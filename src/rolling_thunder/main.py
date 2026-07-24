@@ -32,15 +32,16 @@ def main(
     )
 
     try:
-        initialize_database(config.storage.database_path)
+        schema_version = initialize_database(config.storage.database_path)
     except StorageError as error:
         logger.error("Storage error: %s", error)
         print(f"Rolling Thunder storage error: {error}", file=sys.stderr)
         return 3
 
     logger.info(
-        "Local storage initialized database=%s",
+        "Local storage initialized database=%s schema_version=%s",
         config.storage.database_path,
+        schema_version,
     )
 
     print(
