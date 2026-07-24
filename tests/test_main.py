@@ -113,3 +113,37 @@ operator:
     assert main(config_path, log_path) == 0
 
     assert log_path.is_file()
+
+
+def test_main_reports_storage_failure_without_traceback(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Storage initialization failures should be concise and logged."""
+    database_path = tmp_path / "database-directory"
+    database_path.mkdir()
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+    log_path = tmp_path / "logs" / "rolling-thunder.log"
+
+    assert main(config_path, log_path) == 3
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Rolling Thunder storage error" in captured.err
+    assert str(database_path) in captured.err
+    assert "Traceback" not in captured.err
+
+    log_text = log_path.read_text(encoding="utf-8")
+    assert "Storage error" in log_text
+    assert str(database_path) in log_text
+    assert "Traceback" not in log_text
