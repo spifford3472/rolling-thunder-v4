@@ -5,6 +5,7 @@ from pathlib import Path
 
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.logging_setup import DEFAULT_LOG_PATH, configure_logging
+from rolling_thunder.storage import StorageError, initialize_database
 
 DEFAULT_CONFIG_PATH = Path("config/rolling-thunder.yaml")
 
@@ -13,7 +14,7 @@ def main(
     config_path: Path = DEFAULT_CONFIG_PATH,
     log_path: Path = DEFAULT_LOG_PATH,
 ) -> int:
-    """Start Rolling Thunder after loading validated configuration."""
+    """Start Rolling Thunder after loading configuration and local storage."""
     logger = configure_logging(log_path)
     logger.info("Application startup requested")
 
@@ -28,6 +29,18 @@ def main(
         "Configuration loaded for operator=%s mock_hardware=%s",
         config.operator.callsign,
         config.hardware.mock,
+    )
+
+    try:
+        initialize_database(config.storage.database_path)
+    except StorageError as error:
+        logger.error("Storage error: %s", error)
+        print(f"Rolling Thunder storage error: {error}", file=sys.stderr)
+        return 3
+
+    logger.info(
+        "Local storage initialized database=%s",
+        config.storage.database_path,
     )
 
     print(
