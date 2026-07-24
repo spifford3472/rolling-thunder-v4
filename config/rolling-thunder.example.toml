@@ -1,0 +1,34 @@
+[application]
+environment = "development"
+log_level = "INFO"
+
+[radio]
+enabled = false
+driver = "mock"
+device = "/dev/serial/by-id/REPLACE_WITH_FT891_DEVICE"
+baud_rate = 38400
+
+[gps]
+enabled = false
+driver = "mock"
+device = "/dev/serial/by-id/REPLACE_WITH_GPS_DEVICE"
+
+[voice]
+enabled = false
+driver = "mock"
+microphone_device = "REPLACE_WITH_AUDIO_DEVICE"
+
+[device_input]
+enabled = false
+driver = "mock"
+bluetooth_device = "REPLACE_WITH_ESP32_DEVICE"
+
+[database]
+path = "data/rolling-thunder.db"
+
+[home_station]
+enabled = false
+base_url = "https://REPLACE_WITH_HOME_STATION_ENDPOINT"
+
+[ui]
+fullscreen = true

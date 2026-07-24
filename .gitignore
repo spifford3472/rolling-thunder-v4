@@ -216,3 +216,29 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Rolling Thunder local configuration
+config/rolling-thunder.toml
+.env
+
+# Runtime data
+data/
+logs/
+cache/
+
+# Local hardware information
+hardware-local/
+*.device-info
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Audio test recordings
+*.wav
+*.flac
+
+# IDE and local tools
+.vscode/
+.idea/
