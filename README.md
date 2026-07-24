@@ -21,18 +21,48 @@ The authoritative design is:
 
 ## Current Milestone
 
-**M1 — Mobile Logging MVP**
+**Milestone 1 — Typed Configuration**
 
-The M1 goal is to demonstrate:
+The current milestone establishes the application's centralized configuration
+boundary:
 
-1. Raspberry Pi dashboard startup
-2. FT-891 state acquisition
-3. GPS state acquisition
-4. Voice callsign capture
-5. Pending callsign display
-6. Physical Commit or Discard
-7. Transactional local QSO storage
-8. Continued logging without network connectivity
+- strongly typed configuration models
+- YAML input
+- validation with actionable errors
+- mock-hardware mode
+- machine-local settings outside source control
+- automated tests that require no connected hardware or network services
+
+The broader mobile logging workflow remains the product MVP and will be built
+incrementally through the milestones documented in `docs/ROADMAP.md`.
+
+## Configuration
+
+Create a machine-local configuration from the safe example:
+
+```bash
+cp config/rolling-thunder.example.yaml config/rolling-thunder.yaml
+```
+
+Edit `config/rolling-thunder.yaml` for the local machine. The local file is
+ignored by Git and must not contain passwords, API keys, private keys, access
+tokens, or other credentials.
+
+Mock hardware mode is enabled in the example configuration so development and
+tests do not require connected radio or GPS hardware.
+
+The typed loader can be used from Python with:
+
+```python
+from pathlib import Path
+
+from rolling_thunder.config import load_config
+
+config = load_config(Path("config/rolling-thunder.yaml"))
+```
+
+Configuration validation failures identify the affected setting and provide
+corrective information.
 
 ## Security Boundary
 

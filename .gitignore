@@ -218,7 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Rolling Thunder local configuration
-config/rolling-thunder.toml
+config/rolling-thunder.yaml
 .env
 
 # Runtime data

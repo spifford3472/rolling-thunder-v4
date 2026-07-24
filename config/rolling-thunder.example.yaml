@@ -1,0 +1,14 @@
+operator:
+  callsign: N0CALL
+  home_grid: EM00aa
+
+hardware:
+  mock: true
+  radio_device: null
+  gps_device: null
+
+forge:
+  api_url: null
+
+storage:
+  database_path: data/rolling-thunder.db
