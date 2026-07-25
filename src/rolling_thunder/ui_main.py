@@ -3,11 +3,13 @@
 from pathlib import Path
 
 from rolling_thunder.application_runtime import ApplicationRuntime
-from rolling_thunder.callsign_capture import MockTranscriptController
+from rolling_thunder.callsign_capture import CallsignCaptureState, MockTranscriptController
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.dashboard_state import build_dashboard_state
+from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.radio import RadioConnectionError
+from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 
 _REFRESH_MS = 250
 _BACKGROUND = "#080808"
@@ -68,6 +70,41 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         return 3
 
     mock_transcripts = MockTranscriptController()
+    live_capture: LiveCallsignCaptureController | None = None
+    if config.speech.enabled:
+        model_path = config.speech.model_path
+        if model_path is None:
+            print("Rolling Thunder startup error: speech model path is unavailable")
+            runtime.stop()
+            return 3
+        recognizer = VoskCallsignRecognizer(
+            model_path=model_path,
+            audio_device=config.speech.audio_device,
+            duration_s=config.speech.capture_duration_seconds,
+            sample_rate=config.speech.sample_rate,
+        )
+        live_capture = LiveCallsignCaptureController(recognizer)
+
+    def capture_state() -> CallsignCaptureState:
+        """Return the active mock or live capture presentation state."""
+        if live_capture is not None:
+            return live_capture.state
+        return mock_transcripts.state
+
+    def start_voice_capture() -> None:
+        """Start live recognition or advance the deterministic mock fixture."""
+        if live_capture is not None:
+            live_capture.start_capture()
+        else:
+            mock_transcripts.capture_next()
+
+    def discard_capture() -> None:
+        """Discard the current pending callsign without logging it."""
+        if live_capture is not None:
+            live_capture.discard()
+        else:
+            mock_transcripts.discard()
+
     root = tk.Tk()
     root.title("Rolling Thunder v4")
     root.configure(bg=_BACKGROUND, cursor="none")
@@ -246,7 +283,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     def refresh() -> None:
-        view = build_dashboard_state(runtime.latest_radio_state, mock_transcripts.state)
+        view = build_dashboard_state(runtime.latest_radio_state, capture_state())
         pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
         voice_state = view.voice_state.upper()
         voice_engaged = voice_state in {"ACTIVE", "CAPTURING", "LISTENING", "RECORDING"}
@@ -273,11 +310,10 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         root.destroy()
 
     root.bind("<Escape>", lambda _event: close())
-    if config.hardware.mock:
-        root.bind("<v>", lambda _event: mock_transcripts.capture_next())
-        root.bind("<V>", lambda _event: mock_transcripts.capture_next())
-        root.bind("<d>", lambda _event: mock_transcripts.discard())
-        root.bind("<D>", lambda _event: mock_transcripts.discard())
+    root.bind("<v>", lambda _event: start_voice_capture())
+    root.bind("<V>", lambda _event: start_voice_capture())
+    root.bind("<d>", lambda _event: discard_capture())
+    root.bind("<D>", lambda _event: discard_capture())
     root.protocol("WM_DELETE_WINDOW", close)
     refresh()
     root.mainloop()
