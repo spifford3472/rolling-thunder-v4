@@ -322,3 +322,231 @@ def test_radio_state_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         state.transmitting = True
+
+
+def test_gps_position_normalizes_valid_three_dimensional_fix() -> None:
+    """A valid GPS fix should normalize its state and timestamp."""
+    from rolling_thunder.domain import GPSFixState, GPSPosition
+
+    eastern = timezone(timedelta(hours=-4))
+    position = GPSPosition(
+        fix_state=" 3D ",
+        latitude=39.5296,
+        longitude=-84.0816,
+        altitude_m=274.5,
+        speed_m_s=22.4,
+        heading_degrees=45.0,
+        accuracy_m=3.2,
+        satellites=11,
+        updated_at=datetime(
+            2026,
+            7,
+            24,
+            20,
+            30,
+            tzinfo=eastern,
+        ),
+    )
+
+    assert position.fix_state is GPSFixState.THREE_DIMENSIONAL
+    assert position.latitude == 39.5296
+    assert position.longitude == -84.0816
+    assert position.updated_at == datetime(
+        2026,
+        7,
+        25,
+        0,
+        30,
+        tzinfo=UTC,
+    )
+
+
+def test_gps_position_accepts_no_fix_without_coordinates() -> None:
+    """A no-fix snapshot should remain useful for connection status."""
+    from rolling_thunder.domain import GPSFixState, GPSPosition
+
+    position = GPSPosition(
+        fix_state="no_fix",
+        satellites=2,
+        updated_at=datetime.now(UTC),
+    )
+
+    assert position.fix_state is GPSFixState.NO_FIX
+    assert position.latitude is None
+    assert position.longitude is None
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [
+        (91.0, 0.0),
+        (-91.0, 0.0),
+        (0.0, 181.0),
+        (0.0, -181.0),
+    ],
+)
+def test_gps_position_rejects_out_of_range_coordinates(
+    latitude: float,
+    longitude: float,
+) -> None:
+    """Latitude and longitude must remain within geographic bounds."""
+    from rolling_thunder.domain import GPSPosition
+
+    with pytest.raises(ValidationError):
+        GPSPosition(
+            fix_state="3d",
+            latitude=latitude,
+            longitude=longitude,
+            updated_at=datetime.now(UTC),
+        )
+
+
+def test_gps_position_requires_coordinate_pair() -> None:
+    """Latitude and longitude must be supplied together."""
+    from rolling_thunder.domain import GPSPosition
+
+    with pytest.raises(
+        ValidationError,
+        match="latitude and longitude must either both be provided",
+    ):
+        GPSPosition(
+            fix_state="3d",
+            latitude=39.5296,
+            updated_at=datetime.now(UTC),
+        )
+
+
+def test_gps_fix_requires_coordinates() -> None:
+    """A valid fix state cannot omit its coordinates."""
+    from rolling_thunder.domain import GPSPosition
+
+    with pytest.raises(
+        ValidationError,
+        match="GPS fix requires latitude and longitude",
+    ):
+        GPSPosition(
+            fix_state="2d",
+            updated_at=datetime.now(UTC),
+        )
+
+
+def test_no_fix_rejects_coordinates() -> None:
+    """A no-fix snapshot must not claim a geographic position."""
+    from rolling_thunder.domain import GPSPosition
+
+    with pytest.raises(
+        ValidationError,
+        match="no-fix GPS position cannot contain coordinates",
+    ):
+        GPSPosition(
+            fix_state="no_fix",
+            latitude=39.5296,
+            longitude=-84.0816,
+            updated_at=datetime.now(UTC),
+        )
+
+
+def test_two_dimensional_fix_rejects_altitude() -> None:
+    """Altitude should only be trusted for a three-dimensional fix."""
+    from rolling_thunder.domain import GPSPosition
+
+    with pytest.raises(
+        ValidationError,
+        match="2d GPS fix cannot contain altitude",
+    ):
+        GPSPosition(
+            fix_state="2d",
+            latitude=39.5296,
+            longitude=-84.0816,
+            altitude_m=274.5,
+            updated_at=datetime.now(UTC),
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("speed_m_s", -0.1),
+        ("heading_degrees", -1.0),
+        ("heading_degrees", 360.0),
+        ("accuracy_m", -0.1),
+        ("satellites", -1),
+    ],
+)
+def test_gps_position_rejects_invalid_measurements(
+    field_name: str,
+    field_value: object,
+) -> None:
+    """GPS measurements must remain within sensible structural bounds."""
+    from rolling_thunder.domain import GPSPosition
+
+    values: dict[str, object] = {
+        "fix_state": "3d",
+        "latitude": 39.5296,
+        "longitude": -84.0816,
+        "updated_at": datetime.now(UTC),
+        field_name: field_value,
+    }
+
+    with pytest.raises(ValidationError):
+        GPSPosition.model_validate(values)
+
+
+def test_gps_position_rejects_naive_timestamp() -> None:
+    """GPS snapshots require unambiguous timezone-aware timestamps."""
+    from rolling_thunder.domain import GPSPosition
+
+    with pytest.raises(ValidationError, match="timezone information"):
+        GPSPosition(
+            fix_state="no_fix",
+            updated_at=datetime(2026, 7, 25, 0, 30),  # noqa: DTZ001
+        )
+
+
+def test_gps_position_serialization_is_stable() -> None:
+    """GPS snapshots should serialize consistently for APIs and storage."""
+    from rolling_thunder.domain import GPSPosition
+
+    position = GPSPosition(
+        fix_state="3d",
+        latitude=39.5296,
+        longitude=-84.0816,
+        altitude_m=274.5,
+        speed_m_s=0.0,
+        heading_degrees=45.0,
+        accuracy_m=3.2,
+        satellites=11,
+        updated_at=datetime(
+            2026,
+            7,
+            25,
+            0,
+            30,
+            tzinfo=UTC,
+        ),
+    )
+
+    assert position.model_dump(mode="json") == {
+        "fix_state": "3d",
+        "latitude": 39.5296,
+        "longitude": -84.0816,
+        "altitude_m": 274.5,
+        "speed_m_s": 0.0,
+        "heading_degrees": 45.0,
+        "accuracy_m": 3.2,
+        "satellites": 11,
+        "updated_at": "2026-07-25T00:30:00Z",
+    }
+
+
+def test_gps_position_is_immutable() -> None:
+    """GPS snapshots should not be modified in place."""
+    from rolling_thunder.domain import GPSPosition
+
+    position = GPSPosition(
+        fix_state="no_fix",
+        updated_at=datetime.now(UTC),
+    )
+
+    with pytest.raises(ValidationError):
+        position.latitude = 39.5296

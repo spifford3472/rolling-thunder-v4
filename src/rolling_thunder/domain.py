@@ -36,6 +36,14 @@ class RadioMode(StrEnum):
     USB = "USB"
 
 
+class GPSFixState(StrEnum):
+    """Fix quality reported by a GPS adapter."""
+
+    NO_FIX = "no_fix"
+    TWO_DIMENSIONAL = "2d"
+    THREE_DIMENSIONAL = "3d"
+
+
 class RadioConnectionState(StrEnum):
     """Connection state reported by a radio adapter."""
 
@@ -161,6 +169,78 @@ class RadioState(DomainModel):
     @field_serializer("updated_at")
     def serialize_updated_at(self, value: datetime) -> str:
         """Serialize timestamps as unambiguous UTC ISO-8601 values."""
+        return value.isoformat().replace("+00:00", "Z")
+
+
+class GPSPosition(DomainModel):
+    """Current position snapshot reported by a GPS adapter."""
+
+    fix_state: GPSFixState
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    altitude_m: float | None = None
+    speed_m_s: float | None = Field(default=None, ge=0)
+    heading_degrees: float | None = Field(default=None, ge=0, lt=360)
+    accuracy_m: float | None = Field(default=None, ge=0)
+    satellites: int | None = Field(default=None, ge=0)
+    updated_at: datetime
+
+    @field_validator("fix_state", mode="before")
+    @classmethod
+    def normalize_fix_state(cls, value: object) -> object:
+        """Normalize string GPS-fix values before enum validation."""
+        if isinstance(value, str):
+            return value.strip().lower()
+
+        return value
+
+    @field_validator("updated_at")
+    @classmethod
+    def normalize_gps_updated_at(cls, value: datetime) -> datetime:
+        """Require a timezone-aware timestamp and normalize it to UTC."""
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("must include timezone information")
+
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def validate_fix_consistency(self) -> "GPSPosition":
+        """Reject internally inconsistent GPS snapshots."""
+        has_latitude = self.latitude is not None
+        has_longitude = self.longitude is not None
+
+        if has_latitude != has_longitude:
+            raise ValueError(
+                "latitude and longitude must either both be provided or both be absent"
+            )
+
+        if self.fix_state is GPSFixState.NO_FIX:
+            if has_latitude or has_longitude:
+                raise ValueError("no-fix GPS position cannot contain coordinates")
+
+            if self.altitude_m is not None:
+                raise ValueError("no-fix GPS position cannot contain altitude")
+
+            if self.speed_m_s is not None or self.heading_degrees is not None:
+                raise ValueError(
+                    "no-fix GPS position cannot contain movement information"
+                )
+
+        else:
+            if not has_latitude or not has_longitude:
+                raise ValueError("GPS fix requires latitude and longitude")
+
+        if (
+            self.fix_state is GPSFixState.TWO_DIMENSIONAL
+            and self.altitude_m is not None
+        ):
+            raise ValueError("2d GPS fix cannot contain altitude")
+
+        return self
+
+    @field_serializer("updated_at")
+    def serialize_gps_updated_at(self, value: datetime) -> str:
+        """Serialize GPS timestamps as unambiguous UTC ISO-8601 values."""
         return value.isoformat().replace("+00:00", "Z")
 
 
