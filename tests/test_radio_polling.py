@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 import pytest
+
 from rolling_thunder.domain import (
     Frequency,
     RadioConnectionState,
