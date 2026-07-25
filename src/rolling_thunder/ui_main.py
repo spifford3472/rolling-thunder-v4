@@ -1,5 +1,7 @@
 """Full-screen Raspberry Pi dashboard entry point."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from rolling_thunder.application_runtime import ApplicationRuntime
