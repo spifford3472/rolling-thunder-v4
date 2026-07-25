@@ -135,7 +135,11 @@ class VoskCallsignRecognizer:
             raise SpeechRecognitionError("Microphone capture returned no audio.")
 
         try:
-            from vosk import KaldiRecognizer, Model, SetLogLevel
+            from vosk import (  # type: ignore[import-not-found]
+                KaldiRecognizer,
+                Model,
+                SetLogLevel,
+            )
         except ImportError as error:
             raise SpeechRecognitionError(
                 "Vosk is not installed; install the Rolling Thunder speech dependency."
