@@ -7,7 +7,6 @@ import subprocess
 from pathlib import Path
 from typing import Final, Protocol
 
-
 CALLSIGN_GRAMMAR: Final[tuple[str, ...]] = (
     "alfa",
     "alpha",
