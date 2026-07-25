@@ -3,7 +3,10 @@
 import argparse
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from rolling_thunder.config import (
     ConfigurationError,
@@ -20,9 +23,11 @@ from rolling_thunder.contact_import import (
     preview_contact_import,
 )
 from rolling_thunder.contact_repository import (
+    ContactAlreadyExistsError,
     ContactConflictError,
     ContactRepository,
 )
+from rolling_thunder.domain import Contact
 from rolling_thunder.logging_setup import DEFAULT_LOG_PATH, configure_logging
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.storage import StorageError
@@ -34,6 +39,8 @@ EXIT_BACKUP_ERROR = 4
 EXIT_BACKUP_DISABLED = 5
 EXIT_IMPORT_VALIDATION_ERROR = 6
 EXIT_IMPORT_CONFLICT = 7
+EXIT_CONTACT_VALIDATION_ERROR = 8
+EXIT_CONTACT_CONFLICT = 9
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -95,6 +102,65 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="validate and report changes without modifying the database",
+    )
+
+    add_parser = subparsers.add_parser(
+        "add-contact",
+        help="Store one manually entered contact",
+    )
+    add_parser.add_argument(
+        "callsign",
+        help="contact callsign",
+    )
+    add_parser.add_argument(
+        "--frequency-hz",
+        required=True,
+        help="contact frequency in integer hertz",
+    )
+    add_parser.add_argument(
+        "--mode",
+        required=True,
+        help="radio mode: AM, CW, DATA, FM, LSB, or USB",
+    )
+    add_parser.add_argument(
+        "--started-at",
+        help=(
+            "timezone-aware ISO-8601 start time "
+            "(default: current UTC time)"
+        ),
+    )
+    add_parser.add_argument(
+        "--rst-sent",
+        default="59",
+        help="signal report sent (default: 59)",
+    )
+    add_parser.add_argument(
+        "--rst-received",
+        default="59",
+        help="signal report received (default: 59)",
+    )
+    add_parser.add_argument(
+        "--grid",
+        help="optional Maidenhead grid",
+    )
+    add_parser.add_argument(
+        "--notes",
+        help="optional contact notes",
+    )
+    add_parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=(
+            "YAML configuration path "
+            f"(default: {DEFAULT_CONFIG_PATH})"
+        ),
+    )
+    add_parser.add_argument(
+        "--log",
+        type=Path,
+        default=DEFAULT_LOG_PATH,
+        help=f"log file path (default: {DEFAULT_LOG_PATH})",
     )
 
     return parser
@@ -310,6 +376,102 @@ def run_manual_contact_restore(
     return EXIT_SUCCESS
 
 
+def run_manual_contact_entry(
+    config_path: Path,
+    *,
+    callsign: str,
+    frequency_hz: str,
+    mode: str,
+    started_at: str | None,
+    rst_sent: str,
+    rst_received: str,
+    grid: str | None,
+    notes: str | None,
+    log_path: Path = DEFAULT_LOG_PATH,
+) -> int:
+    """Validate and store one manually entered contact."""
+    logger = configure_logging(log_path)
+    logger.info(
+        "Manual contact entry requested callsign=%s frequency_hz=%s mode=%s",
+        callsign,
+        frequency_hz,
+        mode,
+    )
+
+    try:
+        config = load_config(config_path)
+    except ConfigurationError as error:
+        logger.error("Configuration error: %s", error)
+        print(
+            f"Rolling Thunder configuration error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONFIGURATION_ERROR
+
+    contact_values: dict[str, object] = {
+        "callsign": callsign,
+        "frequency_hz": frequency_hz,
+        "mode": mode,
+        "started_at": (
+            started_at
+            if started_at is not None
+            else datetime.now(UTC)
+        ),
+        "rst_sent": rst_sent,
+        "rst_received": rst_received,
+        "grid": grid,
+        "notes": notes,
+    }
+
+    try:
+        contact = Contact.model_validate(contact_values)
+    except ValidationError as error:
+        logger.error("Contact validation error: %s", error)
+        print(
+            f"Rolling Thunder contact validation error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    try:
+        repository = ContactRepository(
+            config.storage.database_path
+        )
+        repository.add(contact)
+    except ContactAlreadyExistsError as error:
+        logger.error("Contact conflict: %s", error)
+        print(
+            f"Rolling Thunder contact conflict: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_CONFLICT
+    except StorageError as error:
+        logger.error("Storage error: %s", error)
+        print(
+            f"Rolling Thunder storage error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_STORAGE_ERROR
+
+    logger.info(
+        "Manual contact entry completed contact_id=%s callsign=%s "
+        "frequency_hz=%s mode=%s",
+        contact.contact_id,
+        contact.callsign,
+        contact.frequency_hz,
+        contact.mode.value,
+    )
+    print(
+        "Contact created: "
+        f"id={contact.contact_id} "
+        f"callsign={contact.callsign} "
+        f"frequency_hz={contact.frequency_hz} "
+        f"mode={contact.mode.value} "
+        f"started_at={contact.started_at.isoformat().replace('+00:00', 'Z')}"
+    )
+    return EXIT_SUCCESS
+
+
 def cli(argv: Sequence[str] | None = None) -> int:
     """Parse command-line arguments and execute the selected operation."""
     parser = build_parser()
@@ -326,6 +488,20 @@ def cli(argv: Sequence[str] | None = None) -> int:
             arguments.config,
             arguments.backup,
             dry_run=arguments.dry_run,
+            log_path=arguments.log,
+        )
+
+    if arguments.command == "add-contact":
+        return run_manual_contact_entry(
+            arguments.config,
+            callsign=arguments.callsign,
+            frequency_hz=arguments.frequency_hz,
+            mode=arguments.mode,
+            started_at=arguments.started_at,
+            rst_sent=arguments.rst_sent,
+            rst_received=arguments.rst_received,
+            grid=arguments.grid,
+            notes=arguments.notes,
             log_path=arguments.log,
         )
 
