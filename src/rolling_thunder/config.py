@@ -53,6 +53,28 @@ class HardwareConfig(ConfigurationModel):
     radio_device: Path | None = None
     gps_device: Path | None = None
 
+    @field_validator("radio_device", "gps_device", mode="before")
+    @classmethod
+    def validate_device_path(cls, value: object) -> object:
+        """Require configured hardware devices to use usable absolute paths."""
+        if value is None:
+            return value
+
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+
+        path = Path(value) if isinstance(value, (str, Path)) else value
+
+        if isinstance(path, Path):
+            if str(path) in {"", "."}:
+                raise ValueError("must name a device path")
+            if not path.is_absolute():
+                raise ValueError(
+                    "must be an absolute device path, such as /dev/ttyUSB0"
+                )
+
+        return path
+
     @model_validator(mode="after")
     def validate_real_hardware_devices(self) -> Self:
         """Require device preferences when real hardware mode is selected."""
@@ -94,19 +116,13 @@ class ContactBackupConfig(ConfigurationModel):
     def validate_directory(cls, value: object) -> object:
         """Reject empty or current-directory backup paths."""
         if isinstance(value, str) and not value.strip():
-            raise ValueError(
-                "contact backup directory must not be empty"
-            )
+            raise ValueError("contact backup directory must not be empty")
 
         if isinstance(value, Path) and str(value) in {"", "."}:
-            raise ValueError(
-                "contact backup directory must name a directory"
-            )
+            raise ValueError("contact backup directory must name a directory")
 
         if isinstance(value, str) and str(Path(value)) == ".":
-            raise ValueError(
-                "contact backup directory must name a directory"
-            )
+            raise ValueError("contact backup directory must name a directory")
 
         return value
 
@@ -117,6 +133,18 @@ class StorageConfig(ConfigurationModel):
     database_path: Path = Path("data/rolling-thunder.db")
     contact_backups: ContactBackupConfig = ContactBackupConfig()
 
+    @field_validator("database_path", mode="before")
+    @classmethod
+    def validate_database_path(cls, value: object) -> object:
+        """Reject empty paths and paths that only name the current directory."""
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("database path must not be empty")
+
+        if isinstance(value, (str, Path)) and str(Path(value)) == ".":
+            raise ValueError("database path must name a database file")
+
+        return value
+
 
 class ApplicationConfig(ConfigurationModel):
     """Complete Rolling Thunder application configuration."""
@@ -125,6 +153,19 @@ class ApplicationConfig(ConfigurationModel):
     hardware: HardwareConfig = HardwareConfig()
     forge: ForgeConfig = ForgeConfig()
     storage: StorageConfig = StorageConfig()
+
+
+def resolve_database_path(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path:
+    """Resolve the configured database path relative to the YAML file."""
+    database_path = config.storage.database_path
+
+    if database_path.is_absolute():
+        return database_path
+
+    return (config_path.parent / database_path).resolve()
 
 
 def resolve_contact_backup_directory(
@@ -152,7 +193,7 @@ def _format_validation_error(error: ValidationError) -> str:
 
 
 def load_config(path: Path) -> ApplicationConfig:
-    """Load and validate an application configuration from a YAML file."""
+    """Load, validate, and resolve an application configuration YAML file."""
     try:
         yaml_text = path.read_text(encoding="utf-8")
     except FileNotFoundError as error:
@@ -188,9 +229,14 @@ def load_config(path: Path) -> ApplicationConfig:
         )
 
     try:
-        return ApplicationConfig.model_validate(raw_config)
+        config = ApplicationConfig.model_validate(raw_config)
     except ValidationError as error:
         details = _format_validation_error(error)
         raise ConfigurationValidationError(
             f"Configuration validation failed:\n{details}"
         ) from error
+
+    resolved_storage = config.storage.model_copy(
+        update={"database_path": resolve_database_path(config, path)}
+    )
+    return config.model_copy(update={"storage": resolved_storage})
