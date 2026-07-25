@@ -12,6 +12,7 @@ from rolling_thunder.domain import (
     RadioState,
 )
 from rolling_thunder.ft891_cat import (
+    Ft891CatError,
     encode_read_frequency,
     encode_read_mode,
     encode_set_frequency,
@@ -61,16 +62,21 @@ class Ft891Radio:
                 self._transport.query(encode_read_frequency())
             )
             mode = parse_mode_reply(self._transport.query(encode_read_mode()))
-        except Exception as error:
+        except (RadioConnectionError, Ft891CatError) as error:
+            error_message = str(error) or error.__class__.__name__
             try:
                 self._transport.close()
-            except Exception:
-                pass
+            except RadioConnectionError as close_error:
+                error_message = (
+                    f"{error_message}; additionally failed to close CAT transport: "
+                    f"{close_error}"
+                )
+
             self._state = RadioState(
                 connection_state=RadioConnectionState.ERROR,
                 transmitting=False,
                 updated_at=self._timestamp(),
-                last_error=str(error) or error.__class__.__name__,
+                last_error=error_message,
             )
             if isinstance(error, RadioConnectionError):
                 raise
