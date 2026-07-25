@@ -135,7 +135,7 @@ class VoskCallsignRecognizer:
             raise SpeechRecognitionError("Microphone capture returned no audio.")
 
         try:
-            from vosk import (  # type: ignore[import-not-found,import-untyped]
+            from vosk import (  # type: ignore[import-untyped]
                 KaldiRecognizer,
                 Model,
                 SetLogLevel,
