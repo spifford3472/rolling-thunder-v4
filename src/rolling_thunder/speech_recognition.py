@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 from pathlib import Path
@@ -135,20 +136,16 @@ class VoskCallsignRecognizer:
             raise SpeechRecognitionError("Microphone capture returned no audio.")
 
         try:
-            from vosk import (  # type: ignore[import-untyped]
-                KaldiRecognizer,
-                Model,
-                SetLogLevel,
-            )
+            vosk = importlib.import_module("vosk")
         except ImportError as error:
             raise SpeechRecognitionError(
                 "Vosk is not installed; install the Rolling Thunder speech dependency."
             ) from error
 
-        SetLogLevel(-1)
+        vosk.SetLogLevel(-1)
         try:
-            model = Model(str(self._model_path))
-            recognizer = KaldiRecognizer(
+            model = vosk.Model(str(self._model_path))
+            recognizer = vosk.KaldiRecognizer(
                 model,
                 self._sample_rate,
                 json.dumps(CALLSIGN_GRAMMAR),
