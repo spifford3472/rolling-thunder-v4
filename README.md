@@ -21,17 +21,22 @@ The authoritative design is:
 
 ## Current Milestone
 
-**Milestone 1 — Typed Configuration**
+**Milestone 4 — Radio Abstraction**
 
-The current milestone establishes the application's centralized configuration
-boundary:
+Milestones 1 through 3 have been implemented and audited:
 
-- strongly typed configuration models
-- YAML input
-- validation with actionable errors
-- mock-hardware mode
-- machine-local settings outside source control
-- automated tests that require no connected hardware or network services
+- typed YAML configuration with validation and mock-hardware mode
+- core contact, radio-state, GPS-position, and synchronization domain models
+- durable SQLite contact logging, duplicate protection, export, backup, and recovery
+
+The current milestone establishes the hardware-independent radio boundary:
+
+- a typed radio interface
+- a deterministic mock radio
+- frequency, mode, and connection-state reporting
+- safe band and frequency changes
+- an FT-891 CAT adapter
+- actionable disconnect and malformed-reply handling
 
 The broader mobile logging workflow remains the product MVP and will be built
 incrementally through the milestones documented in `docs/ROADMAP.md`.
