@@ -13,11 +13,12 @@ class FakeTransport:
     def __init__(self) -> None:
         self.opened = False
         self.commands: list[bytes] = []
-        self.replies = {
+        self.replies: dict[bytes, bytes] = {
             b"FA;": b"FA014250000;",
             b"MD0;": b"MD02;",
         }
-        self.open_error: Exception | None = None
+        self.open_error: RadioConnectionError | None = None
+        self.query_errors: dict[bytes, RadioConnectionError] = {}
 
     def open(self) -> None:
         if self.open_error is not None:
@@ -29,6 +30,9 @@ class FakeTransport:
 
     def query(self, command: bytes) -> bytes:
         self.commands.append(command)
+        error = self.query_errors.get(command)
+        if error is not None:
+            raise error
         return self.replies[command]
 
     def command(self, command: bytes) -> None:
@@ -55,6 +59,76 @@ def test_connect_reads_frequency_and_mode() -> None:
     assert state.frequency == Frequency(hz=14_250_000)
     assert state.mode is RadioMode.USB
     assert state.transmitting is False
+
+
+def test_refresh_reads_unchanged_hardware_state() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    connected = radio.connect()
+
+    refreshed = radio.refresh_state()
+
+    assert refreshed is not connected
+    assert refreshed.connection_state is RadioConnectionState.CONNECTED
+    assert refreshed.frequency == connected.frequency
+    assert refreshed.mode is connected.mode
+    assert transport.commands[-2:] == [b"FA;", b"MD0;"]
+
+
+def test_refresh_detects_manual_frequency_and_mode_changes() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"FA;"] = b"FA007255000;"
+    transport.replies[b"MD0;"] = b"MD01;"
+
+    state = radio.refresh_state()
+
+    assert state.frequency == Frequency(hz=7_255_000)
+    assert state.mode is RadioMode.LSB
+    assert state.connection_state is RadioConnectionState.CONNECTED
+
+
+def test_refresh_malformed_reply_enters_error_with_last_known_state() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"FA;"] = b"FA-not-valid;"
+
+    with pytest.raises(RadioConnectionError, match="Could not refresh"):
+        radio.refresh_state()
+
+    state = radio.get_state()
+    assert transport.opened is False
+    assert state.connection_state is RadioConnectionState.ERROR
+    assert state.frequency == Frequency(hz=14_250_000)
+    assert state.mode is RadioMode.USB
+    assert state.last_error is not None
+    assert "Malformed FT-891 frequency reply" in state.last_error
+
+
+def test_refresh_device_loss_enters_error_with_last_known_state() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.query_errors[b"FA;"] = RadioConnectionError("USB serial device disappeared")
+
+    with pytest.raises(RadioConnectionError, match="device disappeared"):
+        radio.refresh_state()
+
+    state = radio.get_state()
+    assert transport.opened is False
+    assert state.connection_state is RadioConnectionState.ERROR
+    assert state.frequency == Frequency(hz=14_250_000)
+    assert state.mode is RadioMode.USB
+    assert state.last_error == "USB serial device disappeared"
+
+
+def test_refresh_requires_connection() -> None:
+    radio = Ft891Radio(FakeTransport(), clock=fixed_clock)
+
+    with pytest.raises(RadioConnectionError, match="requires a connected radio"):
+        radio.refresh_state()
 
 
 def test_frequency_and_mode_changes_emit_safe_cat_commands() -> None:

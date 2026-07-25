@@ -79,6 +79,15 @@ class MockRadio:
         """Return the latest immutable snapshot."""
         return self._state
 
+    def refresh_state(self) -> RadioState:
+        """Return a newly timestamped snapshot of the deterministic mock state."""
+        self._require_connected()
+        return self._replace_state(
+            connection_state=RadioConnectionState.CONNECTED,
+            frequency=self._frequency,
+            mode=self._mode,
+        )
+
     def set_frequency(self, frequency: Frequency) -> RadioState:
         """Change frequency while connected."""
         self._require_connected()

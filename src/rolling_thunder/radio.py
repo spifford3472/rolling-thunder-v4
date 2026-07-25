@@ -50,6 +50,10 @@ class Radio(Protocol):
         """Return the latest immutable radio-state snapshot."""
         ...
 
+    def refresh_state(self) -> RadioState:
+        """Read the current hardware state and return a new snapshot."""
+        ...
+
     def set_frequency(self, frequency: Frequency) -> RadioState:
         """Set an operator-requested frequency and return the resulting state."""
         ...
