@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 
 import pytest
-
 from rolling_thunder.domain import (
     Frequency,
     RadioConnectionState,
@@ -12,6 +11,8 @@ from rolling_thunder.domain import (
 )
 from rolling_thunder.radio import RadioBand, RadioConnectionError
 from rolling_thunder.radio_polling import PollCallback, RadioPollingService
+
+_DEFAULT_FREQUENCY = Frequency(hz=14_250_000)
 
 
 class ManualScheduledPoll:
@@ -103,7 +104,7 @@ def timestamp() -> datetime:
 
 def connected_state(
     *,
-    frequency: Frequency | None = Frequency(hz=14_250_000),
+    frequency: Frequency | None = _DEFAULT_FREQUENCY,
     mode: RadioMode | None = RadioMode.USB,
 ) -> RadioState:
     return RadioState(
