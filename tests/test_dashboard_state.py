@@ -30,6 +30,7 @@ def test_connected_radio_formats_logger_fields() -> None:
     assert view.frequency == "14.250 MHz"
     assert view.band == "20 m"
     assert view.mode == "USB"
+    assert view.voice_state == "DISABLED"
     assert view.commit_state == "DISABLED"
     assert view.ticker == "RADIO CONNECTED — MOCK MODE READY"
 

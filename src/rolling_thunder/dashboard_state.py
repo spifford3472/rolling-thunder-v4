@@ -62,7 +62,7 @@ def build_dashboard_state(radio_state: RadioState) -> DashboardState:
 
     return DashboardState(
         pending_callsign="—",
-        voice_state="IDLE",
+        voice_state="DISABLED",
         radio_state=radio_state.connection_state.value.upper(),
         frequency=_format_frequency(radio_state.frequency),
         band=_format_band(radio_state.frequency),
