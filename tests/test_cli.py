@@ -5,19 +5,25 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
+import pytest
 from pytest import CaptureFixture
 
 from rolling_thunder.cli import (
     EXIT_BACKUP_DISABLED,
     EXIT_BACKUP_ERROR,
     EXIT_CONFIGURATION_ERROR,
+    EXIT_CONTACT_CONFLICT,
+    EXIT_CONTACT_VALIDATION_ERROR,
     EXIT_IMPORT_CONFLICT,
     EXIT_IMPORT_VALIDATION_ERROR,
     EXIT_SUCCESS,
     cli,
 )
 from rolling_thunder.contact_export import export_contacts_to_json
-from rolling_thunder.contact_repository import ContactRepository
+from rolling_thunder.contact_repository import (
+    ContactAlreadyExistsError,
+    ContactRepository,
+)
 from rolling_thunder.domain import Contact, RadioMode
 
 
@@ -402,3 +408,208 @@ storage:
     assert captured.out == ""
     assert "contact restore conflict" in captured.err
     assert repository.get(existing.contact_id) == existing
+
+
+def test_add_contact_stores_valid_manual_entry(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A valid manual entry should be normalized and stored."""
+    database_path = tmp_path / "data" / "contacts.db"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "add-contact",
+            "k8abc",
+            "--frequency-hz",
+            "14250000",
+            "--mode",
+            "usb",
+            "--started-at",
+            "2026-07-25T02:30:00-04:00",
+            "--rst-sent",
+            "59",
+            "--rst-received",
+            "57",
+            "--grid",
+            "em79xm",
+            "--notes",
+            "  Manual entry test  ",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "logs" / "entry.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert "Contact created:" in captured.out
+    assert "callsign=K8ABC" in captured.out
+    assert "frequency_hz=14250000" in captured.out
+    assert "mode=USB" in captured.out
+    assert "started_at=2026-07-25T06:30:00Z" in captured.out
+
+    contacts = ContactRepository(database_path).list_all()
+    assert len(contacts) == 1
+
+    contact = contacts[0]
+    assert str(contact.callsign) == "K8ABC"
+    assert contact.frequency_hz == 14_250_000
+    assert contact.mode is RadioMode.USB
+    assert contact.rst_sent == "59"
+    assert contact.rst_received == "57"
+    assert str(contact.grid) == "EM79xm"
+    assert contact.notes == "Manual entry test"
+
+
+def test_add_contact_defaults_time_and_signal_reports(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Omitted time and reports should use safe operator defaults."""
+    database_path = tmp_path / "contacts.db"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+    before = datetime.now(UTC)
+
+    result = cli(
+        [
+            "add-contact",
+            "W8O",
+            "--frequency-hz",
+            "7255000",
+            "--mode",
+            "LSB",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "entry.log"),
+        ]
+    )
+
+    after = datetime.now(UTC)
+
+    assert result == EXIT_SUCCESS
+    assert capsys.readouterr().err == ""
+
+    contacts = ContactRepository(database_path).list_all()
+    assert len(contacts) == 1
+    assert before <= contacts[0].started_at <= after
+    assert contacts[0].rst_sent == "59"
+    assert contacts[0].rst_received == "59"
+
+
+def test_add_contact_rejects_invalid_domain_values(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Invalid entry data should fail before a contact is stored."""
+    database_path = tmp_path / "contacts.db"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "add-contact",
+            "not a callsign",
+            "--frequency-hz",
+            "-1",
+            "--mode",
+            "INVALID",
+            "--started-at",
+            "not-a-time",
+            "--rst-sent",
+            "99",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "entry.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Rolling Thunder contact validation error" in captured.err
+    assert "Traceback" not in captured.err
+    assert not database_path.exists()
+
+
+def test_add_contact_reports_duplicate_uuid_conflict(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repository UUID collisions should use the contact conflict code."""
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {tmp_path / "contacts.db"}
+""",
+    )
+
+    def reject_contact(
+        self: ContactRepository,
+        contact: Contact,
+    ) -> None:
+        raise ContactAlreadyExistsError(
+            f"Contact already exists: {contact.contact_id}"
+        )
+
+    monkeypatch.setattr(ContactRepository, "add", reject_contact)
+
+    result = cli(
+        [
+            "add-contact",
+            "K8ABC",
+            "--frequency-hz",
+            "14250000",
+            "--mode",
+            "USB",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "entry.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_CONFLICT
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Rolling Thunder contact conflict" in captured.err
+    assert "Traceback" not in captured.err
