@@ -9,11 +9,13 @@ from rolling_thunder.config import (
     ConfigurationFileError,
     ConfigurationParseError,
     ConfigurationValidationError,
+    ContactBackupConfig,
     ForgeConfig,
     HardwareConfig,
     OperatorConfig,
     StorageConfig,
     load_config,
+    resolve_contact_backup_directory,
 )
 
 
@@ -233,3 +235,148 @@ hardware:
     assert config.hardware.mock is False
     assert config.hardware.radio_device == Path("/dev/ttyUSB0")
     assert config.hardware.gps_device == Path("/dev/ttyACM0")
+
+
+def test_contact_backup_defaults_are_typed() -> None:
+    """Backup settings should have safe disabled defaults."""
+    config = ApplicationConfig(
+        operator=OperatorConfig(callsign="KI5VNB", home_grid="EM79xm")
+    )
+
+    assert isinstance(
+        config.storage.contact_backups,
+        ContactBackupConfig,
+    )
+    assert config.storage.contact_backups.enabled is False
+    assert config.storage.contact_backups.directory == Path(
+        "backups/contacts"
+    )
+    assert config.storage.contact_backups.retention_count == 10
+
+
+def test_contact_backup_yaml_overrides_load(tmp_path: Path) -> None:
+    """Explicit backup settings should load as typed values."""
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  contact_backups:
+    enabled: true
+    directory: local/contact-backups
+    retention_count: 25
+""",
+    )
+
+    config = load_config(path)
+
+    assert config.storage.contact_backups.enabled is True
+    assert config.storage.contact_backups.directory == Path(
+        "local/contact-backups"
+    )
+    assert config.storage.contact_backups.retention_count == 25
+
+
+@pytest.mark.parametrize("retention_count", [0, -1])
+def test_contact_backup_rejects_non_positive_retention(
+    tmp_path: Path,
+    retention_count: int,
+) -> None:
+    """Retention must identify the exact invalid configuration path."""
+    path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  contact_backups:
+    retention_count: {retention_count}
+""",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match=r"storage\.contact_backups\.retention_count",
+    ):
+        load_config(path)
+
+
+@pytest.mark.parametrize("directory", ["''", '""', "'.'"])
+def test_contact_backup_rejects_invalid_directory(
+    tmp_path: Path,
+    directory: str,
+) -> None:
+    """Empty and current-directory backup paths should be rejected."""
+    path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  contact_backups:
+    directory: {directory}
+""",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match=r"storage\.contact_backups\.directory",
+    ):
+        load_config(path)
+
+
+def test_contact_backup_directory_resolves_relative_to_config(
+    tmp_path: Path,
+) -> None:
+    """Relative machine paths should be anchored beside the YAML file."""
+    config_directory = tmp_path / "machine-config"
+    config_directory.mkdir()
+    config_path = write_config(
+        config_directory,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  contact_backups:
+    directory: ../persistent/contact-backups
+""",
+    )
+    config = load_config(config_path)
+
+    resolved = resolve_contact_backup_directory(
+        config,
+        config_path,
+    )
+
+    assert resolved == (
+        tmp_path / "persistent" / "contact-backups"
+    ).resolve()
+
+
+def test_absolute_contact_backup_directory_is_preserved(
+    tmp_path: Path,
+) -> None:
+    """Absolute backup paths should not be rebased."""
+    absolute_directory = tmp_path / "absolute-backups"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  contact_backups:
+    directory: {absolute_directory}
+""",
+    )
+    config = load_config(config_path)
+
+    assert resolve_contact_backup_directory(
+        config,
+        config_path,
+    ) == absolute_directory

@@ -148,3 +148,38 @@ storage:
     assert "Storage error" in log_text
     assert str(database_path) in log_text
     assert "Traceback" not in log_text
+
+
+def test_main_logs_resolved_contact_backup_configuration(
+    tmp_path: Path,
+) -> None:
+    """Startup should resolve and report configured backup settings."""
+    config_directory = tmp_path / "config"
+    config_directory.mkdir()
+    config_path = write_config(
+        config_directory,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: data/contacts.db
+  contact_backups:
+    enabled: true
+    directory: ../backups/contacts
+    retention_count: 7
+""",
+    )
+    log_path = tmp_path / "logs" / "rolling-thunder.log"
+
+    assert main(config_path, log_path) == 0
+
+    log_text = log_path.read_text(encoding="utf-8")
+    expected_directory = (
+        tmp_path / "backups" / "contacts"
+    ).resolve()
+
+    assert "Contact backups configured enabled=True" in log_text
+    assert f"directory={expected_directory}" in log_text
+    assert "retention=7" in log_text
+    assert not expected_directory.exists()

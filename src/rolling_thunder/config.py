@@ -8,7 +8,9 @@ from pydantic import (
     AnyHttpUrl,
     BaseModel,
     ConfigDict,
+    Field,
     ValidationError,
+    field_validator,
     model_validator,
 )
 
@@ -80,10 +82,40 @@ class ForgeConfig(ConfigurationModel):
     api_url: AnyHttpUrl | None = None
 
 
+class ContactBackupConfig(ConfigurationModel):
+    """Verified local contact-backup settings."""
+
+    enabled: bool = False
+    directory: Path = Path("backups/contacts")
+    retention_count: int = Field(default=10, ge=1)
+
+    @field_validator("directory", mode="before")
+    @classmethod
+    def validate_directory(cls, value: object) -> object:
+        """Reject empty or current-directory backup paths."""
+        if isinstance(value, str) and not value.strip():
+            raise ValueError(
+                "contact backup directory must not be empty"
+            )
+
+        if isinstance(value, Path) and str(value) in {"", "."}:
+            raise ValueError(
+                "contact backup directory must name a directory"
+            )
+
+        if isinstance(value, str) and str(Path(value)) == ".":
+            raise ValueError(
+                "contact backup directory must name a directory"
+            )
+
+        return value
+
+
 class StorageConfig(ConfigurationModel):
     """Local persistent-storage settings."""
 
     database_path: Path = Path("data/rolling-thunder.db")
+    contact_backups: ContactBackupConfig = ContactBackupConfig()
 
 
 class ApplicationConfig(ConfigurationModel):
@@ -93,6 +125,19 @@ class ApplicationConfig(ConfigurationModel):
     hardware: HardwareConfig = HardwareConfig()
     forge: ForgeConfig = ForgeConfig()
     storage: StorageConfig = StorageConfig()
+
+
+def resolve_contact_backup_directory(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path:
+    """Resolve the configured backup directory relative to the YAML file."""
+    directory = config.storage.contact_backups.directory
+
+    if directory.is_absolute():
+        return directory
+
+    return (config_path.parent / directory).resolve()
 
 
 def _format_validation_error(error: ValidationError) -> str:
