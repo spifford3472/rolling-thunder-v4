@@ -5,7 +5,6 @@ from typing import Final
 
 from rolling_thunder.phonetic_callsign import parse_phonetic_callsign
 
-
 _DEFAULT_TRANSCRIPTS: Final[tuple[tuple[str, ...], ...]] = (
     ("KILO", "INDIA", "FIVE", "VICTOR", "NOVEMBER", "BRAVO"),
     ("GOLF", "BRAVO", "NINER", "ZERO", "MIKE", "GOLF", "YANKEE"),
