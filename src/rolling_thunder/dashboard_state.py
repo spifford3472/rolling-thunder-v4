@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from rolling_thunder.callsign_capture import CallsignCaptureState
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
 
 
@@ -49,25 +50,29 @@ def _format_band(frequency: Frequency | None) -> str:
     return "Out of band"
 
 
-def build_dashboard_state(radio_state: RadioState) -> DashboardState:
-    """Convert domain radio state into stable UI-facing text."""
+def build_dashboard_state(
+    radio_state: RadioState,
+    callsign_capture: CallsignCaptureState | None = None,
+) -> DashboardState:
+    """Convert domain and callsign state into stable UI-facing text."""
+    capture = callsign_capture or CallsignCaptureState()
     connected = radio_state.connection_state is RadioConnectionState.CONNECTED
     mode = radio_state.mode.value if radio_state.mode is not None else "--"
     if connected:
-        ticker = "RADIO CONNECTED — MOCK MODE READY"
+        ticker = "RADIO CONNECTED — MOCK VOICE READY"
     elif radio_state.last_error:
         ticker = f"RADIO ERROR — {radio_state.last_error}"
     else:
         ticker = "RADIO DISCONNECTED — LOGGING DISABLED"
 
     return DashboardState(
-        pending_callsign="—",
-        voice_state="DISABLED",
+        pending_callsign=capture.pending_callsign or "—",
+        voice_state=capture.voice_state,
         radio_state=radio_state.connection_state.value.upper(),
         frequency=_format_frequency(radio_state.frequency),
         band=_format_band(radio_state.frequency),
         mode=mode,
-        commit_state="DISABLED",
-        last_result="—",
+        commit_state=capture.commit_state,
+        last_result=capture.last_result,
         ticker=ticker,
     )
