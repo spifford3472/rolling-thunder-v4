@@ -91,21 +91,35 @@ def is_structurally_valid_callsign(callsign: str) -> bool:
 
 def parse_phonetic_callsign(tokens: list[str] | tuple[str, ...]) -> CallsignParseResult:
     """Convert finalized phonetic tokens into a callsign without guessing."""
+    normalized_tokens = [normalize_token(token) for token in tokens]
     output: list[str] = []
     unknown: list[str] = []
+    index = 0
 
-    for raw_token in tokens:
-        token = normalize_token(raw_token)
+    while index < len(normalized_tokens):
+        token = normalized_tokens[index]
         if not token:
+            index += 1
+            continue
+        if (
+            token == "X"
+            and index + 1 < len(normalized_tokens)
+            and normalized_tokens[index + 1] == "RAY"
+        ):
+            output.append("X")
+            index += 2
             continue
         if token in _PORTABLE_SUFFIXES:
             output.append(_PORTABLE_SUFFIXES[token])
+            index += 1
             continue
         mapped = _TOKEN_ALIASES.get(token)
         if mapped is None:
             unknown.append(token)
+            index += 1
             continue
         output.append(mapped)
+        index += 1
 
     if unknown:
         return CallsignParseResult(

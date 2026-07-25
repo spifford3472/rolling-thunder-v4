@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 
 from rolling_thunder.config import ApplicationConfig
+from rolling_thunder.contact_logging import ContactLoggingService
+from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.domain import RadioState
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.mock_radio import MockRadio
@@ -14,10 +16,11 @@ from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
 @dataclass
 class ApplicationRuntime:
-    """Own the composed radio and polling lifecycle for one application run."""
+    """Own the composed radio, logging, and polling lifecycle for one run."""
 
     radio: Radio
     polling: RadioPollingService
+    contact_logging: ContactLoggingService
     _started: bool = False
 
     @classmethod
@@ -28,7 +31,7 @@ class ApplicationRuntime:
         scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
     ) -> "ApplicationRuntime":
-        """Build mock or FT-891 services from validated application configuration."""
+        """Build configured radio, persistence, and application services."""
         radio: Radio
         if config.hardware.mock:
             radio = MockRadio()
@@ -39,6 +42,7 @@ class ApplicationRuntime:
             radio = Ft891Radio(PySerialCatTransport(radio_device))
 
         polling_scheduler = scheduler or ThreadingPollScheduler()
+        repository = ContactRepository(config.storage.database_path)
         return cls(
             radio=radio,
             polling=RadioPollingService(
@@ -46,6 +50,7 @@ class ApplicationRuntime:
                 polling_scheduler,
                 interval_s=interval_s,
             ),
+            contact_logging=ContactLoggingService(repository),
         )
 
     @property

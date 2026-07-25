@@ -41,7 +41,7 @@ class LiveCallsignCaptureController:
     def start_capture(self) -> bool:
         """Start one daemon capture worker, returning false when already active."""
         with self._lock:
-            if self._capturing:
+            if self._capturing or self._state.commit_state == "COMMITTING":
                 return False
             self._capturing = True
             self._state = CallsignCaptureState(
@@ -88,9 +88,46 @@ class LiveCallsignCaptureController:
             self._capturing = False
 
     def discard(self) -> CallsignCaptureState:
-        """Discard a completed pending callsign; active capture continues safely."""
+        """Discard a completed pending callsign; active work continues safely."""
         with self._lock:
-            if self._capturing:
+            if self._capturing or self._state.commit_state == "COMMITTING":
                 return self._state
             self._state = CallsignCaptureState(last_result="DISCARDED")
+            return self._state
+
+    def commit_started(self, callsign: str) -> CallsignCaptureState:
+        """Preserve a matching pending callsign while durable storage runs."""
+        with self._lock:
+            if self._capturing or self._state.pending_callsign != callsign:
+                return self._state
+            self._state = CallsignCaptureState(
+                pending_callsign=callsign,
+                voice_state="READY",
+                commit_state="COMMITTING",
+                last_result="COMMITTING",
+            )
+            return self._state
+
+    def commit_succeeded(self, callsign: str) -> CallsignCaptureState:
+        """Clear a matching pending callsign after durable storage succeeds."""
+        with self._lock:
+            if self._state.pending_callsign != callsign:
+                return self._state
+            self._state = CallsignCaptureState(
+                last_result=f"COMMITTED {callsign}",
+            )
+            return self._state
+
+    def commit_failed(self, message: str) -> CallsignCaptureState:
+        """Preserve the pending callsign and restore Commit after a write failure."""
+        del message
+        with self._lock:
+            if not self._state.pending_callsign:
+                return self._state
+            self._state = CallsignCaptureState(
+                pending_callsign=self._state.pending_callsign,
+                voice_state="READY",
+                commit_state="READY",
+                last_result="LOG ERROR",
+            )
             return self._state
