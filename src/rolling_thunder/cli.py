@@ -27,9 +27,10 @@ from rolling_thunder.contact_import import (
 from rolling_thunder.contact_repository import (
     ContactAlreadyExistsError,
     ContactConflictError,
+    ContactNotFoundError,
     ContactRepository,
 )
-from rolling_thunder.domain import Contact
+from rolling_thunder.domain import Contact, SynchronizationState
 from rolling_thunder.logging_setup import DEFAULT_LOG_PATH, configure_logging
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.storage import StorageError
@@ -210,6 +211,77 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     show_parser.add_argument(
+        "--log",
+        type=Path,
+        default=DEFAULT_LOG_PATH,
+        help=f"log file path (default: {DEFAULT_LOG_PATH})",
+    )
+
+    update_parser = subparsers.add_parser(
+        "update-contact",
+        help="Update selected fields on one stored contact",
+    )
+    update_parser.add_argument(
+        "contact_id",
+        help="contact UUID",
+    )
+    update_parser.add_argument(
+        "--callsign",
+        help="replacement callsign",
+    )
+    update_parser.add_argument(
+        "--frequency-hz",
+        help="replacement frequency in integer hertz",
+    )
+    update_parser.add_argument(
+        "--mode",
+        help="replacement mode: AM, CW, DATA, FM, LSB, or USB",
+    )
+    update_parser.add_argument(
+        "--started-at",
+        help="replacement timezone-aware ISO-8601 start time",
+    )
+    update_parser.add_argument(
+        "--rst-sent",
+        help="replacement signal report sent",
+    )
+    update_parser.add_argument(
+        "--rst-received",
+        help="replacement signal report received",
+    )
+
+    grid_group = update_parser.add_mutually_exclusive_group()
+    grid_group.add_argument(
+        "--grid",
+        help="replacement Maidenhead grid",
+    )
+    grid_group.add_argument(
+        "--clear-grid",
+        action="store_true",
+        help="remove the stored Maidenhead grid",
+    )
+
+    notes_group = update_parser.add_mutually_exclusive_group()
+    notes_group.add_argument(
+        "--notes",
+        help="replacement contact notes",
+    )
+    notes_group.add_argument(
+        "--clear-notes",
+        action="store_true",
+        help="remove the stored contact notes",
+    )
+
+    update_parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=(
+            "YAML configuration path "
+            f"(default: {DEFAULT_CONFIG_PATH})"
+        ),
+    )
+    update_parser.add_argument(
         "--log",
         type=Path,
         default=DEFAULT_LOG_PATH,
@@ -703,6 +775,190 @@ def run_contact_show(
     return EXIT_SUCCESS
 
 
+def run_contact_update(
+    config_path: Path,
+    *,
+    contact_id: str,
+    callsign: str | None,
+    frequency_hz: str | None,
+    mode: str | None,
+    started_at: str | None,
+    rst_sent: str | None,
+    rst_received: str | None,
+    grid: str | None,
+    clear_grid: bool,
+    notes: str | None,
+    clear_notes: bool,
+    log_path: Path = DEFAULT_LOG_PATH,
+) -> int:
+    """Validate and atomically update selected contact fields."""
+    logger = configure_logging(log_path)
+    logger.info(
+        "Contact update requested config=%s contact_id=%s",
+        config_path,
+        contact_id,
+    )
+
+    replacements_requested = any(
+        (
+            callsign is not None,
+            frequency_hz is not None,
+            mode is not None,
+            started_at is not None,
+            rst_sent is not None,
+            rst_received is not None,
+            grid is not None,
+            clear_grid,
+            notes is not None,
+            clear_notes,
+        )
+    )
+
+    if not replacements_requested:
+        message = "at least one replacement field is required"
+        logger.error("Contact update validation error: %s", message)
+        print(
+            f"Rolling Thunder contact validation error: {message}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    try:
+        parsed_contact_id = UUID(contact_id)
+    except ValueError as error:
+        logger.error("Contact UUID validation error: %s", error)
+        print(
+            f"Rolling Thunder contact validation error: "
+            f"invalid contact UUID: {contact_id}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    try:
+        config = load_config(config_path)
+    except ConfigurationError as error:
+        logger.error("Configuration error: %s", error)
+        print(
+            f"Rolling Thunder configuration error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONFIGURATION_ERROR
+
+    try:
+        repository = ContactRepository(
+            config.storage.database_path
+        )
+        existing = repository.get(parsed_contact_id)
+    except StorageError as error:
+        logger.error("Storage error: %s", error)
+        print(
+            f"Rolling Thunder storage error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_STORAGE_ERROR
+
+    if existing is None:
+        logger.error("Contact not found contact_id=%s", parsed_contact_id)
+        print(
+            f"Rolling Thunder contact not found: {parsed_contact_id}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_NOT_FOUND
+
+    values = existing.model_dump()
+
+    if callsign is not None:
+        values["callsign"] = callsign
+    if frequency_hz is not None:
+        values["frequency_hz"] = frequency_hz
+    if mode is not None:
+        values["mode"] = mode
+    if started_at is not None:
+        values["started_at"] = started_at
+    if rst_sent is not None:
+        values["rst_sent"] = rst_sent
+    if rst_received is not None:
+        values["rst_received"] = rst_received
+    if grid is not None:
+        values["grid"] = grid
+    elif clear_grid:
+        values["grid"] = None
+    if notes is not None:
+        values["notes"] = notes
+    elif clear_notes:
+        values["notes"] = None
+
+    try:
+        candidate = Contact.model_validate(values)
+    except ValidationError as error:
+        logger.error("Contact update validation error: %s", error)
+        print(
+            f"Rolling Thunder contact validation error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    visible_fields = (
+        "callsign",
+        "frequency_hz",
+        "mode",
+        "started_at",
+        "rst_sent",
+        "rst_received",
+        "grid",
+        "notes",
+    )
+    changed = any(
+        getattr(candidate, field) != getattr(existing, field)
+        for field in visible_fields
+    )
+
+    if changed:
+        candidate = Contact.model_validate(
+            {
+                **candidate.model_dump(),
+                "synchronization_state": SynchronizationState.PENDING,
+            }
+        )
+
+    try:
+        updated = repository.update(candidate)
+    except ContactNotFoundError:
+        logger.error(
+            "Contact disappeared during update contact_id=%s",
+            parsed_contact_id,
+        )
+        print(
+            f"Rolling Thunder contact not found: {parsed_contact_id}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_NOT_FOUND
+    except StorageError as error:
+        logger.error("Storage error: %s", error)
+        print(
+            f"Rolling Thunder storage error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_STORAGE_ERROR
+
+    logger.info(
+        "Contact update completed contact_id=%s callsign=%s changed=%s",
+        updated.contact_id,
+        updated.callsign,
+        changed,
+    )
+    print(
+        "Contact updated: "
+        f"id={updated.contact_id} "
+        f"callsign={updated.callsign} "
+        f"frequency_hz={updated.frequency_hz} "
+        f"mode={updated.mode.value} "
+        f"sync={updated.synchronization_state.value} "
+        f"changed={str(changed).lower()}"
+    )
+    return EXIT_SUCCESS
+
+
 def cli(argv: Sequence[str] | None = None) -> int:
     """Parse command-line arguments and execute the selected operation."""
     parser = build_parser()
@@ -747,6 +1003,23 @@ def cli(argv: Sequence[str] | None = None) -> int:
         return run_contact_show(
             arguments.config,
             contact_id=arguments.contact_id,
+            log_path=arguments.log,
+        )
+
+    if arguments.command == "update-contact":
+        return run_contact_update(
+            arguments.config,
+            contact_id=arguments.contact_id,
+            callsign=arguments.callsign,
+            frequency_hz=arguments.frequency_hz,
+            mode=arguments.mode,
+            started_at=arguments.started_at,
+            rst_sent=arguments.rst_sent,
+            rst_received=arguments.rst_received,
+            grid=arguments.grid,
+            clear_grid=arguments.clear_grid,
+            notes=arguments.notes,
+            clear_notes=arguments.clear_notes,
             log_path=arguments.log,
         )
 

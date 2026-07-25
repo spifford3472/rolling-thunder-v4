@@ -25,7 +25,11 @@ from rolling_thunder.contact_repository import (
     ContactAlreadyExistsError,
     ContactRepository,
 )
-from rolling_thunder.domain import Contact, RadioMode
+from rolling_thunder.domain import (
+    Contact,
+    RadioMode,
+    SynchronizationState,
+)
 
 
 def make_contact() -> Contact:
@@ -1031,4 +1035,314 @@ storage:
         "11111111-2222-3333-4444-555555555557"
         in captured.err
     )
+    assert "Traceback" not in captured.err
+
+
+def test_update_contact_replaces_selected_fields(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Selected replacements should change while other fields remain."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+    original = Contact(
+        contact_id=UUID(
+            "11111111-2222-3333-4444-555555555561"
+        ),
+        callsign="K8ABC",
+        frequency_hz=14_250_000,
+        mode=RadioMode.USB,
+        started_at=datetime(2026, 7, 25, 6, 30, tzinfo=UTC),
+        rst_sent="59",
+        rst_received="57",
+        grid="EM79xm",
+        notes="Original notes",
+        synchronization_state=SynchronizationState.SYNCHRONIZED,
+    )
+    repository.add(original)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "update-contact",
+            str(original.contact_id),
+            "--frequency-hz",
+            "7255000",
+            "--mode",
+            "lsb",
+            "--rst-received",
+            "55",
+            "--notes",
+            "Corrected notes",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "update.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert "changed=true" in captured.out
+    assert "frequency_hz=7255000" in captured.out
+    assert "mode=LSB" in captured.out
+    assert "sync=pending" in captured.out
+
+    updated = repository.get(original.contact_id)
+    assert updated is not None
+    assert updated.callsign == original.callsign
+    assert updated.frequency_hz == 7_255_000
+    assert updated.mode is RadioMode.LSB
+    assert updated.started_at == original.started_at
+    assert updated.rst_sent == original.rst_sent
+    assert updated.rst_received == "55"
+    assert updated.grid == original.grid
+    assert updated.notes == "Corrected notes"
+    assert updated.synchronization_state is SynchronizationState.PENDING
+
+
+def test_update_contact_can_clear_optional_fields(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Explicit clear options should remove grid and notes."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+    original = make_contact().model_copy(
+        update={
+            "contact_id": UUID(
+                "11111111-2222-3333-4444-555555555562"
+            ),
+            "synchronization_state": SynchronizationState.SYNCHRONIZED,
+        }
+    )
+    repository.add(original)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "update-contact",
+            str(original.contact_id),
+            "--clear-grid",
+            "--clear-notes",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "update.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+    assert capsys.readouterr().err == ""
+
+    updated = repository.get(original.contact_id)
+    assert updated is not None
+    assert updated.grid is None
+    assert updated.notes is None
+    assert updated.synchronization_state is SynchronizationState.PENDING
+
+
+def test_update_contact_preserves_sync_state_for_identical_value(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """An identical replacement should not reset synchronization state."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+    original = make_contact().model_copy(
+        update={
+            "contact_id": UUID(
+                "11111111-2222-3333-4444-555555555563"
+            ),
+            "synchronization_state": SynchronizationState.SYNCHRONIZED,
+        }
+    )
+    repository.add(original)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "update-contact",
+            str(original.contact_id),
+            "--callsign",
+            str(original.callsign),
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "update.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert "changed=false" in captured.out
+    assert "sync=synchronized" in captured.out
+
+    updated = repository.get(original.contact_id)
+    assert updated is not None
+    assert (
+        updated.synchronization_state
+        is SynchronizationState.SYNCHRONIZED
+    )
+
+
+def test_update_contact_rejects_missing_replacements(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """An update command must contain at least one replacement."""
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {tmp_path / "contacts.db"}
+""",
+    )
+
+    result = cli(
+        [
+            "update-contact",
+            "11111111-2222-3333-4444-555555555564",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "update.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "at least one replacement field is required" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_update_contact_rejects_invalid_replacement(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Invalid replacement data should leave storage unchanged."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+    original = make_contact().model_copy(
+        update={
+            "contact_id": UUID(
+                "11111111-2222-3333-4444-555555555565"
+            )
+        }
+    )
+    repository.add(original)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "update-contact",
+            str(original.contact_id),
+            "--frequency-hz",
+            "-1",
+            "--mode",
+            "INVALID",
+            "--rst-sent",
+            "99",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "update.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Rolling Thunder contact validation error" in captured.err
+    assert "Traceback" not in captured.err
+    assert repository.get(original.contact_id) == original
+
+
+def test_update_contact_reports_missing_contact(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A valid absent UUID should return contact-not-found."""
+    missing_id = UUID(
+        "11111111-2222-3333-4444-555555555566"
+    )
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {tmp_path / "contacts.db"}
+""",
+    )
+
+    result = cli(
+        [
+            "update-contact",
+            str(missing_id),
+            "--notes",
+            "Replacement",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "update.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_NOT_FOUND
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"Rolling Thunder contact not found: {missing_id}" in captured.err
     assert "Traceback" not in captured.err

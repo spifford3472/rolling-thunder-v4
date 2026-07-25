@@ -130,6 +130,72 @@ class ContactRepository:
 
         return self._contact_from_row(row, contact_id)
 
+    def update(self, contact: Contact) -> Contact:
+        """Atomically replace one stored contact and return it."""
+        values = {
+            "contact_id": str(contact.contact_id),
+            "callsign": contact.callsign,
+            "frequency_hz": contact.frequency_hz,
+            "mode": contact.mode.value,
+            "started_at": contact.started_at.isoformat().replace(
+                "+00:00",
+                "Z",
+            ),
+            "rst_sent": contact.rst_sent,
+            "rst_received": contact.rst_received,
+            "grid": contact.grid,
+            "notes": contact.notes,
+            "synchronization_state": contact.synchronization_state.value,
+        }
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                result = connection.execute(
+                    """
+                    UPDATE contacts
+                    SET callsign = :callsign,
+                        frequency_hz = :frequency_hz,
+                        mode = :mode,
+                        started_at = :started_at,
+                        rst_sent = :rst_sent,
+                        rst_received = :rst_received,
+                        grid = :grid,
+                        notes = :notes,
+                        synchronization_state = :synchronization_state,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE contact_id = :contact_id
+                    """,
+                    values,
+                )
+
+                if result.rowcount == 0:
+                    raise ContactNotFoundError(
+                        f"Contact does not exist: {contact.contact_id}"
+                    )
+
+                connection.commit()
+        except ContactNotFoundError:
+            raise
+        except sqlite3.IntegrityError as error:
+            raise StorageError(
+                "Contact could not be updated because it violates "
+                f"the database schema: {contact.contact_id}: {error}"
+            ) from error
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contact could not be updated in "
+                f"{self._database_path}: {contact.contact_id}: {error}"
+            ) from error
+
+        updated_contact = self.get(contact.contact_id)
+
+        if updated_contact is None:
+            raise StorageError(
+                f"Contact disappeared after update: {contact.contact_id}"
+            )
+
+        return updated_contact
+
     def update_synchronization_state(
         self,
         contact_id: UUID,
