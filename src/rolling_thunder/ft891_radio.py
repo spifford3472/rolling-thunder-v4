@@ -74,7 +74,9 @@ class Ft891Radio:
             )
             if isinstance(error, RadioConnectionError):
                 raise
-            raise RadioConnectionError(f"Could not connect to FT-891: {error}") from error
+            raise RadioConnectionError(
+                f"Could not connect to FT-891: {error}"
+            ) from error
 
         self._state = RadioState(
             connection_state=RadioConnectionState.CONNECTED,
@@ -142,7 +144,9 @@ class Ft891Radio:
 
     def _require_connected(self) -> None:
         if self._state.connection_state is not RadioConnectionState.CONNECTED:
-            raise RadioConnectionError("FT-891 operation requires a connected radio.")
+            raise RadioConnectionError(
+                "FT-891 operation requires a connected radio."
+            )
 
     def _timestamp(self) -> datetime:
         timestamp = self._clock()
