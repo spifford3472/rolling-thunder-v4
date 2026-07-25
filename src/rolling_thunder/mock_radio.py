@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Final
+from typing import Final, cast
 
 from rolling_thunder.domain import (
     Frequency,
@@ -16,6 +16,7 @@ Clock = Callable[[], datetime]
 
 _DEFAULT_FREQUENCY: Final = Frequency(hz=14_250_000)
 _DEFAULT_MODE: Final = RadioMode.USB
+_UNSET: Final = object()
 
 _BAND_DEFAULTS: Final[dict[RadioBand, tuple[Frequency, RadioMode]]] = {
     RadioBand.BAND_160M: (Frequency(hz=1_900_000), RadioMode.LSB),
@@ -135,24 +136,32 @@ class MockRadio:
         self,
         *,
         connection_state: RadioConnectionState | None = None,
-        frequency: Frequency | None | object = ..., 
-        mode: RadioMode | None | object = ...,
-        last_error: str | None | object = ...,
+        frequency: Frequency | None | object = _UNSET,
+        mode: RadioMode | None | object = _UNSET,
+        last_error: str | None | object = _UNSET,
     ) -> RadioState:
-        updates: dict[str, object] = {
-            "updated_at": self._timestamp(),
-            "transmitting": False,
-        }
-        if connection_state is not None:
-            updates["connection_state"] = connection_state
-        if frequency is not ...:
-            updates["frequency"] = frequency
-        if mode is not ...:
-            updates["mode"] = mode
-        if last_error is not ...:
-            updates["last_error"] = last_error
-        elif connection_state is not RadioConnectionState.ERROR:
-            updates["last_error"] = None
+        next_connection_state = connection_state or self._state.connection_state
+        next_frequency = (
+            self._state.frequency
+            if frequency is _UNSET
+            else cast(Frequency | None, frequency)
+        )
+        next_mode = (
+            self._state.mode if mode is _UNSET else cast(RadioMode | None, mode)
+        )
+        if last_error is not _UNSET:
+            next_last_error = cast(str | None, last_error)
+        elif next_connection_state is RadioConnectionState.ERROR:
+            next_last_error = self._state.last_error
+        else:
+            next_last_error = None
 
-        self._state = self._state.model_copy(update=updates)
+        self._state = RadioState(
+            connection_state=next_connection_state,
+            frequency=next_frequency,
+            mode=next_mode,
+            transmitting=False,
+            updated_at=self._timestamp(),
+            last_error=next_last_error,
+        )
         return self._state
