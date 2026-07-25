@@ -9,6 +9,7 @@ import pytest
 
 from rolling_thunder.contact_repository import (
     ContactAlreadyExistsError,
+    ContactNotFoundError,
     ContactRepository,
 )
 from rolling_thunder.domain import Contact, RadioMode, SynchronizationState
@@ -330,3 +331,131 @@ def test_repository_rejects_non_integer_list_limit(
         match=r"must be an integer",
     ):
         repository.list_recent(limit=limit)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        SynchronizationState.SYNCHRONIZED,
+        SynchronizationState.FAILED,
+    ],
+)
+def test_repository_updates_synchronization_state(
+    tmp_path: Path,
+    state: SynchronizationState,
+) -> None:
+    """A synchronization transition should return the updated contact."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+    contact = make_contact(
+        synchronization_state=SynchronizationState.PENDING
+    )
+    repository.add(contact)
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            UPDATE contacts
+            SET updated_at = '2000-01-01 00:00:00'
+            WHERE contact_id = ?
+            """,
+            (str(contact.contact_id),),
+        )
+        connection.commit()
+
+    updated = repository.update_synchronization_state(
+        contact.contact_id,
+        state,
+    )
+
+    assert updated.synchronization_state is state
+    assert updated.contact_id == contact.contact_id
+    assert updated.callsign == contact.callsign
+    assert updated.frequency_hz == contact.frequency_hz
+    assert updated.mode == contact.mode
+    assert updated.started_at == contact.started_at
+    assert updated.rst_sent == contact.rst_sent
+    assert updated.rst_received == contact.rst_received
+    assert updated.grid == contact.grid
+    assert updated.notes == contact.notes
+
+    with sqlite3.connect(database_path) as connection:
+        stored = connection.execute(
+            """
+            SELECT synchronization_state, updated_at
+            FROM contacts
+            WHERE contact_id = ?
+            """,
+            (str(contact.contact_id),),
+        ).fetchone()
+
+    assert stored is not None
+    assert stored[0] == state.value
+    assert stored[1] != "2000-01-01 00:00:00"
+
+
+def test_repository_state_update_changes_filter_results(
+    tmp_path: Path,
+) -> None:
+    """A transitioned contact should move between synchronization queries."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    contact = make_contact(
+        synchronization_state=SynchronizationState.PENDING
+    )
+    repository.add(contact)
+
+    repository.update_synchronization_state(
+        contact.contact_id,
+        SynchronizationState.SYNCHRONIZED,
+    )
+
+    pending = repository.list_by_synchronization_state(
+        SynchronizationState.PENDING
+    )
+    synchronized = repository.list_by_synchronization_state(
+        SynchronizationState.SYNCHRONIZED
+    )
+
+    assert pending == []
+    assert synchronized == [
+        contact.model_copy(
+            update={
+                "synchronization_state": SynchronizationState.SYNCHRONIZED
+            }
+        )
+    ]
+
+
+def test_repository_state_update_reports_missing_contact(
+    tmp_path: Path,
+) -> None:
+    """Updating an unknown contact should raise a specific storage error."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    contact_id = UUID("00000000-0000-0000-0000-000000000999")
+
+    with pytest.raises(
+        ContactNotFoundError,
+        match=str(contact_id),
+    ):
+        repository.update_synchronization_state(
+            contact_id,
+            SynchronizationState.FAILED,
+        )
+
+
+@pytest.mark.parametrize("state", ["pending", None, 1])
+def test_repository_state_update_rejects_invalid_state_type(
+    tmp_path: Path,
+    state: object,
+) -> None:
+    """Synchronization updates should require the domain enum type."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+
+    with pytest.raises(
+        TypeError,
+        match=r"must be a SynchronizationState",
+    ):
+        repository.update_synchronization_state(
+            _DEFAULT_CONTACT_ID,
+            state,  # type: ignore[arg-type]
+        )

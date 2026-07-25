@@ -17,6 +17,10 @@ class ContactAlreadyExistsError(StorageError):
     """Raised when a contact UUID is already stored."""
 
 
+class ContactNotFoundError(StorageError):
+    """Raised when a requested contact does not exist."""
+
+
 class ContactRepository:
     """Create, retrieve, and list durable contacts from SQLite."""
 
@@ -121,6 +125,53 @@ class ContactRepository:
             return None
 
         return self._contact_from_row(row, contact_id)
+
+    def update_synchronization_state(
+        self,
+        contact_id: UUID,
+        state: SynchronizationState,
+    ) -> Contact:
+        """Persist and return a contact's new synchronization state."""
+        if not isinstance(state, SynchronizationState):
+            raise TypeError(
+                "Synchronization state must be a SynchronizationState."
+            )
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                result = connection.execute(
+                    """
+                    UPDATE contacts
+                    SET synchronization_state = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE contact_id = ?
+                    """,
+                    (state.value, str(contact_id)),
+                )
+
+                if result.rowcount == 0:
+                    raise ContactNotFoundError(
+                        f"Contact does not exist: {contact_id}"
+                    )
+
+                connection.commit()
+        except ContactNotFoundError:
+            raise
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contact synchronization state could not be updated in "
+                f"{self._database_path}: {contact_id}: {error}"
+            ) from error
+
+        updated_contact = self.get(contact_id)
+
+        if updated_contact is None:
+            raise StorageError(
+                f"Contact disappeared after synchronization-state update: "
+                f"{contact_id}"
+            )
+
+        return updated_contact
 
     def list_recent(self, *, limit: int = 100) -> list[Contact]:
         """List contacts from newest to oldest."""
