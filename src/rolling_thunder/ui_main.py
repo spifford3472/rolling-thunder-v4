@@ -293,14 +293,20 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     for column in range(len(CONTEXT_DEFINITIONS)):
         context_tabs.grid_columnconfigure(column, weight=1, uniform="context-tabs")
 
+    def select_context(context_id: ContextId) -> None:
+        context_navigation.select(context_id)
+
     context_buttons: dict[ContextId, tk.Button] = {}
     for column, definition in enumerate(CONTEXT_DEFINITIONS):
+        context_id = definition.context_id
+
+        def select_button_context(selected: ContextId = context_id) -> None:
+            select_context(selected)
+
         button = tk.Button(
             context_tabs,
             text=f"{definition.shortcut} {definition.label}",
-            command=lambda context_id=definition.context_id: context_navigation.select(
-                context_id
-            ),
+            command=select_button_context,
             bg=_SECONDARY_BACKGROUND,
             fg=_MUTED,
             activebackground=_CONTEXT_SELECTED,
@@ -421,13 +427,11 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     root.bind("<C>", lambda _event: commit_capture())
     root.bind("<d>", lambda _event: discard_capture())
     root.bind("<D>", lambda _event: discard_capture())
+    def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
+        context_navigation.select_shortcut(event.char)
+
     for definition in CONTEXT_DEFINITIONS:
-        root.bind(
-            definition.shortcut,
-            lambda _event, shortcut=definition.shortcut: context_navigation.select_shortcut(
-                shortcut
-            ),
-        )
+        root.bind(definition.shortcut, select_context_shortcut)
     root.protocol("WM_DELETE_WINDOW", close)
     refresh()
     root.mainloop()
