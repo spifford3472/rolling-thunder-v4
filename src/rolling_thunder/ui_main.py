@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from rolling_thunder.application_runtime import ApplicationRuntime
+from rolling_thunder.callsign_capture import MockTranscriptController
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
@@ -66,6 +67,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         print(f"Rolling Thunder startup error: {error}")
         return 3
 
+    mock_transcripts = MockTranscriptController()
     root = tk.Tk()
     root.title("Rolling Thunder v4")
     root.configure(bg=_BACKGROUND, cursor="none")
@@ -244,7 +246,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     def refresh() -> None:
-        view = build_dashboard_state(runtime.latest_radio_state)
+        view = build_dashboard_state(runtime.latest_radio_state, mock_transcripts.state)
         pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
         voice_state = view.voice_state.upper()
         voice_engaged = voice_state in {"ACTIVE", "CAPTURING", "LISTENING", "RECORDING"}
@@ -271,6 +273,11 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         root.destroy()
 
     root.bind("<Escape>", lambda _event: close())
+    if config.hardware.mock:
+        root.bind("<v>", lambda _event: mock_transcripts.capture_next())
+        root.bind("<V>", lambda _event: mock_transcripts.capture_next())
+        root.bind("<d>", lambda _event: mock_transcripts.discard())
+        root.bind("<D>", lambda _event: mock_transcripts.discard())
     root.protocol("WM_DELETE_WINDOW", close)
     refresh()
     root.mainloop()
