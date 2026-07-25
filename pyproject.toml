@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 rolling-thunder = "rolling_thunder.cli:cli"
+rolling-thunder-ui = "rolling_thunder.ui_main:main"
 
 [project.optional-dependencies]
 development = [
