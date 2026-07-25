@@ -485,3 +485,67 @@ def test_repository_lists_all_contacts_without_limit(tmp_path: Path) -> None:
     assert contacts[-1].contact_id == UUID(
         "00000000-0000-0000-0000-000000001001"
     )
+
+
+def test_repository_atomically_updates_complete_contact(
+    tmp_path: Path,
+) -> None:
+    """A complete replacement should persist every updated field."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    original = make_contact()
+    repository.add(original)
+
+    replacement = Contact(
+        contact_id=original.contact_id,
+        callsign="K8ABC",
+        frequency_hz=7_255_000,
+        mode=RadioMode.LSB,
+        started_at=datetime(2026, 7, 25, 2, 30, tzinfo=UTC),
+        rst_sent="59",
+        rst_received="55",
+        grid="EN80aa",
+        notes="Corrected contact",
+        synchronization_state=SynchronizationState.PENDING,
+    )
+
+    returned = repository.update(replacement)
+    stored = repository.get(original.contact_id)
+
+    assert returned == replacement
+    assert stored == replacement
+    assert returned is not replacement
+
+
+def test_repository_update_preserves_contact_uuid(
+    tmp_path: Path,
+) -> None:
+    """Updating a contact should retain its existing UUID."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    original = make_contact()
+    repository.add(original)
+
+    replacement = original.model_copy(
+        update={
+            "callsign": "K8ABC",
+            "synchronization_state": SynchronizationState.PENDING,
+        }
+    )
+
+    updated = repository.update(replacement)
+
+    assert updated.contact_id == original.contact_id
+    assert repository.get(original.contact_id) == updated
+
+
+def test_repository_update_rejects_missing_contact(
+    tmp_path: Path,
+) -> None:
+    """Updating an absent UUID should raise contact-not-found."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    contact = make_contact()
+
+    with pytest.raises(
+        ContactNotFoundError,
+        match=f"Contact does not exist: {contact.contact_id}",
+    ):
+        repository.update(contact)
