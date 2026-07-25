@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 import serial
 
@@ -39,7 +39,7 @@ SerialFactory = Callable[[Path, int, float], SerialPort]
 
 def _open_serial(device: Path, baud_rate: int, timeout_s: float) -> SerialPort:
     """Open a pyserial port using FT-891 CAT framing."""
-    return serial.Serial(
+    port = serial.Serial(
         port=str(device),
         baudrate=baud_rate,
         bytesize=serial.EIGHTBITS,
@@ -48,6 +48,7 @@ def _open_serial(device: Path, baud_rate: int, timeout_s: float) -> SerialPort:
         timeout=timeout_s,
         write_timeout=timeout_s,
     )
+    return cast(SerialPort, port)
 
 
 class PySerialCatTransport:
