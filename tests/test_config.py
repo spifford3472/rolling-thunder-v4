@@ -16,6 +16,7 @@ from rolling_thunder.config import (
     StorageConfig,
     load_config,
     resolve_contact_backup_directory,
+    resolve_database_path,
 )
 
 
@@ -54,7 +55,7 @@ storage:
     assert config.operator.home_grid == "EM79xm"
     assert config.hardware.mock is True
     assert config.forge.api_url is not None
-    assert str(config.storage.database_path) == "data/test.db"
+    assert config.storage.database_path == (tmp_path / "data/test.db").resolve()
 
 
 def test_models_can_be_constructed_directly() -> None:
@@ -237,6 +238,105 @@ hardware:
     assert config.hardware.gps_device == Path("/dev/ttyACM0")
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("radio_device", "''"),
+        ("gps_device", "'.'"),
+        ("radio_device", "ttyUSB0"),
+        ("gps_device", "devices/gps"),
+    ],
+)
+def test_hardware_device_paths_are_actionable(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    """Configured hardware paths should be non-empty absolute device paths."""
+    path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+hardware:
+  mock: true
+  {field}: {value}
+""",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match=rf"hardware\.{field}",
+    ):
+        load_config(path)
+
+
+@pytest.mark.parametrize("database_path", ["''", '""', "'.'"])
+def test_database_path_rejects_empty_or_current_directory(
+    tmp_path: Path,
+    database_path: str,
+) -> None:
+    """The database setting must identify a database file."""
+    path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match=r"storage\.database_path",
+    ):
+        load_config(path)
+
+
+def test_relative_database_path_resolves_relative_to_config(tmp_path: Path) -> None:
+    """YAML-relative database paths should not depend on the launch directory."""
+    config_directory = tmp_path / "machine-config"
+    config_directory.mkdir()
+    config_path = write_config(
+        config_directory,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: ../persistent/rolling-thunder.db
+""",
+    )
+
+    config = load_config(config_path)
+
+    assert config.storage.database_path == (
+        tmp_path / "persistent/rolling-thunder.db"
+    ).resolve()
+
+
+def test_absolute_database_path_is_preserved(tmp_path: Path) -> None:
+    """Absolute database paths should not be rebased."""
+    absolute_database = tmp_path / "persistent/rolling-thunder.db"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {absolute_database}
+""",
+    )
+    config = load_config(config_path)
+
+    assert resolve_database_path(config, config_path) == absolute_database
+    assert config.storage.database_path == absolute_database
+
+
 def test_contact_backup_defaults_are_typed() -> None:
     """Backup settings should have safe disabled defaults."""
     config = ApplicationConfig(
@@ -248,9 +348,7 @@ def test_contact_backup_defaults_are_typed() -> None:
         ContactBackupConfig,
     )
     assert config.storage.contact_backups.enabled is False
-    assert config.storage.contact_backups.directory == Path(
-        "backups/contacts"
-    )
+    assert config.storage.contact_backups.directory == Path("backups/contacts")
     assert config.storage.contact_backups.retention_count == 10
 
 
@@ -273,9 +371,7 @@ storage:
     config = load_config(path)
 
     assert config.storage.contact_backups.enabled is True
-    assert config.storage.contact_backups.directory == Path(
-        "local/contact-backups"
-    )
+    assert config.storage.contact_backups.directory == Path("local/contact-backups")
     assert config.storage.contact_backups.retention_count == 25
 
 
@@ -353,9 +449,7 @@ storage:
         config_path,
     )
 
-    assert resolved == (
-        tmp_path / "persistent" / "contact-backups"
-    ).resolve()
+    assert resolved == (tmp_path / "persistent" / "contact-backups").resolve()
 
 
 def test_absolute_contact_backup_directory_is_preserved(

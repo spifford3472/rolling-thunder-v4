@@ -51,6 +51,12 @@ tokens, or other credentials.
 Mock hardware mode is enabled in the example configuration so development and
 tests do not require connected radio or GPS hardware.
 
+Configured radio and GPS device paths must be absolute Linux device paths, such
+as `/dev/ttyUSB0` or `/dev/ttyACM0`. Relative database paths are resolved from
+the directory containing the YAML configuration file, so the database location
+does not change when Rolling Thunder is launched from a different working
+directory. Absolute database paths are preserved unchanged.
+
 The typed loader can be used from Python with:
 
 ```python
