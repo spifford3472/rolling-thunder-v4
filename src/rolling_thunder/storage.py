@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 1
+CURRENT_SCHEMA_VERSION: Final = 2
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -21,6 +21,45 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
             schema_version
         )
         VALUES (1, 0)
+        """,
+    ),
+    2: (
+        """
+        CREATE TABLE contacts (
+            contact_id TEXT PRIMARY KEY,
+            callsign TEXT NOT NULL,
+            frequency_hz INTEGER NOT NULL
+                CHECK (frequency_hz > 0 AND frequency_hz <= 300000000000),
+            mode TEXT NOT NULL
+                CHECK (mode IN ('AM', 'CW', 'DATA', 'FM', 'LSB', 'USB')),
+            started_at TEXT NOT NULL,
+            rst_sent TEXT NOT NULL,
+            rst_received TEXT NOT NULL,
+            grid TEXT,
+            notes TEXT CHECK (notes IS NULL OR length(notes) <= 2000),
+            synchronization_state TEXT NOT NULL DEFAULT 'pending'
+                CHECK (
+                    synchronization_state IN (
+                        'pending',
+                        'synchronized',
+                        'failed'
+                    )
+                ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE INDEX contacts_started_at_index
+        ON contacts (started_at DESC)
+        """,
+        """
+        CREATE INDEX contacts_synchronization_state_index
+        ON contacts (synchronization_state, started_at)
+        """,
+        """
+        CREATE INDEX contacts_callsign_index
+        ON contacts (callsign, started_at DESC)
         """,
     ),
 }
