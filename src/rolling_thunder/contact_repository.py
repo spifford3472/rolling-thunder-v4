@@ -7,8 +7,10 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from rolling_thunder.domain import Contact
+from rolling_thunder.domain import Contact, SynchronizationState
 from rolling_thunder.storage import StorageError, initialize_database
+
+_MAX_LIST_LIMIT = 1_000
 
 
 class ContactAlreadyExistsError(StorageError):
@@ -16,7 +18,7 @@ class ContactAlreadyExistsError(StorageError):
 
 
 class ContactRepository:
-    """Create and retrieve durable contacts from a SQLite database."""
+    """Create, retrieve, and list durable contacts from SQLite."""
 
     def __init__(self, database_path: Path) -> None:
         """Prepare a repository backed by the configured database."""
@@ -120,10 +122,107 @@ class ContactRepository:
 
         return self._contact_from_row(row, contact_id)
 
+    def list_recent(self, *, limit: int = 100) -> list[Contact]:
+        """List contacts from newest to oldest."""
+        self._validate_limit(limit)
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    ORDER BY started_at DESC, contact_id ASC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contacts could not be listed from "
+                f"{self._database_path}: {error}"
+            ) from error
+
+        return self._contacts_from_rows(rows)
+
+    def list_by_synchronization_state(
+        self,
+        state: SynchronizationState,
+        *,
+        limit: int = 100,
+    ) -> list[Contact]:
+        """List contacts in one synchronization state, newest first."""
+        self._validate_limit(limit)
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    WHERE synchronization_state = ?
+                    ORDER BY started_at DESC, contact_id ASC
+                    LIMIT ?
+                    """,
+                    (state.value, limit),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contacts could not be listed from "
+                f"{self._database_path}: synchronization_state="
+                f"{state.value}: {error}"
+            ) from error
+
+        return self._contacts_from_rows(rows)
+
+    @staticmethod
+    def _validate_limit(limit: int) -> None:
+        """Require a bounded positive contact-list limit."""
+        if isinstance(limit, bool) or not isinstance(limit, int):
+            raise TypeError("Contact list limit must be an integer.")
+
+        if limit < 1 or limit > _MAX_LIST_LIMIT:
+            raise ValueError(
+                f"Contact list limit must be between 1 and {_MAX_LIST_LIMIT}."
+            )
+
+    @classmethod
+    def _contacts_from_rows(
+        cls,
+        rows: list[sqlite3.Row],
+    ) -> list[Contact]:
+        """Reconstruct and validate contacts from database rows."""
+        return [
+            cls._contact_from_row(row, row["contact_id"])
+            for row in rows
+        ]
+
     @staticmethod
     def _contact_from_row(
         row: sqlite3.Row,
-        requested_contact_id: UUID,
+        requested_contact_id: object,
     ) -> Contact:
         """Reconstruct and validate a domain contact from one database row."""
         values: dict[str, Any] = {
