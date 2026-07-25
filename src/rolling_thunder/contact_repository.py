@@ -21,6 +21,10 @@ class ContactNotFoundError(StorageError):
     """Raised when a requested contact does not exist."""
 
 
+class ContactConflictError(StorageError):
+    """Raised when an existing UUID contains different contact data."""
+
+
 class ContactRepository:
     """Create, retrieve, and list durable contacts from SQLite."""
 
@@ -172,6 +176,98 @@ class ContactRepository:
             )
 
         return updated_contact
+
+    def recover_contacts(
+        self,
+        contacts: list[Contact],
+    ) -> tuple[int, int]:
+        """Transactionally import contacts, skipping exact duplicates."""
+        imported_count = 0
+        skipped_count = 0
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+
+                for contact in contacts:
+                    existing_row = connection.execute(
+                        """
+                        SELECT
+                            contact_id,
+                            callsign,
+                            frequency_hz,
+                            mode,
+                            started_at,
+                            rst_sent,
+                            rst_received,
+                            grid,
+                            notes,
+                            synchronization_state
+                        FROM contacts
+                        WHERE contact_id = ?
+                        """,
+                        (str(contact.contact_id),),
+                    ).fetchone()
+
+                    if existing_row is not None:
+                        existing = self._contact_from_row(
+                            existing_row,
+                            contact.contact_id,
+                        )
+
+                        if existing == contact:
+                            skipped_count += 1
+                            continue
+
+                        raise ContactConflictError(
+                            "Contact recovery conflict for UUID "
+                            f"{contact.contact_id}."
+                        )
+
+                    connection.execute(
+                        """
+                        INSERT INTO contacts (
+                            contact_id,
+                            callsign,
+                            frequency_hz,
+                            mode,
+                            started_at,
+                            rst_sent,
+                            rst_received,
+                            grid,
+                            notes,
+                            synchronization_state
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(contact.contact_id),
+                            contact.callsign,
+                            contact.frequency_hz,
+                            contact.mode.value,
+                            contact.started_at.isoformat().replace(
+                                "+00:00",
+                                "Z",
+                            ),
+                            contact.rst_sent,
+                            contact.rst_received,
+                            contact.grid,
+                            contact.notes,
+                            contact.synchronization_state.value,
+                        ),
+                    )
+                    imported_count += 1
+
+                connection.commit()
+        except ContactConflictError:
+            raise
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contacts could not be recovered into "
+                f"{self._database_path}: {error}"
+            ) from error
+
+        return imported_count, skipped_count
 
     def list_all(self) -> list[Contact]:
         """List every contact from newest to oldest."""
