@@ -32,6 +32,18 @@ def _indicator_color(value: str) -> str:
     return _BRIGHT
 
 
+def _callsign_font_size(callsign: str) -> int:
+    """Keep common and portable callsigns as large as the panel permits."""
+    length = len(callsign)
+    if length <= 7:
+        return 72
+    if length <= 10:
+        return 62
+    if length <= 13:
+        return 52
+    return 44
+
+
 def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     """Load configuration and run the persistent dashboard until closed."""
     try:
@@ -78,21 +90,32 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     logger.grid(row=0, column=0, sticky="nsew", padx=14, pady=(8, 4))
     logger.grid_columnconfigure(0, weight=1)
     logger.grid_columnconfigure(1, weight=1)
-    logger.grid_rowconfigure(0, weight=4)
-    logger.grid_rowconfigure(1, weight=2)
-    logger.grid_rowconfigure(3, weight=2)
-    logger.grid_rowconfigure(4, weight=1)
-    logger.grid_rowconfigure(6, weight=2)
+    logger.grid_rowconfigure(1, weight=4)
+    logger.grid_rowconfigure(2, weight=2)
+    logger.grid_rowconfigure(4, weight=2)
+    logger.grid_rowconfigure(5, weight=1)
+    logger.grid_rowconfigure(7, weight=2)
 
-    callsign_text = tk.StringVar(value="CALLSIGN: —")
+    callsign_prompt_text = tk.StringVar(value="CALLSIGN")
     tk.Label(
+        logger,
+        textvariable=callsign_prompt_text,
+        bg=_PANEL_BACKGROUND,
+        fg=_MUTED,
+        font=("DejaVu Sans", 18, "bold"),
+        anchor="center",
+    ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=0)
+
+    callsign_text = tk.StringVar(value="")
+    callsign_label = tk.Label(
         logger,
         textvariable=callsign_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 58, "bold"),
+        font=("DejaVu Sans", 72, "bold"),
         anchor="center",
-    ).grid(row=0, column=0, columnspan=2, sticky="nsew", pady=0)
+    )
+    callsign_label.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=0)
 
     voice_text = tk.StringVar(value="VOICE")
     voice_label = tk.Label(
@@ -103,7 +126,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         font=("DejaVu Sans", 36, "bold"),
         anchor="center",
     )
-    voice_label.grid(row=1, column=0, sticky="nsew", padx=8, pady=0)
+    voice_label.grid(row=2, column=0, sticky="nsew", padx=8, pady=0)
 
     commit_text = tk.StringVar(value="COMMIT")
     commit_label = tk.Label(
@@ -114,10 +137,10 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         font=("DejaVu Sans", 36, "bold"),
         anchor="center",
     )
-    commit_label.grid(row=1, column=1, sticky="nsew", padx=8, pady=0)
+    commit_label.grid(row=2, column=1, sticky="nsew", padx=8, pady=0)
 
     tk.Frame(logger, bg=_BORDER, height=3).grid(
-        row=2,
+        row=3,
         column=0,
         columnspan=2,
         sticky="ew",
@@ -132,7 +155,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         fg=_BRIGHT,
         font=("DejaVu Sans", 44, "bold"),
         anchor="center",
-    ).grid(row=3, column=0, columnspan=2, sticky="nsew", pady=0)
+    ).grid(row=4, column=0, columnspan=2, sticky="nsew", pady=0)
 
     band_text = tk.StringVar(value="--")
     tk.Label(
@@ -142,7 +165,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         fg=_BRIGHT,
         font=("DejaVu Sans", 30, "bold"),
         anchor="w",
-    ).grid(row=4, column=0, sticky="ew", padx=(10, 5), pady=0)
+    ).grid(row=5, column=0, sticky="ew", padx=(10, 5), pady=0)
 
     mode_text = tk.StringVar(value="--")
     tk.Label(
@@ -152,10 +175,10 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         fg=_BRIGHT,
         font=("DejaVu Sans", 30, "bold"),
         anchor="e",
-    ).grid(row=4, column=1, sticky="ew", padx=(5, 10), pady=0)
+    ).grid(row=5, column=1, sticky="ew", padx=(5, 10), pady=0)
 
     tk.Frame(logger, bg=_BORDER, height=2).grid(
-        row=5,
+        row=6,
         column=0,
         columnspan=2,
         sticky="ew",
@@ -170,7 +193,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         fg=_MUTED,
         font=("DejaVu Sans", 42, "bold"),
         anchor="w",
-    ).grid(row=6, column=0, columnspan=2, sticky="nsew", padx=6, pady=0)
+    ).grid(row=7, column=0, columnspan=2, sticky="nsew", padx=6, pady=0)
 
     context = tk.Frame(
         left,
@@ -222,7 +245,15 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
     def refresh() -> None:
         view = build_dashboard_state(runtime.latest_radio_state)
-        callsign_text.set(f"CALLSIGN: {view.pending_callsign}")
+        pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
+        voice_state = view.voice_state.upper()
+        voice_engaged = voice_state in {"ACTIVE", "CAPTURING", "LISTENING", "RECORDING"}
+
+        callsign_prompt_text.set("" if pending_callsign or voice_engaged else "CALLSIGN")
+        callsign_text.set(pending_callsign)
+        callsign_label.configure(
+            font=("DejaVu Sans", _callsign_font_size(pending_callsign), "bold")
+        )
         voice_text.set("VOICE")
         voice_label.configure(fg=_indicator_color(view.voice_state))
         commit_text.set("COMMIT")
