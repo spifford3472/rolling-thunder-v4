@@ -34,6 +34,13 @@ class ContactImportResult:
     skipped: int
 
 
+def validate_contact_export_json(source: Path) -> int:
+    """Validate an export without writing and return its contact count."""
+    document = _read_document(source)
+    contacts = _validate_document(document)
+    return len(contacts)
+
+
 def import_contacts_from_json(
     repository: ContactRepository,
     source: Path,
