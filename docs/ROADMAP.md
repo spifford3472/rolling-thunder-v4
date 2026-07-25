@@ -19,6 +19,8 @@ Status: substantially complete.
 
 ## Milestone 1: Typed Configuration
 
+Status: complete and audited.
+
 - Add a typed application configuration model.
 - Load configuration from a local YAML file.
 - Validate callsign, grid, URLs, paths, and mode selections.
@@ -28,6 +30,8 @@ Status: substantially complete.
 - Include an example configuration without secrets.
 
 ## Milestone 2: Core Domain Models
+
+Status: complete and audited.
 
 - Contact model
 - Frequency and radio-mode types
@@ -39,6 +43,8 @@ Status: substantially complete.
 
 ## Milestone 3: Local Contact Logging
 
+Status: complete and audited.
+
 - SQLite-backed contact repository
 - Create and retrieve contacts
 - Pending/synchronized status
@@ -48,6 +54,8 @@ Status: substantially complete.
 - Tests using temporary databases
 
 ## Milestone 4: Radio Abstraction
+
+Status: next.
 
 - Typed radio interface
 - Deterministic mock radio
@@ -127,6 +135,6 @@ Status: substantially complete.
 
 ## Immediate Next Feature
 
-The first Codex implementation task should be the typed configuration loader.
-It establishes validation, dependency injection, testing patterns, and the
-boundary between machine-specific settings and application code.
+Begin Milestone 4 with a small focused slice that defines the typed radio
+interface and deterministic mock radio. Build application behavior and tests
+against that boundary before adding the FT-891 CAT adapter.
