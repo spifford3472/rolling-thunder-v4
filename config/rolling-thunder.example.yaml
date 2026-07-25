@@ -12,3 +12,7 @@ forge:
 
 storage:
   database_path: data/rolling-thunder.db
+  contact_backups:
+    enabled: false
+    directory: backups/contacts
+    retention_count: 10

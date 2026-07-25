@@ -3,7 +3,11 @@
 import sys
 from pathlib import Path
 
-from rolling_thunder.config import ConfigurationError, load_config
+from rolling_thunder.config import (
+    ConfigurationError,
+    load_config,
+    resolve_contact_backup_directory,
+)
 from rolling_thunder.logging_setup import DEFAULT_LOG_PATH, configure_logging
 from rolling_thunder.storage import StorageError, initialize_database
 
@@ -29,6 +33,17 @@ def main(
         "Configuration loaded for operator=%s mock_hardware=%s",
         config.operator.callsign,
         config.hardware.mock,
+    )
+
+    backup_directory = resolve_contact_backup_directory(
+        config,
+        config_path,
+    )
+    logger.info(
+        "Contact backups configured enabled=%s directory=%s retention=%s",
+        config.storage.contact_backups.enabled,
+        backup_directory,
+        config.storage.contact_backups.retention_count,
     )
 
     try:
