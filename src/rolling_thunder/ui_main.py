@@ -1,7 +1,6 @@
 """Full-screen Raspberry Pi dashboard entry point."""
 
 from pathlib import Path
-from typing import Any
 
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ConfigurationError, load_config
