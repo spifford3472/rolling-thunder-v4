@@ -7,6 +7,7 @@ from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
+from rolling_thunder.radio import RadioConnectionError
 
 _REFRESH_MS = 250
 
@@ -50,7 +51,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     runtime = ApplicationRuntime.from_config(config)
     try:
         runtime.start()
-    except Exception as error:
+    except (RadioConnectionError, RuntimeError, ValueError) as error:
         print(f"Rolling Thunder startup error: {error}")
         return 3
 
