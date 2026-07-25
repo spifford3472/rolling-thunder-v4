@@ -5,6 +5,7 @@ from pathlib import Path
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.callsign_capture import CallsignCaptureState, MockTranscriptController
 from rolling_thunder.config import ConfigurationError, load_config
+from rolling_thunder.contact_commit_controller import ContactCommitController
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
@@ -105,6 +106,41 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         else:
             mock_transcripts.discard()
 
+    def commit_started(callsign: str) -> None:
+        if live_capture is not None:
+            live_capture.commit_started(callsign)
+        else:
+            mock_transcripts.commit_started(callsign)
+
+    def commit_succeeded(callsign: str) -> None:
+        if live_capture is not None:
+            live_capture.commit_succeeded(callsign)
+        else:
+            mock_transcripts.commit_succeeded(callsign)
+
+    def commit_failed(message: str) -> None:
+        if live_capture is not None:
+            live_capture.commit_failed(message)
+        else:
+            mock_transcripts.commit_failed(message)
+
+    contact_commit = ContactCommitController(
+        runtime.contact_logging,
+        on_started=commit_started,
+        on_succeeded=commit_succeeded,
+        on_failed=commit_failed,
+    )
+
+    def commit_capture() -> None:
+        """Start a durable Commit using immutable callsign and radio snapshots."""
+        state = capture_state()
+        if state.commit_state != "READY" or not state.pending_callsign:
+            return
+        contact_commit.start_commit(
+            state.pending_callsign,
+            runtime.latest_radio_state,
+        )
+
     root = tk.Tk()
     root.title("Rolling Thunder v4")
     root.configure(bg=_BACKGROUND, cursor="none")
@@ -114,12 +150,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     root.grid_rowconfigure(0, weight=1)
     root.grid_rowconfigure(1, weight=0)
 
-    left = tk.Frame(
-        root,
-        bg=_PANEL_BACKGROUND,
-        highlightthickness=1,
-        highlightbackground=_BORDER,
-    )
+    left = tk.Frame(root, bg=_PANEL_BACKGROUND, highlightthickness=1, highlightbackground=_BORDER)
     left.grid(row=0, column=0, sticky="nsew")
     left.grid_columnconfigure(0, weight=1)
     left.grid_rowconfigure(0, weight=1, uniform="left-column")
@@ -136,150 +167,46 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     logger.grid_rowconfigure(7, weight=2)
 
     callsign_prompt_text = tk.StringVar(value="CALLSIGN")
-    tk.Label(
-        logger,
-        textvariable=callsign_prompt_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_MUTED,
-        font=("DejaVu Sans", 18, "bold"),
-        anchor="center",
-    ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=0)
+    tk.Label(logger, textvariable=callsign_prompt_text, bg=_PANEL_BACKGROUND, fg=_MUTED, font=("DejaVu Sans", 18, "bold"), anchor="center").grid(row=0, column=0, columnspan=2, sticky="ew", pady=0)
 
     callsign_text = tk.StringVar(value="")
-    callsign_label = tk.Label(
-        logger,
-        textvariable=callsign_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_BRIGHT,
-        font=("DejaVu Sans", 72, "bold"),
-        anchor="center",
-    )
+    callsign_label = tk.Label(logger, textvariable=callsign_text, bg=_PANEL_BACKGROUND, fg=_BRIGHT, font=("DejaVu Sans", 72, "bold"), anchor="center")
     callsign_label.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=0)
 
     voice_text = tk.StringVar(value="VOICE")
-    voice_label = tk.Label(
-        logger,
-        textvariable=voice_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_DISABLED,
-        font=("DejaVu Sans", 36, "bold"),
-        anchor="center",
-    )
+    voice_label = tk.Label(logger, textvariable=voice_text, bg=_PANEL_BACKGROUND, fg=_DISABLED, font=("DejaVu Sans", 36, "bold"), anchor="center")
     voice_label.grid(row=2, column=0, sticky="nsew", padx=8, pady=0)
 
     commit_text = tk.StringVar(value="COMMIT")
-    commit_label = tk.Label(
-        logger,
-        textvariable=commit_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_DISABLED,
-        font=("DejaVu Sans", 36, "bold"),
-        anchor="center",
-    )
+    commit_label = tk.Label(logger, textvariable=commit_text, bg=_PANEL_BACKGROUND, fg=_DISABLED, font=("DejaVu Sans", 36, "bold"), anchor="center")
     commit_label.grid(row=2, column=1, sticky="nsew", padx=8, pady=0)
 
-    tk.Frame(logger, bg=_BORDER, height=3).grid(
-        row=3,
-        column=0,
-        columnspan=2,
-        sticky="ew",
-        pady=(2, 2),
-    )
+    tk.Frame(logger, bg=_BORDER, height=3).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(2, 2))
 
     frequency_text = tk.StringVar(value="---.--- MHz")
-    tk.Label(
-        logger,
-        textvariable=frequency_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_BRIGHT,
-        font=("DejaVu Sans", 44, "bold"),
-        anchor="center",
-    ).grid(row=4, column=0, columnspan=2, sticky="nsew", pady=0)
+    tk.Label(logger, textvariable=frequency_text, bg=_PANEL_BACKGROUND, fg=_BRIGHT, font=("DejaVu Sans", 44, "bold"), anchor="center").grid(row=4, column=0, columnspan=2, sticky="nsew", pady=0)
 
     band_text = tk.StringVar(value="--")
-    tk.Label(
-        logger,
-        textvariable=band_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_BRIGHT,
-        font=("DejaVu Sans", 30, "bold"),
-        anchor="w",
-    ).grid(row=5, column=0, sticky="ew", padx=(10, 5), pady=0)
+    tk.Label(logger, textvariable=band_text, bg=_PANEL_BACKGROUND, fg=_BRIGHT, font=("DejaVu Sans", 30, "bold"), anchor="w").grid(row=5, column=0, sticky="ew", padx=(10, 5), pady=0)
 
     mode_text = tk.StringVar(value="--")
-    tk.Label(
-        logger,
-        textvariable=mode_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_BRIGHT,
-        font=("DejaVu Sans", 30, "bold"),
-        anchor="e",
-    ).grid(row=5, column=1, sticky="ew", padx=(5, 10), pady=0)
+    tk.Label(logger, textvariable=mode_text, bg=_PANEL_BACKGROUND, fg=_BRIGHT, font=("DejaVu Sans", 30, "bold"), anchor="e").grid(row=5, column=1, sticky="ew", padx=(5, 10), pady=0)
 
-    tk.Frame(logger, bg=_BORDER, height=2).grid(
-        row=6,
-        column=0,
-        columnspan=2,
-        sticky="ew",
-        pady=(2, 1),
-    )
+    tk.Frame(logger, bg=_BORDER, height=2).grid(row=6, column=0, columnspan=2, sticky="ew", pady=(2, 1))
 
     last_result_text = tk.StringVar(value="Last Result: —")
-    tk.Label(
-        logger,
-        textvariable=last_result_text,
-        bg=_PANEL_BACKGROUND,
-        fg=_MUTED,
-        font=("DejaVu Sans", 42, "bold"),
-        anchor="w",
-    ).grid(row=7, column=0, columnspan=2, sticky="nsew", padx=6, pady=0)
+    tk.Label(logger, textvariable=last_result_text, bg=_PANEL_BACKGROUND, fg=_MUTED, font=("DejaVu Sans", 42, "bold"), anchor="w").grid(row=7, column=0, columnspan=2, sticky="nsew", padx=6, pady=0)
 
-    context = tk.Frame(
-        left,
-        bg=_SECONDARY_BACKGROUND,
-        highlightthickness=1,
-        highlightbackground=_BORDER,
-    )
+    context = tk.Frame(left, bg=_SECONDARY_BACKGROUND, highlightthickness=1, highlightbackground=_BORDER)
     context.grid(row=1, column=0, sticky="nsew", padx=12, pady=(4, 12))
-    tk.Label(
-        context,
-        text="POTA   DX   REPEATERS   AI   SETTINGS\n\nContext services arrive in later milestones.",
-        bg=_SECONDARY_BACKGROUND,
-        fg="#b8b8b8",
-        font=("DejaVu Sans", 16),
-        justify="left",
-        anchor="nw",
-        padx=14,
-        pady=14,
-    ).pack(fill="both", expand=True)
+    tk.Label(context, text="POTA   DX   REPEATERS   AI   SETTINGS\n\nContext services arrive in later milestones.", bg=_SECONDARY_BACKGROUND, fg="#b8b8b8", font=("DejaVu Sans", 16), justify="left", anchor="nw", padx=14, pady=14).pack(fill="both", expand=True)
 
-    situational = tk.Frame(
-        root,
-        bg="#0d1418",
-        highlightthickness=1,
-        highlightbackground=_BORDER,
-    )
+    situational = tk.Frame(root, bg="#0d1418", highlightthickness=1, highlightbackground=_BORDER)
     situational.grid(row=0, column=1, sticky="nsew")
-    tk.Label(
-        situational,
-        text="MAP / FUTURE CARDS\n\nReserved for mapping and operating intelligence.",
-        bg="#0d1418",
-        fg="#83939c",
-        font=("DejaVu Sans", 22, "bold"),
-        justify="center",
-    ).pack(fill="both", expand=True)
+    tk.Label(situational, text="MAP / FUTURE CARDS\n\nReserved for mapping and operating intelligence.", bg="#0d1418", fg="#83939c", font=("DejaVu Sans", 22, "bold"), justify="center").pack(fill="both", expand=True)
 
     ticker_text = tk.StringVar(value="STARTING ROLLING THUNDER")
-    ticker = tk.Label(
-        root,
-        textvariable=ticker_text,
-        bg="#202020",
-        fg=_BRIGHT,
-        font=("DejaVu Sans", 16, "bold"),
-        anchor="w",
-        padx=18,
-        pady=10,
-    )
+    ticker = tk.Label(root, textvariable=ticker_text, bg="#202020", fg=_BRIGHT, font=("DejaVu Sans", 16, "bold"), anchor="w", padx=18, pady=10)
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     def refresh() -> None:
@@ -290,9 +217,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
         callsign_prompt_text.set("" if pending_callsign or voice_engaged else "CALLSIGN")
         callsign_text.set(pending_callsign)
-        callsign_label.configure(
-            font=("DejaVu Sans", _callsign_font_size(pending_callsign), "bold")
-        )
+        callsign_label.configure(font=("DejaVu Sans", _callsign_font_size(pending_callsign), "bold"))
         voice_text.set("VOICE")
         voice_label.configure(fg=_indicator_color(view.voice_state))
         commit_text.set("COMMIT")
@@ -312,6 +237,8 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     root.bind("<Escape>", lambda _event: close())
     root.bind("<v>", lambda _event: start_voice_capture())
     root.bind("<V>", lambda _event: start_voice_capture())
+    root.bind("<c>", lambda _event: commit_capture())
+    root.bind("<C>", lambda _event: commit_capture())
     root.bind("<d>", lambda _event: discard_capture())
     root.bind("<D>", lambda _event: discard_capture())
     root.protocol("WM_DELETE_WINDOW", close)
