@@ -71,11 +71,11 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     )
     left.grid(row=0, column=0, sticky="nsew")
     left.grid_columnconfigure(0, weight=1)
-    left.grid_rowconfigure(0, weight=3)
-    left.grid_rowconfigure(1, weight=2)
+    left.grid_rowconfigure(0, weight=1, uniform="left-column")
+    left.grid_rowconfigure(1, weight=2, uniform="left-column")
 
     logger = tk.Frame(left, bg=_PANEL_BACKGROUND)
-    logger.grid(row=0, column=0, sticky="nsew", padx=18, pady=(18, 10))
+    logger.grid(row=0, column=0, sticky="nsew", padx=14, pady=(10, 5))
     logger.grid_columnconfigure(0, weight=1)
     logger.grid_columnconfigure(1, weight=1)
     logger.grid_rowconfigure(0, weight=2)
@@ -89,9 +89,9 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=callsign_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 30, "bold"),
+        font=("DejaVu Sans", 40, "bold"),
         anchor="center",
-    ).grid(row=0, column=0, columnspan=2, sticky="nsew", pady=(4, 8))
+    ).grid(row=0, column=0, columnspan=2, sticky="nsew", pady=(0, 2))
 
     voice_text = tk.StringVar(value="VOICE")
     voice_label = tk.Label(
@@ -99,10 +99,10 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=voice_text,
         bg=_PANEL_BACKGROUND,
         fg=_DISABLED,
-        font=("DejaVu Sans", 22, "bold"),
+        font=("DejaVu Sans", 29, "bold"),
         anchor="center",
     )
-    voice_label.grid(row=1, column=0, sticky="nsew", padx=10, pady=6)
+    voice_label.grid(row=1, column=0, sticky="nsew", padx=8, pady=1)
 
     commit_text = tk.StringVar(value="COMMIT")
     commit_label = tk.Label(
@@ -110,17 +110,17 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=commit_text,
         bg=_PANEL_BACKGROUND,
         fg=_DISABLED,
-        font=("DejaVu Sans", 22, "bold"),
+        font=("DejaVu Sans", 29, "bold"),
         anchor="center",
     )
-    commit_label.grid(row=1, column=1, sticky="nsew", padx=10, pady=6)
+    commit_label.grid(row=1, column=1, sticky="nsew", padx=8, pady=1)
 
     tk.Frame(logger, bg=_BORDER, height=3).grid(
         row=2,
         column=0,
         columnspan=2,
         sticky="ew",
-        pady=(8, 10),
+        pady=(3, 3),
     )
 
     frequency_text = tk.StringVar(value="---.--- MHz")
@@ -129,9 +129,9 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=frequency_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 38, "bold"),
+        font=("DejaVu Sans", 51, "bold"),
         anchor="center",
-    ).grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(2, 8))
+    ).grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(0, 1))
 
     band_text = tk.StringVar(value="--")
     tk.Label(
@@ -139,9 +139,9 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=band_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 27, "bold"),
+        font=("DejaVu Sans", 36, "bold"),
         anchor="w",
-    ).grid(row=4, column=0, sticky="ew", padx=(12, 6), pady=4)
+    ).grid(row=4, column=0, sticky="ew", padx=(10, 5), pady=0)
 
     mode_text = tk.StringVar(value="--")
     tk.Label(
@@ -149,16 +149,16 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=mode_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 27, "bold"),
+        font=("DejaVu Sans", 36, "bold"),
         anchor="e",
-    ).grid(row=4, column=1, sticky="ew", padx=(6, 12), pady=4)
+    ).grid(row=4, column=1, sticky="ew", padx=(5, 10), pady=0)
 
     tk.Frame(logger, bg=_BORDER, height=2).grid(
         row=5,
         column=0,
         columnspan=2,
         sticky="ew",
-        pady=(10, 8),
+        pady=(3, 2),
     )
 
     last_result_text = tk.StringVar(value="Last Result: —")
@@ -167,9 +167,9 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=last_result_text,
         bg=_PANEL_BACKGROUND,
         fg=_MUTED,
-        font=("DejaVu Sans", 16, "bold"),
+        font=("DejaVu Sans", 21, "bold"),
         anchor="w",
-    ).grid(row=6, column=0, columnspan=2, sticky="ew", padx=8, pady=(2, 4))
+    ).grid(row=6, column=0, columnspan=2, sticky="ew", padx=6, pady=0)
 
     context = tk.Frame(
         left,
