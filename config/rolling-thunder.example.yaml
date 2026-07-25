@@ -7,6 +7,13 @@ hardware:
   radio_device: null
   gps_device: null
 
+speech:
+  enabled: false
+  audio_device: default
+  model_path: null
+  capture_duration_seconds: 8
+  sample_rate: 16000
+
 forge:
   api_url: null
 

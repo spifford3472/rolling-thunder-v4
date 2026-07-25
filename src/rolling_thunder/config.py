@@ -98,6 +98,44 @@ class HardwareConfig(ConfigurationModel):
         return self
 
 
+class SpeechConfig(ConfigurationModel):
+    """Offline push-to-listen speech-recognition settings."""
+
+    enabled: bool = False
+    audio_device: str = "default"
+    model_path: Path | None = None
+    capture_duration_seconds: int = Field(default=8, ge=1, le=30)
+    sample_rate: int = Field(default=16_000, ge=8_000, le=48_000)
+
+    @field_validator("audio_device")
+    @classmethod
+    def validate_audio_device(cls, value: str) -> str:
+        """Require a nonblank ALSA device selector."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be empty")
+        return normalized
+
+    @field_validator("model_path", mode="before")
+    @classmethod
+    def validate_model_path(cls, value: object) -> object:
+        """Reject empty or current-directory model paths."""
+        if value is None:
+            return value
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        if isinstance(value, (str, Path)) and str(Path(value)) == ".":
+            raise ValueError("must name a Vosk model directory")
+        return value
+
+    @model_validator(mode="after")
+    def validate_enabled_speech(self) -> Self:
+        """Require a model path whenever live recognition is enabled."""
+        if self.enabled and self.model_path is None:
+            raise ValueError("speech.model_path must be configured when speech.enabled is true")
+        return self
+
+
 class ForgeConfig(ConfigurationModel):
     """Optional Forge service settings."""
 
@@ -151,6 +189,7 @@ class ApplicationConfig(ConfigurationModel):
 
     operator: OperatorConfig
     hardware: HardwareConfig = HardwareConfig()
+    speech: SpeechConfig = SpeechConfig()
     forge: ForgeConfig = ForgeConfig()
     storage: StorageConfig = StorageConfig()
 
@@ -179,6 +218,17 @@ def resolve_contact_backup_directory(
         return directory
 
     return (config_path.parent / directory).resolve()
+
+
+def resolve_speech_model_path(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path | None:
+    """Resolve the optional Vosk model path relative to the YAML file."""
+    model_path = config.speech.model_path
+    if model_path is None or model_path.is_absolute():
+        return model_path
+    return (config_path.parent / model_path).resolve()
 
 
 def _format_validation_error(error: ValidationError) -> str:
@@ -239,4 +289,9 @@ def load_config(path: Path) -> ApplicationConfig:
     resolved_storage = config.storage.model_copy(
         update={"database_path": resolve_database_path(config, path)}
     )
-    return config.model_copy(update={"storage": resolved_storage})
+    resolved_speech = config.speech.model_copy(
+        update={"model_path": resolve_speech_model_path(config, path)}
+    )
+    return config.model_copy(
+        update={"storage": resolved_storage, "speech": resolved_speech}
+    )
