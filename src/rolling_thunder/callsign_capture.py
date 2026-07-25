@@ -1,6 +1,7 @@
 """Application state for deterministic mock callsign capture."""
 
 from dataclasses import dataclass
+from threading import Lock
 from typing import Final
 
 from rolling_thunder.phonetic_callsign import parse_phonetic_callsign
@@ -45,35 +46,81 @@ class MockTranscriptController:
             raise ValueError("At least one mock transcript is required.")
         self._transcripts = transcripts
         self._next_index = 0
+        self._lock = Lock()
         self._state = CallsignCaptureState()
 
     @property
     def state(self) -> CallsignCaptureState:
         """Return the latest immutable capture state."""
-        return self._state
+        with self._lock:
+            return self._state
 
     def capture_next(self) -> CallsignCaptureState:
         """Parse the next mock transcript and expose a committable result when valid."""
-        transcript = self._transcripts[self._next_index]
-        self._next_index = (self._next_index + 1) % len(self._transcripts)
+        with self._lock:
+            transcript = self._transcripts[self._next_index]
+            self._next_index = (self._next_index + 1) % len(self._transcripts)
         result = parse_phonetic_callsign(transcript)
 
-        if result.is_valid and result.callsign is not None:
-            self._state = CallsignCaptureState(
-                pending_callsign=result.callsign,
-                voice_state="READY",
-                commit_state="READY",
-                last_result=f"HEARD {result.callsign}",
-            )
-        else:
-            self._state = CallsignCaptureState(
-                voice_state="FAILED",
-                commit_state="DISABLED",
-                last_result="VOICE ERROR",
-            )
-        return self._state
+        with self._lock:
+            if result.is_valid and result.callsign is not None:
+                self._state = CallsignCaptureState(
+                    pending_callsign=result.callsign,
+                    voice_state="READY",
+                    commit_state="READY",
+                    last_result=f"HEARD {result.callsign}",
+                )
+            else:
+                self._state = CallsignCaptureState(
+                    voice_state="FAILED",
+                    commit_state="DISABLED",
+                    last_result="VOICE ERROR",
+                )
+            return self._state
 
     def discard(self) -> CallsignCaptureState:
         """Clear the pending result without logging anything."""
-        self._state = CallsignCaptureState(last_result="DISCARDED")
-        return self._state
+        with self._lock:
+            if self._state.commit_state == "COMMITTING":
+                return self._state
+            self._state = CallsignCaptureState(last_result="DISCARDED")
+            return self._state
+
+    def commit_started(self, callsign: str) -> CallsignCaptureState:
+        """Preserve a matching pending callsign while durable storage runs."""
+        with self._lock:
+            if self._state.pending_callsign != callsign:
+                return self._state
+            self._state = CallsignCaptureState(
+                pending_callsign=callsign,
+                voice_state="READY",
+                commit_state="COMMITTING",
+                last_result="COMMITTING",
+            )
+            return self._state
+
+    def commit_succeeded(self, callsign: str) -> CallsignCaptureState:
+        """Clear a matching pending callsign after durable storage succeeds."""
+        with self._lock:
+            if self._state.pending_callsign != callsign:
+                return self._state
+            self._state = CallsignCaptureState(
+                voice_state="READY",
+                commit_state="DISABLED",
+                last_result=f"COMMITTED {callsign}",
+            )
+            return self._state
+
+    def commit_failed(self, message: str) -> CallsignCaptureState:
+        """Preserve the pending callsign and restore Commit after a write failure."""
+        del message
+        with self._lock:
+            if not self._state.pending_callsign:
+                return self._state
+            self._state = CallsignCaptureState(
+                pending_callsign=self._state.pending_callsign,
+                voice_state="READY",
+                commit_state="READY",
+                last_result="LOG ERROR",
+            )
+            return self._state
