@@ -166,3 +166,159 @@ def test_contact_rejects_unknown_fields() -> None:
     """Unexpected data should not silently cross the domain boundary."""
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         make_contact(unknown_field="unexpected")
+
+
+def test_frequency_exposes_common_units() -> None:
+    """Frequency should retain exact hertz while exposing display units."""
+    from rolling_thunder.domain import Frequency
+
+    frequency = Frequency(hz=14_250_000)
+
+    assert frequency.hz == 14_250_000
+    assert frequency.khz == 14_250
+    assert frequency.mhz == 14.25
+    assert frequency.model_dump(mode="json") == 14_250_000
+
+
+@pytest.mark.parametrize("frequency", [0, -1, 300_000_000_001, 14.25, True])
+def test_frequency_rejects_invalid_values(frequency: object) -> None:
+    """Frequency must contain a positive integer number of hertz."""
+    from rolling_thunder.domain import Frequency
+
+    with pytest.raises(ValidationError):
+        Frequency(hz=frequency)
+
+
+def test_connected_radio_state_normalizes_values() -> None:
+    """Connected state should normalize mode, connection state, and time."""
+    from rolling_thunder.domain import (
+        Frequency,
+        RadioConnectionState,
+        RadioState,
+    )
+
+    eastern = timezone(timedelta(hours=-4))
+    state = RadioState(
+        connection_state=" CONNECTED ",
+        frequency=Frequency(hz=7_200_000),
+        mode="lsb",
+        transmitting=False,
+        updated_at=datetime(
+            2026,
+            7,
+            24,
+            20,
+            30,
+            tzinfo=eastern,
+        ),
+    )
+
+    assert state.connection_state is RadioConnectionState.CONNECTED
+    assert state.frequency == Frequency(hz=7_200_000)
+    assert state.mode is RadioMode.LSB
+    assert state.updated_at == datetime(
+        2026,
+        7,
+        25,
+        0,
+        30,
+        tzinfo=UTC,
+    )
+
+
+def test_connected_radio_state_requires_frequency_and_mode() -> None:
+    """A connected radio must report its operating frequency and mode."""
+    from rolling_thunder.domain import RadioState
+
+    with pytest.raises(
+        ValidationError,
+        match="connected radio state requires a frequency",
+    ):
+        RadioState(
+            connection_state="connected",
+            updated_at=datetime.now(UTC),
+        )
+
+
+def test_transmitting_requires_connected_radio() -> None:
+    """A disconnected or connecting radio cannot report transmission."""
+    from rolling_thunder.domain import RadioState
+
+    with pytest.raises(
+        ValidationError,
+        match="transmitting requires a connected radio",
+    ):
+        RadioState(
+            connection_state="disconnected",
+            transmitting=True,
+            updated_at=datetime.now(UTC),
+        )
+
+
+def test_error_radio_state_requires_error_message() -> None:
+    """An error state should provide actionable adapter information."""
+    from rolling_thunder.domain import RadioState
+
+    with pytest.raises(
+        ValidationError,
+        match="error radio state requires last_error",
+    ):
+        RadioState(
+            connection_state="error",
+            updated_at=datetime.now(UTC),
+        )
+
+
+def test_radio_state_normalizes_error_message() -> None:
+    """Adapter errors should be trimmed before crossing the domain boundary."""
+    from rolling_thunder.domain import RadioState
+
+    state = RadioState(
+        connection_state="error",
+        updated_at=datetime.now(UTC),
+        last_error=" CAT connection timed out ",
+    )
+
+    assert state.last_error == "CAT connection timed out"
+
+
+def test_radio_state_serialization_is_stable() -> None:
+    """Radio state should serialize consistently for APIs and persistence."""
+    from rolling_thunder.domain import Frequency, RadioState
+
+    state = RadioState(
+        connection_state="connected",
+        frequency=Frequency(hz=14_250_000),
+        mode="usb",
+        transmitting=True,
+        updated_at=datetime(
+            2026,
+            7,
+            25,
+            0,
+            15,
+            tzinfo=UTC,
+        ),
+    )
+
+    assert state.model_dump(mode="json") == {
+        "connection_state": "connected",
+        "frequency": 14_250_000,
+        "mode": "USB",
+        "transmitting": True,
+        "updated_at": "2026-07-25T00:15:00Z",
+        "last_error": None,
+    }
+
+
+def test_radio_state_is_immutable() -> None:
+    """Radio-state snapshots should not be modified in place."""
+    from rolling_thunder.domain import RadioState
+
+    state = RadioState(
+        connection_state="disconnected",
+        updated_at=datetime.now(UTC),
+    )
+
+    with pytest.raises(ValidationError):
+        state.transmitting = True
