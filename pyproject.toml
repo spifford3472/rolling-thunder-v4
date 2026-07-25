@@ -20,6 +20,7 @@ rolling-thunder = "rolling_thunder.cli:cli"
 [project.optional-dependencies]
 development = [
     "mypy",
+    "types-pyserial",
     "types-PyYAML",
     "pre-commit",
     "pytest",
