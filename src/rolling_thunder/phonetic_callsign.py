@@ -1,9 +1,8 @@
 """Deterministic phonetic-token parsing for voice callsign capture."""
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Final
-
 
 _TOKEN_ALIASES: Final[dict[str, str]] = {
     "ALFA": "A",
@@ -80,17 +79,14 @@ class CallsignParseResult:
     is_valid: bool
 
 
-
 def normalize_token(token: str) -> str:
     """Normalize speech-engine token text before alias lookup."""
     return token.strip().upper().replace("_", "-")
 
 
-
 def is_structurally_valid_callsign(callsign: str) -> bool:
     """Apply intentionally broad amateur-callsign structural validation."""
     return _CALLSIGN_PATTERN.fullmatch(callsign) is not None
-
 
 
 def parse_phonetic_callsign(tokens: list[str] | tuple[str, ...]) -> CallsignParseResult:
