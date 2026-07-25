@@ -8,6 +8,11 @@ from rolling_thunder.config import (
     load_config,
     resolve_contact_backup_directory,
 )
+from rolling_thunder.contact_backup import (
+    ContactBackupError,
+    create_contact_backup,
+)
+from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.logging_setup import DEFAULT_LOG_PATH, configure_logging
 from rolling_thunder.storage import StorageError, initialize_database
 
@@ -58,6 +63,34 @@ def main(
         config.storage.database_path,
         schema_version,
     )
+
+    if config.storage.contact_backups.enabled:
+        try:
+            repository = ContactRepository(
+                config.storage.database_path
+            )
+            backup_result = create_contact_backup(
+                repository,
+                backup_directory,
+                retention_count=(
+                    config.storage.contact_backups.retention_count
+                ),
+            )
+        except (ContactBackupError, StorageError) as error:
+            logger.error("Contact backup error: %s", error)
+            print(
+                f"Rolling Thunder contact backup error: {error}",
+                file=sys.stderr,
+            )
+            return 4
+
+        logger.info(
+            "Startup contact backup completed path=%s contacts=%s",
+            backup_result.path,
+            backup_result.contact_count,
+        )
+    else:
+        logger.info("Startup contact backup skipped because disabled")
 
     print(
         "Rolling Thunder v4 starting "
