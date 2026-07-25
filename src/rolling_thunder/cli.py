@@ -288,6 +288,35 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"log file path (default: {DEFAULT_LOG_PATH})",
     )
 
+    delete_parser = subparsers.add_parser(
+        "delete-contact",
+        help="Permanently delete one stored contact",
+    )
+    delete_parser.add_argument(
+        "contact_id",
+        help="contact UUID to delete",
+    )
+    delete_parser.add_argument(
+        "--confirm",
+        required=True,
+        help="repeat the contact UUID to confirm permanent deletion",
+    )
+    delete_parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=(
+            "YAML configuration path "
+            f"(default: {DEFAULT_CONFIG_PATH})"
+        ),
+    )
+    delete_parser.add_argument(
+        "--log",
+        type=Path,
+        default=DEFAULT_LOG_PATH,
+        help=f"log file path (default: {DEFAULT_LOG_PATH})",
+    )
+
     return parser
 
 
@@ -959,6 +988,103 @@ def run_contact_update(
     return EXIT_SUCCESS
 
 
+def run_contact_delete(
+    config_path: Path,
+    *,
+    contact_id: str,
+    confirmation: str,
+    log_path: Path = DEFAULT_LOG_PATH,
+) -> int:
+    """Validate confirmation and permanently delete one contact."""
+    logger = configure_logging(log_path)
+    logger.info(
+        "Contact deletion requested config=%s contact_id=%s",
+        config_path,
+        contact_id,
+    )
+
+    try:
+        parsed_contact_id = UUID(contact_id)
+    except ValueError as error:
+        logger.error("Contact UUID validation error: %s", error)
+        print(
+            f"Rolling Thunder contact validation error: "
+            f"invalid contact UUID: {contact_id}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    try:
+        parsed_confirmation = UUID(confirmation)
+    except ValueError as error:
+        logger.error("Contact confirmation validation error: %s", error)
+        print(
+            "Rolling Thunder contact validation error: "
+            f"invalid confirmation UUID: {confirmation}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    if parsed_confirmation != parsed_contact_id:
+        message = (
+            "confirmation UUID does not match contact UUID: "
+            f"{parsed_confirmation} != {parsed_contact_id}"
+        )
+        logger.error("Contact deletion rejected: %s", message)
+        print(
+            f"Rolling Thunder contact validation error: {message}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    try:
+        config = load_config(config_path)
+    except ConfigurationError as error:
+        logger.error("Configuration error: %s", error)
+        print(
+            f"Rolling Thunder configuration error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONFIGURATION_ERROR
+
+    try:
+        repository = ContactRepository(
+            config.storage.database_path
+        )
+        deleted = repository.delete(parsed_contact_id)
+    except ContactNotFoundError:
+        logger.error(
+            "Contact not found during deletion contact_id=%s",
+            parsed_contact_id,
+        )
+        print(
+            f"Rolling Thunder contact not found: {parsed_contact_id}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_NOT_FOUND
+    except StorageError as error:
+        logger.error("Storage error: %s", error)
+        print(
+            f"Rolling Thunder storage error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_STORAGE_ERROR
+
+    logger.info(
+        "Contact deletion completed contact_id=%s callsign=%s",
+        deleted.contact_id,
+        deleted.callsign,
+    )
+    print(
+        "Contact deleted: "
+        f"id={deleted.contact_id} "
+        f"callsign={deleted.callsign} "
+        f"frequency_hz={deleted.frequency_hz} "
+        f"mode={deleted.mode.value}"
+    )
+    return EXIT_SUCCESS
+
+
 def cli(argv: Sequence[str] | None = None) -> int:
     """Parse command-line arguments and execute the selected operation."""
     parser = build_parser()
@@ -1020,6 +1146,14 @@ def cli(argv: Sequence[str] | None = None) -> int:
             clear_grid=arguments.clear_grid,
             notes=arguments.notes,
             clear_notes=arguments.clear_notes,
+            log_path=arguments.log,
+        )
+
+    if arguments.command == "delete-contact":
+        return run_contact_delete(
+            arguments.config,
+            contact_id=arguments.contact_id,
+            confirmation=arguments.confirm,
             log_path=arguments.log,
         )
 

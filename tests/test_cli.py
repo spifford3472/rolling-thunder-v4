@@ -1346,3 +1346,233 @@ storage:
     assert captured.out == ""
     assert f"Rolling Thunder contact not found: {missing_id}" in captured.err
     assert "Traceback" not in captured.err
+
+
+def test_delete_contact_requires_matching_confirmation(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A different confirmation UUID must prevent deletion."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+    contact = make_contact().model_copy(
+        update={
+            "contact_id": UUID(
+                "11111111-2222-3333-4444-555555555571"
+            )
+        }
+    )
+    repository.add(contact)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "delete-contact",
+            str(contact.contact_id),
+            "--confirm",
+            "11111111-2222-3333-4444-555555555572",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "delete.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "confirmation UUID does not match contact UUID" in captured.err
+    assert "Traceback" not in captured.err
+    assert repository.get(contact.contact_id) == contact
+
+
+def test_delete_contact_rejects_invalid_target_uuid(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A malformed target UUID should fail before database access."""
+    database_path = tmp_path / "contacts.db"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "delete-contact",
+            "not-a-uuid",
+            "--confirm",
+            "11111111-2222-3333-4444-555555555573",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "delete.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "invalid contact UUID: not-a-uuid" in captured.err
+    assert "Traceback" not in captured.err
+    assert not database_path.exists()
+
+
+def test_delete_contact_rejects_invalid_confirmation_uuid(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A malformed confirmation UUID should fail before database access."""
+    database_path = tmp_path / "contacts.db"
+    target_id = UUID(
+        "11111111-2222-3333-4444-555555555574"
+    )
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "delete-contact",
+            str(target_id),
+            "--confirm",
+            "not-a-uuid",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "delete.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "invalid confirmation UUID: not-a-uuid" in captured.err
+    assert "Traceback" not in captured.err
+    assert not database_path.exists()
+
+
+def test_delete_contact_removes_confirmed_contact(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A matching confirmation should permanently remove the contact."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+    contact = Contact(
+        contact_id=UUID(
+            "11111111-2222-3333-4444-555555555575"
+        ),
+        callsign="K8ABC",
+        frequency_hz=14_250_000,
+        mode=RadioMode.USB,
+        started_at=datetime(2026, 7, 25, 6, 30, tzinfo=UTC),
+        rst_sent="59",
+        rst_received="57",
+        grid="EM79xm",
+        notes="Delete this contact",
+    )
+    repository.add(contact)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "delete-contact",
+            str(contact.contact_id),
+            "--confirm",
+            str(contact.contact_id),
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "delete.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out == (
+        "Contact deleted: "
+        "id=11111111-2222-3333-4444-555555555575 "
+        "callsign=K8ABC "
+        "frequency_hz=14250000 "
+        "mode=USB\n"
+    )
+    assert repository.get(contact.contact_id) is None
+
+
+def test_delete_contact_reports_missing_contact(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A confirmed absent UUID should return contact-not-found."""
+    missing_id = UUID(
+        "11111111-2222-3333-4444-555555555576"
+    )
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {tmp_path / "contacts.db"}
+""",
+    )
+
+    result = cli(
+        [
+            "delete-contact",
+            str(missing_id),
+            "--confirm",
+            str(missing_id),
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "delete.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_NOT_FOUND
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"Rolling Thunder contact not found: {missing_id}" in captured.err
+    assert "Traceback" not in captured.err

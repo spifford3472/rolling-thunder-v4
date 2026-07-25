@@ -549,3 +549,55 @@ def test_repository_update_rejects_missing_contact(
         match=f"Contact does not exist: {contact.contact_id}",
     ):
         repository.update(contact)
+
+
+def test_repository_atomically_deletes_and_returns_contact(
+    tmp_path: Path,
+) -> None:
+    """Deleting a stored UUID should return and remove its contact."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    contact = make_contact()
+    repository.add(contact)
+
+    deleted = repository.delete(contact.contact_id)
+
+    assert deleted == contact
+    assert deleted is not contact
+    assert repository.get(contact.contact_id) is None
+
+
+def test_repository_delete_does_not_affect_other_contacts(
+    tmp_path: Path,
+) -> None:
+    """Deleting one contact should preserve all other records."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    deleted_contact = make_contact()
+    retained_contact = make_contact(
+        contact_id=UUID(
+            "00000000-0000-0000-0000-000000000002"
+        ),
+        started_at=datetime(2026, 7, 25, 1, 30, tzinfo=UTC),
+    )
+    repository.add(deleted_contact)
+    repository.add(retained_contact)
+
+    repository.delete(deleted_contact.contact_id)
+
+    assert repository.get(deleted_contact.contact_id) is None
+    assert repository.get(retained_contact.contact_id) == retained_contact
+
+
+def test_repository_delete_rejects_missing_contact(
+    tmp_path: Path,
+) -> None:
+    """Deleting an absent UUID should raise contact-not-found."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    missing_id = UUID(
+        "00000000-0000-0000-0000-000000000003"
+    )
+
+    with pytest.raises(
+        ContactNotFoundError,
+        match=f"Contact does not exist: {missing_id}",
+    ):
+        repository.delete(missing_id)
