@@ -173,6 +173,36 @@ class ContactRepository:
 
         return updated_contact
 
+    def list_all(self) -> list[Contact]:
+        """List every contact from newest to oldest."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    ORDER BY started_at DESC, contact_id ASC
+                    """
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contacts could not be listed from "
+                f"{self._database_path}: {error}"
+            ) from error
+
+        return self._contacts_from_rows(rows)
+
     def list_recent(self, *, limit: int = 100) -> list[Contact]:
         """List contacts from newest to oldest."""
         self._validate_limit(limit)

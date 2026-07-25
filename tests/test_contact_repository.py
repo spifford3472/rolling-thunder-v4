@@ -459,3 +459,29 @@ def test_repository_state_update_rejects_invalid_state_type(
             _DEFAULT_CONTACT_ID,
             state,  # type: ignore[arg-type]
         )
+
+
+def test_repository_lists_all_contacts_without_limit(tmp_path: Path) -> None:
+    """Complete listing should not apply the bounded UI query limit."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    shared_time = datetime(2026, 7, 25, 2, 0, tzinfo=UTC)
+
+    for index in range(1, 1_002):
+        repository.add(
+            make_contact(
+                contact_id=UUID(
+                    f"00000000-0000-0000-0000-{index:012d}"
+                ),
+                started_at=shared_time,
+            )
+        )
+
+    contacts = repository.list_all()
+
+    assert len(contacts) == 1_001
+    assert contacts[0].contact_id == UUID(
+        "00000000-0000-0000-0000-000000000001"
+    )
+    assert contacts[-1].contact_id == UUID(
+        "00000000-0000-0000-0000-000000001001"
+    )
