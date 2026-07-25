@@ -58,20 +58,11 @@ class Ft891Radio:
         """Open CAT and read the current frequency and mode."""
         try:
             self._transport.open()
-            frequency = parse_frequency_reply(
-                self._transport.query(encode_read_frequency())
-            )
-            mode = parse_mode_reply(self._transport.query(encode_read_mode()))
+            frequency, mode = self._read_hardware_state()
         except (RadioConnectionError, Ft891CatError) as error:
-            error_message = str(error) or error.__class__.__name__
-            try:
-                self._transport.close()
-            except RadioConnectionError as close_error:
-                error_message = (
-                    f"{error_message}; additionally failed to close CAT transport: "
-                    f"{close_error}"
-                )
-
+            error_message = self._close_after_failure(
+                str(error) or error.__class__.__name__
+            )
             self._state = RadioState(
                 connection_state=RadioConnectionState.ERROR,
                 transmitting=False,
@@ -105,6 +96,40 @@ class Ft891Radio:
 
     def get_state(self) -> RadioState:
         """Return the latest immutable state snapshot."""
+        return self._state
+
+    def refresh_state(self) -> RadioState:
+        """Read current frequency and mode, detecting CAT device loss."""
+        self._require_connected()
+        previous_frequency = self._state.frequency
+        previous_mode = self._state.mode
+        try:
+            frequency, mode = self._read_hardware_state()
+        except (RadioConnectionError, Ft891CatError) as error:
+            error_message = self._close_after_failure(
+                str(error) or error.__class__.__name__
+            )
+            self._state = RadioState(
+                connection_state=RadioConnectionState.ERROR,
+                frequency=previous_frequency,
+                mode=previous_mode,
+                transmitting=False,
+                updated_at=self._timestamp(),
+                last_error=error_message,
+            )
+            if isinstance(error, RadioConnectionError):
+                raise
+            raise RadioConnectionError(
+                f"Could not refresh FT-891 state: {error}"
+            ) from error
+
+        self._state = RadioState(
+            connection_state=RadioConnectionState.CONNECTED,
+            frequency=frequency,
+            mode=mode,
+            transmitting=False,
+            updated_at=self._timestamp(),
+        )
         return self._state
 
     def set_frequency(self, frequency: Frequency) -> RadioState:
@@ -147,6 +172,23 @@ class Ft891Radio:
             updated_at=self._timestamp(),
         )
         return self._state
+
+    def _read_hardware_state(self) -> tuple[Frequency, RadioMode]:
+        frequency = parse_frequency_reply(
+            self._transport.query(encode_read_frequency())
+        )
+        mode = parse_mode_reply(self._transport.query(encode_read_mode()))
+        return frequency, mode
+
+    def _close_after_failure(self, error_message: str) -> str:
+        try:
+            self._transport.close()
+        except RadioConnectionError as close_error:
+            return (
+                f"{error_message}; additionally failed to close CAT transport: "
+                f"{close_error}"
+            )
+        return error_message
 
     def _require_connected(self) -> None:
         if self._state.connection_state is not RadioConnectionState.CONNECTED:
