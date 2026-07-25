@@ -12,6 +12,7 @@ from rolling_thunder.contact_import import (
     ContactImportError,
     ContactImportResult,
     import_contacts_from_json,
+    preview_contact_import,
 )
 from rolling_thunder.contact_repository import (
     ContactConflictError,
@@ -238,3 +239,70 @@ def test_import_rejects_invalid_export_timestamp(
 
     with pytest.raises(ContactImportError):
         import_contacts_from_json(repository, source)
+
+
+def test_preview_contact_import_reports_new_contacts_without_writing(
+    tmp_path: Path,
+) -> None:
+    """Preview should report importable contacts without storing them."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    source = tmp_path / "backup.json"
+    contact = make_import_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000010"),
+        callsign="K8ABC",
+        started_at=datetime(2026, 7, 25, 2, 0, tzinfo=UTC),
+    )
+    write_document(source, [contact_json(contact)])
+
+    result = preview_contact_import(repository, source)
+
+    assert result.imported == 1
+    assert result.skipped == 0
+    assert result.conflicted == 0
+    assert repository.get(contact.contact_id) is None
+
+
+def test_preview_contact_import_reports_exact_duplicate(
+    tmp_path: Path,
+) -> None:
+    """Preview should report an existing identical contact as skipped."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    contact = make_import_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000011"),
+        callsign="W8O",
+        started_at=datetime(2026, 7, 25, 2, 0, tzinfo=UTC),
+    )
+    repository.add(contact)
+    source = tmp_path / "backup.json"
+    write_document(source, [contact_json(contact)])
+
+    result = preview_contact_import(repository, source)
+
+    assert result.imported == 0
+    assert result.skipped == 1
+    assert result.conflicted == 0
+
+
+def test_preview_contact_import_reports_uuid_conflict(
+    tmp_path: Path,
+) -> None:
+    """Preview should report differing data with an existing UUID."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    existing = make_import_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000012"),
+        callsign="K8ABC",
+        started_at=datetime(2026, 7, 25, 2, 0, tzinfo=UTC),
+    )
+    repository.add(existing)
+    source = tmp_path / "backup.json"
+    conflicting = existing.model_copy(
+        update={"callsign": "W8O"}
+    )
+    write_document(source, [contact_json(conflicting)])
+
+    result = preview_contact_import(repository, source)
+
+    assert result.imported == 0
+    assert result.skipped == 0
+    assert result.conflicted == 1
+    assert repository.get(existing.contact_id) == existing

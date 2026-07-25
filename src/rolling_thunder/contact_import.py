@@ -34,11 +34,49 @@ class ContactImportResult:
     skipped: int
 
 
+@dataclass(frozen=True, slots=True)
+class ContactImportPreview:
+    """Counts produced without changing the contact repository."""
+
+    imported: int
+    skipped: int
+    conflicted: int
+
+
 def validate_contact_export_json(source: Path) -> int:
     """Validate an export without writing and return its contact count."""
     document = _read_document(source)
     contacts = _validate_document(document)
     return len(contacts)
+
+
+def preview_contact_import(
+    repository: ContactRepository,
+    source: Path,
+) -> ContactImportPreview:
+    """Validate and compare an export without writing to the repository."""
+    document = _read_document(source)
+    contacts = _validate_document(document)
+
+    imported = 0
+    skipped = 0
+    conflicted = 0
+
+    for contact in contacts:
+        existing = repository.get(contact.contact_id)
+
+        if existing is None:
+            imported += 1
+        elif existing == contact:
+            skipped += 1
+        else:
+            conflicted += 1
+
+    return ContactImportPreview(
+        imported=imported,
+        skipped=skipped,
+        conflicted=conflicted,
+    )
 
 
 def import_contacts_from_json(
