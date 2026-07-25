@@ -82,12 +82,6 @@ class LiveCallsignCaptureController:
                 commit_state="DISABLED",
                 last_result="MIC ERROR",
             )
-        except Exception:
-            new_state = CallsignCaptureState(
-                voice_state="FAILED",
-                commit_state="DISABLED",
-                last_result="VOICE ERROR",
-            )
 
         with self._lock:
             self._state = new_state
