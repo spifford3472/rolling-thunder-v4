@@ -10,7 +10,6 @@ from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
 from rolling_thunder.context_navigation import (
     CONTEXT_DEFINITIONS,
-    ContextId,
     ContextNavigationController,
 )
 from rolling_thunder.dashboard_state import build_dashboard_state
@@ -290,41 +289,8 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     context.grid_columnconfigure(0, weight=1)
     context.grid_rowconfigure(1, weight=1)
 
-    context_tabs = tk.Frame(context, bg=_SECONDARY_BACKGROUND)
-    context_tabs.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
-    for column in range(len(CONTEXT_DEFINITIONS)):
-        context_tabs.grid_columnconfigure(column, weight=1, uniform="context-tabs")
-
-    def select_context(context_id: ContextId) -> None:
-        context_navigation.select(context_id)
-
-    context_buttons: dict[ContextId, tk.Button] = {}
-    for column, definition in enumerate(CONTEXT_DEFINITIONS):
-        context_id = definition.context_id
-
-        def select_button_context(selected: ContextId = context_id) -> None:
-            select_context(selected)
-
-        button = tk.Button(
-            context_tabs,
-            text=f"{definition.shortcut} {definition.label}",
-            command=select_button_context,
-            bg=_SECONDARY_BACKGROUND,
-            fg=_MUTED,
-            activebackground=_CONTEXT_SELECTED,
-            activeforeground=_BRIGHT,
-            relief="flat",
-            borderwidth=0,
-            highlightthickness=0,
-            font=("DejaVu Sans", 13, "bold"),
-            cursor="none",
-            takefocus=False,
-        )
-        button.grid(row=0, column=column, sticky="ew", padx=2, pady=2)
-        context_buttons[definition.context_id] = button
-
     context_content = tk.Frame(context, bg=_SECONDARY_BACKGROUND)
-    context_content.grid(row=1, column=0, sticky="nsew", padx=14, pady=(4, 14))
+    context_content.grid(row=0, column=0, sticky="nsew", padx=14, pady=14)
     context_content.grid_columnconfigure(0, weight=1)
     context_content.grid_rowconfigure(1, weight=1)
 
@@ -334,9 +300,9 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=context_title_text,
         bg=_SECONDARY_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 24, "bold"),
-        anchor="w",
-    ).grid(row=0, column=0, sticky="ew", pady=(4, 8))
+        font=("DejaVu Sans", 48, "bold"),
+        anchor="center",
+    ).grid(row=0, column=0, sticky="ew", pady=(8, 16))
 
     context_body_text = tk.StringVar(value="")
     tk.Label(
@@ -344,7 +310,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         textvariable=context_body_text,
         bg=_SECONDARY_BACKGROUND,
         fg=_MUTED,
-        font=("DejaVu Sans", 17),
+        font=("DejaVu Sans", 22),
         justify="left",
         anchor="nw",
         wraplength=560,
@@ -409,13 +375,6 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         selected_context = context_navigation.state
         context_title_text.set(selected_context.definition.title)
         context_body_text.set(selected_context.definition.placeholder)
-        for context_id, button in context_buttons.items():
-            selected = context_id is selected_context.selected
-            button.configure(
-                bg=_CONTEXT_SELECTED if selected else _SECONDARY_BACKGROUND,
-                fg=_BRIGHT if selected else _MUTED,
-            )
-
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:
