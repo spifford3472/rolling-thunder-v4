@@ -11,6 +11,8 @@ from pydantic import (
     Field,
     field_serializer,
     field_validator,
+    model_serializer,
+    model_validator,
 )
 
 _CALLSIGN_PATTERN = re.compile(
@@ -34,6 +36,15 @@ class RadioMode(StrEnum):
     USB = "USB"
 
 
+class RadioConnectionState(StrEnum):
+    """Connection state reported by a radio adapter."""
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    ERROR = "error"
+
+
 class SynchronizationState(StrEnum):
     """Remote synchronization state for a locally stored contact."""
 
@@ -50,6 +61,107 @@ class DomainModel(BaseModel):
         frozen=True,
         use_enum_values=False,
     )
+
+
+class Frequency(DomainModel):
+    """A validated radio frequency represented in integer hertz."""
+
+    hz: int = Field(gt=0, le=300_000_000_000, strict=True)
+
+    @property
+    def khz(self) -> float:
+        """Return the frequency in kilohertz."""
+        return self.hz / 1_000
+
+    @property
+    def mhz(self) -> float:
+        """Return the frequency in megahertz."""
+        return self.hz / 1_000_000
+
+    @model_serializer(mode="plain")
+    def serialize_frequency(self) -> int:
+        """Serialize frequency values as integer hertz."""
+        return self.hz
+
+
+class RadioState(DomainModel):
+    """Current state reported by a radio adapter."""
+
+    connection_state: RadioConnectionState
+    frequency: Frequency | None = None
+    mode: RadioMode | None = None
+    transmitting: bool = False
+    updated_at: datetime
+    last_error: str | None = Field(default=None, max_length=500)
+
+    @field_validator("connection_state", mode="before")
+    @classmethod
+    def normalize_connection_state(cls, value: object) -> object:
+        """Normalize string connection-state values."""
+        if isinstance(value, str):
+            return value.strip().lower()
+
+        return value
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def normalize_radio_mode(cls, value: object) -> object:
+        """Normalize optional string mode values."""
+        if isinstance(value, str):
+            return value.strip().upper()
+
+        return value
+
+    @field_validator("updated_at")
+    @classmethod
+    def normalize_updated_at(cls, value: datetime) -> datetime:
+        """Require a timezone-aware timestamp and normalize it to UTC."""
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("must include timezone information")
+
+        return value.astimezone(UTC)
+
+    @field_validator("last_error")
+    @classmethod
+    def normalize_last_error(cls, value: str | None) -> str | None:
+        """Trim optional adapter errors and convert blank text to None."""
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_state_consistency(self) -> "RadioState":
+        """Reject internally inconsistent radio states."""
+        if self.connection_state is RadioConnectionState.CONNECTED:
+            if self.frequency is None:
+                raise ValueError("connected radio state requires a frequency")
+
+            if self.mode is None:
+                raise ValueError("connected radio state requires a mode")
+
+        if self.transmitting:
+            if self.connection_state is not RadioConnectionState.CONNECTED:
+                raise ValueError("transmitting requires a connected radio")
+
+            if self.frequency is None or self.mode is None:
+                raise ValueError(
+                    "transmitting requires a known frequency and mode"
+                )
+
+        if (
+            self.connection_state is RadioConnectionState.ERROR
+            and self.last_error is None
+        ):
+            raise ValueError("error radio state requires last_error")
+
+        return self
+
+    @field_serializer("updated_at")
+    def serialize_updated_at(self, value: datetime) -> str:
+        """Serialize timestamps as unambiguous UTC ISO-8601 values."""
+        return value.isoformat().replace("+00:00", "Z")
 
 
 class Contact(DomainModel):
