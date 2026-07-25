@@ -196,6 +196,62 @@ class ContactRepository:
 
         return updated_contact
 
+    def delete(self, contact_id: UUID) -> Contact:
+        """Atomically delete and return one stored contact."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                row = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    WHERE contact_id = ?
+                    """,
+                    (str(contact_id),),
+                ).fetchone()
+
+                if row is None:
+                    raise ContactNotFoundError(
+                        f"Contact does not exist: {contact_id}"
+                    )
+
+                contact = self._contact_from_row(row, contact_id)
+
+                result = connection.execute(
+                    """
+                    DELETE FROM contacts
+                    WHERE contact_id = ?
+                    """,
+                    (str(contact_id),),
+                )
+
+                if result.rowcount != 1:
+                    raise StorageError(
+                        "Contact deletion affected an unexpected number "
+                        f"of rows: {contact_id}: {result.rowcount}"
+                    )
+
+                connection.commit()
+        except (ContactNotFoundError, StorageError):
+            raise
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contact could not be deleted from "
+                f"{self._database_path}: {contact_id}: {error}"
+            ) from error
+
+        return contact
+
     def update_synchronization_state(
         self,
         contact_id: UUID,
