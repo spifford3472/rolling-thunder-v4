@@ -47,6 +47,10 @@ from rolling_thunder.phonetic_callsign import (
             ["QUEEN", "ONE", "ZANSABAR", "PORTABLE"],
             "Q1Z/P",
         ),
+        (
+            ["NOVEMBER", "CHARLIE", "FOUR", "X", "RAY", "LIMA"],
+            "NC4XL",
+        ),
     ],
 )
 def test_parses_supported_phonetic_aliases(tokens: list[str], expected: str) -> None:
@@ -64,6 +68,24 @@ def test_unknown_token_disables_result_without_guessing() -> None:
 
     assert result.callsign is None
     assert result.unknown_tokens == ("MYSTERY",)
+    assert result.is_valid is False
+
+
+@pytest.mark.parametrize(
+    ("tokens", "unknown"),
+    [
+        (["NOVEMBER", "CHARLIE", "FOUR", "X", "LIMA"], ("X",)),
+        (["NOVEMBER", "CHARLIE", "FOUR", "RAY", "LIMA"], ("RAY",)),
+    ],
+)
+def test_incomplete_x_ray_pair_is_rejected(
+    tokens: list[str],
+    unknown: tuple[str, ...],
+) -> None:
+    result = parse_phonetic_callsign(tokens)
+
+    assert result.callsign is None
+    assert result.unknown_tokens == unknown
     assert result.is_valid is False
 
 
