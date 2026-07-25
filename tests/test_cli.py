@@ -13,6 +13,7 @@ from rolling_thunder.cli import (
     EXIT_BACKUP_ERROR,
     EXIT_CONFIGURATION_ERROR,
     EXIT_CONTACT_CONFLICT,
+    EXIT_CONTACT_NOT_FOUND,
     EXIT_CONTACT_VALIDATION_ERROR,
     EXIT_IMPORT_CONFLICT,
     EXIT_IMPORT_VALIDATION_ERROR,
@@ -828,4 +829,206 @@ storage:
     assert captured.out == ""
     assert "Rolling Thunder contact validation error" in captured.err
     assert "between 1 and 1000" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_show_contact_outputs_complete_details(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A stored contact should be displayed with all operator details."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+
+    contact = Contact(
+        contact_id=UUID(
+            "11111111-2222-3333-4444-555555555555"
+        ),
+        callsign="K8ABC",
+        frequency_hz=14_250_000,
+        mode=RadioMode.USB,
+        started_at=datetime(
+            2026,
+            7,
+            25,
+            6,
+            30,
+            tzinfo=UTC,
+        ),
+        rst_sent="59",
+        rst_received="57",
+        grid="EM79xm",
+        notes="Detailed contact",
+    )
+    repository.add(contact)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "show-contact",
+            str(contact.contact_id),
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "show.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out == (
+        "Contact ID: 11111111-2222-3333-4444-555555555555\n"
+        "Callsign: K8ABC\n"
+        "Frequency: 14250000 Hz\n"
+        "Mode: USB\n"
+        "Started: 2026-07-25T06:30:00Z\n"
+        "RST sent: 59\n"
+        "RST received: 57\n"
+        "Grid: EM79xm\n"
+        "Synchronization: pending\n"
+        "Notes: Detailed contact\n"
+    )
+
+
+def test_show_contact_displays_missing_optional_values(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Absent grid and notes should be represented clearly."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+
+    contact = make_contact().model_copy(
+        update={
+            "contact_id": UUID(
+                "11111111-2222-3333-4444-555555555556"
+            ),
+            "grid": None,
+            "notes": None,
+        }
+    )
+    repository.add(contact)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "show-contact",
+            str(contact.contact_id),
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "show.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    output = capsys.readouterr().out
+    assert "Grid: -\n" in output
+    assert "Notes: -\n" in output
+
+
+def test_show_contact_rejects_invalid_uuid(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Malformed UUID input should fail before opening the database."""
+    database_path = tmp_path / "contacts.db"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "show-contact",
+            "not-a-uuid",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "show.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert (
+        "Rolling Thunder contact validation error: "
+        "invalid contact UUID: not-a-uuid"
+        in captured.err
+    )
+    assert "Traceback" not in captured.err
+    assert not database_path.exists()
+
+
+def test_show_contact_reports_missing_contact(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """A valid UUID absent from storage should return not-found."""
+    database_path = tmp_path / "contacts.db"
+    missing_id = UUID(
+        "11111111-2222-3333-4444-555555555557"
+    )
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "show-contact",
+            str(missing_id),
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "show.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_NOT_FOUND
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert (
+        "Rolling Thunder contact not found: "
+        "11111111-2222-3333-4444-555555555557"
+        in captured.err
+    )
     assert "Traceback" not in captured.err

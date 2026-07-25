@@ -6,6 +6,7 @@ import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -42,6 +43,7 @@ EXIT_IMPORT_VALIDATION_ERROR = 6
 EXIT_IMPORT_CONFLICT = 7
 EXIT_CONTACT_VALIDATION_ERROR = 8
 EXIT_CONTACT_CONFLICT = 9
+EXIT_CONTACT_NOT_FOUND = 10
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -184,6 +186,30 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     list_parser.add_argument(
+        "--log",
+        type=Path,
+        default=DEFAULT_LOG_PATH,
+        help=f"log file path (default: {DEFAULT_LOG_PATH})",
+    )
+
+    show_parser = subparsers.add_parser(
+        "show-contact",
+        help="Show one stored contact",
+    )
+    show_parser.add_argument(
+        "contact_id",
+        help="contact UUID",
+    )
+    show_parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=(
+            "YAML configuration path "
+            f"(default: {DEFAULT_CONFIG_PATH})"
+        ),
+    )
+    show_parser.add_argument(
         "--log",
         type=Path,
         default=DEFAULT_LOG_PATH,
@@ -584,6 +610,99 @@ def run_contact_listing(
     return EXIT_SUCCESS
 
 
+def format_contact_details(contact: Contact) -> str:
+    """Format one contact as readable multiline details."""
+    started_at = contact.started_at.isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+    grid = str(contact.grid) if contact.grid is not None else "-"
+    notes = contact.notes if contact.notes is not None else "-"
+
+    return "\n".join(
+        (
+            f"Contact ID: {contact.contact_id}",
+            f"Callsign: {contact.callsign}",
+            f"Frequency: {contact.frequency_hz} Hz",
+            f"Mode: {contact.mode.value}",
+            f"Started: {started_at}",
+            f"RST sent: {contact.rst_sent}",
+            f"RST received: {contact.rst_received}",
+            f"Grid: {grid}",
+            f"Synchronization: {contact.synchronization_state.value}",
+            f"Notes: {notes}",
+        )
+    )
+
+
+def run_contact_show(
+    config_path: Path,
+    *,
+    contact_id: str,
+    log_path: Path = DEFAULT_LOG_PATH,
+) -> int:
+    """Show one stored contact by UUID."""
+    logger = configure_logging(log_path)
+    logger.info(
+        "Contact lookup requested config=%s contact_id=%s",
+        config_path,
+        contact_id,
+    )
+
+    try:
+        parsed_contact_id = UUID(contact_id)
+    except ValueError as error:
+        logger.error("Contact UUID validation error: %s", error)
+        print(
+            f"Rolling Thunder contact validation error: "
+            f"invalid contact UUID: {contact_id}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+
+    try:
+        config = load_config(config_path)
+    except ConfigurationError as error:
+        logger.error("Configuration error: %s", error)
+        print(
+            f"Rolling Thunder configuration error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONFIGURATION_ERROR
+
+    try:
+        repository = ContactRepository(
+            config.storage.database_path
+        )
+        contact = repository.get(parsed_contact_id)
+    except StorageError as error:
+        logger.error("Storage error: %s", error)
+        print(
+            f"Rolling Thunder storage error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_STORAGE_ERROR
+
+    if contact is None:
+        logger.error(
+            "Contact not found contact_id=%s",
+            parsed_contact_id,
+        )
+        print(
+            f"Rolling Thunder contact not found: {parsed_contact_id}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_NOT_FOUND
+
+    logger.info(
+        "Contact lookup completed contact_id=%s callsign=%s",
+        contact.contact_id,
+        contact.callsign,
+    )
+    print(format_contact_details(contact))
+    return EXIT_SUCCESS
+
+
 def cli(argv: Sequence[str] | None = None) -> int:
     """Parse command-line arguments and execute the selected operation."""
     parser = build_parser()
@@ -621,6 +740,13 @@ def cli(argv: Sequence[str] | None = None) -> int:
         return run_contact_listing(
             arguments.config,
             limit=arguments.limit,
+            log_path=arguments.log,
+        )
+
+    if arguments.command == "show-contact":
+        return run_contact_show(
+            arguments.config,
+            contact_id=arguments.contact_id,
             log_path=arguments.log,
         )
 
