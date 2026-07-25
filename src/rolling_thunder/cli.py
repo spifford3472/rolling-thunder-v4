@@ -1,6 +1,7 @@
 """Command-line operations for Rolling Thunder."""
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -157,6 +158,32 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     add_parser.add_argument(
+        "--log",
+        type=Path,
+        default=DEFAULT_LOG_PATH,
+        help=f"log file path (default: {DEFAULT_LOG_PATH})",
+    )
+
+    list_parser = subparsers.add_parser(
+        "list-contacts",
+        help="List recently stored contacts",
+    )
+    list_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="maximum contacts to list, from 1 through 1000 (default: 20)",
+    )
+    list_parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=(
+            "YAML configuration path "
+            f"(default: {DEFAULT_CONFIG_PATH})"
+        ),
+    )
+    list_parser.add_argument(
         "--log",
         type=Path,
         default=DEFAULT_LOG_PATH,
@@ -472,6 +499,91 @@ def run_manual_contact_entry(
     return EXIT_SUCCESS
 
 
+def format_contact_line(contact: Contact) -> str:
+    """Format one contact as a stable, readable single line."""
+    started_at = contact.started_at.isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+    grid = str(contact.grid) if contact.grid is not None else "-"
+    notes = json.dumps(
+        contact.notes if contact.notes is not None else "",
+        ensure_ascii=False,
+    )
+
+    return (
+        f"id={contact.contact_id} "
+        f"callsign={contact.callsign} "
+        f"frequency_hz={contact.frequency_hz} "
+        f"mode={contact.mode.value} "
+        f"started_at={started_at} "
+        f"rst={contact.rst_sent}/{contact.rst_received} "
+        f"grid={grid} "
+        f"sync={contact.synchronization_state.value} "
+        f"notes={notes}"
+    )
+
+
+def run_contact_listing(
+    config_path: Path,
+    *,
+    limit: int,
+    log_path: Path = DEFAULT_LOG_PATH,
+) -> int:
+    """List recently stored contacts from newest to oldest."""
+    logger = configure_logging(log_path)
+    logger.info(
+        "Contact listing requested config=%s limit=%s",
+        config_path,
+        limit,
+    )
+
+    try:
+        config = load_config(config_path)
+    except ConfigurationError as error:
+        logger.error("Configuration error: %s", error)
+        print(
+            f"Rolling Thunder configuration error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONFIGURATION_ERROR
+
+    try:
+        repository = ContactRepository(
+            config.storage.database_path
+        )
+        contacts = repository.list_recent(limit=limit)
+    except (TypeError, ValueError) as error:
+        logger.error("Contact list validation error: %s", error)
+        print(
+            f"Rolling Thunder contact validation error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_CONTACT_VALIDATION_ERROR
+    except StorageError as error:
+        logger.error("Storage error: %s", error)
+        print(
+            f"Rolling Thunder storage error: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_STORAGE_ERROR
+
+    logger.info(
+        "Contact listing completed count=%s limit=%s",
+        len(contacts),
+        limit,
+    )
+
+    if not contacts:
+        print("No contacts found.")
+        return EXIT_SUCCESS
+
+    for contact in contacts:
+        print(format_contact_line(contact))
+
+    return EXIT_SUCCESS
+
+
 def cli(argv: Sequence[str] | None = None) -> int:
     """Parse command-line arguments and execute the selected operation."""
     parser = build_parser()
@@ -502,6 +614,13 @@ def cli(argv: Sequence[str] | None = None) -> int:
             rst_received=arguments.rst_received,
             grid=arguments.grid,
             notes=arguments.notes,
+            log_path=arguments.log,
+        )
+
+    if arguments.command == "list-contacts":
+        return run_contact_listing(
+            arguments.config,
+            limit=arguments.limit,
             log_path=arguments.log,
         )
 

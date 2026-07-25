@@ -613,3 +613,219 @@ storage:
     assert captured.out == ""
     assert "Rolling Thunder contact conflict" in captured.err
     assert "Traceback" not in captured.err
+
+
+def test_list_contacts_outputs_newest_first(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """Stored contacts should be printed newest first with core details."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+
+    older = make_contact().model_copy(
+        update={
+            "contact_id": UUID(
+                "11111111-2222-3333-4444-555555555551"
+            ),
+            "callsign": "K8ABC",
+            "started_at": datetime(
+                2026,
+                7,
+                25,
+                1,
+                0,
+                tzinfo=UTC,
+            ),
+            "notes": 'Older "contact"',
+        }
+    )
+    newer = make_contact().model_copy(
+        update={
+            "contact_id": UUID(
+                "11111111-2222-3333-4444-555555555552"
+            ),
+            "callsign": "W8O",
+            "started_at": datetime(
+                2026,
+                7,
+                25,
+                2,
+                0,
+                tzinfo=UTC,
+            ),
+            "grid": None,
+            "notes": "Newer contact",
+        }
+    )
+    repository.add(older)
+    repository.add(newer)
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "list-contacts",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "list.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+
+    lines = captured.out.strip().splitlines()
+    assert len(lines) == 2
+    assert "callsign=W8O" in lines[0]
+    assert "callsign=K8ABC" in lines[1]
+    assert "frequency_hz=14250000" in lines[0]
+    assert "mode=USB" in lines[0]
+    assert "started_at=2026-07-25T02:00:00Z" in lines[0]
+    assert "rst=59/59" in lines[0]
+    assert "grid=-" in lines[0]
+    assert "sync=pending" in lines[0]
+    assert 'notes="Newer contact"' in lines[0]
+    assert 'notes="Older \\"contact\\""' in lines[1]
+
+
+def test_list_contacts_honors_limit(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """The requested limit should bound the newest-first result."""
+    database_path = tmp_path / "contacts.db"
+    repository = ContactRepository(database_path)
+
+    for index in range(3):
+        repository.add(
+            make_contact().model_copy(
+                update={
+                    "contact_id": UUID(
+                        f"11111111-2222-3333-4444-{index + 1:012d}"
+                    ),
+                    "callsign": f"K8A{index}",
+                    "started_at": datetime(
+                        2026,
+                        7,
+                        25,
+                        index,
+                        0,
+                        tzinfo=UTC,
+                    ),
+                }
+            )
+        )
+
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "list-contacts",
+            "--limit",
+            "2",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "list.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert len(lines) == 2
+    assert "callsign=K8A2" in lines[0]
+    assert "callsign=K8A1" in lines[1]
+
+
+def test_list_contacts_reports_empty_repository(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """An empty repository should produce a clear successful result."""
+    database_path = tmp_path / "contacts.db"
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {database_path}
+""",
+    )
+
+    result = cli(
+        [
+            "list-contacts",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "list.log"),
+        ]
+    )
+
+    assert result == EXIT_SUCCESS
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out == "No contacts found.\n"
+
+
+def test_list_contacts_rejects_invalid_limit(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    """An out-of-range limit should fail with contact validation."""
+    config_path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+storage:
+  database_path: {tmp_path / "contacts.db"}
+""",
+    )
+
+    result = cli(
+        [
+            "list-contacts",
+            "--limit",
+            "0",
+            "--config",
+            str(config_path),
+            "--log",
+            str(tmp_path / "list.log"),
+        ]
+    )
+
+    assert result == EXIT_CONTACT_VALIDATION_ERROR
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Rolling Thunder contact validation error" in captured.err
+    assert "between 1 and 1000" in captured.err
+    assert "Traceback" not in captured.err
