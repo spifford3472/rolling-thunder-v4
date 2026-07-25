@@ -1,0 +1,147 @@
+"""SQLite-backed persistence for Rolling Thunder contacts."""
+
+import sqlite3
+from pathlib import Path
+from typing import Any
+from uuid import UUID
+
+from pydantic import ValidationError
+
+from rolling_thunder.domain import Contact
+from rolling_thunder.storage import StorageError, initialize_database
+
+
+class ContactAlreadyExistsError(StorageError):
+    """Raised when a contact UUID is already stored."""
+
+
+class ContactRepository:
+    """Create and retrieve durable contacts from a SQLite database."""
+
+    def __init__(self, database_path: Path) -> None:
+        """Prepare a repository backed by the configured database."""
+        self._database_path = database_path
+        initialize_database(database_path)
+
+    def add(self, contact: Contact) -> None:
+        """Persist a contact and commit it before returning."""
+        values = {
+            "contact_id": str(contact.contact_id),
+            "callsign": contact.callsign,
+            "frequency_hz": contact.frequency_hz,
+            "mode": contact.mode.value,
+            "started_at": contact.started_at.isoformat().replace("+00:00", "Z"),
+            "rst_sent": contact.rst_sent,
+            "rst_received": contact.rst_received,
+            "grid": contact.grid,
+            "notes": contact.notes,
+            "synchronization_state": contact.synchronization_state.value,
+        }
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO contacts (
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        notes,
+                        synchronization_state
+                    )
+                    VALUES (
+                        :contact_id,
+                        :callsign,
+                        :frequency_hz,
+                        :mode,
+                        :started_at,
+                        :rst_sent,
+                        :rst_received,
+                        :grid,
+                        :notes,
+                        :synchronization_state
+                    )
+                    """,
+                    values,
+                )
+                connection.commit()
+        except sqlite3.IntegrityError as error:
+            if self.get(contact.contact_id) is not None:
+                raise ContactAlreadyExistsError(
+                    f"Contact already exists: {contact.contact_id}"
+                ) from error
+
+            raise StorageError(
+                f"Contact could not be stored because it violates "
+                f"the database schema: {contact.contact_id}: {error}"
+            ) from error
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contact could not be stored in "
+                f"{self._database_path}: {contact.contact_id}: {error}"
+            ) from error
+
+    def get(self, contact_id: UUID) -> Contact | None:
+        """Retrieve one contact by UUID, or return None when it is absent."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                row = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    WHERE contact_id = ?
+                    """,
+                    (str(contact_id),),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contact could not be read from "
+                f"{self._database_path}: {contact_id}: {error}"
+            ) from error
+
+        if row is None:
+            return None
+
+        return self._contact_from_row(row, contact_id)
+
+    @staticmethod
+    def _contact_from_row(
+        row: sqlite3.Row,
+        requested_contact_id: UUID,
+    ) -> Contact:
+        """Reconstruct and validate a domain contact from one database row."""
+        values: dict[str, Any] = {
+            "contact_id": row["contact_id"],
+            "callsign": row["callsign"],
+            "frequency_hz": row["frequency_hz"],
+            "mode": row["mode"],
+            "started_at": row["started_at"],
+            "rst_sent": row["rst_sent"],
+            "rst_received": row["rst_received"],
+            "grid": row["grid"],
+            "notes": row["notes"],
+            "synchronization_state": row["synchronization_state"],
+        }
+
+        try:
+            return Contact.model_validate(values)
+        except ValidationError as error:
+            raise StorageError(
+                f"Stored contact is invalid: {requested_contact_id}: {error}"
+            ) from error
