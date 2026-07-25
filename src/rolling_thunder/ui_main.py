@@ -68,7 +68,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
     root = tk.Tk()
     root.title("Rolling Thunder v4")
-    root.configure(bg=_BACKGROUND)
+    root.configure(bg=_BACKGROUND, cursor="none")
     root.attributes("-fullscreen", True)
     root.grid_columnconfigure(0, weight=2, uniform="dashboard")
     root.grid_columnconfigure(1, weight=3, uniform="dashboard")
