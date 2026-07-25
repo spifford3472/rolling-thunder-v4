@@ -109,3 +109,241 @@ def test_initialize_database_rejects_newer_schema(tmp_path: Path) -> None:
         initialize_database(database_path)
 
     assert read_schema_version(database_path) == newer_version
+
+
+def read_table_columns(
+    database_path: Path,
+    table_name: str,
+) -> dict[str, tuple[object, ...]]:
+    """Return SQLite table metadata keyed by column name."""
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            f"PRAGMA table_info({table_name})"
+        ).fetchall()
+
+    return {str(row[1]): row for row in rows}
+
+
+def read_index_names(database_path: Path, table_name: str) -> set[str]:
+    """Return index names associated with a SQLite table."""
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            f"PRAGMA index_list({table_name})"
+        ).fetchall()
+
+    return {str(row[1]) for row in rows}
+
+
+def create_version_one_database(database_path: Path) -> None:
+    """Create a database matching the previously released schema version."""
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE schema_metadata (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                schema_version INTEGER NOT NULL CHECK (schema_version >= 0),
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO schema_metadata (
+                singleton_id,
+                schema_version
+            )
+            VALUES (1, 1)
+            """
+        )
+        connection.commit()
+
+
+def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
+    """A new database should include the durable contacts table."""
+    database_path = tmp_path / "rolling-thunder.db"
+
+    initialize_database(database_path)
+
+    columns = read_table_columns(database_path, "contacts")
+
+    assert set(columns) == {
+        "contact_id",
+        "callsign",
+        "frequency_hz",
+        "mode",
+        "started_at",
+        "rst_sent",
+        "rst_received",
+        "grid",
+        "notes",
+        "synchronization_state",
+        "created_at",
+        "updated_at",
+    }
+
+    assert columns["contact_id"][5] == 1
+    assert columns["callsign"][3] == 1
+    assert columns["frequency_hz"][3] == 1
+    assert columns["mode"][3] == 1
+    assert columns["started_at"][3] == 1
+    assert columns["synchronization_state"][4] == "'pending'"
+
+
+def test_initialize_database_creates_contact_indexes(tmp_path: Path) -> None:
+    """Contact retrieval and synchronization should have supporting indexes."""
+    database_path = tmp_path / "rolling-thunder.db"
+
+    initialize_database(database_path)
+
+    indexes = read_index_names(database_path, "contacts")
+
+    assert {
+        "contacts_started_at_index",
+        "contacts_synchronization_state_index",
+        "contacts_callsign_index",
+    }.issubset(indexes)
+
+
+def test_initialize_database_migrates_version_one_database(
+    tmp_path: Path,
+) -> None:
+    """An existing version-one database should migrate without replacement."""
+    database_path = tmp_path / "rolling-thunder.db"
+    create_version_one_database(database_path)
+
+    assert read_schema_version(database_path) == 1
+
+    version = initialize_database(database_path)
+
+    assert version == CURRENT_SCHEMA_VERSION
+    assert read_schema_version(database_path) == CURRENT_SCHEMA_VERSION
+    assert read_table_columns(database_path, "contacts")
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("frequency_hz", 0),
+        ("frequency_hz", 300_000_000_001),
+        ("mode", "INVALID"),
+        ("synchronization_state", "unknown"),
+    ],
+)
+def test_contacts_table_rejects_invalid_constrained_values(
+    tmp_path: Path,
+    column: str,
+    value: object,
+) -> None:
+    """The database should protect essential domain invariants."""
+    database_path = tmp_path / "rolling-thunder.db"
+    initialize_database(database_path)
+
+    values: dict[str, object] = {
+        "contact_id": "00000000-0000-0000-0000-000000000001",
+        "callsign": "W8O",
+        "frequency_hz": 14_250_000,
+        "mode": "USB",
+        "started_at": "2026-07-25T00:30:00Z",
+        "rst_sent": "59",
+        "rst_received": "59",
+        "synchronization_state": "pending",
+    }
+    values[column] = value
+
+    with sqlite3.connect(database_path) as connection, pytest.raises(sqlite3.IntegrityError):
+        connection.execute(
+            """
+                INSERT INTO contacts (
+                    contact_id,
+                    callsign,
+                    frequency_hz,
+                    mode,
+                    started_at,
+                    rst_sent,
+                    rst_received,
+                    synchronization_state
+                )
+                VALUES (
+                    :contact_id,
+                    :callsign,
+                    :frequency_hz,
+                    :mode,
+                    :started_at,
+                    :rst_sent,
+                    :rst_received,
+                    :synchronization_state
+                )
+                """,
+            values,
+        )
+
+
+def test_contacts_table_rejects_duplicate_contact_id(tmp_path: Path) -> None:
+    """A contact UUID must uniquely identify one durable record."""
+    database_path = tmp_path / "rolling-thunder.db"
+    initialize_database(database_path)
+
+    values = {
+        "contact_id": "00000000-0000-0000-0000-000000000001",
+        "callsign": "W8O",
+        "frequency_hz": 14_250_000,
+        "mode": "USB",
+        "started_at": "2026-07-25T00:30:00Z",
+        "rst_sent": "59",
+        "rst_received": "59",
+        "synchronization_state": "pending",
+    }
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO contacts (
+                contact_id,
+                callsign,
+                frequency_hz,
+                mode,
+                started_at,
+                rst_sent,
+                rst_received,
+                synchronization_state
+            )
+            VALUES (
+                :contact_id,
+                :callsign,
+                :frequency_hz,
+                :mode,
+                :started_at,
+                :rst_sent,
+                :rst_received,
+                :synchronization_state
+            )
+            """,
+            values,
+        )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO contacts (
+                    contact_id,
+                    callsign,
+                    frequency_hz,
+                    mode,
+                    started_at,
+                    rst_sent,
+                    rst_received,
+                    synchronization_state
+                )
+                VALUES (
+                    :contact_id,
+                    :callsign,
+                    :frequency_hz,
+                    :mode,
+                    :started_at,
+                    :rst_sent,
+                    :rst_received,
+                    :synchronization_state
+                )
+                """,
+                values,
+            )
