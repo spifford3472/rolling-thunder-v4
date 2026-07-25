@@ -155,5 +155,6 @@ class PySerialCatTransport:
             ) from error
         if written != len(command):
             raise RadioConnectionError(
-                f"Incomplete FT-891 CAT write: expected {len(command)} bytes, wrote {written}."
+                "Incomplete FT-891 CAT write: "
+                f"expected {len(command)} bytes, wrote {written}."
             )
