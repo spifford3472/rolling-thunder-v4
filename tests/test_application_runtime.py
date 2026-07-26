@@ -1,15 +1,17 @@
 """Tests for the application composition root."""
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
-from rolling_thunder.gps import GPSConnectionState
+from rolling_thunder.gps import GPSConnectionState, GPSReceiver
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.radio_polling import PollCallback
+from rolling_thunder.serial_gps import SerialGPSReceiver
 
 
 class ManualScheduledPoll:
@@ -90,14 +92,35 @@ def test_runtime_stop_cancels_polling_and_disconnects_hardware() -> None:
     assert scheduler.poll.cancelled is True
 
 
-def test_non_mock_runtime_leaves_gps_unconfigured() -> None:
+def test_non_mock_runtime_composes_serial_gps() -> None:
     runtime = ApplicationRuntime.from_config(
         hardware_config(),
         scheduler=ManualScheduler(),
     )
 
-    assert runtime.gps is None
-    assert runtime.latest_gps_state is None
+    assert isinstance(runtime.gps, SerialGPSReceiver)
+    gps_state = runtime.latest_gps_state
+    assert gps_state is not None
+    assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
+
+
+def test_non_mock_runtime_uses_configured_gps_device_with_injected_factory() -> None:
+    received_devices: list[Path] = []
+    receiver = MockGPSReceiver()
+
+    def gps_factory(device: Path) -> GPSReceiver:
+        received_devices.append(device)
+        return receiver
+
+    runtime = ApplicationRuntime.from_config(
+        hardware_config(),
+        scheduler=ManualScheduler(),
+        gps_factory=gps_factory,
+    )
+
+    assert received_devices == [Path("/dev/ttyUSB1")]
+    assert runtime.gps is receiver
+    assert runtime.latest_gps_state is receiver.get_state()
 
 
 def test_runtime_rejects_repeated_start() -> None:

@@ -1,6 +1,8 @@
 """Application composition root for the first persistent Pi dashboard."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.contact_logging import ContactLoggingService
@@ -13,7 +15,10 @@ from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
 from rolling_thunder.radio import Radio
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
+from rolling_thunder.serial_gps import SerialGPSReceiver
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
+
+GPSFactory = Callable[[Path], GPSReceiver]
 
 
 @dataclass
@@ -33,10 +38,11 @@ class ApplicationRuntime:
         *,
         scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
+        gps_factory: GPSFactory = SerialGPSReceiver,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
-        gps: GPSReceiver | None
+        gps: GPSReceiver
         if config.hardware.mock:
             radio = MockRadio()
             gps = MockGPSReceiver()
@@ -44,8 +50,11 @@ class ApplicationRuntime:
             radio_device = config.hardware.radio_device
             if radio_device is None:
                 raise ValueError("A radio device is required outside mock mode.")
+            gps_device = config.hardware.gps_device
+            if gps_device is None:
+                raise ValueError("A GPS device is required outside mock mode.")
             radio = Ft891Radio(PySerialCatTransport(radio_device))
-            gps = None
+            gps = gps_factory(gps_device)
 
         polling_scheduler = scheduler or ThreadingPollScheduler()
         repository = ContactRepository(config.storage.database_path)
