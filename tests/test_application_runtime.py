@@ -6,7 +6,9 @@ import pytest
 
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
-from rolling_thunder.domain import RadioConnectionState
+from rolling_thunder.domain import GPSFixState, RadioConnectionState
+from rolling_thunder.gps import GPSConnectionState
+from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.radio_polling import PollCallback
 
 
@@ -42,7 +44,16 @@ def mock_config() -> ApplicationConfig:
     )
 
 
-def test_runtime_composes_and_starts_mock_radio() -> None:
+def hardware_config() -> ApplicationConfig:
+    return ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {"mock": False, "radio_device": "/dev/ttyUSB0"},
+        }
+    )
+
+
+def test_runtime_composes_and_starts_mock_hardware() -> None:
     scheduler = ManualScheduler()
     runtime = ApplicationRuntime.from_config(mock_config(), scheduler=scheduler)
 
@@ -50,10 +61,16 @@ def test_runtime_composes_and_starts_mock_radio() -> None:
 
     assert state.connection_state is RadioConnectionState.CONNECTED
     assert runtime.latest_radio_state.connection_state is RadioConnectionState.CONNECTED
+    assert isinstance(runtime.gps, MockGPSReceiver)
+    gps_state = runtime.latest_gps_state
+    assert gps_state is not None
+    assert gps_state.connection_state is GPSConnectionState.CONNECTED
+    assert gps_state.position is not None
+    assert gps_state.position.fix_state is GPSFixState.THREE_DIMENSIONAL
     assert scheduler.poll is not None
 
 
-def test_runtime_stop_cancels_polling_and_disconnects() -> None:
+def test_runtime_stop_cancels_polling_and_disconnects_hardware() -> None:
     scheduler = ManualScheduler()
     runtime = ApplicationRuntime.from_config(mock_config(), scheduler=scheduler)
     runtime.start()
@@ -61,8 +78,22 @@ def test_runtime_stop_cancels_polling_and_disconnects() -> None:
     state = runtime.stop()
 
     assert state.connection_state is RadioConnectionState.DISCONNECTED
+    gps_state = runtime.latest_gps_state
+    assert gps_state is not None
+    assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
+    assert gps_state.position is None
     assert scheduler.poll is not None
     assert scheduler.poll.cancelled is True
+
+
+def test_non_mock_runtime_leaves_gps_unconfigured() -> None:
+    runtime = ApplicationRuntime.from_config(
+        hardware_config(),
+        scheduler=ManualScheduler(),
+    )
+
+    assert runtime.gps is None
+    assert runtime.latest_gps_state is None
 
 
 def test_runtime_rejects_repeated_start() -> None:
@@ -85,6 +116,9 @@ def test_runtime_stop_before_start_is_safe() -> None:
     state = runtime.stop()
 
     assert state.connection_state is RadioConnectionState.DISCONNECTED
+    gps_state = runtime.latest_gps_state
+    assert gps_state is not None
+    assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
 
 
 def test_test_clock_reference_is_timezone_aware() -> None:
