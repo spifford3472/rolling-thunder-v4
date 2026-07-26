@@ -22,6 +22,12 @@ from rolling_thunder.network_keepalive import (
     NetworkKeepaliveService,
     NetworkKeepaliveTransport,
 )
+from rolling_thunder.pota_runtime import (
+    PotaSpotsRuntimeConfig,
+    build_pota_spot_polling,
+)
+from rolling_thunder.pota_spot_polling import PotaSpotPollingService
+from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
 from rolling_thunder.radio import Radio
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
@@ -44,6 +50,7 @@ class ApplicationRuntime:
     home_platform_health: HomePlatformHealthService | None = None
     contact_sync: ContactSyncService | None = None
     network_keepalive: NetworkKeepaliveService | None = None
+    pota_spot_polling: PotaSpotPollingService | None = None
     _started: bool = False
 
     @classmethod
@@ -56,11 +63,14 @@ class ApplicationRuntime:
         home_platform_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
+        pota_scheduler: PollScheduler | None = None,
+        pota_config: PotaSpotsRuntimeConfig | None = None,
         interval_s: float = 1.0,
         gps_interval_s: float = 1.0,
         gps_factory: GPSFactory = SerialGPSReceiver,
         home_platform_transport: HttpTransport | None = None,
         network_keepalive_transport: NetworkKeepaliveTransport | None = None,
+        pota_transport: HttpTransport | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -123,6 +133,13 @@ class ApplicationRuntime:
                 transport=network_keepalive_transport,
             )
 
+        pota_spot_polling = build_pota_spot_polling(
+            pota_config or PotaSpotsRuntimeConfig(),
+            pota_scheduler or ThreadingPollScheduler(),
+            mock_mode=config.hardware.mock,
+            transport=pota_transport,
+        )
+
         return cls(
             radio=radio,
             polling=RadioPollingService(
@@ -141,6 +158,7 @@ class ApplicationRuntime:
             home_platform_health=home_platform_health,
             contact_sync=contact_sync,
             network_keepalive=network_keepalive,
+            pota_spot_polling=pota_spot_polling,
         )
 
     @property
@@ -156,6 +174,13 @@ class ApplicationRuntime:
         if self.gps is None:
             return None
         return self.gps.get_state()
+
+    @property
+    def latest_pota_spot_state(self) -> PotaSpotServiceState | None:
+        """Return the latest POTA spot snapshot available to consumers."""
+        if self.pota_spot_polling is None:
+            return None
+        return self.pota_spot_polling.latest_state
 
     def start(self) -> RadioState:
         """Connect configured hardware and begin background polling."""
@@ -174,6 +199,8 @@ class ApplicationRuntime:
             self.contact_sync.start()
         if self.network_keepalive is not None:
             self.network_keepalive.start()
+        if self.pota_spot_polling is not None:
+            self.pota_spot_polling.start()
         self._started = True
         return state
 
@@ -182,6 +209,8 @@ class ApplicationRuntime:
         if not self._started:
             return self.radio.get_state()
 
+        if self.pota_spot_polling is not None:
+            self.pota_spot_polling.stop()
         if self.network_keepalive is not None:
             self.network_keepalive.stop()
         if self.contact_sync is not None:
