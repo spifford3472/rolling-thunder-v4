@@ -158,8 +158,10 @@ def test_empty_simulated_error_is_rejected() -> None:
 
 
 def test_naive_mock_clock_is_rejected() -> None:
+    naive_time = _FIXED_TIME.replace(tzinfo=None)
+
     with pytest.raises(ValueError, match="timezone-aware"):
-        MockGPSReceiver(clock=lambda: datetime(2026, 7, 26, 10, 0, tzinfo=None))
+        MockGPSReceiver(clock=lambda: naive_time)
 
 
 def test_state_timestamp_is_normalized_to_utc() -> None:
@@ -175,11 +177,13 @@ def test_state_timestamp_is_normalized_to_utc() -> None:
 
 
 def test_state_rejects_naive_timestamp() -> None:
+    naive_time = _FIXED_TIME.replace(tzinfo=None)
+
     with pytest.raises(ValueError, match="timezone"):
         GPSState(
             connection_state=GPSConnectionState.DISCONNECTED,
             position=None,
-            updated_at=datetime(2026, 7, 26, 10, 0, tzinfo=None),
+            updated_at=naive_time,
         )
 
 
