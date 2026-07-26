@@ -18,6 +18,10 @@ from rolling_thunder.home_platform_health import HomePlatformHealthService
 from rolling_thunder.http_home_platform import HttpHomePlatformClient, HttpTransport
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
+from rolling_thunder.network_keepalive import (
+    NetworkKeepaliveService,
+    NetworkKeepaliveTransport,
+)
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
 from rolling_thunder.radio import Radio
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
@@ -39,6 +43,7 @@ class ApplicationRuntime:
     home_platform_client: HomePlatformClient | None = None
     home_platform_health: HomePlatformHealthService | None = None
     contact_sync: ContactSyncService | None = None
+    network_keepalive: NetworkKeepaliveService | None = None
     _started: bool = False
 
     @classmethod
@@ -50,10 +55,12 @@ class ApplicationRuntime:
         gps_scheduler: PollScheduler | None = None,
         home_platform_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
+        network_keepalive_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
         gps_interval_s: float = 1.0,
         gps_factory: GPSFactory = SerialGPSReceiver,
         home_platform_transport: HttpTransport | None = None,
+        network_keepalive_transport: NetworkKeepaliveTransport | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -102,6 +109,20 @@ class ApplicationRuntime:
                 retry_store=ContactRetryRepository(config.storage.database_path),
             )
 
+        network_keepalive: NetworkKeepaliveService | None = None
+        keepalive_config = config.network_keepalive
+        if keepalive_config.enabled:
+            target_url = keepalive_config.target_url
+            if target_url is None:
+                raise ValueError("Network keepalive target URL is required when enabled.")
+            network_keepalive = NetworkKeepaliveService(
+                str(target_url),
+                network_keepalive_scheduler or ThreadingPollScheduler(),
+                interval_s=keepalive_config.interval_s,
+                timeout_s=keepalive_config.timeout_s,
+                transport=network_keepalive_transport,
+            )
+
         return cls(
             radio=radio,
             polling=RadioPollingService(
@@ -119,6 +140,7 @@ class ApplicationRuntime:
             home_platform_client=home_platform_client,
             home_platform_health=home_platform_health,
             contact_sync=contact_sync,
+            network_keepalive=network_keepalive,
         )
 
     @property
@@ -150,6 +172,8 @@ class ApplicationRuntime:
             self.home_platform_health.start()
         if self.contact_sync is not None:
             self.contact_sync.start()
+        if self.network_keepalive is not None:
+            self.network_keepalive.start()
         self._started = True
         return state
 
@@ -158,6 +182,8 @@ class ApplicationRuntime:
         if not self._started:
             return self.radio.get_state()
 
+        if self.network_keepalive is not None:
+            self.network_keepalive.stop()
         if self.contact_sync is not None:
             self.contact_sync.stop()
         if self.home_platform_health is not None:

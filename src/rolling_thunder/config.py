@@ -132,7 +132,9 @@ class SpeechConfig(ConfigurationModel):
     def validate_enabled_speech(self) -> Self:
         """Require a model path whenever live recognition is enabled."""
         if self.enabled and self.model_path is None:
-            raise ValueError("speech.model_path must be configured when speech.enabled is true")
+            raise ValueError(
+                "speech.model_path must be configured when speech.enabled is true"
+            )
         return self
 
 
@@ -159,6 +161,25 @@ class HomePlatformConfig(ConfigurationModel):
             raise ValueError(
                 "home_platform.base_url must be configured when "
                 "home_platform.enabled is true"
+            )
+        return self
+
+
+class NetworkKeepaliveConfig(ConfigurationModel):
+    """Optional cellular/WAN keepalive settings."""
+
+    enabled: bool = False
+    target_url: AnyHttpUrl | None = None
+    interval_s: float = Field(default=30.0, gt=0, le=3_600)
+    timeout_s: float = Field(default=5.0, gt=0, le=60)
+
+    @model_validator(mode="after")
+    def validate_enabled_keepalive(self) -> Self:
+        """Require a target URL whenever keepalive traffic is enabled."""
+        if self.enabled and self.target_url is None:
+            raise ValueError(
+                "network_keepalive.target_url must be configured when "
+                "network_keepalive.enabled is true"
             )
         return self
 
@@ -213,6 +234,7 @@ class ApplicationConfig(ConfigurationModel):
     speech: SpeechConfig = SpeechConfig()
     forge: ForgeConfig = ForgeConfig()
     home_platform: HomePlatformConfig = HomePlatformConfig()
+    network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
     storage: StorageConfig = StorageConfig()
 
 
