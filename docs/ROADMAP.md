@@ -1,7 +1,8 @@
 # Rolling Thunder v4 Roadmap
 
 This roadmap describes intended sequencing. It is not a promise that every
-feature will be implemented exactly as listed.
+feature will be implemented exactly as listed. The approved v4.1.0 architecture
+specification remains authoritative when sequencing or terminology differs.
 
 ## Milestone 0: Development Foundation
 
@@ -55,7 +56,7 @@ Status: complete and audited.
 
 ## Milestone 4: Radio Abstraction
 
-Status: next.
+Status: complete for the current FT-891 scope.
 
 - Typed radio interface
 - Deterministic mock radio
@@ -64,16 +65,25 @@ Status: next.
 - Connection-state reporting
 - FT-891 CAT adapter
 - Safe handling of disconnects and malformed replies
+- Background radio polling outside the UI thread
 
 ## Milestone 5: Basic Pi User Interface
 
-- Application shell
-- navigation among primary screens
-- radio status area
-- basic manual logging
-- large in-vehicle controls
-- readable high-contrast layout
-- no blocking work in the UI thread
+Status: substantially complete for the current mobile-logging slice.
+
+- Full-screen Raspberry Pi application shell
+- direct navigation among primary contexts
+- live radio status area
+- pending-callsign voice workflow
+- explicit Commit and Discard controls
+- durable local contact commits
+- large, readable in-vehicle presentation
+- high-contrast layout
+- station-health presentation
+- no blocking radio, voice, or storage work in the UI thread
+
+Remaining Milestone 5 work should be limited to focused architecture-aligned
+integration and usability refinements rather than a broad dashboard rewrite.
 
 ## Milestone 6: GPS and Location
 
@@ -84,7 +94,7 @@ Status: next.
 - current position display
 - graceful loss and reacquisition of GPS
 
-## Milestone 7: Forge Connectivity
+## Milestone 7: Home Station Platform Connectivity
 
 - Typed remote API interface
 - health and reachability checks
@@ -103,14 +113,16 @@ Status: next.
 - safeguards against unintended tuning
 - local cache for temporary outages
 
-## Milestone 9: Voice and Physical Controls
+## Milestone 9: Physical Controls
 
-- USB microphone abstraction
-- test with the Jabra headset
-- callsign speech-to-text workflow
-- confidence and correction flow
+Voice callsign capture is already implemented. Remaining work in this milestone
+is the physical control surface and its safe application integration.
+
 - ESP32 button and LED interface
+- configuration-driven input mappings
 - mock controls for development
+- physical Voice, Commit, and Discard controls
+- direct context-selection buttons
 - driver-distraction and error safeguards
 
 ## Milestone 10: Mapping and Operating Intelligence
@@ -120,8 +132,21 @@ Status: next.
 - contact visualization
 - POTA locations
 - station status
-- selected Forge-assisted analytics
+- selected Home Station Platform-assisted analytics
 - cached behavior where practical
+
+## Cross-Cutting Architecture Work
+
+The v4.1.0 architecture specification defines Station State as the unified
+operational read model consumed by the UI and dependent services. This boundary
+is being added incrementally around the already implemented radio, voice,
+logging, storage, context, and health capabilities before more state-producing
+subsystems are introduced.
+
+An in-process event bus remains an architectural direction, not a requirement to
+retrofit prematurely. Its implementation should be driven by demonstrated
+service-coordination needs while preserving the current safe Tkinter and worker-
+thread boundaries.
 
 ## Later Possibilities
 
@@ -135,6 +160,11 @@ Status: next.
 
 ## Immediate Next Feature
 
-Begin Milestone 4 with a small focused slice that defines the typed radio
-interface and deterministic mock radio. Build application behavior and tests
-against that boundary before adding the FT-891 CAT adapter.
+Complete the focused typed Station State read-model slice. It must compose the
+currently implemented radio, callsign-capture, context-navigation, and station-
+health models without performing I/O or introducing UI, hardware, storage, or
+network coupling.
+
+After that boundary is merged, begin Milestone 6 with the smallest GPS slice:
+a typed GPS interface and deterministic mock source, followed by Station State
+integration before the physical serial adapter or dashboard wiring.
