@@ -87,7 +87,7 @@ def test_naive_spot_timestamp_is_rejected() -> None:
             park=ParkReference(reference="US-1234"),
             frequency=Frequency(hz=14_250_000),
             mode=RadioMode.USB,
-            spotted_at=datetime(2026, 7, 26, 18, 0),
+            spotted_at=datetime(2026, 7, 26, 18, 0),  # noqa: DTZ001
         )
 
 
