@@ -25,6 +25,12 @@ home_platform:
   contact_sync_interval_s: 30.0
   contact_sync_batch_size: 25
 
+network_keepalive:
+  enabled: false
+  target_url: null
+  interval_s: 30.0
+  timeout_s: 5.0
+
 storage:
   database_path: data/rolling-thunder.db
   contact_backups:
