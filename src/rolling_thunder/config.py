@@ -142,6 +142,27 @@ class ForgeConfig(ConfigurationModel):
     api_url: AnyHttpUrl | None = None
 
 
+class HomePlatformConfig(ConfigurationModel):
+    """Optional Home Station Platform connectivity and polling settings."""
+
+    enabled: bool = False
+    base_url: AnyHttpUrl | None = None
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    health_poll_interval_s: float = Field(default=30.0, gt=0, le=3_600)
+    contact_sync_interval_s: float = Field(default=30.0, gt=0, le=3_600)
+    contact_sync_batch_size: int = Field(default=25, ge=1, le=1_000)
+
+    @model_validator(mode="after")
+    def validate_enabled_platform(self) -> Self:
+        """Require a base URL whenever Home Station Platform access is enabled."""
+        if self.enabled and self.base_url is None:
+            raise ValueError(
+                "home_platform.base_url must be configured when "
+                "home_platform.enabled is true"
+            )
+        return self
+
+
 class ContactBackupConfig(ConfigurationModel):
     """Verified local contact-backup settings."""
 
@@ -191,6 +212,7 @@ class ApplicationConfig(ConfigurationModel):
     hardware: HardwareConfig = HardwareConfig()
     speech: SpeechConfig = SpeechConfig()
     forge: ForgeConfig = ForgeConfig()
+    home_platform: HomePlatformConfig = HomePlatformConfig()
     storage: StorageConfig = StorageConfig()
 
 
