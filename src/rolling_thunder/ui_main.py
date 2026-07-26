@@ -17,6 +17,7 @@ from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.radio import RadioConnectionError
+from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
 
@@ -448,10 +449,16 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
     def refresh() -> None:
         gps_state = runtime.latest_gps_state
+        connectivity = build_runtime_connectivity_status(
+            runtime,
+            network_enabled=config.network_keepalive.enabled,
+            platform_enabled=config.home_platform.enabled,
+        )
         view = build_dashboard_state(
             runtime.latest_radio_state,
             capture_state(),
             gps_state,
+            connectivity,
         )
         pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
         voice_state = view.voice_state.upper()
@@ -479,6 +486,13 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         ticker = view.ticker
         if view.grid != "—":
             ticker = f"{ticker} — GRID {view.grid.upper()}"
+        ticker = (
+            f"{ticker} — NETWORK {view.network_state}"
+            f" — HOME {view.home_platform_state}"
+            f" — SYNC {view.synchronization_state}"
+        )
+        if view.connectivity_detail != "CONNECTIVITY READY":
+            ticker = f"{ticker} — {view.connectivity_detail}"
         ticker_text.set(ticker)
 
         selected_context = context_navigation.state
