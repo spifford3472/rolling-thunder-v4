@@ -1,8 +1,9 @@
-"""Composition helper for configured POTA spot services."""
+"""Composition helpers and typed settings for configured POTA spot services."""
 
 from datetime import UTC, datetime
 
-from rolling_thunder.config import PotaSpotsConfig
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+
 from rolling_thunder.http_home_platform import HttpTransport
 from rolling_thunder.http_pota_spot_source import HttpPotaSpotSource
 from rolling_thunder.pota_spot_polling import PotaSpotPollingService
@@ -16,8 +17,20 @@ from rolling_thunder.pota_spot_source import (
 from rolling_thunder.radio_polling import PollScheduler
 
 
+class PotaSpotsRuntimeConfig(BaseModel):
+    """Immutable runtime settings for optional POTA spot retrieval."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = False
+    base_url: AnyHttpUrl = AnyHttpUrl("https://api.pota.app")
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    refresh_interval_s: float = Field(default=60.0, gt=0, le=3_600)
+    refresh_on_start: bool = True
+
+
 def build_pota_spot_polling(
-    config: PotaSpotsConfig,
+    config: PotaSpotsRuntimeConfig,
     scheduler: PollScheduler,
     *,
     mock_mode: bool,
@@ -46,5 +59,5 @@ def build_pota_spot_polling(
         PotaSpotService(source),
         scheduler,
         interval_s=config.refresh_interval_s,
-        refresh_immediately=config.refresh_immediately,
+        refresh_on_start=config.refresh_on_start,
     )
