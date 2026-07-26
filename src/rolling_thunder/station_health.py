@@ -39,7 +39,10 @@ class StationHealthSnapshot:
 
     @property
     def items(self) -> tuple[HealthItem, ...]:
-        """Return subsystem rows in dashboard display order."""
+        """Return configured subsystem rows in dashboard display order."""
+        required_items = (self.radio, self.voice, self.logging, self.storage)
+        if self.gps.status is HealthStatus.DISABLED:
+            return required_items
         return (self.radio, self.gps, self.voice, self.logging, self.storage)
 
 
