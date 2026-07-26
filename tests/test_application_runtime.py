@@ -48,7 +48,11 @@ def hardware_config() -> ApplicationConfig:
     return ApplicationConfig.model_validate(
         {
             "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
-            "hardware": {"mock": False, "radio_device": "/dev/ttyUSB0"},
+            "hardware": {
+                "mock": False,
+                "radio_device": "/dev/ttyUSB0",
+                "gps_device": "/dev/ttyUSB1",
+            },
         }
     )
 
