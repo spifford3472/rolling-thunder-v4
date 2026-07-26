@@ -3,7 +3,9 @@
 from dataclasses import dataclass
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
-from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
+from rolling_thunder.domain import Frequency, GPSFixState, RadioConnectionState, RadioState
+from rolling_thunder.gps import GPSConnectionState, GPSState
+from rolling_thunder.maidenhead import maidenhead_grid
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,8 @@ class DashboardState:
     frequency: str
     band: str
     mode: str
+    gps_state: str
+    grid: str
     commit_state: str
     last_result: str
     ticker: str
@@ -50,14 +54,34 @@ def _format_band(frequency: Frequency | None) -> str:
     return "Out of band"
 
 
+def _format_gps(gps_state: GPSState | None) -> tuple[str, str]:
+    """Return stable operator-facing GPS status and grid text."""
+    if gps_state is None:
+        return "DISABLED", "—"
+    if gps_state.connection_state is GPSConnectionState.ERROR:
+        return "ERROR", "—"
+    if gps_state.connection_state is not GPSConnectionState.CONNECTED:
+        return "DISCONNECTED", "—"
+
+    position = gps_state.position
+    if position is None or position.fix_state is GPSFixState.NO_FIX:
+        return "NO FIX", "—"
+    if position.latitude is None or position.longitude is None:
+        return "NO FIX", "—"
+
+    return "READY", maidenhead_grid(position.latitude, position.longitude)
+
+
 def build_dashboard_state(
     radio_state: RadioState,
     callsign_capture: CallsignCaptureState | None = None,
+    gps_state: GPSState | None = None,
 ) -> DashboardState:
     """Convert domain and callsign state into stable UI-facing text."""
     capture = callsign_capture or CallsignCaptureState()
     connected = radio_state.connection_state is RadioConnectionState.CONNECTED
     mode = radio_state.mode.value if radio_state.mode is not None else "--"
+    gps_status, grid = _format_gps(gps_state)
     if connected:
         ticker = "RADIO CONNECTED — MOCK VOICE READY"
     elif radio_state.last_error:
@@ -72,6 +96,8 @@ def build_dashboard_state(
         frequency=_format_frequency(radio_state.frequency),
         band=_format_band(radio_state.frequency),
         mode=mode,
+        gps_state=gps_status,
+        grid=grid,
         commit_state=capture.commit_state,
         last_result=capture.last_result,
         ticker=ticker,
