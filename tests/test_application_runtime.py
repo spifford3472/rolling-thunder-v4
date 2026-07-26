@@ -99,7 +99,8 @@ def test_runtime_stop_cancels_polling_and_disconnects_hardware() -> None:
     assert state.connection_state is RadioConnectionState.DISCONNECTED
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
-    assert gps_state.connection_state is GPSConnectionState.CONNECTED
+    assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
+    assert gps_state.position is None
     assert radio_scheduler.poll is not None
     assert radio_scheduler.poll.cancelled is True
     assert gps_scheduler.poll is not None
