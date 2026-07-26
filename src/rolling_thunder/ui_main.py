@@ -379,7 +379,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     )
     health_table.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
 
-    health_labels = ("Radio", "Voice", "Logging", "Storage")
+    health_labels = ("Radio", "GPS", "Voice", "Logging", "Storage")
     health_status_text: dict[str, tk.StringVar] = {}
     health_status_labels: dict[str, tk.Label] = {}
 
@@ -447,7 +447,12 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     def refresh() -> None:
-        view = build_dashboard_state(runtime.latest_radio_state, capture_state())
+        gps_state = runtime.latest_gps_state
+        view = build_dashboard_state(
+            runtime.latest_radio_state,
+            capture_state(),
+            gps_state,
+        )
         pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
         voice_state = view.voice_state.upper()
         voice_engaged = voice_state in {
@@ -471,7 +476,10 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         mode_text.set(view.mode)
         last_result = view.last_result if view.last_result != "—" else "—"
         last_result_text.set(f"Last Result: {last_result[:18]}")
-        ticker_text.set(view.ticker)
+        ticker = view.ticker
+        if view.grid != "—":
+            ticker = f"{ticker} — GRID {view.grid.upper()}"
+        ticker_text.set(ticker)
 
         selected_context = context_navigation.state
         context_title_text.set(selected_context.definition.title)
@@ -483,6 +491,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
                 runtime.latest_radio_state,
                 capture_state(),
                 speech_enabled=config.speech.enabled,
+                gps_state=gps_state,
             )
 
             overall_status = health.overall.value
