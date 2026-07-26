@@ -16,6 +16,8 @@ from rolling_thunder.context_navigation import (
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
+from rolling_thunder.pota_dashboard_controller import PotaDashboardController
+from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
@@ -120,6 +122,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         live_capture = LiveCallsignCaptureController(recognizer)
 
     context_navigation = ContextNavigationController()
+    pota_dashboard = PotaDashboardController(runtime)
 
     def capture_state() -> CallsignCaptureState:
         """Return the active mock or live capture presentation state."""
@@ -498,7 +501,36 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         selected_context = context_navigation.state
         context_title_text.set(selected_context.definition.title)
 
-        if selected_context.selected is ContextId.SETTINGS:
+        if selected_context.selected is ContextId.POTA:
+            health_frame.grid_remove()
+            panel = build_pota_dashboard_panel(pota_dashboard.state)
+
+            pota_lines = [
+                panel.status_line,
+                panel.detail_line,
+                panel.refresh_line,
+            ]
+            if panel.error_line:
+                pota_lines.append(panel.error_line)
+
+            for row in panel.rows:
+                pota_lines.append(
+                    f"{row.activator}  {row.park_reference}  "
+                    f"{row.frequency}  {row.mode}"
+                )
+                pota_lines.append(
+                    f"  {row.park_name} — {row.spotted_at}"
+                )
+                if row.comments:
+                    pota_lines.append(f"  {row.comments}")
+
+            if panel.hidden_row_count:
+                pota_lines.append(
+                    f"+ {panel.hidden_row_count} MORE SPOTS"
+                )
+
+            context_body_text.set("\n".join(pota_lines))
+        elif selected_context.selected is ContextId.SETTINGS:
             context_body_text.set("")
 
             health = build_station_health(
