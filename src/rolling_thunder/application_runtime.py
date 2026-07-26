@@ -10,6 +10,7 @@ from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.domain import RadioState
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
+from rolling_thunder.gps_polling import GPSPollingService
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
@@ -29,6 +30,7 @@ class ApplicationRuntime:
     polling: RadioPollingService
     contact_logging: ContactLoggingService
     gps: GPSReceiver | None = None
+    gps_polling: GPSPollingService | None = None
     _started: bool = False
 
     @classmethod
@@ -37,7 +39,9 @@ class ApplicationRuntime:
         config: ApplicationConfig,
         *,
         scheduler: PollScheduler | None = None,
+        gps_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
+        gps_interval_s: float = 1.0,
         gps_factory: GPSFactory = SerialGPSReceiver,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
@@ -57,6 +61,7 @@ class ApplicationRuntime:
             gps = gps_factory(gps_device)
 
         polling_scheduler = scheduler or ThreadingPollScheduler()
+        gps_polling_scheduler = gps_scheduler or ThreadingPollScheduler()
         repository = ContactRepository(config.storage.database_path)
         return cls(
             radio=radio,
@@ -67,6 +72,11 @@ class ApplicationRuntime:
             ),
             contact_logging=ContactLoggingService(repository),
             gps=gps,
+            gps_polling=GPSPollingService(
+                gps,
+                gps_polling_scheduler,
+                interval_s=gps_interval_s,
+            ),
         )
 
     @property
@@ -76,13 +86,15 @@ class ApplicationRuntime:
 
     @property
     def latest_gps_state(self) -> GPSState | None:
-        """Return the current GPS snapshot when a receiver is configured."""
+        """Return the latest GPS snapshot available to the UI."""
+        if self.gps_polling is not None:
+            return self.gps_polling.latest_state
         if self.gps is None:
             return None
         return self.gps.get_state()
 
     def start(self) -> RadioState:
-        """Connect configured hardware and begin background radio polling."""
+        """Connect configured hardware and begin background polling."""
         if self._started:
             raise RuntimeError("Application runtime is already started.")
 
@@ -90,6 +102,8 @@ class ApplicationRuntime:
         if self.gps is not None:
             self.gps.connect()
         self.polling.start()
+        if self.gps_polling is not None:
+            self.gps_polling.start()
         self._started = True
         return state
 
@@ -98,6 +112,8 @@ class ApplicationRuntime:
         if not self._started:
             return self.radio.get_state()
 
+        if self.gps_polling is not None:
+            self.gps_polling.stop()
         self.polling.stop()
         if self.gps is not None:
             self.gps.disconnect()
