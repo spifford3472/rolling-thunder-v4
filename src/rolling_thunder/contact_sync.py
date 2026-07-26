@@ -1,6 +1,7 @@
 """Deterministic synchronization of locally stored contacts."""
 
 from typing import Protocol
+from uuid import UUID
 
 from pydantic import Field
 
@@ -27,7 +28,7 @@ class ContactSyncRepository(Protocol):
 
     def update_synchronization_state(
         self,
-        contact_id: object,
+        contact_id: UUID,
         state: SynchronizationState,
     ) -> Contact:
         """Persist and return a contact's new synchronization state."""
