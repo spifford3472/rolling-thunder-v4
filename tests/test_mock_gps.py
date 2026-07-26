@@ -80,15 +80,22 @@ def test_refresh_requires_connection() -> None:
 
 
 def test_refresh_returns_new_receiver_snapshot() -> None:
-    times = iter((_FIXED_TIME, _FIXED_TIME, _FIXED_TIME + timedelta(seconds=1)))
-    receiver = MockGPSReceiver(clock=lambda: next(times))
+    count = 0
+
+    def advancing_clock() -> datetime:
+        nonlocal count
+        timestamp = _FIXED_TIME + timedelta(seconds=count)
+        count += 1
+        return timestamp
+
+    receiver = MockGPSReceiver(clock=advancing_clock)
     connected = receiver.connect()
 
     refreshed = receiver.refresh_state()
 
     assert refreshed is not connected
     assert refreshed.position is connected.position
-    assert refreshed.updated_at == _FIXED_TIME + timedelta(seconds=1)
+    assert refreshed.updated_at > connected.updated_at
 
 
 def test_set_position_updates_connected_receiver() -> None:
@@ -167,30 +174,65 @@ def test_state_timestamp_is_normalized_to_utc() -> None:
     assert state.updated_at.tzinfo is UTC
 
 
+def test_state_rejects_naive_timestamp() -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        GPSState(
+            connection_state=GPSConnectionState.DISCONNECTED,
+            position=None,
+            updated_at=datetime(2026, 7, 26, 10, 0),
+        )
+
+
+def test_disconnected_state_rejects_position() -> None:
+    with pytest.raises(ValueError, match="Disconnected GPS state"):
+        GPSState(
+            connection_state=GPSConnectionState.DISCONNECTED,
+            position=_two_dimensional_position(),
+            updated_at=_FIXED_TIME,
+        )
+
+
+def test_connected_state_requires_position() -> None:
+    with pytest.raises(ValueError, match="requires a position"):
+        GPSState(
+            connection_state=GPSConnectionState.CONNECTED,
+            position=None,
+            updated_at=_FIXED_TIME,
+        )
+
+
+def test_connected_state_rejects_error_detail() -> None:
+    with pytest.raises(ValueError, match="cannot contain an error"):
+        GPSState(
+            connection_state=GPSConnectionState.CONNECTED,
+            position=_two_dimensional_position(),
+            updated_at=_FIXED_TIME,
+            last_error="unexpected",
+        )
+
+
+def test_error_state_requires_non_empty_detail() -> None:
+    with pytest.raises(ValueError, match="requires a non-empty error"):
+        GPSState(
+            connection_state=GPSConnectionState.ERROR,
+            position=None,
+            updated_at=_FIXED_TIME,
+            last_error="  ",
+        )
+
+
+def test_error_state_rejects_position() -> None:
+    with pytest.raises(ValueError, match="error state cannot contain a position"):
+        GPSState(
+            connection_state=GPSConnectionState.ERROR,
+            position=_two_dimensional_position(),
+            updated_at=_FIXED_TIME,
+            last_error="serial timeout",
+        )
+
+
 def test_state_is_immutable() -> None:
     state = MockGPSReceiver(clock=_clock).get_state()
 
     with pytest.raises(FrozenInstanceError):
         state.position = _two_dimensional_position()  # type: ignore[misc]
-
-
-@pytest.mark.parametrize(
-    ("state", "message"),
-    [
-        (
-            GPSState,
-            "Disconnected GPS state cannot contain a position",
-        ),
-    ],
-)
-def test_placeholder_for_state_validation_contract(
-    state: type[GPSState],
-    message: str,
-) -> None:
-    position = _two_dimensional_position()
-    with pytest.raises(ValueError, match=message):
-        state(
-            connection_state=GPSConnectionState.DISCONNECTED,
-            position=position,
-            updated_at=_FIXED_TIME,
-        )
