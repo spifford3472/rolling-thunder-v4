@@ -2,16 +2,10 @@
 
 from collections.abc import Mapping
 
-import pytest
-from pydantic import ValidationError
-
 from rolling_thunder.application_runtime import ApplicationRuntime
-from rolling_thunder.config import ApplicationConfig
+from rolling_thunder.config import ApplicationConfig, PotaSpotsConfig
 from rolling_thunder.http_home_platform import UrllibHttpResponse
-from rolling_thunder.pota_runtime import (
-    PotaSpotsRuntimeConfig,
-    build_pota_spot_polling,
-)
+from rolling_thunder.pota_runtime import build_pota_spot_polling
 from rolling_thunder.pota_spot_source import PotaSpotSourceAvailability
 from rolling_thunder.radio_polling import PollCallback
 
@@ -62,18 +56,22 @@ class RecordingTransport:
         return UrllibHttpResponse(200, b"[]")
 
 
-def mock_application_config() -> ApplicationConfig:
+def mock_application_config(*, pota_enabled: bool = False) -> ApplicationConfig:
     return ApplicationConfig.model_validate(
         {
             "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
             "hardware": {"mock": True},
+            "pota_spots": {
+                "enabled": pota_enabled,
+                "refresh_interval_s": 45.0,
+            },
         }
     )
 
 
 def test_disabled_pota_configuration_builds_no_service() -> None:
     polling = build_pota_spot_polling(
-        PotaSpotsRuntimeConfig(),
+        PotaSpotsConfig(),
         ManualScheduler(),
         mock_mode=True,
     )
@@ -86,14 +84,10 @@ def test_mock_runtime_starts_available_pota_polling_and_stops_cleanly() -> None:
     gps_scheduler = ManualScheduler()
     pota_scheduler = ManualScheduler()
     runtime = ApplicationRuntime.from_config(
-        mock_application_config(),
+        mock_application_config(pota_enabled=True),
         scheduler=radio_scheduler,
         gps_scheduler=gps_scheduler,
         pota_scheduler=pota_scheduler,
-        pota_config=PotaSpotsRuntimeConfig(
-            enabled=True,
-            refresh_interval_s=45.0,
-        ),
     )
 
     assert runtime.latest_pota_spot_state is not None
@@ -135,7 +129,7 @@ def test_real_pota_composition_uses_configured_http_settings() -> None:
     scheduler = ManualScheduler()
     transport = RecordingTransport()
     polling = build_pota_spot_polling(
-        PotaSpotsRuntimeConfig(
+        PotaSpotsConfig(
             enabled=True,
             base_url="https://spots.example.test/api",
             request_timeout_s=7.5,
@@ -153,20 +147,3 @@ def test_real_pota_composition_uses_configured_http_settings() -> None:
     assert transport.urls == ["https://spots.example.test/api/spot/activator"]
     assert transport.timeouts == [7.5]
     assert scheduler.interval_s == 90.0
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("request_timeout_s", 0.0),
-        ("refresh_interval_s", -1.0),
-    ],
-)
-def test_pota_runtime_intervals_must_be_positive(field: str, value: float) -> None:
-    with pytest.raises(ValidationError):
-        PotaSpotsRuntimeConfig.model_validate({field: value})
-
-
-def test_pota_runtime_settings_reject_unknown_fields() -> None:
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        PotaSpotsRuntimeConfig.model_validate({"enabled": True, "token": "secret"})
