@@ -41,6 +41,10 @@ _DATA_MODES = frozenset(
         "SSTV",
     }
 )
+_LSB_RANGES_HZ = (
+    (1_800_000, 4_000_000),
+    (7_000_000, 7_300_000),
+)
 
 
 class HttpPotaSpotSource:
@@ -154,10 +158,16 @@ class HttpPotaSpotSource:
         if not isinstance(value, str):
             raise TypeError("mode must be text")
         normalized = value.strip().upper()
-        if normalized in RadioMode._value2member_map_:
+        try:
             return RadioMode(normalized)
+        except ValueError:
+            pass
         if normalized == "SSB":
-            return RadioMode.LSB if frequency.hz < 10_000_000 else RadioMode.USB
+            uses_lsb = any(
+                lower_hz <= frequency.hz <= upper_hz
+                for lower_hz, upper_hz in _LSB_RANGES_HZ
+            )
+            return RadioMode.LSB if uses_lsb else RadioMode.USB
         if normalized in _DATA_MODES:
             return RadioMode.DATA
         raise ValueError("unsupported POTA mode")
