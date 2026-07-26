@@ -17,16 +17,12 @@ def write_config(tmp_path: Path, home_platform: str) -> Path:
     """Write a minimal configuration with one Home Platform section."""
     path = tmp_path / "rolling-thunder.yaml"
     path.write_text(
-        "\n".join(
-            [
-                "operator:",
-                "  callsign: KI5VNB",
-                "  home_grid: EM79xm",
-                "home_platform:",
-                home_platform,
-                "",
-            ]
-        ),
+        f"""operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+home_platform:
+{home_platform}
+""",
         encoding="utf-8",
     )
     return path
@@ -51,16 +47,12 @@ def test_enabled_home_platform_loads_typed_settings(tmp_path: Path) -> None:
     """Enabled settings should load as one immutable typed section."""
     path = write_config(
         tmp_path,
-        "\n".join(
-            [
-                "  enabled: true",
-                "  base_url: https://forge.example.invalid/platform",
-                "  request_timeout_s: 4.5",
-                "  health_poll_interval_s: 15",
-                "  contact_sync_interval_s: 20",
-                "  contact_sync_batch_size: 50",
-            ]
-        ),
+        """  enabled: true
+  base_url: https://forge.example.invalid/platform
+  request_timeout_s: 4.5
+  health_poll_interval_s: 15
+  contact_sync_interval_s: 20
+  contact_sync_batch_size: 50""",
     )
 
     config = load_config(path)
@@ -101,12 +93,8 @@ def test_home_platform_base_url_must_be_http(tmp_path: Path, base_url: str) -> N
     """Invalid endpoint schemes should identify the exact YAML path."""
     path = write_config(
         tmp_path,
-        "\n".join(
-            [
-                "  enabled: true",
-                f"  base_url: {base_url}",
-            ]
-        ),
+        f"""  enabled: true
+  base_url: {base_url}""",
     )
 
     with pytest.raises(
@@ -137,12 +125,8 @@ def test_home_platform_limits_are_actionable(
     """Unsafe timeout, polling, and batch values should be rejected."""
     path = write_config(
         tmp_path,
-        "\n".join(
-            [
-                "  enabled: false",
-                f"  {field}: {value}",
-            ]
-        ),
+        f"""  enabled: false
+  {field}: {value}""",
     )
 
     with pytest.raises(
@@ -156,12 +140,7 @@ def test_unknown_home_platform_key_is_rejected(tmp_path: Path) -> None:
     """Misspelled platform keys must not be ignored silently."""
     path = write_config(
         tmp_path,
-        "\n".join(
-            [
-                "  enabled: false",
-                "  request_timout_s: 5",
-            ]
-        ),
+        "  enabled: false\n  request_timout_s: 5",
     )
 
     with pytest.raises(
