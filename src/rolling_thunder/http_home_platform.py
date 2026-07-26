@@ -88,7 +88,7 @@ class UrllibHttpTransport:
             method=method,
         )
         try:
-            with urlopen(request, timeout=timeout_s) as response:  # noqa: S310
+            with urlopen(request, timeout=timeout_s) as response:
                 return UrllibHttpResponse(response.status, response.read())
         except HTTPError as error:
             return UrllibHttpResponse(error.code, error.read())
@@ -133,9 +133,9 @@ class HttpHomePlatformClient(HomePlatformClient):
                 f"{response.status_code}."
             )
 
-        payload = self._decode_json(response.body, operation="health check")
+        response_payload = self._decode_json(response.body, operation="health check")
         try:
-            state = HomePlatformState.model_validate(payload)
+            state = HomePlatformState.model_validate(response_payload)
         except ValidationError as error:
             raise HomePlatformConnectionError(
                 "Home Station Platform health response did not match the expected schema."
@@ -146,7 +146,7 @@ class HttpHomePlatformClient(HomePlatformClient):
 
     def upload_contact(self, request: ContactUploadRequest) -> ContactUploadResult:
         """Upload one contact with UUID-based idempotency and validate the result."""
-        payload = request.contact.model_dump(mode="json")
+        request_payload = request.contact.model_dump(mode="json")
         response = self._request(
             "POST",
             "/contacts",
@@ -155,7 +155,7 @@ class HttpHomePlatformClient(HomePlatformClient):
                 "Content-Type": _JSON_CONTENT_TYPE,
                 "Idempotency-Key": str(request.idempotency_key),
             },
-            body=dumps(payload, separators=(",", ":")).encode("utf-8"),
+            body=dumps(request_payload, separators=(",", ":")).encode("utf-8"),
             operation="contact upload",
         )
         if not 200 <= response.status_code < 300:
@@ -164,9 +164,9 @@ class HttpHomePlatformClient(HomePlatformClient):
                 f"{response.status_code}."
             )
 
-        payload = self._decode_json(response.body, operation="contact upload")
+        response_payload = self._decode_json(response.body, operation="contact upload")
         try:
-            result = ContactUploadResult.model_validate(payload)
+            result = ContactUploadResult.model_validate(response_payload)
         except ValidationError as error:
             raise HomePlatformUploadError(
                 "Home Station Platform upload response did not match the expected schema."
