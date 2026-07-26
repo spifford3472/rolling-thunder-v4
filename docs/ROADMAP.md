@@ -87,12 +87,25 @@ integration and usability refinements rather than a broad dashboard rewrite.
 
 ## Milestone 6: GPS and Location
 
+Status: complete and audited for the approved roadmap scope.
+
 - Typed GPS interface
 - mock GPS source
 - serial GPS adapter
 - Maidenhead grid calculation
 - current position display
 - graceful loss and reacquisition of GPS
+
+The implemented GPS path includes typed immutable state, deterministic mock and
+serial-NMEA adapters, Station State and dashboard integration, independent
+background polling, visible degraded/error state, and automatic recovery after
+transient read or parse failures.
+
+Live receiver validation remains an operational smoke test rather than an
+automated-test requirement. The broader v4.1.0 architecture also describes
+trusted GPS UTC, speed and heading, stationary/moving hysteresis, and commit-time
+GPS capture. Those capabilities remain architecture-aligned follow-up work and
+are not implied by completion of this focused roadmap milestone.
 
 ## Milestone 7: Home Station Platform Connectivity
 
@@ -160,11 +173,8 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Complete the focused typed Station State read-model slice. It must compose the
-currently implemented radio, callsign-capture, context-navigation, and station-
-health models without performing I/O or introducing UI, hardware, storage, or
-network coupling.
-
-After that boundary is merged, begin Milestone 6 with the smallest GPS slice:
-a typed GPS interface and deterministic mock source, followed by Station State
-integration before the physical serial adapter or dashboard wiring.
+Begin Milestone 7 with the smallest Home Station Platform connectivity slice: a
+typed, transport-independent remote API boundary and deterministic mock client.
+The slice must define request, response, availability, and error contracts
+without performing network I/O, starting retry loops, uploading contacts, or
+coupling the UI to a particular server implementation.
