@@ -10,6 +10,7 @@ from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
 from rolling_thunder.context_navigation import (
     CONTEXT_DEFINITIONS,
+    ContextId,
     ContextNavigationController,
 )
 from rolling_thunder.dashboard_state import build_dashboard_state
@@ -17,6 +18,7 @@ from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
+from rolling_thunder.station_health import build_station_health
 
 _REFRESH_MS = 250
 _BACKGROUND = "#080808"
@@ -30,6 +32,12 @@ _SUCCESS = "#42ff72"
 _FAILURE = "#ff3b3b"
 _MUTED = "#a8a8a8"
 
+_HEALTH_READY = "#238636"
+_HEALTH_DEGRADED = "#d4a017"
+_HEALTH_DISABLED = "#c8c8c8"
+_HEALTH_UNAVAILABLE = "#b42318"
+_HEALTH_DARK_TEXT = "#080808"
+
 
 def _indicator_color(value: str) -> str:
     """Return the visual color for a compact operator-state indicator."""
@@ -40,6 +48,23 @@ def _indicator_color(value: str) -> str:
         return _SUCCESS
     if normalized in {"FAILED", "FAILURE", "ERROR"}:
         return _FAILURE
+    return _BRIGHT
+
+
+def _health_color(status: str) -> str:
+    """Return the required station-health color for one status."""
+    return {
+        "READY": _HEALTH_READY,
+        "DEGRADED": _HEALTH_DEGRADED,
+        "DISABLED": _HEALTH_DISABLED,
+        "UNAVAILABLE": _HEALTH_UNAVAILABLE,
+    }.get(status.upper(), _MUTED)
+
+
+def _health_cell_foreground(status: str) -> str:
+    """Keep health-cell text readable against its status background."""
+    if status.upper() in {"DEGRADED", "DISABLED"}:
+        return _HEALTH_DARK_TEXT
     return _BRIGHT
 
 
@@ -293,6 +318,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     context_content.grid(row=0, column=0, sticky="nsew", padx=14, pady=14)
     context_content.grid_columnconfigure(0, weight=1)
     context_content.grid_rowconfigure(1, weight=1)
+    context_content.grid_rowconfigure(2, weight=0)
 
     context_title_text = tk.StringVar(value="POTA")
     tk.Label(
@@ -305,7 +331,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     ).grid(row=0, column=0, sticky="ew", pady=(8, 16))
 
     context_body_text = tk.StringVar(value="")
-    tk.Label(
+    context_body_label = tk.Label(
         context_content,
         textvariable=context_body_text,
         bg=_SECONDARY_BACKGROUND,
@@ -314,7 +340,82 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         justify="left",
         anchor="nw",
         wraplength=560,
-    ).grid(row=1, column=0, sticky="nsew")
+    )
+    context_body_label.grid(row=1, column=0, sticky="nsew")
+
+    health_frame = tk.Frame(
+        context_content,
+        bg=_SECONDARY_BACKGROUND,
+        highlightthickness=1,
+        highlightbackground=_BORDER,
+    )
+    health_frame.grid(
+        row=2,
+        column=0,
+        sticky="sew",
+        pady=(12, 0),
+    )
+    health_frame.grid_columnconfigure(0, weight=1)
+    health_frame.grid_remove()
+
+    overall_health_text = tk.StringVar(value="Overall Station Health: —")
+    overall_health_label = tk.Label(
+        health_frame,
+        textvariable=overall_health_text,
+        bg=_SECONDARY_BACKGROUND,
+        fg=_MUTED,
+        font=("DejaVu Sans", 29, "bold"),
+        anchor="w",
+        padx=10,
+        pady=10,
+    )
+    overall_health_label.grid(row=0, column=0, sticky="ew")
+
+    health_table = tk.Frame(
+        health_frame,
+        bg=_BORDER,
+        highlightthickness=1,
+        highlightbackground=_BORDER,
+    )
+    health_table.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
+
+    health_labels = ("Radio", "Voice", "Logging", "Storage")
+    health_status_text: dict[str, tk.StringVar] = {}
+    health_status_labels: dict[str, tk.Label] = {}
+
+    for column, label in enumerate(health_labels):
+        health_table.grid_columnconfigure(column, weight=1, uniform="health")
+
+        tk.Label(
+            health_table,
+            text=label,
+            bg=_PANEL_BACKGROUND,
+            fg=_BRIGHT,
+            font=("DejaVu Sans", 24, "bold"),
+            anchor="center",
+            relief="solid",
+            borderwidth=1,
+            padx=4,
+            pady=8,
+        ).grid(row=0, column=column, sticky="nsew")
+
+        status_text = tk.StringVar(value="—")
+        status_label = tk.Label(
+            health_table,
+            textvariable=status_text,
+            bg=_DISABLED,
+            fg=_HEALTH_DARK_TEXT,
+            font=("DejaVu Sans", 26, "bold"),
+            anchor="center",
+            relief="solid",
+            borderwidth=1,
+            padx=4,
+            pady=10,
+        )
+        status_label.grid(row=1, column=column, sticky="nsew")
+
+        health_status_text[label] = status_text
+        health_status_labels[label] = status_label
 
     situational = tk.Frame(
         root,
@@ -374,7 +475,37 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
         selected_context = context_navigation.state
         context_title_text.set(selected_context.definition.title)
-        context_body_text.set(selected_context.definition.placeholder)
+
+        if selected_context.selected is ContextId.SETTINGS:
+            context_body_text.set("")
+
+            health = build_station_health(
+                runtime.latest_radio_state,
+                capture_state(),
+                speech_enabled=config.speech.enabled,
+            )
+
+            overall_status = health.overall.value
+            overall_health_text.set(
+                f"Overall Station Health: {overall_status.title()}"
+            )
+            overall_health_label.configure(
+                fg=_health_color(overall_status),
+            )
+
+            for item in health.items:
+                status = item.status.value
+                health_status_text[item.label].set(status)
+                health_status_labels[item.label].configure(
+                    bg=_health_color(status),
+                    fg=_health_cell_foreground(status),
+                )
+
+            health_frame.grid()
+        else:
+            health_frame.grid_remove()
+            context_body_text.set(selected_context.definition.placeholder)
+
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:
