@@ -93,7 +93,7 @@ def test_upload_result_normalizes_and_serializes() -> None:
 
 @pytest.mark.parametrize("field", ["checked_at", "received_at"])
 def test_platform_timestamps_require_timezone(field: str) -> None:
-    naive = datetime(2026, 7, 26, 11, 0)
+    naive = datetime(2026, 7, 26, 11, 0)  # noqa: DTZ001
 
     if field == "checked_at":
         with pytest.raises(ValidationError, match="timezone"):
