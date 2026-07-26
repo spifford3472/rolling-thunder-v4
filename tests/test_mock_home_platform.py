@@ -97,7 +97,7 @@ def test_blank_upload_failure_message_is_rejected() -> None:
 
 def test_mock_clock_must_be_timezone_aware() -> None:
     def naive_clock() -> datetime:
-        return datetime(2026, 7, 26, 12, 0)
+        return datetime(2026, 7, 26, 12, 0)  # noqa: DTZ001
 
     with pytest.raises(ValueError, match="timezone-aware"):
         MockHomePlatformClient(clock=naive_clock)
