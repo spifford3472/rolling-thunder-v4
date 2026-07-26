@@ -44,7 +44,7 @@ hardware:
     assert "Application startup requested" in log_text
     assert "Configuration loaded for operator=KI5VNB" in log_text
     assert "mock_hardware=True" in log_text
-    assert "schema_version=2" in log_text
+    assert "schema_version=3" in log_text
 
 
 def test_main_reports_missing_configuration_without_traceback(

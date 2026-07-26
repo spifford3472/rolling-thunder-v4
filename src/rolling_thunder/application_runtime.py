@@ -7,6 +7,7 @@ from pathlib import Path
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_repository import ContactRepository
+from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.domain import RadioState
 from rolling_thunder.ft891_radio import Ft891Radio
@@ -98,6 +99,7 @@ class ApplicationRuntime:
                 contact_sync_scheduler or ThreadingPollScheduler(),
                 interval_s=platform_config.contact_sync_interval_s,
                 batch_size=platform_config.contact_sync_batch_size,
+                retry_store=ContactRetryRepository(config.storage.database_path),
             )
 
         return cls(

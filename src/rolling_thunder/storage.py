@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 2
+CURRENT_SCHEMA_VERSION: Final = 3
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -60,6 +60,24 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         """
         CREATE INDEX contacts_callsign_index
         ON contacts (callsign, started_at DESC)
+        """,
+    ),
+    3: (
+        """
+        CREATE TABLE contact_sync_retries (
+            contact_id TEXT PRIMARY KEY,
+            attempt_count INTEGER NOT NULL CHECK (attempt_count >= 1),
+            next_attempt_at TEXT NOT NULL,
+            last_error TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (contact_id)
+                REFERENCES contacts (contact_id)
+                ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE INDEX contact_sync_retries_due_index
+        ON contact_sync_retries (next_attempt_at, contact_id)
         """,
     ),
 }

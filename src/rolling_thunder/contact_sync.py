@@ -1,5 +1,7 @@
 """Deterministic synchronization of locally stored contacts."""
 
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -13,9 +15,19 @@ from rolling_thunder.home_platform import (
 )
 from rolling_thunder.radio_polling import PollScheduler, ScheduledPoll
 
+Clock = Callable[[], datetime]
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
 
 class ContactSyncRepository(Protocol):
     """Persistence operations required by the synchronization service."""
+
+    def get(self, contact_id: UUID) -> Contact | None:
+        """Return one contact by UUID, or None when absent."""
+        ...
 
     def list_by_synchronization_state(
         self,
@@ -35,6 +47,30 @@ class ContactSyncRepository(Protocol):
         ...
 
 
+class ContactRetryStore(Protocol):
+    """Restart-safe retry metadata used by contact synchronization."""
+
+    def list_due_contact_ids(self, due_at: datetime, *, limit: int) -> list[UUID]:
+        """Return failed contact IDs whose retry time has arrived."""
+        ...
+
+    def record_failure(
+        self,
+        contact_id: UUID,
+        *,
+        failed_at: datetime,
+        error_message: str,
+        initial_delay_s: float,
+        max_delay_s: float,
+    ) -> object:
+        """Persist the next exponential-backoff attempt."""
+        ...
+
+    def clear(self, contact_id: UUID) -> None:
+        """Remove retry metadata after synchronization succeeds."""
+        ...
+
+
 class ContactSyncResult(DomainModel):
     """Immutable summary of one synchronization run."""
 
@@ -44,7 +80,7 @@ class ContactSyncResult(DomainModel):
 
 
 class ContactSyncService:
-    """Upload pending contacts without coupling network failures to local logging."""
+    """Upload eligible contacts without coupling network failures to local logging."""
 
     def __init__(
         self,
@@ -54,17 +90,32 @@ class ContactSyncService:
         *,
         interval_s: float = 30.0,
         batch_size: int = 25,
+        retry_store: ContactRetryStore | None = None,
+        retry_initial_delay_s: float = 5.0,
+        retry_max_delay_s: float = 300.0,
+        clock: Clock = _utc_now,
     ) -> None:
         if interval_s <= 0:
             raise ValueError("Contact synchronization interval must be positive.")
         if batch_size <= 0:
             raise ValueError("Contact synchronization batch size must be positive.")
+        if retry_initial_delay_s <= 0 or retry_max_delay_s <= 0:
+            raise ValueError("Contact synchronization retry delays must be positive.")
+        if retry_max_delay_s < retry_initial_delay_s:
+            raise ValueError(
+                "Contact synchronization maximum retry delay must not be below "
+                "the initial delay."
+            )
 
         self._repository = repository
         self._client = client
         self._scheduler = scheduler
         self._interval_s = interval_s
         self._batch_size = batch_size
+        self._retry_store = retry_store
+        self._retry_initial_delay_s = retry_initial_delay_s
+        self._retry_max_delay_s = retry_max_delay_s
+        self._clock = clock
         self._scheduled_poll: ScheduledPoll | None = None
         self._synchronizing = False
         self._latest_result = ContactSyncResult(
@@ -103,7 +154,7 @@ class ContactSyncService:
         return self._latest_result
 
     def synchronize_now(self) -> ContactSyncResult:
-        """Synchronize one bounded pending batch unless a run is already active."""
+        """Synchronize one bounded eligible batch unless a run is already active."""
         if self._synchronizing:
             return self._latest_result
         return self._run_once()
@@ -119,19 +170,24 @@ class ContactSyncService:
         synchronized = 0
         failed = 0
         try:
-            contacts = self._repository.list_by_synchronization_state(
-                SynchronizationState.PENDING,
-                limit=self._batch_size,
-            )
+            contacts = self._eligible_contacts()
             for contact in contacts:
                 attempted += 1
                 try:
                     self._client.upload_contact(ContactUploadRequest(contact=contact))
-                except HomePlatformError:
+                except HomePlatformError as error:
                     self._repository.update_synchronization_state(
                         contact.contact_id,
                         SynchronizationState.FAILED,
                     )
+                    if self._retry_store is not None:
+                        self._retry_store.record_failure(
+                            contact.contact_id,
+                            failed_at=self._timestamp(),
+                            error_message=str(error),
+                            initial_delay_s=self._retry_initial_delay_s,
+                            max_delay_s=self._retry_max_delay_s,
+                        )
                     failed += 1
                     continue
 
@@ -139,6 +195,8 @@ class ContactSyncService:
                     contact.contact_id,
                     SynchronizationState.SYNCHRONIZED,
                 )
+                if self._retry_store is not None:
+                    self._retry_store.clear(contact.contact_id)
                 synchronized += 1
 
             self._latest_result = ContactSyncResult(
@@ -149,3 +207,27 @@ class ContactSyncService:
             return self._latest_result
         finally:
             self._synchronizing = False
+
+    def _eligible_contacts(self) -> list[Contact]:
+        contacts = self._repository.list_by_synchronization_state(
+            SynchronizationState.PENDING,
+            limit=self._batch_size,
+        )
+        remaining = self._batch_size - len(contacts)
+        if remaining <= 0 or self._retry_store is None:
+            return contacts
+
+        for contact_id in self._retry_store.list_due_contact_ids(
+            self._timestamp(),
+            limit=remaining,
+        ):
+            contact = self._repository.get(contact_id)
+            if contact is not None:
+                contacts.append(contact)
+        return contacts
+
+    def _timestamp(self) -> datetime:
+        timestamp = self._clock()
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise ValueError("Contact synchronization clock must be timezone-aware.")
+        return timestamp.astimezone(UTC)
