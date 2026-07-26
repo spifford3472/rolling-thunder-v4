@@ -1,7 +1,5 @@
 """Pure Maidenhead locator calculation from geographic coordinates."""
 
-from typing import cast
-
 from rolling_thunder.value_types import MaidenheadGrid
 
 
@@ -36,4 +34,4 @@ def maidenhead_grid(latitude: float, longitude: float) -> MaidenheadGrid:
         f"{chr(ord('a') + subsquare_longitude)}"
         f"{chr(ord('a') + subsquare_latitude)}"
     )
-    return cast(MaidenheadGrid, locator)
+    return locator
