@@ -87,7 +87,7 @@ class ApplicationRuntime:
     @property
     def latest_gps_state(self) -> GPSState | None:
         """Return the latest GPS snapshot available to the UI."""
-        if self.gps_polling is not None:
+        if self._started and self.gps_polling is not None:
             return self.gps_polling.latest_state
         if self.gps is None:
             return None
