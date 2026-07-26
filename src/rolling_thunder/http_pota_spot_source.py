@@ -125,14 +125,16 @@ class HttpPotaSpotSource:
         if not isinstance(item, Mapping):
             return None
         try:
+            activator = cls._require_text(item.get("activator"), "activator")
+            reference = cls._require_text(item.get("reference"), "reference")
             frequency = cls._parse_frequency(item.get("frequency"))
             mode = cls._parse_mode(item.get("mode"), frequency)
             spotted_at = cls._parse_timestamp(item.get("spotTime"))
             park_name = item.get("parkName") or item.get("name")
             return PotaSpot(
-                activator=item.get("activator"),
+                activator=activator,
                 park=ParkReference(
-                    reference=item.get("reference"),
+                    reference=reference,
                     name=park_name,
                 ),
                 frequency=frequency,
@@ -142,6 +144,15 @@ class HttpPotaSpotSource:
             )
         except (InvalidOperation, TypeError, ValueError, ValidationError):
             return None
+
+    @staticmethod
+    def _require_text(value: object, field_name: str) -> str:
+        if not isinstance(value, str):
+            raise TypeError(f"{field_name} must be text")
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(f"{field_name} must not be blank")
+        return normalized
 
     @staticmethod
     def _parse_frequency(value: object) -> Frequency:
