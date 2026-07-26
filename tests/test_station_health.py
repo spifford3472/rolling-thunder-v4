@@ -3,7 +3,12 @@
 from datetime import UTC, datetime
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
-from rolling_thunder.domain import RadioConnectionState, RadioState
+from rolling_thunder.domain import (
+    Frequency,
+    RadioConnectionState,
+    RadioMode,
+    RadioState,
+)
 from rolling_thunder.station_health import HealthStatus, build_station_health
 
 
@@ -12,11 +17,18 @@ def _radio(
     *,
     last_error: str | None = None,
 ) -> RadioState:
-    return RadioState(
-        connection_state=connection_state,
-        last_error=last_error,
-        updated_at=datetime(2026, 7, 26, tzinfo=UTC),
-    )
+    state_data: dict[str, object] = {
+        "connection_state": connection_state,
+        "last_error": last_error,
+        "updated_at": datetime(2026, 7, 26, tzinfo=UTC),
+    }
+    if connection_state is RadioConnectionState.CONNECTED:
+        state_data.update(
+            frequency=Frequency(hz=14_250_000),
+            mode=RadioMode.USB,
+            transmitting=False,
+        )
+    return RadioState.model_validate(state_data)
 
 
 def test_all_available_subsystems_are_ready() -> None:
