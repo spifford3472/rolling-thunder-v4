@@ -1,5 +1,7 @@
 """Tests for the pure dashboard station-health read model."""
 
+from datetime import UTC, datetime
+
 from rolling_thunder.callsign_capture import CallsignCaptureState
 from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.station_health import HealthStatus, build_station_health
@@ -10,7 +12,11 @@ def _radio(
     *,
     last_error: str | None = None,
 ) -> RadioState:
-    return RadioState(connection_state=connection_state, last_error=last_error)
+    return RadioState(
+        connection_state=connection_state,
+        last_error=last_error,
+        updated_at=datetime(2026, 7, 26, tzinfo=UTC),
+    )
 
 
 def test_all_available_subsystems_are_ready() -> None:
