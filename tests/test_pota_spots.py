@@ -1,6 +1,6 @@
 """Tests for typed POTA spot models and deterministic filtering."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -33,7 +33,14 @@ def _spot(
 
 
 def test_pota_spot_normalizes_operator_facing_values() -> None:
-    local_time = datetime(2026, 7, 26, 14, 0, tzinfo=timedelta(hours=-4))
+    local_time = datetime(
+        2026,
+        7,
+        26,
+        14,
+        0,
+        tzinfo=timezone(timedelta(hours=-4)),
+    )
 
     spot = PotaSpot(
         activator=" ki5vnb/p ",
