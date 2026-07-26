@@ -17,6 +17,14 @@ speech:
 forge:
   api_url: null
 
+home_platform:
+  enabled: false
+  base_url: null
+  request_timeout_s: 5.0
+  health_poll_interval_s: 30.0
+  contact_sync_interval_s: 30.0
+  contact_sync_batch_size: 25
+
 storage:
   database_path: data/rolling-thunder.db
   contact_backups:
