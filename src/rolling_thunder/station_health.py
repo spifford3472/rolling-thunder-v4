@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
-from rolling_thunder.domain import RadioConnectionState, RadioState
+from rolling_thunder.domain import GPSFixState, RadioConnectionState, RadioState
+from rolling_thunder.gps import GPSConnectionState, GPSState
 
 
 class HealthStatus(StrEnum):
@@ -30,6 +31,7 @@ class StationHealthSnapshot:
     """Immutable station-health snapshot consumed by presentation code."""
 
     radio: HealthItem
+    gps: HealthItem
     voice: HealthItem
     logging: HealthItem
     storage: HealthItem
@@ -38,7 +40,7 @@ class StationHealthSnapshot:
     @property
     def items(self) -> tuple[HealthItem, ...]:
         """Return subsystem rows in dashboard display order."""
-        return (self.radio, self.voice, self.logging, self.storage)
+        return (self.radio, self.gps, self.voice, self.logging, self.storage)
 
 
 def _radio_health(radio_state: RadioState) -> HealthItem:
@@ -47,6 +49,24 @@ def _radio_health(radio_state: RadioState) -> HealthItem:
     if radio_state.last_error:
         return HealthItem("Radio", HealthStatus.UNAVAILABLE, radio_state.last_error)
     return HealthItem("Radio", HealthStatus.UNAVAILABLE, "Disconnected")
+
+
+def _gps_health(gps_state: GPSState | None) -> HealthItem:
+    if gps_state is None:
+        return HealthItem("GPS", HealthStatus.DISABLED, "Not configured")
+    if gps_state.connection_state is GPSConnectionState.ERROR:
+        return HealthItem(
+            "GPS",
+            HealthStatus.UNAVAILABLE,
+            gps_state.last_error or "Receiver error",
+        )
+    if gps_state.connection_state is GPSConnectionState.DISCONNECTED:
+        return HealthItem("GPS", HealthStatus.UNAVAILABLE, "Disconnected")
+
+    position = gps_state.position
+    if position is None or position.fix_state is GPSFixState.NO_FIX:
+        return HealthItem("GPS", HealthStatus.DEGRADED, "No fix")
+    return HealthItem("GPS", HealthStatus.READY, position.fix_state.value.upper())
 
 
 def _voice_health(
@@ -76,26 +96,33 @@ def build_station_health(
     callsign_capture: CallsignCaptureState | None = None,
     *,
     speech_enabled: bool,
+    gps_state: GPSState | None = None,
     logging_available: bool = True,
     storage_available: bool = True,
 ) -> StationHealthSnapshot:
     """Build current health without performing I/O or touching UI state."""
     capture = callsign_capture or CallsignCaptureState()
     radio = _radio_health(radio_state)
+    gps = _gps_health(gps_state)
     voice = _voice_health(capture, speech_enabled=speech_enabled)
     logging = _availability_health("Logging", logging_available, "Service unavailable")
     storage = _availability_health("Storage", storage_available, "Database unavailable")
 
     required = (radio.status, logging.status, storage.status)
+    optional = (gps.status, voice.status)
     if HealthStatus.UNAVAILABLE in required:
         overall = HealthStatus.UNAVAILABLE
-    elif voice.status in {HealthStatus.DEGRADED, HealthStatus.DISABLED}:
+    elif any(
+        status in {HealthStatus.DEGRADED, HealthStatus.UNAVAILABLE}
+        for status in optional
+    ) or voice.status is HealthStatus.DISABLED:
         overall = HealthStatus.DEGRADED
     else:
         overall = HealthStatus.READY
 
     return StationHealthSnapshot(
         radio=radio,
+        gps=gps,
         voice=voice,
         logging=logging,
         storage=storage,
