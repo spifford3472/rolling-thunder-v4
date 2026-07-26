@@ -60,25 +60,38 @@ def hardware_config() -> ApplicationConfig:
 
 
 def test_runtime_composes_and_starts_mock_hardware() -> None:
-    scheduler = ManualScheduler()
-    runtime = ApplicationRuntime.from_config(mock_config(), scheduler=scheduler)
+    radio_scheduler = ManualScheduler()
+    gps_scheduler = ManualScheduler()
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=radio_scheduler,
+        gps_scheduler=gps_scheduler,
+    )
 
     state = runtime.start()
 
     assert state.connection_state is RadioConnectionState.CONNECTED
     assert runtime.latest_radio_state.connection_state is RadioConnectionState.CONNECTED
     assert isinstance(runtime.gps, MockGPSReceiver)
+    assert runtime.gps_polling is not None
+    assert runtime.gps_polling.is_running is True
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
     assert gps_state.connection_state is GPSConnectionState.CONNECTED
     assert gps_state.position is not None
     assert gps_state.position.fix_state is GPSFixState.THREE_DIMENSIONAL
-    assert scheduler.poll is not None
+    assert radio_scheduler.poll is not None
+    assert gps_scheduler.poll is not None
 
 
 def test_runtime_stop_cancels_polling_and_disconnects_hardware() -> None:
-    scheduler = ManualScheduler()
-    runtime = ApplicationRuntime.from_config(mock_config(), scheduler=scheduler)
+    radio_scheduler = ManualScheduler()
+    gps_scheduler = ManualScheduler()
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=radio_scheduler,
+        gps_scheduler=gps_scheduler,
+    )
     runtime.start()
 
     state = runtime.stop()
@@ -86,19 +99,24 @@ def test_runtime_stop_cancels_polling_and_disconnects_hardware() -> None:
     assert state.connection_state is RadioConnectionState.DISCONNECTED
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
-    assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
-    assert gps_state.position is None
-    assert scheduler.poll is not None
-    assert scheduler.poll.cancelled is True
+    assert gps_state.connection_state is GPSConnectionState.CONNECTED
+    assert radio_scheduler.poll is not None
+    assert radio_scheduler.poll.cancelled is True
+    assert gps_scheduler.poll is not None
+    assert gps_scheduler.poll.cancelled is True
+    assert runtime.gps is not None
+    assert runtime.gps.get_state().connection_state is GPSConnectionState.DISCONNECTED
 
 
 def test_non_mock_runtime_composes_serial_gps() -> None:
     runtime = ApplicationRuntime.from_config(
         hardware_config(),
         scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
     )
 
     assert isinstance(runtime.gps, SerialGPSReceiver)
+    assert runtime.gps_polling is not None
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
     assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
@@ -115,6 +133,7 @@ def test_non_mock_runtime_uses_configured_gps_device_with_injected_factory() -> 
     runtime = ApplicationRuntime.from_config(
         hardware_config(),
         scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
         gps_factory=gps_factory,
     )
 
@@ -127,6 +146,7 @@ def test_runtime_rejects_repeated_start() -> None:
     runtime = ApplicationRuntime.from_config(
         mock_config(),
         scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
     )
     runtime.start()
 
@@ -138,6 +158,7 @@ def test_runtime_stop_before_start_is_safe() -> None:
     runtime = ApplicationRuntime.from_config(
         mock_config(),
         scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
     )
 
     state = runtime.stop()
