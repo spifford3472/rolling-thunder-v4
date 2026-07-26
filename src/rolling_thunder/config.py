@@ -184,6 +184,16 @@ class NetworkKeepaliveConfig(ConfigurationModel):
         return self
 
 
+class PotaSpotsConfig(ConfigurationModel):
+    """Optional POTA spot retrieval and polling settings."""
+
+    enabled: bool = False
+    base_url: AnyHttpUrl = AnyHttpUrl("https://api.pota.app")
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    refresh_interval_s: float = Field(default=60.0, gt=0, le=3_600)
+    refresh_on_start: bool = True
+
+
 class ContactBackupConfig(ConfigurationModel):
     """Verified local contact-backup settings."""
 
@@ -235,6 +245,7 @@ class ApplicationConfig(ConfigurationModel):
     forge: ForgeConfig = ForgeConfig()
     home_platform: HomePlatformConfig = HomePlatformConfig()
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
+    pota_spots: PotaSpotsConfig = PotaSpotsConfig()
     storage: StorageConfig = StorageConfig()
 
 
