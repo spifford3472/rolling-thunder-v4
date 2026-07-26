@@ -6,18 +6,21 @@ from rolling_thunder.callsign_capture import CallsignCaptureState
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.domain import (
     Frequency,
+    GPSFixState,
+    GPSPosition,
     RadioConnectionState,
     RadioMode,
     RadioState,
 )
+from rolling_thunder.gps import GPSConnectionState, GPSState
 
 
 def timestamp() -> datetime:
     return datetime(2026, 7, 25, 7, 0, tzinfo=UTC)
 
 
-def test_connected_radio_formats_logger_fields() -> None:
-    state = RadioState(
+def connected_radio() -> RadioState:
+    return RadioState(
         connection_state=RadioConnectionState.CONNECTED,
         frequency=Frequency(hz=14_250_000),
         mode=RadioMode.USB,
@@ -25,25 +28,36 @@ def test_connected_radio_formats_logger_fields() -> None:
         updated_at=timestamp(),
     )
 
-    view = build_dashboard_state(state)
+
+def gps_state(
+    connection_state: GPSConnectionState,
+    *,
+    position: GPSPosition | None = None,
+    last_error: str | None = None,
+) -> GPSState:
+    return GPSState(
+        connection_state=connection_state,
+        position=position,
+        updated_at=timestamp(),
+        last_error=last_error,
+    )
+
+
+def test_connected_radio_formats_logger_fields() -> None:
+    view = build_dashboard_state(connected_radio())
 
     assert view.radio_state == "CONNECTED"
     assert view.frequency == "14.250 MHz"
     assert view.band == "20 m"
     assert view.mode == "USB"
     assert view.voice_state == "READY"
+    assert view.gps_state == "DISABLED"
+    assert view.grid == "—"
     assert view.commit_state == "DISABLED"
     assert view.ticker == "RADIO CONNECTED — MOCK VOICE READY"
 
 
 def test_callsign_capture_populates_logger_state() -> None:
-    state = RadioState(
-        connection_state=RadioConnectionState.CONNECTED,
-        frequency=Frequency(hz=14_250_000),
-        mode=RadioMode.USB,
-        transmitting=False,
-        updated_at=timestamp(),
-    )
     capture = CallsignCaptureState(
         pending_callsign="KI5VNB/VE6",
         voice_state="READY",
@@ -51,7 +65,7 @@ def test_callsign_capture_populates_logger_state() -> None:
         last_result="HEARD KI5VNB/VE6",
     )
 
-    view = build_dashboard_state(state, capture)
+    view = build_dashboard_state(connected_radio(), capture)
 
     assert view.pending_callsign == "KI5VNB/VE6"
     assert view.voice_state == "READY"
@@ -84,3 +98,60 @@ def test_error_state_surfaces_actionable_message() -> None:
 
     assert view.radio_state == "ERROR"
     assert view.ticker == "RADIO ERROR — USB serial device disappeared"
+
+
+def test_disconnected_gps_uses_clear_status_without_grid() -> None:
+    view = build_dashboard_state(
+        connected_radio(),
+        gps_state=gps_state(GPSConnectionState.DISCONNECTED),
+    )
+
+    assert view.gps_state == "DISCONNECTED"
+    assert view.grid == "—"
+
+
+def test_no_fix_gps_uses_clear_status_without_grid() -> None:
+    position = GPSPosition(
+        fix_state=GPSFixState.NO_FIX,
+        updated_at=timestamp(),
+    )
+
+    view = build_dashboard_state(
+        connected_radio(),
+        gps_state=gps_state(GPSConnectionState.CONNECTED, position=position),
+    )
+
+    assert view.gps_state == "NO FIX"
+    assert view.grid == "—"
+
+
+def test_valid_gps_fix_exposes_maidenhead_grid() -> None:
+    position = GPSPosition(
+        fix_state=GPSFixState.THREE_DIMENSIONAL,
+        latitude=39.5309,
+        longitude=-84.0866,
+        altitude_m=262.0,
+        satellites=10,
+        updated_at=timestamp(),
+    )
+
+    view = build_dashboard_state(
+        connected_radio(),
+        gps_state=gps_state(GPSConnectionState.CONNECTED, position=position),
+    )
+
+    assert view.gps_state == "READY"
+    assert view.grid == "EM79wm"
+
+
+def test_gps_error_uses_clear_status_without_grid() -> None:
+    view = build_dashboard_state(
+        connected_radio(),
+        gps_state=gps_state(
+            GPSConnectionState.ERROR,
+            last_error="Serial timeout",
+        ),
+    )
+
+    assert view.gps_state == "ERROR"
+    assert view.grid == "—"
