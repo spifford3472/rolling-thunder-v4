@@ -6,8 +6,8 @@ import pytest
 
 from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import (
-    GPSConnectionState,
     GPSConnectionError,
+    GPSConnectionState,
     GPSError,
     GPSState,
 )
