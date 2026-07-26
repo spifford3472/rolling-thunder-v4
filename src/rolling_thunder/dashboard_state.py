@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
+from rolling_thunder.connectivity_status import ConnectivityStatus
 from rolling_thunder.domain import Frequency, GPSFixState, RadioConnectionState, RadioState
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.maidenhead import maidenhead_grid
@@ -23,6 +24,10 @@ class DashboardState:
     commit_state: str
     last_result: str
     ticker: str
+    network_state: str = "DISABLED"
+    home_platform_state: str = "DISABLED"
+    synchronization_state: str = "DISABLED"
+    connectivity_detail: str = "CONNECTIVITY READY"
 
 
 def _format_frequency(frequency: Frequency | None) -> str:
@@ -76,6 +81,7 @@ def build_dashboard_state(
     radio_state: RadioState,
     callsign_capture: CallsignCaptureState | None = None,
     gps_state: GPSState | None = None,
+    connectivity: ConnectivityStatus | None = None,
 ) -> DashboardState:
     """Convert domain and callsign state into stable UI-facing text."""
     capture = callsign_capture or CallsignCaptureState()
@@ -89,6 +95,13 @@ def build_dashboard_state(
     else:
         ticker = "RADIO DISCONNECTED — LOGGING DISABLED"
 
+    connectivity_state = connectivity or ConnectivityStatus(
+        network="DISABLED",
+        home_platform="DISABLED",
+        synchronization="DISABLED",
+        detail="CONNECTIVITY READY",
+    )
+
     return DashboardState(
         pending_callsign=capture.pending_callsign or "—",
         voice_state=capture.voice_state,
@@ -101,4 +114,8 @@ def build_dashboard_state(
         commit_state=capture.commit_state,
         last_result=capture.last_result,
         ticker=ticker,
+        network_state=connectivity_state.network,
+        home_platform_state=connectivity_state.home_platform,
+        synchronization_state=connectivity_state.synchronization,
+        connectivity_detail=connectivity_state.detail,
     )

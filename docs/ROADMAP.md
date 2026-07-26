@@ -109,13 +109,30 @@ are not implied by completion of this focused roadmap milestone.
 
 ## Milestone 7: Home Station Platform Connectivity
 
+Status: complete and audited for the approved roadmap scope.
+
 - Typed remote API interface
 - health and reachability checks
 - queued synchronization
-- retry with backoff
+- retry with persisted exponential backoff
 - idempotent contact upload
-- visible online/offline state
+- visible online, offline, unknown, and disabled state
+- independent cellular/WireGuard network keepalive
 - network failures never block local logging
+
+The implemented connectivity path includes a transport-independent Home Station
+Platform boundary, deterministic mock and HTTP clients, lifecycle-managed health
+polling, queued contact synchronization, durable retry eligibility, typed network
+keepalive configuration and service, runtime composition, and pure connectivity
+presentation state. The existing dashboard ticker exposes network, platform, and
+synchronization status without changing the reserved right-side presentation
+area or coupling the UI directly to worker services.
+
+Live validation against the configured cellular hotspot, WireGuard route, and
+Forge endpoint remains an operational smoke test rather than an automated-test
+requirement. Home Station Platform server implementation and broader remote
+analytics remain later architecture work and are not implied by completion of
+this client-side milestone.
 
 ## Milestone 8: POTA Assistance
 
@@ -153,8 +170,8 @@ is the physical control surface and its safe application integration.
 The v4.1.0 architecture specification defines Station State as the unified
 operational read model consumed by the UI and dependent services. This boundary
 is being added incrementally around the already implemented radio, voice,
-logging, storage, context, and health capabilities before more state-producing
-subsystems are introduced.
+logging, storage, context, health, GPS, and connectivity capabilities before
+more state-producing subsystems are introduced.
 
 An in-process event bus remains an architectural direction, not a requirement to
 retrofit prematurely. Its implementation should be driven by demonstrated
@@ -173,8 +190,7 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Begin Milestone 7 with the smallest Home Station Platform connectivity slice: a
-typed, transport-independent remote API boundary and deterministic mock client.
-The slice must define request, response, availability, and error contracts
-without performing network I/O, starting retry loops, uploading contacts, or
-coupling the UI to a particular server implementation.
+Begin Milestone 8 with the smallest POTA-assistance slice: a typed,
+transport-independent spot model and deterministic local ranking/filtering
+service. The first slice must not perform live network I/O, tune the radio, or
+couple presentation code to a specific POTA data provider.
