@@ -17,6 +17,7 @@ from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
+from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
 from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
@@ -123,6 +124,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
     context_navigation = ContextNavigationController()
     pota_dashboard = PotaDashboardController(runtime)
+    pota_filters = PotaDashboardFilterController(pota_dashboard)
 
     def capture_state() -> CallsignCaptureState:
         """Return the active mock or live capture presentation state."""
@@ -503,9 +505,12 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
         if selected_context.selected is ContextId.POTA:
             health_frame.grid_remove()
-            panel = build_pota_dashboard_panel(pota_dashboard.state)
+            filter_state = pota_filters.state
+            panel = build_pota_dashboard_panel(filter_state.dashboard)
 
             pota_lines = [
+                filter_state.display_line,
+                "[ / ] BAND    , / . MODE    / CLEAR",
                 panel.status_line,
                 panel.detail_line,
                 panel.refresh_line,
@@ -574,6 +579,14 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     root.bind("<C>", lambda _event: commit_capture())
     root.bind("<d>", lambda _event: discard_capture())
     root.bind("<D>", lambda _event: discard_capture())
+
+    def handle_pota_filter_key(event: tk.Event[tk.Misc]) -> None:
+        if context_navigation.state.selected is ContextId.POTA:
+            pota_filters.handle_key(event.char)
+
+    for key in ("[", "]", ",", ".", "/"):
+        root.bind(key, handle_pota_filter_key)
+
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
         context_navigation.select_shortcut(event.char)
 
