@@ -72,7 +72,7 @@ def test_preferred_band_outranks_recency() -> None:
         age_minutes=15,
     )
     newer_other_band = make_spot(
-        "K1OTHER",
+        "K1OTH",
         frequency_hz=7_200_000,
         mode=RadioMode.LSB,
         age_minutes=1,
@@ -121,13 +121,13 @@ def test_preferred_mode_breaks_ties_after_band() -> None:
 
 def test_source_order_is_stable_final_tie_breaker() -> None:
     first = make_spot(
-        "K1FIRST",
+        "K1FST",
         frequency_hz=14_250_000,
         mode=RadioMode.USB,
         age_minutes=5,
     )
     second = make_spot(
-        "K1SECOND",
+        "K1SND",
         frequency_hz=14_260_000,
         mode=RadioMode.USB,
         age_minutes=5,
@@ -146,7 +146,7 @@ def test_source_order_is_stable_final_tie_breaker() -> None:
 
 def test_future_spot_age_is_clamped_to_zero() -> None:
     future = PotaSpot(
-        activator="K1FUTURE",
+        activator="K1FUT",
         park=ParkReference(reference="US-9999"),
         frequency=Frequency(hz=14_250_000),
         mode=RadioMode.USB,
