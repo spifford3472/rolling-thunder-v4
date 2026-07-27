@@ -59,7 +59,9 @@ class ControlActionMapper:
         for raw_input_id, action in mappings.items():
             input_id = raw_input_id.strip()
             if not input_id:
-                raise ControlMappingError("Control mapping input identifiers must not be blank.")
+                raise ControlMappingError(
+                    "Control mapping input identifiers must not be blank."
+                )
             if input_id in normalized:
                 raise ControlMappingError(
                     f"Duplicate control mapping for input identifier {input_id!r}."
@@ -69,7 +71,38 @@ class ControlActionMapper:
 
     def resolve(self, event: ControlInputEvent) -> ControlAction | None:
         """Return the configured action, or None for an unknown input."""
-        return self._mappings.get(event.input_id)
+        return self._mappings.get(event.input_id.strip())
+
+
+class ControlEventGate:
+    """Reject duplicate, stale, and rapidly repeated physical-control events."""
+
+    def __init__(self, repeat_suppression_s: float) -> None:
+        if repeat_suppression_s < 0:
+            raise ValueError("Control repeat_suppression_s must not be negative.")
+        self._repeat_suppression_s = repeat_suppression_s
+        self._seen_event_ids: set[str] = set()
+        self._last_accepted_at_by_input: dict[str, float] = {}
+        self._lock = Lock()
+
+    def accept(self, event: ControlInputEvent) -> bool:
+        """Return true only when an event is safe to dispatch once."""
+        input_id = event.input_id.strip()
+        event_id = event.event_id.strip()
+
+        with self._lock:
+            if event_id in self._seen_event_ids:
+                return False
+            self._seen_event_ids.add(event_id)
+
+            last_accepted_at = self._last_accepted_at_by_input.get(input_id)
+            if last_accepted_at is not None:
+                elapsed_s = event.occurred_at_s - last_accepted_at
+                if elapsed_s < 0 or elapsed_s < self._repeat_suppression_s:
+                    return False
+
+            self._last_accepted_at_by_input[input_id] = event.occurred_at_s
+            return True
 
 
 class MockControlSource:
