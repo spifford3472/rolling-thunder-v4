@@ -3,6 +3,7 @@
 import pytest
 
 from rolling_thunder.callsign_capture import MockTranscriptController
+from rolling_thunder.operator_commands import CallsignCaptureCommands
 
 
 def test_valid_mock_transcript_becomes_committable() -> None:
@@ -16,6 +17,15 @@ def test_valid_mock_transcript_becomes_committable() -> None:
     assert state.voice_state == "READY"
     assert state.commit_state == "READY"
     assert state.last_result == "HEARD KI5VNB"
+
+
+def test_shared_capture_command_advances_mock_transcript() -> None:
+    controller: CallsignCaptureCommands = MockTranscriptController(
+        transcripts=(("KILO", "INDIA", "FIVE", "VICTOR", "NOVEMBER", "BRAVO"),)
+    )
+
+    assert controller.start_capture() is True
+    assert controller.state.pending_callsign == "KI5VNB"
 
 
 def test_invalid_mock_transcript_is_not_committable() -> None:
