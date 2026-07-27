@@ -511,13 +511,30 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
             pota_lines = [
                 filter_state.display_line,
                 "[ / ] BAND    , / . MODE    / CLEAR",
-                "UP / DOWN SELECT SPOT",
+                "UP / DOWN SELECT    T STAGE TUNE    X CANCEL",
                 panel.status_line,
                 panel.detail_line,
                 panel.refresh_line,
             ]
             if panel.error_line:
                 pota_lines.append(panel.error_line)
+
+            tune_intent = pota_dashboard.tune_intent
+            if tune_intent is not None:
+                intent_status = tune_intent.status.value.upper()
+                pota_lines.append(
+                    f"TUNE {intent_status}: {tune_intent.activator} "
+                    f"{tune_intent.park_reference} "
+                    f"{tune_intent.frequency.mhz:.3f} MHz "
+                    f"{tune_intent.mode.value}"
+                )
+                if (
+                    tune_intent.status.value
+                    == "pending_confirmation"
+                ):
+                    pota_lines.append(
+                        "NO RADIO CHANGE — CONFIRMATION NOT IMPLEMENTED"
+                    )
 
             for row in panel.rows:
                 selection_marker = ">" if row.is_selected else " "
@@ -599,6 +616,19 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
     root.bind("<Up>", select_previous_pota_spot)
     root.bind("<Down>", select_next_pota_spot)
+
+    def request_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
+        if context_navigation.state.selected is ContextId.POTA:
+            pota_dashboard.request_tune_intent()
+
+    def cancel_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
+        if context_navigation.state.selected is ContextId.POTA:
+            pota_dashboard.cancel_tune_intent()
+
+    root.bind("<t>", request_pota_tune_intent)
+    root.bind("<T>", request_pota_tune_intent)
+    root.bind("<x>", cancel_pota_tune_intent)
+    root.bind("<X>", cancel_pota_tune_intent)
 
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
         context_navigation.select_shortcut(event.char)

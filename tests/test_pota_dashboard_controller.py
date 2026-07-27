@@ -7,6 +7,7 @@ from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pota_spot_source import PotaSpotSourceAvailability
 from rolling_thunder.pota_spots import AmateurBand, ParkReference, PotaSpot
+from rolling_thunder.pota_tune_intent import PotaTuneIntentStatus
 
 
 class MutableProvider:
@@ -242,3 +243,92 @@ def test_empty_refresh_clears_selection() -> None:
 
     assert controller.selected_index is None
     assert state.rows == ()
+
+
+def test_request_tune_intent_requires_explicit_selection() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+
+    assert controller.request_tune_intent() is None
+    assert controller.tune_intent is None
+
+
+def test_request_tune_intent_uses_selected_typed_spot() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+
+    intent = controller.request_tune_intent()
+
+    assert intent is not None
+    assert intent.status is PotaTuneIntentStatus.PENDING_CONFIRMATION
+    assert str(intent.activator) == controller.state.rows[0].activator
+    assert intent.frequency.hz == 14_250_000
+    assert intent.mode is RadioMode.USB
+    assert intent.park_reference == "US-1234"
+
+
+def test_cancel_tune_intent_has_no_radio_side_effect_contract() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.request_tune_intent()
+
+    cancelled = controller.cancel_tune_intent()
+
+    assert cancelled is not None
+    assert cancelled.status is PotaTuneIntentStatus.CANCELLED
+
+
+def test_selection_change_clears_tune_intent() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.request_tune_intent()
+
+    controller.select_next()
+
+    assert controller.tune_intent is None
+
+
+def test_filter_change_clears_tune_intent() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.request_tune_intent()
+
+    controller.select_band(AmateurBand.BAND_20M)
+
+    assert controller.tune_intent is None
+
+
+def test_refresh_that_removes_selection_clears_tune_intent() -> None:
+    provider = MutableProvider(available_state())
+    controller = PotaDashboardController(
+        provider,
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.select_next()
+    controller.select_next()
+    controller.request_tune_intent()
+
+    provider.latest_pota_spot_state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(spot("KI5VNB", "US-1234", 14_250_000, RadioMode.USB),),
+        last_attempt_at=datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+        last_success_at=datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    _ = controller.state
+
+    assert controller.tune_intent is None
