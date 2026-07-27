@@ -13,9 +13,17 @@ from rolling_thunder.context_navigation import (
     ContextId,
     ContextNavigationController,
 )
+from rolling_thunder.control_dispatcher import ControlDispatcher
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
+from rolling_thunder.operator_commands import OperatorCommandController
+from rolling_thunder.physical_controls import (
+    ControlAction,
+    ControlActionMapper,
+    ControlEventGate,
+    MockControlSource,
+)
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
 from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
@@ -130,6 +138,7 @@ def run_dashboard(
         )
         live_capture = LiveCallsignCaptureController(recognizer)
 
+    capture = live_capture if live_capture is not None else mock_transcripts
     context_navigation = ContextNavigationController()
     pota_dashboard = PotaDashboardController(runtime)
     pota_filters = PotaDashboardFilterController(pota_dashboard)
@@ -139,42 +148,17 @@ def run_dashboard(
     )
 
     def capture_state() -> CallsignCaptureState:
-        """Return the active mock or live capture presentation state."""
-        if live_capture is not None:
-            return live_capture.state
-        return mock_transcripts.state
-
-    def start_voice_capture() -> None:
-        """Start live recognition or advance the deterministic mock fixture."""
-        if live_capture is not None:
-            live_capture.start_capture()
-        else:
-            mock_transcripts.capture_next()
-
-    def discard_capture() -> None:
-        """Discard the current pending callsign without logging it."""
-        if live_capture is not None:
-            live_capture.discard()
-        else:
-            mock_transcripts.discard()
+        """Return the active capture controller's immutable state."""
+        return capture.state
 
     def commit_started(callsign: str) -> None:
-        if live_capture is not None:
-            live_capture.commit_started(callsign)
-        else:
-            mock_transcripts.commit_started(callsign)
+        capture.commit_started(callsign)
 
     def commit_succeeded(callsign: str) -> None:
-        if live_capture is not None:
-            live_capture.commit_succeeded(callsign)
-        else:
-            mock_transcripts.commit_succeeded(callsign)
+        capture.commit_succeeded(callsign)
 
     def commit_failed(message: str) -> None:
-        if live_capture is not None:
-            live_capture.commit_failed(message)
-        else:
-            mock_transcripts.commit_failed(message)
+        capture.commit_failed(message)
 
     contact_commit = ContactCommitController(
         runtime.contact_logging,
@@ -182,15 +166,20 @@ def run_dashboard(
         on_succeeded=commit_succeeded,
         on_failed=commit_failed,
     )
+    operator_commands = OperatorCommandController(
+        capture,
+        contact_commit,
+        context_navigation,
+        radio_state=lambda: runtime.latest_radio_state,
+    )
 
-    def commit_capture() -> None:
-        """Start a durable Commit using immutable callsign and radio snapshots."""
-        state = capture_state()
-        if state.commit_state != "READY" or not state.pending_callsign:
-            return
-        contact_commit.start_commit(
-            state.pending_callsign,
-            runtime.latest_radio_state,
+    control_dispatcher: ControlDispatcher | None = None
+    if config.physical_controls.enabled:
+        control_dispatcher = ControlDispatcher(
+            MockControlSource(),
+            ControlActionMapper(config.physical_controls.mappings),
+            ControlEventGate(config.physical_controls.repeat_suppression_s),
+            operator_commands,
         )
 
     root = tk.Tk()
@@ -465,6 +454,9 @@ def run_dashboard(
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     def refresh() -> None:
+        if control_dispatcher is not None:
+            control_dispatcher.dispatch_available()
+
         gps_state = runtime.latest_gps_state
         connectivity = build_runtime_connectivity_status(
             runtime,
@@ -596,12 +588,30 @@ def run_dashboard(
         root.destroy()
 
     root.bind("<Escape>", lambda _event: close())
-    root.bind("<v>", lambda _event: start_voice_capture())
-    root.bind("<V>", lambda _event: start_voice_capture())
-    root.bind("<c>", lambda _event: commit_capture())
-    root.bind("<C>", lambda _event: commit_capture())
-    root.bind("<d>", lambda _event: discard_capture())
-    root.bind("<D>", lambda _event: discard_capture())
+    root.bind(
+        "<v>",
+        lambda _event: operator_commands.execute(ControlAction.VOICE),
+    )
+    root.bind(
+        "<V>",
+        lambda _event: operator_commands.execute(ControlAction.VOICE),
+    )
+    root.bind(
+        "<c>",
+        lambda _event: operator_commands.execute(ControlAction.COMMIT),
+    )
+    root.bind(
+        "<C>",
+        lambda _event: operator_commands.execute(ControlAction.COMMIT),
+    )
+    root.bind(
+        "<d>",
+        lambda _event: operator_commands.execute(ControlAction.DISCARD),
+    )
+    root.bind(
+        "<D>",
+        lambda _event: operator_commands.execute(ControlAction.DISCARD),
+    )
 
     def handle_pota_filter_key(event: tk.Event[tk.Misc]) -> None:
         if context_navigation.state.selected is ContextId.POTA:
@@ -646,8 +656,18 @@ def run_dashboard(
     root.bind("<x>", cancel_pota_tune_intent)
     root.bind("<X>", cancel_pota_tune_intent)
 
+    context_shortcut_actions = {
+        "1": ControlAction.SELECT_POTA,
+        "2": ControlAction.SELECT_DX,
+        "3": ControlAction.SELECT_REPEATERS,
+        "4": ControlAction.SELECT_AI,
+        "5": ControlAction.SELECT_SETTINGS,
+    }
+
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
-        context_navigation.select_shortcut(event.char)
+        action = context_shortcut_actions.get(event.char)
+        if action is not None:
+            operator_commands.execute(action)
 
     for definition in CONTEXT_DEFINITIONS:
         root.bind(definition.shortcut, select_context_shortcut)
