@@ -53,3 +53,33 @@ def test_created_at_requires_timezone() -> None:
             mode=RadioMode.USB,
             created_at=datetime(2026, 7, 27, 1, 0),  # noqa: DTZ001
         )
+
+
+def test_confirm_transitions_only_pending_intent() -> None:
+    pending = make_intent()
+
+    confirmed = pending.confirm()
+
+    assert pending.status is PotaTuneIntentStatus.PENDING_CONFIRMATION
+    assert confirmed.status is PotaTuneIntentStatus.CONFIRMED
+
+
+def test_confirm_is_idempotent_after_confirmation() -> None:
+    confirmed = make_intent().confirm()
+
+    assert confirmed.confirm() is confirmed
+
+
+def test_cancel_is_allowed_after_confirmation() -> None:
+    confirmed = make_intent().confirm()
+
+    cancelled = confirmed.cancel()
+
+    assert cancelled.status is PotaTuneIntentStatus.CANCELLED
+
+
+def test_cancelled_intent_cannot_be_confirmed() -> None:
+    cancelled = make_intent().cancel()
+
+    assert cancelled.confirm() is cancelled
+    assert cancelled.status is PotaTuneIntentStatus.CANCELLED

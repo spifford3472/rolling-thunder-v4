@@ -511,7 +511,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
             pota_lines = [
                 filter_state.display_line,
                 "[ / ] BAND    , / . MODE    / CLEAR",
-                "UP / DOWN SELECT    T STAGE TUNE    X CANCEL",
+                "UP / DOWN SELECT    T STAGE    ENTER CONFIRM    X CANCEL",
                 panel.status_line,
                 panel.detail_line,
                 panel.refresh_line,
@@ -528,12 +528,13 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
                     f"{tune_intent.frequency.mhz:.3f} MHz "
                     f"{tune_intent.mode.value}"
                 )
-                if (
-                    tune_intent.status.value
-                    == "pending_confirmation"
-                ):
+                if tune_intent.status.value == "pending_confirmation":
                     pota_lines.append(
-                        "NO RADIO CHANGE — CONFIRMATION NOT IMPLEMENTED"
+                        "PRESS ENTER TO CONFIRM — NO RADIO CHANGE"
+                    )
+                elif tune_intent.status.value == "confirmed":
+                    pota_lines.append(
+                        "CONFIRMED — RADIO CHANGE NOT YET IMPLEMENTED"
                     )
 
             for row in panel.rows:
@@ -621,10 +622,16 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
         if context_navigation.state.selected is ContextId.POTA:
             pota_dashboard.request_tune_intent()
 
+    def confirm_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
+        if context_navigation.state.selected is ContextId.POTA:
+            pota_dashboard.confirm_tune_intent()
+
     def cancel_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
         if context_navigation.state.selected is ContextId.POTA:
             pota_dashboard.cancel_tune_intent()
 
+    root.bind("<Return>", confirm_pota_tune_intent)
+    root.bind("<KP_Enter>", confirm_pota_tune_intent)
     root.bind("<t>", request_pota_tune_intent)
     root.bind("<T>", request_pota_tune_intent)
     root.bind("<x>", cancel_pota_tune_intent)

@@ -332,3 +332,84 @@ def test_refresh_that_removes_selection_clears_tune_intent() -> None:
     _ = controller.state
 
     assert controller.tune_intent is None
+
+
+def test_confirm_tune_intent_requires_pending_intent() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+
+    assert controller.confirm_tune_intent() is None
+
+
+def test_confirm_tune_intent_preserves_typed_target() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    pending = controller.request_tune_intent()
+
+    confirmed = controller.confirm_tune_intent()
+
+    assert pending is not None
+    assert confirmed is not None
+    assert confirmed.status is PotaTuneIntentStatus.CONFIRMED
+    assert confirmed.activator == pending.activator
+    assert confirmed.park_reference == pending.park_reference
+    assert confirmed.frequency == pending.frequency
+    assert confirmed.mode is pending.mode
+
+
+def test_confirm_tune_intent_rejects_changed_selected_spot() -> None:
+    provider = MutableProvider(available_state())
+    controller = PotaDashboardController(
+        provider,
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.request_tune_intent()
+
+    provider.latest_pota_spot_state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(
+            spot("W8NEW", "US-7777", 14_300_000, RadioMode.USB),
+        ),
+        last_attempt_at=datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+        last_success_at=datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+
+    assert controller.confirm_tune_intent() is None
+    assert controller.tune_intent is None
+
+
+def test_cancel_is_allowed_after_confirmation() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.request_tune_intent()
+    controller.confirm_tune_intent()
+
+    cancelled = controller.cancel_tune_intent()
+
+    assert cancelled is not None
+    assert cancelled.status is PotaTuneIntentStatus.CANCELLED
+
+
+def test_confirmed_intent_cannot_be_confirmed_again() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.request_tune_intent()
+    confirmed = controller.confirm_tune_intent()
+
+    repeated = controller.confirm_tune_intent()
+
+    assert repeated is confirmed
+    assert repeated is not None
+    assert repeated.status is PotaTuneIntentStatus.CONFIRMED
