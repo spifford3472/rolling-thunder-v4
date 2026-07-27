@@ -3,12 +3,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from rolling_thunder.domain import Frequency, RadioMode
-from rolling_thunder.pota_spot_ranking import (
-    PotaSpotRankingCriteria,
-    rank_pota_spots,
-)
+from rolling_thunder.pota_spot_ranking import PotaSpotRankingCriteria, rank_pota_spots
 from rolling_thunder.pota_spots import AmateurBand, ParkReference, PotaSpot
-
 
 REFERENCE_TIME = datetime(2026, 7, 27, 0, 0, tzinfo=UTC)
 
@@ -32,7 +28,9 @@ def make_spot(
 
 def test_rejects_naive_reference_time() -> None:
     with pytest.raises(ValueError, match="timezone"):
-        PotaSpotRankingCriteria(reference_time=datetime(2026, 7, 27))
+        PotaSpotRankingCriteria(
+            reference_time=datetime(2026, 7, 27),  # noqa: DTZ001
+        )
 
 
 def test_empty_input_returns_empty_tuple() -> None:
