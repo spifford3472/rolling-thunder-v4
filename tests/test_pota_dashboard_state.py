@@ -229,3 +229,32 @@ def test_missing_reference_time_preserves_filtered_source_order() -> None:
     dashboard = build_pota_dashboard_state(state)
 
     assert [row.activator for row in dashboard.rows] == ["K1OLD", "K1NEW"]
+
+
+def test_selected_index_marks_only_matching_ranked_row() -> None:
+    state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(
+            spot("KI5VNB", "US-1234", 14_250_000, RadioMode.USB),
+            spot("W8ABC", "US-5678", 7_255_000, RadioMode.LSB),
+        ),
+        last_attempt_at=timestamp(),
+        last_success_at=timestamp(),
+    )
+
+    dashboard = build_pota_dashboard_state(state, selected_index=1)
+
+    assert [row.is_selected for row in dashboard.rows] == [False, True]
+
+
+def test_out_of_range_selected_index_marks_no_row() -> None:
+    state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(spot("KI5VNB", "US-1234", 14_250_000, RadioMode.USB),),
+        last_attempt_at=timestamp(),
+        last_success_at=timestamp(),
+    )
+
+    dashboard = build_pota_dashboard_state(state, selected_index=4)
+
+    assert [row.is_selected for row in dashboard.rows] == [False]

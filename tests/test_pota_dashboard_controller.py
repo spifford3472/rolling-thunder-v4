@@ -160,3 +160,85 @@ def test_controller_supplies_clock_for_ranked_dashboard_order() -> None:
     )
 
     assert [row.activator for row in controller.state.rows] == ["K1NEW", "K1OLD"]
+
+
+def test_next_selects_first_row_then_moves_without_wrapping() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+
+    first = controller.select_next()
+    second = controller.select_next()
+    controller.select_next()
+    final = controller.select_next()
+
+    assert first.rows[0].is_selected is True
+    assert second.rows[1].is_selected is True
+    assert final.rows[-1].is_selected is True
+    assert controller.selected_index == len(final.rows) - 1
+
+
+def test_previous_initially_selects_last_row() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+
+    state = controller.select_previous()
+
+    assert state.rows[-1].is_selected is True
+
+
+def test_filter_change_clears_selection() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+    controller.select_next()
+
+    state = controller.select_band(AmateurBand.BAND_20M)
+
+    assert controller.selected_index is None
+    assert not any(row.is_selected for row in state.rows)
+
+
+def test_selection_clamps_when_refreshed_rows_shrink() -> None:
+    provider = MutableProvider(available_state())
+    controller = PotaDashboardController(
+        provider,
+        clock=lambda: datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+    controller.select_next()
+    controller.select_next()
+    controller.select_next()
+
+    provider.latest_pota_spot_state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(spot("KI5VNB", "US-1234", 14_250_000, RadioMode.USB),),
+        last_attempt_at=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+        last_success_at=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+    state = controller.state
+
+    assert controller.selected_index == 0
+    assert state.rows[0].is_selected is True
+
+
+def test_empty_refresh_clears_selection() -> None:
+    provider = MutableProvider(available_state())
+    controller = PotaDashboardController(
+        provider,
+        clock=lambda: datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+    controller.select_next()
+
+    provider.latest_pota_spot_state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        last_attempt_at=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+        last_success_at=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+    state = controller.state
+
+    assert controller.selected_index is None
+    assert state.rows == ()

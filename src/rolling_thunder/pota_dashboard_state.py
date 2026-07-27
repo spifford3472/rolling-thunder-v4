@@ -24,6 +24,7 @@ class PotaSpotRow:
     mode: str
     spotted_at: str
     comments: str
+    is_selected: bool
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ def build_pota_dashboard_state(
     band: AmateurBand | None = None,
     mode: RadioMode | None = None,
     reference_time: datetime | None = None,
+    selected_index: int | None = None,
 ) -> PotaDashboardState:
     """Convert a service snapshot into stable display-ready POTA state."""
     if state is None:
@@ -76,7 +78,10 @@ def build_pota_dashboard_state(
             )
         )
 
-    rows = tuple(_build_row(spot) for spot in spots)
+    rows = tuple(
+        _build_row(spot, is_selected=index == selected_index)
+        for index, spot in enumerate(spots)
+    )
     availability = state.availability.value.upper()
     last_refresh = _format_timestamp(state.last_success_at)
     error = state.last_error or ""
@@ -110,7 +115,7 @@ def build_pota_dashboard_state(
     )
 
 
-def _build_row(spot: PotaSpot) -> PotaSpotRow:
+def _build_row(spot: PotaSpot, *, is_selected: bool = False) -> PotaSpotRow:
     return PotaSpotRow(
         activator=str(spot.activator),
         park_reference=spot.park.reference,
@@ -119,6 +124,7 @@ def _build_row(spot: PotaSpot) -> PotaSpotRow:
         mode=spot.mode.value,
         spotted_at=_format_timestamp(spot.spotted_at),
         comments=spot.comments or "",
+        is_selected=is_selected,
     )
 
 

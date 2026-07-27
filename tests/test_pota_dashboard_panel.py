@@ -15,6 +15,7 @@ def row(index: int) -> PotaSpotRow:
         mode="USB",
         spotted_at="2026-07-26 12:30 UTC",
         comments="",
+        is_selected=False,
     )
 
 
