@@ -22,6 +22,9 @@ from rolling_thunder.network_keepalive import (
     NetworkKeepaliveService,
     NetworkKeepaliveTransport,
 )
+from rolling_thunder.pota_receive_tune_executor import (
+    PotaReceiveTuneExecutor,
+)
 from rolling_thunder.pota_runtime import build_pota_spot_polling
 from rolling_thunder.pota_spot_polling import PotaSpotPollingService
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
@@ -156,6 +159,11 @@ class ApplicationRuntime:
             network_keepalive=network_keepalive,
             pota_spot_polling=pota_spot_polling,
         )
+
+    @property
+    def pota_receive_tune_executor(self) -> PotaReceiveTuneExecutor:
+        """Return a receive-only executor backed by the owned radio."""
+        return PotaReceiveTuneExecutor(self.radio)
 
     @property
     def latest_radio_state(self) -> RadioState:
