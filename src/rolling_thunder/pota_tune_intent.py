@@ -13,6 +13,7 @@ class PotaTuneIntentStatus(StrEnum):
     """Lifecycle states before any radio command is permitted."""
 
     PENDING_CONFIRMATION = "pending_confirmation"
+    CONFIRMED = "confirmed"
     CANCELLED = "cancelled"
 
 
@@ -34,8 +35,18 @@ class PotaTuneIntent(DomainModel):
             raise ValueError("created_at must include timezone information")
         return value.astimezone(UTC)
 
+    def confirm(self) -> "PotaTuneIntent":
+        """Confirm pending operator intent without performing external action."""
+        if self.status is not PotaTuneIntentStatus.PENDING_CONFIRMATION:
+            return self
+        return self.model_copy(
+            update={"status": PotaTuneIntentStatus.CONFIRMED}
+        )
+
     def cancel(self) -> "PotaTuneIntent":
         """Return a cancelled copy without performing any external action."""
+        if self.status is PotaTuneIntentStatus.CANCELLED:
+            return self
         return self.model_copy(
             update={"status": PotaTuneIntentStatus.CANCELLED}
         )

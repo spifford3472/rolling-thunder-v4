@@ -187,12 +187,45 @@ class PotaDashboardController:
         )
         return self._tune_intent
 
+    def confirm_tune_intent(self) -> PotaTuneIntent | None:
+        """Confirm only a pending intent that still matches selection."""
+        intent = self._tune_intent
+        if (
+            intent is None
+            or intent.status is not PotaTuneIntentStatus.PENDING_CONFIRMATION
+        ):
+            return intent
+
+        selected_spot = self._selected_spot(self._clock())
+        if selected_spot is None or not self._intent_matches_spot(
+            intent,
+            selected_spot,
+        ):
+            self._tune_intent = None
+            return None
+
+        self._tune_intent = intent.confirm()
+        return self._tune_intent
+
     def cancel_tune_intent(self) -> PotaTuneIntent | None:
-        """Cancel pending intent without calling a radio interface."""
+        """Cancel staged or confirmed intent without radio access."""
         if self._tune_intent is None:
             return None
         self._tune_intent = self._tune_intent.cancel()
         return self._tune_intent
+
+    @staticmethod
+    def _intent_matches_spot(
+        intent: PotaTuneIntent,
+        spot: PotaSpot,
+    ) -> bool:
+        """Return whether intent still identifies the selected typed spot."""
+        return (
+            intent.activator == spot.activator
+            and intent.park_reference == spot.park.reference
+            and intent.frequency == spot.frequency
+            and intent.mode is spot.mode
+        )
 
     def _selected_spot(self, reference_time: datetime) -> PotaSpot | None:
         """Resolve selection against the current filtered ranked snapshot."""
