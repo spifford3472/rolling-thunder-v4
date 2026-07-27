@@ -5,6 +5,7 @@ import pytest
 from rolling_thunder.physical_controls import (
     ControlAction,
     ControlActionMapper,
+    ControlEventGate,
     ControlInputEvent,
     ControlMappingError,
     MockControlSource,
@@ -60,6 +61,13 @@ def test_mapper_resolves_configured_input_to_typed_action() -> None:
     )
 
 
+def test_mapper_normalizes_event_input_identifier() -> None:
+    """Transport whitespace must not create a second physical-control identity."""
+    mapper = ControlActionMapper({"voice-button": ControlAction.VOICE})
+
+    assert mapper.resolve(event(" voice-button ", "event-1")) is ControlAction.VOICE
+
+
 def test_mapper_returns_none_for_unknown_input() -> None:
     """Unknown controls must not guess or fall back to another action."""
     mapper = ControlActionMapper({"commit-button": ControlAction.COMMIT})
@@ -79,6 +87,45 @@ def test_mapper_rejects_blank_and_normalized_duplicate_input_ids() -> None:
                 " voice-button ": ControlAction.COMMIT,
             }
         )
+
+
+def test_event_gate_rejects_duplicate_event_id() -> None:
+    """A replayed transport event must never dispatch twice."""
+    gate = ControlEventGate(repeat_suppression_s=0.25)
+
+    assert gate.accept(event("voice-button", "event-1", 1.0)) is True
+    assert gate.accept(event("commit-button", "event-1", 2.0)) is False
+
+
+def test_event_gate_rejects_rapid_repeat_of_same_input() -> None:
+    """Button bounce and rapid repeats should fail safely."""
+    gate = ControlEventGate(repeat_suppression_s=0.25)
+
+    assert gate.accept(event("commit-button", "event-1", 1.0)) is True
+    assert gate.accept(event("commit-button", "event-2", 1.1)) is False
+    assert gate.accept(event("commit-button", "event-3", 1.25)) is True
+
+
+def test_event_gate_allows_different_inputs_without_cross_suppression() -> None:
+    """One physical input must not suppress a distinct direct action."""
+    gate = ControlEventGate(repeat_suppression_s=0.25)
+
+    assert gate.accept(event("voice-button", "event-1", 1.0)) is True
+    assert gate.accept(event("discard-button", "event-2", 1.1)) is True
+
+
+def test_event_gate_rejects_out_of_order_event_for_same_input() -> None:
+    """Stale transport events must not be dispatched after a newer event."""
+    gate = ControlEventGate(repeat_suppression_s=0.0)
+
+    assert gate.accept(event("voice-button", "event-1", 2.0)) is True
+    assert gate.accept(event("voice-button", "event-2", 1.0)) is False
+
+
+def test_event_gate_rejects_negative_suppression_window() -> None:
+    """Unsafe timing configuration should fail during construction."""
+    with pytest.raises(ValueError, match="repeat_suppression_s"):
+        ControlEventGate(repeat_suppression_s=-0.1)
 
 
 def test_mock_source_is_inert_until_explicitly_stimulated() -> None:
