@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from rolling_thunder.domain import RadioMode
+from rolling_thunder.pota_spot_ranking import (
+    PotaSpotRankingCriteria,
+    rank_pota_spots,
+)
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pota_spot_source import PotaSpotSourceAvailability
 from rolling_thunder.pota_spots import AmateurBand, PotaSpot, filter_pota_spots
@@ -42,6 +46,7 @@ def build_pota_dashboard_state(
     *,
     band: AmateurBand | None = None,
     mode: RadioMode | None = None,
+    reference_time: datetime | None = None,
 ) -> PotaDashboardState:
     """Convert a service snapshot into stable display-ready POTA state."""
     if state is None:
@@ -58,6 +63,19 @@ def build_pota_dashboard_state(
         )
 
     spots = tuple(filter_pota_spots(list(state.spots), band=band, mode=mode))
+    if reference_time is not None:
+        spots = tuple(
+            ranked.spot
+            for ranked in rank_pota_spots(
+                list(spots),
+                PotaSpotRankingCriteria(
+                    reference_time=reference_time,
+                    preferred_band=band,
+                    preferred_mode=mode,
+                ),
+            )
+        )
+
     rows = tuple(_build_row(spot) for spot in spots)
     availability = state.availability.value.upper()
     last_refresh = _format_timestamp(state.last_success_at)

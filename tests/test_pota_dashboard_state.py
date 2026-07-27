@@ -172,3 +172,60 @@ def test_missing_optional_row_values_have_stable_placeholders() -> None:
 
     assert row.park_name == "—"
     assert row.comments == ""
+
+
+def test_spots_are_ranked_by_recency_when_reference_time_is_supplied() -> None:
+    older = PotaSpot(
+        activator="K1OLD",
+        park=ParkReference(reference="US-1234"),
+        frequency=Frequency(hz=14_250_000),
+        mode=RadioMode.USB,
+        spotted_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
+    )
+    newer = PotaSpot(
+        activator="K1NEW",
+        park=ParkReference(reference="US-5678"),
+        frequency=Frequency(hz=7_255_000),
+        mode=RadioMode.LSB,
+        spotted_at=datetime(2026, 7, 26, 12, 25, tzinfo=UTC),
+    )
+    state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(older, newer),
+        last_attempt_at=timestamp(),
+        last_success_at=timestamp(),
+    )
+
+    dashboard = build_pota_dashboard_state(
+        state,
+        reference_time=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+
+    assert [row.activator for row in dashboard.rows] == ["K1NEW", "K1OLD"]
+
+
+def test_missing_reference_time_preserves_filtered_source_order() -> None:
+    older = PotaSpot(
+        activator="K1OLD",
+        park=ParkReference(reference="US-1234"),
+        frequency=Frequency(hz=14_250_000),
+        mode=RadioMode.USB,
+        spotted_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
+    )
+    newer = PotaSpot(
+        activator="K1NEW",
+        park=ParkReference(reference="US-5678"),
+        frequency=Frequency(hz=7_255_000),
+        mode=RadioMode.LSB,
+        spotted_at=datetime(2026, 7, 26, 12, 25, tzinfo=UTC),
+    )
+    state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(older, newer),
+        last_attempt_at=timestamp(),
+        last_success_at=timestamp(),
+    )
+
+    dashboard = build_pota_dashboard_state(state)
+
+    assert [row.activator for row in dashboard.rows] == ["K1OLD", "K1NEW"]
