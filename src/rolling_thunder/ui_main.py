@@ -19,9 +19,10 @@ from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
 from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
-from rolling_thunder.pota_tune_presentation import (
-    build_pota_tune_presentation,
+from rolling_thunder.pota_tune_execution_controller import (
+    PotaTuneIntentExecutor,
 )
+from rolling_thunder.pota_tune_ui_controller import PotaTuneUiController
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
@@ -87,7 +88,11 @@ def _callsign_font_size(callsign: str) -> int:
     return 44
 
 
-def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
+def run_dashboard(
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    *,
+    pota_tune_executor: PotaTuneIntentExecutor | None = None,
+) -> int:
     """Load configuration and run the persistent dashboard until closed."""
     try:
         import tkinter as tk
@@ -128,6 +133,10 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
     context_navigation = ContextNavigationController()
     pota_dashboard = PotaDashboardController(runtime)
     pota_filters = PotaDashboardFilterController(pota_dashboard)
+    pota_tune_ui = PotaTuneUiController(
+        pota_dashboard,
+        pota_tune_executor,
+    )
 
     def capture_state() -> CallsignCaptureState:
         """Return the active mock or live capture presentation state."""
@@ -514,7 +523,8 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
             pota_lines = [
                 filter_state.display_line,
                 "[ / ] BAND    , / . MODE    / CLEAR",
-                "UP / DOWN SELECT    T STAGE    ENTER CONFIRM    X CANCEL",
+                "UP / DOWN SELECT    T STAGE    ENTER CONFIRM",
+                "E EXECUTE    X CANCEL",
                 panel.status_line,
                 panel.detail_line,
                 panel.refresh_line,
@@ -522,9 +532,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
             if panel.error_line:
                 pota_lines.append(panel.error_line)
 
-            tune_presentation = build_pota_tune_presentation(
-                pota_dashboard.tune_intent,
-            )
+            tune_presentation = pota_tune_ui.presentation
             if tune_presentation.summary_line is not None:
                 pota_lines.append(tune_presentation.summary_line)
             if tune_presentation.status_line is not None:
@@ -615,20 +623,26 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
     def request_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
         if context_navigation.state.selected is ContextId.POTA:
-            pota_dashboard.request_tune_intent()
+            pota_tune_ui.request()
 
     def confirm_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
         if context_navigation.state.selected is ContextId.POTA:
-            pota_dashboard.confirm_tune_intent()
+            pota_tune_ui.confirm()
 
     def cancel_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
         if context_navigation.state.selected is ContextId.POTA:
-            pota_dashboard.cancel_tune_intent()
+            pota_tune_ui.cancel()
+
+    def execute_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
+        if context_navigation.state.selected is ContextId.POTA:
+            pota_tune_ui.execute()
 
     root.bind("<Return>", confirm_pota_tune_intent)
     root.bind("<KP_Enter>", confirm_pota_tune_intent)
     root.bind("<t>", request_pota_tune_intent)
     root.bind("<T>", request_pota_tune_intent)
+    root.bind("<e>", execute_pota_tune_intent)
+    root.bind("<E>", execute_pota_tune_intent)
     root.bind("<x>", cancel_pota_tune_intent)
     root.bind("<X>", cancel_pota_tune_intent)
 
