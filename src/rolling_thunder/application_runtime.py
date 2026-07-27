@@ -135,6 +135,7 @@ class ApplicationRuntime:
         pota_spot_polling = build_pota_spot_polling(
             config.pota_spots,
             pota_scheduler or ThreadingPollScheduler(),
+            database_path=config.storage.database_path,
             mock_mode=config.hardware.mock,
             transport=pota_transport,
         )

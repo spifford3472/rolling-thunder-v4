@@ -1,6 +1,7 @@
 """Tests for configured POTA composition and application lifecycle wiring."""
 
 from collections.abc import Mapping
+from pathlib import Path
 
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig, PotaSpotsConfig
@@ -56,35 +57,48 @@ class RecordingTransport:
         return UrllibHttpResponse(200, b"[]")
 
 
-def mock_application_config(*, pota_enabled: bool = False) -> ApplicationConfig:
-    return ApplicationConfig.model_validate(
-        {
-            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
-            "hardware": {"mock": True},
-            "pota_spots": {
-                "enabled": pota_enabled,
-                "refresh_interval_s": 45.0,
-            },
-        }
-    )
+def mock_application_config(
+    *,
+    database_path: Path | None = None,
+    pota_enabled: bool = False,
+) -> ApplicationConfig:
+    values: dict[str, object] = {
+        "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+        "hardware": {"mock": True},
+        "pota_spots": {
+            "enabled": pota_enabled,
+            "refresh_interval_s": 45.0,
+        },
+    }
+
+    if database_path is not None:
+        values["storage"] = {"database_path": database_path}
+
+    return ApplicationConfig.model_validate(values)
 
 
-def test_disabled_pota_configuration_builds_no_service() -> None:
+def test_disabled_pota_configuration_builds_no_service(tmp_path) -> None:
     polling = build_pota_spot_polling(
         PotaSpotsConfig(),
         ManualScheduler(),
+        database_path=tmp_path / "contacts.sqlite3",
         mock_mode=True,
     )
 
     assert polling is None
 
 
-def test_mock_runtime_starts_available_pota_polling_and_stops_cleanly() -> None:
+def test_mock_runtime_starts_available_pota_polling_and_stops_cleanly(
+    tmp_path: Path,
+) -> None:
     radio_scheduler = ManualScheduler()
     gps_scheduler = ManualScheduler()
     pota_scheduler = ManualScheduler()
     runtime = ApplicationRuntime.from_config(
-        mock_application_config(pota_enabled=True),
+        mock_application_config(
+            database_path=tmp_path / "contacts.sqlite3",
+            pota_enabled=True,
+        ),
         scheduler=radio_scheduler,
         gps_scheduler=gps_scheduler,
         pota_scheduler=pota_scheduler,
@@ -125,7 +139,7 @@ def test_runtime_leaves_pota_state_absent_when_disabled() -> None:
     assert runtime.latest_pota_spot_state is None
 
 
-def test_real_pota_composition_uses_configured_http_settings() -> None:
+def test_real_pota_composition_uses_configured_http_settings(tmp_path) -> None:
     scheduler = ManualScheduler()
     transport = RecordingTransport()
     polling = build_pota_spot_polling(
@@ -136,6 +150,7 @@ def test_real_pota_composition_uses_configured_http_settings() -> None:
             refresh_interval_s=90.0,
         ),
         scheduler,
+        database_path=tmp_path / "contacts.sqlite3",
         mock_mode=False,
         transport=transport,
     )
@@ -147,3 +162,58 @@ def test_real_pota_composition_uses_configured_http_settings() -> None:
     assert transport.urls == ["https://spots.example.test/api/spot/activator"]
     assert transport.timeouts == [7.5]
     assert scheduler.interval_s == 90.0
+
+
+def test_new_runtime_loads_previous_successful_snapshot_as_stale(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "contacts.sqlite3"
+
+    first_runtime = ApplicationRuntime.from_config(
+        mock_application_config(
+            database_path=database_path,
+            pota_enabled=True,
+        ),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        pota_scheduler=ManualScheduler(),
+    )
+
+    first_runtime.start()
+
+    first_state = first_runtime.latest_pota_spot_state
+    assert first_state is not None
+    assert first_state.availability is PotaSpotSourceAvailability.AVAILABLE
+    assert first_state.last_success_at is not None
+
+    first_runtime.stop()
+
+    second_runtime = ApplicationRuntime.from_config(
+        mock_application_config(
+            database_path=database_path,
+            pota_enabled=True,
+        ),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        pota_scheduler=ManualScheduler(),
+    )
+
+    cached_state = second_runtime.latest_pota_spot_state
+
+    assert cached_state is not None
+    assert cached_state.availability is PotaSpotSourceAvailability.UNAVAILABLE
+    assert cached_state.spots == first_state.spots
+    assert cached_state.last_success_at == first_state.last_success_at
+    assert cached_state.is_stale is False
+    assert cached_state.last_error == (
+        "Using cached POTA spots until a live refresh succeeds."
+    )
+
+    second_runtime.start()
+
+    refreshed_state = second_runtime.latest_pota_spot_state
+    assert refreshed_state is not None
+    assert refreshed_state.availability is PotaSpotSourceAvailability.AVAILABLE
+    assert refreshed_state.is_stale is False
+
+    second_runtime.stop()
