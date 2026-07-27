@@ -511,6 +511,7 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
             pota_lines = [
                 filter_state.display_line,
                 "[ / ] BAND    , / . MODE    / CLEAR",
+                "UP / DOWN SELECT SPOT",
                 panel.status_line,
                 panel.detail_line,
                 panel.refresh_line,
@@ -519,8 +520,9 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
                 pota_lines.append(panel.error_line)
 
             for row in panel.rows:
+                selection_marker = ">" if row.is_selected else " "
                 pota_lines.append(
-                    f"{row.activator}  {row.park_reference}  "
+                    f"{selection_marker} {row.activator}  {row.park_reference}  "
                     f"{row.frequency}  {row.mode}"
                 )
                 pota_lines.append(
@@ -586,6 +588,17 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
 
     for key in ("[", "]", ",", ".", "/"):
         root.bind(key, handle_pota_filter_key)
+
+    def select_previous_pota_spot(_event: tk.Event[tk.Misc]) -> None:
+        if context_navigation.state.selected is ContextId.POTA:
+            pota_dashboard.select_previous()
+
+    def select_next_pota_spot(_event: tk.Event[tk.Misc]) -> None:
+        if context_navigation.state.selected is ContextId.POTA:
+            pota_dashboard.select_next()
+
+    root.bind("<Up>", select_previous_pota_spot)
+    root.bind("<Down>", select_next_pota_spot)
 
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
         context_navigation.select_shortcut(event.char)
