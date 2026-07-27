@@ -38,6 +38,19 @@ pota_spots:
   refresh_interval_s: 60.0
   refresh_on_start: true
 
+physical_controls:
+  enabled: false
+  repeat_suppression_s: 0.25
+  mappings:
+    voice-button: voice
+    commit-button: commit
+    discard-button: discard
+    context-pota-button: select_pota
+    context-dx-button: select_dx
+    context-repeaters-button: select_repeaters
+    context-ai-button: select_ai
+    context-settings-button: select_settings
+
 storage:
   database_path: data/rolling-thunder.db
   contact_backups:
