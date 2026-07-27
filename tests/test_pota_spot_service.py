@@ -14,6 +14,7 @@ from rolling_thunder.pota_spot_source import (
     PotaSpotSourceConnectionError,
 )
 from rolling_thunder.pota_spots import AmateurBand, ParkReference, PotaSpot
+from rolling_thunder.storage import StorageError
 
 _ATTEMPT_1 = datetime(2026, 7, 26, 18, 0, tzinfo=UTC)
 _ATTEMPT_2 = datetime(2026, 7, 26, 18, 5, tzinfo=UTC)
@@ -155,3 +156,127 @@ def test_service_rejects_naive_clock() -> None:
 
     with pytest.raises(ValueError, match="aware datetime"):
         service.refresh()
+
+
+
+class FakeCacheSnapshot:
+    def __init__(
+        self,
+        spots: tuple[PotaSpot, ...],
+        last_success_at: datetime,
+    ) -> None:
+        self.spots = spots
+        self.last_success_at = last_success_at
+
+
+class FakeCache:
+    def __init__(self) -> None:
+        self.snapshot: FakeCacheSnapshot | None = None
+        self.saved: tuple[tuple[PotaSpot, ...], datetime] | None = None
+        self.load_error: StorageError | None = None
+        self.replace_error: StorageError | None = None
+
+    def load(self) -> FakeCacheSnapshot | None:
+        if self.load_error is not None:
+            raise self.load_error
+        return self.snapshot
+
+    def replace(
+        self,
+        spots: tuple[PotaSpot, ...],
+        last_success_at: datetime,
+    ) -> None:
+        if self.replace_error is not None:
+            raise self.replace_error
+        self.saved = (spots, last_success_at)
+
+
+def test_service_starts_with_cached_snapshot_as_stale() -> None:
+    cache = FakeCache()
+    cached_spot = _spot("KI5VNB", 14_250_000, RadioMode.USB)
+    cache.snapshot = FakeCacheSnapshot(
+        (cached_spot,),
+        _ATTEMPT_1,
+    )
+
+    service = PotaSpotService(
+        MockPotaSpotSource(
+            PotaSpotFetchResult(
+                availability=PotaSpotSourceAvailability.UNAVAILABLE,
+                fetched_at=_ATTEMPT_1,
+                last_error="offline",
+            )
+        ),
+        cache=cache,
+        now=lambda: _ATTEMPT_2,
+    )
+
+    state = service.get_state()
+
+    assert state.availability is PotaSpotSourceAvailability.UNAVAILABLE
+    assert state.spots == (cached_spot,)
+    assert state.last_success_at == _ATTEMPT_1
+    assert state.is_stale is True
+
+
+def test_service_ignores_cache_load_failure() -> None:
+    cache = FakeCache()
+    cache.load_error = StorageError("cache unavailable")
+
+    service = PotaSpotService(
+        MockPotaSpotSource(
+            PotaSpotFetchResult(
+                availability=PotaSpotSourceAvailability.UNAVAILABLE,
+                fetched_at=_ATTEMPT_1,
+                last_error="offline",
+            )
+        ),
+        cache=cache,
+        now=lambda: _ATTEMPT_2,
+    )
+
+    assert service.get_state().availability is PotaSpotSourceAvailability.UNKNOWN
+
+
+def test_successful_refresh_replaces_cache() -> None:
+    cache = FakeCache()
+    expected = (_spot("KI5VNB", 14_250_000, RadioMode.USB),)
+
+    service = PotaSpotService(
+        MockPotaSpotSource(
+            PotaSpotFetchResult(
+                availability=PotaSpotSourceAvailability.AVAILABLE,
+                spots=expected,
+                fetched_at=_ATTEMPT_1,
+            )
+        ),
+        cache=cache,
+        now=lambda: _ATTEMPT_2,
+    )
+
+    service.refresh()
+
+    assert cache.saved == (expected, _ATTEMPT_1)
+
+
+def test_cache_write_failure_does_not_fail_live_refresh() -> None:
+    cache = FakeCache()
+    cache.replace_error = StorageError("cache unavailable")
+    expected = (_spot("KI5VNB", 14_250_000, RadioMode.USB),)
+
+    service = PotaSpotService(
+        MockPotaSpotSource(
+            PotaSpotFetchResult(
+                availability=PotaSpotSourceAvailability.AVAILABLE,
+                spots=expected,
+                fetched_at=_ATTEMPT_1,
+            )
+        ),
+        cache=cache,
+        now=lambda: _ATTEMPT_2,
+    )
+
+    state = service.refresh()
+
+    assert state.availability is PotaSpotSourceAvailability.AVAILABLE
+    assert state.spots == expected

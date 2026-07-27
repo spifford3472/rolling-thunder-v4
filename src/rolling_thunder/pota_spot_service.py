@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Protocol
 
 from pydantic import Field, field_validator, model_validator
 
@@ -12,6 +13,30 @@ from rolling_thunder.pota_spot_source import (
     PotaSpotSourceError,
 )
 from rolling_thunder.pota_spots import AmateurBand, PotaSpot, filter_pota_spots
+from rolling_thunder.storage import StorageError
+
+
+class PotaSpotCacheSnapshot(Protocol):
+    """Cached snapshot shape consumed by the POTA service."""
+
+    spots: tuple[PotaSpot, ...]
+    last_success_at: datetime
+
+
+class PotaSpotCache(Protocol):
+    """Persistence boundary for the latest successful POTA snapshot."""
+
+    def load(self) -> PotaSpotCacheSnapshot | None:
+        """Load the latest snapshot, or return None."""
+        ...
+
+    def replace(
+        self,
+        spots: tuple[PotaSpot, ...],
+        last_success_at: datetime,
+    ) -> None:
+        """Replace the latest successful snapshot."""
+        ...
 
 
 class PotaSpotServiceState(DomainModel):
@@ -79,13 +104,13 @@ class PotaSpotService:
         self,
         source: PotaSpotSource,
         *,
+        cache: PotaSpotCache | None = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._source = source
+        self._cache = cache
         self._now = now or (lambda: datetime.now(UTC))
-        self._state = PotaSpotServiceState(
-            availability=PotaSpotSourceAvailability.UNKNOWN,
-        )
+        self._state = self._initial_state()
 
     def get_state(self) -> PotaSpotServiceState:
         """Return the latest immutable service state without performing I/O."""
@@ -120,6 +145,7 @@ class PotaSpotService:
             last_attempt_at=attempted_at,
             last_success_at=result.fetched_at,
         )
+        self._save_cache(result.spots, result.fetched_at)
         return self._state
 
     def filtered_spots(
@@ -132,6 +158,43 @@ class PotaSpotService:
         return tuple(
             filter_pota_spots(list(self._state.spots), band=band, mode=mode)
         )
+
+    def _initial_state(self) -> PotaSpotServiceState:
+        if self._cache is None:
+            return PotaSpotServiceState(
+                availability=PotaSpotSourceAvailability.UNKNOWN,
+            )
+
+        try:
+            snapshot = self._cache.load()
+        except StorageError:
+            snapshot = None
+
+        if snapshot is None:
+            return PotaSpotServiceState(
+                availability=PotaSpotSourceAvailability.UNKNOWN,
+            )
+
+        return PotaSpotServiceState(
+            availability=PotaSpotSourceAvailability.UNAVAILABLE,
+            spots=snapshot.spots,
+            last_attempt_at=self._aware_now(),
+            last_success_at=snapshot.last_success_at,
+            last_error="Using cached POTA spots until a live refresh succeeds.",
+        )
+
+    def _save_cache(
+        self,
+        spots: tuple[PotaSpot, ...],
+        last_success_at: datetime,
+    ) -> None:
+        if self._cache is None:
+            return
+
+        try:
+            self._cache.replace(spots, last_success_at)
+        except StorageError:
+            return
 
     def _failed_state(self, attempted_at: datetime, error: str) -> PotaSpotServiceState:
         return PotaSpotServiceState(

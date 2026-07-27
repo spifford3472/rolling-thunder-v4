@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 3
+CURRENT_SCHEMA_VERSION: Final = 4
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -78,6 +78,31 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         """
         CREATE INDEX contact_sync_retries_due_index
         ON contact_sync_retries (next_attempt_at, contact_id)
+        """,
+    ),
+    4: (
+        """
+        CREATE TABLE pota_spot_cache_metadata (
+            singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+            last_success_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE pota_spot_cache (
+            position INTEGER PRIMARY KEY CHECK (position >= 0),
+            activator TEXT NOT NULL,
+            park_reference TEXT NOT NULL,
+            park_name TEXT,
+            frequency_hz INTEGER NOT NULL
+                CHECK (frequency_hz > 0 AND frequency_hz <= 300000000000),
+            mode TEXT NOT NULL
+                CHECK (mode IN ('AM', 'CW', 'DATA', 'FM', 'LSB', 'USB')),
+            spotted_at TEXT NOT NULL,
+            comments TEXT CHECK (
+                comments IS NULL OR length(comments) <= 500
+            )
+        )
         """,
     ),
 }
