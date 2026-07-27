@@ -135,7 +135,7 @@ def run_dashboard(
     pota_filters = PotaDashboardFilterController(pota_dashboard)
     pota_tune_ui = PotaTuneUiController(
         pota_dashboard,
-        pota_tune_executor,
+        pota_tune_executor or runtime.pota_receive_tune_executor,
     )
 
     def capture_state() -> CallsignCaptureState:
