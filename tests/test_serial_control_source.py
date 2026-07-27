@@ -93,8 +93,10 @@ def test_open_is_idempotent_while_connected() -> None:
 def test_drain_returns_complete_valid_events_without_blocking() -> None:
     port = FakeSerialPort(
         (
-            b"RTCTRL/1 EVENT voice-button boot-1 1.250\n"
-            b"RTCTRL/1 EVENT commit-button boot-2 2.500\n",
+            (
+                b"RTCTRL/1 EVENT voice-button boot-1 1.250\n"
+                b"RTCTRL/1 EVENT commit-button boot-2 2.500\n"
+            ),
         )
     )
     source = make_source(port)
@@ -124,8 +126,10 @@ def test_drain_preserves_partial_line_until_completed() -> None:
 def test_malformed_line_is_rejected_and_later_valid_line_survives() -> None:
     port = FakeSerialPort(
         (
-            b"RTCTRL/1 ACTION commit boot-1 1.0\n"
-            b"RTCTRL/1 EVENT discard-button boot-2 2.0\n",
+            (
+                b"RTCTRL/1 ACTION commit boot-1 1.0\n"
+                b"RTCTRL/1 EVENT discard-button boot-2 2.0\n"
+            ),
         )
     )
     source = make_source(port)
@@ -142,9 +146,11 @@ def test_malformed_line_is_rejected_and_later_valid_line_survives() -> None:
 def test_drain_is_bounded_by_event_limit() -> None:
     port = FakeSerialPort(
         (
-            b"RTCTRL/1 EVENT one e1 1\n"
-            b"RTCTRL/1 EVENT two e2 2\n"
-            b"RTCTRL/1 EVENT three e3 3\n",
+            (
+                b"RTCTRL/1 EVENT one e1 1\n"
+                b"RTCTRL/1 EVENT two e2 2\n"
+                b"RTCTRL/1 EVENT three e3 3\n"
+            ),
         )
     )
     source = make_source(port, maximum_events_per_drain=2)
