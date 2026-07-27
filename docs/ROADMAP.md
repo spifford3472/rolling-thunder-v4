@@ -136,12 +136,25 @@ this client-side milestone.
 
 ## Milestone 8: POTA Assistance
 
+Status: complete and audited for the approved roadmap scope.
+
 - Retrieve or receive POTA spots
 - filter and rank spots
 - frequency and mode display
 - assisted tuning through the radio interface
 - safeguards against unintended tuning
 - local cache for temporary outages
+
+The implemented POTA path includes typed provider-independent spot models,
+deterministic mock and HTTP sources, lifecycle-managed polling, visible degraded
+and stale-data handling, local filtering and ranking, dashboard presentation,
+explicit operator-confirmed tune intent, receive-only runtime tuning, and a
+durable SQLite-backed cache that survives application restarts.
+
+Live validation against the configured POTA endpoint and FT-891 remains an
+operational smoke test rather than an automated-test requirement. The completed
+scope does not permit voice-originated tuning, unattended tuning, PTT, or
+transmission.
 
 ## Milestone 9: Physical Controls
 
@@ -190,7 +203,11 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Begin Milestone 8 with the smallest POTA-assistance slice: a typed,
-transport-independent spot model and deterministic local ranking/filtering
-service. The first slice must not perform live network I/O, tune the radio, or
-couple presentation code to a specific POTA data provider.
+Begin Milestone 9 with the smallest physical-controls slice: typed,
+transport-independent control actions, configuration-driven mappings, and a
+deterministic mock control source.
+
+The first slice must not depend on ESP32 hardware, initiate transmission, trigger
+PTT, or bypass the existing Commit, Discard, Voice, and direct-context safety
+boundaries. Physical controls must invoke the same application commands already
+used by the user interface rather than creating a parallel control path.
