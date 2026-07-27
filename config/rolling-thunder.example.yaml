@@ -40,6 +40,12 @@ pota_spots:
 
 physical_controls:
   enabled: false
+  transport: mock
+  device: null
+  baud_rate: 115200
+  maximum_line_bytes: 256
+  maximum_read_bytes: 4096
+  maximum_events_per_drain: 32
   repeat_suppression_s: 0.25
   mappings:
     voice-button: voice

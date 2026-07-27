@@ -1,5 +1,6 @@
 """Typed YAML configuration for Rolling Thunder."""
 
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Self
 
@@ -70,9 +71,7 @@ class HardwareConfig(ConfigurationModel):
             if str(path) in {"", "."}:
                 raise ValueError("must name a device path")
             if not path.is_absolute():
-                raise ValueError(
-                    "must be an absolute device path, such as /dev/ttyUSB0"
-                )
+                raise ValueError("must be an absolute device path, such as /dev/ttyUSB0")
 
         return path
 
@@ -92,9 +91,7 @@ class HardwareConfig(ConfigurationModel):
 
         if missing:
             missing_fields = ", ".join(missing)
-            raise ValueError(
-                f"{missing_fields} must be configured when hardware.mock is false"
-            )
+            raise ValueError(f"{missing_fields} must be configured when hardware.mock is false")
 
         return self
 
@@ -133,9 +130,7 @@ class SpeechConfig(ConfigurationModel):
     def validate_enabled_speech(self) -> Self:
         """Require a model path whenever live recognition is enabled."""
         if self.enabled and self.model_path is None:
-            raise ValueError(
-                "speech.model_path must be configured when speech.enabled is true"
-            )
+            raise ValueError("speech.model_path must be configured when speech.enabled is true")
         return self
 
 
@@ -160,8 +155,7 @@ class HomePlatformConfig(ConfigurationModel):
         """Require a base URL whenever Home Station Platform access is enabled."""
         if self.enabled and self.base_url is None:
             raise ValueError(
-                "home_platform.base_url must be configured when "
-                "home_platform.enabled is true"
+                "home_platform.base_url must be configured when home_platform.enabled is true"
             )
         return self
 
@@ -195,12 +189,42 @@ class PotaSpotsConfig(ConfigurationModel):
     refresh_on_start: bool = True
 
 
+class PhysicalControlTransport(StrEnum):
+    """Supported physical-control input transports."""
+
+    MOCK = "mock"
+    SERIAL = "serial"
+
+
 class PhysicalControlsConfig(ConfigurationModel):
-    """Transport-independent physical-control mappings and safeguards."""
+    """Physical-control transport, mappings, and input safeguards."""
 
     enabled: bool = False
+    transport: PhysicalControlTransport = PhysicalControlTransport.MOCK
+    device: Path | None = None
+    baud_rate: int = Field(default=115_200, ge=1, le=4_000_000)
+    maximum_line_bytes: int = Field(default=256, ge=32, le=4_096)
+    maximum_read_bytes: int = Field(default=4_096, ge=1, le=65_536)
+    maximum_events_per_drain: int = Field(default=32, ge=1, le=1_024)
     repeat_suppression_s: float = Field(default=0.25, ge=0, le=5)
     mappings: dict[str, ControlAction] = Field(default_factory=dict)
+
+    @field_validator("device", mode="before")
+    @classmethod
+    def validate_device(cls, value: object) -> object:
+        """Require a usable absolute serial-device path when one is supplied."""
+        if value is None:
+            return value
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+
+        path = Path(value) if isinstance(value, (str, Path)) else value
+        if isinstance(path, Path):
+            if str(path) in {"", "."}:
+                raise ValueError("must name a serial device")
+            if not path.is_absolute():
+                raise ValueError("must be an absolute device path, such as /dev/ttyACM0")
+        return path
 
     @field_validator("mappings")
     @classmethod
@@ -215,11 +239,23 @@ class PhysicalControlsConfig(ConfigurationModel):
             if not input_id:
                 raise ValueError("input identifiers must not be blank")
             if input_id in normalized:
-                raise ValueError(
-                    f"duplicate mapping for input identifier {input_id!r}"
-                )
+                raise ValueError(f"duplicate mapping for input identifier {input_id!r}")
             normalized[input_id] = action
         return normalized
+
+    @model_validator(mode="after")
+    def validate_transport_requirements(self) -> Self:
+        """Require a serial device only when the serial transport is enabled."""
+        if (
+            self.enabled
+            and self.transport is PhysicalControlTransport.SERIAL
+            and self.device is None
+        ):
+            raise ValueError(
+                "physical_controls.device must be configured when "
+                "physical_controls transport is serial"
+            )
+        return self
 
 
 class ContactBackupConfig(ConfigurationModel):
@@ -376,6 +412,4 @@ def load_config(path: Path) -> ApplicationConfig:
     resolved_speech = config.speech.model_copy(
         update={"model_path": resolve_speech_model_path(config, path)}
     )
-    return config.model_copy(
-        update={"storage": resolved_storage, "speech": resolved_speech}
-    )
+    return config.model_copy(update={"storage": resolved_storage, "speech": resolved_speech})
