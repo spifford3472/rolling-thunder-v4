@@ -19,6 +19,9 @@ from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
 from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
+from rolling_thunder.pota_tune_presentation import (
+    build_pota_tune_presentation,
+)
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
@@ -519,23 +522,15 @@ def run_dashboard(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
             if panel.error_line:
                 pota_lines.append(panel.error_line)
 
-            tune_intent = pota_dashboard.tune_intent
-            if tune_intent is not None:
-                intent_status = tune_intent.status.value.upper()
-                pota_lines.append(
-                    f"TUNE {intent_status}: {tune_intent.activator} "
-                    f"{tune_intent.park_reference} "
-                    f"{tune_intent.frequency.mhz:.3f} MHz "
-                    f"{tune_intent.mode.value}"
-                )
-                if tune_intent.status.value == "pending_confirmation":
-                    pota_lines.append(
-                        "PRESS ENTER TO CONFIRM — NO RADIO CHANGE"
-                    )
-                elif tune_intent.status.value == "confirmed":
-                    pota_lines.append(
-                        "CONFIRMED — RADIO CHANGE NOT YET IMPLEMENTED"
-                    )
+            tune_presentation = build_pota_tune_presentation(
+                pota_dashboard.tune_intent,
+            )
+            if tune_presentation.summary_line is not None:
+                pota_lines.append(tune_presentation.summary_line)
+            if tune_presentation.status_line is not None:
+                pota_lines.append(tune_presentation.status_line)
+            if tune_presentation.detail_line is not None:
+                pota_lines.append(tune_presentation.detail_line)
 
             for row in panel.rows:
                 selection_marker = ">" if row.is_selected else " "
