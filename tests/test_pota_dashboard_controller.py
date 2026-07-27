@@ -129,3 +129,34 @@ def test_unavailable_provider_state_remains_deterministic_with_filters() -> None
     assert state.status == "UNAVAILABLE"
     assert state.error == "request timed out"
     assert state.rows == ()
+
+
+def test_controller_supplies_clock_for_ranked_dashboard_order() -> None:
+    older = PotaSpot(
+        activator="K1OLD",
+        park=ParkReference(reference="US-1234"),
+        frequency=Frequency(hz=14_250_000),
+        mode=RadioMode.USB,
+        spotted_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
+    )
+    newer = PotaSpot(
+        activator="K1NEW",
+        park=ParkReference(reference="US-5678"),
+        frequency=Frequency(hz=7_255_000),
+        mode=RadioMode.LSB,
+        spotted_at=datetime(2026, 7, 26, 12, 25, tzinfo=UTC),
+    )
+    provider = MutableProvider(
+        PotaSpotServiceState(
+            availability=PotaSpotSourceAvailability.AVAILABLE,
+            spots=(older, newer),
+            last_attempt_at=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+            last_success_at=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+        )
+    )
+    controller = PotaDashboardController(
+        provider,
+        clock=lambda: datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+
+    assert [row.activator for row in controller.state.rows] == ["K1NEW", "K1OLD"]

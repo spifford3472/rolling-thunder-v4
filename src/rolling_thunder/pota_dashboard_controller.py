@@ -1,5 +1,7 @@
 """Stateful controller connecting runtime POTA snapshots to presentation state."""
 
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Protocol
 
 from rolling_thunder.domain import RadioMode
@@ -20,11 +22,22 @@ class PotaSpotStateProvider(Protocol):
         ...
 
 
+def _utc_now() -> datetime:
+    """Return the current timezone-aware UTC time."""
+    return datetime.now(UTC)
+
+
 class PotaDashboardController:
     """Retain explicit POTA filters and build fresh immutable dashboard state."""
 
-    def __init__(self, provider: PotaSpotStateProvider) -> None:
+    def __init__(
+        self,
+        provider: PotaSpotStateProvider,
+        *,
+        clock: Callable[[], datetime] = _utc_now,
+    ) -> None:
         self._provider = provider
+        self._clock = clock
         self._band: AmateurBand | None = None
         self._mode: RadioMode | None = None
 
@@ -45,6 +58,7 @@ class PotaDashboardController:
             self._provider.latest_pota_spot_state,
             band=self._band,
             mode=self._mode,
+            reference_time=self._clock(),
         )
 
     def select_band(self, band: AmateurBand | None) -> PotaDashboardState:
