@@ -14,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from rolling_thunder.physical_controls import ControlAction
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
 
 
@@ -194,6 +195,33 @@ class PotaSpotsConfig(ConfigurationModel):
     refresh_on_start: bool = True
 
 
+class PhysicalControlsConfig(ConfigurationModel):
+    """Transport-independent physical-control mappings and safeguards."""
+
+    enabled: bool = False
+    repeat_suppression_s: float = Field(default=0.25, ge=0, le=5)
+    mappings: dict[str, ControlAction] = Field(default_factory=dict)
+
+    @field_validator("mappings")
+    @classmethod
+    def validate_mappings(
+        cls,
+        value: dict[str, ControlAction],
+    ) -> dict[str, ControlAction]:
+        """Normalize opaque input identifiers and reject ambiguous mappings."""
+        normalized: dict[str, ControlAction] = {}
+        for raw_input_id, action in value.items():
+            input_id = raw_input_id.strip()
+            if not input_id:
+                raise ValueError("input identifiers must not be blank")
+            if input_id in normalized:
+                raise ValueError(
+                    f"duplicate mapping for input identifier {input_id!r}"
+                )
+            normalized[input_id] = action
+        return normalized
+
+
 class ContactBackupConfig(ConfigurationModel):
     """Verified local contact-backup settings."""
 
@@ -246,6 +274,7 @@ class ApplicationConfig(ConfigurationModel):
     home_platform: HomePlatformConfig = HomePlatformConfig()
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
     pota_spots: PotaSpotsConfig = PotaSpotsConfig()
+    physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     storage: StorageConfig = StorageConfig()
 
 
