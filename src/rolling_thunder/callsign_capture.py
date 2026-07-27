@@ -55,6 +55,11 @@ class MockTranscriptController:
         with self._lock:
             return self._state
 
+    def start_capture(self) -> bool:
+        """Advance one deterministic fixture through the shared capture command."""
+        self.capture_next()
+        return True
+
     def capture_next(self) -> CallsignCaptureState:
         """Parse the next mock transcript and expose a committable result when valid."""
         with self._lock:
