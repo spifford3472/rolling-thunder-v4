@@ -14,6 +14,11 @@ from rolling_thunder.context_navigation import (
     ContextNavigationController,
 )
 from rolling_thunder.control_dispatcher import ControlDispatcher
+from rolling_thunder.control_source_factory import build_control_source
+from rolling_thunder.control_source_lifecycle import (
+    close_control_source,
+    open_control_source,
+)
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
@@ -22,7 +27,7 @@ from rolling_thunder.physical_controls import (
     ControlAction,
     ControlActionMapper,
     ControlEventGate,
-    MockControlSource,
+    ControlSource,
 )
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
@@ -173,10 +178,16 @@ def run_dashboard(
         radio_state=lambda: runtime.latest_radio_state,
     )
 
+    control_source: ControlSource | None = None
     control_dispatcher: ControlDispatcher | None = None
     if config.physical_controls.enabled:
+        control_source = build_control_source(config.physical_controls)
+        control_start_error = open_control_source(control_source)
+        if control_start_error is not None:
+            print(f"Rolling Thunder physical controls unavailable: {control_start_error}")
+
         control_dispatcher = ControlDispatcher(
-            MockControlSource(),
+            control_source,
             ControlActionMapper(config.physical_controls.mappings),
             ControlEventGate(config.physical_controls.repeat_suppression_s),
             operator_commands,
@@ -538,16 +549,12 @@ def run_dashboard(
                     f"{selection_marker} {row.activator}  {row.park_reference}  "
                     f"{row.frequency}  {row.mode}"
                 )
-                pota_lines.append(
-                    f"  {row.park_name} — {row.spotted_at}"
-                )
+                pota_lines.append(f"  {row.park_name} — {row.spotted_at}")
                 if row.comments:
                     pota_lines.append(f"  {row.comments}")
 
             if panel.hidden_row_count:
-                pota_lines.append(
-                    f"+ {panel.hidden_row_count} MORE SPOTS"
-                )
+                pota_lines.append(f"+ {panel.hidden_row_count} MORE SPOTS")
 
             context_body_text.set("\n".join(pota_lines))
         elif selected_context.selected is ContextId.SETTINGS:
@@ -561,9 +568,7 @@ def run_dashboard(
             )
 
             overall_status = health.overall.value
-            overall_health_text.set(
-                f"Overall Station Health: {overall_status.title()}"
-            )
+            overall_health_text.set(f"Overall Station Health: {overall_status.title()}")
             overall_health_label.configure(
                 fg=_health_color(overall_status),
             )
@@ -584,6 +589,9 @@ def run_dashboard(
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:
+        control_close_error = close_control_source(control_source)
+        if control_close_error is not None:
+            print(f"Rolling Thunder physical controls shutdown error: {control_close_error}")
         runtime.stop()
         root.destroy()
 
