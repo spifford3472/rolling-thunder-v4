@@ -9,7 +9,6 @@ from rolling_thunder.physical_controls import (
     ControlAction,
     ControlActionMapper,
     ControlEventGate,
-    ControlInputEvent,
     ControlSource,
 )
 
