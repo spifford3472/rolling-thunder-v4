@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import Lock
+from time import monotonic
 from typing import Protocol
 
 
@@ -59,9 +60,7 @@ class ControlActionMapper:
         for raw_input_id, action in mappings.items():
             input_id = raw_input_id.strip()
             if not input_id:
-                raise ControlMappingError(
-                    "Control mapping input identifiers must not be blank."
-                )
+                raise ControlMappingError("Control mapping input identifiers must not be blank.")
             if input_id in normalized:
                 raise ControlMappingError(
                     f"Duplicate control mapping for input identifier {input_id!r}."
@@ -75,12 +74,18 @@ class ControlActionMapper:
 
 
 class ControlEventGate:
-    """Reject duplicate, stale, and rapidly repeated physical-control events."""
+    """Reject duplicate and rapidly repeated physical-control events."""
 
-    def __init__(self, repeat_suppression_s: float) -> None:
+    def __init__(
+        self,
+        repeat_suppression_s: float,
+        *,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
         if repeat_suppression_s < 0:
             raise ValueError("Control repeat_suppression_s must not be negative.")
         self._repeat_suppression_s = repeat_suppression_s
+        self._clock = clock
         self._seen_event_ids: set[str] = set()
         self._last_accepted_at_by_input: dict[str, float] = {}
         self._lock = Lock()
@@ -89,6 +94,7 @@ class ControlEventGate:
         """Return true only when an event is safe to dispatch once."""
         input_id = event.input_id.strip()
         event_id = event.event_id.strip()
+        received_at_s = self._clock()
 
         with self._lock:
             if event_id in self._seen_event_ids:
@@ -97,11 +103,11 @@ class ControlEventGate:
 
             last_accepted_at = self._last_accepted_at_by_input.get(input_id)
             if last_accepted_at is not None:
-                elapsed_s = event.occurred_at_s - last_accepted_at
+                elapsed_s = received_at_s - last_accepted_at
                 if elapsed_s < 0 or elapsed_s < self._repeat_suppression_s:
                     return False
 
-            self._last_accepted_at_by_input[input_id] = event.occurred_at_s
+            self._last_accepted_at_by_input[input_id] = received_at_s
             return True
 
 
