@@ -55,10 +55,7 @@ def test_mapper_resolves_configured_input_to_typed_action() -> None:
     )
 
     assert mapper.resolve(event("voice-button", "event-1")) is ControlAction.VOICE
-    assert (
-        mapper.resolve(event("context-pota", "event-2"))
-        is ControlAction.SELECT_POTA
-    )
+    assert mapper.resolve(event("context-pota", "event-2")) is ControlAction.SELECT_POTA
 
 
 def test_mapper_normalizes_event_input_identifier() -> None:
@@ -99,11 +96,15 @@ def test_event_gate_rejects_duplicate_event_id() -> None:
 
 def test_event_gate_rejects_rapid_repeat_of_same_input() -> None:
     """Button bounce and rapid repeats should fail safely."""
-    gate = ControlEventGate(repeat_suppression_s=0.25)
+    times = iter((1.0, 1.1, 1.25))
+    gate = ControlEventGate(
+        repeat_suppression_s=0.25,
+        clock=times.__next__,
+    )
 
-    assert gate.accept(event("commit-button", "event-1", 1.0)) is True
-    assert gate.accept(event("commit-button", "event-2", 1.1)) is False
-    assert gate.accept(event("commit-button", "event-3", 1.25)) is True
+    assert gate.accept(event("commit-button", "event-1", 50.0)) is True
+    assert gate.accept(event("commit-button", "event-2", 50.1)) is False
+    assert gate.accept(event("commit-button", "event-3", 50.25)) is True
 
 
 def test_event_gate_allows_different_inputs_without_cross_suppression() -> None:
@@ -114,12 +115,16 @@ def test_event_gate_allows_different_inputs_without_cross_suppression() -> None:
     assert gate.accept(event("discard-button", "event-2", 1.1)) is True
 
 
-def test_event_gate_rejects_out_of_order_event_for_same_input() -> None:
-    """Stale transport events must not be dispatched after a newer event."""
-    gate = ControlEventGate(repeat_suppression_s=0.0)
+def test_event_gate_allows_source_timestamp_reset_after_reboot() -> None:
+    """A controller reboot must not disable its input until the old uptime passes."""
+    times = iter((100.0, 101.0))
+    gate = ControlEventGate(
+        repeat_suppression_s=0.25,
+        clock=times.__next__,
+    )
 
-    assert gate.accept(event("voice-button", "event-1", 2.0)) is True
-    assert gate.accept(event("voice-button", "event-2", 1.0)) is False
+    assert gate.accept(event("voice-button", "boot-a-1", 52.0)) is True
+    assert gate.accept(event("voice-button", "boot-b-1", 0.1)) is True
 
 
 def test_event_gate_rejects_negative_suppression_window() -> None:
