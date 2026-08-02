@@ -33,7 +33,19 @@ class ContactCommitCommands(Protocol):
 
 
 class ActivePanelCommands(Protocol):
-    """Context-aware selection capabilities for the active dashboard panel."""
+    """Context-aware capabilities for the active dashboard panel."""
+
+    def primary(self) -> bool:
+        """Run the active panel's first context-sensitive command."""
+
+    def secondary(self) -> bool:
+        """Run the active panel's second context-sensitive command."""
+
+    def tertiary(self) -> bool:
+        """Run the active panel's third context-sensitive command."""
+
+    def tertiary_long(self) -> bool:
+        """Run the active panel's long third command."""
 
     def move_previous(self) -> bool:
         """Move selection toward the previous active-panel item."""
@@ -100,6 +112,21 @@ class OperatorCommandController:
         if action is ControlAction.HOME_CONTEXT:
             self._context_navigation.select_home()
             return True
+
+        if action is ControlAction.PANEL_PRIMARY:
+            return self._active_panel is not None and self._active_panel.primary()
+
+        if action is ControlAction.PANEL_SECONDARY:
+            return self._active_panel is not None and self._active_panel.secondary()
+
+        if action is ControlAction.PANEL_TERTIARY:
+            return self._active_panel is not None and self._active_panel.tertiary()
+
+        if action is ControlAction.PANEL_TERTIARY_LONG:
+            return (
+                self._active_panel is not None
+                and self._active_panel.tertiary_long()
+            )
 
         if action is ControlAction.MOVE_PREVIOUS:
             return self._active_panel is not None and self._active_panel.move_previous()
