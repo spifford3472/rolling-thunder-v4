@@ -1,4 +1,4 @@
-"""Tests for bounded read-only POTA panel presentation."""
+"""Tests for bounded scrolling POTA panel presentation."""
 
 import pytest
 
@@ -6,20 +6,26 @@ from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
 from rolling_thunder.pota_dashboard_state import PotaDashboardState, PotaSpotRow
 
 
-def row(index: int) -> PotaSpotRow:
+def row(index: int, *, selected: bool = False) -> PotaSpotRow:
     return PotaSpotRow(
         activator=f"W8{index}",
         park_reference=f"US-{index:04d}",
         park_name=f"Park {index}",
+        location_code="US-OH",
         frequency="14.250 MHz",
-        mode="USB",
+        mode="SSB",
         spotted_at="2026-07-26 12:30 UTC",
         comments="",
-        is_selected=False,
+        is_selected=selected,
     )
 
 
-def state(*, rows: tuple[PotaSpotRow, ...] = (), stale: bool = False) -> PotaDashboardState:
+def state(
+    *,
+    rows: tuple[PotaSpotRow, ...] = (),
+    stale: bool = False,
+    selected_index: int | None = None,
+) -> PotaDashboardState:
     return PotaDashboardState(
         status="STALE" if stale else "READY",
         detail="SHOWING SPOTS",
@@ -30,6 +36,7 @@ def state(*, rows: tuple[PotaSpotRow, ...] = (), stale: bool = False) -> PotaDas
         total_spot_count=len(rows),
         visible_spot_count=len(rows),
         rows=rows,
+        selected_index=selected_index,
     )
 
 
@@ -49,13 +56,42 @@ def test_panel_marks_stale_data_and_surfaces_error() -> None:
     assert panel.error_line == "ERROR: request timed out"
 
 
-def test_panel_bounds_rows_and_reports_hidden_count() -> None:
+def test_panel_defaults_to_first_three_cards() -> None:
     rows = tuple(row(index) for index in range(1, 9))
 
-    panel = build_pota_dashboard_panel(state(rows=rows), max_rows=6)
+    panel = build_pota_dashboard_panel(state(rows=rows))
 
-    assert panel.rows == rows[:6]
-    assert panel.hidden_row_count == 2
+    assert panel.rows == rows[:3]
+    assert panel.hidden_above_count == 0
+    assert panel.hidden_below_count == 5
+    assert panel.hidden_row_count == 5
+
+
+def test_panel_scrolls_selected_row_into_view() -> None:
+    rows = tuple(row(index, selected=index == 5) for index in range(1, 9))
+
+    panel = build_pota_dashboard_panel(
+        state(rows=rows, selected_index=4),
+        max_rows=3,
+    )
+
+    assert panel.rows == rows[2:5]
+    assert panel.rows[-1].is_selected is True
+    assert panel.hidden_above_count == 2
+    assert panel.hidden_below_count == 3
+
+
+def test_panel_stops_viewport_at_final_cards() -> None:
+    rows = tuple(row(index, selected=index == 8) for index in range(1, 9))
+
+    panel = build_pota_dashboard_panel(
+        state(rows=rows, selected_index=7),
+        max_rows=3,
+    )
+
+    assert panel.rows == rows[-3:]
+    assert panel.hidden_above_count == 5
+    assert panel.hidden_below_count == 0
 
 
 def test_panel_preserves_empty_and_disabled_snapshots() -> None:
@@ -69,6 +105,7 @@ def test_panel_preserves_empty_and_disabled_snapshots() -> None:
         total_spot_count=0,
         visible_spot_count=0,
         rows=(),
+        selected_index=None,
     )
 
     panel = build_pota_dashboard_panel(disabled)
