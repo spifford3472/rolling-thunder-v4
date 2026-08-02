@@ -45,8 +45,12 @@ class PotaSpotCacheRepository:
                 "activator": str(spot.activator),
                 "park_reference": spot.park.reference,
                 "park_name": spot.park.name,
+                "location_code": spot.park.location_code,
+                "latitude": spot.park.latitude,
+                "longitude": spot.park.longitude,
                 "frequency_hz": spot.frequency.hz,
                 "mode": spot.mode.value,
+                "spot_mode": spot.spot_mode,
                 "spotted_at": self._timestamp_text(spot.spotted_at),
                 "comments": spot.comments,
             }
@@ -67,8 +71,12 @@ class PotaSpotCacheRepository:
                             activator,
                             park_reference,
                             park_name,
+                            location_code,
+                            latitude,
+                            longitude,
                             frequency_hz,
                             mode,
+                            spot_mode,
                             spotted_at,
                             comments
                         )
@@ -77,8 +85,12 @@ class PotaSpotCacheRepository:
                             :activator,
                             :park_reference,
                             :park_name,
+                            :location_code,
+                            :latitude,
+                            :longitude,
                             :frequency_hz,
                             :mode,
+                            :spot_mode,
                             :spotted_at,
                             :comments
                         )
@@ -125,8 +137,12 @@ class PotaSpotCacheRepository:
                         activator,
                         park_reference,
                         park_name,
+                        location_code,
+                        latitude,
+                        longitude,
                         frequency_hz,
                         mode,
+                        spot_mode,
                         spotted_at,
                         comments
                     FROM pota_spot_cache
@@ -149,9 +165,13 @@ class PotaSpotCacheRepository:
                     park=ParkReference(
                         reference=row["park_reference"],
                         name=row["park_name"],
+                        location_code=row["location_code"],
+                        latitude=row["latitude"],
+                        longitude=row["longitude"],
                     ),
                     frequency=Frequency(hz=row["frequency_hz"]),
                     mode=RadioMode(row["mode"]),
+                    spot_mode=row["spot_mode"],
                     spotted_at=self._parse_timestamp(row["spotted_at"]),
                     comments=row["comments"],
                 )
