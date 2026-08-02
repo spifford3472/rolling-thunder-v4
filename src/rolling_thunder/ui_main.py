@@ -62,6 +62,7 @@ _HEALTH_DARK_TEXT = "#080808"
 
 _POTA_HEADER_FONT_SIZE = 52
 _POTA_BODY_FONT_SIZE = 32
+_POTA_CARD_OUTER_PAD_PX = 6
 _POTA_CARD_NORMAL_BORDER_PX = 2
 _POTA_CARD_SELECTED_BORDER_PX = 6
 _POTA_VISIBLE_CARD_COUNT = 3
@@ -422,9 +423,9 @@ def run_dashboard(
         card_frame = tk.Frame(
             pota_cards_container,
             bg=_PANEL_BACKGROUND,
-            highlightthickness=_POTA_CARD_NORMAL_BORDER_PX,
-            highlightbackground=_BORDER,
-            highlightcolor=_BORDER,
+            highlightthickness=_POTA_CARD_SELECTED_BORDER_PX,
+            highlightbackground=_SECONDARY_BACKGROUND,
+            highlightcolor=_SECONDARY_BACKGROUND,
         )
         card_frame.grid(
             row=card_index,
@@ -757,17 +758,22 @@ def run_dashboard(
                     selected_background = (
                         _CONTEXT_SELECTED if row.is_selected else _PANEL_BACKGROUND
                     )
-                    border_color = _BRIGHT if row.is_selected else _BORDER
-                    border_width = (
+                    visible_border_width = (
                         _POTA_CARD_SELECTED_BORDER_PX
                         if row.is_selected
                         else _POTA_CARD_NORMAL_BORDER_PX
                     )
+                    invisible_border_width = (
+                        _POTA_CARD_OUTER_PAD_PX - visible_border_width
+                    )
+                    border_color = _BRIGHT if row.is_selected else _BORDER
                     card_frame.configure(
                         bg=selected_background,
                         highlightbackground=border_color,
                         highlightcolor=border_color,
-                        highlightthickness=border_width,
+                        highlightthickness=visible_border_width,
+                        padx=invisible_border_width,
+                        pady=invisible_border_width,
                     )
                     for card_label in pota_card_labels[card_index]:
                         card_label.configure(bg=selected_background)
