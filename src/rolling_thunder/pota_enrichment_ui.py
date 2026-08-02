@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import tkinter as tk
 from base64 import b64encode
 from dataclasses import dataclass
-import tkinter as tk
 
 from rolling_thunder.pota_detail_overlay import PotaDetailOverlayState
 from rolling_thunder.pota_enrichment import ParkDetailStatus
