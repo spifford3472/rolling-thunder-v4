@@ -226,16 +226,50 @@ expanding mapping or intelligence. Execute it in this order.
 
 ### Phase B: Real Yaesu FT-891 Integration
 
-- identify the stable CAT device path and required serial settings
-- begin with read-only connection, frequency, mode, polling, disconnect, and
-  recovery validation
-- then validate explicit receive-only frequency, mode, band, and confirmed POTA
-  tune actions
-- preserve the typed `Radio` and `CatTransport` boundaries and mock radio
-- keep software transmit state false and add no PTT, MOX, keying, or unattended
-  transmit authority
-- document CAT configuration, cable/device setup, recovery, and safe operator
-  test procedures
+Status: read-only hardware integration is complete and approved. The ordered
+band-first receive-tuning software slice is implemented and awaiting controlled
+live hardware acceptance.
+
+Completed and verified:
+
+- stable Enhanced CAT device identity and permissions
+- 38,400-baud, 8-N-2 serial configuration
+- read-only connection, frequency, mode, polling, disconnect, and recovery
+- typed `Radio` and `CatTransport` boundaries
+- deterministic mock-radio and fake-transport coverage
+- dedicated FT-891 `BSxx;` band-selection encoding
+- shared frequency-to-amateur-band resolution
+- separate `select_band()`, `set_frequency()`, and `set_mode()` operations
+- cross-band frequency requests fail before an `FA` command
+- read-back verification for band, frequency, and mode
+- one ordered `ReceiveTuningService`
+- confirmed POTA tuning routed through the ordered service
+- unsupported 60-meter CAT band selection fails closed
+- no PTT, MOX, keying, tuner, power, or unattended transmit authority
+
+Remaining Phase B acceptance:
+
+- validate same-band frequency and mode changes on the installed FT-891
+- validate controlled cross-band `BS` selection before target frequency
+- verify band, frequency, and mode read-back against the physical radio
+- validate confirmed POTA tuning through the same ordered path
+- confirm the Standard Com Port remains unopened
+- implement issue #16, the ATAS-120 retune warning
+- document final live results and recovery behavior
+
+The required order is:
+
+```text
+band selection
+band verification
+frequency setting
+frequency verification
+mode setting when needed
+mode verification
+```
+
+Phase C begins only after the remaining Phase B hardware validation and
+ATAS-120 warning work are approved and merged.
 
 ### Phase C: Mapping and Operating Intelligence
 
@@ -277,14 +311,21 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Begin Milestone 10 Phase A with the smallest real-GPS integration slice. Audit
-GitHub issue #10 and the existing `GPSReceiver`, `SerialGPSReceiver`, GPS polling,
-configuration, runtime, dashboard, Station State, and tests before proposing
-changes.
+Complete GitHub issue #15, `Implement FT-891 band and frequency control`.
 
-The first pull request should prove safe receiver discovery/configuration and
-read-only live position state on `anvilmobile`. It must preserve mock mode, avoid
-UI-thread serial I/O, include deterministic tests, update documentation, and
-remain independently reviewable. Do not combine the first GPS pull request with
-FT-891 changes. After the GPS path is approved and merged, begin a separate
-real-FT-891 branch and pull request.
+The current feature must:
+
+- preserve independent band, frequency, and mode operations
+- enforce band selection before every cross-band frequency change
+- validate same-band tuning first on `anvilmobile`
+- validate controlled cross-band selection and read-back
+- validate confirmed POTA receive tuning
+- keep software transmit state false
+- leave the Standard Com Port unopened
+- record the live hardware results
+
+After issue #15 is approved and merged, implement issue #16,
+`Add ATAS-120 retune warning`.
+
+After issues #15 and #16 are complete, begin Milestone 10 Phase C with the
+smallest live-map slice based on the proven GPS and radio state.
