@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.census_state_outline import CensusStateOutlineProvider
@@ -39,6 +40,23 @@ from rolling_thunder.serial_gps import SerialGPSReceiver
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
 GPSFactory = Callable[..., GPSReceiver]
+RadioFactory = Callable[..., Radio]
+
+
+def _build_serial_radio(
+    device: Path,
+    *,
+    baud_rate: int,
+    timeout_s: float,
+) -> Radio:
+    """Build the physical FT-891 adapter with configured CAT settings."""
+    return Ft891Radio(
+        PySerialCatTransport(
+            device,
+            baud_rate=baud_rate,
+            timeout_s=timeout_s,
+        )
+    )
 
 
 @dataclass
@@ -72,6 +90,7 @@ class ApplicationRuntime:
         pota_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
         gps_interval_s: float = 1.0,
+        radio_factory: RadioFactory = _build_serial_radio,
         gps_factory: GPSFactory = SerialGPSReceiver,
         home_platform_transport: HttpTransport | None = None,
         network_keepalive_transport: NetworkKeepaliveTransport | None = None,
@@ -90,7 +109,11 @@ class ApplicationRuntime:
             radio_device = config.hardware.radio_device
             if radio_device is None:
                 raise ValueError("A radio device is required when radio mode is real.")
-            radio = Ft891Radio(PySerialCatTransport(radio_device))
+            radio = radio_factory(
+                radio_device,
+                baud_rate=config.hardware.radio_baud_rate,
+                timeout_s=config.hardware.radio_timeout_s,
+            )
 
         gps: GPSReceiver
         if config.hardware.effective_gps_mode is HardwareAdapterMode.MOCK:
@@ -243,12 +266,11 @@ class ApplicationRuntime:
         return self.pota_spot_polling.latest_state
 
     def start(self) -> RadioState:
-        """Connect configured hardware and begin background polling."""
+        """Start hardware polling and the remaining application services."""
         if self._started:
             raise RuntimeError("Application runtime is already started.")
 
-        state = self.radio.connect()
-        self.polling.start()
+        state = self.polling.start()
         if self.gps_polling is not None:
             self.gps_polling.start()
         if self.home_platform_health is not None:
