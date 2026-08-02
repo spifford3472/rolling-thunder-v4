@@ -69,6 +69,7 @@ def test_lookup_logs_in_once_and_reuses_session_key() -> None:
                     <call>KI5VNB</call>
                     <fname>Geoff</fname>
                     <name>KLINE</name>
+                    <image>https://cdn-xml.qrz.com/ki5vnb.jpg</image>
                   </Callsign>
                   <Session><Key>SESSION-1</Key></Session>
                 </QRZDatabase>
@@ -93,7 +94,11 @@ def test_lookup_logs_in_once_and_reuses_session_key() -> None:
         transport=transport,
     )
 
-    assert provider.lookup_name("KI5VNB/P") == "Geoff KLINE"
+    profile = provider.lookup_profile("KI5VNB/P")
+    assert profile is not None
+    assert profile.callsign == "KI5VNB"
+    assert profile.name == "Geoff KLINE"
+    assert profile.image_url == "https://cdn-xml.qrz.com/ki5vnb.jpg"
     assert provider.lookup_name("W8O") == "Special Event"
 
     assert len(transport.requests) == 3
