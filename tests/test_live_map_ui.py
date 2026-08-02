@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
 from rolling_thunder.live_map import (
     GeoPoint,
     LiveMapGpsStatus,
@@ -14,6 +16,7 @@ from rolling_thunder.live_map_service import (
 from rolling_thunder.live_map_ui import (
     live_map_status_color,
     live_map_status_lines,
+    rotate_marker_points,
 )
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
@@ -64,25 +67,60 @@ def test_status_lines_show_disabled_without_snapshot() -> None:
 
 
 def test_ready_status_uses_success_color() -> None:
-    assert live_map_status_color(
-        LiveMapGpsStatus.READY,
-        MapDataStatus.READY,
-    ) == "#42ff72"
+    assert (
+        live_map_status_color(
+            LiveMapGpsStatus.READY,
+            MapDataStatus.READY,
+        )
+        == "#42ff72"
+    )
 
 
 def test_stale_or_cache_only_status_uses_warning_color() -> None:
-    assert live_map_status_color(
-        LiveMapGpsStatus.STALE,
-        MapDataStatus.READY,
-    ) == "#ffd24a"
-    assert live_map_status_color(
-        LiveMapGpsStatus.READY,
-        MapDataStatus.CACHE_ONLY,
-    ) == "#ffd24a"
+    assert (
+        live_map_status_color(
+            LiveMapGpsStatus.STALE,
+            MapDataStatus.READY,
+        )
+        == "#ffd24a"
+    )
+    assert (
+        live_map_status_color(
+            LiveMapGpsStatus.READY,
+            MapDataStatus.CACHE_ONLY,
+        )
+        == "#ffd24a"
+    )
 
 
 def test_unavailable_status_uses_failure_color() -> None:
-    assert live_map_status_color(
-        LiveMapGpsStatus.READY,
-        MapDataStatus.UNAVAILABLE,
-    ) == "#ff7070"
+    assert (
+        live_map_status_color(
+            LiveMapGpsStatus.READY,
+            MapDataStatus.UNAVAILABLE,
+        )
+        == "#ff7070"
+    )
+
+
+@pytest.mark.parametrize(
+    ("heading", "expected"),
+    [
+        (0.0, (100.0, 90.0)),
+        (90.0, (110.0, 100.0)),
+        (180.0, (100.0, 110.0)),
+        (270.0, (90.0, 100.0)),
+    ],
+)
+def test_marker_rotation_follows_compass_heading(
+    heading: float,
+    expected: tuple[float, float],
+) -> None:
+    rotated = rotate_marker_points(
+        ((0.0, -10.0),),
+        center_x=100.0,
+        center_y=100.0,
+        heading_degrees=heading,
+    )
+
+    assert rotated == pytest.approx(expected)

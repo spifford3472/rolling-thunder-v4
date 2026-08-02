@@ -12,7 +12,7 @@ no radio-control or transmit authority.
 map:
   enabled: true
   tile_url_template: https://tile.openstreetmap.org/{z}/{x}/{y}.png
-  zoom: 13
+  zoom: 17
   request_timeout_s: 4.0
   gps_stale_after_s: 10.0
   cache_directory: data/map-tiles
@@ -43,6 +43,13 @@ renders immutable state and never contacts the provider or cache directly.
 A fresh fix displays GPS readiness, map readiness, Maidenhead grid, and current
 coordinates. An old connected fix is marked stale and is not described as
 current.
+
+The installed serial adapter combines GGA position data with RMC
+course-over-ground and speed. The prominent top-down vehicle marker rotates to
+the latest reliable course while moving at least 0.9 metres per second
+(approximately 2 mph). Below that threshold it retains the last reliable
+heading to avoid stoplight jitter. Before the first reliable movement reading,
+the marker points north.
 
 Loss after a prior valid fix retains the map and marker but displays
 `LAST KNOWN POSITION`.
@@ -101,17 +108,19 @@ POTA operation, physical controls, or radio state polling.
 3. Confirm the right side displays local map tiles rather than the placeholder.
 4. Confirm the vehicle marker is centered and the displayed grid and coordinates
    agree with the dashboard GPS state.
-5. Leave the dashboard running long enough to confirm ordinary GPS updates do not
+5. Drive above approximately 2 mph and confirm the vehicle marker follows the
+   course of travel, then retains its last reliable heading when stopped.
+7. Leave the dashboard running long enough to confirm ordinary GPS updates do not
    cause visible flicker or UI stalls.
 6. Open a POTA detail overlay and confirm it appears above the persistent map.
-7. Confirm the global ticker still spans both columns.
-8. Confirm a retained ATAS-120 warning still overrides routine ticker text.
-9. Remove public-internet access after tiles have been cached and confirm cached
+8. Confirm the global ticker still spans both columns.
+9. Confirm a retained ATAS-120 warning still overrides routine ticker text.
+10. Remove public-internet access after tiles have been cached and confirm cached
    map data remains visible with an offline/cache status.
-10. Restore connectivity and confirm normal map state recovers.
-11. Stop or disconnect GPS and confirm the marker is explicitly labeled
+11. Restore connectivity and confirm normal map state recovers.
+12. Stop or disconnect GPS and confirm the marker is explicitly labeled
     last-known rather than current.
-12. Confirm logging, POTA selection, controls, and radio polling remain usable
+13. Confirm logging, POTA selection, controls, and radio polling remain usable
     throughout map and network degradation.
 
 Record the visible results in the draft pull request before approval.

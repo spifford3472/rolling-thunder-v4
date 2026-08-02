@@ -19,6 +19,8 @@ def gps_state(
     latitude: float | None = 39.53,
     longitude: float | None = -84.08,
     fix_time: datetime = NOW,
+    speed_m_s: float | None = None,
+    heading_degrees: float | None = None,
     error: str | None = None,
 ) -> GPSState:
     position = None
@@ -27,6 +29,8 @@ def gps_state(
             fix_state=fix,
             latitude=latitude,
             longitude=longitude,
+            speed_m_s=speed_m_s,
+            heading_degrees=heading_degrees,
             updated_at=fix_time,
         )
     return GPSState(
@@ -155,13 +159,41 @@ def test_controller_reacquires_after_last_known_state() -> None:
         )
     )
 
-    state = controller.update(
-        gps_state(latitude=39.60, longitude=-84.10, fix_time=NOW)
-    )
+    state = controller.update(gps_state(latitude=39.60, longitude=-84.10, fix_time=NOW))
 
     assert state.status is LiveMapGpsStatus.READY
     assert state.position == GeoPoint(39.60, -84.10)
     assert state.is_current is True
+
+
+def test_controller_uses_heading_while_vehicle_is_moving() -> None:
+    controller = LiveMapController(clock=lambda: NOW)
+
+    state = controller.update(gps_state(speed_m_s=5.0, heading_degrees=123.0))
+
+    assert state.heading_degrees == pytest.approx(123.0)
+
+
+def test_controller_retains_last_reliable_heading_while_stopped() -> None:
+    controller = LiveMapController(clock=lambda: NOW)
+    controller.update(gps_state(speed_m_s=4.0, heading_degrees=270.0))
+
+    state = controller.update(gps_state(speed_m_s=0.2, heading_degrees=45.0))
+
+    assert state.heading_degrees == pytest.approx(270.0)
+
+
+def test_controller_has_no_heading_before_reliable_movement() -> None:
+    controller = LiveMapController(clock=lambda: NOW)
+
+    state = controller.update(gps_state(speed_m_s=0.1, heading_degrees=180.0))
+
+    assert state.heading_degrees is None
+
+
+def test_controller_rejects_negative_heading_speed_threshold() -> None:
+    with pytest.raises(ValueError, match="heading speed"):
+        LiveMapController(minimum_heading_speed_m_s=-0.1)
 
 
 def test_controller_rejects_naive_clock() -> None:

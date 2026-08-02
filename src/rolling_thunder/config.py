@@ -108,10 +108,7 @@ class HardwareConfig(ConfigurationModel):
         """Require only the devices selected for physical hardware operation."""
         missing: list[str] = []
 
-        if (
-            self.effective_radio_mode is HardwareAdapterMode.REAL
-            and self.radio_device is None
-        ):
+        if self.effective_radio_mode is HardwareAdapterMode.REAL and self.radio_device is None:
             missing.append("hardware.radio_device")
 
         if self.effective_gps_mode is HardwareAdapterMode.REAL and self.gps_device is None:
@@ -225,7 +222,7 @@ class MapConfig(ConfigurationModel):
 
     enabled: bool = False
     tile_url_template: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-    zoom: int = Field(default=13, ge=0, le=22)
+    zoom: int = Field(default=17, ge=0, le=22)
     request_timeout_s: float = Field(default=4.0, gt=0, le=60)
     gps_stale_after_s: float = Field(default=10.0, gt=0, le=300)
     cache_directory: Path = Path("data/map-tiles")

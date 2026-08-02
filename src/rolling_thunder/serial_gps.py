@@ -1,6 +1,7 @@
-"""Read-only serial GPS adapter for NMEA GGA position sentences."""
+"""Read-only serial GPS adapter for NMEA position and movement sentences."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, cast
@@ -35,6 +36,8 @@ class SerialLinePort(Protocol):
 SerialFactory = Callable[[Path, int, float], SerialLinePort]
 Clock = Callable[[], datetime]
 _SUPPORTED_GGA_SENTENCE_TYPES = frozenset({"GPGGA", "GNGGA"})
+_SUPPORTED_RMC_SENTENCE_TYPES = frozenset({"GPRMC", "GNRMC"})
+_KNOTS_TO_METRES_PER_SECOND = 0.514444
 _DEFAULT_MAXIMUM_SENTENCES_PER_REFRESH = 32
 
 
@@ -143,6 +146,45 @@ def parse_gga_sentence(sentence: str, *, updated_at: datetime) -> GPSPosition:
     )
 
 
+@dataclass(frozen=True)
+class RmcMovement:
+    """Validated movement data from one supported RMC sentence."""
+
+    speed_m_s: float | None
+    heading_degrees: float | None
+
+
+def parse_rmc_sentence(sentence: str) -> RmcMovement:
+    """Parse one checksummed RMC sentence into optional movement data."""
+    normalized = sentence.strip()
+    payload = _validate_checksum(normalized)
+    fields = payload.split(",")
+    if len(fields) < 10 or fields[0] not in _SUPPORTED_RMC_SENTENCE_TYPES:
+        raise GPSParseError("Expected a supported GPRMC or GNRMC sentence.")
+
+    status = fields[2]
+    if status not in {"A", "V"}:
+        raise GPSParseError("RMC status must be 'A' or 'V'.")
+    if status == "V":
+        return RmcMovement(speed_m_s=None, heading_degrees=None)
+
+    try:
+        speed_m_s = float(fields[7]) * _KNOTS_TO_METRES_PER_SECOND if fields[7] else None
+        heading_degrees = float(fields[8]) if fields[8] else None
+    except ValueError as error:
+        raise GPSParseError("RMC speed or course is invalid.") from error
+
+    if speed_m_s is not None and speed_m_s < 0:
+        raise GPSParseError("RMC speed cannot be negative.")
+    if heading_degrees is not None and not 0 <= heading_degrees < 360:
+        raise GPSParseError("RMC course must be between 0 and 360 degrees.")
+
+    return RmcMovement(
+        speed_m_s=speed_m_s,
+        heading_degrees=heading_degrees,
+    )
+
+
 class SerialGPSReceiver:
     """GPSReceiver implementation backed by a read-only NMEA serial stream."""
 
@@ -171,6 +213,8 @@ class SerialGPSReceiver:
         self._serial_factory = serial_factory
         self._clock = clock
         self._port: SerialLinePort | None = None
+        self._latest_speed_m_s: float | None = None
+        self._latest_heading_degrees: float | None = None
         self._state = GPSState(
             connection_state=GPSConnectionState.DISCONNECTED,
             position=None,
@@ -180,6 +224,8 @@ class SerialGPSReceiver:
     def connect(self) -> GPSState:
         """Open the receiver and read its first supported position sentence."""
         if self._port is None or not self._port.is_open:
+            self._latest_speed_m_s = None
+            self._latest_heading_degrees = None
             try:
                 self._port = self._serial_factory(
                     self._device,
@@ -209,6 +255,8 @@ class SerialGPSReceiver:
                 message = f"Could not close GPS device {self._device}: {error}"
                 self._publish_error(message)
                 raise GPSConnectionError(message) from error
+        self._latest_speed_m_s = None
+        self._latest_heading_degrees = None
         self._state = GPSState(
             connection_state=GPSConnectionState.DISCONNECTED,
             position=None,
@@ -256,9 +304,22 @@ class SerialGPSReceiver:
             try:
                 payload = _validate_checksum(sentence)
                 sentence_type = payload.split(",", 1)[0]
+                if sentence_type in _SUPPORTED_RMC_SENTENCE_TYPES:
+                    movement = parse_rmc_sentence(sentence)
+                    self._latest_speed_m_s = movement.speed_m_s
+                    self._latest_heading_degrees = movement.heading_degrees
+                    continue
                 if sentence_type not in _SUPPORTED_GGA_SENTENCE_TYPES:
                     continue
                 position = parse_gga_sentence(sentence, updated_at=self._clock())
+                if position.fix_state is not GPSFixState.NO_FIX:
+                    position = GPSPosition.model_validate(
+                        {
+                            **position.model_dump(),
+                            "speed_m_s": self._latest_speed_m_s,
+                            "heading_degrees": self._latest_heading_degrees,
+                        }
+                    )
             except GPSParseError as error:
                 self._publish_error(str(error))
                 raise

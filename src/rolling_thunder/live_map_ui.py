@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from base64 import b64encode
+from math import cos, radians, sin
 from typing import Any
 
 from rolling_thunder.live_map import LiveMapGpsStatus, LiveMapPresentation
@@ -18,6 +19,29 @@ _FAILURE = "#ff7070"
 _MARKER = "#ff4040"
 _MARKER_OUTLINE = "#ffffff"
 _STATUS_BACKGROUND = "#10191e"
+
+
+def rotate_marker_points(
+    points: tuple[tuple[float, float], ...],
+    center_x: float,
+    center_y: float,
+    heading_degrees: float,
+) -> tuple[float, ...]:
+    """Rotate marker-local points clockwise using a compass heading."""
+    angle = radians(heading_degrees)
+    cosine = cos(angle)
+    sine = sin(angle)
+    rotated: list[float] = []
+
+    for x, y in points:
+        rotated.extend(
+            (
+                center_x + x * cosine - y * sine,
+                center_y + x * sine + y * cosine,
+            )
+        )
+
+    return tuple(rotated)
 
 
 def live_map_status_color(
@@ -52,10 +76,7 @@ def live_map_status_lines(
     if presentation.grid is not None:
         lines.append(f"GRID {presentation.grid.upper()}")
     if presentation.position is not None:
-        lines.append(
-            f"{presentation.position.latitude:.5f}, "
-            f"{presentation.position.longitude:.5f}"
-        )
+        lines.append(f"{presentation.position.latitude:.5f}, {presentation.position.longitude:.5f}")
     return tuple(lines)
 
 
@@ -99,7 +120,12 @@ class LiveMapWidgets:
 
         self._canvas.delete("map-overlay")
         if presentation.position is not None:
-            self._draw_vehicle_marker(width / 2, height / 2, presentation.is_current)
+            self._draw_vehicle_marker(
+                width / 2,
+                height / 2,
+                presentation.is_current,
+                presentation.heading_degrees or 0.0,
+            )
         self._draw_status(presentation, snapshot)
 
     def _draw_base(
@@ -191,28 +217,98 @@ class LiveMapWidgets:
         center_x: float,
         center_y: float,
         is_current: bool,
+        heading_degrees: float,
     ) -> None:
         fill = _MARKER if is_current else _WARNING
-        radius = 15
-        self._canvas.create_oval(
-            center_x - radius,
-            center_y - radius,
-            center_x + radius,
-            center_y + radius,
-            fill=fill,
+        canvas = self._canvas
+
+        def polygon(
+            points: tuple[tuple[float, float], ...],
+            *,
+            polygon_fill: str,
+            outline: str,
+            width: int,
+        ) -> None:
+            canvas.create_polygon(
+                rotate_marker_points(
+                    points,
+                    center_x,
+                    center_y,
+                    heading_degrees,
+                ),
+                fill=polygon_fill,
+                outline=outline,
+                width=width,
+                joinstyle="round",
+                tags="map-overlay",
+            )
+
+        # Draw wheels first so the larger top-down car remains readable over
+        # detailed map tiles.
+        for wheel in (
+            ((-30.0, -24.0), (-22.0, -24.0), (-22.0, -7.0), (-30.0, -7.0)),
+            ((22.0, -24.0), (30.0, -24.0), (30.0, -7.0), (22.0, -7.0)),
+            ((-30.0, 9.0), (-22.0, 9.0), (-22.0, 27.0), (-30.0, 27.0)),
+            ((22.0, 9.0), (30.0, 9.0), (30.0, 27.0), (22.0, 27.0)),
+        ):
+            polygon(
+                wheel,
+                polygon_fill=_STATUS_BACKGROUND,
+                outline=_MARKER_OUTLINE,
+                width=2,
+            )
+
+        polygon(
+            (
+                (-14.0, -39.0),
+                (14.0, -39.0),
+                (23.0, -24.0),
+                (23.0, 25.0),
+                (15.0, 39.0),
+                (-15.0, 39.0),
+                (-23.0, 25.0),
+                (-23.0, -24.0),
+            ),
+            polygon_fill=fill,
             outline=_MARKER_OUTLINE,
             width=4,
-            tags="map-overlay",
         )
-        self._canvas.create_oval(
-            center_x - 4,
-            center_y - 4,
-            center_x + 4,
-            center_y + 4,
-            fill=_MARKER_OUTLINE,
-            outline="",
-            tags="map-overlay",
+
+        polygon(
+            (
+                (-13.0, -22.0),
+                (13.0, -22.0),
+                (17.0, -6.0),
+                (-17.0, -6.0),
+            ),
+            polygon_fill=_STATUS_BACKGROUND,
+            outline=_MARKER_OUTLINE,
+            width=2,
         )
+        polygon(
+            (
+                (-17.0, 7.0),
+                (17.0, 7.0),
+                (12.0, 24.0),
+                (-12.0, 24.0),
+            ),
+            polygon_fill=_STATUS_BACKGROUND,
+            outline=_MARKER_OUTLINE,
+            width=2,
+        )
+
+        for light_x in (-11.0, 11.0):
+            polygon(
+                (
+                    (light_x - 4.0, -34.0),
+                    (light_x + 4.0, -34.0),
+                    (light_x + 4.0, -27.0),
+                    (light_x - 4.0, -27.0),
+                ),
+                polygon_fill=_MARKER_OUTLINE,
+                outline="",
+                width=0,
+            )
 
     def _draw_status(
         self,
@@ -226,19 +322,19 @@ class LiveMapWidgets:
         self._canvas.create_rectangle(
             12,
             12,
-            500,
-            34 + len(lines) * 28,
+            880,
+            54 + len(lines) * 52,
             fill=_STATUS_BACKGROUND,
             outline=color,
-            width=2,
+            width=3,
             tags="map-overlay",
         )
         self._canvas.create_text(
+            32,
             28,
-            24,
             text=text,
             fill=color,
-            font=("DejaVu Sans", 17, "bold"),
+            font=("DejaVu Sans", 34, "bold"),
             anchor="nw",
             justify="left",
             tags="map-overlay",

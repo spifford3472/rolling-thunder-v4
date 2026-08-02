@@ -44,6 +44,7 @@ class LiveMapPresentation:
     detail: str
     fix_time: datetime | None
     is_current: bool
+    heading_degrees: float | None = None
 
 
 def _utc_now() -> datetime:
@@ -57,14 +58,19 @@ class LiveMapController:
         self,
         *,
         stale_after: timedelta = timedelta(seconds=10),
+        minimum_heading_speed_m_s: float = 0.9,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         if stale_after <= timedelta(0):
             raise ValueError("Live-map GPS stale threshold must be positive.")
+        if minimum_heading_speed_m_s < 0:
+            raise ValueError("Minimum heading speed cannot be negative.")
         self._stale_after = stale_after
+        self._minimum_heading_speed_m_s = minimum_heading_speed_m_s
         self._clock = clock
         self._last_position: GeoPoint | None = None
         self._last_fix_time: datetime | None = None
+        self._last_heading_degrees: float | None = None
 
     def update(self, gps_state: GPSState | None) -> LiveMapPresentation:
         """Build current map presentation from one immutable GPS snapshot."""
@@ -75,6 +81,7 @@ class LiveMapController:
             if self._last_fix_time is None or fix_time >= self._last_fix_time:
                 self._last_position = position
                 self._last_fix_time = fix_time
+                self._retain_reliable_heading(gps_state)
 
             age = max(timedelta(0), now - fix_time)
             if age <= self._stale_after:
@@ -103,10 +110,7 @@ class LiveMapController:
                 is_current=False,
             )
 
-        if (
-            gps_state is not None
-            and gps_state.connection_state is GPSConnectionState.ERROR
-        ):
+        if gps_state is not None and gps_state.connection_state is GPSConnectionState.ERROR:
             return LiveMapPresentation(
                 status=LiveMapGpsStatus.ERROR,
                 position=None,
@@ -141,7 +145,20 @@ class LiveMapController:
             detail=detail,
             fix_time=fix_time,
             is_current=is_current,
+            heading_degrees=self._last_heading_degrees,
         )
+
+    def _retain_reliable_heading(self, gps_state: GPSState | None) -> None:
+        if gps_state is None or gps_state.position is None:
+            return
+        position = gps_state.position
+        if (
+            position.speed_m_s is None
+            or position.heading_degrees is None
+            or position.speed_m_s < self._minimum_heading_speed_m_s
+        ):
+            return
+        self._last_heading_degrees = position.heading_degrees
 
     @staticmethod
     def _valid_position(

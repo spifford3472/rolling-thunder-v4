@@ -37,7 +37,7 @@ def test_map_defaults_are_safe_and_disabled() -> None:
     )
 
     assert config.map.enabled is False
-    assert config.map.zoom == 13
+    assert config.map.zoom == 17
     assert config.map.cache_retention_days == 7
 
 
