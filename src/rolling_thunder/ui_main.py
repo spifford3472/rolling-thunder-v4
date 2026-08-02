@@ -60,7 +60,11 @@ _HEALTH_DISABLED = "#c8c8c8"
 _HEALTH_UNAVAILABLE = "#b42318"
 _HEALTH_DARK_TEXT = "#080808"
 
-_POTA_CARD_WIDTH = 45
+_POTA_HEADER_FONT_SIZE = 52
+_POTA_BODY_FONT_SIZE = 32
+_POTA_CARD_NORMAL_BORDER_PX = 2
+_POTA_CARD_SELECTED_BORDER_PX = 6
+_POTA_VISIBLE_CARD_COUNT = 3
 
 
 def _indicator_color(value: str) -> str:
@@ -102,11 +106,6 @@ def _callsign_font_size(callsign: str) -> int:
     if length <= 13:
         return 52
     return 44
-
-
-def _pota_card_line(value: str) -> str:
-    """Fit one value inside the fixed-width POTA card border."""
-    return f"│ {value[:_POTA_CARD_WIDTH - 4]:<{_POTA_CARD_WIDTH - 4}} │"
 
 
 def run_dashboard(
@@ -346,10 +345,10 @@ def run_dashboard(
     )
     context.grid(row=1, column=0, sticky="nsew", padx=12, pady=(4, 12))
     context.grid_columnconfigure(0, weight=1)
-    context.grid_rowconfigure(1, weight=1)
+    context.grid_rowconfigure(0, weight=1)
 
     context_content = tk.Frame(context, bg=_SECONDARY_BACKGROUND)
-    context_content.grid(row=0, column=0, sticky="nsew", padx=14, pady=14)
+    context_content.grid(row=0, column=0, sticky="nsew", padx=6, pady=8)
     context_content.grid_columnconfigure(0, weight=1)
     context_content.grid_rowconfigure(1, weight=1)
     context_content.grid_rowconfigure(2, weight=0)
@@ -363,7 +362,7 @@ def run_dashboard(
         font=("DejaVu Sans", 48, "bold"),
         anchor="center",
     )
-    context_title_label.grid(row=0, column=0, sticky="ew", pady=(8, 16))
+    context_title_label.grid(row=0, column=0, sticky="ew", pady=(2, 8))
 
     context_body_text = tk.StringVar(value="")
     context_body_label = tk.Label(
@@ -377,6 +376,155 @@ def run_dashboard(
         wraplength=560,
     )
     context_body_label.grid(row=1, column=0, sticky="nsew")
+
+    pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
+    pota_panel_frame.grid(row=1, column=0, sticky="nsew")
+    pota_panel_frame.grid_columnconfigure(0, weight=1)
+    pota_panel_frame.grid_rowconfigure(1, weight=1)
+    pota_panel_frame.grid_remove()
+
+    pota_more_above_text = tk.StringVar(value="")
+    pota_more_above_label = tk.Label(
+        pota_panel_frame,
+        textvariable=pota_more_above_text,
+        bg=_SECONDARY_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+        anchor="center",
+    )
+    pota_more_above_label.grid(row=0, column=0, sticky="ew", pady=(0, 2))
+
+    pota_status_text = tk.StringVar(value="")
+    pota_status_label = tk.Label(
+        pota_panel_frame,
+        textvariable=pota_status_text,
+        bg=_SECONDARY_BACKGROUND,
+        fg=_MUTED,
+        font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+        justify="left",
+        anchor="nw",
+        wraplength=680,
+    )
+    pota_status_label.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
+
+    pota_cards_container = tk.Frame(pota_panel_frame, bg=_SECONDARY_BACKGROUND)
+    pota_cards_container.grid(row=1, column=0, sticky="nsew")
+    pota_cards_container.grid_columnconfigure(0, weight=1)
+    pota_cards_container.grid_remove()
+
+    pota_card_frames: list[tk.Frame] = []
+    pota_card_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
+    pota_card_texts: list[
+        tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]
+    ] = []
+
+    for card_index in range(_POTA_VISIBLE_CARD_COUNT):
+        card_frame = tk.Frame(
+            pota_cards_container,
+            bg=_PANEL_BACKGROUND,
+            highlightthickness=_POTA_CARD_NORMAL_BORDER_PX,
+            highlightbackground=_BORDER,
+            highlightcolor=_BORDER,
+        )
+        card_frame.grid(
+            row=card_index,
+            column=0,
+            sticky="ew",
+            padx=2,
+            pady=5,
+        )
+        card_frame.grid_columnconfigure(0, weight=1)
+
+        callsign_var = tk.StringVar(value="")
+        frequency_var = tk.StringVar(value="")
+        park_var = tk.StringVar(value="")
+        location_var = tk.StringVar(value="")
+
+        callsign_label = tk.Label(
+            card_frame,
+            textvariable=callsign_var,
+            bg=_PANEL_BACKGROUND,
+            fg=_BRIGHT,
+            font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+            anchor="w",
+            justify="left",
+            padx=12,
+            pady=2,
+        )
+        callsign_label.grid(row=0, column=0, sticky="ew")
+
+        frequency_label = tk.Label(
+            card_frame,
+            textvariable=frequency_var,
+            bg=_PANEL_BACKGROUND,
+            fg=_BRIGHT,
+            font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+            anchor="w",
+            justify="left",
+            padx=12,
+            pady=0,
+        )
+        frequency_label.grid(row=1, column=0, sticky="ew")
+
+        park_label = tk.Label(
+            card_frame,
+            textvariable=park_var,
+            bg=_PANEL_BACKGROUND,
+            fg=_BRIGHT,
+            font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+            anchor="w",
+            justify="left",
+            padx=12,
+            pady=0,
+            wraplength=680,
+        )
+        park_label.grid(row=2, column=0, sticky="ew")
+
+        location_label = tk.Label(
+            card_frame,
+            textvariable=location_var,
+            bg=_PANEL_BACKGROUND,
+            fg=_BRIGHT,
+            font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+            anchor="w",
+            justify="left",
+            padx=12,
+            pady=2,
+        )
+        location_label.grid(row=3, column=0, sticky="ew")
+
+        pota_card_frames.append(card_frame)
+        pota_card_labels.append(
+            (callsign_label, frequency_label, park_label, location_label)
+        )
+        pota_card_texts.append(
+            (callsign_var, frequency_var, park_var, location_var)
+        )
+        card_frame.grid_remove()
+
+    pota_more_below_text = tk.StringVar(value="")
+    pota_more_below_label = tk.Label(
+        pota_panel_frame,
+        textvariable=pota_more_below_text,
+        bg=_SECONDARY_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+        anchor="center",
+    )
+    pota_more_below_label.grid(row=2, column=0, sticky="ew", pady=(2, 0))
+
+    pota_footer_text = tk.StringVar(value="")
+    pota_footer_label = tk.Label(
+        pota_panel_frame,
+        textvariable=pota_footer_text,
+        bg=_SECONDARY_BACKGROUND,
+        fg=_MUTED,
+        font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
+        anchor="w",
+        justify="left",
+        wraplength=680,
+    )
+    pota_footer_label.grid(row=3, column=0, sticky="ew", padx=4, pady=(4, 0))
 
     health_frame = tk.Frame(
         context_content,
@@ -483,6 +631,16 @@ def run_dashboard(
 
     previous_context: ContextId | None = None
 
+    def show_standard_context_body() -> None:
+        """Show the reusable text body and hide the POTA card viewport."""
+        pota_panel_frame.grid_remove()
+        context_body_label.grid()
+
+    def show_pota_context_body() -> None:
+        """Show the POTA card viewport and hide the generic text body."""
+        context_body_label.grid_remove()
+        pota_panel_frame.grid()
+
     def refresh() -> None:
         nonlocal previous_context
 
@@ -546,55 +704,87 @@ def run_dashboard(
 
         if selected_context.selected is ContextId.POTA:
             health_frame.grid_remove()
+            show_pota_context_body()
             filter_state = pota_filters.state
             panel = build_pota_dashboard_panel(filter_state.dashboard)
             context_title_text.set(filter_state.display_line)
-            context_title_label.configure(font=("DejaVu Sans Mono", 26, "bold"))
-            context_body_label.configure(
-                font=("DejaVu Sans Mono", 16, "bold"),
-                wraplength=0,
+            context_title_label.configure(
+                font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold")
             )
 
-            pota_lines: list[str] = []
+            available_wrap_width = max(480, pota_panel_frame.winfo_width() - 36)
+            pota_status_label.configure(wraplength=available_wrap_width)
+            pota_footer_label.configure(wraplength=available_wrap_width)
+            for labels in pota_card_labels:
+                labels[2].configure(wraplength=available_wrap_width)
+
             if filter_state.dashboard.status != "READY":
-                pota_lines.extend((panel.detail_line, panel.status_line))
+                pota_cards_container.grid_remove()
+                pota_status_label.grid()
+                status_lines = [panel.detail_line, panel.status_line]
                 if panel.error_line:
-                    pota_lines.append(panel.error_line)
+                    status_lines.append(panel.error_line)
+                pota_status_text.set("\n".join(status_lines))
+                pota_more_above_text.set("")
+                pota_more_below_text.set("")
+                for card_frame in pota_card_frames:
+                    card_frame.grid_remove()
             else:
-                if panel.hidden_above_count:
-                    pota_lines.append("                 /\\ MORE /\\")
+                pota_status_label.grid_remove()
+                pota_cards_container.grid()
+                pota_more_above_text.set(
+                    "▲ MORE ▲" if panel.hidden_above_count else ""
+                )
+                pota_more_below_text.set(
+                    "▼ MORE ▼" if panel.hidden_below_count else ""
+                )
 
-                top_border = "┌" + "─" * (_POTA_CARD_WIDTH - 2) + "┐"
-                bottom_border = "└" + "─" * (_POTA_CARD_WIDTH - 2) + "┘"
-                for row in panel.rows:
-                    selection_marker = "▶" if row.is_selected else " "
-                    pota_lines.extend(
-                        (
-                            top_border,
-                            _pota_card_line(f"{selection_marker} {row.activator}"),
-                            _pota_card_line(row.frequency),
-                            _pota_card_line(
-                                f"{row.park_reference} - {row.park_name}"
-                            ),
-                            _pota_card_line(row.location_code),
-                            bottom_border,
-                            "",
-                        )
+                for card_index, card_frame in enumerate(pota_card_frames):
+                    if card_index >= len(panel.rows):
+                        card_frame.grid_remove()
+                        continue
+
+                    row = panel.rows[card_index]
+                    card_frame.grid()
+                    callsign_var, frequency_var, park_var, location_var = (
+                        pota_card_texts[card_index]
                     )
+                    callsign_var.set(row.activator)
+                    frequency_var.set(row.frequency)
+                    park_var.set(f"{row.park_reference} - {row.park_name}")
+                    location_var.set(row.location_code)
 
-                if panel.hidden_below_count:
-                    pota_lines.append("                 \\/ MORE \\/")
+                    selected_background = (
+                        _CONTEXT_SELECTED if row.is_selected else _PANEL_BACKGROUND
+                    )
+                    border_color = _BRIGHT if row.is_selected else _BORDER
+                    border_width = (
+                        _POTA_CARD_SELECTED_BORDER_PX
+                        if row.is_selected
+                        else _POTA_CARD_NORMAL_BORDER_PX
+                    )
+                    card_frame.configure(
+                        bg=selected_background,
+                        highlightbackground=border_color,
+                        highlightcolor=border_color,
+                        highlightthickness=border_width,
+                    )
+                    for card_label in pota_card_labels[card_index]:
+                        card_label.configure(bg=selected_background)
 
             tune_presentation = pota_tune_ui.presentation
-            if tune_presentation.summary_line is not None:
-                pota_lines.append(tune_presentation.summary_line)
-            if tune_presentation.status_line is not None:
-                pota_lines.append(tune_presentation.status_line)
-            if tune_presentation.detail_line is not None:
-                pota_lines.append(tune_presentation.detail_line)
-
-            context_body_text.set("\n".join(pota_lines))
+            footer_lines = [
+                line
+                for line in (
+                    tune_presentation.summary_line,
+                    tune_presentation.status_line,
+                    tune_presentation.detail_line,
+                )
+                if line is not None
+            ]
+            pota_footer_text.set("\n".join(footer_lines))
         elif selected_context.selected is ContextId.SETTINGS:
+            show_standard_context_body()
             context_title_text.set(selected_context.definition.title)
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
             context_body_label.configure(font=("DejaVu Sans", 22), wraplength=560)
@@ -623,6 +813,7 @@ def run_dashboard(
 
             health_frame.grid()
         else:
+            show_standard_context_body()
             health_frame.grid_remove()
             context_title_text.set(selected_context.definition.title)
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
