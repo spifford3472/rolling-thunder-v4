@@ -75,6 +75,7 @@ def test_runtime_composes_and_starts_mock_hardware() -> None:
     assert isinstance(runtime.gps, MockGPSReceiver)
     assert runtime.gps_polling is not None
     assert runtime.gps_polling.is_running is True
+    assert runtime.pota_enrichment.is_running is True
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
     assert gps_state.connection_state is GPSConnectionState.CONNECTED
@@ -97,6 +98,7 @@ def test_runtime_stop_cancels_polling_and_disconnects_hardware() -> None:
     state = runtime.stop()
 
     assert state.connection_state is RadioConnectionState.DISCONNECTED
+    assert runtime.pota_enrichment.is_running is False
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
     assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
@@ -165,6 +167,7 @@ def test_runtime_stop_before_start_is_safe() -> None:
     state = runtime.stop()
 
     assert state.connection_state is RadioConnectionState.DISCONNECTED
+    assert runtime.pota_enrichment.is_running is False
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
     assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
