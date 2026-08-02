@@ -17,11 +17,20 @@ class ControlAction(StrEnum):
     VOICE = "voice"
     COMMIT = "commit"
     DISCARD = "discard"
+
+    NEXT_CONTEXT = "next_context"
+    HOME_CONTEXT = "home_context"
+
     SELECT_POTA = "select_pota"
     SELECT_DX = "select_dx"
     SELECT_REPEATERS = "select_repeaters"
     SELECT_AI = "select_ai"
     SELECT_SETTINGS = "select_settings"
+
+    MOVE_PREVIOUS = "move_previous"
+    MOVE_NEXT = "move_next"
+    ACTIVATE_SELECTION = "activate_selection"
+    BACK = "back"
 
 
 @dataclass(frozen=True)

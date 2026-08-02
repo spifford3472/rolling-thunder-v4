@@ -22,16 +22,22 @@ def event(input_id: str, event_id: str, occurred_at_s: float = 1.0) -> ControlIn
 
 
 def test_control_actions_exclude_radio_and_tuning_authority() -> None:
-    """The first physical-control slice must expose only approved actions."""
+    """Physical controls expose only operator UI actions, never radio authority."""
     assert set(ControlAction) == {
         ControlAction.VOICE,
         ControlAction.COMMIT,
         ControlAction.DISCARD,
+        ControlAction.NEXT_CONTEXT,
+        ControlAction.HOME_CONTEXT,
         ControlAction.SELECT_POTA,
         ControlAction.SELECT_DX,
         ControlAction.SELECT_REPEATERS,
         ControlAction.SELECT_AI,
         ControlAction.SELECT_SETTINGS,
+        ControlAction.MOVE_PREVIOUS,
+        ControlAction.MOVE_NEXT,
+        ControlAction.ACTIVATE_SELECTION,
+        ControlAction.BACK,
     }
 
 

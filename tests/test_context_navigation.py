@@ -63,3 +63,28 @@ def test_definitions_have_unique_ids_shortcuts_and_labels() -> None:
     assert len(ids) == len(set(ids))
     assert len(shortcuts) == len(set(shortcuts))
     assert len(labels) == len(set(labels))
+
+
+def test_select_next_advances_through_contexts() -> None:
+    controller = ContextNavigationController(ContextId.POTA)
+
+    assert controller.select_next().selected is ContextId.DX
+    assert controller.select_next().selected is ContextId.REPEATERS
+    assert controller.select_next().selected is ContextId.AI
+    assert controller.select_next().selected is ContextId.SETTINGS
+
+
+def test_select_next_wraps_from_settings_to_pota() -> None:
+    controller = ContextNavigationController(ContextId.SETTINGS)
+
+    state = controller.select_next()
+
+    assert state.selected is ContextId.POTA
+
+
+def test_select_home_returns_to_pota() -> None:
+    controller = ContextNavigationController(ContextId.AI)
+
+    state = controller.select_home()
+
+    assert state.selected is ContextId.POTA

@@ -52,11 +52,21 @@ physical_controls:
     voice-button: voice
     commit-button: commit
     discard-button: discard
-    context-pota-button: select_pota
-    context-dx-button: select_dx
-    context-repeaters-button: select_repeaters
-    context-ai-button: select_ai
-    context-settings-button: select_settings
+
+    panel-button-short: next_context
+    panel-button-long: home_context
+
+    context-button-1-short: select_pota
+    context-button-1-long: select_ai
+    context-button-2-short: select_dx
+    context-button-2-long: select_settings
+    context-button-3-short: select_repeaters
+    context-button-3-long: select_pota
+
+    encoder-counterclockwise: move_previous
+    encoder-clockwise: move_next
+    encoder-switch-short: activate_selection
+    encoder-switch-long: back
 
 storage:
   database_path: data/rolling-thunder.db
