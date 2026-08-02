@@ -1,7 +1,7 @@
 """Pure UI-facing presentation state for POTA spot data."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from rolling_thunder.domain import RadioMode
 from rolling_thunder.pota_spot_ranking import (
@@ -10,16 +10,22 @@ from rolling_thunder.pota_spot_ranking import (
 )
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pota_spot_source import PotaSpotSourceAvailability
-from rolling_thunder.pota_spots import AmateurBand, PotaSpot, filter_pota_spots
+from rolling_thunder.pota_spots import (
+    AmateurBand,
+    PotaModeFilter,
+    PotaSpot,
+    filter_pota_spots,
+)
 
 
 @dataclass(frozen=True)
 class PotaSpotRow:
-    """Display-ready values for one POTA spot row."""
+    """Display-ready values for one POTA spot card."""
 
     activator: str
     park_reference: str
     park_name: str
+    location_code: str
     frequency: str
     mode: str
     spotted_at: str
@@ -29,7 +35,7 @@ class PotaSpotRow:
 
 @dataclass(frozen=True)
 class PotaDashboardState:
-    """Immutable display state for a future POTA dashboard panel."""
+    """Immutable display state for the POTA dashboard panel."""
 
     status: str
     detail: str
@@ -40,6 +46,7 @@ class PotaDashboardState:
     total_spot_count: int
     visible_spot_count: int
     rows: tuple[PotaSpotRow, ...]
+    selected_index: int | None
 
 
 def build_pota_dashboard_state(
@@ -47,7 +54,9 @@ def build_pota_dashboard_state(
     *,
     band: AmateurBand | None = None,
     mode: RadioMode | None = None,
+    mode_filter: PotaModeFilter = PotaModeFilter.ALL,
     reference_time: datetime | None = None,
+    maximum_age: timedelta | None = None,
     selected_index: int | None = None,
 ) -> PotaDashboardState:
     """Convert a service snapshot into stable display-ready POTA state."""
@@ -62,9 +71,19 @@ def build_pota_dashboard_state(
             total_spot_count=0,
             visible_spot_count=0,
             rows=(),
+            selected_index=None,
         )
 
-    spots = tuple(filter_pota_spots(list(state.spots), band=band, mode=mode))
+    spots = tuple(
+        filter_pota_spots(
+            list(state.spots),
+            band=band,
+            mode=mode,
+            mode_filter=mode_filter,
+            reference_time=reference_time,
+            maximum_age=maximum_age,
+        )
+    )
     if reference_time is not None:
         spots = tuple(
             ranked.spot
@@ -91,16 +110,19 @@ def build_pota_dashboard_state(
         detail = "POTA SPOTS NOT REFRESHED"
     elif state.is_stale:
         status = "STALE"
-        detail = f"SHOWING {len(rows)} OF {len(state.spots)} RETAINED SPOTS"
+        detail = f"SHOWING {len(rows)} FRESH RETAINED SPOTS"
     elif state.availability is PotaSpotSourceAvailability.UNAVAILABLE:
         status = "UNAVAILABLE"
         detail = "POTA SPOT SOURCE UNAVAILABLE"
     elif not state.spots:
         status = "EMPTY"
         detail = "NO CURRENT POTA SPOTS"
+    elif not rows:
+        status = "EMPTY"
+        detail = "NO FRESH SPOTS MATCH CURRENT FILTERS"
     else:
         status = "READY"
-        detail = f"SHOWING {len(rows)} OF {len(state.spots)} SPOTS"
+        detail = f"SHOWING {len(rows)} FRESH SPOTS"
 
     return PotaDashboardState(
         status=status,
@@ -112,6 +134,7 @@ def build_pota_dashboard_state(
         total_spot_count=len(state.spots),
         visible_spot_count=len(rows),
         rows=rows,
+        selected_index=selected_index,
     )
 
 
@@ -119,9 +142,10 @@ def _build_row(spot: PotaSpot, *, is_selected: bool = False) -> PotaSpotRow:
     return PotaSpotRow(
         activator=str(spot.activator),
         park_reference=spot.park.reference,
-        park_name=spot.park.name or "—",
+        park_name=spot.park.name or "NOT AVAILABLE",
+        location_code=spot.park.location_code or "—",
         frequency=f"{spot.frequency.hz / 1_000_000:.3f} MHz",
-        mode=spot.mode.value,
+        mode=spot.display_mode,
         spotted_at=_format_timestamp(spot.spotted_at),
         comments=spot.comments or "",
         is_selected=is_selected,
