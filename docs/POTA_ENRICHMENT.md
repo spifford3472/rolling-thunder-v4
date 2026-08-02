@@ -142,6 +142,11 @@ not match, the map falls back to the country's ADM0 outline. POTA location codes
 follow ISO-3166-2 whenever practical, which makes ADM1 matching possible for
 most countries and territories.
 
+The first request for a DX country may take several seconds because the
+background worker retrieves boundary metadata followed by simplified GeoJSON.
+Later requests for the same park use the bounded in-memory cache for the life of
+the application process.
+
 Weather symbols are limited to:
 
 - `☀` clear daytime
