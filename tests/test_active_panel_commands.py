@@ -6,6 +6,7 @@ from rolling_thunder.active_panel_commands import ActivePanelCommandController
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
+from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
 from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneResult
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pota_spot_source import PotaSpotSourceAvailability
@@ -61,6 +62,7 @@ def controller(
     ActivePanelCommandController,
     ContextNavigationController,
     PotaDashboardController,
+    PotaDashboardFilterController,
     RecordingExecutor,
 ]:
     navigation = ContextNavigationController(context)
@@ -68,46 +70,65 @@ def controller(
         StaticProvider(available_state()),
         clock=lambda: datetime(2026, 8, 1, 23, 5, tzinfo=UTC),
     )
+    filters = PotaDashboardFilterController(dashboard)
+    filters.activate_for_frequency(Frequency(hz=14_250_000))
     executor = RecordingExecutor()
     tune = PotaTuneUiController(dashboard, executor)
     return (
-        ActivePanelCommandController(navigation, dashboard, tune),
+        ActivePanelCommandController(navigation, dashboard, filters, tune),
         navigation,
         dashboard,
+        filters,
         executor,
     )
 
 
-def test_non_pota_context_rejects_panel_selection_actions() -> None:
-    commands, _navigation, dashboard, executor = controller(ContextId.DX)
+def test_non_pota_context_rejects_panel_actions() -> None:
+    commands, _navigation, dashboard, filters, executor = controller(ContextId.DX)
+    initial_filter = filters.state
 
+    assert commands.primary() is False
+    assert commands.secondary() is False
+    assert commands.tertiary() is False
+    assert commands.tertiary_long() is False
     assert commands.move_previous() is False
     assert commands.move_next() is False
     assert commands.activate_selection() is False
     assert commands.back() is False
+    assert filters.state.band_label == initial_filter.band_label
+    assert filters.state.mode_label == initial_filter.mode_label
     assert dashboard.selected_index is None
     assert dashboard.tune_intent is None
     assert executor.calls == []
 
 
+def test_primary_and_secondary_cycle_pota_filters() -> None:
+    commands, _navigation, _dashboard, filters, _executor = controller()
+
+    assert filters.state.band_label == "20"
+    assert filters.state.mode_label == "SSB"
+
+    assert commands.primary() is True
+    assert filters.state.band_label == "17"
+
+    assert commands.secondary() is True
+    assert filters.state.mode_label == "CW"
+
+
 def test_encoder_rotation_moves_pota_selection_without_wrapping() -> None:
-    commands, _navigation, dashboard, _executor = controller()
+    commands, _navigation, dashboard, _filters, _executor = controller()
 
     assert commands.move_next() is True
     assert dashboard.selected_index == 0
-    assert commands.move_next() is True
-    assert dashboard.selected_index == 1
     assert commands.move_next() is False
-    assert dashboard.selected_index == 1
-
-    assert commands.move_previous() is True
     assert dashboard.selected_index == 0
+
     assert commands.move_previous() is False
     assert dashboard.selected_index == 0
 
 
 def test_activate_requires_an_explicit_pota_selection() -> None:
-    commands, _navigation, dashboard, executor = controller()
+    commands, _navigation, dashboard, _filters, executor = controller()
 
     assert commands.activate_selection() is False
     assert dashboard.tune_intent is None
@@ -115,7 +136,7 @@ def test_activate_requires_an_explicit_pota_selection() -> None:
 
 
 def test_activate_stages_intent_without_confirming_or_executing() -> None:
-    commands, _navigation, dashboard, executor = controller()
+    commands, _navigation, dashboard, _filters, executor = controller()
     commands.move_next()
 
     assert commands.activate_selection() is True
@@ -127,7 +148,7 @@ def test_activate_stages_intent_without_confirming_or_executing() -> None:
 
 
 def test_back_cancels_intent_before_clearing_selection() -> None:
-    commands, _navigation, dashboard, executor = controller()
+    commands, _navigation, dashboard, _filters, executor = controller()
     commands.move_next()
     commands.activate_selection()
 
@@ -145,7 +166,7 @@ def test_back_cancels_intent_before_clearing_selection() -> None:
 
 
 def test_context_change_prevents_encoder_from_mutating_pota_state() -> None:
-    commands, navigation, dashboard, _executor = controller()
+    commands, navigation, dashboard, _filters, _executor = controller()
     commands.move_next()
     commands.activate_selection()
     pending = dashboard.tune_intent
