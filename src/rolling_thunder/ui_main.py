@@ -533,10 +533,6 @@ def run_dashboard(
 
             pota_lines = [
                 filter_state.display_line,
-                "[ / ] BAND    , / . MODE    / CLEAR",
-                "UP / DOWN OR ENCODER TURN SELECT",
-                "ENCODER PRESS STAGE    LONG PRESS BACK",
-                "ENTER CONFIRM    E EXECUTE    X CANCEL",
                 panel.status_line,
                 panel.detail_line,
                 panel.refresh_line,
