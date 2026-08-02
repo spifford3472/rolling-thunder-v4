@@ -198,6 +198,7 @@ class PotaEnrichmentService:
         """Return cached state or queue a non-blocking park-detail refresh."""
         park_name = park.name or park.reference
         now = self._aware_now()
+        executor: Executor | None = None
         with self._lock:
             entry = self._park_cache.get(park.reference)
             if entry is not None and entry.expires_at > now:
@@ -225,12 +226,14 @@ class PotaEnrichmentService:
                 return unavailable
 
             self._pending_parks.add(park.reference)
-            self._executor.submit(self._fetch_park_detail, park)
-            return ParkDetailSnapshot(
-                park_reference=park.reference,
-                park_name=park_name,
-                status=ParkDetailStatus.LOADING,
-            )
+            executor = self._executor
+
+        executor.submit(self._fetch_park_detail, park)
+        return ParkDetailSnapshot(
+            park_reference=park.reference,
+            park_name=park_name,
+            status=ParkDetailStatus.LOADING,
+        )
 
     def get_park_detail(self, park_reference: str) -> ParkDetailSnapshot | None:
         """Return only a cached park snapshot; never perform I/O."""
