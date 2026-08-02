@@ -1,4 +1,4 @@
-"""Open-Meteo adapter for current park temperature and local time."""
+"""Open-Meteo adapter for current park weather and local time."""
 
 from collections.abc import Mapping
 from json import JSONDecodeError, loads
@@ -34,7 +34,7 @@ class OpenMeteoParkWeatherProvider:
         self._endpoint = endpoint
 
     def fetch_weather(self, park: ParkReference) -> ParkWeather:
-        """Return current temperature and local 24-hour time for one park."""
+        """Return current temperature, condition, and local time for one park."""
         if park.latitude is None or park.longitude is None:
             raise ValueError("Park coordinates are required for weather lookup.")
 
@@ -42,7 +42,7 @@ class OpenMeteoParkWeatherProvider:
             {
                 "latitude": park.latitude,
                 "longitude": park.longitude,
-                "current": "temperature_2m",
+                "current": "temperature_2m,weather_code,is_day",
                 "timezone": "auto",
                 "forecast_days": 1,
             }
@@ -77,6 +77,14 @@ class OpenMeteoParkWeatherProvider:
         if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
             raise OpenMeteoError("Open-Meteo returned an invalid temperature.")
 
+        weather_code = current.get("weather_code")
+        if isinstance(weather_code, bool) or not isinstance(weather_code, int):
+            raise OpenMeteoError("Open-Meteo returned an invalid weather code.")
+
+        is_day = current.get("is_day")
+        if isinstance(is_day, bool) or is_day not in {0, 1}:
+            raise OpenMeteoError("Open-Meteo returned an invalid day-state value.")
+
         local_timestamp = current.get("time")
         if not isinstance(local_timestamp, str) or "T" not in local_timestamp:
             raise OpenMeteoError("Open-Meteo returned an invalid local time.")
@@ -91,6 +99,8 @@ class OpenMeteoParkWeatherProvider:
             temperature_c=temperature_c,
             temperature_f=(temperature_c * 9.0 / 5.0) + 32.0,
             local_time=local_time,
+            weather_code=weather_code,
+            is_day=is_day == 1,
             timezone=normalized_timezone,
         )
 
