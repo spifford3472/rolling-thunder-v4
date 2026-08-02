@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from rolling_thunder.application_secrets import ApplicationSecrets
+from rolling_thunder.census_state_outline import CensusStateOutlineProvider
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_repository import ContactRepository
@@ -26,19 +27,17 @@ from rolling_thunder.network_keepalive import (
 )
 from rolling_thunder.open_meteo import OpenMeteoParkWeatherProvider
 from rolling_thunder.pota_enrichment import PotaEnrichmentService
-from rolling_thunder.pota_receive_tune_executor import (
-    PotaReceiveTuneExecutor,
-)
+from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
 from rolling_thunder.pota_runtime import build_pota_spot_polling
 from rolling_thunder.pota_spot_polling import PotaSpotPollingService
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
+from rolling_thunder.qrz_profile_image import QrzProfileImageProvider
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
 from rolling_thunder.radio import Radio
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.serial_gps import SerialGPSReceiver
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
-from rolling_thunder.wikimedia_park_image import WikimediaParkImageProvider
 
 GPSFactory = Callable[[Path], GPSReceiver]
 
@@ -57,9 +56,7 @@ class ApplicationRuntime:
     contact_sync: ContactSyncService | None = None
     network_keepalive: NetworkKeepaliveService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
-    pota_enrichment: PotaEnrichmentService = field(
-        default_factory=PotaEnrichmentService
-    )
+    pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     _started: bool = False
 
     @classmethod
@@ -83,6 +80,7 @@ class ApplicationRuntime:
         qrz_transport: HttpTransport | None = None,
         weather_transport: HttpTransport | None = None,
         image_transport: HttpTransport | None = None,
+        state_map_transport: HttpTransport | None = None,
         enrichment_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
@@ -156,28 +154,35 @@ class ApplicationRuntime:
 
         resolved_secrets = secrets or ApplicationSecrets()
         qrz_provider = None
+        qrz_photo_provider = None
         weather_provider = None
-        image_provider = None
+        state_outline_provider = None
         if config.pota_spots.enabled:
+            timeout_s = config.pota_spots.request_timeout_s
             if resolved_secrets.qrz is not None:
                 qrz_provider = QrzXmlCallsignNameProvider(
                     resolved_secrets.qrz,
-                    timeout_s=config.pota_spots.request_timeout_s,
+                    timeout_s=timeout_s,
                     transport=qrz_transport,
                 )
+                qrz_photo_provider = QrzProfileImageProvider(
+                    timeout_s=timeout_s,
+                    transport=image_transport,
+                )
             weather_provider = OpenMeteoParkWeatherProvider(
-                timeout_s=config.pota_spots.request_timeout_s,
+                timeout_s=timeout_s,
                 transport=weather_transport,
             )
-            image_provider = WikimediaParkImageProvider(
-                timeout_s=config.pota_spots.request_timeout_s,
-                transport=image_transport,
+            state_outline_provider = CensusStateOutlineProvider(
+                timeout_s=timeout_s,
+                transport=state_map_transport,
             )
 
         pota_enrichment = PotaEnrichmentService(
             callsign_provider=qrz_provider,
+            callsign_photo_provider=qrz_photo_provider,
             weather_provider=weather_provider,
-            image_provider=image_provider,
+            state_outline_provider=state_outline_provider,
             executor=enrichment_executor,
         )
 
