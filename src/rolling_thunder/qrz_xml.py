@@ -1,5 +1,6 @@
-"""QRZ XML callsign-name adapter with reusable authenticated sessions."""
+"""QRZ XML callsign profile adapter with reusable authenticated sessions."""
 
+from dataclasses import dataclass
 from threading import Lock
 from urllib.error import URLError
 from urllib.parse import urlencode
@@ -30,6 +31,15 @@ class QrzAuthenticationError(QrzLookupError):
     """Raised when QRZ authentication does not produce a session key."""
 
 
+@dataclass(frozen=True)
+class QrzCallsignProfile:
+    """Optional presentation metadata returned for one QRZ callsign record."""
+
+    callsign: str
+    name: str | None
+    image_url: str | None
+
+
 def normalize_qrz_callsign(callsign: Callsign | str) -> str:
     """Remove an optional portable suffix before a QRZ lookup."""
     normalized = str(callsign).strip().upper()
@@ -58,11 +68,21 @@ class QrzXmlCallsignNameProvider:
 
     def lookup_name(self, callsign: Callsign | str) -> str | None:
         """Return a display name, or none when QRZ has no usable name."""
+        profile = self.lookup_profile(callsign)
+        return profile.name if profile is not None else None
+
+    def lookup_profile(self, callsign: Callsign | str) -> QrzCallsignProfile | None:
+        """Return QRZ name and optional primary-image URL for one callsign."""
         query_callsign = normalize_qrz_callsign(callsign)
         with self._lock:
             return self._lookup_locked(query_callsign, allow_relogin=True)
 
-    def _lookup_locked(self, callsign: str, *, allow_relogin: bool) -> str | None:
+    def _lookup_locked(
+        self,
+        callsign: str,
+        *,
+        allow_relogin: bool,
+    ) -> QrzCallsignProfile | None:
         session_key = self._session_key or self._login()
         root = self._request_xml(
             {
@@ -77,8 +97,14 @@ class QrzXmlCallsignNameProvider:
             first_name = self._child_text(callsign_node, "fname")
             last_name = self._child_text(callsign_node, "name")
             display_name = self._format_name(first_name, last_name)
+            returned_callsign = self._child_text(callsign_node, "call") or callsign
+            image_url = self._child_text(callsign_node, "image")
             self._refresh_session_key(root)
-            return display_name
+            return QrzCallsignProfile(
+                callsign=returned_callsign,
+                name=display_name,
+                image_url=image_url,
+            )
 
         error = self._session_text(root, "Error")
         self._refresh_session_key(root)
