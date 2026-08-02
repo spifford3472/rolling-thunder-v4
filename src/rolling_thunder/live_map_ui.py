@@ -11,7 +11,6 @@ from rolling_thunder.live_map_service import LiveMapSnapshot, MapDataStatus
 _BACKGROUND = "#0d1418"
 _MISSING_TILE = "#17242a"
 _GRID_LINE = "#26363d"
-_BRIGHT = "#ffffff"
 _MUTED = "#a8b4ba"
 _READY = "#42ff72"
 _WARNING = "#ffd24a"
@@ -19,7 +18,6 @@ _FAILURE = "#ff7070"
 _MARKER = "#ff4040"
 _MARKER_OUTLINE = "#ffffff"
 _STATUS_BACKGROUND = "#10191e"
-_ATTRIBUTION_BACKGROUND = "#10191e"
 
 
 def live_map_status_color(
@@ -75,6 +73,8 @@ class LiveMapWidgets:
         )
         self._canvas.pack(fill="both", expand=True)
         self._tile_photos: list[Any] = []
+        self._last_snapshot: LiveMapSnapshot | None = None
+        self._last_size = (0, 0)
 
     @property
     def viewport_size(self) -> tuple[int, int]:
@@ -89,10 +89,27 @@ class LiveMapWidgets:
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
     ) -> None:
-        """Redraw the current immutable map state."""
-        canvas = self._canvas
+        """Redraw changed base-map data and lightweight current overlays."""
         width, height = self.viewport_size
-        canvas.delete("live-map")
+        size = (width, height)
+        if snapshot is not self._last_snapshot or size != self._last_size:
+            self._draw_base(snapshot, width, height)
+            self._last_snapshot = snapshot
+            self._last_size = size
+
+        self._canvas.delete("map-overlay")
+        if presentation.position is not None:
+            self._draw_vehicle_marker(width / 2, height / 2, presentation.is_current)
+        self._draw_status(presentation, snapshot)
+
+    def _draw_base(
+        self,
+        snapshot: LiveMapSnapshot | None,
+        width: int,
+        height: int,
+    ) -> None:
+        canvas = self._canvas
+        canvas.delete("map-base")
         self._tile_photos.clear()
         canvas.create_rectangle(
             0,
@@ -101,7 +118,7 @@ class LiveMapWidgets:
             height,
             fill=_BACKGROUND,
             outline="",
-            tags="live-map",
+            tags="map-base",
         )
 
         if snapshot is not None and snapshot.viewport is not None:
@@ -109,10 +126,6 @@ class LiveMapWidgets:
         else:
             self._draw_reference_grid(width, height)
 
-        if presentation.position is not None:
-            self._draw_vehicle_marker(width / 2, height / 2, presentation.is_current)
-
-        self._draw_status(presentation, snapshot)
         canvas.create_text(
             width - 12,
             height - 10,
@@ -120,7 +133,7 @@ class LiveMapWidgets:
             fill=_MUTED,
             font=("DejaVu Sans", 11, "bold"),
             anchor="se",
-            tags="live-map",
+            tags="map-base",
         )
 
     def _draw_tiles(self, snapshot: LiveMapSnapshot) -> None:
@@ -135,7 +148,7 @@ class LiveMapWidgets:
                     placement.y_px + 256,
                     fill=_MISSING_TILE,
                     outline=_GRID_LINE,
-                    tags="live-map",
+                    tags="map-base",
                 )
                 continue
 
@@ -148,7 +161,7 @@ class LiveMapWidgets:
                 placement.y_px,
                 image=photo,
                 anchor="nw",
-                tags="live-map",
+                tags="map-base",
             )
 
     def _draw_reference_grid(self, width: int, height: int) -> None:
@@ -161,7 +174,7 @@ class LiveMapWidgets:
                 x,
                 height,
                 fill=_GRID_LINE,
-                tags="live-map",
+                tags="map-base",
             )
         for y in range(0, height + spacing, spacing):
             canvas.create_line(
@@ -170,7 +183,7 @@ class LiveMapWidgets:
                 width,
                 y,
                 fill=_GRID_LINE,
-                tags="live-map",
+                tags="map-base",
             )
 
     def _draw_vehicle_marker(
@@ -189,7 +202,7 @@ class LiveMapWidgets:
             fill=fill,
             outline=_MARKER_OUTLINE,
             width=4,
-            tags="live-map",
+            tags="map-overlay",
         )
         self._canvas.create_oval(
             center_x - 4,
@@ -198,7 +211,7 @@ class LiveMapWidgets:
             center_y + 4,
             fill=_MARKER_OUTLINE,
             outline="",
-            tags="live-map",
+            tags="map-overlay",
         )
 
     def _draw_status(
@@ -218,7 +231,7 @@ class LiveMapWidgets:
             fill=_STATUS_BACKGROUND,
             outline=color,
             width=2,
-            tags="live-map",
+            tags="map-overlay",
         )
         self._canvas.create_text(
             28,
@@ -228,5 +241,5 @@ class LiveMapWidgets:
             font=("DejaVu Sans", 17, "bold"),
             anchor="nw",
             justify="left",
-            tags="live-map",
+            tags="map-overlay",
         )
