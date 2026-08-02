@@ -9,6 +9,7 @@ from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.pota_spots import (
     AmateurBand,
     ParkReference,
+    PotaModeFilter,
     PotaSpot,
     filter_pota_spots,
     frequency_band,
@@ -22,13 +23,17 @@ def _spot(
     park: str,
     frequency_hz: int,
     mode: RadioMode,
+    *,
+    spot_mode: str | None = None,
+    spotted_at: datetime = _FIXED_TIME,
 ) -> PotaSpot:
     return PotaSpot(
         activator=callsign,
         park=ParkReference(reference=park),
         frequency=Frequency(hz=frequency_hz),
         mode=mode,
-        spotted_at=_FIXED_TIME,
+        spot_mode=spot_mode,
+        spotted_at=spotted_at,
     )
 
 
@@ -44,9 +49,16 @@ def test_pota_spot_normalizes_operator_facing_values() -> None:
 
     spot = PotaSpot(
         activator=" ki5vnb/p ",
-        park=ParkReference(reference=" us-1234 ", name="  Caesar Creek State Park  "),
+        park=ParkReference(
+            reference=" us-1234 ",
+            name="  Caesar Creek State Park  ",
+            location_code=" us-oh ",
+            latitude=39.5,
+            longitude=-84.0,
+        ),
         frequency=Frequency(hz=14_250_000),
         mode=" usb ",
+        spot_mode=" ssb ",
         spotted_at=local_time,
         comments="  Strong signal  ",
     )
@@ -54,13 +66,18 @@ def test_pota_spot_normalizes_operator_facing_values() -> None:
     assert spot.activator == "KI5VNB/P"
     assert spot.park.reference == "US-1234"
     assert spot.park.name == "Caesar Creek State Park"
+    assert spot.park.location_code == "us-oh"
+    assert spot.park.latitude == 39.5
+    assert spot.park.longitude == -84.0
     assert spot.mode is RadioMode.USB
+    assert spot.spot_mode == "SSB"
+    assert spot.display_mode == "SSB"
     assert spot.spotted_at == _FIXED_TIME
     assert spot.comments == "Strong signal"
 
 
 def test_optional_text_converts_blank_values_to_none() -> None:
-    park = ParkReference(reference="US-0001", name="   ")
+    park = ParkReference(reference="US-0001", name="   ", location_code=" ")
     spot = PotaSpot(
         activator="W8O",
         park=park,
@@ -71,6 +88,7 @@ def test_optional_text_converts_blank_values_to_none() -> None:
     )
 
     assert park.name is None
+    assert park.location_code is None
     assert spot.comments is None
 
 
@@ -123,3 +141,73 @@ def test_filter_spots_by_mode_and_combined_criteria() -> None:
         mode=RadioMode.USB,
     ) == [usb]
     assert filter_pota_spots(spots) == spots
+
+
+def test_operator_mode_groups_keep_ft4_and_ft8_distinct() -> None:
+    ssb = _spot(
+        "K1SSB",
+        "US-1001",
+        14_250_000,
+        RadioMode.USB,
+        spot_mode="PHONE",
+    )
+    ft4 = _spot(
+        "K1FT4",
+        "US-1002",
+        14_080_000,
+        RadioMode.DATA,
+        spot_mode="FT4",
+    )
+    ft8 = _spot(
+        "K1FT8",
+        "US-1003",
+        14_074_000,
+        RadioMode.DATA,
+        spot_mode="FT8",
+    )
+    data = _spot(
+        "K1DAT",
+        "US-1004",
+        14_070_000,
+        RadioMode.DATA,
+        spot_mode="RTTY",
+    )
+    spots = [ssb, ft4, ft8, data]
+
+    assert filter_pota_spots(spots, mode_filter=PotaModeFilter.SSB_PHONE) == [ssb]
+    assert filter_pota_spots(spots, mode_filter=PotaModeFilter.FT4) == [ft4]
+    assert filter_pota_spots(spots, mode_filter=PotaModeFilter.FT8) == [ft8]
+    assert filter_pota_spots(spots, mode_filter=PotaModeFilter.DATA) == [data]
+    assert filter_pota_spots(spots, mode_filter=PotaModeFilter.ALL) == spots
+
+
+def test_freshness_filter_hides_spots_older_than_fifteen_minutes() -> None:
+    reference_time = datetime(2026, 7, 26, 18, 30, tzinfo=UTC)
+    old = _spot(
+        "K1OLD",
+        "US-1001",
+        14_250_000,
+        RadioMode.USB,
+        spotted_at=reference_time - timedelta(minutes=16),
+    )
+    fresh = _spot(
+        "K1NEW",
+        "US-1002",
+        14_260_000,
+        RadioMode.USB,
+        spotted_at=reference_time - timedelta(minutes=15),
+    )
+
+    assert filter_pota_spots(
+        [old, fresh],
+        reference_time=reference_time,
+        maximum_age=timedelta(minutes=15),
+    ) == [fresh]
+
+
+def test_freshness_filter_requires_reference_time() -> None:
+    with pytest.raises(ValueError, match="reference time"):
+        filter_pota_spots(
+            [],
+            maximum_age=timedelta(minutes=15),
+        )
