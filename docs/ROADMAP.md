@@ -205,30 +205,27 @@ or UI callbacks.
 
 ## Milestone 10: Hardware-Backed Mapping and Operating Intelligence
 
-Status: next milestone.
+Status: in progress.
 
 Milestone 10 must begin by proving the real local hardware foundations before
 expanding mapping or intelligence. Execute it in this order.
 
 ### Phase A: Real GPS Integration
 
-- start with GitHub issue #10, `Implement real GPS provider`
-- identify the stable device path and actual receiver characteristics on
-  `anvilmobile`
-- validate permissions, baud rate, NMEA sentence types, checksums, timeouts, and
-  startup behavior
-- preserve the typed `GPSReceiver` boundary and mock source
-- add any additional sentence support only when the real receiver demonstrates
-  the need
-- verify position, fix state, Maidenhead grid, loss/reacquisition, and UI status
-- document setup, troubleshooting, and recovery
-- keep all serial reads outside the Tkinter thread
+Status: complete and approved.
+
+- stable real GPS device identity and permissions
+- actual 9,600-baud mixed-NMEA receiver behavior
+- typed `GPSReceiver` boundary and mock source preserved
+- live position, fix state, Maidenhead grid, loss, reacquisition, and UI status
+- background serial work and automatic recovery
+- setup, troubleshooting, and recovery documentation
 
 ### Phase B: Real Yaesu FT-891 Integration
 
-Status: read-only hardware integration is complete and approved. The ordered
-band-first receive-tuning software slice is implemented and awaiting controlled
-live hardware acceptance.
+Status: receive-only CAT integration and ordered hardware acceptance are
+complete. The ATAS-120 warning implementation is in final automated and
+full-screen acceptance.
 
 Completed and verified:
 
@@ -245,19 +242,34 @@ Completed and verified:
 - one ordered `ReceiveTuningService`
 - confirmed POTA tuning routed through the ordered service
 - unsupported 60-meter CAT band selection fails closed
+- same-band frequency and mode hardware validation
+- controlled cross-band `BS` selection before target frequency
+- isolated band-memory behavior validation
+- confirmed POTA hardware tuning through the ordered path
+- Standard Com Port remained unopened
 - no PTT, MOX, keying, tuner, power, or unattended transmit authority
+
+Current issue #16 warning slice:
+
+- publish only from a verified `band_changed` result and target band
+- use three explicit short encoder presses to stage, confirm, and execute the selected receive-only tune
+- display `BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120`
+- show no warning for same-band tuning
+- retain the warning across POTA selection, filter, context, and result cleanup
+- preserve an existing warning across later same-band tuning
+- replace the warning after a later verified band change
+- acknowledge through the existing Back or X interaction
+- acknowledge before cancelling intent or clearing selection
+- never claim that the antenna is tuned or safe to transmit
 
 Remaining Phase B acceptance:
 
-- validate same-band frequency and mode changes on the installed FT-891
-- validate controlled cross-band `BS` selection before target frequency
-- verify band, frequency, and mode read-back against the physical radio
-- validate confirmed POTA tuning through the same ordered path
-- confirm the Standard Com Port remains unopened
-- implement issue #16, the ATAS-120 retune warning
-- document final live results and recovery behavior
+- pass Ruff, MyPy, pytest, pre-commit, and GitHub Actions for issue #16
+- validate the exact warning in the full-screen dashboard on `anvilmobile`
+- validate same-band suppression, sticky retention, and explicit acknowledgement
+- record final visible behavior in the pull request
 
-The required order is:
+The required tuning order remains:
 
 ```text
 band selection
@@ -268,8 +280,7 @@ mode setting when needed
 mode verification
 ```
 
-Phase C begins only after the remaining Phase B hardware validation and
-ATAS-120 warning work are approved and merged.
+Phase C begins only after the ATAS-120 warning work is approved and merged.
 
 ### Phase C: Mapping and Operating Intelligence
 
@@ -311,21 +322,16 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Complete GitHub issue #15, `Implement FT-891 band and frequency control`.
+Complete GitHub issue #16, `Add ATAS-120 retune warning`.
 
 The current feature must:
 
-- preserve independent band, frequency, and mode operations
-- enforce band selection before every cross-band frequency change
-- validate same-band tuning first on `anvilmobile`
-- validate controlled cross-band selection and read-back
-- validate confirmed POTA receive tuning
-- keep software transmit state false
-- leave the Standard Com Port unopened
-- record the live hardware results
+- publish only after a verified band change
+- preserve the exact target-band warning until explicit acknowledgement
+- produce no warning for same-band tuning
+- remain presentation-only with no tuner or transmit authority
+- pass all automated quality gates
+- complete visible full-screen acceptance on `anvilmobile`
 
-After issue #15 is approved and merged, implement issue #16,
-`Add ATAS-120 retune warning`.
-
-After issues #15 and #16 are complete, begin Milestone 10 Phase C with the
+After issue #16 is approved and merged, begin Milestone 10 Phase C with the
 smallest live-map slice based on the proven GPS and radio state.
