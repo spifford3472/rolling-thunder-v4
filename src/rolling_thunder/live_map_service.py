@@ -172,6 +172,8 @@ class LiveMapService:
             if keyset and all(
                 key in existing and existing[key].png is not None for key in keyset
             ):
+                if self._latest.viewport == viewport:
+                    return
                 self._latest = self._reframe_snapshot(
                     self._latest,
                     viewport,
