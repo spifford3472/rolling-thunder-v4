@@ -27,6 +27,16 @@ class PotaPanelCommands(Protocol):
         """Clear the POTA row selection and any associated intent."""
 
 
+class PotaFilterCommands(Protocol):
+    """Fixed mobile POTA filter-cycle capabilities."""
+
+    def next_band(self) -> object:
+        """Cycle to the next supported mobile HF band."""
+
+    def next_mode(self) -> object:
+        """Cycle to the next supported POTA mode group."""
+
+
 class PotaTuneCommands(Protocol):
     """UI-safe POTA tune-intent capabilities used by panel commands."""
 
@@ -44,11 +54,35 @@ class ActivePanelCommandController:
         self,
         context_navigation: ContextNavigationController,
         pota_panel: PotaPanelCommands,
+        pota_filters: PotaFilterCommands,
         pota_tune: PotaTuneCommands,
     ) -> None:
         self._context_navigation = context_navigation
         self._pota_panel = pota_panel
+        self._pota_filters = pota_filters
         self._pota_tune = pota_tune
+
+    def primary(self) -> bool:
+        """Run the active panel's first context-sensitive command."""
+        if not self._pota_is_active():
+            return False
+        self._pota_filters.next_band()
+        return True
+
+    def secondary(self) -> bool:
+        """Run the active panel's second context-sensitive command."""
+        if not self._pota_is_active():
+            return False
+        self._pota_filters.next_mode()
+        return True
+
+    def tertiary(self) -> bool:
+        """Reserve the third command for the park-information overlay."""
+        return False
+
+    def tertiary_long(self) -> bool:
+        """Reserve the third long command for overlay dismissal."""
+        return False
 
     def move_previous(self) -> bool:
         """Move selection in the active panel when that panel supports it."""
