@@ -7,12 +7,16 @@ from rolling_thunder.context_navigation import ContextId, ContextNavigationContr
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
-from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneResult
+from rolling_thunder.pota_receive_tune_executor import (
+    PotaReceiveTuneResult,
+    PotaReceiveTuneResultStatus,
+)
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pota_spot_source import PotaSpotSourceAvailability
 from rolling_thunder.pota_spots import ParkReference, PotaSpot
 from rolling_thunder.pota_tune_intent import PotaTuneIntent, PotaTuneIntentStatus
 from rolling_thunder.pota_tune_ui_controller import PotaTuneUiController
+from rolling_thunder.radio import RadioBand
 
 
 class StaticProvider:
@@ -27,6 +31,17 @@ class RecordingExecutor:
     def execute(self, intent: PotaTuneIntent) -> PotaReceiveTuneResult:
         self.calls.append(intent)
         raise AssertionError("Active-panel commands must never execute radio tuning.")
+
+
+class BandChangeExecutor:
+    def execute(self, intent: PotaTuneIntent) -> PotaReceiveTuneResult:
+        return PotaReceiveTuneResult(
+            status=PotaReceiveTuneResultStatus.SUCCEEDED,
+            frequency=intent.frequency,
+            mode=intent.mode,
+            target_band=RadioBand.BAND_20M,
+            band_changed=True,
+        )
 
 
 class RecordingOverlay:
@@ -207,6 +222,38 @@ def test_back_cancels_intent_before_clearing_selection() -> None:
 
     assert commands.back() is False
     assert executor.calls == []
+
+
+def test_back_acknowledges_warning_before_cancelling_intent() -> None:
+    navigation = ContextNavigationController(ContextId.POTA)
+    dashboard = PotaDashboardController(
+        StaticProvider(available_state()),
+        clock=lambda: datetime(2026, 8, 1, 23, 5, tzinfo=UTC),
+    )
+    filters = PotaDashboardFilterController(dashboard)
+    filters.activate_for_frequency(Frequency(hz=14_250_000))
+    dashboard.select_next()
+    tune = PotaTuneUiController(dashboard, BandChangeExecutor())
+    overlay = RecordingOverlay()
+    commands = ActivePanelCommandController(
+        navigation,
+        dashboard,
+        filters,
+        tune,
+        overlay,
+    )
+    tune.request()
+    tune.confirm()
+    tune.execute()
+    original_intent = dashboard.tune_intent
+
+    assert tune.retune_warning_active is True
+    assert commands.back() is True
+    assert tune.retune_warning_active is False
+    assert dashboard.selected_index == 0
+    assert dashboard.tune_intent is original_intent
+    assert dashboard.tune_intent is not None
+    assert dashboard.tune_intent.status is PotaTuneIntentStatus.CONFIRMED
 
 
 def test_context_change_prevents_encoder_from_mutating_pota_state() -> None:
