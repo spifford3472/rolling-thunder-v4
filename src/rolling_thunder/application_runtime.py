@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.census_state_outline import CensusStateOutlineProvider
