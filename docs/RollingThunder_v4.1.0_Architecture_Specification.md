@@ -755,11 +755,15 @@ The required logical sequence is:
    c. Read back and verify.
 ```
 
-### Required Research Item
+### Verified CAT Decision
 
-Determine and test the exact FT-891 CAT sequence for reliable band selection.
+The verified FT-891 CAT operations are:
 
-Codex must not guess or invent this behavior.
+- `BSxx;` selects the band.
+- `FA#########;` sets the VFO-A frequency.
+- `MD0x;` sets the receive mode.
+
+`BS` is set-only, so band verification uses `FA;` read-back and the shared frequency-to-band resolver. The FT-891 CAT table has no dedicated 60-meter band-select value, so software selection of 60 meters fails closed.
 
 ### ATAS-120 Constraint
 
@@ -1696,7 +1700,7 @@ The exact source-control policy can be finalized when the repository is establis
 
 ## Required Before or During M1
 
-- Exact FT-891 CAT sequence for reliable band selection
+- Live hardware acceptance of the verified FT-891 band-first CAT sequence
 - Initial local speech-recognition engine
 - Exact microphone and ALSA/PipeWire device configuration
 - Exact GPS hardware and device path
