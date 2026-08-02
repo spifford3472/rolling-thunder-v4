@@ -149,17 +149,13 @@ class PotaDetailOverlayWidgets:
                 source_url=snapshot.image.source_url,
                 byte_count=len(snapshot.image.png_bytes),
             )
-            if identity != self._image_identity:
+            photo = self._photo
+            if identity != self._image_identity or photo is None:
                 encoded = b64encode(snapshot.image.png_bytes).decode("ascii")
                 photo = tk.PhotoImage(data=encoded, format="png")
                 self._photo = photo
                 self._image_identity = identity
-            else:
-                photo = self._photo
-                if photo is None:
-                    encoded = b64encode(snapshot.image.png_bytes).decode("ascii")
-                    photo = tk.PhotoImage(data=encoded, format="png")
-                    self._photo = photo
+            assert photo is not None
             self._image_label.configure(
                 image=photo,
                 text="",
