@@ -109,3 +109,14 @@ class ContextNavigationController:
             return False
         self.select(context_id)
         return True
+
+    def select_next(self) -> ContextNavigationState:
+        """Select the next context, wrapping to the first context."""
+        context_ids = tuple(definition.context_id for definition in CONTEXT_DEFINITIONS)
+        current_index = context_ids.index(self._state.selected)
+        next_index = (current_index + 1) % len(context_ids)
+        return self.select(context_ids[next_index])
+
+    def select_home(self) -> ContextNavigationState:
+        """Return to the primary POTA context."""
+        return self.select(ContextId.POTA)

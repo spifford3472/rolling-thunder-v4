@@ -75,6 +75,14 @@ class OperatorCommandController:
                 self._radio_state(),
             )
 
+        if action is ControlAction.NEXT_CONTEXT:
+            self._context_navigation.select_next()
+            return True
+
+        if action is ControlAction.HOME_CONTEXT:
+            self._context_navigation.select_home()
+            return True
+
         context_id = _CONTEXT_ACTIONS.get(action)
         if context_id is None:
             return False

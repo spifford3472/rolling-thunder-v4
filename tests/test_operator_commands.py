@@ -161,3 +161,33 @@ def test_each_context_action_selects_exact_existing_context() -> None:
 
         assert commands.execute(action) is True
         assert navigation.state.selected is context_id
+
+
+def test_next_context_cycles_existing_navigation_controller() -> None:
+    navigation = ContextNavigationController(ContextId.POTA)
+    commands = controller(FakeCapture(), FakeCommit(), navigation)
+
+    assert commands.execute(ControlAction.NEXT_CONTEXT) is True
+    assert navigation.state.selected is ContextId.DX
+
+
+def test_home_context_returns_to_pota() -> None:
+    navigation = ContextNavigationController(ContextId.SETTINGS)
+    commands = controller(FakeCapture(), FakeCommit(), navigation)
+
+    assert commands.execute(ControlAction.HOME_CONTEXT) is True
+    assert navigation.state.selected is ContextId.POTA
+
+
+def test_unimplemented_selection_actions_are_safely_rejected() -> None:
+    commands = controller(FakeCapture(), FakeCommit())
+
+    unsupported = (
+        ControlAction.MOVE_PREVIOUS,
+        ControlAction.MOVE_NEXT,
+        ControlAction.ACTIVATE_SELECTION,
+        ControlAction.BACK,
+    )
+
+    for action in unsupported:
+        assert commands.execute(action) is False
