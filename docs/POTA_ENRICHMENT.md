@@ -4,10 +4,13 @@
 
 Rolling Thunder can optionally enrich the mobile POTA panel with:
 
-- operator names from the QRZ XML callsign-data service
-- current park temperature from Open-Meteo
-- park-local 24-hour time from Open-Meteo
-- a freely licensed park image from Wikimedia Commons when available
+- operator names and optional primary profile photos from the QRZ XML
+  callsign-data service
+- current park temperature, condition, and park-local 24-hour time from
+  Open-Meteo
+- a generalized U.S. state outline from the U.S. Census TIGERweb service
+- a locally rendered park-location pin using the coordinates already supplied
+  by the POTA spot feed
 
 These services enhance the POTA display only. They are not required for POTA
 spot retrieval, local logging, radio state, filtering, encoder selection, or
@@ -18,13 +21,14 @@ provider leaves the rest of the POTA panel operational.
 
 ## QRZ Account Requirement
 
-QRZ callsign-name lookup uses the QRZ XML callsign-data service. It requires the
+QRZ callsign enrichment uses the QRZ XML callsign-data service. It requires the
 QRZ account username and password used to create an XML session key.
 
 The separate QRZ Logbook API key is not used by the XML callsign-data service.
 
 When QRZ credentials are absent, POTA cards continue to show callsigns without
-names.
+names. The park overlay shows a generated callsign badge instead of a profile
+photo.
 
 ## Local Secret File
 
@@ -97,9 +101,9 @@ value.
 
 ### Callsign names
 
-Visible POTA cards are queued for background name lookup. Until the lookup
-finishes, the card shows only the callsign. A successful cached result is shown
-as:
+Visible POTA cards are queued for background QRZ profile lookup. Until the
+lookup finishes, the card shows only the callsign. A successful cached result is
+shown as:
 
 ```text
 KI5VNB - Geoff Kline
@@ -117,15 +121,27 @@ On the POTA panel:
 
 1. Rotate the encoder to focus a spot.
 2. Short-press Context #3.
-3. The park detail card appears over the reserved map panel.
+3. The park detail card appears over the reserved situational panel.
 
 The card displays:
 
-- park name
-- park image or `NOT AVAILABLE`
+- park name and POTA reference
+- a state-level map on the left with the park coordinates marked by a pin
+- the focused activator's QRZ primary photo on the right when available
+- a generated callsign badge when no suitable QRZ photo is available
 - temperature in Fahrenheit and Celsius
+- one familiar current-condition weather symbol
 - park-local time in 24-hour format
-- image attribution and license when an image is shown
+
+Weather symbols are limited to:
+
+- `☀` clear daytime
+- `☾` clear nighttime
+- `⛅` partly cloudy
+- `☁` cloudy or fog
+- `☂` drizzle or rain
+- `❄` snow
+- `⚡` thunderstorm
 
 The card disappears when:
 
@@ -137,20 +153,22 @@ Context #3 does nothing when no POTA spot is focused.
 
 ## Provider Failure Behavior
 
-- QRZ unavailable: callsign-only cards remain usable.
-- Weather unavailable or coordinates missing: temperature and local time show
-  `NOT AVAILABLE`.
-- No suitable licensed image: the image area shows `NOT AVAILABLE`.
-- One park-detail provider fails: successful data from the other provider is
-  still displayed.
+- QRZ unavailable: callsign-only cards and the callsign badge remain usable.
+- QRZ profile has no primary photo: the callsign badge is displayed.
+- Weather unavailable or coordinates missing: temperature, symbol, and local
+  time show `NOT AVAILABLE`.
+- State map unavailable or the location is outside the supported U.S. state
+  format: the map area shows `MAP NOT AVAILABLE`.
+- One provider fails: successful data from the other providers remains visible.
 - Internet unavailable: POTA spot cache and all local application functions
   continue according to their existing behavior.
 
-## Image Licensing
+## Data and Image Safety
 
-The image adapter accepts only Commons metadata indicating a freely reusable
-license such as Creative Commons, CC0, or public domain. Non-free and restricted
-results are rejected. When an image is displayed, its contributor attribution
-and short license name are shown below it.
+The map adapter requests a generalized state boundary as GeoJSON and passes only
+validated longitude/latitude rings to the UI. Tkinter draws the state and park
+pin locally; no map tiles or embedded browser are used.
 
-The image is normalized to PNG and bounded in size before it reaches Tkinter.
+QRZ profile-image URLs are accepted only from `qrz.com` or its subdomains. The
+image is downloaded in the background, limited in size, normalized to a bounded
+PNG with Pillow, and then delivered to Tkinter as immutable cached data.
