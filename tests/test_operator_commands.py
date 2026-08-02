@@ -52,6 +52,22 @@ class FakeActivePanel:
         self.result = result
         self.actions: list[str] = []
 
+    def primary(self) -> bool:
+        self.actions.append("primary")
+        return self.result
+
+    def secondary(self) -> bool:
+        self.actions.append("secondary")
+        return self.result
+
+    def tertiary(self) -> bool:
+        self.actions.append("tertiary")
+        return self.result
+
+    def tertiary_long(self) -> bool:
+        self.actions.append("tertiary_long")
+        return self.result
+
     def move_previous(self) -> bool:
         self.actions.append("move_previous")
         return self.result
@@ -203,10 +219,14 @@ def test_home_context_returns_to_pota() -> None:
     assert navigation.state.selected is ContextId.POTA
 
 
-def test_selection_actions_are_safely_rejected_without_active_panel() -> None:
+def test_active_panel_actions_are_safely_rejected_without_controller() -> None:
     commands = controller(FakeCapture(), FakeCommit())
 
     unsupported = (
+        ControlAction.PANEL_PRIMARY,
+        ControlAction.PANEL_SECONDARY,
+        ControlAction.PANEL_TERTIARY,
+        ControlAction.PANEL_TERTIARY_LONG,
         ControlAction.MOVE_PREVIOUS,
         ControlAction.MOVE_NEXT,
         ControlAction.ACTIVATE_SELECTION,
@@ -217,8 +237,12 @@ def test_selection_actions_are_safely_rejected_without_active_panel() -> None:
         assert commands.execute(action) is False
 
 
-def test_selection_actions_delegate_to_active_panel_commands() -> None:
+def test_active_panel_actions_delegate_to_active_panel_commands() -> None:
     expected = {
+        ControlAction.PANEL_PRIMARY: "primary",
+        ControlAction.PANEL_SECONDARY: "secondary",
+        ControlAction.PANEL_TERTIARY: "tertiary",
+        ControlAction.PANEL_TERTIARY_LONG: "tertiary_long",
         ControlAction.MOVE_PREVIOUS: "move_previous",
         ControlAction.MOVE_NEXT: "move_next",
         ControlAction.ACTIVATE_SELECTION: "activate_selection",
