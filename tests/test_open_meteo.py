@@ -44,7 +44,7 @@ def park() -> ParkReference:
     )
 
 
-def test_fetch_weather_returns_fahrenheit_celsius_and_local_time() -> None:
+def test_fetch_weather_returns_condition_temperature_and_local_time() -> None:
     transport = FakeTransport(
         FakeResponse(
             status_code=200,
@@ -52,7 +52,7 @@ def test_fetch_weather_returns_fahrenheit_celsius_and_local_time() -> None:
                 b'{"latitude":39.489,"longitude":-84.055,'
                 b'"timezone":"America/New_York",'
                 b'"current":{"time":"2026-08-02T01:30",'
-                b'"temperature_2m":20.0}}'
+                b'"temperature_2m":20.0,"weather_code":2,"is_day":0}}'
             ),
         )
     )
@@ -63,9 +63,11 @@ def test_fetch_weather_returns_fahrenheit_celsius_and_local_time() -> None:
     assert weather.temperature_c == 20.0
     assert weather.temperature_f == 68.0
     assert weather.local_time == "01:30"
+    assert weather.weather_code == 2
+    assert weather.is_day is False
     assert weather.timezone == "America/New_York"
     assert "timezone=auto" in transport.requests[0][0]
-    assert "current=temperature_2m" in transport.requests[0][0]
+    assert "current=temperature_2m%2Cweather_code%2Cis_day" in transport.requests[0][0]
 
 
 def test_missing_coordinates_are_rejected_before_http() -> None:
@@ -86,4 +88,42 @@ def test_invalid_current_weather_is_actionable() -> None:
     )
 
     with pytest.raises(OpenMeteoError, match="missing current weather"):
+        provider.fetch_weather(park())
+
+
+def test_invalid_weather_code_is_rejected() -> None:
+    provider = OpenMeteoParkWeatherProvider(
+        transport=FakeTransport(
+            FakeResponse(
+                status_code=200,
+                body=(
+                    b'{"timezone":"America/New_York",'
+                    b'"current":{"time":"2026-08-02T01:30",'
+                    b'"temperature_2m":20.0,"weather_code":"rain",'
+                    b'"is_day":0}}'
+                ),
+            )
+        )
+    )
+
+    with pytest.raises(OpenMeteoError, match="invalid weather code"):
+        provider.fetch_weather(park())
+
+
+def test_invalid_day_state_is_rejected() -> None:
+    provider = OpenMeteoParkWeatherProvider(
+        transport=FakeTransport(
+            FakeResponse(
+                status_code=200,
+                body=(
+                    b'{"timezone":"America/New_York",'
+                    b'"current":{"time":"2026-08-02T01:30",'
+                    b'"temperature_2m":20.0,"weather_code":0,'
+                    b'"is_day":2}}'
+                ),
+            )
+        )
+    )
+
+    with pytest.raises(OpenMeteoError, match="invalid day-state"):
         provider.fetch_weather(park())
