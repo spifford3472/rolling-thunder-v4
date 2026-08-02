@@ -219,21 +219,77 @@ The `Radio` boundary and `Ft891Radio` adapter support the approved safe scope:
 
 - connect and disconnect
 - read current VFO-A frequency and receive mode
-- background state refresh
-- set frequency and receive mode
-- deterministic band changes
-- explicit receive-only POTA tune execution after the existing confirmation
-  intent flow
+- background state refresh and recovery
+- independent band selection through `select_band()`
+- independent same-band frequency changes through `set_frequency()`
+- independent receive-mode changes through `set_mode()`
+- verified, ordered receive-only tuning
+- confirmed POTA tuning through the same ordered application service
+
+Band, frequency, and mode are intentionally separate operations. No
+band-selection operation chooses the final operating frequency or receive mode.
+
+The shared frequency-to-band resolver determines the amateur band represented
+by a frequency. A direct cross-band `set_frequency()` request raises
+`BandChangeRequiredError` before an `FA` command is sent.
+
+The FT-891 CAT operations are separated as follows:
+
+```text
+BSxx;          select a band
+FA#########;   set VFO-A frequency
+MD0x;          set the main receive mode
+```
+
+`BS` is set-only. Band selection is verified by reading `FA;` and resolving the
+returned frequency back to an amateur band.
+
+The ordered `ReceiveTuningService` owns the approved sequence:
+
+```text
+Determine target band from requested frequency
+Read current radio state
+
+If the target band differs:
+    select target band with BSxx;
+    read frequency and mode
+    verify the selected band
+
+set target frequency with FA#########;
+read FA;
+verify frequency
+
+set target mode with MD0x; when needed
+read MD0;
+verify mode
+```
+
+Same-band tuning skips `select_band()` but still verifies frequency and mode.
+A failed band verification prevents frequency and mode changes. A failed
+frequency verification prevents the mode change.
+
+Confirmed POTA tuning uses this same service and cannot issue frequency or mode
+commands directly.
+
+The FT-891 CAT table has no dedicated 60-meter `BS` command. Software band
+selection for 60 meters therefore fails closed rather than guessing or silently
+mapping it to another band.
 
 The radio state always reports `transmitting=False` in this scope. No component
-may expose PTT, MOX, CW keying, voice keying, automatic transmission, or
-unattended transmit control. Voice recognition and ESP32 events are operator
-input mechanisms, not radio-control authority.
+may expose PTT, MOX, CW keying, voice keying, automatic transmission, tuner
+control, power control, or unattended transmit authority. Voice recognition and
+ESP32 events are operator-input mechanisms, not direct radio-control authority.
 
-Milestone 10 Phase B validates the existing adapter with the installed FT-891.
-The sequence is read-only connection and polling first, then explicit
-receive-only changes. Hardware validation must be performed by the repository
-owner before merge.
+Milestone 10 Phase B read-only connection, polling, disconnect, and recovery
+have been validated on the installed FT-891. The ordered band-first software
+path is implemented and covered by deterministic tests. Same-band,
+cross-band, and confirmed POTA receive-only changes still require controlled
+live validation on `anvilmobile` before approval and merge.
+
+Issue #16 remains responsible for publishing and presenting the required
+ATAS-120 retune warning after a verified band change. Until that warning is
+implemented, live cross-band tests must remain receive-only and the operator
+must not assume the antenna is tuned or safe to transmit.
 
 ## GPS Architecture
 
