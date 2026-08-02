@@ -34,6 +34,8 @@ class SerialLinePort(Protocol):
 
 SerialFactory = Callable[[Path, int, float], SerialLinePort]
 Clock = Callable[[], datetime]
+_SUPPORTED_GGA_SENTENCE_TYPES = frozenset({"GPGGA", "GNGGA"})
+_DEFAULT_MAXIMUM_SENTENCES_PER_REFRESH = 32
 
 
 def _open_serial(device: Path, baud_rate: int, timeout_s: float) -> SerialLinePort:
@@ -102,7 +104,7 @@ def parse_gga_sentence(sentence: str, *, updated_at: datetime) -> GPSPosition:
     normalized = sentence.strip()
     payload = _validate_checksum(normalized)
     fields = payload.split(",")
-    if len(fields) < 15 or fields[0] not in {"GPGGA", "GNGGA"}:
+    if len(fields) < 15 or fields[0] not in _SUPPORTED_GGA_SENTENCE_TYPES:
         raise GPSParseError("Expected a supported GPGGA or GNGGA sentence.")
 
     try:
@@ -150,6 +152,7 @@ class SerialGPSReceiver:
         *,
         baud_rate: int = 9_600,
         timeout_s: float = 2.0,
+        maximum_sentences_per_refresh: int = _DEFAULT_MAXIMUM_SENTENCES_PER_REFRESH,
         serial_factory: SerialFactory = _open_serial,
         clock: Clock = _utc_now,
     ) -> None:
@@ -159,9 +162,12 @@ class SerialGPSReceiver:
             raise ValueError("GPS baud rate must be positive.")
         if timeout_s <= 0:
             raise ValueError("GPS timeout must be positive.")
+        if maximum_sentences_per_refresh <= 0:
+            raise ValueError("Maximum GPS sentences per refresh must be positive.")
         self._device = device
         self._baud_rate = baud_rate
         self._timeout_s = timeout_s
+        self._maximum_sentences_per_refresh = maximum_sentences_per_refresh
         self._serial_factory = serial_factory
         self._clock = clock
         self._port: SerialLinePort | None = None
@@ -173,23 +179,24 @@ class SerialGPSReceiver:
 
     def connect(self) -> GPSState:
         """Open the receiver and read its first supported position sentence."""
-        if self._port is not None and self._port.is_open:
-            return self.get_state()
+        if self._port is None or not self._port.is_open:
+            try:
+                self._port = self._serial_factory(
+                    self._device,
+                    self._baud_rate,
+                    self._timeout_s,
+                )
+            except (OSError, serial.SerialException) as error:
+                message = f"Could not open GPS device {self._device}: {error}"
+                self._publish_error(message)
+                raise GPSConnectionError(message) from error
+
         try:
-            self._port = self._serial_factory(
-                self._device,
-                self._baud_rate,
-                self._timeout_s,
-            )
             return self.refresh_state()
-        except (OSError, serial.SerialException, GPSError) as error:
-            self._state = GPSState(
-                connection_state=GPSConnectionState.ERROR,
-                position=None,
-                updated_at=self._clock(),
-                last_error=f"Could not initialize GPS device {self._device}: {error}",
-            )
-            raise GPSConnectionError(self._state.last_error) from error
+        except GPSError as error:
+            message = f"Could not initialize GPS device {self._device}: {error}"
+            self._publish_error(message)
+            raise GPSConnectionError(message) from error
 
     def disconnect(self) -> GPSState:
         """Close the receiver and clear its position snapshot."""
@@ -199,13 +206,9 @@ class SerialGPSReceiver:
             try:
                 port.close()
             except (OSError, serial.SerialException) as error:
-                self._state = GPSState(
-                    connection_state=GPSConnectionState.ERROR,
-                    position=None,
-                    updated_at=self._clock(),
-                    last_error=f"Could not close GPS device {self._device}: {error}",
-                )
-                raise GPSConnectionError(self._state.last_error) from error
+                message = f"Could not close GPS device {self._device}: {error}"
+                self._publish_error(message)
+                raise GPSConnectionError(message) from error
         self._state = GPSState(
             connection_state=GPSConnectionState.DISCONNECTED,
             position=None,
@@ -218,28 +221,78 @@ class SerialGPSReceiver:
         return self._state
 
     def refresh_state(self) -> GPSState:
-        """Read one supported GGA sentence and publish a new immutable snapshot."""
+        """Scan a bounded mixed NMEA stream for the next supported GGA sentence."""
         port = self._port
         if port is None or not port.is_open:
-            raise GPSConnectionError("GPS receiver is not connected.")
-        try:
-            raw_sentence = port.readline()
-        except (OSError, serial.SerialException) as error:
-            raise GPSConnectionError(
-                f"Could not read from GPS device {self._device}: {error}"
-            ) from error
-        if not raw_sentence:
-            raise GPSConnectionError(
-                f"Timed out waiting for NMEA data from GPS device {self._device}."
+            message = "GPS receiver is not connected."
+            self._publish_error(message)
+            raise GPSConnectionError(message)
+
+        for _ in range(self._maximum_sentences_per_refresh):
+            try:
+                raw_sentence = port.readline()
+            except (OSError, serial.SerialException) as error:
+                self._close_failed_port()
+                message = f"Could not read from GPS device {self._device}: {error}"
+                self._publish_error(message)
+                raise GPSConnectionError(message) from error
+
+            if not raw_sentence:
+                message = f"Timed out waiting for NMEA data from GPS device {self._device}."
+                self._publish_error(message)
+                raise GPSConnectionError(message)
+
+            try:
+                sentence = raw_sentence.decode("ascii").strip()
+            except UnicodeDecodeError:
+                continue
+
+            # Opening a live serial stream can begin in the middle of one sentence.
+            # Ignore only incomplete framing fragments; complete NMEA candidates still
+            # receive strict checksum validation below.
+            if not sentence.startswith("$") or "*" not in sentence:
+                continue
+
+            try:
+                payload = _validate_checksum(sentence)
+                sentence_type = payload.split(",", 1)[0]
+                if sentence_type not in _SUPPORTED_GGA_SENTENCE_TYPES:
+                    continue
+                position = parse_gga_sentence(sentence, updated_at=self._clock())
+            except GPSParseError as error:
+                self._publish_error(str(error))
+                raise
+
+            self._state = GPSState(
+                connection_state=GPSConnectionState.CONNECTED,
+                position=position,
+                updated_at=position.updated_at,
             )
-        try:
-            sentence = raw_sentence.decode("ascii")
-        except UnicodeDecodeError as error:
-            raise GPSParseError("GPS NMEA data is not ASCII.") from error
-        position = parse_gga_sentence(sentence, updated_at=self._clock())
+            return self._state
+
+        message = (
+            "Did not receive a supported GPGGA or GNGGA sentence within "
+            f"{self._maximum_sentences_per_refresh} NMEA sentences from "
+            f"GPS device {self._device}."
+        )
+        self._publish_error(message)
+        raise GPSConnectionError(message)
+
+    def _publish_error(self, message: str) -> GPSState:
         self._state = GPSState(
-            connection_state=GPSConnectionState.CONNECTED,
-            position=position,
-            updated_at=position.updated_at,
+            connection_state=GPSConnectionState.ERROR,
+            position=None,
+            updated_at=self._clock(),
+            last_error=message,
         )
         return self._state
+
+    def _close_failed_port(self) -> None:
+        port = self._port
+        self._port = None
+        if port is None:
+            return
+        try:
+            port.close()
+        except (OSError, serial.SerialException):
+            pass
