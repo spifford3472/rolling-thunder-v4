@@ -122,8 +122,7 @@ class PotaDetailOverlayWidgets:
             font=("DejaVu Sans", 38, "bold"),
             anchor="w",
             padx=24,
-            pady=(6, 22),
-        ).grid(row=3, column=0, sticky="ew")
+        ).grid(row=3, column=0, sticky="ew", pady=(6, 22))
 
     def update(self, state: PotaDetailOverlayState) -> None:
         """Show or hide the overlay using only immutable cached state."""
@@ -152,10 +151,17 @@ class PotaDetailOverlayWidgets:
             )
             if identity != self._image_identity:
                 encoded = b64encode(snapshot.image.png_bytes).decode("ascii")
-                self._photo = tk.PhotoImage(data=encoded, format="png")
+                photo = tk.PhotoImage(data=encoded, format="png")
+                self._photo = photo
                 self._image_identity = identity
+            else:
+                photo = self._photo
+                if photo is None:
+                    encoded = b64encode(snapshot.image.png_bytes).decode("ascii")
+                    photo = tk.PhotoImage(data=encoded, format="png")
+                    self._photo = photo
             self._image_label.configure(
-                image=self._photo,
+                image=photo,
                 text="",
                 fg=_BRIGHT,
             )
