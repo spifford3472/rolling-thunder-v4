@@ -1,7 +1,7 @@
 """Central environment-backed secret configuration for Rolling Thunder."""
 
-from collections.abc import Mapping
 import os
+from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
 
