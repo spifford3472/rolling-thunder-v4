@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import serial
 
 from rolling_thunder.domain import GPSFixState
 from rolling_thunder.gps import GPSConnectionError, GPSConnectionState
@@ -20,7 +21,12 @@ def _sentence(payload: str) -> str:
 
 
 class FakeSerialPort:
-    def __init__(self, replies: list[bytes], *, is_open: bool = True) -> None:
+    def __init__(
+        self,
+        replies: list[bytes | BaseException],
+        *,
+        is_open: bool = True,
+    ) -> None:
         self.replies = replies
         self._is_open = is_open
         self.closed = False
@@ -36,7 +42,10 @@ class FakeSerialPort:
     def readline(self) -> bytes:
         if not self.replies:
             return b""
-        return self.replies.pop(0)
+        reply = self.replies.pop(0)
+        if isinstance(reply, BaseException):
+            raise reply
+        return reply
 
 
 def test_parse_valid_gga_fix() -> None:
@@ -131,6 +140,76 @@ def test_receiver_connects_reads_and_disconnects() -> None:
     assert disconnected.position is None
 
 
+def test_receiver_skips_live_stream_sentences_until_gga() -> None:
+    gga = _sentence(
+        "GNGGA,131645.000,3931.4668,N,08403.7491,W,2,15,0.68,271.6,M,-33.3,M,,"
+    )
+    replies = [
+        _sentence("GNRMC,131645.000,A,3931.4668,N,08403.7491,W,0.07,0.00,020826,,,D").encode(
+            "ascii"
+        ),
+        _sentence("GPGSA,A,3,21,11,05,20,25,15,12,06,18,,,,0.97,0.68,0.68").encode(
+            "ascii"
+        ),
+        gga.encode("ascii"),
+    ]
+    receiver = SerialGPSReceiver(
+        Path("/dev/ttyUSB3"),
+        serial_factory=lambda _device, _baud, _timeout: FakeSerialPort(replies),
+        clock=lambda: _FIXED_TIME,
+    )
+
+    state = receiver.connect()
+
+    assert state.connection_state is GPSConnectionState.CONNECTED
+    assert state.position is not None
+    assert state.position.latitude == pytest.approx(39.5244467)
+    assert state.position.longitude == pytest.approx(-84.062485)
+    assert state.position.satellites == 15
+
+
+def test_receiver_skips_truncated_and_non_ascii_startup_fragments() -> None:
+    gga = _sentence(
+        "GNGGA,131646.000,3931.4668,N,08403.7492,W,2,15,0.68,271.6,M,-33.3,M,,"
+    )
+    receiver = SerialGPSReceiver(
+        Path("/dev/ttyUSB3"),
+        serial_factory=lambda _device, _baud, _timeout: FakeSerialPort(
+            [b"1644.000,1,1.53,-1.81,*53\r\n", b"\xff\n", gga.encode("ascii")]
+        ),
+        clock=lambda: _FIXED_TIME,
+    )
+
+    state = receiver.connect()
+
+    assert state.connection_state is GPSConnectionState.CONNECTED
+    assert state.position is not None
+    assert state.position.longitude == pytest.approx(-84.0624867)
+
+
+def test_receiver_rejects_bad_checksum_in_unsupported_sentence() -> None:
+    first_gga = _sentence(
+        "GNGGA,131645.000,3931.4668,N,08403.7491,W,2,15,0.68,271.6,M,-33.3,M,,"
+    )
+    port = FakeSerialPort(
+        [
+            first_gga.encode("ascii"),
+            b"$GNRMC,131646.000,A,3931.4668,N,08403.7492,W,0.03,0.00,020826,,,D*00\r\n",
+        ]
+    )
+    receiver = SerialGPSReceiver(
+        Path("/dev/ttyUSB3"),
+        serial_factory=lambda _device, _baud, _timeout: port,
+        clock=lambda: _FIXED_TIME,
+    )
+    receiver.connect()
+
+    with pytest.raises(GPSParseError, match="checksum mismatch"):
+        receiver.refresh_state()
+
+    assert receiver.get_state().connection_state is GPSConnectionState.ERROR
+
+
 def test_receiver_rejects_refresh_before_connect() -> None:
     receiver = SerialGPSReceiver(
         Path("/dev/ttyUSB1"),
@@ -158,15 +237,55 @@ def test_receiver_reports_timeout_during_connect() -> None:
     assert "/dev/ttyUSB1" in state.last_error
 
 
-def test_receiver_reports_non_ascii_input() -> None:
+def test_receiver_reports_missing_gga_within_bounded_scan() -> None:
     receiver = SerialGPSReceiver(
-        Path("/dev/ttyUSB1"),
-        serial_factory=lambda _device, _baud, _timeout: FakeSerialPort([b"\xff\n"]),
+        Path("/dev/ttyUSB3"),
+        maximum_sentences_per_refresh=2,
+        serial_factory=lambda _device, _baud, _timeout: FakeSerialPort(
+            [
+                _sentence("GNRMC,131645.000,A,,,,,,,020826,,,N").encode("ascii"),
+                _sentence("GNZDA,131645.000,02,08,2026,,").encode("ascii"),
+            ]
+        ),
         clock=lambda: _FIXED_TIME,
     )
 
-    with pytest.raises(GPSConnectionError, match="not ASCII"):
+    with pytest.raises(GPSConnectionError, match="within 2 NMEA sentences"):
         receiver.connect()
+
+
+def test_receiver_reopens_after_physical_disconnect() -> None:
+    first_gga = _sentence(
+        "GNGGA,131645.000,3931.4668,N,08403.7491,W,2,15,0.68,271.6,M,-33.3,M,,"
+    )
+    recovered_gga = _sentence(
+        "GNGGA,131700.000,3931.5000,N,08403.7000,W,2,14,0.75,272.0,M,-33.3,M,,"
+    )
+    first_port = FakeSerialPort(
+        [first_gga.encode("ascii"), serial.SerialException("device disconnected")]
+    )
+    recovered_port = FakeSerialPort([recovered_gga.encode("ascii")])
+    ports = iter([first_port, recovered_port])
+
+    receiver = SerialGPSReceiver(
+        Path("/dev/serial/by-id/gps"),
+        serial_factory=lambda _device, _baud, _timeout: next(ports),
+        clock=lambda: _FIXED_TIME,
+    )
+    receiver.connect()
+
+    with pytest.raises(GPSConnectionError, match="device disconnected"):
+        receiver.refresh_state()
+
+    assert first_port.closed is True
+    assert receiver.get_state().connection_state is GPSConnectionState.ERROR
+
+    recovered = receiver.connect()
+
+    assert recovered.connection_state is GPSConnectionState.CONNECTED
+    assert recovered.position is not None
+    assert recovered.position.latitude == pytest.approx(39.525)
+    assert recovered.position.longitude == pytest.approx(-84.0616667)
 
 
 def test_receiver_requires_absolute_device_path() -> None:
@@ -179,3 +298,5 @@ def test_receiver_validates_serial_settings() -> None:
         SerialGPSReceiver(Path("/dev/ttyUSB1"), baud_rate=0)
     with pytest.raises(ValueError, match="timeout"):
         SerialGPSReceiver(Path("/dev/ttyUSB1"), timeout_s=0)
+    with pytest.raises(ValueError, match="sentences per refresh"):
+        SerialGPSReceiver(Path("/dev/ttyUSB1"), maximum_sentences_per_refresh=0)
