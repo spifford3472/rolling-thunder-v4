@@ -24,7 +24,7 @@ def test_format_enriched_callsign_preserves_callsign_only_fallback() -> None:
         (0, True, "☀"),
         (0, False, "☾"),
         (2, True, "⛅"),
-        (2, False, "☁"),
+        (2, False, "⛅"),
         (3, True, "☁"),
         (45, True, "☁"),
         (51, True, "☂"),
