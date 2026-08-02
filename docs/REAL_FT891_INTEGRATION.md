@@ -2,13 +2,27 @@
 
 ## Scope
 
-This document covers Milestone 10 Phase B, first slice: read-only integration of
-the installed Yaesu FT-891. The approved live commands in this slice request the
-current VFO-A frequency and operating mode only.
+This document covers Milestone 10 Phase B integration of the installed Yaesu
+FT-891.
 
-Receive-only frequency, mode, band, and confirmed POTA tuning remain a later
-validation step. This slice adds no PTT, MOX, CW keying, voice keying, automatic
-transmission, or unattended transmit authority.
+The first Phase B slice established and validated:
+
+- stable USB device identity
+- read-only CAT connection
+- current VFO-A frequency and receive mode
+- background polling
+- disconnect detection
+- automatic recovery
+
+The current Phase B slice implements safe receive-only control with independent
+band, frequency, and mode operations and a hard band-before-frequency rule.
+
+The ordered control software is covered by deterministic automated tests. Its
+write operations still require controlled live hardware acceptance on
+`anvilmobile`.
+
+This work adds no PTT, MOX, CW keying, voice keying, tuner control, power
+control, automatic transmission, or unattended transmit authority.
 
 ## Verified USB Interfaces
 
@@ -19,7 +33,7 @@ The two interfaces have different safety roles:
 
 | Interface | Stable path suffix | Observed tty | Purpose |
 | --- | --- | --- | --- |
-| Enhanced Com Port | `if00-port0` | `/dev/ttyUSB1` | CAT frequency and mode |
+| Enhanced Com Port | `if00-port0` | `/dev/ttyUSB1` | CAT state and receive control |
 | Standard Com Port | `if01-port0` | `/dev/ttyUSB2` | PTT, CW keying, and digital TX control |
 
 Rolling Thunder must use only the Enhanced Com Port:
@@ -28,8 +42,8 @@ Rolling Thunder must use only the Enhanced Com Port:
 /dev/serial/by-id/usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_011F42E9-if00-port0
 ```
 
-The Standard Com Port must not be configured as `hardware.radio_device` and was
-not opened during read-only validation.
+The Standard Com Port must not be configured as `hardware.radio_device` and
+must remain unopened.
 
 ## Verified Serial Settings
 
@@ -41,15 +55,86 @@ The installed radio responded successfully with:
 - 2 stop bits
 - semicolon-terminated CAT commands and replies
 
-The read-only live probe sent only:
+The verified read commands are:
 
 ```text
 FA;
 MD0;
 ```
 
-The radio replied with a current state of 7.273020 MHz, LSB. Rolling Thunder
-reported `transmitting=False`, closed the transport, and released the device.
+The read-only hardware tests confirmed current frequency and mode,
+disconnect/reconnect recovery, and `transmitting=False`.
+
+## Band, Frequency, and Mode Separation
+
+Band selection, frequency setting, and mode setting are independent operations:
+
+```text
+select_band(band)
+set_frequency(frequency)
+set_mode(mode)
+```
+
+Band selection does not choose the final target frequency or receive mode.
+
+The FT-891 CAT commands are:
+
+```text
+BSxx;          select band
+FA#########;   set VFO-A frequency
+MD0x;          set main receive mode
+```
+
+The supported CAT band-selection commands are:
+
+| Band | Command |
+| --- | --- |
+| 160 m | `BS00;` |
+| 80 m | `BS01;` |
+| 40 m | `BS03;` |
+| 30 m | `BS04;` |
+| 20 m | `BS05;` |
+| 17 m | `BS06;` |
+| 15 m | `BS07;` |
+| 12 m | `BS08;` |
+| 10 m | `BS09;` |
+| 6 m | `BS10;` |
+
+The FT-891 CAT table has no dedicated 60-meter `BS` value. Software selection
+of 60 meters therefore fails closed.
+
+## Required Receive-Tuning Order
+
+The shared `ReceiveTuningService` owns the required sequence:
+
+```text
+Determine target band from requested frequency
+Read current frequency and determine current band
+
+If the target band differs:
+    send BSxx;
+    read FA; and MD0;
+    verify the returned frequency belongs to the target band
+
+send FA#########;
+read FA;
+verify the exact requested frequency
+
+send MD0x; when the requested mode differs
+read MD0;
+verify the requested mode
+```
+
+A direct cross-band `set_frequency()` call raises
+`BandChangeRequiredError` before an `FA` command is transmitted.
+
+A failed band verification prevents frequency and mode changes. A failed
+frequency verification prevents the mode change.
+
+Same-band tuning skips the `BS` command but still verifies frequency and mode.
+
+Confirmed POTA tuning uses this same ordered service. POTA code has no direct
+frequency, mode, band, PTT, or transmit-command path.
 
 ## Configuration
 
@@ -66,77 +151,128 @@ hardware:
   gps_device: null
 ```
 
-Use a stable `/dev/serial/by-id` path rather than `/dev/ttyUSB1`, because tty
-numbers can change after USB reconnects. The configured user must have access to
-the serial device; user `geoff` is a member of `dialout` on the verified Pi.
+Use the stable `/dev/serial/by-id` path rather than `/dev/ttyUSB1`, because tty
+numbers can change after USB reconnects.
+
+The configured user must have serial-device access. User `geoff` is a member of
+`dialout` on the verified Pi.
 
 ## Runtime Behavior
 
-Radio polling owns initial connection and recovery. It operates outside the
-Tkinter thread through the existing scheduler boundary.
+Radio polling owns initial connection and recovery outside the Tkinter thread.
 
 At startup:
 
-- the application attempts to connect to the configured Enhanced CAT port
+- the application connects to the configured Enhanced CAT port
 - successful connection publishes current frequency and mode
 - failed connection publishes visible radio error state
-- local application services and GPS polling continue running
-- polling remains scheduled and retries the radio connection
+- local services and GPS continue running
+- polling remains scheduled and retries the stable device path
 
-After a read failure or physical disconnect:
+After a CAT failure or physical disconnect:
 
-- the FT-891 adapter closes the failed CAT transport
+- the adapter closes the failed transport
 - the last known frequency and mode remain available with error state
 - software transmit state remains false
-- polling continues and retries the stable by-id path
-- reconnection refreshes current hardware frequency and mode without restarting
-  the application
+- polling continues
+- reconnection refreshes current hardware state without restarting the app
+
+Receive-tuning operations use the ordered application service through the
+existing explicit operator-confirmation path. Blocking CAT work must not run
+directly from a Tkinter widget callback.
+
+## ATAS-120 Limitation
+
+Band selection and receive frequency changes do not imply that the ATAS-120 is
+tuned or safe to transmit.
+
+Issue #16 will add the required visible warning:
+
+```text
+BAND CHANGED TO <BAND> — RETUNE ATAS-120
+```
+
+Until that warning is implemented and approved, live cross-band validation must
+remain receive-only. Do not key the transmitter during these tests.
 
 ## Safety Boundary
 
-The typed `Radio` boundary exposes no PTT operation. This integration does not add
-or issue raw commands for:
+The typed radio and receive-tuning boundaries expose no command for:
 
 - PTT or MOX
 - CW keying
 - voice keying
 - digital-mode TX control
+- tuner control
+- radio power control
 - unattended transmit
 
-The read-only hardware test must not call `set_frequency`, `set_mode`,
-`change_band`, or the POTA tune executor. Receive-only tuning will be validated
-separately through the existing explicit operator-confirmation path.
+The Standard Com Port must remain unopened. The radio state remains
+`transmitting=False` throughout this scope.
 
 ## Automated Coverage
 
-Automated tests use fakes and manual schedulers. They cover:
+Automated tests use fakes, mock radios, fake CAT transports, and manual
+schedulers. Coverage includes:
 
-- verified default CAT baud and timeout settings
-- invalid CAT configuration
-- real-radio plus mock-GPS composition
-- configured device, baud, and timeout factory arguments
-- unavailable radio at application startup
-- visible error state while local services continue
-- disconnect error with last-known state
-- continued polling after failure
-- automatic reconnect and refreshed frequency/mode
-- non-overlapping hardware callbacks
+- exact `BSxx;` command encoding
+- unsupported 60-meter selection
+- shared frequency-to-band resolution
+- same-band frequency changes
+- prohibited direct cross-band frequency changes
+- band, frequency, and mode read-back verification
+- failures stopping subsequent operations
+- ordered receive-tuning call sequence
+- same-band tuning skipping band selection
+- confirmed POTA tuning through the ordered service
+- startup failure and recovery
+- absence of PTT, MOX, keying, tuner, and power commands
 
 Automated tests never open a physical serial device.
 
-## Live Validation Sequence
+## Controlled Live Validation
 
-Before approval and merge:
+Perform live validation only while parked, with no PTT action and no
+transmission.
 
-1. Confirm the configured path resolves to the Enhanced Com Port.
-2. Confirm the Standard Com Port remains unopened.
-3. Start Rolling Thunder with real radio and mock or real GPS as selected.
-4. Confirm the dashboard displays the FT-891 frequency and mode.
-5. Change frequency and mode manually on the radio and confirm display updates.
-6. Unplug only the FT-891 USB connection.
-7. Confirm the dashboard remains running and radio state becomes unavailable or
-   error while local logging and GPS remain available.
-8. Reconnect the same USB cable.
-9. Confirm radio state automatically returns without restarting the application.
-10. Confirm no frequency-set, mode-set, band-change, PTT, MOX, or keying command
-    was issued during this read-only validation.
+### Preparation
+
+1. Confirm the radio uses the Enhanced CAT device path.
+2. Confirm the Standard Com Port is not open.
+3. Confirm CAT speed is 38,400 baud.
+4. Start on a known amateur band and note the current frequency and mode.
+5. Keep the ATAS-120 limitation in mind and do not transmit.
+
+### Same-Band Test
+
+1. Request a receive frequency on the current band.
+2. Confirm no `BS` band-selection command is required.
+3. Confirm the radio moves to the requested frequency.
+4. Confirm frequency read-back matches exactly.
+5. Change receive mode if needed.
+6. Confirm mode read-back matches.
+7. Confirm `transmitting=False`.
+
+### Cross-Band Test
+
+1. Request a receive frequency on a different supported band.
+2. Confirm band selection occurs before the target frequency.
+3. Confirm the selected band is read back and verified.
+4. Confirm the target frequency is then set and verified.
+5. Confirm the requested receive mode is then set and verified.
+6. Confirm no PTT, MOX, keying, tuner, or power command occurs.
+7. Do not transmit; the ATAS-120 has not been declared tuned.
+
+### Confirmed POTA Test
+
+1. Select one POTA spot.
+2. Create the normal pending tune intent.
+3. Explicitly confirm the intent.
+4. Execute the tune once.
+5. Confirm it follows the same band-first sequence.
+6. Confirm duplicate execution remains rejected.
+7. Confirm no voice or unattended action can trigger tuning.
+
+Record the observed starting state, requested state, final read-back state, CAT
+device path, and any error or recovery behavior before approving the pull
+request.
