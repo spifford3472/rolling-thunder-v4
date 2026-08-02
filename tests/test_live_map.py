@@ -8,7 +8,6 @@ from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.live_map import GeoPoint, LiveMapController, LiveMapGpsStatus
 
-
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
 NAIVE_NOW = NOW.replace(tzinfo=None)
 

@@ -11,7 +11,6 @@ from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.live_map_service import LiveMapService, MapDataStatus, MapTileSource
 from rolling_thunder.map_tiles import CachedMapTile, MapTileError, MapTileKey
 
-
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
 
 
@@ -31,10 +30,7 @@ class ImmediateExecutor:
         **kwargs: Any,
     ) -> Future[Any]:
         future: Future[Any] = Future()
-        try:
-            future.set_result(function(*args, **kwargs))
-        except Exception as error:
-            future.set_exception(error)
+        future.set_result(function(*args, **kwargs))
         return future
 
 

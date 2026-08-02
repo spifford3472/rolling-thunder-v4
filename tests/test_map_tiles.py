@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
 import pytest
+from PIL import Image
 
 from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.map_tiles import (
@@ -21,7 +21,6 @@ from rolling_thunder.map_tiles import (
     validate_map_tile_png,
     web_mercator_world_pixel,
 )
-
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
 
