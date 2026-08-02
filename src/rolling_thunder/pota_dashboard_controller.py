@@ -26,8 +26,6 @@ from rolling_thunder.pota_tune_intent import (
     PotaTuneIntentStatus,
 )
 
-_MAXIMUM_SPOT_AGE = timedelta(minutes=15)
-
 
 class PotaSpotStateProvider(Protocol):
     """Provide the latest immutable POTA service snapshot."""
@@ -51,12 +49,16 @@ class PotaDashboardController:
         provider: PotaSpotStateProvider,
         *,
         clock: Callable[[], datetime] = _utc_now,
+        maximum_spot_age: timedelta | None = None,
     ) -> None:
+        if maximum_spot_age is not None and maximum_spot_age < timedelta(0):
+            raise ValueError("POTA maximum spot age must not be negative.")
         self._provider = provider
         self._clock = clock
+        self._maximum_spot_age = maximum_spot_age
         self._band: AmateurBand | None = None
         self._mode: RadioMode | None = None
-        self._mode_filter = PotaModeFilter.SSB_PHONE
+        self._mode_filter = PotaModeFilter.ALL
         self._selected_index: int | None = None
         self._tune_intent: PotaTuneIntent | None = None
 
@@ -147,7 +149,7 @@ class PotaDashboardController:
         return self.state
 
     def clear_filters(self) -> PotaDashboardState:
-        """Clear the band and show all POTA modes explicitly."""
+        """Clear all POTA filters."""
         self._band = None
         self._mode = None
         self._mode_filter = PotaModeFilter.ALL
@@ -266,7 +268,7 @@ class PotaDashboardController:
             mode=self._mode,
             mode_filter=self._mode_filter,
             reference_time=reference_time,
-            maximum_age=_MAXIMUM_SPOT_AGE,
+            maximum_age=self._maximum_spot_age,
             selected_index=selected_index,
         )
 
@@ -282,7 +284,7 @@ class PotaDashboardController:
             mode=self._mode,
             mode_filter=self._mode_filter,
             reference_time=reference_time,
-            maximum_age=_MAXIMUM_SPOT_AGE,
+            maximum_age=self._maximum_spot_age,
         )
         ranked = rank_pota_spots(
             filtered,
