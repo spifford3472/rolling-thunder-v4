@@ -1,8 +1,8 @@
 """PySerial implementation of the CAT transport boundary."""
 
+import termios
 from collections.abc import Callable
 from pathlib import Path
-import termios
 from typing import Protocol, cast
 
 import serial
