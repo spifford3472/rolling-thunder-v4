@@ -11,6 +11,7 @@ from rolling_thunder.config import (
     ConfigurationValidationError,
     ContactBackupConfig,
     ForgeConfig,
+    HardwareAdapterMode,
     HardwareConfig,
     OperatorConfig,
     StorageConfig,
@@ -54,6 +55,8 @@ storage:
     assert config.operator.callsign == "KI5VNB"
     assert config.operator.home_grid == "EM79xm"
     assert config.hardware.mock is True
+    assert config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK
+    assert config.hardware.effective_gps_mode is HardwareAdapterMode.MOCK
     assert config.forge.api_url is not None
     assert config.storage.database_path == (tmp_path / "data/test.db").resolve()
 
@@ -65,6 +68,10 @@ def test_models_can_be_constructed_directly() -> None:
     )
 
     assert config.hardware.mock is True
+    assert config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK
+    assert config.hardware.effective_gps_mode is HardwareAdapterMode.MOCK
+    assert config.hardware.gps_baud_rate == 9_600
+    assert config.hardware.gps_timeout_s == 2.0
     assert config.forge.api_url is None
     assert config.storage.database_path == Path("data/rolling-thunder.db")
 
@@ -194,8 +201,8 @@ hardware:
         load_config(path)
 
 
-def test_real_hardware_mode_requires_device_paths(tmp_path: Path) -> None:
-    """Real hardware mode should require both configured devices."""
+def test_legacy_real_hardware_mode_requires_device_paths(tmp_path: Path) -> None:
+    """Legacy global real mode should still require both configured devices."""
     path = write_config(
         tmp_path,
         """
@@ -213,11 +220,11 @@ hardware:
     message = str(error_info.value)
     assert "hardware.radio_device" in message
     assert "hardware.gps_device" in message
-    assert "hardware.mock is false" in message
+    assert "selected hardware mode is real" in message
 
 
-def test_real_hardware_mode_accepts_device_paths(tmp_path: Path) -> None:
-    """Configured device paths should permit real hardware mode."""
+def test_legacy_real_hardware_mode_accepts_device_paths(tmp_path: Path) -> None:
+    """Configured device paths should permit legacy global real mode."""
     path = write_config(
         tmp_path,
         """
@@ -234,8 +241,60 @@ hardware:
     config = load_config(path)
 
     assert config.hardware.mock is False
+    assert config.hardware.effective_radio_mode is HardwareAdapterMode.REAL
+    assert config.hardware.effective_gps_mode is HardwareAdapterMode.REAL
     assert config.hardware.radio_device == Path("/dev/ttyUSB0")
     assert config.hardware.gps_device == Path("/dev/ttyACM0")
+
+
+def test_real_gps_with_mock_radio_requires_only_gps_device(tmp_path: Path) -> None:
+    """Per-device modes should support safe real-GPS and mock-radio testing."""
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+hardware:
+  mock: true
+  radio_mode: mock
+  gps_mode: real
+  gps_device: /dev/serial/by-id/gps
+  gps_baud_rate: 9600
+  gps_timeout_s: 0.75
+""",
+    )
+
+    config = load_config(path)
+
+    assert config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK
+    assert config.hardware.effective_gps_mode is HardwareAdapterMode.REAL
+    assert config.hardware.radio_device is None
+    assert config.hardware.gps_device == Path("/dev/serial/by-id/gps")
+    assert config.hardware.gps_baud_rate == 9_600
+    assert config.hardware.gps_timeout_s == 0.75
+
+
+def test_explicit_real_gps_mode_requires_gps_device(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+hardware:
+  mock: true
+  radio_mode: mock
+  gps_mode: real
+""",
+    )
+
+    with pytest.raises(ConfigurationValidationError) as error_info:
+        load_config(path)
+
+    message = str(error_info.value)
+    assert "hardware.gps_device" in message
+    assert "hardware.radio_device" not in message
 
 
 @pytest.mark.parametrize(
@@ -261,6 +320,33 @@ operator:
   home_grid: EM79xm
 hardware:
   mock: true
+  {field}: {value}
+""",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match=rf"hardware\.{field}",
+    ):
+        load_config(path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("gps_baud_rate", 0), ("gps_timeout_s", 0), ("gps_timeout_s", 61)],
+)
+def test_gps_serial_settings_are_bounded(
+    tmp_path: Path,
+    field: str,
+    value: int,
+) -> None:
+    path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+hardware:
   {field}: {value}
 """,
     )
