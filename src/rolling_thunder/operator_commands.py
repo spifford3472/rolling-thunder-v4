@@ -32,6 +32,22 @@ class ContactCommitCommands(Protocol):
         """Start one durable contact Commit when permitted."""
 
 
+class ActivePanelCommands(Protocol):
+    """Context-aware selection capabilities for the active dashboard panel."""
+
+    def move_previous(self) -> bool:
+        """Move selection toward the previous active-panel item."""
+
+    def move_next(self) -> bool:
+        """Move selection toward the next active-panel item."""
+
+    def activate_selection(self) -> bool:
+        """Activate the current selection without bypassing safeguards."""
+
+    def back(self) -> bool:
+        """Cancel or clear the current active-panel interaction."""
+
+
 _CONTEXT_ACTIONS: dict[ControlAction, ContextId] = {
     ControlAction.SELECT_POTA: ContextId.POTA,
     ControlAction.SELECT_DX: ContextId.DX,
@@ -50,11 +66,13 @@ class OperatorCommandController:
         contact_commit: ContactCommitCommands,
         context_navigation: ContextNavigationController,
         radio_state: Callable[[], RadioState],
+        active_panel: ActivePanelCommands | None = None,
     ) -> None:
         self._capture = capture
         self._contact_commit = contact_commit
         self._context_navigation = context_navigation
         self._radio_state = radio_state
+        self._active_panel = active_panel
 
     def execute(self, action: ControlAction) -> bool:
         """Execute one approved action, returning whether it was accepted."""
@@ -82,6 +100,21 @@ class OperatorCommandController:
         if action is ControlAction.HOME_CONTEXT:
             self._context_navigation.select_home()
             return True
+
+        if action is ControlAction.MOVE_PREVIOUS:
+            return self._active_panel is not None and self._active_panel.move_previous()
+
+        if action is ControlAction.MOVE_NEXT:
+            return self._active_panel is not None and self._active_panel.move_next()
+
+        if action is ControlAction.ACTIVATE_SELECTION:
+            return (
+                self._active_panel is not None
+                and self._active_panel.activate_selection()
+            )
+
+        if action is ControlAction.BACK:
+            return self._active_panel is not None and self._active_panel.back()
 
         context_id = _CONTEXT_ACTIONS.get(action)
         if context_id is None:
