@@ -47,6 +47,28 @@ class FakeCommit:
         return self.result
 
 
+class FakeActivePanel:
+    def __init__(self, result: bool = True) -> None:
+        self.result = result
+        self.actions: list[str] = []
+
+    def move_previous(self) -> bool:
+        self.actions.append("move_previous")
+        return self.result
+
+    def move_next(self) -> bool:
+        self.actions.append("move_next")
+        return self.result
+
+    def activate_selection(self) -> bool:
+        self.actions.append("activate_selection")
+        return self.result
+
+    def back(self) -> bool:
+        self.actions.append("back")
+        return self.result
+
+
 def connected_radio() -> RadioState:
     return RadioState(
         connection_state=RadioConnectionState.CONNECTED,
@@ -60,12 +82,14 @@ def controller(
     capture: FakeCapture,
     commit: FakeCommit,
     navigation: ContextNavigationController | None = None,
+    active_panel: FakeActivePanel | None = None,
 ) -> OperatorCommandController:
     return OperatorCommandController(
         capture,
         commit,
         navigation or ContextNavigationController(),
         connected_radio,
+        active_panel,
     )
 
 
@@ -179,7 +203,7 @@ def test_home_context_returns_to_pota() -> None:
     assert navigation.state.selected is ContextId.POTA
 
 
-def test_unimplemented_selection_actions_are_safely_rejected() -> None:
+def test_selection_actions_are_safely_rejected_without_active_panel() -> None:
     commands = controller(FakeCapture(), FakeCommit())
 
     unsupported = (
@@ -191,3 +215,35 @@ def test_unimplemented_selection_actions_are_safely_rejected() -> None:
 
     for action in unsupported:
         assert commands.execute(action) is False
+
+
+def test_selection_actions_delegate_to_active_panel_commands() -> None:
+    expected = {
+        ControlAction.MOVE_PREVIOUS: "move_previous",
+        ControlAction.MOVE_NEXT: "move_next",
+        ControlAction.ACTIVATE_SELECTION: "activate_selection",
+        ControlAction.BACK: "back",
+    }
+
+    for action, recorded_action in expected.items():
+        active_panel = FakeActivePanel()
+        commands = controller(
+            FakeCapture(),
+            FakeCommit(),
+            active_panel=active_panel,
+        )
+
+        assert commands.execute(action) is True
+        assert active_panel.actions == [recorded_action]
+
+
+def test_active_panel_rejection_is_preserved() -> None:
+    active_panel = FakeActivePanel(result=False)
+    commands = controller(
+        FakeCapture(),
+        FakeCommit(),
+        active_panel=active_panel,
+    )
+
+    assert commands.execute(ControlAction.ACTIVATE_SELECTION) is False
+    assert active_panel.actions == ["activate_selection"]
