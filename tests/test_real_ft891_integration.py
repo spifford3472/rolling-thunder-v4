@@ -99,7 +99,7 @@ class FakePhysicalRadio:
         self.state = self.state.model_copy(update={"mode": mode})
         return self.state
 
-    def change_band(self, band: RadioBand) -> RadioState:
+    def select_band(self, band: RadioBand) -> RadioState:
         del band
         return self.state
 

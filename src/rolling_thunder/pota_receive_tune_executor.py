@@ -1,29 +1,26 @@
-"""Execute confirmed POTA receive tuning through a minimal radio boundary."""
+"""Execute confirmed POTA receive tuning through the ordered tuner."""
 
 from enum import StrEnum
 from typing import Protocol
 
-from rolling_thunder.domain import DomainModel, Frequency, RadioMode, RadioState
+from rolling_thunder.domain import DomainModel, Frequency, RadioMode
 from rolling_thunder.pota_tune_intent import (
     PotaTuneIntent,
     PotaTuneIntentStatus,
 )
-from rolling_thunder.radio import RadioError
+from rolling_thunder.radio import RadioBand, RadioError
+from rolling_thunder.receive_tuning import ReceiveTuneOutcome
 
 
-class PotaReceiveTuneRadio(Protocol):
-    """Receive-only radio operations required for POTA tuning.
+class PotaReceiveTuner(Protocol):
+    """Single ordered receive-tuning capability used by POTA."""
 
-    This boundary deliberately exposes no connect, disconnect, band-change,
-    transmit, PTT, MOX, tuner, power, or audio operations.
-    """
-
-    def set_frequency(self, frequency: Frequency) -> RadioState:
-        """Set an operator-confirmed receive frequency."""
-        ...
-
-    def set_mode(self, mode: RadioMode) -> RadioState:
-        """Set an operator-confirmed receive mode."""
+    def tune(
+        self,
+        frequency: Frequency,
+        mode: RadioMode,
+    ) -> ReceiveTuneOutcome:
+        """Perform one verified band-first receive tune."""
         ...
 
 
@@ -41,17 +38,19 @@ class PotaReceiveTuneResult(DomainModel):
     status: PotaReceiveTuneResultStatus
     frequency: Frequency | None = None
     mode: RadioMode | None = None
+    target_band: RadioBand | None = None
+    band_changed: bool = False
     error: str | None = None
 
 
 class PotaReceiveTuneExecutor:
-    """Apply confirmed frequency and mode without any transmit capability."""
+    """Apply confirmed POTA intent through the ordered receive tuner."""
 
-    def __init__(self, radio: PotaReceiveTuneRadio) -> None:
-        self._radio = radio
+    def __init__(self, tuner: PotaReceiveTuner) -> None:
+        self._tuner = tuner
 
     def execute(self, intent: PotaTuneIntent) -> PotaReceiveTuneResult:
-        """Execute only confirmed intent, setting frequency before mode."""
+        """Execute only confirmed operator intent."""
         if intent.status is not PotaTuneIntentStatus.CONFIRMED:
             return PotaReceiveTuneResult(
                 status=PotaReceiveTuneResultStatus.REJECTED,
@@ -59,26 +58,22 @@ class PotaReceiveTuneExecutor:
             )
 
         try:
-            self._radio.set_frequency(intent.frequency)
-        except RadioError as error:
-            return PotaReceiveTuneResult(
-                status=PotaReceiveTuneResultStatus.FAILED,
-                frequency=intent.frequency,
-                error=f"Unable to set receive frequency: {error}",
+            outcome = self._tuner.tune(
+                intent.frequency,
+                intent.mode,
             )
-
-        try:
-            self._radio.set_mode(intent.mode)
         except RadioError as error:
             return PotaReceiveTuneResult(
                 status=PotaReceiveTuneResultStatus.FAILED,
                 frequency=intent.frequency,
                 mode=intent.mode,
-                error=f"Receive frequency set, but mode change failed: {error}",
+                error=f"Unable to complete ordered receive tune: {error}",
             )
 
         return PotaReceiveTuneResult(
             status=PotaReceiveTuneResultStatus.SUCCEEDED,
-            frequency=intent.frequency,
-            mode=intent.mode,
+            frequency=outcome.state.frequency,
+            mode=outcome.state.mode,
+            target_band=outcome.target_band,
+            band_changed=outcome.band_changed,
         )

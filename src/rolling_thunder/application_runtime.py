@@ -36,6 +36,7 @@ from rolling_thunder.qrz_profile_image import QrzProfileImageProvider
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
 from rolling_thunder.radio import Radio
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
+from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.serial_gps import SerialGPSReceiver
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
@@ -241,8 +242,10 @@ class ApplicationRuntime:
 
     @property
     def pota_receive_tune_executor(self) -> PotaReceiveTuneExecutor:
-        """Return a receive-only executor backed by the owned radio."""
-        return PotaReceiveTuneExecutor(self.radio)
+        """Return POTA tuning through the ordered receive-tuning service."""
+        return PotaReceiveTuneExecutor(
+            ReceiveTuningService(self.radio)
+        )
 
     @property
     def latest_radio_state(self) -> RadioState:

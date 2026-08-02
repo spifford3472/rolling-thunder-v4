@@ -8,11 +8,13 @@ from rolling_thunder.ft891_cat import (
     Ft891CatError,
     encode_read_frequency,
     encode_read_mode,
+    encode_select_band,
     encode_set_frequency,
     encode_set_mode,
     parse_frequency_reply,
     parse_mode_reply,
 )
+from rolling_thunder.radio import RadioBand
 
 
 class FakeCatTransport:
@@ -42,6 +44,41 @@ def test_fake_transport_satisfies_cat_transport_protocol() -> None:
 
     assert isinstance(transport, CatTransport)
 
+
+
+@pytest.mark.parametrize(
+    ("band", "command"),
+    [
+        (RadioBand.BAND_160M, b"BS00;"),
+        (RadioBand.BAND_80M, b"BS01;"),
+        (RadioBand.BAND_40M, b"BS03;"),
+        (RadioBand.BAND_30M, b"BS04;"),
+        (RadioBand.BAND_20M, b"BS05;"),
+        (RadioBand.BAND_17M, b"BS06;"),
+        (RadioBand.BAND_15M, b"BS07;"),
+        (RadioBand.BAND_12M, b"BS08;"),
+        (RadioBand.BAND_10M, b"BS09;"),
+        (RadioBand.BAND_6M, b"BS10;"),
+    ],
+)
+def test_band_select_commands_use_dedicated_ft891_codes(
+    band: RadioBand,
+    command: bytes,
+) -> None:
+    assert encode_select_band(band) == command
+
+
+def test_band_select_rejects_unsupported_60m_without_guessing() -> None:
+    with pytest.raises(
+        Ft891CatError,
+        match="band selection does not support 60m",
+    ):
+        encode_select_band(RadioBand.BAND_60M)
+
+
+def test_band_select_requires_radio_band_value() -> None:
+    with pytest.raises(TypeError, match="band must be a RadioBand"):
+        encode_select_band("40m")  # type: ignore[arg-type]
 
 def test_frequency_read_and_set_commands_match_ft891_format() -> None:
     assert encode_read_frequency() == b"FA;"

@@ -30,6 +30,14 @@ class RadioConnectionError(RadioError):
     """Raised when an operation requires a connected radio."""
 
 
+class BandChangeRequiredError(RadioError):
+    """Raised when a frequency request would cross bands without selection."""
+
+
+class RadioVerificationError(RadioError):
+    """Raised when radio read-back does not match an operator request."""
+
+
 @runtime_checkable
 class Radio(Protocol):
     """Small typed boundary implemented by mock and physical radios.
@@ -62,6 +70,6 @@ class Radio(Protocol):
         """Set an operator-requested mode and return the resulting state."""
         ...
 
-    def change_band(self, band: RadioBand) -> RadioState:
-        """Select a deterministic calling frequency and mode for a band."""
+    def select_band(self, band: RadioBand) -> RadioState:
+        """Select and verify a band without choosing the final frequency or mode."""
         ...

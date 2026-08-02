@@ -10,7 +10,12 @@ from rolling_thunder.domain import (
     RadioMode,
     RadioState,
 )
-from rolling_thunder.radio import RadioBand, RadioConnectionError
+from rolling_thunder.radio import (
+    BandChangeRequiredError,
+    RadioBand,
+    RadioConnectionError,
+)
+from rolling_thunder.radio_band import resolve_radio_band
 
 Clock = Callable[[], datetime]
 
@@ -18,18 +23,18 @@ _DEFAULT_FREQUENCY: Final = Frequency(hz=14_250_000)
 _DEFAULT_MODE: Final = RadioMode.USB
 _UNSET: Final = object()
 
-_BAND_DEFAULTS: Final[dict[RadioBand, tuple[Frequency, RadioMode]]] = {
-    RadioBand.BAND_160M: (Frequency(hz=1_900_000), RadioMode.LSB),
-    RadioBand.BAND_80M: (Frequency(hz=3_900_000), RadioMode.LSB),
-    RadioBand.BAND_60M: (Frequency(hz=5_357_000), RadioMode.USB),
-    RadioBand.BAND_40M: (Frequency(hz=7_200_000), RadioMode.LSB),
-    RadioBand.BAND_30M: (Frequency(hz=10_120_000), RadioMode.CW),
-    RadioBand.BAND_20M: (Frequency(hz=14_250_000), RadioMode.USB),
-    RadioBand.BAND_17M: (Frequency(hz=18_130_000), RadioMode.USB),
-    RadioBand.BAND_15M: (Frequency(hz=21_300_000), RadioMode.USB),
-    RadioBand.BAND_12M: (Frequency(hz=24_950_000), RadioMode.USB),
-    RadioBand.BAND_10M: (Frequency(hz=28_400_000), RadioMode.USB),
-    RadioBand.BAND_6M: (Frequency(hz=50_125_000), RadioMode.USB),
+_BAND_SELECTION_FREQUENCIES: Final[dict[RadioBand, Frequency]] = {
+    RadioBand.BAND_160M: Frequency(hz=1_900_000),
+    RadioBand.BAND_80M: Frequency(hz=3_900_000),
+    RadioBand.BAND_60M: Frequency(hz=5_357_000),
+    RadioBand.BAND_40M: Frequency(hz=7_200_000),
+    RadioBand.BAND_30M: Frequency(hz=10_120_000),
+    RadioBand.BAND_20M: Frequency(hz=14_250_000),
+    RadioBand.BAND_17M: Frequency(hz=18_130_000),
+    RadioBand.BAND_15M: Frequency(hz=21_300_000),
+    RadioBand.BAND_12M: Frequency(hz=24_950_000),
+    RadioBand.BAND_10M: Frequency(hz=28_400_000),
+    RadioBand.BAND_6M: Frequency(hz=50_125_000),
 }
 
 
@@ -89,10 +94,18 @@ class MockRadio:
         )
 
     def set_frequency(self, frequency: Frequency) -> RadioState:
-        """Change frequency while connected."""
+        """Change frequency without implicitly crossing amateur bands."""
         self._require_connected()
         if not isinstance(frequency, Frequency):
             raise TypeError("frequency must be a Frequency")
+
+        current_band = resolve_radio_band(self._frequency)
+        target_band = resolve_radio_band(frequency)
+        if current_band is not target_band:
+            raise BandChangeRequiredError(
+                f"Select {target_band.value} before changing frequency from "
+                f"{current_band.value}."
+            )
 
         self._frequency = frequency
         return self._replace_state(frequency=frequency)
@@ -106,16 +119,15 @@ class MockRadio:
         self._mode = mode
         return self._replace_state(mode=mode)
 
-    def change_band(self, band: RadioBand) -> RadioState:
-        """Select the mock's deterministic frequency and mode for a band."""
+    def select_band(self, band: RadioBand) -> RadioState:
+        """Select a deterministic band without choosing the final mode."""
         self._require_connected()
         if not isinstance(band, RadioBand):
             raise TypeError("band must be a RadioBand")
 
-        frequency, mode = _BAND_DEFAULTS[band]
+        frequency = _BAND_SELECTION_FREQUENCIES[band]
         self._frequency = frequency
-        self._mode = mode
-        return self._replace_state(frequency=frequency, mode=mode)
+        return self._replace_state(frequency=frequency)
 
     def simulate_error(self, message: str) -> RadioState:
         """Enter a deterministic adapter-error state for application tests."""

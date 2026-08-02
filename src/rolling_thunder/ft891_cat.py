@@ -4,7 +4,7 @@ import re
 from typing import Final
 
 from rolling_thunder.domain import Frequency, RadioMode
-from rolling_thunder.radio import RadioError
+from rolling_thunder.radio import RadioBand, RadioError
 
 _FREQUENCY_REPLY_PATTERN: Final = re.compile(rb"FA([0-9]{9});")
 _MODE_REPLY_PATTERN: Final = re.compile(rb"MD0([0-9A-D]);")
@@ -31,8 +31,37 @@ _CAT_TO_MODE: Final[dict[bytes, RadioMode]] = {
 }
 
 
+_BAND_TO_CAT: Final[dict[RadioBand, bytes]] = {
+    RadioBand.BAND_160M: b"00",
+    RadioBand.BAND_80M: b"01",
+    RadioBand.BAND_40M: b"03",
+    RadioBand.BAND_30M: b"04",
+    RadioBand.BAND_20M: b"05",
+    RadioBand.BAND_17M: b"06",
+    RadioBand.BAND_15M: b"07",
+    RadioBand.BAND_12M: b"08",
+    RadioBand.BAND_10M: b"09",
+    RadioBand.BAND_6M: b"10",
+}
+
+
 class Ft891CatError(RadioError):
     """Raised when an FT-891 CAT command or reply is invalid."""
+
+
+def encode_select_band(band: RadioBand) -> bytes:
+    """Return the dedicated FT-891 CAT command for one supported band."""
+    if not isinstance(band, RadioBand):
+        raise TypeError("band must be a RadioBand")
+
+    try:
+        cat_band = _BAND_TO_CAT[band]
+    except KeyError as error:
+        raise Ft891CatError(
+            f"FT-891 CAT band selection does not support {band.value}."
+        ) from error
+
+    return b"BS" + cat_band + b";"
 
 
 def encode_read_frequency() -> bytes:
