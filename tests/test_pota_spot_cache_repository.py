@@ -22,9 +22,13 @@ def spot(
         park=ParkReference(
             reference=reference,
             name="Test Park",
+            location_code="US-OH",
+            latitude=39.5,
+            longitude=-84.0,
         ),
         frequency=Frequency(hz=14_250_000),
         mode=RadioMode.USB,
+        spot_mode="SSB",
         spotted_at=SUCCESS_AT,
         comments="test spot",
     )
