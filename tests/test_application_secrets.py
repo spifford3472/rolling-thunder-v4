@@ -1,5 +1,5 @@
-from pydantic import SecretStr
 import pytest
+from pydantic import SecretStr
 
 from rolling_thunder.application_secrets import (
     ApplicationSecrets,
