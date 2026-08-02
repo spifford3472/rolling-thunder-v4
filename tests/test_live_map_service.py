@@ -178,9 +178,7 @@ def test_service_uses_stale_cache_when_refresh_fails() -> None:
     state = live_map.latest_state
     assert state.status is MapDataStatus.CACHE_ONLY
     assert state.detail == "MAP DATA OFFLINE — USING CACHE"
-    assert {tile.source for tile in state.tiles} == {
-        MapTileSource.STALE_CACHE
-    }
+    assert {tile.source for tile in state.tiles} == {MapTileSource.STALE_CACHE}
 
 
 def test_service_publishes_partial_snapshot_when_some_tiles_fail() -> None:
@@ -244,6 +242,28 @@ def test_service_reframes_same_tile_set_without_more_io() -> None:
     assert first_state.viewport is not None
     assert second_state.viewport.center != first_state.viewport.center
     assert second_state.status is MapDataStatus.READY
+
+
+def test_service_ignores_an_identical_loaded_viewport() -> None:
+    client = FakeClient()
+    live_map = service(client, FakeCache())
+    live_map.start()
+    live_map.request_viewport(
+        GeoPoint(39.53, -84.08),
+        width_px=600,
+        height_px=400,
+    )
+    first_state = live_map.latest_state
+    request_count = len(client.requests)
+
+    live_map.request_viewport(
+        GeoPoint(39.53, -84.08),
+        width_px=600,
+        height_px=400,
+    )
+
+    assert live_map.latest_state is first_state
+    assert len(client.requests) == request_count
 
 
 def test_service_stop_is_idempotent() -> None:
