@@ -1,10 +1,10 @@
 """Stateful controller connecting runtime POTA snapshots to presentation state."""
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from rolling_thunder.domain import RadioMode
+from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.pota_dashboard_state import (
     PotaDashboardState,
     build_pota_dashboard_state,
@@ -16,13 +16,17 @@ from rolling_thunder.pota_spot_ranking import (
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pota_spots import (
     AmateurBand,
+    PotaModeFilter,
     PotaSpot,
     filter_pota_spots,
+    frequency_band,
 )
 from rolling_thunder.pota_tune_intent import (
     PotaTuneIntent,
     PotaTuneIntentStatus,
 )
+
+_MAXIMUM_SPOT_AGE = timedelta(minutes=15)
 
 
 class PotaSpotStateProvider(Protocol):
@@ -52,6 +56,7 @@ class PotaDashboardController:
         self._clock = clock
         self._band: AmateurBand | None = None
         self._mode: RadioMode | None = None
+        self._mode_filter = PotaModeFilter.SSB_PHONE
         self._selected_index: int | None = None
         self._tune_intent: PotaTuneIntent | None = None
 
@@ -62,8 +67,13 @@ class PotaDashboardController:
 
     @property
     def selected_mode(self) -> RadioMode | None:
-        """Return the currently selected mode filter."""
+        """Return the legacy exact radio-mode filter, if one was requested."""
         return self._mode
+
+    @property
+    def selected_mode_filter(self) -> PotaModeFilter:
+        """Return the operator-facing POTA mode group."""
+        return self._mode_filter
 
     @property
     def selected_index(self) -> int | None:
@@ -79,12 +89,7 @@ class PotaDashboardController:
     def state(self) -> PotaDashboardState:
         """Build display state and clamp selection to its current rows."""
         reference_time = self._clock()
-        dashboard = build_pota_dashboard_state(
-            self._provider.latest_pota_spot_state,
-            band=self._band,
-            mode=self._mode,
-            reference_time=reference_time,
-        )
+        dashboard = self._build_state(reference_time)
 
         previous_index = self._selected_index
         if not dashboard.rows:
@@ -98,13 +103,16 @@ class PotaDashboardController:
         if self._selected_index != previous_index:
             self._tune_intent = None
 
-        return build_pota_dashboard_state(
-            self._provider.latest_pota_spot_state,
-            band=self._band,
-            mode=self._mode,
-            reference_time=reference_time,
-            selected_index=self._selected_index,
-        )
+        return self._build_state(reference_time, selected_index=self._selected_index)
+
+    def activate_for_frequency(self, frequency: Frequency | None) -> PotaDashboardState:
+        """Default a newly selected POTA panel to the radio's current band."""
+        band = frequency_band(frequency) if frequency is not None else None
+        if band is not None:
+            self._band = band
+        self._selected_index = None
+        self._tune_intent = None
+        return self.state
 
     def select_band(self, band: AmateurBand | None) -> PotaDashboardState:
         """Set or clear the band filter and return refreshed display state."""
@@ -114,16 +122,35 @@ class PotaDashboardController:
         return self.state
 
     def select_mode(self, mode: RadioMode | None) -> PotaDashboardState:
-        """Set or clear the mode filter and return refreshed display state."""
+        """Preserve the legacy exact mode-filter command for existing callers."""
         self._mode = mode
+        if mode is None:
+            self._mode_filter = PotaModeFilter.ALL
+        elif mode in {RadioMode.LSB, RadioMode.USB}:
+            self._mode_filter = PotaModeFilter.SSB_PHONE
+        elif mode is RadioMode.CW:
+            self._mode_filter = PotaModeFilter.CW
+        elif mode is RadioMode.DATA:
+            self._mode_filter = PotaModeFilter.DATA
+        else:
+            self._mode_filter = PotaModeFilter.ALL
+        self._selected_index = None
+        self._tune_intent = None
+        return self.state
+
+    def select_mode_filter(self, mode_filter: PotaModeFilter) -> PotaDashboardState:
+        """Set the operator-facing mode group and clear exact-mode filtering."""
+        self._mode_filter = mode_filter
+        self._mode = None
         self._selected_index = None
         self._tune_intent = None
         return self.state
 
     def clear_filters(self) -> PotaDashboardState:
-        """Clear all POTA filters and return refreshed display state."""
+        """Clear the band and show all POTA modes explicitly."""
         self._band = None
         self._mode = None
+        self._mode_filter = PotaModeFilter.ALL
         self._selected_index = None
         self._tune_intent = None
         return self.state
@@ -227,6 +254,22 @@ class PotaDashboardController:
             and intent.mode is spot.mode
         )
 
+    def _build_state(
+        self,
+        reference_time: datetime,
+        *,
+        selected_index: int | None = None,
+    ) -> PotaDashboardState:
+        return build_pota_dashboard_state(
+            self._provider.latest_pota_spot_state,
+            band=self._band,
+            mode=self._mode,
+            mode_filter=self._mode_filter,
+            reference_time=reference_time,
+            maximum_age=_MAXIMUM_SPOT_AGE,
+            selected_index=selected_index,
+        )
+
     def _selected_spot(self, reference_time: datetime) -> PotaSpot | None:
         """Resolve selection against the current filtered ranked snapshot."""
         source_state = self._provider.latest_pota_spot_state
@@ -237,6 +280,9 @@ class PotaDashboardController:
             list(source_state.spots),
             band=self._band,
             mode=self._mode,
+            mode_filter=self._mode_filter,
+            reference_time=reference_time,
+            maximum_age=_MAXIMUM_SPOT_AGE,
         )
         ranked = rank_pota_spots(
             filtered,
