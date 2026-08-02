@@ -1,9 +1,12 @@
 """Application composition root for the first persistent Pi dashboard."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from concurrent.futures import Executor
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from rolling_thunder.application_secrets import ApplicationSecrets
+from rolling_thunder.census_state_outline import CensusStateOutlineProvider
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_repository import ContactRepository
@@ -22,13 +25,15 @@ from rolling_thunder.network_keepalive import (
     NetworkKeepaliveService,
     NetworkKeepaliveTransport,
 )
-from rolling_thunder.pota_receive_tune_executor import (
-    PotaReceiveTuneExecutor,
-)
+from rolling_thunder.open_meteo import OpenMeteoParkWeatherProvider
+from rolling_thunder.pota_enrichment import PotaEnrichmentService
+from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
 from rolling_thunder.pota_runtime import build_pota_spot_polling
 from rolling_thunder.pota_spot_polling import PotaSpotPollingService
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
+from rolling_thunder.qrz_profile_image import QrzProfileImageProvider
+from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
 from rolling_thunder.radio import Radio
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.serial_gps import SerialGPSReceiver
@@ -39,7 +44,7 @@ GPSFactory = Callable[[Path], GPSReceiver]
 
 @dataclass
 class ApplicationRuntime:
-    """Own composed radio, GPS, logging, and polling lifecycle for one run."""
+    """Own composed radio, GPS, logging, polling, and enrichment lifecycle."""
 
     radio: Radio
     polling: RadioPollingService
@@ -51,6 +56,7 @@ class ApplicationRuntime:
     contact_sync: ContactSyncService | None = None
     network_keepalive: NetworkKeepaliveService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
+    pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     _started: bool = False
 
     @classmethod
@@ -58,6 +64,7 @@ class ApplicationRuntime:
         cls,
         config: ApplicationConfig,
         *,
+        secrets: ApplicationSecrets | None = None,
         scheduler: PollScheduler | None = None,
         gps_scheduler: PollScheduler | None = None,
         home_platform_scheduler: PollScheduler | None = None,
@@ -70,6 +77,11 @@ class ApplicationRuntime:
         home_platform_transport: HttpTransport | None = None,
         network_keepalive_transport: NetworkKeepaliveTransport | None = None,
         pota_transport: HttpTransport | None = None,
+        qrz_transport: HttpTransport | None = None,
+        weather_transport: HttpTransport | None = None,
+        image_transport: HttpTransport | None = None,
+        state_map_transport: HttpTransport | None = None,
+        enrichment_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -140,6 +152,40 @@ class ApplicationRuntime:
             transport=pota_transport,
         )
 
+        resolved_secrets = secrets or ApplicationSecrets()
+        qrz_provider = None
+        qrz_photo_provider = None
+        weather_provider = None
+        state_outline_provider = None
+        if config.pota_spots.enabled:
+            timeout_s = config.pota_spots.request_timeout_s
+            if resolved_secrets.qrz is not None:
+                qrz_provider = QrzXmlCallsignNameProvider(
+                    resolved_secrets.qrz,
+                    timeout_s=timeout_s,
+                    transport=qrz_transport,
+                )
+                qrz_photo_provider = QrzProfileImageProvider(
+                    timeout_s=timeout_s,
+                    transport=image_transport,
+                )
+            weather_provider = OpenMeteoParkWeatherProvider(
+                timeout_s=timeout_s,
+                transport=weather_transport,
+            )
+            state_outline_provider = CensusStateOutlineProvider(
+                timeout_s=timeout_s,
+                transport=state_map_transport,
+            )
+
+        pota_enrichment = PotaEnrichmentService(
+            callsign_provider=qrz_provider,
+            callsign_photo_provider=qrz_photo_provider,
+            weather_provider=weather_provider,
+            state_outline_provider=state_outline_provider,
+            executor=enrichment_executor,
+        )
+
         return cls(
             radio=radio,
             polling=RadioPollingService(
@@ -159,6 +205,7 @@ class ApplicationRuntime:
             contact_sync=contact_sync,
             network_keepalive=network_keepalive,
             pota_spot_polling=pota_spot_polling,
+            pota_enrichment=pota_enrichment,
         )
 
     @property
@@ -204,6 +251,7 @@ class ApplicationRuntime:
             self.contact_sync.start()
         if self.network_keepalive is not None:
             self.network_keepalive.start()
+        self.pota_enrichment.start()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.start()
         self._started = True
@@ -216,6 +264,7 @@ class ApplicationRuntime:
 
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.stop()
+        self.pota_enrichment.stop()
         if self.network_keepalive is not None:
             self.network_keepalive.stop()
         if self.contact_sync is not None:

@@ -6,6 +6,10 @@ from pathlib import Path
 
 from rolling_thunder.active_panel_commands import ActivePanelCommandController
 from rolling_thunder.application_runtime import ApplicationRuntime
+from rolling_thunder.application_secrets import (
+    SecretConfigurationError,
+    load_application_secrets,
+)
 from rolling_thunder.callsign_capture import CallsignCaptureState, MockTranscriptController
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
@@ -33,6 +37,11 @@ from rolling_thunder.physical_controls import (
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
 from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
+from rolling_thunder.pota_detail_overlay import PotaDetailOverlayController
+from rolling_thunder.pota_enrichment_ui import (
+    PotaDetailOverlayWidgets,
+    format_enriched_callsign,
+)
 from rolling_thunder.pota_tune_execution_controller import (
     PotaTuneIntentExecutor,
 )
@@ -128,7 +137,13 @@ def run_dashboard(
         print(f"Rolling Thunder configuration error: {error}")
         return 2
 
-    runtime = ApplicationRuntime.from_config(config)
+    try:
+        secrets = load_application_secrets()
+    except SecretConfigurationError as error:
+        print(f"Rolling Thunder secret configuration error: {error}")
+        return 2
+
+    runtime = ApplicationRuntime.from_config(config, secrets=secrets)
     try:
         runtime.start()
     except (RadioConnectionError, RuntimeError, ValueError) as error:
@@ -160,11 +175,17 @@ def run_dashboard(
         pota_dashboard,
         pota_tune_executor or runtime.pota_receive_tune_executor,
     )
+    pota_detail_overlay = PotaDetailOverlayController(
+        context_navigation,
+        pota_dashboard,
+        runtime.pota_enrichment,
+    )
     active_panel_commands = ActivePanelCommandController(
         context_navigation,
         pota_dashboard,
         pota_filters,
         pota_tune_ui,
+        pota_detail_overlay,
     )
 
     def capture_state() -> CallsignCaptureState:
@@ -616,6 +637,7 @@ def run_dashboard(
         font=("DejaVu Sans", 22, "bold"),
         justify="center",
     ).pack(fill="both", expand=True)
+    pota_overlay_widgets = PotaDetailOverlayWidgets(situational)
 
     ticker_text = tk.StringVar(value="STARTING ROLLING THUNDER")
     ticker = tk.Label(
@@ -708,6 +730,9 @@ def run_dashboard(
             show_pota_context_body()
             filter_state = pota_filters.state
             panel = build_pota_dashboard_panel(filter_state.dashboard)
+            runtime.pota_enrichment.prefetch_callsigns(
+                row.activator for row in panel.rows
+            )
             context_title_text.set(filter_state.display_line)
             context_title_label.configure(
                 font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold")
@@ -717,6 +742,7 @@ def run_dashboard(
             pota_status_label.configure(wraplength=available_wrap_width)
             pota_footer_label.configure(wraplength=available_wrap_width)
             for labels in pota_card_labels:
+                labels[0].configure(wraplength=available_wrap_width)
                 labels[2].configure(wraplength=available_wrap_width)
 
             if filter_state.dashboard.status != "READY":
@@ -750,7 +776,14 @@ def run_dashboard(
                     callsign_var, frequency_var, park_var, location_var = (
                         pota_card_texts[card_index]
                     )
-                    callsign_var.set(row.activator)
+                    callsign_var.set(
+                        format_enriched_callsign(
+                            row.activator,
+                            runtime.pota_enrichment.get_callsign_name(
+                                row.activator
+                            ),
+                        )
+                    )
                     frequency_var.set(row.frequency)
                     park_var.set(f"{row.park_reference} - {row.park_name}")
                     location_var.set(row.location_code)
@@ -826,6 +859,7 @@ def run_dashboard(
             context_body_label.configure(font=("DejaVu Sans", 22), wraplength=560)
             context_body_text.set(selected_context.definition.placeholder)
 
+        pota_overlay_widgets.update(pota_detail_overlay.state)
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:

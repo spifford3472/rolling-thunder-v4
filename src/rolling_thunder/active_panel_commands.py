@@ -47,6 +47,16 @@ class PotaTuneCommands(Protocol):
         """Cancel the current POTA intent without radio access."""
 
 
+class PotaOverlayCommands(Protocol):
+    """Temporary POTA park-detail overlay capabilities."""
+
+    def show_selected(self) -> bool:
+        """Show details for the selected park when possible."""
+
+    def hide(self) -> bool:
+        """Dismiss the current overlay when visible."""
+
+
 class ActivePanelCommandController:
     """Route generic selection controls to the currently active panel."""
 
@@ -56,11 +66,13 @@ class ActivePanelCommandController:
         pota_panel: PotaPanelCommands,
         pota_filters: PotaFilterCommands,
         pota_tune: PotaTuneCommands,
+        pota_overlay: PotaOverlayCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._pota_panel = pota_panel
         self._pota_filters = pota_filters
         self._pota_tune = pota_tune
+        self._pota_overlay = pota_overlay
 
     def primary(self) -> bool:
         """Run the active panel's first context-sensitive command."""
@@ -77,12 +89,16 @@ class ActivePanelCommandController:
         return True
 
     def tertiary(self) -> bool:
-        """Reserve the third command for the park-information overlay."""
-        return False
+        """Show selected park details over the situational panel."""
+        if not self._pota_is_active() or self._pota_overlay is None:
+            return False
+        return self._pota_overlay.show_selected()
 
     def tertiary_long(self) -> bool:
-        """Reserve the third long command for overlay dismissal."""
-        return False
+        """Dismiss the selected park detail overlay."""
+        if not self._pota_is_active() or self._pota_overlay is None:
+            return False
+        return self._pota_overlay.hide()
 
     def move_previous(self) -> bool:
         """Move selection in the active panel when that panel supports it."""
