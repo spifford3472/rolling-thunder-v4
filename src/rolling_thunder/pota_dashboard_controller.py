@@ -85,6 +85,11 @@ class PotaDashboardController:
         """Return the current operator-created tune intent, if any."""
         return self._tune_intent
 
+    @property
+    def selected_spot(self) -> PotaSpot | None:
+        """Return the currently selected typed spot from the live filtered view."""
+        return self._selected_spot(self._clock())
+
     def set_maximum_spot_age(
         self,
         maximum_spot_age: timedelta | None,
