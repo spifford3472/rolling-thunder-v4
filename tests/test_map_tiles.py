@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
-import pytest
 from PIL import Image
+import pytest
 
 from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.map_tiles import (
