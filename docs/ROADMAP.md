@@ -56,7 +56,7 @@ Status: complete and audited.
 
 ## Milestone 4: Radio Abstraction
 
-Status: complete for the current FT-891 scope.
+Status: complete for the current FT-891 software scope.
 
 - Typed radio interface
 - Deterministic mock radio
@@ -66,6 +66,11 @@ Status: complete for the current FT-891 scope.
 - FT-891 CAT adapter
 - Safe handling of disconnects and malformed replies
 - Background radio polling outside the UI thread
+
+The adapter and CAT protocol are implemented and tested without hardware. Live
+operation against the installed Yaesu FT-891 is scheduled as Milestone 10 Phase
+B so hardware configuration, device identity, startup, recovery, and safe
+receive-only tuning can be validated as one focused integration slice.
 
 ## Milestone 5: Basic Pi User Interface
 
@@ -87,7 +92,7 @@ integration and usability refinements rather than a broad dashboard rewrite.
 
 ## Milestone 6: GPS and Location
 
-Status: complete and audited for the approved roadmap scope.
+Status: complete and audited for the approved software scope.
 
 - Typed GPS interface
 - mock GPS source
@@ -101,11 +106,15 @@ serial-NMEA adapters, Station State and dashboard integration, independent
 background polling, visible degraded/error state, and automatic recovery after
 transient read or parse failures.
 
-Live receiver validation remains an operational smoke test rather than an
-automated-test requirement. The broader v4.1.0 architecture also describes
-trusted GPS UTC, speed and heading, stationary/moving hysteresis, and commit-time
-GPS capture. Those capabilities remain architecture-aligned follow-up work and
-are not implied by completion of this focused roadmap milestone.
+The current serial adapter accepts checksummed GPGGA and GNGGA sentences and
+provides latitude, longitude, altitude, satellite count, fix state, and update
+time. Live receiver integration is scheduled as Milestone 10 Phase A so the
+actual device path, baud rate, permissions, sentence mix, startup behavior, and
+recovery behavior can be validated on `anvilmobile`.
+
+Trusted GPS UTC, speed, heading, stationary/moving hysteresis, and commit-time
+GPS capture remain architecture-aligned follow-up capabilities. They should be
+added only after the real receiver is proven stable.
 
 ## Milestone 7: Home Station Platform Connectivity
 
@@ -151,40 +160,104 @@ and stale-data handling, local filtering and ranking, dashboard presentation,
 explicit operator-confirmed tune intent, receive-only runtime tuning, and a
 durable SQLite-backed cache that survives application restarts.
 
-Live validation against the configured POTA endpoint and FT-891 remains an
-operational smoke test rather than an automated-test requirement. The completed
-scope does not permit voice-originated tuning, unattended tuning, PTT, or
-transmission.
+The POTA panel also includes asynchronous QRZ name/profile enrichment,
+Open-Meteo weather and park-local time, U.S. Census state outlines,
+geoBoundaries DX subdivision/country outlines, a park-location marker, and a
+timed detail overlay. These network enhancements remain independent of local
+logging, radio state, and the core POTA spot workflow.
+
+The completed scope does not permit voice-originated tuning, unattended tuning,
+PTT, MOX, or transmission.
 
 ## Milestone 9: Physical Controls
 
-Voice callsign capture is already implemented. Remaining work in this milestone
-is the physical control surface and its safe application integration.
+Status: complete and audited for the approved physical-input scope.
 
-- ESP32 button and LED interface
-- configuration-driven input mappings
-- mock controls for development
+- typed, transport-independent control actions and input events
+- configuration-driven mappings from opaque ESP32 identifiers to approved
+  application actions
+- deterministic mock control source for tests and development
+- strict versioned `RTCTRL/1 EVENT` parser
+- bounded, nonblocking pyserial control source
+- startup, refresh-dispatch, shutdown, and failure lifecycle integration
 - physical Voice, Commit, and Discard controls
-- direct context-selection buttons
-- driver-distraction and error safeguards
+- direct context-selection and panel-action controls
+- short- and long-press handling for Panel, Context, and encoder-switch inputs
+- rotary-encoder navigation, activation, cancellation, and back behavior
+- duplicate-event and rapid-repeat suppression
+- malformed, oversized, unsupported, and incomplete input fails closed
+- physical controls invoke the same shared application commands used by the UI
+- no physical-control action grants direct PTT, MOX, transmit, or unattended
+  tuning authority
+- complete ESP32 GPIO/event firmware and bench validation on the installed panel
 
-## Milestone 10: Mapping and Operating Intelligence
+The milestone was delivered through the typed control boundary, serial transport,
+complete ESP32 panel firmware, shared operator-command dispatch, and active-panel
+encoder integration. Hardware event identifiers were observed and validated on
+`anvilmobile`; the full panel was bench-tested for one-event-per-press behavior,
+short/long press separation, held-button suppression, and encoder direction.
 
-- map screen
-- current location
+The current ESP32 link is intentionally one-way from ESP32 to Raspberry Pi.
+Bidirectional LED color or status control was explicitly excluded from the
+implemented milestone. LED feedback remains a later physical-panel enhancement
+and must use a typed output boundary rather than being added to the input parser
+or UI callbacks.
+
+## Milestone 10: Hardware-Backed Mapping and Operating Intelligence
+
+Status: next milestone.
+
+Milestone 10 must begin by proving the real local hardware foundations before
+expanding mapping or intelligence. Execute it in this order.
+
+### Phase A: Real GPS Integration
+
+- start with GitHub issue #10, `Implement real GPS provider`
+- identify the stable device path and actual receiver characteristics on
+  `anvilmobile`
+- validate permissions, baud rate, NMEA sentence types, checksums, timeouts, and
+  startup behavior
+- preserve the typed `GPSReceiver` boundary and mock source
+- add any additional sentence support only when the real receiver demonstrates
+  the need
+- verify position, fix state, Maidenhead grid, loss/reacquisition, and UI status
+- document setup, troubleshooting, and recovery
+- keep all serial reads outside the Tkinter thread
+
+### Phase B: Real Yaesu FT-891 Integration
+
+- identify the stable CAT device path and required serial settings
+- begin with read-only connection, frequency, mode, polling, disconnect, and
+  recovery validation
+- then validate explicit receive-only frequency, mode, band, and confirmed POTA
+  tune actions
+- preserve the typed `Radio` and `CatTransport` boundaries and mock radio
+- keep software transmit state false and add no PTT, MOX, keying, or unattended
+  transmit authority
+- document CAT configuration, cable/device setup, recovery, and safe operator
+  test procedures
+
+### Phase C: Mapping and Operating Intelligence
+
+- live map screen based on proven GPS state
+- current location and movement presentation
 - contact visualization
-- POTA locations
-- station status
+- POTA locations and selected-park details
+- station and connection status
 - selected Home Station Platform-assisted analytics
 - cached behavior where practical
+- graceful offline and stale-data behavior
+
+Large hardware or full-screen changes require manual validation by the repository
+owner on `anvilmobile` before their pull requests are approved or merged.
 
 ## Cross-Cutting Architecture Work
 
 The v4.1.0 architecture specification defines Station State as the unified
 operational read model consumed by the UI and dependent services. This boundary
-is being added incrementally around the already implemented radio, voice,
-logging, storage, context, health, GPS, and connectivity capabilities before
-more state-producing subsystems are introduced.
+is being added incrementally around the implemented radio, voice, logging,
+storage, context, health, GPS, connectivity, POTA, enrichment, and physical-input
+capabilities.
 
 An in-process event bus remains an architectural direction, not a requirement to
 retrofit prematurely. Its implementation should be driven by demonstrated
@@ -193,6 +266,7 @@ thread boundaries.
 
 ## Later Possibilities
 
+- typed bidirectional ESP32 LED feedback
 - Wavelog integration
 - Maestro or Flex station detection
 - enhanced contest workflows
@@ -203,11 +277,14 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Begin Milestone 9 with the smallest physical-controls slice: typed,
-transport-independent control actions, configuration-driven mappings, and a
-deterministic mock control source.
+Begin Milestone 10 Phase A with the smallest real-GPS integration slice. Audit
+GitHub issue #10 and the existing `GPSReceiver`, `SerialGPSReceiver`, GPS polling,
+configuration, runtime, dashboard, Station State, and tests before proposing
+changes.
 
-The first slice must not depend on ESP32 hardware, initiate transmission, trigger
-PTT, or bypass the existing Commit, Discard, Voice, and direct-context safety
-boundaries. Physical controls must invoke the same application commands already
-used by the user interface rather than creating a parallel control path.
+The first pull request should prove safe receiver discovery/configuration and
+read-only live position state on `anvilmobile`. It must preserve mock mode, avoid
+UI-thread serial I/O, include deterministic tests, update documentation, and
+remain independently reviewable. Do not combine the first GPS pull request with
+FT-891 changes. After the GPS path is approved and merged, begin a separate
+real-FT-891 branch and pull request.
