@@ -13,6 +13,7 @@ speech:
   model_path: null
   capture_duration_seconds: 8
   sample_rate: 16000
+  channels: 1
 
 forge:
   api_url: null

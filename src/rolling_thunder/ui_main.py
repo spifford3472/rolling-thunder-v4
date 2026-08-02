@@ -140,6 +140,7 @@ def run_dashboard(
             audio_device=config.speech.audio_device,
             duration_s=config.speech.capture_duration_seconds,
             sample_rate=config.speech.sample_rate,
+            channels=config.speech.channels,
         )
         live_capture = LiveCallsignCaptureController(recognizer)
 

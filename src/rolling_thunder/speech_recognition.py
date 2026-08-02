@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import struct
 import subprocess
 from pathlib import Path
 from typing import Final, Protocol
@@ -74,6 +75,31 @@ class SpeechRecognizer(Protocol):
         """Capture one push-to-listen utterance and return normalized tokens."""
 
 
+def _downmix_s16le_to_mono(audio: bytes, channels: int) -> bytes:
+    """Return mono S16_LE audio from interleaved input channels."""
+    if channels < 1:
+        raise ValueError("Speech capture channels must be at least one.")
+
+    if channels == 1:
+        return audio
+
+    frame_size = channels * 2
+    if len(audio) % frame_size != 0:
+        raise SpeechRecognitionError(
+            "Microphone capture returned an incomplete multichannel audio frame."
+        )
+
+    sample_count = len(audio) // 2
+    samples = struct.unpack(f"<{sample_count}h", audio)
+    mono_samples: list[int] = []
+
+    for offset in range(0, sample_count, channels):
+        frame = samples[offset : offset + channels]
+        mono_samples.append(int(sum(frame) / channels))
+
+    return struct.pack(f"<{len(mono_samples)}h", *mono_samples)
+
+
 class VoskCallsignRecognizer:
     """Capture bounded ALSA audio and recognize it with a constrained Vosk grammar."""
 
@@ -84,11 +110,14 @@ class VoskCallsignRecognizer:
         audio_device: str,
         duration_s: int = 8,
         sample_rate: int = 16_000,
+        channels: int = 1,
     ) -> None:
         if duration_s < 1:
             raise ValueError("Speech capture duration must be at least one second.")
         if sample_rate < 8_000:
             raise ValueError("Speech sample rate must be at least 8000 Hz.")
+        if channels < 1:
+            raise ValueError("Speech capture channels must be at least one.")
         if not audio_device.strip():
             raise ValueError("Speech audio device must not be empty.")
 
@@ -96,13 +125,12 @@ class VoskCallsignRecognizer:
         self._audio_device = audio_device
         self._duration_s = duration_s
         self._sample_rate = sample_rate
+        self._channels = channels
 
     def capture_tokens(self) -> tuple[str, ...]:
         """Record one bounded utterance and return finalized uppercase words."""
         if not self._model_path.is_dir():
-            raise SpeechRecognitionError(
-                f"Vosk model directory was not found: {self._model_path}"
-            )
+            raise SpeechRecognitionError(f"Vosk model directory was not found: {self._model_path}")
 
         command = (
             "arecord",
@@ -111,7 +139,7 @@ class VoskCallsignRecognizer:
             "--file-type=raw",
             "--format=S16_LE",
             f"--rate={self._sample_rate}",
-            "--channels=1",
+            f"--channels={self._channels}",
             f"--duration={self._duration_s}",
         )
         try:
@@ -135,6 +163,11 @@ class VoskCallsignRecognizer:
         if not completed.stdout:
             raise SpeechRecognitionError("Microphone capture returned no audio.")
 
+        mono_audio = _downmix_s16le_to_mono(
+            completed.stdout,
+            self._channels,
+        )
+
         try:
             vosk = importlib.import_module("vosk")
         except ImportError as error:
@@ -150,8 +183,8 @@ class VoskCallsignRecognizer:
                 self._sample_rate,
                 json.dumps(CALLSIGN_GRAMMAR),
             )
-            for offset in range(0, len(completed.stdout), 8_000):
-                recognizer.AcceptWaveform(completed.stdout[offset : offset + 8_000])
+            for offset in range(0, len(mono_audio), 8_000):
+                recognizer.AcceptWaveform(mono_audio[offset : offset + 8_000])
             result = json.loads(recognizer.FinalResult())
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
             raise SpeechRecognitionError(f"Vosk recognition failed: {error}") from error
