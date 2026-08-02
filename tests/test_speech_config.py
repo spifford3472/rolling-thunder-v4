@@ -21,9 +21,7 @@ def write_config(tmp_path: Path, content: str) -> Path:
 
 
 def test_speech_defaults_are_disabled_and_typed() -> None:
-    config = ApplicationConfig(
-        operator=OperatorConfig(callsign="KI5VNB", home_grid="EM79xm")
-    )
+    config = ApplicationConfig(operator=OperatorConfig(callsign="KI5VNB", home_grid="EM79xm"))
 
     assert isinstance(config.speech, SpeechConfig)
     assert config.speech.enabled is False
@@ -31,6 +29,7 @@ def test_speech_defaults_are_disabled_and_typed() -> None:
     assert config.speech.model_path is None
     assert config.speech.capture_duration_seconds == 8
     assert config.speech.sample_rate == 16_000
+    assert config.speech.channels == 1
 
 
 def test_enabled_speech_loads_and_resolves_relative_model_path(tmp_path: Path) -> None:
@@ -48,6 +47,7 @@ speech:
   model_path: ../models/vosk-small
   capture_duration_seconds: 10
   sample_rate: 16000
+  channels: 2
 """,
     )
 
@@ -58,6 +58,7 @@ speech:
     assert config.speech.model_path == (tmp_path / "models/vosk-small").resolve()
     assert config.speech.capture_duration_seconds == 10
     assert config.speech.sample_rate == 16_000
+    assert config.speech.channels == 2
 
 
 def test_absolute_speech_model_path_is_preserved(tmp_path: Path) -> None:
@@ -110,6 +111,8 @@ speech:
         ("capture_duration_seconds", "31"),
         ("sample_rate", "7999"),
         ("sample_rate", "48001"),
+        ("channels", "0"),
+        ("channels", "9"),
     ],
 )
 def test_invalid_speech_settings_are_actionable(

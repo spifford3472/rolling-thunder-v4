@@ -104,6 +104,7 @@ class SpeechConfig(ConfigurationModel):
     model_path: Path | None = None
     capture_duration_seconds: int = Field(default=8, ge=1, le=30)
     sample_rate: int = Field(default=16_000, ge=8_000, le=48_000)
+    channels: int = Field(default=1, ge=1, le=8)
 
     @field_validator("audio_device")
     @classmethod
