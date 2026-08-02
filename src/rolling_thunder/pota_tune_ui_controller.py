@@ -14,6 +14,7 @@ from rolling_thunder.pota_tune_presentation import (
     PotaTunePresentation,
     build_pota_tune_presentation,
 )
+from rolling_thunder.radio import RadioBand
 
 
 class UnavailablePotaTuneExecutor:
@@ -30,7 +31,7 @@ class UnavailablePotaTuneExecutor:
 
 
 class PotaTuneUiController:
-    """Coordinate stage, confirm, execute, cancel, and presentation state."""
+    """Coordinate tune intent, execution, warning, and presentation state."""
 
     def __init__(
         self,
@@ -41,6 +42,7 @@ class PotaTuneUiController:
         self._execution = PotaTuneExecutionController(
             executor or UnavailablePotaTuneExecutor(),
         )
+        self._retune_warning_band: RadioBand | None = None
 
     @property
     def result(self) -> PotaReceiveTuneResult | None:
@@ -49,12 +51,39 @@ class PotaTuneUiController:
         return self._execution.result
 
     @property
+    def retune_warning_active(self) -> bool:
+        """Return whether an ATAS-120 retune warning awaits acknowledgement."""
+        return self._retune_warning_band is not None
+
+    @property
+    def retune_warning_line(self) -> str | None:
+        """Return the sticky ATAS-120 warning for the verified target band."""
+        band = self._retune_warning_band
+        if band is None:
+            return None
+        band_label = band.value.removesuffix("m")
+        return (
+            f"BAND CHANGED TO {band_label} METERS — RETUNE ATAS-120"
+        )
+
+    @property
     def presentation(self) -> PotaTunePresentation:
-        """Return display state for the current intent and execution result."""
+        """Return display state for intent, result, and sticky warning state."""
         self._synchronize_context()
-        return build_pota_tune_presentation(
+        presentation = build_pota_tune_presentation(
             self._dashboard.tune_intent,
             self._execution.result,
+        )
+        warning_line = self.retune_warning_line
+        if warning_line is None:
+            return presentation
+
+        detail_line = warning_line
+        if presentation.detail_line is not None:
+            detail_line = f"{presentation.detail_line}\n{warning_line}"
+
+        return presentation.model_copy(
+            update={"detail_line": detail_line},
         )
 
     def request(self) -> PotaTuneIntent | None:
@@ -68,17 +97,28 @@ class PotaTuneUiController:
         return self._dashboard.confirm_tune_intent()
 
     def execute(self) -> PotaReceiveTuneResult:
-        """Execute the current confirmed intent through the narrow boundary."""
+        """Execute confirmed intent and publish a verified band-change warning."""
         self._synchronize_context()
-        return self._execution.execute(self._dashboard.tune_intent)
+        result = self._execution.execute(self._dashboard.tune_intent)
+        if result.band_changed and result.target_band is not None:
+            self._retune_warning_band = result.target_band
+        return result
 
     def cancel(self) -> PotaTuneIntent | None:
-        """Cancel the current intent and clear prior execution state."""
+        """Cancel the current intent and acknowledge any retune warning."""
         self._execution.clear()
+        self.acknowledge_retune_warning()
         return self._dashboard.cancel_tune_intent()
 
+    def acknowledge_retune_warning(self) -> bool:
+        """Clear the sticky warning only after an explicit operator action."""
+        if self._retune_warning_band is None:
+            return False
+        self._retune_warning_band = None
+        return True
+
     def _synchronize_context(self) -> None:
-        """Clear stale results when selection, filters, or intent change."""
+        """Clear stale results without clearing a safety warning."""
         executed_intent = self._execution.executed_intent
         current_intent = self._dashboard.tune_intent
 
