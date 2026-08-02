@@ -1,6 +1,7 @@
 """Tests for the pyserial CAT transport."""
 
 from pathlib import Path
+import termios
 
 import pytest
 
@@ -14,6 +15,7 @@ class FakeSerialPort:
         self.is_open = True
         self.writes: list[bytes] = []
         self.reset_count = 0
+        self.reset_error: BaseException | None = None
         self.write_size: int | None = None
 
     def close(self) -> None:
@@ -32,6 +34,8 @@ class FakeSerialPort:
 
     def reset_input_buffer(self) -> None:
         self.reset_count += 1
+        if self.reset_error is not None:
+            raise self.reset_error
 
 
 def test_query_reads_through_semicolon() -> None:
@@ -58,6 +62,22 @@ def test_query_reports_timeout() -> None:
     transport.open()
 
     with pytest.raises(RadioConnectionError, match="Timed out"):
+        transport.query(b"FA;")
+
+
+def test_query_normalizes_termios_disconnect_error() -> None:
+    port = FakeSerialPort()
+    port.reset_error = termios.error(5, "Input/output error")
+    transport = PySerialCatTransport(
+        Path("/dev/ttyUSB0"),
+        serial_factory=lambda _device, _baud, _timeout: port,
+    )
+    transport.open()
+
+    with pytest.raises(
+        RadioConnectionError,
+        match="Could not write to FT-891 CAT device.*Input/output error",
+    ):
         transport.query(b"FA;")
 
 
