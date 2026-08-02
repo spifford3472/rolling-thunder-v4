@@ -6,14 +6,11 @@ import pytest
 
 from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import GPSConnectionState, GPSState
-from rolling_thunder.live_map import (
-    GeoPoint,
-    LiveMapController,
-    LiveMapGpsStatus,
-)
+from rolling_thunder.live_map import GeoPoint, LiveMapController, LiveMapGpsStatus
 
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
+NAIVE_NOW = NOW.replace(tzinfo=None)
 
 
 def gps_state(
@@ -169,7 +166,7 @@ def test_controller_reacquires_after_last_known_state() -> None:
 
 
 def test_controller_rejects_naive_clock() -> None:
-    controller = LiveMapController(clock=lambda: datetime(2026, 8, 2, 20, 0))
+    controller = LiveMapController(clock=lambda: NAIVE_NOW)
 
     with pytest.raises(ValueError, match="timezone-aware"):
         controller.update(None)
