@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from json import JSONDecodeError, loads
 from urllib.error import URLError
 
-import pycountry  # type: ignore[import-untyped]
+import pycountry
 
 from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
 from rolling_thunder.pota_enrichment import StateOutline
