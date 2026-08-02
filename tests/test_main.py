@@ -6,6 +6,7 @@ from pathlib import Path
 from pytest import CaptureFixture
 
 from rolling_thunder.main import main
+from rolling_thunder.storage import CURRENT_SCHEMA_VERSION
 
 
 def write_config(tmp_path: Path, content: str) -> Path:
@@ -44,7 +45,7 @@ hardware:
     assert "Application startup requested" in log_text
     assert "Configuration loaded for operator=KI5VNB" in log_text
     assert "mock_hardware=True" in log_text
-    assert "schema_version=4" in log_text
+    assert f"schema_version={CURRENT_SCHEMA_VERSION}" in log_text
 
 
 def test_main_reports_missing_configuration_without_traceback(
