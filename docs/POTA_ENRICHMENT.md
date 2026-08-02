@@ -9,6 +9,8 @@ Rolling Thunder can optionally enrich the mobile POTA panel with:
 - current park temperature, condition, and park-local 24-hour time from
   Open-Meteo
 - a generalized U.S. state outline from the U.S. Census TIGERweb service
+- a generalized DX first-level subdivision or country outline from the
+  geoBoundaries `gbOpen` service
 - a locally rendered park-location pin using the coordinates already supplied
   by the POTA spot feed
 
@@ -126,12 +128,19 @@ On the POTA panel:
 The card displays:
 
 - park name and POTA reference
-- a state-level map on the left with the park coordinates marked by a pin
+- a U.S. state, DX subdivision, or DX country map on the left
+- the park coordinates marked by a pin
 - the focused activator's QRZ primary photo on the right when available
 - a generated callsign badge when no suitable QRZ photo is available
 - temperature in Fahrenheit and Celsius
 - one familiar current-condition weather symbol
 - park-local time in 24-hour format
+
+For DX parks, Rolling Thunder first tries to match the POTA location code to a
+geoBoundaries ADM1 subdivision. If the subdivision code is unavailable or does
+not match, the map falls back to the country's ADM0 outline. POTA location codes
+follow ISO-3166-2 whenever practical, which makes ADM1 matching possible for
+most countries and territories.
 
 Weather symbols are limited to:
 
@@ -157,18 +166,21 @@ Context #3 does nothing when no POTA spot is focused.
 - QRZ profile has no primary photo: the callsign badge is displayed.
 - Weather unavailable or coordinates missing: temperature, symbol, and local
   time show `NOT AVAILABLE`.
-- State map unavailable or the location is outside the supported U.S. state
-  format: the map area shows `MAP NOT AVAILABLE`.
+- U.S. Census or geoBoundaries unavailable: the map area shows
+  `MAP NOT AVAILABLE` while QRZ and weather data remain visible.
 - One provider fails: successful data from the other providers remains visible.
 - Internet unavailable: POTA spot cache and all local application functions
   continue according to their existing behavior.
 
 ## Data and Image Safety
 
-The map adapter requests a generalized state boundary as GeoJSON in a background
-worker. The successful result is retained in the bounded in-memory enrichment
-cache. Tkinter draws the state and park pin locally; no map tiles or embedded
-browser are used.
+Map adapters request generalized boundaries as GeoJSON in a background worker.
+Successful results are retained in the bounded in-memory enrichment cache.
+Tkinter draws the outline and park pin locally; no map tiles or embedded browser
+are used.
+
+U.S. outlines are supplied by the U.S. Census Bureau. DX outlines use the
+geoBoundaries `gbOpen` dataset from William & Mary geoLab under CC BY 4.0.
 
 QRZ profile-image URLs are accepted only from `qrz.com` or its subdomains. The
 image is downloaded in the background, limited in size, normalized to a bounded
