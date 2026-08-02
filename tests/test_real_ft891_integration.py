@@ -138,7 +138,7 @@ def test_hardware_config_defaults_to_verified_ft891_serial_settings() -> None:
 )
 def test_hardware_config_rejects_invalid_ft891_serial_settings(
     field: str,
-    value: int | float,
+    value: float,
 ) -> None:
     with pytest.raises(ValidationError):
         HardwareConfig.model_validate({field: value})
