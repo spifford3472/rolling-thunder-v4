@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from rolling_thunder.active_panel_commands import ActivePanelCommandController
@@ -26,6 +27,8 @@ from rolling_thunder.control_source_lifecycle import (
 )
 from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
+from rolling_thunder.live_map import LiveMapController
+from rolling_thunder.live_map_ui import LiveMapWidgets
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.operator_commands import OperatorCommandController
 from rolling_thunder.physical_controls import (
@@ -641,14 +644,10 @@ def run_dashboard(
         highlightbackground=_BORDER,
     )
     situational.grid(row=0, column=1, sticky="nsew")
-    tk.Label(
-        situational,
-        text="MAP / FUTURE CARDS\n\nReserved for mapping and operating intelligence.",
-        bg="#0d1418",
-        fg="#83939c",
-        font=("DejaVu Sans", 22, "bold"),
-        justify="center",
-    ).pack(fill="both", expand=True)
+    live_map_controller = LiveMapController(
+        stale_after=timedelta(seconds=config.map.gps_stale_after_s)
+    )
+    live_map_widgets = LiveMapWidgets(situational)
     pota_overlay_widgets = PotaDetailOverlayWidgets(situational)
 
     ticker_text = tk.StringVar(value="STARTING ROLLING THUNDER")
@@ -683,6 +682,23 @@ def run_dashboard(
             control_dispatcher.dispatch_available()
 
         gps_state = runtime.latest_gps_state
+        live_map_presentation = live_map_controller.update(gps_state)
+        if (
+            runtime.live_map is not None
+            and live_map_presentation.position is not None
+        ):
+            map_width, map_height = live_map_widgets.viewport_size
+            if map_width >= 64 and map_height >= 64:
+                runtime.live_map.request_viewport(
+                    live_map_presentation.position,
+                    width_px=map_width,
+                    height_px=map_height,
+                )
+        live_map_widgets.update(
+            live_map_presentation,
+            runtime.latest_live_map_state,
+        )
+
         connectivity = build_runtime_connectivity_status(
             runtime,
             network_enabled=config.network_keepalive.enabled,

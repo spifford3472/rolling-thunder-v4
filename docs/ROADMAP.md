@@ -207,8 +207,8 @@ or UI callbacks.
 
 Status: in progress.
 
-Milestone 10 must begin by proving the real local hardware foundations before
-expanding mapping or intelligence. Execute it in this order.
+Milestone 10 begins by proving the real local hardware foundations, then expands
+mapping and operating intelligence in focused vertical slices.
 
 ### Phase A: Real GPS Integration
 
@@ -223,53 +223,27 @@ Status: complete and approved.
 
 ### Phase B: Real Yaesu FT-891 Integration
 
-Status: receive-only CAT integration and ordered hardware acceptance are
-complete. The ATAS-120 warning implementation is in final automated and
-full-screen acceptance.
+Status: complete and approved.
 
 Completed and verified:
 
 - stable Enhanced CAT device identity and permissions
 - 38,400-baud, 8-N-2 serial configuration
-- read-only connection, frequency, mode, polling, disconnect, and recovery
+- read-only frequency, mode, polling, disconnect, and recovery
 - typed `Radio` and `CatTransport` boundaries
-- deterministic mock-radio and fake-transport coverage
-- dedicated FT-891 `BSxx;` band-selection encoding
-- shared frequency-to-amateur-band resolution
-- separate `select_band()`, `set_frequency()`, and `set_mode()` operations
-- cross-band frequency requests fail before an `FA` command
-- read-back verification for band, frequency, and mode
-- one ordered `ReceiveTuningService`
-- confirmed POTA tuning routed through the ordered service
-- unsupported 60-meter CAT band selection fails closed
-- same-band frequency and mode hardware validation
-- controlled cross-band `BS` selection before target frequency
-- isolated band-memory behavior validation
-- confirmed POTA hardware tuning through the ordered path
-- Standard Com Port remained unopened
+- independent band, frequency, and mode operations
+- hard band-before-frequency ordering for cross-band changes
+- band, frequency, and mode read-back verification
+- confirmed POTA receive tuning through the ordered service
+- unsupported 60-meter CAT band selection failing closed
+- same-band and controlled cross-band hardware validation
+- isolated FT-891 band-memory behavior validation
+- Standard Com Port remaining unopened
+- sticky global ATAS-120 retune warning after verified band changes
+- same-band warning suppression, retention, replacement, and acknowledgement
 - no PTT, MOX, keying, tuner, power, or unattended transmit authority
 
-Current issue #16 warning slice:
-
-- publish only from a verified `band_changed` result and target band
-- use three explicit short encoder presses to stage, confirm, and execute the selected receive-only tune
-- display `BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120`
-- show no warning for same-band tuning
-- retain the warning across POTA selection, filter, context, and result cleanup
-- preserve an existing warning across later same-band tuning
-- replace the warning after a later verified band change
-- acknowledge through the existing Back or X interaction
-- acknowledge before cancelling intent or clearing selection
-- never claim that the antenna is tuned or safe to transmit
-
-Remaining Phase B acceptance:
-
-- pass Ruff, MyPy, pytest, pre-commit, and GitHub Actions for issue #16
-- validate the exact warning in the full-screen dashboard on `anvilmobile`
-- validate same-band suppression, sticky retention, and explicit acknowledgement
-- record final visible behavior in the pull request
-
-The required tuning order remains:
+The required receive-tuning order remains:
 
 ```text
 band selection
@@ -280,18 +254,38 @@ mode setting when needed
 mode verification
 ```
 
-Phase C begins only after the ATAS-120 warning work is approved and merged.
-
 ### Phase C: Mapping and Operating Intelligence
 
-- live map screen based on proven GPS state
-- current location and movement presentation
+Status: first live-map slice implemented under GitHub issue #120 and awaiting
+full automated, GitHub Actions, and owner-visible acceptance.
+
+The current first slice provides:
+
+- north-up live map in the existing right-side situational area
+- latest valid GPS position centered at a typed configurable fixed zoom
+- prominent current or last-known vehicle marker
+- Maidenhead grid, coordinates, GPS state, and map-data state
+- explicit waiting, stale, last-known, cache-only, partial, and unavailable
+  presentation
+- one bounded background worker for all map HTTP and cache work
+- validated atomic raster-tile cache with configured bounds
+- on-demand visible-tile retrieval with no route or regional prefetching
+- existing POTA overlay above the map
+- unchanged global ticker and sticky ATAS-120 warning priority
+- no Home Station Platform dependency
+- no radio or transmit-control changes
+
+Still deferred after the first slice:
+
+- panning or zoom controls
+- movement trail, heading, or speed arrow
 - contact visualization
-- POTA locations and selected-park details
-- station and connection status
-- selected Home Station Platform-assisted analytics
-- cached behavior where practical
-- graceful offline and stale-data behavior
+- POTA markers on the persistent map
+- routing, repeaters, weather radar, and analytics
+- automatic zoom
+- packaged regional offline maps, MBTiles, or vector tiles
+- persisted location history
+- dashboard redesign
 
 Large hardware or full-screen changes require manual validation by the repository
 owner on `anvilmobile` before their pull requests are approved or merged.
@@ -301,8 +295,8 @@ owner on `anvilmobile` before their pull requests are approved or merged.
 The v4.1.0 architecture specification defines Station State as the unified
 operational read model consumed by the UI and dependent services. This boundary
 is being added incrementally around the implemented radio, voice, logging,
-storage, context, health, GPS, connectivity, POTA, enrichment, and physical-input
-capabilities.
+storage, context, health, GPS, connectivity, POTA, enrichment, physical-input,
+and live-map capabilities.
 
 An in-process event bus remains an architectural direction, not a requirement to
 retrofit prematurely. Its implementation should be driven by demonstrated
@@ -322,16 +316,16 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Complete GitHub issue #16, `Add ATAS-120 retune warning`.
+Complete GitHub issue #120, `Implement first live GPS map slice`.
 
 The current feature must:
 
-- publish only after a verified band change
-- preserve the exact target-band warning until explicit acknowledgement
-- produce no warning for same-band tuning
-- remain presentation-only with no tuner or transmit authority
-- pass all automated quality gates
-- complete visible full-screen acceptance on `anvilmobile`
-
-After issue #16 is approved and merged, begin Milestone 10 Phase C with the
-smallest live-map slice based on the proven GPS and radio state.
+- pass Ruff, strict MyPy, full pytest, pre-commit, and GitHub Actions
+- preserve the existing dashboard layout, POTA overlay, and global ticker
+- validate live positioning with the installed GPS on `anvilmobile`
+- validate clear stale and last-known behavior
+- validate fresh tile loading and cache-only degradation
+- confirm map or network failure does not disrupt logging or radio state
+- record full-screen acceptance in the draft pull request
+- remain draft until the owner accepts the visible behavior
+- remain unmerged without explicit owner authorization

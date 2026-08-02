@@ -218,6 +218,8 @@ audited system includes:
 - deterministic mock radio and FT-891 CAT adapter
 - typed `GPSReceiver`, mock GPS, serial NMEA adapter, and background polling
 - full-screen Tkinter dashboard and context navigation
+- first live GPS map slice with stale and last-known presentation
+- bounded raster-tile retrieval and validated local cache
 - station-health and connectivity presentation
 - Home Station Platform health, queued synchronization, durable retries, and
   network keepalive
@@ -259,6 +261,7 @@ Application code coordinates use cases, including:
 
 - recording or discarding a pending callsign
 - displaying radio and GPS state
+- requesting map viewports and presenting immutable cached map state
 - selecting and confirming POTA receive tuning
 - synchronizing pending contacts
 - dispatching physical input through approved operator commands
@@ -397,6 +400,7 @@ Potentially blocking work must not run in the Tkinter thread, including:
 - CAT and GPS serial operations
 - speech capture and recognition
 - HTTP requests and image normalization
+- map tile retrieval, validation, and cache I/O
 - synchronization and retries
 - database maintenance
 - long calculations

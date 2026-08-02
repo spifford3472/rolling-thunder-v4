@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 
 from rolling_thunder.application_secrets import ApplicationSecrets
@@ -19,6 +20,8 @@ from rolling_thunder.gps_polling import GPSPollingService
 from rolling_thunder.home_platform import HomePlatformClient
 from rolling_thunder.home_platform_health import HomePlatformHealthService
 from rolling_thunder.http_home_platform import HttpHomePlatformClient, HttpTransport
+from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
+from rolling_thunder.map_tiles import MapTileCache, MapTileClient
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.network_keepalive import (
@@ -69,6 +72,7 @@ class ApplicationRuntime:
     contact_logging: ContactLoggingService
     gps: GPSReceiver | None = None
     gps_polling: GPSPollingService | None = None
+    live_map: LiveMapService | None = None
     home_platform_client: HomePlatformClient | None = None
     home_platform_health: HomePlatformHealthService | None = None
     contact_sync: ContactSyncService | None = None
@@ -100,7 +104,9 @@ class ApplicationRuntime:
         weather_transport: HttpTransport | None = None,
         image_transport: HttpTransport | None = None,
         state_map_transport: HttpTransport | None = None,
+        map_transport: HttpTransport | None = None,
         enrichment_executor: Executor | None = None,
+        map_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -218,6 +224,24 @@ class ApplicationRuntime:
             executor=enrichment_executor,
         )
 
+        live_map: LiveMapService | None = None
+        map_config = config.map
+        if map_config.enabled:
+            live_map = LiveMapService(
+                MapTileClient(
+                    map_config.tile_url_template,
+                    timeout_s=map_config.request_timeout_s,
+                    transport=map_transport,
+                ),
+                MapTileCache(
+                    map_config.cache_directory,
+                    retention=timedelta(days=map_config.cache_retention_days),
+                    maximum_tiles=map_config.maximum_cached_tiles,
+                ),
+                zoom=map_config.zoom,
+                executor=map_executor,
+            )
+
         return cls(
             radio=radio,
             polling=RadioPollingService(
@@ -232,6 +256,7 @@ class ApplicationRuntime:
                 gps_polling_scheduler,
                 interval_s=gps_interval_s,
             ),
+            live_map=live_map,
             home_platform_client=home_platform_client,
             home_platform_health=home_platform_health,
             contact_sync=contact_sync,
@@ -262,6 +287,13 @@ class ApplicationRuntime:
         return self.gps.get_state()
 
     @property
+    def latest_live_map_state(self) -> LiveMapSnapshot | None:
+        """Return the latest immutable map snapshot without performing I/O."""
+        if self.live_map is None:
+            return None
+        return self.live_map.latest_state
+
+    @property
     def latest_pota_spot_state(self) -> PotaSpotServiceState | None:
         """Return the latest POTA spot snapshot available to consumers."""
         if self.pota_spot_polling is None:
@@ -276,6 +308,8 @@ class ApplicationRuntime:
         state = self.polling.start()
         if self.gps_polling is not None:
             self.gps_polling.start()
+        if self.live_map is not None:
+            self.live_map.start()
         if self.home_platform_health is not None:
             self.home_platform_health.start()
         if self.contact_sync is not None:
@@ -302,6 +336,8 @@ class ApplicationRuntime:
             self.contact_sync.stop()
         if self.home_platform_health is not None:
             self.home_platform_health.stop()
+        if self.live_map is not None:
+            self.live_map.stop()
         if self.gps_polling is not None:
             self.gps_polling.stop()
         self.polling.stop()

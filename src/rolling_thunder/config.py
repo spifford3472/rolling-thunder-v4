@@ -3,6 +3,7 @@
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Self
+from urllib.parse import urlparse
 
 import yaml
 from pydantic import (
@@ -107,10 +108,7 @@ class HardwareConfig(ConfigurationModel):
         """Require only the devices selected for physical hardware operation."""
         missing: list[str] = []
 
-        if (
-            self.effective_radio_mode is HardwareAdapterMode.REAL
-            and self.radio_device is None
-        ):
+        if self.effective_radio_mode is HardwareAdapterMode.REAL and self.radio_device is None:
             missing.append("hardware.radio_device")
 
         if self.effective_gps_mode is HardwareAdapterMode.REAL and self.gps_device is None:
@@ -217,6 +215,42 @@ class PotaSpotsConfig(ConfigurationModel):
     request_timeout_s: float = Field(default=5.0, gt=0, le=60)
     refresh_interval_s: float = Field(default=60.0, gt=0, le=3_600)
     refresh_on_start: bool = True
+
+
+class MapConfig(ConfigurationModel):
+    """Optional live raster-map retrieval and local cache settings."""
+
+    enabled: bool = False
+    tile_url_template: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    zoom: int = Field(default=17, ge=0, le=22)
+    request_timeout_s: float = Field(default=4.0, gt=0, le=60)
+    gps_stale_after_s: float = Field(default=10.0, gt=0, le=300)
+    cache_directory: Path = Path("data/map-tiles")
+    cache_retention_days: int = Field(default=7, ge=7, le=365)
+    maximum_cached_tiles: int = Field(default=2_048, ge=1, le=100_000)
+
+    @field_validator("tile_url_template")
+    @classmethod
+    def validate_tile_url_template(cls, value: str) -> str:
+        """Require an HTTP URL containing all standard tile placeholders."""
+        normalized = value.strip()
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("must be an absolute HTTP or HTTPS URL")
+        for token in ("{z}", "{x}", "{y}"):
+            if token not in normalized:
+                raise ValueError(f"must contain {token}")
+        return normalized
+
+    @field_validator("cache_directory", mode="before")
+    @classmethod
+    def validate_cache_directory(cls, value: object) -> object:
+        """Reject empty or current-directory map cache paths."""
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        if isinstance(value, (str, Path)) and str(Path(value)) == ".":
+            raise ValueError("must name a cache directory")
+        return value
 
 
 class PhysicalControlTransport(StrEnum):
@@ -340,6 +374,7 @@ class ApplicationConfig(ConfigurationModel):
     home_platform: HomePlatformConfig = HomePlatformConfig()
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
     pota_spots: PotaSpotsConfig = PotaSpotsConfig()
+    map: MapConfig = MapConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     storage: StorageConfig = StorageConfig()
 
@@ -379,6 +414,17 @@ def resolve_speech_model_path(
     if model_path is None or model_path.is_absolute():
         return model_path
     return (config_path.parent / model_path).resolve()
+
+
+def resolve_map_cache_directory(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path:
+    """Resolve the map tile cache relative to the YAML file."""
+    directory = config.map.cache_directory
+    if directory.is_absolute():
+        return directory
+    return (config_path.parent / directory).resolve()
 
 
 def _format_validation_error(error: ValidationError) -> str:
@@ -442,4 +488,13 @@ def load_config(path: Path) -> ApplicationConfig:
     resolved_speech = config.speech.model_copy(
         update={"model_path": resolve_speech_model_path(config, path)}
     )
-    return config.model_copy(update={"storage": resolved_storage, "speech": resolved_speech})
+    resolved_map = config.map.model_copy(
+        update={"cache_directory": resolve_map_cache_directory(config, path)}
+    )
+    return config.model_copy(
+        update={
+            "storage": resolved_storage,
+            "speech": resolved_speech,
+            "map": resolved_map,
+        }
+    )
