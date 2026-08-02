@@ -3,11 +3,10 @@
 from collections.abc import Callable
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.census_state_outline import CensusStateOutlineProvider
-from rolling_thunder.config import ApplicationConfig
+from rolling_thunder.config import ApplicationConfig, HardwareAdapterMode
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
@@ -39,7 +38,7 @@ from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.serial_gps import SerialGPSReceiver
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
-GPSFactory = Callable[[Path], GPSReceiver]
+GPSFactory = Callable[..., GPSReceiver]
 
 
 @dataclass
@@ -85,19 +84,26 @@ class ApplicationRuntime:
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
-        gps: GPSReceiver
-        if config.hardware.mock:
+        if config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK:
             radio = MockRadio()
-            gps = MockGPSReceiver()
         else:
             radio_device = config.hardware.radio_device
             if radio_device is None:
-                raise ValueError("A radio device is required outside mock mode.")
+                raise ValueError("A radio device is required when radio mode is real.")
+            radio = Ft891Radio(PySerialCatTransport(radio_device))
+
+        gps: GPSReceiver
+        if config.hardware.effective_gps_mode is HardwareAdapterMode.MOCK:
+            gps = MockGPSReceiver()
+        else:
             gps_device = config.hardware.gps_device
             if gps_device is None:
-                raise ValueError("A GPS device is required outside mock mode.")
-            radio = Ft891Radio(PySerialCatTransport(radio_device))
-            gps = gps_factory(gps_device)
+                raise ValueError("A GPS device is required when GPS mode is real.")
+            gps = gps_factory(
+                gps_device,
+                baud_rate=config.hardware.gps_baud_rate,
+                timeout_s=config.hardware.gps_timeout_s,
+            )
 
         polling_scheduler = scheduler or ThreadingPollScheduler()
         gps_polling_scheduler = gps_scheduler or ThreadingPollScheduler()
@@ -148,7 +154,9 @@ class ApplicationRuntime:
             config.pota_spots,
             pota_scheduler or ThreadingPollScheduler(),
             database_path=config.storage.database_path,
-            mock_mode=config.hardware.mock,
+            mock_mode=(
+                config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK
+            ),
             transport=pota_transport,
         )
 
@@ -240,8 +248,6 @@ class ApplicationRuntime:
             raise RuntimeError("Application runtime is already started.")
 
         state = self.radio.connect()
-        if self.gps is not None:
-            self.gps.connect()
         self.polling.start()
         if self.gps_polling is not None:
             self.gps_polling.start()

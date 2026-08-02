@@ -50,12 +50,20 @@ class ManualScheduler:
 class ScriptedGPSReceiver:
     def __init__(self) -> None:
         self.state = connected_state(latitude=39.75, longitude=-84.20)
+        self.connect_count = 0
         self.refresh_count = 0
+        self.next_connect_state: GPSState | None = None
         self.next_refresh_state: GPSState | None = None
+        self.connect_error: GPSError | None = None
         self.refresh_error: GPSError | None = None
         self.during_refresh: PollCallback | None = None
 
     def connect(self) -> GPSState:
+        self.connect_count += 1
+        if self.connect_error is not None:
+            raise self.connect_error
+        if self.next_connect_state is not None:
+            self.state = self.next_connect_state
         return self.state
 
     def disconnect(self) -> GPSState:
@@ -114,6 +122,43 @@ def test_start_schedules_configured_interval() -> None:
     assert state is gps.state
     assert service.is_running is True
     assert scheduler.interval_s == 0.5
+    assert gps.connect_count == 0
+
+
+def test_start_connects_disconnected_receiver() -> None:
+    gps = ScriptedGPSReceiver()
+    gps.disconnect()
+    gps.next_connect_state = connected_state(latitude=39.76, longitude=-84.19)
+    scheduler = ManualScheduler()
+    service = GPSPollingService(gps, scheduler)
+
+    state = service.start()
+
+    assert state.connection_state is GPSConnectionState.CONNECTED
+    assert gps.connect_count == 1
+    assert service.is_running is True
+
+
+def test_initial_connection_failure_is_degraded_and_retried() -> None:
+    gps = ScriptedGPSReceiver()
+    gps.disconnect()
+    gps.connect_error = GPSConnectionError("GPS device is absent")
+    scheduler = ManualScheduler()
+    service = GPSPollingService(gps, scheduler, clock=lambda: timestamp(1))
+
+    state = service.start()
+
+    assert state.connection_state is GPSConnectionState.ERROR
+    assert state.last_error == "GPS device is absent"
+    assert service.is_running is True
+    assert gps.connect_count == 1
+
+    gps.connect_error = None
+    gps.next_connect_state = connected_state(latitude=39.77, longitude=-84.18)
+    scheduler.fire()
+
+    assert service.latest_state.connection_state is GPSConnectionState.CONNECTED
+    assert gps.connect_count == 2
 
 
 def test_poll_publishes_new_position() -> None:
@@ -157,13 +202,14 @@ def test_polling_recovers_after_transient_failure() -> None:
     gps.refresh_error = GPSConnectionError("temporary read failure")
     scheduler.fire()
     gps.refresh_error = None
-    gps.next_refresh_state = connected_state(latitude=39.90, longitude=-84.00)
+    gps.next_connect_state = connected_state(latitude=39.90, longitude=-84.00)
 
     scheduler.fire()
 
     assert service.latest_state.connection_state is GPSConnectionState.CONNECTED
     assert service.latest_state.position is not None
     assert service.latest_state.position.latitude == 39.90
+    assert gps.connect_count == 1
     assert service.is_running is True
 
 
@@ -185,15 +231,6 @@ def test_repeated_start_is_rejected() -> None:
     service.start()
 
     with pytest.raises(RuntimeError, match="already running"):
-        service.start()
-
-
-def test_start_requires_connected_receiver() -> None:
-    gps = ScriptedGPSReceiver()
-    gps.disconnect()
-    service = GPSPollingService(gps, ManualScheduler())
-
-    with pytest.raises(GPSError, match="requires a connected receiver"):
         service.start()
 
 
