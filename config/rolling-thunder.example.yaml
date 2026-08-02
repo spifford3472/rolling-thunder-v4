@@ -3,9 +3,14 @@ operator:
   home_grid: EM00aa
 
 hardware:
+  # Legacy default for adapters without an explicit per-device mode.
   mock: true
+  radio_mode: mock
+  gps_mode: mock
   radio_device: null
   gps_device: null
+  gps_baud_rate: 9600
+  gps_timeout_s: 2.0
 
 speech:
   enabled: false
