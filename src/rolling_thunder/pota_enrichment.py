@@ -80,16 +80,6 @@ class CallsignProfileSnapshot:
     photo_error: str | None = None
 
 
-@dataclass(frozen=True)
-class ParkImage:
-    """Licensed park image normalized for isolated adapter compatibility."""
-
-    png_bytes: bytes
-    attribution: str
-    license_name: str
-    source_url: str
-
-
 class ParkDetailStatus(StrEnum):
     """Availability state for one requested park-detail snapshot."""
 
