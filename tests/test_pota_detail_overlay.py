@@ -75,9 +75,13 @@ def test_overlay_shows_selected_park_and_expires_after_twenty_seconds() -> None:
     controller, _navigation, clock = controller_fixture()
 
     assert controller.show_selected() is True
-    assert controller.state.visible is True
-    assert controller.state.snapshot is not None
-    assert controller.state.snapshot.park_name == "Caesar Creek State Park"
+    state = controller.state
+    assert state.visible is True
+    assert state.activator == "KI5VNB"
+    assert state.park is not None
+    assert state.park.location_code == "US-OH"
+    assert state.snapshot is not None
+    assert state.snapshot.park_name == "Caesar Creek State Park"
 
     clock.value += timedelta(seconds=19)
     assert controller.state.visible is True
