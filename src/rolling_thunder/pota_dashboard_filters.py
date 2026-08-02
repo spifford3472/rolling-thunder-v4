@@ -1,6 +1,7 @@
 """Operator-driven POTA dashboard filter commands."""
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 from rolling_thunder.domain import Frequency
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
@@ -25,6 +26,7 @@ _MODES: tuple[PotaModeFilter, ...] = (
     PotaModeFilter.ALL,
 )
 _DEFAULT_BAND = AmateurBand.BAND_20M
+_MAXIMUM_SPOT_AGE = timedelta(minutes=15)
 
 
 @dataclass(frozen=True)
@@ -42,10 +44,11 @@ class PotaDashboardFilterState:
 
 
 class PotaDashboardFilterController:
-    """Apply the fixed mobile POTA band and mode cycles."""
+    """Apply the fixed mobile POTA band, mode, and freshness policies."""
 
     def __init__(self, dashboard: PotaDashboardController) -> None:
         self._dashboard = dashboard
+        self._dashboard.set_maximum_spot_age(_MAXIMUM_SPOT_AGE)
         self._dashboard.select_mode_filter(PotaModeFilter.SSB_PHONE)
 
     @property
