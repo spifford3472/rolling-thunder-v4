@@ -3,14 +3,19 @@ operator:
   home_grid: EM00aa
 
 hardware:
-  # Legacy default for adapters without an explicit per-device mode.
+  # Legacy default used when a per-device mode is null.
   mock: true
-  radio_mode: mock
-  gps_mode: mock
+  radio_mode: null
+  gps_mode: null
   radio_device: null
   gps_device: null
   gps_baud_rate: 9600
   gps_timeout_s: 2.0
+
+  # Example for testing the physical GPS while keeping the radio safely mocked:
+  # radio_mode: mock
+  # gps_mode: real
+  # gps_device: /dev/serial/by-id/your-gps-device
 
 speech:
   enabled: false
