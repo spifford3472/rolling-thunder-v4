@@ -1,7 +1,7 @@
 """Tests for the pyserial CAT transport."""
 
-from pathlib import Path
 import termios
+from pathlib import Path
 
 import pytest
 
