@@ -53,6 +53,8 @@ class FakeWeatherProvider:
             temperature_c=20.0,
             temperature_f=68.0,
             local_time="01:30",
+            weather_code=2,
+            is_day=False,
             timezone="America/New_York",
         )
 
@@ -134,6 +136,8 @@ def test_park_detail_combines_weather_and_image_in_background_cache() -> None:
     assert cached.status is ParkDetailStatus.READY
     assert cached.weather is not None
     assert cached.weather.temperature_f == 68.0
+    assert cached.weather.weather_code == 2
+    assert cached.weather.is_day is False
     assert cached.image is not None
     assert cached.image.attribution == "Test Photographer"
     assert weather.calls == ["US-1940"]
