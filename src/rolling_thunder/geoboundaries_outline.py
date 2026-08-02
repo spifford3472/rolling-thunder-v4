@@ -10,12 +10,10 @@ import pycountry  # type: ignore[import-untyped]
 
 from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
 from rolling_thunder.pota_enrichment import StateOutline
-from rolling_thunder.pota_spots import ParkReference
 
 _API_ROOT = "https://www.geoboundaries.org/api/current/gbOpen"
 _JSON_ACCEPT = "application/geo+json,application/json"
 _USER_AGENT = "RollingThunder/4.1 POTA mobile client"
-_ATTRIBUTION = "geoBoundaries · CC BY 4.0"
 
 
 class GeoBoundariesOutlineError(OSError):
@@ -23,7 +21,7 @@ class GeoBoundariesOutlineError(OSError):
 
 
 class GeoBoundariesOutlineProvider:
-    """Fetch a DX ADM1 outline, falling back to the containing country."""
+    """Fetch a DX ADM1 outline, falling back to the country outline."""
 
     def __init__(
         self,
@@ -38,34 +36,34 @@ class GeoBoundariesOutlineProvider:
         self._transport = transport or UrllibHttpTransport()
         self._api_root = api_root.rstrip("/")
 
-    def fetch_outline(self, park: ParkReference) -> StateOutline | None:
-        """Return the containing ADM1 boundary or a country-level fallback."""
-        country_alpha_2 = self._country_alpha_2(park)
-        if country_alpha_2 is None or country_alpha_2 == "US":
+    def fetch_outline(self, location_code: str | None) -> StateOutline | None:
+        """Return the named ADM1 boundary or a country-level fallback."""
+        normalized_code = self._location_code(location_code)
+        if normalized_code is None or normalized_code.startswith("US-"):
             return None
+        country_alpha_2 = normalized_code.split("-", 1)[0]
         country = pycountry.countries.get(alpha_2=country_alpha_2)
         if country is None:
             return None
         country_alpha_3 = str(country.alpha_3)
 
-        if park.latitude is not None and park.longitude is not None:
-            try:
-                outline = self._fetch_level(
-                    country_alpha_3,
-                    "ADM1",
-                    park=park,
-                    select_containing=True,
-                )
-            except GeoBoundariesOutlineError:
-                outline = None
-            if outline is not None:
-                return outline
+        try:
+            outline = self._fetch_level(
+                country_alpha_3,
+                "ADM1",
+                requested_code=normalized_code,
+                select_code=True,
+            )
+        except GeoBoundariesOutlineError:
+            outline = None
+        if outline is not None:
+            return outline
 
         return self._fetch_level(
             country_alpha_3,
             "ADM0",
-            park=park,
-            select_containing=False,
+            requested_code=country_alpha_2,
+            select_code=False,
         )
 
     def _fetch_level(
@@ -73,8 +71,8 @@ class GeoBoundariesOutlineProvider:
         country_alpha_3: str,
         level: str,
         *,
-        park: ParkReference,
-        select_containing: bool,
+        requested_code: str,
+        select_code: bool,
     ) -> StateOutline | None:
         metadata_url = f"{self._api_root}/{country_alpha_3}/{level}/"
         metadata = self._request_json(metadata_url)
@@ -90,10 +88,9 @@ class GeoBoundariesOutlineProvider:
         payload = self._request_json(geojson_url)
         return self._parse_feature_collection(
             payload,
-            park=park,
             fallback_name=self._text(metadata.get("boundaryName")) or country_alpha_3,
-            fallback_code=(park.location_code or country_alpha_3),
-            select_containing=select_containing,
+            fallback_code=requested_code,
+            requested_code=requested_code if select_code else None,
         )
 
     def _request_json(self, url: str) -> object:
@@ -125,10 +122,9 @@ class GeoBoundariesOutlineProvider:
         cls,
         payload: object,
         *,
-        park: ParkReference,
         fallback_name: str,
         fallback_code: str,
-        select_containing: bool,
+        requested_code: str | None,
     ) -> StateOutline | None:
         if not isinstance(payload, Mapping):
             raise GeoBoundariesOutlineError(
@@ -161,40 +157,27 @@ class GeoBoundariesOutlineProvider:
                     or cls._text(properties.get("shapeID"))
                     or fallback_code
                 )
-            parsed.append((name, code, rings))
+            parsed.append((name, code.upper(), rings))
 
         if not parsed:
             return None
 
         chosen = parsed[0]
-        if select_containing:
-            if park.latitude is None or park.longitude is None:
-                return None
-            containing = next(
-                (
-                    item
-                    for item in parsed
-                    if any(
-                        cls._point_in_ring(
-                            park.longitude,
-                            park.latitude,
-                            ring,
-                        )
-                        for ring in item[2]
-                    )
-                ),
+        if requested_code is not None:
+            normalized_requested = requested_code.upper()
+            matched = next(
+                (item for item in parsed if item[1] == normalized_requested),
                 None,
             )
-            if containing is None:
+            if matched is None:
                 return None
-            chosen = containing
+            chosen = matched
 
         name, code, rings = chosen
         return StateOutline(
             state_code=code,
             state_name=name,
             rings=rings,
-            attribution=_ATTRIBUTION,
         )
 
     @classmethod
@@ -251,49 +234,14 @@ class GeoBoundariesOutlineProvider:
         return float(longitude), float(latitude)
 
     @staticmethod
-    def _point_in_ring(
-        longitude: float,
-        latitude: float,
-        ring: Sequence[tuple[float, float]],
-    ) -> bool:
-        if len(ring) < 3:
-            return False
-        adjusted = [
-            (GeoBoundariesOutlineProvider._near_longitude(x, longitude), y)
-            for x, y in ring
-        ]
-        inside = False
-        previous_x, previous_y = adjusted[-1]
-        for current_x, current_y in adjusted:
-            crosses = (current_y > latitude) != (previous_y > latitude)
-            if crosses:
-                denominator = previous_y - current_y
-                if denominator != 0:
-                    intersection_x = (
-                        (previous_x - current_x)
-                        * (latitude - current_y)
-                        / denominator
-                        + current_x
-                    )
-                    if longitude < intersection_x:
-                        inside = not inside
-            previous_x, previous_y = current_x, current_y
-        return inside
-
-    @staticmethod
-    def _near_longitude(value: float, center: float) -> float:
-        adjusted = value
-        while adjusted - center > 180:
-            adjusted -= 360
-        while adjusted - center < -180:
-            adjusted += 360
-        return adjusted
-
-    @staticmethod
-    def _country_alpha_2(park: ParkReference) -> str | None:
-        source = park.location_code or park.reference
-        prefix = source.strip().upper().split("-", 1)[0]
-        return prefix if len(prefix) == 2 and prefix.isalpha() else None
+    def _location_code(location_code: str | None) -> str | None:
+        if location_code is None:
+            return None
+        normalized = location_code.strip().upper()
+        parts = normalized.split("-", 1)
+        if len(parts) != 2 or len(parts[0]) != 2 or not parts[0].isalpha():
+            return None
+        return normalized
 
     @staticmethod
     def _text(value: object) -> str | None:
