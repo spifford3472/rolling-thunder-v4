@@ -5,11 +5,12 @@ from typing import Any
 
 from rolling_thunder.pota_enrichment import (
     ParkDetailStatus,
-    ParkImage,
     ParkWeather,
     PotaEnrichmentService,
+    StateOutline,
 )
 from rolling_thunder.pota_spots import ParkReference
+from rolling_thunder.qrz_xml import QrzCallsignProfile
 
 
 class ImmediateExecutor(Executor):
@@ -34,13 +35,22 @@ class MutableClock:
 
 
 class FakeCallsignProvider:
-    def __init__(self, names: dict[str, str | None]) -> None:
-        self.names = names
+    def __init__(self, profiles: dict[str, QrzCallsignProfile | None]) -> None:
+        self.profiles = profiles
         self.calls: list[str] = []
 
-    def lookup_name(self, callsign: str) -> str | None:
+    def lookup_profile(self, callsign: str) -> QrzCallsignProfile | None:
         self.calls.append(callsign)
-        return self.names.get(callsign)
+        return self.profiles.get(callsign)
+
+
+class FakePhotoProvider:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def fetch_photo(self, image_url: str) -> bytes:
+        self.calls.append(image_url)
+        return b"profile-png"
 
 
 class FakeWeatherProvider:
@@ -59,17 +69,24 @@ class FakeWeatherProvider:
         )
 
 
-class FakeImageProvider:
+class FakeStateOutlineProvider:
     def __init__(self) -> None:
-        self.calls: list[str] = []
+        self.calls: list[str | None] = []
 
-    def fetch_image(self, park: ParkReference) -> ParkImage:
-        self.calls.append(park.reference)
-        return ParkImage(
-            png_bytes=b"png",
-            attribution="Test Photographer",
-            license_name="CC BY 4.0",
-            source_url="https://commons.example/image",
+    def fetch_outline(self, location_code: str | None) -> StateOutline:
+        self.calls.append(location_code)
+        return StateOutline(
+            state_code="OH",
+            state_name="Ohio",
+            rings=(
+                (
+                    (-84.8, 38.4),
+                    (-80.5, 38.4),
+                    (-80.5, 42.0),
+                    (-84.8, 42.0),
+                    (-84.8, 38.4),
+                ),
+            ),
         )
 
 
@@ -83,10 +100,20 @@ def park() -> ParkReference:
     )
 
 
-def test_callsign_names_are_prefetched_and_cached() -> None:
-    provider = FakeCallsignProvider({"KI5VNB": "Geoff Kline"})
+def profile(name: str | None = "Geoff Kline") -> QrzCallsignProfile:
+    return QrzCallsignProfile(
+        callsign="KI5VNB",
+        name=name,
+        image_url="https://cdn-xml.qrz.com/ki5vnb.jpg",
+    )
+
+
+def test_callsign_names_are_prefetched_and_cached_without_fetching_photos() -> None:
+    provider = FakeCallsignProvider({"KI5VNB": profile()})
+    photo_provider = FakePhotoProvider()
     service = PotaEnrichmentService(
         callsign_provider=provider,
+        callsign_photo_provider=photo_provider,
         executor=ImmediateExecutor(),
     )
     service.start()
@@ -96,6 +123,26 @@ def test_callsign_names_are_prefetched_and_cached() -> None:
 
     assert service.get_callsign_name("KI5VNB") == "Geoff Kline"
     assert provider.calls == ["KI5VNB"]
+    assert photo_provider.calls == []
+
+
+def test_selected_callsign_photo_is_fetched_and_cached() -> None:
+    provider = FakeCallsignProvider({"KI5VNB": profile()})
+    photo_provider = FakePhotoProvider()
+    service = PotaEnrichmentService(
+        callsign_provider=provider,
+        callsign_photo_provider=photo_provider,
+        executor=ImmediateExecutor(),
+    )
+    service.start()
+    service.prefetch_callsigns(["KI5VNB"])
+
+    service.request_callsign_photo("KI5VNB")
+    cached = service.get_callsign_profile("KI5VNB")
+
+    assert cached is not None
+    assert cached.photo_png == b"profile-png"
+    assert photo_provider.calls == ["https://cdn-xml.qrz.com/ki5vnb.jpg"]
 
 
 def test_negative_callsign_results_are_cached_until_expiry() -> None:
@@ -118,12 +165,12 @@ def test_negative_callsign_results_are_cached_until_expiry() -> None:
     assert provider.calls == ["W8O", "W8O"]
 
 
-def test_park_detail_combines_weather_and_image_in_background_cache() -> None:
+def test_park_detail_combines_weather_and_state_outline() -> None:
     weather = FakeWeatherProvider()
-    image = FakeImageProvider()
+    outline = FakeStateOutlineProvider()
     service = PotaEnrichmentService(
         weather_provider=weather,
-        image_provider=image,
+        state_outline_provider=outline,
         executor=ImmediateExecutor(),
     )
     service.start()
@@ -136,12 +183,10 @@ def test_park_detail_combines_weather_and_image_in_background_cache() -> None:
     assert cached.status is ParkDetailStatus.READY
     assert cached.weather is not None
     assert cached.weather.temperature_f == 68.0
-    assert cached.weather.weather_code == 2
-    assert cached.weather.is_day is False
-    assert cached.image is not None
-    assert cached.image.attribution == "Test Photographer"
+    assert cached.outline is not None
+    assert cached.outline.state_code == "OH"
     assert weather.calls == ["US-1940"]
-    assert image.calls == ["US-1940"]
+    assert outline.calls == ["US-OH"]
 
 
 def test_unavailable_providers_degrade_without_starting_network_work() -> None:
@@ -152,11 +197,11 @@ def test_unavailable_providers_degrade_without_starting_network_work() -> None:
 
     assert snapshot.status is ParkDetailStatus.UNAVAILABLE
     assert snapshot.weather_error == "Weather unavailable"
-    assert snapshot.image_error == "Image unavailable"
+    assert snapshot.map_error == "Map unavailable"
 
 
 def test_stopped_service_never_submits_new_work() -> None:
-    provider = FakeCallsignProvider({"KI5VNB": "Geoff Kline"})
+    provider = FakeCallsignProvider({"KI5VNB": profile()})
     service = PotaEnrichmentService(
         callsign_provider=provider,
         executor=ImmediateExecutor(),
