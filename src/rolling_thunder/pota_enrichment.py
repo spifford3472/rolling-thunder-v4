@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from threading import Lock
-from typing import Protocol, TypeVar, Generic
+from typing import Generic, Protocol, TypeVar
 
 from rolling_thunder.pota_spots import ParkReference
 from rolling_thunder.qrz_xml import QrzLookupError, normalize_qrz_callsign
@@ -147,13 +147,13 @@ class PotaEnrichmentService:
         self._started = True
 
     def stop(self) -> None:
-        """Stop accepting work and cancel queued tasks during application shutdown."""
+        """Stop accepting work and cancel queued tasks without blocking the UI."""
         if not self._started:
             return
         self._started = False
         executor = self._executor
         if executor is not None and self._owns_executor:
-            executor.shutdown(wait=True, cancel_futures=True)
+            executor.shutdown(wait=False, cancel_futures=True)
             self._executor = None
         with self._lock:
             self._pending_callsigns.clear()
@@ -337,7 +337,7 @@ class PotaEnrichmentService:
             return None
         return entry.value
 
-    def _trim_cache_locked(self, cache: dict[str, _CacheEntry[object]]) -> None:
+    def _trim_cache_locked(self, cache: dict[str, _CacheEntry[T]]) -> None:
         while len(cache) > self._maximum_cache_entries:
             oldest_key = min(cache, key=lambda key: cache[key].stored_at)
             del cache[oldest_key]
