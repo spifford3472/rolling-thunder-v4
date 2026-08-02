@@ -26,8 +26,6 @@ _DATA_MODES = frozenset(
     {
         "DATA",
         "DIGITAL",
-        "FT4",
-        "FT8",
         "HELL",
         "JS8",
         "JT65",
@@ -128,7 +126,7 @@ class HttpPotaSpotSource:
             activator = cls._require_text(item.get("activator"), "activator")
             reference = cls._require_text(item.get("reference"), "reference")
             frequency = cls._parse_frequency(item.get("frequency"))
-            mode = cls._parse_mode(item.get("mode"), frequency)
+            mode, spot_mode = cls._parse_mode(item.get("mode"), frequency)
             spotted_at = cls._parse_timestamp(item.get("spotTime"))
             park_name = item.get("parkName") or item.get("name")
             return PotaSpot(
@@ -136,9 +134,13 @@ class HttpPotaSpotSource:
                 park=ParkReference(
                     reference=reference,
                     name=park_name,
+                    location_code=item.get("locationDesc"),
+                    latitude=cls._optional_coordinate(item.get("latitude")),
+                    longitude=cls._optional_coordinate(item.get("longitude")),
                 ),
                 frequency=frequency,
                 mode=mode,
+                spot_mode=spot_mode,
                 spotted_at=spotted_at,
                 comments=item.get("comments"),
             )
@@ -155,6 +157,14 @@ class HttpPotaSpotSource:
         return normalized
 
     @staticmethod
+    def _optional_coordinate(value: object) -> float | None:
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
+            raise TypeError("coordinate must be numeric")
+        return float(value)
+
+    @staticmethod
     def _parse_frequency(value: object) -> Frequency:
         if isinstance(value, bool) or not isinstance(value, (str, int, float, Decimal)):
             raise TypeError("frequency must be numeric")
@@ -165,23 +175,29 @@ class HttpPotaSpotSource:
         return Frequency(hz=int(hertz))
 
     @staticmethod
-    def _parse_mode(value: object, frequency: Frequency) -> RadioMode:
+    def _parse_mode(value: object, frequency: Frequency) -> tuple[RadioMode, str]:
         if not isinstance(value, str):
             raise TypeError("mode must be text")
         normalized = value.strip().upper()
-        try:
-            return RadioMode(normalized)
-        except ValueError:
-            pass
-        if normalized == "SSB":
+
+        if normalized in {"SSB", "PHONE"}:
             uses_lsb = any(
                 lower_hz <= frequency.hz <= upper_hz
                 for lower_hz, upper_hz in _LSB_RANGES_HZ
             )
-            return RadioMode.LSB if uses_lsb else RadioMode.USB
+            return (RadioMode.LSB if uses_lsb else RadioMode.USB, normalized)
+
+        if normalized in {"FT4", "FT8"}:
+            return RadioMode.DATA, normalized
+
         if normalized in _DATA_MODES:
-            return RadioMode.DATA
-        raise ValueError("unsupported POTA mode")
+            return RadioMode.DATA, "DATA"
+
+        try:
+            mode = RadioMode(normalized)
+        except ValueError as error:
+            raise ValueError("unsupported POTA mode") from error
+        return mode, normalized
 
     @staticmethod
     def _parse_timestamp(value: object) -> datetime:

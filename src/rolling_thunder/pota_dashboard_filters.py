@@ -1,14 +1,32 @@
-"""Keyboard-driven POTA dashboard filter commands."""
+"""Operator-driven POTA dashboard filter commands."""
 
 from dataclasses import dataclass
+from datetime import timedelta
 
-from rolling_thunder.domain import RadioMode
+from rolling_thunder.domain import Frequency
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_state import PotaDashboardState
-from rolling_thunder.pota_spots import AmateurBand
+from rolling_thunder.pota_spots import AmateurBand, PotaModeFilter, frequency_band
 
-_BANDS: tuple[AmateurBand | None, ...] = (None, *tuple(AmateurBand))
-_MODES: tuple[RadioMode | None, ...] = (None, *tuple(RadioMode))
+_BANDS: tuple[AmateurBand, ...] = (
+    AmateurBand.BAND_80M,
+    AmateurBand.BAND_40M,
+    AmateurBand.BAND_20M,
+    AmateurBand.BAND_17M,
+    AmateurBand.BAND_15M,
+    AmateurBand.BAND_12M,
+    AmateurBand.BAND_10M,
+)
+_MODES: tuple[PotaModeFilter, ...] = (
+    PotaModeFilter.SSB_PHONE,
+    PotaModeFilter.CW,
+    PotaModeFilter.FT4,
+    PotaModeFilter.FT8,
+    PotaModeFilter.DATA,
+    PotaModeFilter.ALL,
+)
+_DEFAULT_BAND = AmateurBand.BAND_20M
+_MAXIMUM_SPOT_AGE = timedelta(minutes=15)
 
 
 @dataclass(frozen=True)
@@ -21,37 +39,44 @@ class PotaDashboardFilterState:
 
     @property
     def display_line(self) -> str:
-        """Return one compact line for the read-only POTA panel."""
-        return f"FILTERS — BAND {self.band_label} — MODE {self.mode_label}"
+        """Return one compact header line for the POTA panel."""
+        return f"POTA    BAND: {self.band_label}    MODE: {self.mode_label}"
 
 
 class PotaDashboardFilterController:
-    """Translate direct keyboard commands into explicit POTA filters."""
+    """Apply the fixed mobile POTA band, mode, and freshness policies."""
 
     def __init__(self, dashboard: PotaDashboardController) -> None:
         self._dashboard = dashboard
+        self._dashboard.set_maximum_spot_age(_MAXIMUM_SPOT_AGE)
+        self._dashboard.select_mode_filter(PotaModeFilter.SSB_PHONE)
 
     @property
     def state(self) -> PotaDashboardFilterState:
         """Return current filter labels with a fresh dashboard snapshot."""
+        selected_band = self._dashboard.selected_band or _DEFAULT_BAND
         return PotaDashboardFilterState(
-            band_label=self._dashboard.selected_band.value
-            if self._dashboard.selected_band is not None
-            else "ALL",
-            mode_label=self._dashboard.selected_mode.value
-            if self._dashboard.selected_mode is not None
-            else "ALL",
+            band_label=selected_band.value.removesuffix("m"),
+            mode_label=self._dashboard.selected_mode_filter.value,
             dashboard=self._dashboard.state,
         )
 
+    def activate_for_frequency(self, frequency: Frequency | None) -> PotaDashboardFilterState:
+        """Default the POTA panel to the radio's current supported band."""
+        band = frequency_band(frequency) if frequency is not None else None
+        if band not in _BANDS:
+            band = _DEFAULT_BAND
+        self._dashboard.select_band(band)
+        return self.state
+
     def handle_key(self, key: str) -> bool:
-        """Handle one supported key and report whether it was consumed."""
+        """Handle retained development keyboard shortcuts."""
         actions = {
             "[": self.previous_band,
             "]": self.next_band,
             ",": self.previous_mode,
             ".": self.next_mode,
-            "/": self.clear,
+            "/": self.reset_defaults,
         }
         action = actions.get(key)
         if action is None:
@@ -60,30 +85,41 @@ class PotaDashboardFilterController:
         return True
 
     def previous_band(self) -> PotaDashboardFilterState:
-        """Select the previous supported band, wrapping through ALL."""
-        current = _BANDS.index(self._dashboard.selected_band)
+        """Select the previous mobile HF band with wraparound."""
+        current = self._current_band_index()
         self._dashboard.select_band(_BANDS[(current - 1) % len(_BANDS)])
         return self.state
 
     def next_band(self) -> PotaDashboardFilterState:
-        """Select the next supported band, wrapping through ALL."""
-        current = _BANDS.index(self._dashboard.selected_band)
+        """Select the next mobile HF band with wraparound."""
+        current = self._current_band_index()
         self._dashboard.select_band(_BANDS[(current + 1) % len(_BANDS)])
         return self.state
 
     def previous_mode(self) -> PotaDashboardFilterState:
-        """Select the previous supported mode, wrapping through ALL."""
-        current = _MODES.index(self._dashboard.selected_mode)
-        self._dashboard.select_mode(_MODES[(current - 1) % len(_MODES)])
+        """Select the previous operator mode group with wraparound."""
+        current = _MODES.index(self._dashboard.selected_mode_filter)
+        self._dashboard.select_mode_filter(_MODES[(current - 1) % len(_MODES)])
         return self.state
 
     def next_mode(self) -> PotaDashboardFilterState:
-        """Select the next supported mode, wrapping through ALL."""
-        current = _MODES.index(self._dashboard.selected_mode)
-        self._dashboard.select_mode(_MODES[(current + 1) % len(_MODES)])
+        """Select the next operator mode group with wraparound."""
+        current = _MODES.index(self._dashboard.selected_mode_filter)
+        self._dashboard.select_mode_filter(_MODES[(current + 1) % len(_MODES)])
+        return self.state
+
+    def reset_defaults(self) -> PotaDashboardFilterState:
+        """Restore the 20-meter SSB/PHONE mobile defaults."""
+        self._dashboard.select_band(_DEFAULT_BAND)
+        self._dashboard.select_mode_filter(PotaModeFilter.SSB_PHONE)
         return self.state
 
     def clear(self) -> PotaDashboardFilterState:
-        """Clear both filters explicitly."""
-        self._dashboard.clear_filters()
-        return self.state
+        """Compatibility alias for restoring mobile defaults."""
+        return self.reset_defaults()
+
+    def _current_band_index(self) -> int:
+        selected = self._dashboard.selected_band
+        if selected not in _BANDS:
+            return _BANDS.index(_DEFAULT_BAND)
+        return _BANDS.index(selected)

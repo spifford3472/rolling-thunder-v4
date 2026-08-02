@@ -27,6 +27,11 @@ class ControlAction(StrEnum):
     SELECT_AI = "select_ai"
     SELECT_SETTINGS = "select_settings"
 
+    PANEL_PRIMARY = "panel_primary"
+    PANEL_SECONDARY = "panel_secondary"
+    PANEL_TERTIARY = "panel_tertiary"
+    PANEL_TERTIARY_LONG = "panel_tertiary_long"
+
     MOVE_PREVIOUS = "move_previous"
     MOVE_NEXT = "move_next"
     ACTIVATE_SELECTION = "activate_selection"

@@ -47,6 +47,44 @@ class FakeCommit:
         return self.result
 
 
+class FakeActivePanel:
+    def __init__(self, result: bool = True) -> None:
+        self.result = result
+        self.actions: list[str] = []
+
+    def primary(self) -> bool:
+        self.actions.append("primary")
+        return self.result
+
+    def secondary(self) -> bool:
+        self.actions.append("secondary")
+        return self.result
+
+    def tertiary(self) -> bool:
+        self.actions.append("tertiary")
+        return self.result
+
+    def tertiary_long(self) -> bool:
+        self.actions.append("tertiary_long")
+        return self.result
+
+    def move_previous(self) -> bool:
+        self.actions.append("move_previous")
+        return self.result
+
+    def move_next(self) -> bool:
+        self.actions.append("move_next")
+        return self.result
+
+    def activate_selection(self) -> bool:
+        self.actions.append("activate_selection")
+        return self.result
+
+    def back(self) -> bool:
+        self.actions.append("back")
+        return self.result
+
+
 def connected_radio() -> RadioState:
     return RadioState(
         connection_state=RadioConnectionState.CONNECTED,
@@ -60,12 +98,14 @@ def controller(
     capture: FakeCapture,
     commit: FakeCommit,
     navigation: ContextNavigationController | None = None,
+    active_panel: FakeActivePanel | None = None,
 ) -> OperatorCommandController:
     return OperatorCommandController(
         capture,
         commit,
         navigation or ContextNavigationController(),
         connected_radio,
+        active_panel,
     )
 
 
@@ -179,10 +219,14 @@ def test_home_context_returns_to_pota() -> None:
     assert navigation.state.selected is ContextId.POTA
 
 
-def test_unimplemented_selection_actions_are_safely_rejected() -> None:
+def test_active_panel_actions_are_safely_rejected_without_controller() -> None:
     commands = controller(FakeCapture(), FakeCommit())
 
     unsupported = (
+        ControlAction.PANEL_PRIMARY,
+        ControlAction.PANEL_SECONDARY,
+        ControlAction.PANEL_TERTIARY,
+        ControlAction.PANEL_TERTIARY_LONG,
         ControlAction.MOVE_PREVIOUS,
         ControlAction.MOVE_NEXT,
         ControlAction.ACTIVATE_SELECTION,
@@ -191,3 +235,39 @@ def test_unimplemented_selection_actions_are_safely_rejected() -> None:
 
     for action in unsupported:
         assert commands.execute(action) is False
+
+
+def test_active_panel_actions_delegate_to_active_panel_commands() -> None:
+    expected = {
+        ControlAction.PANEL_PRIMARY: "primary",
+        ControlAction.PANEL_SECONDARY: "secondary",
+        ControlAction.PANEL_TERTIARY: "tertiary",
+        ControlAction.PANEL_TERTIARY_LONG: "tertiary_long",
+        ControlAction.MOVE_PREVIOUS: "move_previous",
+        ControlAction.MOVE_NEXT: "move_next",
+        ControlAction.ACTIVATE_SELECTION: "activate_selection",
+        ControlAction.BACK: "back",
+    }
+
+    for action, recorded_action in expected.items():
+        active_panel = FakeActivePanel()
+        commands = controller(
+            FakeCapture(),
+            FakeCommit(),
+            active_panel=active_panel,
+        )
+
+        assert commands.execute(action) is True
+        assert active_panel.actions == [recorded_action]
+
+
+def test_active_panel_rejection_is_preserved() -> None:
+    active_panel = FakeActivePanel(result=False)
+    commands = controller(
+        FakeCapture(),
+        FakeCommit(),
+        active_panel=active_panel,
+    )
+
+    assert commands.execute(ControlAction.ACTIVATE_SELECTION) is False
+    assert active_panel.actions == ["activate_selection"]

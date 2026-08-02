@@ -56,12 +56,12 @@ physical_controls:
     panel-button-short: next_context
     panel-button-long: home_context
 
-    context-button-1-short: select_pota
+    context-button-1-short: panel_primary
     context-button-1-long: select_ai
-    context-button-2-short: select_dx
+    context-button-2-short: panel_secondary
     context-button-2-long: select_settings
-    context-button-3-short: select_repeaters
-    context-button-3-long: select_pota
+    context-button-3-short: panel_tertiary
+    context-button-3-long: panel_tertiary_long
 
     encoder-counterclockwise: move_previous
     encoder-clockwise: move_next
