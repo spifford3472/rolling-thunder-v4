@@ -1,6 +1,6 @@
 """Tests for pure POTA dashboard presentation state."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.pota_dashboard_state import build_pota_dashboard_state
@@ -9,8 +9,8 @@ from rolling_thunder.pota_spot_source import PotaSpotSourceAvailability
 from rolling_thunder.pota_spots import AmateurBand, ParkReference, PotaSpot
 
 
-def timestamp(hour: int = 12) -> datetime:
-    return datetime(2026, 7, 26, hour, 30, tzinfo=UTC)
+def timestamp(hour: int = 12, minute: int = 30) -> datetime:
+    return datetime(2026, 7, 26, hour, minute, tzinfo=UTC)
 
 
 def spot(
@@ -20,14 +20,20 @@ def spot(
     mode: RadioMode,
     *,
     name: str | None = None,
+    location_code: str | None = None,
     comments: str | None = None,
+    spotted_at: datetime | None = None,
 ) -> PotaSpot:
     return PotaSpot(
         activator=callsign,
-        park=ParkReference(reference=reference, name=name),
+        park=ParkReference(
+            reference=reference,
+            name=name,
+            location_code=location_code,
+        ),
         frequency=Frequency(hz=frequency_hz),
         mode=mode,
-        spotted_at=timestamp(),
+        spotted_at=spotted_at or timestamp(),
         comments=comments,
     )
 
@@ -44,6 +50,7 @@ def test_disabled_state_is_explicit_and_empty() -> None:
     assert dashboard.total_spot_count == 0
     assert dashboard.visible_spot_count == 0
     assert dashboard.rows == ()
+    assert dashboard.selected_index is None
 
 
 def test_unknown_state_maps_to_loading() -> None:
@@ -70,7 +77,7 @@ def test_available_empty_state_maps_to_empty() -> None:
     assert dashboard.last_refresh == "2026-07-26 12:30 UTC"
 
 
-def test_available_spots_are_formatted_for_display() -> None:
+def test_available_spots_are_formatted_as_cards() -> None:
     state = PotaSpotServiceState(
         availability=PotaSpotSourceAvailability.AVAILABLE,
         spots=(
@@ -80,6 +87,7 @@ def test_available_spots_are_formatted_for_display() -> None:
                 14_250_000,
                 RadioMode.USB,
                 name="Example State Park",
+                location_code="US-OH",
                 comments="Listening up 5",
             ),
         ),
@@ -90,19 +98,20 @@ def test_available_spots_are_formatted_for_display() -> None:
     dashboard = build_pota_dashboard_state(state)
 
     assert dashboard.status == "READY"
-    assert dashboard.detail == "SHOWING 1 OF 1 SPOTS"
+    assert dashboard.detail == "SHOWING 1 FRESH SPOTS"
     assert dashboard.total_spot_count == 1
     assert dashboard.visible_spot_count == 1
     assert dashboard.rows[0].activator == "KI5VNB"
     assert dashboard.rows[0].park_reference == "US-1234"
     assert dashboard.rows[0].park_name == "Example State Park"
+    assert dashboard.rows[0].location_code == "US-OH"
     assert dashboard.rows[0].frequency == "14.250 MHz"
-    assert dashboard.rows[0].mode == "USB"
+    assert dashboard.rows[0].mode == "SSB"
     assert dashboard.rows[0].spotted_at == "2026-07-26 12:30 UTC"
     assert dashboard.rows[0].comments == "Listening up 5"
 
 
-def test_band_and_mode_filters_change_only_visible_rows() -> None:
+def test_band_and_exact_mode_filters_change_only_visible_rows() -> None:
     state = PotaSpotServiceState(
         availability=PotaSpotSourceAvailability.AVAILABLE,
         spots=(
@@ -121,10 +130,42 @@ def test_band_and_mode_filters_change_only_visible_rows() -> None:
     )
 
     assert dashboard.status == "READY"
-    assert dashboard.detail == "SHOWING 1 OF 3 SPOTS"
+    assert dashboard.detail == "SHOWING 1 FRESH SPOTS"
     assert dashboard.total_spot_count == 3
     assert dashboard.visible_spot_count == 1
     assert [row.activator for row in dashboard.rows] == ["KI5VNB"]
+
+
+def test_spots_older_than_maximum_age_are_hidden() -> None:
+    state = PotaSpotServiceState(
+        availability=PotaSpotSourceAvailability.AVAILABLE,
+        spots=(
+            spot(
+                "K1OLD",
+                "US-1001",
+                14_250_000,
+                RadioMode.USB,
+                spotted_at=timestamp(12, 14),
+            ),
+            spot(
+                "K1NEW",
+                "US-1002",
+                14_260_000,
+                RadioMode.USB,
+                spotted_at=timestamp(12, 16),
+            ),
+        ),
+        last_attempt_at=timestamp(),
+        last_success_at=timestamp(),
+    )
+
+    dashboard = build_pota_dashboard_state(
+        state,
+        reference_time=timestamp(),
+        maximum_age=timedelta(minutes=15),
+    )
+
+    assert [row.activator for row in dashboard.rows] == ["K1NEW"]
 
 
 def test_unavailable_without_retained_spots_maps_to_error_state() -> None:
@@ -154,7 +195,7 @@ def test_unavailable_with_retained_spots_maps_to_stale_state() -> None:
     )
 
     assert dashboard.status == "STALE"
-    assert dashboard.detail == "SHOWING 1 OF 1 RETAINED SPOTS"
+    assert dashboard.detail == "SHOWING 1 FRESH RETAINED SPOTS"
     assert dashboard.is_stale is True
     assert dashboard.last_refresh == "2026-07-26 12:30 UTC"
     assert dashboard.error == "request timed out"
@@ -170,24 +211,25 @@ def test_missing_optional_row_values_have_stable_placeholders() -> None:
 
     row = build_pota_dashboard_state(state).rows[0]
 
-    assert row.park_name == "—"
+    assert row.park_name == "NOT AVAILABLE"
+    assert row.location_code == "—"
     assert row.comments == ""
 
 
 def test_spots_are_ranked_by_recency_when_reference_time_is_supplied() -> None:
-    older = PotaSpot(
-        activator="K1OLD",
-        park=ParkReference(reference="US-1234"),
-        frequency=Frequency(hz=14_250_000),
-        mode=RadioMode.USB,
-        spotted_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
+    older = spot(
+        "K1OLD",
+        "US-1234",
+        14_250_000,
+        RadioMode.USB,
+        spotted_at=timestamp(12, 20),
     )
-    newer = PotaSpot(
-        activator="K1NEW",
-        park=ParkReference(reference="US-5678"),
-        frequency=Frequency(hz=7_255_000),
-        mode=RadioMode.LSB,
-        spotted_at=datetime(2026, 7, 26, 12, 25, tzinfo=UTC),
+    newer = spot(
+        "K1NEW",
+        "US-5678",
+        7_255_000,
+        RadioMode.LSB,
+        spotted_at=timestamp(12, 25),
     )
     state = PotaSpotServiceState(
         availability=PotaSpotSourceAvailability.AVAILABLE,
@@ -198,26 +240,26 @@ def test_spots_are_ranked_by_recency_when_reference_time_is_supplied() -> None:
 
     dashboard = build_pota_dashboard_state(
         state,
-        reference_time=datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+        reference_time=timestamp(),
     )
 
     assert [row.activator for row in dashboard.rows] == ["K1NEW", "K1OLD"]
 
 
 def test_missing_reference_time_preserves_filtered_source_order() -> None:
-    older = PotaSpot(
-        activator="K1OLD",
-        park=ParkReference(reference="US-1234"),
-        frequency=Frequency(hz=14_250_000),
-        mode=RadioMode.USB,
-        spotted_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
+    older = spot(
+        "K1OLD",
+        "US-1234",
+        14_250_000,
+        RadioMode.USB,
+        spotted_at=timestamp(12, 0),
     )
-    newer = PotaSpot(
-        activator="K1NEW",
-        park=ParkReference(reference="US-5678"),
-        frequency=Frequency(hz=7_255_000),
-        mode=RadioMode.LSB,
-        spotted_at=datetime(2026, 7, 26, 12, 25, tzinfo=UTC),
+    newer = spot(
+        "K1NEW",
+        "US-5678",
+        7_255_000,
+        RadioMode.LSB,
+        spotted_at=timestamp(12, 25),
     )
     state = PotaSpotServiceState(
         availability=PotaSpotSourceAvailability.AVAILABLE,
@@ -244,6 +286,7 @@ def test_selected_index_marks_only_matching_ranked_row() -> None:
 
     dashboard = build_pota_dashboard_state(state, selected_index=1)
 
+    assert dashboard.selected_index == 1
     assert [row.is_selected for row in dashboard.rows] == [False, True]
 
 
