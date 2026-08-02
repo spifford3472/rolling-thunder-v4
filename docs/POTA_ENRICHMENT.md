@@ -165,9 +165,10 @@ Context #3 does nothing when no POTA spot is focused.
 
 ## Data and Image Safety
 
-The map adapter requests a generalized state boundary as GeoJSON and passes only
-validated longitude/latitude rings to the UI. Tkinter draws the state and park
-pin locally; no map tiles or embedded browser are used.
+The map adapter requests a generalized state boundary as GeoJSON in a background
+worker. The successful result is retained in the bounded in-memory enrichment
+cache. Tkinter draws the state and park pin locally; no map tiles or embedded
+browser are used.
 
 QRZ profile-image URLs are accepted only from `qrz.com` or its subdomains. The
 image is downloaded in the background, limited in size, normalized to a bounded
