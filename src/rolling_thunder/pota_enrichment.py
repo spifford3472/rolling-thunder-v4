@@ -39,11 +39,13 @@ class ParkImageProvider(Protocol):
 
 @dataclass(frozen=True)
 class ParkWeather:
-    """Current temperature and local time at a park."""
+    """Current temperature, condition, and local time at a park."""
 
     temperature_c: float
     temperature_f: float
     local_time: str
+    weather_code: int
+    is_day: bool
     timezone: str | None = None
 
 
