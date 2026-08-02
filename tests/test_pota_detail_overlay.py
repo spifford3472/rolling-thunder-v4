@@ -19,10 +19,7 @@ class ImmediateExecutor(Executor):
         **kwargs: Any,
     ) -> Future[Any]:
         future: Future[Any] = Future()
-        try:
-            future.set_result(fn(*args, **kwargs))
-        except Exception as error:
-            future.set_exception(error)
+        future.set_result(fn(*args, **kwargs))
         return future
 
 
