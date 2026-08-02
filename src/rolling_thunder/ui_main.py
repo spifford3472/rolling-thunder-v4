@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rolling_thunder.active_panel_commands import ActivePanelCommandController
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.callsign_capture import CallsignCaptureState, MockTranscriptController
 from rolling_thunder.config import ConfigurationError, load_config
@@ -152,6 +153,11 @@ def run_dashboard(
         pota_dashboard,
         pota_tune_executor or runtime.pota_receive_tune_executor,
     )
+    active_panel_commands = ActivePanelCommandController(
+        context_navigation,
+        pota_dashboard,
+        pota_tune_ui,
+    )
 
     def capture_state() -> CallsignCaptureState:
         """Return the active capture controller's immutable state."""
@@ -177,6 +183,7 @@ def run_dashboard(
         contact_commit,
         context_navigation,
         radio_state=lambda: runtime.latest_radio_state,
+        active_panel=active_panel_commands,
     )
 
     control_source: ControlSource | None = None
@@ -527,8 +534,9 @@ def run_dashboard(
             pota_lines = [
                 filter_state.display_line,
                 "[ / ] BAND    , / . MODE    / CLEAR",
-                "UP / DOWN SELECT    T STAGE    ENTER CONFIRM",
-                "E EXECUTE    X CANCEL",
+                "UP / DOWN OR ENCODER TURN SELECT",
+                "ENCODER PRESS STAGE    LONG PRESS BACK",
+                "ENTER CONFIRM    E EXECUTE    X CANCEL",
                 panel.status_line,
                 panel.detail_line,
                 panel.refresh_line,
