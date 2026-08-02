@@ -8,8 +8,14 @@ import pytest
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
-from rolling_thunder.gps import GPSConnectionState, GPSReceiver
+from rolling_thunder.gps import (
+    GPSConnectionError,
+    GPSConnectionState,
+    GPSReceiver,
+    GPSState,
+)
 from rolling_thunder.mock_gps import MockGPSReceiver
+from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.radio_polling import PollCallback
 from rolling_thunder.serial_gps import SerialGPSReceiver
 
@@ -37,6 +43,32 @@ class ManualScheduler:
         return self.poll
 
 
+class UnavailableGPSReceiver:
+    def __init__(self) -> None:
+        self.state = GPSState(
+            connection_state=GPSConnectionState.DISCONNECTED,
+            position=None,
+            updated_at=datetime(2026, 8, 2, 13, 0, tzinfo=UTC),
+        )
+
+    def connect(self) -> GPSState:
+        raise GPSConnectionError("GPS device is unavailable")
+
+    def disconnect(self) -> GPSState:
+        self.state = GPSState(
+            connection_state=GPSConnectionState.DISCONNECTED,
+            position=None,
+            updated_at=datetime(2026, 8, 2, 13, 1, tzinfo=UTC),
+        )
+        return self.state
+
+    def get_state(self) -> GPSState:
+        return self.state
+
+    def refresh_state(self) -> GPSState:
+        raise GPSConnectionError("GPS device is unavailable")
+
+
 def mock_config() -> ApplicationConfig:
     return ApplicationConfig.model_validate(
         {
@@ -54,6 +86,22 @@ def hardware_config() -> ApplicationConfig:
                 "mock": False,
                 "radio_device": "/dev/ttyUSB0",
                 "gps_device": "/dev/ttyUSB1",
+            },
+        }
+    )
+
+
+def real_gps_mock_radio_config() -> ApplicationConfig:
+    return ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {
+                "mock": True,
+                "radio_mode": "mock",
+                "gps_mode": "real",
+                "gps_device": "/dev/serial/by-id/gps",
+                "gps_baud_rate": 9_600,
+                "gps_timeout_s": 0.75,
             },
         }
     )
@@ -125,12 +173,17 @@ def test_non_mock_runtime_composes_serial_gps() -> None:
     assert gps_state.connection_state is GPSConnectionState.DISCONNECTED
 
 
-def test_non_mock_runtime_uses_configured_gps_device_with_injected_factory() -> None:
-    received_devices: list[Path] = []
+def test_non_mock_runtime_uses_configured_gps_settings_with_injected_factory() -> None:
+    received: list[tuple[Path, int, float]] = []
     receiver = MockGPSReceiver()
 
-    def gps_factory(device: Path) -> GPSReceiver:
-        received_devices.append(device)
+    def gps_factory(
+        device: Path,
+        *,
+        baud_rate: int,
+        timeout_s: float,
+    ) -> GPSReceiver:
+        received.append((device, baud_rate, timeout_s))
         return receiver
 
     runtime = ApplicationRuntime.from_config(
@@ -140,9 +193,65 @@ def test_non_mock_runtime_uses_configured_gps_device_with_injected_factory() -> 
         gps_factory=gps_factory,
     )
 
-    assert received_devices == [Path("/dev/ttyUSB1")]
+    assert received == [(Path("/dev/ttyUSB1"), 9_600, 2.0)]
     assert runtime.gps is receiver
     assert runtime.latest_gps_state is receiver.get_state()
+
+
+def test_real_gps_can_run_with_mock_radio() -> None:
+    received: list[tuple[Path, int, float]] = []
+    receiver = MockGPSReceiver()
+
+    def gps_factory(
+        device: Path,
+        *,
+        baud_rate: int,
+        timeout_s: float,
+    ) -> GPSReceiver:
+        received.append((device, baud_rate, timeout_s))
+        return receiver
+
+    runtime = ApplicationRuntime.from_config(
+        real_gps_mock_radio_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        gps_factory=gps_factory,
+    )
+
+    assert isinstance(runtime.radio, MockRadio)
+    assert runtime.gps is receiver
+    assert received == [(Path("/dev/serial/by-id/gps"), 9_600, 0.75)]
+
+
+def test_unavailable_real_gps_does_not_prevent_runtime_start() -> None:
+    receiver = UnavailableGPSReceiver()
+
+    def gps_factory(
+        _device: Path,
+        *,
+        baud_rate: int,
+        timeout_s: float,
+    ) -> GPSReceiver:
+        assert baud_rate == 9_600
+        assert timeout_s == 0.75
+        return receiver
+
+    runtime = ApplicationRuntime.from_config(
+        real_gps_mock_radio_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        gps_factory=gps_factory,
+    )
+
+    radio_state = runtime.start()
+
+    assert radio_state.connection_state is RadioConnectionState.CONNECTED
+    assert runtime.latest_radio_state.connection_state is RadioConnectionState.CONNECTED
+    gps_state = runtime.latest_gps_state
+    assert gps_state is not None
+    assert gps_state.connection_state is GPSConnectionState.ERROR
+    assert gps_state.last_error == "GPS device is unavailable"
+    assert runtime.contact_logging is not None
 
 
 def test_runtime_rejects_repeated_start() -> None:
