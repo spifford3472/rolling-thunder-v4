@@ -16,11 +16,33 @@ _BRIGHT = "#ffffff"
 _MUTED = "#a8b4ba"
 _FAILURE = "#ff7070"
 
+_RAIN_CODES = frozenset({51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82})
+_SNOW_CODES = frozenset({71, 73, 75, 77, 85, 86})
+_THUNDERSTORM_CODES = frozenset({95, 96, 99})
+_CLOUD_CODES = frozenset({3, 45, 48})
+
 
 def format_enriched_callsign(callsign: str, name: str | None) -> str:
     """Return the large POTA-card heading with an optional QRZ name."""
     normalized_name = " ".join(name.split()) if name else ""
     return f"{callsign} - {normalized_name}" if normalized_name else callsign
+
+
+def weather_symbol(weather_code: int, *, is_day: bool) -> str:
+    """Map an Open-Meteo WMO code to one familiar weather symbol."""
+    if weather_code in {0, 1}:
+        return "☀" if is_day else "☾"
+    if weather_code == 2:
+        return "⛅" if is_day else "☁"
+    if weather_code in _CLOUD_CODES:
+        return "☁"
+    if weather_code in _RAIN_CODES:
+        return "☂"
+    if weather_code in _SNOW_CODES:
+        return "❄"
+    if weather_code in _THUNDERSTORM_CODES:
+        return "⚡"
+    return "☁"
 
 
 @dataclass(frozen=True)
@@ -101,28 +123,41 @@ class PotaDetailOverlayWidgets:
             pady=6,
         ).grid(row=1, column=0, sticky="ew")
 
+        weather_row = tk.Frame(self._frame, bg=_BACKGROUND)
+        weather_row.grid(row=2, column=0, sticky="ew", padx=24, pady=(10, 22))
+        weather_row.grid_columnconfigure(0, weight=3)
+        weather_row.grid_columnconfigure(1, weight=1)
+        weather_row.grid_columnconfigure(2, weight=2)
+
         self._temperature_text = tk.StringVar(value="Temperature: —")
         tk.Label(
-            self._frame,
+            weather_row,
             textvariable=self._temperature_text,
             bg=_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 38, "bold"),
+            font=("DejaVu Sans", 34, "bold"),
             anchor="w",
-            padx=24,
-            pady=10,
-        ).grid(row=2, column=0, sticky="ew")
+        ).grid(row=0, column=0, sticky="ew")
+
+        self._weather_icon_text = tk.StringVar(value="—")
+        tk.Label(
+            weather_row,
+            textvariable=self._weather_icon_text,
+            bg=_BACKGROUND,
+            fg=_BRIGHT,
+            font=("DejaVu Sans", 58, "bold"),
+            anchor="center",
+        ).grid(row=0, column=1, sticky="ew", padx=16)
 
         self._local_time_text = tk.StringVar(value="Local Time: —")
         tk.Label(
-            self._frame,
+            weather_row,
             textvariable=self._local_time_text,
             bg=_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 38, "bold"),
-            anchor="w",
-            padx=24,
-        ).grid(row=3, column=0, sticky="ew", pady=(6, 22))
+            font=("DejaVu Sans", 34, "bold"),
+            anchor="e",
+        ).grid(row=0, column=2, sticky="ew")
 
     def update(self, state: PotaDetailOverlayState) -> None:
         """Show or hide the overlay using only immutable cached state."""
@@ -138,6 +173,7 @@ class PotaDetailOverlayWidgets:
         if snapshot.status is ParkDetailStatus.LOADING:
             self._show_text_image("LOADING…", _MUTED)
             self._temperature_text.set("Temperature: LOADING…")
+            self._weather_icon_text.set("…")
             self._local_time_text.set("Local Time: LOADING…")
             return
 
@@ -168,11 +204,15 @@ class PotaDetailOverlayWidgets:
         weather = snapshot.weather
         if weather is None:
             self._temperature_text.set("Temperature: NOT AVAILABLE")
+            self._weather_icon_text.set("—")
             self._local_time_text.set("Local Time: NOT AVAILABLE")
         else:
             self._temperature_text.set(
                 "Temperature: "
-                f"{weather.temperature_f:.0f}°F    {weather.temperature_c:.0f}°C"
+                f"{weather.temperature_f:.0f}°F / {weather.temperature_c:.0f}°C"
+            )
+            self._weather_icon_text.set(
+                weather_symbol(weather.weather_code, is_day=weather.is_day)
             )
             self._local_time_text.set(f"Local Time: {weather.local_time}")
 
@@ -183,6 +223,7 @@ class PotaDetailOverlayWidgets:
         self._image_identity = None
         self._image_label.configure(image="", text="LOADING…", fg=_MUTED)
         self._attribution_text.set("")
+        self._weather_icon_text.set("—")
 
     def _show_text_image(self, text: str, foreground: str) -> None:
         self._photo = None
