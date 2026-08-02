@@ -1,4 +1,4 @@
-"""Deterministic polling service for refreshing connected GPS state."""
+"""Deterministic polling service for refreshing and reconnecting GPS state."""
 
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -19,7 +19,7 @@ def _utc_now() -> datetime:
 
 
 class GPSPollingService:
-    """Refresh one connected GPS receiver without overlapping reads."""
+    """Refresh or reconnect one GPS receiver without overlapping reads."""
 
     def __init__(
         self,
@@ -51,20 +51,19 @@ class GPSPollingService:
         return self._latest_state
 
     def start(self) -> GPSState:
-        """Start polling a currently connected GPS receiver."""
+        """Start GPS polling even when the receiver is initially unavailable."""
         if self.is_running:
             raise RuntimeError("GPS polling service is already running.")
 
-        state = self._gps.get_state()
-        if state.connection_state is not GPSConnectionState.CONNECTED:
-            raise GPSError("GPS polling requires a connected receiver.")
+        self._latest_state = self._gps.get_state()
+        if self._latest_state.connection_state is not GPSConnectionState.CONNECTED:
+            self._latest_state = self._connect_or_error()
 
-        self._latest_state = state
         self._scheduled_poll = self._scheduler.schedule_repeating(
             self._interval_s,
             self._poll_once,
         )
-        return state
+        return self._latest_state
 
     def stop(self) -> GPSState:
         """Stop future GPS refresh callbacks and return the latest state."""
@@ -80,13 +79,25 @@ class GPSPollingService:
 
         self._refreshing = True
         try:
-            self._latest_state = self._gps.refresh_state()
+            if self._latest_state.connection_state is GPSConnectionState.CONNECTED:
+                self._latest_state = self._gps.refresh_state()
+            else:
+                self._latest_state = self._connect_or_error()
         except GPSError as error:
-            self._latest_state = GPSState(
-                connection_state=GPSConnectionState.ERROR,
-                position=None,
-                updated_at=self._clock(),
-                last_error=str(error),
-            )
+            self._latest_state = self._error_state(error)
         finally:
             self._refreshing = False
+
+    def _connect_or_error(self) -> GPSState:
+        try:
+            return self._gps.connect()
+        except GPSError as error:
+            return self._error_state(error)
+
+    def _error_state(self, error: GPSError) -> GPSState:
+        return GPSState(
+            connection_state=GPSConnectionState.ERROR,
+            position=None,
+            updated_at=self._clock(),
+            last_error=str(error),
+        )
