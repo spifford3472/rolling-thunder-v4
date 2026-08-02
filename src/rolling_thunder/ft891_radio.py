@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Final
 
 from rolling_thunder.cat_transport import CatTransport
 from rolling_thunder.domain import (
@@ -15,28 +14,25 @@ from rolling_thunder.ft891_cat import (
     Ft891CatError,
     encode_read_frequency,
     encode_read_mode,
+    encode_select_band,
     encode_set_frequency,
     encode_set_mode,
     parse_frequency_reply,
     parse_mode_reply,
 )
-from rolling_thunder.radio import RadioBand, RadioConnectionError
+from rolling_thunder.radio import (
+    BandChangeRequiredError,
+    RadioBand,
+    RadioConnectionError,
+    RadioVerificationError,
+)
+from rolling_thunder.radio_band import (
+    RadioBandResolutionError,
+    resolve_radio_band,
+)
 
 Clock = Callable[[], datetime]
 
-_BAND_DEFAULTS: Final[dict[RadioBand, tuple[Frequency, RadioMode]]] = {
-    RadioBand.BAND_160M: (Frequency(hz=1_900_000), RadioMode.LSB),
-    RadioBand.BAND_80M: (Frequency(hz=3_900_000), RadioMode.LSB),
-    RadioBand.BAND_60M: (Frequency(hz=5_357_000), RadioMode.USB),
-    RadioBand.BAND_40M: (Frequency(hz=7_200_000), RadioMode.LSB),
-    RadioBand.BAND_30M: (Frequency(hz=10_120_000), RadioMode.CW),
-    RadioBand.BAND_20M: (Frequency(hz=14_250_000), RadioMode.USB),
-    RadioBand.BAND_17M: (Frequency(hz=18_130_000), RadioMode.USB),
-    RadioBand.BAND_15M: (Frequency(hz=21_300_000), RadioMode.USB),
-    RadioBand.BAND_12M: (Frequency(hz=24_950_000), RadioMode.USB),
-    RadioBand.BAND_10M: (Frequency(hz=28_400_000), RadioMode.USB),
-    RadioBand.BAND_6M: (Frequency(hz=50_125_000), RadioMode.USB),
-}
 
 
 def _utc_now() -> datetime:
@@ -133,37 +129,76 @@ class Ft891Radio:
         return self._state
 
     def set_frequency(self, frequency: Frequency) -> RadioState:
-        """Set VFO-A frequency and return the resulting state."""
+        """Set and verify VFO-A frequency without implicitly changing bands."""
         self._require_connected()
+        current_frequency = self._current_frequency()
+        target_band = resolve_radio_band(frequency)
+
+        try:
+            current_band = resolve_radio_band(current_frequency)
+        except RadioBandResolutionError as error:
+            raise BandChangeRequiredError(
+                "Current FT-891 frequency does not identify a supported amateur "
+                f"band; select {target_band.value} before setting frequency."
+            ) from error
+
+        if current_band is not target_band:
+            raise BandChangeRequiredError(
+                f"Select {target_band.value} before changing frequency from "
+                f"{current_band.value}."
+            )
+
         self._transport.command(encode_set_frequency(frequency))
+        verified_frequency = parse_frequency_reply(
+            self._transport.query(encode_read_frequency())
+        )
+
         self._state = RadioState(
             connection_state=RadioConnectionState.CONNECTED,
-            frequency=frequency,
+            frequency=verified_frequency,
             mode=self._state.mode,
             transmitting=False,
             updated_at=self._timestamp(),
         )
+
+        if verified_frequency != frequency:
+            raise RadioVerificationError(
+                "FT-891 frequency verification failed: requested "
+                f"{frequency.hz} Hz but read back {verified_frequency.hz} Hz."
+            )
+
         return self._state
 
     def set_mode(self, mode: RadioMode) -> RadioState:
-        """Set the main receiver mode and return the resulting state."""
+        """Set and verify the main receiver mode."""
         self._require_connected()
         self._transport.command(encode_set_mode(mode))
+        verified_mode = parse_mode_reply(
+            self._transport.query(encode_read_mode())
+        )
+
         self._state = RadioState(
             connection_state=RadioConnectionState.CONNECTED,
             frequency=self._state.frequency,
-            mode=mode,
+            mode=verified_mode,
             transmitting=False,
             updated_at=self._timestamp(),
         )
+
+        if verified_mode is not mode:
+            raise RadioVerificationError(
+                "FT-891 mode verification failed: requested "
+                f"{mode.value} but read back {verified_mode.value}."
+            )
+
         return self._state
 
-    def change_band(self, band: RadioBand) -> RadioState:
-        """Select the deterministic frequency and mode for one amateur band."""
+    def select_band(self, band: RadioBand) -> RadioState:
+        """Select one FT-891 band and verify it through hardware read-back."""
         self._require_connected()
-        frequency, mode = _BAND_DEFAULTS[band]
-        self._transport.command(encode_set_mode(mode))
-        self._transport.command(encode_set_frequency(frequency))
+        self._transport.command(encode_select_band(band))
+        frequency, mode = self._read_hardware_state()
+
         self._state = RadioState(
             connection_state=RadioConnectionState.CONNECTED,
             frequency=frequency,
@@ -171,6 +206,21 @@ class Ft891Radio:
             transmitting=False,
             updated_at=self._timestamp(),
         )
+
+        try:
+            verified_band = resolve_radio_band(frequency)
+        except RadioBandResolutionError as error:
+            raise RadioVerificationError(
+                "FT-891 band verification failed because the read-back "
+                f"frequency {frequency.hz} Hz is outside supported bands."
+            ) from error
+
+        if verified_band is not band:
+            raise RadioVerificationError(
+                "FT-891 band verification failed: requested "
+                f"{band.value} but read back {verified_band.value}."
+            )
+
         return self._state
 
     def _read_hardware_state(self) -> tuple[Frequency, RadioMode]:
@@ -195,6 +245,14 @@ class Ft891Radio:
             raise RadioConnectionError(
                 "FT-891 operation requires a connected radio."
             )
+
+    def _current_frequency(self) -> Frequency:
+        frequency = self._state.frequency
+        if frequency is None:
+            raise RadioConnectionError(
+                "FT-891 operation requires a known current frequency."
+            )
+        return frequency
 
     def _timestamp(self) -> datetime:
         timestamp = self._clock()

@@ -111,7 +111,7 @@ class ScriptedRadio:
         self.state = connected_state(frequency=self.state.frequency, mode=mode)
         return self.state
 
-    def change_band(self, band: RadioBand) -> RadioState:
+    def select_band(self, band: RadioBand) -> RadioState:
         del band
         return self.state
 

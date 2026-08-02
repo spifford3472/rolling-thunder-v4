@@ -6,7 +6,14 @@ import pytest
 
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode
 from rolling_thunder.ft891_radio import Ft891Radio
-from rolling_thunder.radio import Radio, RadioBand, RadioConnectionError
+from rolling_thunder.radio import (
+    BandChangeRequiredError,
+    Radio,
+    RadioBand,
+    RadioConnectionError,
+    RadioError,
+    RadioVerificationError,
+)
 
 
 class FakeTransport:
@@ -131,29 +138,111 @@ def test_refresh_requires_connection() -> None:
         radio.refresh_state()
 
 
-def test_frequency_and_mode_changes_emit_safe_cat_commands() -> None:
+def test_same_band_frequency_and_mode_changes_use_verified_commands() -> None:
     transport = FakeTransport()
     radio = Ft891Radio(transport, clock=fixed_clock)
     radio.connect()
 
-    radio.set_frequency(Frequency(hz=7_255_000))
+    transport.replies[b"FA;"] = b"FA014300000;"
+    radio.set_frequency(Frequency(hz=14_300_000))
+
+    transport.replies[b"MD0;"] = b"MD01;"
     state = radio.set_mode(RadioMode.LSB)
 
-    assert transport.commands[-2:] == [b"FA007255000;", b"MD01;"]
-    assert state.frequency == Frequency(hz=7_255_000)
+    assert transport.commands[-4:] == [
+        b"FA014300000;",
+        b"FA;",
+        b"MD01;",
+        b"MD0;",
+    ]
+    assert state.frequency == Frequency(hz=14_300_000)
     assert state.mode is RadioMode.LSB
 
 
-def test_change_band_sets_mode_before_frequency() -> None:
+def test_select_band_sends_band_command_before_verification_reads() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"FA;"] = b"FA007200000;"
+    transport.replies[b"MD0;"] = b"MD01;"
+
+    state = radio.select_band(RadioBand.BAND_40M)
+
+    assert transport.commands[-3:] == [b"BS03;", b"FA;", b"MD0;"]
+    assert state.frequency == Frequency(hz=7_200_000)
+    assert state.mode is RadioMode.LSB
+
+
+def test_cross_band_frequency_change_requires_band_selection() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    commands_before = list(transport.commands)
+
+    with pytest.raises(
+        BandChangeRequiredError,
+        match="Select 40m before changing frequency from 20m",
+    ):
+        radio.set_frequency(Frequency(hz=7_255_000))
+
+    assert transport.commands == commands_before
+
+
+def test_failed_band_verification_stops_after_read_back() -> None:
     transport = FakeTransport()
     radio = Ft891Radio(transport, clock=fixed_clock)
     radio.connect()
 
-    state = radio.change_band(RadioBand.BAND_40M)
+    with pytest.raises(
+        RadioVerificationError,
+        match="requested 40m but read back 20m",
+    ):
+        radio.select_band(RadioBand.BAND_40M)
 
-    assert transport.commands[-2:] == [b"MD01;", b"FA007200000;"]
-    assert state.frequency == Frequency(hz=7_200_000)
-    assert state.mode is RadioMode.LSB
+    assert transport.commands[-3:] == [b"BS03;", b"FA;", b"MD0;"]
+
+
+def test_unsupported_60m_band_selection_sends_no_command() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    commands_before = list(transport.commands)
+
+    with pytest.raises(
+        RadioError,
+        match="band selection does not support 60m",
+    ):
+        radio.select_band(RadioBand.BAND_60M)
+
+    assert transport.commands == commands_before
+
+
+def test_frequency_read_back_must_match_request() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    with pytest.raises(
+        RadioVerificationError,
+        match="requested 14300000 Hz but read back 14250000 Hz",
+    ):
+        radio.set_frequency(Frequency(hz=14_300_000))
+
+    assert transport.commands[-2:] == [b"FA014300000;", b"FA;"]
+
+
+def test_mode_read_back_must_match_request() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    with pytest.raises(
+        RadioVerificationError,
+        match="requested LSB but read back USB",
+    ):
+        radio.set_mode(RadioMode.LSB)
+
+    assert transport.commands[-2:] == [b"MD01;", b"MD0;"]
 
 
 def test_disconnect_closes_transport_and_clears_readout() -> None:

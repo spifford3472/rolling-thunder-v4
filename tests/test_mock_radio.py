@@ -10,7 +10,12 @@ from rolling_thunder.domain import (
     RadioMode,
 )
 from rolling_thunder.mock_radio import MockRadio
-from rolling_thunder.radio import Radio, RadioBand, RadioConnectionError
+from rolling_thunder.radio import (
+    BandChangeRequiredError,
+    Radio,
+    RadioBand,
+    RadioConnectionError,
+)
 
 
 class AdvancingClock:
@@ -68,40 +73,52 @@ def test_frequency_and_mode_changes_return_new_immutable_snapshots() -> None:
     radio = MockRadio(clock=AdvancingClock())
     connected = radio.connect()
 
-    frequency_changed = radio.set_frequency(Frequency(hz=7_255_000))
+    frequency_changed = radio.set_frequency(Frequency(hz=14_300_000))
     mode_changed = radio.set_mode(RadioMode.LSB)
 
     assert connected.frequency == Frequency(hz=14_250_000)
     assert connected.mode is RadioMode.USB
-    assert frequency_changed.frequency == Frequency(hz=7_255_000)
+    assert frequency_changed.frequency == Frequency(hz=14_300_000)
     assert frequency_changed.mode is RadioMode.USB
-    assert mode_changed.frequency == Frequency(hz=7_255_000)
+    assert mode_changed.frequency == Frequency(hz=14_300_000)
     assert mode_changed.mode is RadioMode.LSB
     assert mode_changed.updated_at == datetime(2026, 7, 25, 4, 0, 3, tzinfo=UTC)
 
 
 @pytest.mark.parametrize(
-    ("band", "frequency_hz", "mode"),
+    ("band", "frequency_hz"),
     [
-        (RadioBand.BAND_40M, 7_200_000, RadioMode.LSB),
-        (RadioBand.BAND_20M, 14_250_000, RadioMode.USB),
-        (RadioBand.BAND_6M, 50_125_000, RadioMode.USB),
+        (RadioBand.BAND_40M, 7_200_000),
+        (RadioBand.BAND_20M, 14_250_000),
+        (RadioBand.BAND_6M, 50_125_000),
     ],
 )
-def test_change_band_uses_deterministic_defaults(
+def test_select_band_changes_band_without_choosing_final_mode(
     band: RadioBand,
     frequency_hz: int,
-    mode: RadioMode,
 ) -> None:
-    """Band changes should be predictable for UI and application tests."""
+    """Band selection should not also impose a final receive mode."""
     radio = MockRadio(clock=AdvancingClock())
     radio.connect()
 
-    state = radio.change_band(band)
+    state = radio.select_band(band)
 
     assert state.frequency == Frequency(hz=frequency_hz)
-    assert state.mode is mode
+    assert state.mode is RadioMode.USB
     assert state.transmitting is False
+
+
+def test_mock_rejects_cross_band_frequency_change() -> None:
+    radio = MockRadio(clock=AdvancingClock())
+    radio.connect()
+
+    with pytest.raises(
+        BandChangeRequiredError,
+        match="Select 40m before changing frequency from 20m",
+    ):
+        radio.set_frequency(Frequency(hz=7_255_000))
+
+    assert radio.get_state().frequency == Frequency(hz=14_250_000)
 
 
 @pytest.mark.parametrize("operation", ["frequency", "mode", "band"])
@@ -115,7 +132,7 @@ def test_tuning_operations_require_connection(operation: str) -> None:
         elif operation == "mode":
             radio.set_mode(RadioMode.USB)
         else:
-            radio.change_band(RadioBand.BAND_20M)
+            radio.select_band(RadioBand.BAND_20M)
 
 
 def test_disconnect_clears_readout_and_preserves_no_transmit_boundary() -> None:
