@@ -1,7 +1,7 @@
+from collections.abc import Callable
 from concurrent.futures import Executor, Future
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from collections.abc import Callable
 
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
 from rolling_thunder.domain import Frequency, RadioMode
@@ -21,7 +21,7 @@ class ImmediateExecutor(Executor):
         future: Future[Any] = Future()
         try:
             future.set_result(fn(*args, **kwargs))
-        except BaseException as error:
+        except Exception as error:
             future.set_exception(error)
         return future
 
