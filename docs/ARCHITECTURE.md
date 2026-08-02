@@ -7,8 +7,8 @@ Its primary client runs on the Raspberry Pi 4 named `anvilmobile`.
 
 The application supports local contact logging, voice callsign capture, physical
 operator controls, POTA assistance, GPS state, Yaesu FT-891 state and
-receive-only control, connectivity status, park-detail mapping, and optional
-network enrichment. Forge may provide Home Station Platform services, but the Pi
+receive-only control, connectivity status, live GPS mapping, park-detail
+mapping, and optional network enrichment. Forge may provide Home Station Platform services, but the Pi
 client remains authoritative for mobile operation and must remain useful when
 Forge, WireGuard, cellular service, or the public internet is unavailable.
 
@@ -158,7 +158,7 @@ queues. Slow hardware and network work belongs in workers owned by services.
 ## Runtime Composition and Lifecycle
 
 `ApplicationRuntime` is the current composition root for radio, GPS, logging,
-connectivity, POTA, and enrichment services. The UI composes additional
+connectivity, POTA, enrichment, and live-map services. The UI composes additional
 presentation controllers and the physical-control source lifecycle around that
 runtime.
 
@@ -186,6 +186,7 @@ covers:
 - speech configuration
 - Home Station Platform and network keepalive settings
 - POTA retrieval settings
+- live-map provider, zoom, stale threshold, timeout, and cache limits
 - physical-control transport, limits, and mappings
 - local database and backup paths
 
@@ -197,6 +198,27 @@ Secrets are not stored in YAML or Git. Optional QRZ credentials are loaded once
 through the centralized application-secrets boundary from local environment
 variables. Secret values, session keys, and authentication responses must not be
 logged or included in tests, issues, pull requests, or chat.
+
+## Live Map Architecture
+
+The first Milestone 10 Phase C slice replaces the reserved right-side panel with
+a north-up map centered on the latest valid GPS position. It preserves the
+existing dashboard proportions, global ticker, and timed POTA detail overlay.
+
+`LiveMapController` converts immutable `GPSState` snapshots into current, stale,
+last-known, waiting, or error presentation without performing I/O.
+`LiveMapService` owns one bounded background worker and publishes immutable tile
+snapshots. `MapTileClient` and `MapTileCache` own all HTTP, validation, atomic
+disk writes, retention, and pruning.
+
+Tkinter may request a viewport and render immutable PNG bytes. It must not open
+network connections, access cache files, or contact GPS hardware directly.
+
+Map failure is isolated from GPS polling, logging, POTA, physical controls, radio
+polling, and receive-only tuning. The Home Station Platform is not required.
+The default provider is used only for visible on-demand viewing; Rolling Thunder
+does not bulk download, prefetch routes, or claim its normal cache is a complete
+offline map.
 
 ## Local Logging and Offline Operation
 
