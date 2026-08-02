@@ -8,16 +8,8 @@ from typing import Any
 from PIL import Image
 
 from rolling_thunder.live_map import GeoPoint
-from rolling_thunder.live_map_service import (
-    LiveMapService,
-    MapDataStatus,
-    MapTileSource,
-)
-from rolling_thunder.map_tiles import (
-    CachedMapTile,
-    MapTileError,
-    MapTileKey,
-)
+from rolling_thunder.live_map_service import LiveMapService, MapDataStatus, MapTileSource
+from rolling_thunder.map_tiles import CachedMapTile, MapTileError, MapTileKey
 
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
@@ -41,7 +33,7 @@ class ImmediateExecutor:
         future: Future[Any] = Future()
         try:
             future.set_result(function(*args, **kwargs))
-        except BaseException as error:
+        except Exception as error:
             future.set_exception(error)
         return future
 
