@@ -23,7 +23,7 @@ class ImmediateExecutor(Executor):
         future: Future[Any] = Future()
         try:
             future.set_result(fn(*args, **kwargs))
-        except BaseException as error:
+        except Exception as error:
             future.set_exception(error)
         return future
 
