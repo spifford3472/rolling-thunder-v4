@@ -135,7 +135,7 @@ def read_index_names(database_path: Path, table_name: str) -> set[str]:
 
 
 def create_version_one_database(database_path: Path) -> None:
-    """Create a database matching the previously released schema version."""
+    """Create a database matching the first released schema version."""
     with sqlite3.connect(database_path) as connection:
         connection.execute(
             """
@@ -189,6 +189,22 @@ def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
     assert columns["synchronization_state"][4] == "'pending'"
 
 
+def test_initialize_database_creates_pota_cache_metadata_columns(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+
+    initialize_database(database_path)
+
+    columns = read_table_columns(database_path, "pota_spot_cache")
+    assert {
+        "spot_mode",
+        "location_code",
+        "latitude",
+        "longitude",
+    }.issubset(columns)
+
+
 def test_initialize_database_creates_contact_indexes(tmp_path: Path) -> None:
     """Contact retrieval and synchronization should have supporting indexes."""
     database_path = tmp_path / "rolling-thunder.db"
@@ -218,6 +234,7 @@ def test_initialize_database_migrates_version_one_database(
     assert version == CURRENT_SCHEMA_VERSION
     assert read_schema_version(database_path) == CURRENT_SCHEMA_VERSION
     assert read_table_columns(database_path, "contacts")
+    assert "spot_mode" in read_table_columns(database_path, "pota_spot_cache")
 
 
 @pytest.mark.parametrize(
