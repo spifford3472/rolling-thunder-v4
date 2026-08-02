@@ -51,11 +51,9 @@ class PotaDashboardController:
         clock: Callable[[], datetime] = _utc_now,
         maximum_spot_age: timedelta | None = None,
     ) -> None:
-        if maximum_spot_age is not None and maximum_spot_age < timedelta(0):
-            raise ValueError("POTA maximum spot age must not be negative.")
         self._provider = provider
         self._clock = clock
-        self._maximum_spot_age = maximum_spot_age
+        self._maximum_spot_age = self._validated_maximum_age(maximum_spot_age)
         self._band: AmateurBand | None = None
         self._mode: RadioMode | None = None
         self._mode_filter = PotaModeFilter.ALL
@@ -86,6 +84,16 @@ class PotaDashboardController:
     def tune_intent(self) -> PotaTuneIntent | None:
         """Return the current operator-created tune intent, if any."""
         return self._tune_intent
+
+    def set_maximum_spot_age(
+        self,
+        maximum_spot_age: timedelta | None,
+    ) -> PotaDashboardState:
+        """Apply or clear deterministic spot-age filtering."""
+        self._maximum_spot_age = self._validated_maximum_age(maximum_spot_age)
+        self._selected_index = None
+        self._tune_intent = None
+        return self.state
 
     @property
     def state(self) -> PotaDashboardState:
@@ -255,6 +263,12 @@ class PotaDashboardController:
             and intent.frequency == spot.frequency
             and intent.mode is spot.mode
         )
+
+    @staticmethod
+    def _validated_maximum_age(value: timedelta | None) -> timedelta | None:
+        if value is not None and value < timedelta(0):
+            raise ValueError("POTA maximum spot age must not be negative.")
+        return value
 
     def _build_state(
         self,
