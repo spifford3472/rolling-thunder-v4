@@ -188,7 +188,9 @@ Band selection and receive frequency changes do not imply that the ATAS-120 is
 tuned or safe to transmit.
 
 After a receive-tuning result reports a verified band change, Rolling Thunder
-publishes this sticky operator warning:
+publishes this sticky operator warning in the always-visible full-screen bottom
+ticker. Amber warning text temporarily replaces routine ticker status until the
+operator acknowledges it:
 
 ```text
 BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
@@ -201,7 +203,7 @@ The warning behavior is intentionally narrow and explicit:
 - the warning survives POTA selection, filter, and execution-result cleanup
 - a later same-band tune does not clear an existing warning
 - a later verified band change replaces the warning with the new band
-- the existing Back or X interaction explicitly acknowledges and clears it
+- the existing Back or X interaction explicitly acknowledges and clears it from any dashboard context
 - Back acknowledges the warning before cancelling an intent or clearing a row
 
 The warning is presentation and acknowledgement state only. Rolling Thunder

@@ -132,12 +132,12 @@ class ActivePanelCommandController:
         return self._pota_tune.request() is not None
 
     def back(self) -> bool:
-        """Acknowledge warnings, cancel intent, then clear selection."""
-        if not self._pota_is_active():
-            return False
-
+        """Acknowledge warnings globally, then handle active-panel Back."""
         if self._pota_tune.retune_warning_active:
             return self._pota_tune.acknowledge_retune_warning()
+
+        if not self._pota_is_active():
+            return False
 
         intent = self._pota_panel.tune_intent
         if intent is not None and intent.status is not PotaTuneIntentStatus.CANCELLED:

@@ -156,10 +156,7 @@ def test_verified_band_change_publishes_exact_atas_warning() -> None:
     assert controller.retune_warning_line == (
         "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
     )
-    assert controller.presentation.detail_line == (
-        "14.250 MHz USB\n"
-        "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
-    )
+    assert controller.presentation.detail_line == "14.250 MHz USB"
 
 
 def test_same_band_tune_publishes_no_atas_warning() -> None:
@@ -181,10 +178,11 @@ def test_warning_survives_selection_and_result_cleanup() -> None:
 
     assert controller.result is None
     assert controller.retune_warning_active is True
-    assert controller.presentation.summary_line is None
-    assert controller.presentation.detail_line == (
+    assert controller.retune_warning_line == (
         "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
     )
+    assert controller.presentation.summary_line is None
+    assert controller.presentation.detail_line is None
 
 
 def test_later_same_band_tune_does_not_clear_existing_warning() -> None:

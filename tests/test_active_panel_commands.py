@@ -224,7 +224,7 @@ def test_back_cancels_intent_before_clearing_selection() -> None:
     assert executor.calls == []
 
 
-def test_back_acknowledges_warning_before_cancelling_intent() -> None:
+def test_back_acknowledges_warning_from_any_context_before_intent() -> None:
     navigation = ContextNavigationController(ContextId.POTA)
     dashboard = PotaDashboardController(
         StaticProvider(available_state()),
@@ -246,8 +246,10 @@ def test_back_acknowledges_warning_before_cancelling_intent() -> None:
     tune.confirm()
     tune.execute()
     original_intent = dashboard.tune_intent
+    navigation.select(ContextId.SETTINGS)
 
     assert tune.retune_warning_active is True
+    assert navigation.state.selected is ContextId.SETTINGS
     assert commands.back() is True
     assert tune.retune_warning_active is False
     assert dashboard.selected_index == 0

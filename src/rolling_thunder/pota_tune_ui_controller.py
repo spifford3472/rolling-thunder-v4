@@ -68,22 +68,11 @@ class PotaTuneUiController:
 
     @property
     def presentation(self) -> PotaTunePresentation:
-        """Return display state for intent, result, and sticky warning state."""
+        """Return POTA-local intent and execution presentation state."""
         self._synchronize_context()
-        presentation = build_pota_tune_presentation(
+        return build_pota_tune_presentation(
             self._dashboard.tune_intent,
             self._execution.result,
-        )
-        warning_line = self.retune_warning_line
-        if warning_line is None:
-            return presentation
-
-        detail_line = warning_line
-        if presentation.detail_line is not None:
-            detail_line = f"{presentation.detail_line}\n{warning_line}"
-
-        return presentation.model_copy(
-            update={"detail_line": detail_line},
         )
 
     def request(self) -> PotaTuneIntent | None:

@@ -61,6 +61,7 @@ _BRIGHT = "#ffffff"
 _DISABLED = "#777777"
 _SUCCESS = "#42ff72"
 _FAILURE = "#ff3b3b"
+_WARNING = "#ffd24a"
 _MUTED = "#a8a8a8"
 
 _HEALTH_READY = "#238636"
@@ -116,6 +117,17 @@ def _callsign_font_size(callsign: str) -> int:
     if length <= 13:
         return 52
     return 44
+
+
+def _ticker_presentation(
+    normal_text: str,
+    retune_warning: str | None,
+) -> tuple[str, str]:
+    """Give a retained ATAS warning priority over routine ticker status."""
+    if retune_warning is not None:
+        return retune_warning, _WARNING
+
+    return normal_text, _BRIGHT
 
 
 def run_dashboard(
@@ -705,17 +717,26 @@ def run_dashboard(
         mode_text.set(view.mode)
         last_result = view.last_result if view.last_result != "—" else "—"
         last_result_text.set(f"Last Result: {last_result[:18]}")
-        ticker = view.ticker
+        ticker_message = view.ticker
         if view.grid != "—":
-            ticker = f"{ticker} — GRID {view.grid.upper()}"
-        ticker = (
-            f"{ticker} — NETWORK {view.network_state}"
+            ticker_message = (
+                f"{ticker_message} — GRID {view.grid.upper()}"
+            )
+        ticker_message = (
+            f"{ticker_message} — NETWORK {view.network_state}"
             f" — HOME {view.home_platform_state}"
             f" — SYNC {view.synchronization_state}"
         )
         if view.connectivity_detail != "CONNECTIVITY READY":
-            ticker = f"{ticker} — {view.connectivity_detail}"
-        ticker_text.set(ticker)
+            ticker_message = (
+                f"{ticker_message} — {view.connectivity_detail}"
+            )
+        ticker_value, ticker_color = _ticker_presentation(
+            ticker_message,
+            pota_tune_ui.retune_warning_line,
+        )
+        ticker_text.set(ticker_value)
+        ticker.configure(fg=ticker_color)
 
         selected_context = context_navigation.state
         if (
