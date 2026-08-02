@@ -14,12 +14,13 @@ The first Phase B slice established and validated:
 - disconnect detection
 - automatic recovery
 
-The current Phase B slice implements safe receive-only control with independent
-band, frequency, and mode operations and a hard band-before-frequency rule.
+The ordered receive-only control slice is implemented, hardware-validated, and
+merged. Band, frequency, and mode remain separate operations with a hard
+band-before-frequency rule.
 
-The ordered control software is covered by deterministic automated tests. Its
-write operations still require controlled live hardware acceptance on
-`anvilmobile`.
+The current Phase B slice adds the required sticky ATAS-120 operator warning
+after a verified band change. It adds presentation and acknowledgement state
+only. It does not attempt to tune or verify the antenna.
 
 This work adds no PTT, MOX, CW keying, voice keying, tuner control, power
 control, automatic transmission, or unattended transmit authority.
@@ -181,19 +182,31 @@ Receive-tuning operations use the ordered application service through the
 existing explicit operator-confirmation path. Blocking CAT work must not run
 directly from a Tkinter widget callback.
 
-## ATAS-120 Limitation
+## ATAS-120 Retune Warning
 
 Band selection and receive frequency changes do not imply that the ATAS-120 is
 tuned or safe to transmit.
 
-Issue #16 will add the required visible warning:
+After a receive-tuning result reports a verified band change, Rolling Thunder
+publishes this sticky operator warning:
 
 ```text
-BAND CHANGED TO <BAND> — RETUNE ATAS-120
+BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
 ```
 
-Until that warning is implemented and approved, live cross-band validation must
-remain receive-only. Do not key the transmitter during these tests.
+The warning behavior is intentionally narrow and explicit:
+
+- same-band frequency or mode changes publish no warning
+- a verified cross-band result publishes the verified target band
+- the warning survives POTA selection, filter, and execution-result cleanup
+- a later same-band tune does not clear an existing warning
+- a later verified band change replaces the warning with the new band
+- the existing Back or X interaction explicitly acknowledges and clears it
+- Back acknowledges the warning before cancelling an intent or clearing a row
+
+The warning is presentation and acknowledgement state only. Rolling Thunder
+still cannot tune or verify the ATAS-120 and must never claim that the antenna
+is safe to transmit.
 
 ## Safety Boundary
 
@@ -225,6 +238,12 @@ schedulers. Coverage includes:
 - ordered receive-tuning call sequence
 - same-band tuning skipping band selection
 - confirmed POTA tuning through the ordered service
+- exact ATAS-120 warning text after verified band changes
+- no warning for same-band tuning
+- sticky warning persistence across result and selection cleanup
+- later same-band tuning preserving an existing warning
+- later band changes replacing the warning band
+- explicit acknowledgement and Back-command priority
 - startup failure and recovery
 - absence of PTT, MOX, keying, tuner, and power commands
 
@@ -241,7 +260,7 @@ transmission.
 2. Confirm the Standard Com Port is not open.
 3. Confirm CAT speed is 38,400 baud.
 4. Start on a known amateur band and note the current frequency and mode.
-5. Keep the ATAS-120 limitation in mind and do not transmit.
+5. Do not transmit; receive tuning does not tune the ATAS-120.
 
 ### Same-Band Test
 
@@ -251,7 +270,8 @@ transmission.
 4. Confirm frequency read-back matches exactly.
 5. Change receive mode if needed.
 6. Confirm mode read-back matches.
-7. Confirm `transmitting=False`.
+7. Confirm no ATAS-120 warning is displayed.
+8. Confirm `transmitting=False`.
 
 ### Cross-Band Test
 
@@ -260,8 +280,11 @@ transmission.
 3. Confirm the selected band is read back and verified.
 4. Confirm the target frequency is then set and verified.
 5. Confirm the requested receive mode is then set and verified.
-6. Confirm no PTT, MOX, keying, tuner, or power command occurs.
-7. Do not transmit; the ATAS-120 has not been declared tuned.
+6. Confirm the visible warning names the verified target band.
+7. Change selection or context and confirm the warning remains retained.
+8. Use Back or X and confirm the warning clears before other POTA state.
+9. Confirm no PTT, MOX, keying, tuner, or power command occurs.
+10. Do not transmit; the ATAS-120 has not been declared tuned.
 
 ### Confirmed POTA Test
 
@@ -272,7 +295,8 @@ transmission.
 5. Confirm it follows the same band-first sequence.
 6. Confirm duplicate execution remains rejected.
 7. Confirm no voice or unattended action can trigger tuning.
+8. Confirm same-band and cross-band warning behavior matches this document.
 
-Record the observed starting state, requested state, final read-back state, CAT
-device path, and any error or recovery behavior before approving the pull
-request.
+Record the observed starting state, requested state, final read-back state,
+warning text and acknowledgement behavior, CAT device path, and any error or
+recovery behavior before approving the pull request.
