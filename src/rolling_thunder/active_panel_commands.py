@@ -38,13 +38,20 @@ class PotaFilterCommands(Protocol):
 
 
 class PotaTuneCommands(Protocol):
-    """UI-safe POTA tune-intent capabilities used by panel commands."""
+    """UI-safe POTA tune-intent and retune-warning capabilities."""
+
+    @property
+    def retune_warning_active(self) -> bool:
+        """Return whether an ATAS-120 warning awaits acknowledgement."""
 
     def request(self) -> PotaTuneIntent | None:
         """Stage an intent for the selected POTA row without radio access."""
 
     def cancel(self) -> PotaTuneIntent | None:
         """Cancel the current POTA intent without radio access."""
+
+    def acknowledge_retune_warning(self) -> bool:
+        """Acknowledge the current ATAS-120 warning when present."""
 
 
 class PotaOverlayCommands(Protocol):
@@ -125,9 +132,12 @@ class ActivePanelCommandController:
         return self._pota_tune.request() is not None
 
     def back(self) -> bool:
-        """Cancel active intent first, then clear the active row selection."""
+        """Acknowledge warnings, cancel intent, then clear selection."""
         if not self._pota_is_active():
             return False
+
+        if self._pota_tune.retune_warning_active:
+            return self._pota_tune.acknowledge_retune_warning()
 
         intent = self._pota_panel.tune_intent
         if intent is not None and intent.status is not PotaTuneIntentStatus.CANCELLED:
