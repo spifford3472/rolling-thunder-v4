@@ -60,6 +60,8 @@ _HEALTH_DISABLED = "#c8c8c8"
 _HEALTH_UNAVAILABLE = "#b42318"
 _HEALTH_DARK_TEXT = "#080808"
 
+_POTA_CARD_WIDTH = 45
+
 
 def _indicator_color(value: str) -> str:
     """Return the visual color for a compact operator-state indicator."""
@@ -100,6 +102,11 @@ def _callsign_font_size(callsign: str) -> int:
     if length <= 13:
         return 52
     return 44
+
+
+def _pota_card_line(value: str) -> str:
+    """Fit one value inside the fixed-width POTA card border."""
+    return f"│ {value[:_POTA_CARD_WIDTH - 4]:<{_POTA_CARD_WIDTH - 4}} │"
 
 
 def run_dashboard(
@@ -156,6 +163,7 @@ def run_dashboard(
     active_panel_commands = ActivePanelCommandController(
         context_navigation,
         pota_dashboard,
+        pota_filters,
         pota_tune_ui,
     )
 
@@ -347,14 +355,15 @@ def run_dashboard(
     context_content.grid_rowconfigure(2, weight=0)
 
     context_title_text = tk.StringVar(value="POTA")
-    tk.Label(
+    context_title_label = tk.Label(
         context_content,
         textvariable=context_title_text,
         bg=_SECONDARY_BACKGROUND,
         fg=_BRIGHT,
         font=("DejaVu Sans", 48, "bold"),
         anchor="center",
-    ).grid(row=0, column=0, sticky="ew", pady=(8, 16))
+    )
+    context_title_label.grid(row=0, column=0, sticky="ew", pady=(8, 16))
 
     context_body_text = tk.StringVar(value="")
     context_body_label = tk.Label(
@@ -472,7 +481,11 @@ def run_dashboard(
     )
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
+    previous_context: ContextId | None = None
+
     def refresh() -> None:
+        nonlocal previous_context
+
         if control_dispatcher is not None:
             control_dispatcher.dispatch_available()
 
@@ -524,21 +537,53 @@ def run_dashboard(
         ticker_text.set(ticker)
 
         selected_context = context_navigation.state
-        context_title_text.set(selected_context.definition.title)
+        if (
+            selected_context.selected is ContextId.POTA
+            and previous_context is not ContextId.POTA
+        ):
+            pota_filters.activate_for_frequency(runtime.latest_radio_state.frequency)
+        previous_context = selected_context.selected
 
         if selected_context.selected is ContextId.POTA:
             health_frame.grid_remove()
             filter_state = pota_filters.state
             panel = build_pota_dashboard_panel(filter_state.dashboard)
+            context_title_text.set(filter_state.display_line)
+            context_title_label.configure(font=("DejaVu Sans Mono", 26, "bold"))
+            context_body_label.configure(
+                font=("DejaVu Sans Mono", 16, "bold"),
+                wraplength=0,
+            )
 
-            pota_lines = [
-                filter_state.display_line,
-                panel.status_line,
-                panel.detail_line,
-                panel.refresh_line,
-            ]
-            if panel.error_line:
-                pota_lines.append(panel.error_line)
+            pota_lines: list[str] = []
+            if filter_state.dashboard.status != "READY":
+                pota_lines.extend((panel.detail_line, panel.status_line))
+                if panel.error_line:
+                    pota_lines.append(panel.error_line)
+            else:
+                if panel.hidden_above_count:
+                    pota_lines.append("                 /\\ MORE /\\")
+
+                top_border = "┌" + "─" * (_POTA_CARD_WIDTH - 2) + "┐"
+                bottom_border = "└" + "─" * (_POTA_CARD_WIDTH - 2) + "┘"
+                for row in panel.rows:
+                    selection_marker = "▶" if row.is_selected else " "
+                    pota_lines.extend(
+                        (
+                            top_border,
+                            _pota_card_line(f"{selection_marker} {row.activator}"),
+                            _pota_card_line(row.frequency),
+                            _pota_card_line(
+                                f"{row.park_reference} - {row.park_name}"
+                            ),
+                            _pota_card_line(row.location_code),
+                            bottom_border,
+                            "",
+                        )
+                    )
+
+                if panel.hidden_below_count:
+                    pota_lines.append("                 \\/ MORE \\/")
 
             tune_presentation = pota_tune_ui.presentation
             if tune_presentation.summary_line is not None:
@@ -548,21 +593,11 @@ def run_dashboard(
             if tune_presentation.detail_line is not None:
                 pota_lines.append(tune_presentation.detail_line)
 
-            for row in panel.rows:
-                selection_marker = ">" if row.is_selected else " "
-                pota_lines.append(
-                    f"{selection_marker} {row.activator}  {row.park_reference}  "
-                    f"{row.frequency}  {row.mode}"
-                )
-                pota_lines.append(f"  {row.park_name} — {row.spotted_at}")
-                if row.comments:
-                    pota_lines.append(f"  {row.comments}")
-
-            if panel.hidden_row_count:
-                pota_lines.append(f"+ {panel.hidden_row_count} MORE SPOTS")
-
             context_body_text.set("\n".join(pota_lines))
         elif selected_context.selected is ContextId.SETTINGS:
+            context_title_text.set(selected_context.definition.title)
+            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_body_label.configure(font=("DejaVu Sans", 22), wraplength=560)
             context_body_text.set("")
 
             health = build_station_health(
@@ -589,6 +624,9 @@ def run_dashboard(
             health_frame.grid()
         else:
             health_frame.grid_remove()
+            context_title_text.set(selected_context.definition.title)
+            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_body_label.configure(font=("DejaVu Sans", 22), wraplength=560)
             context_body_text.set(selected_context.definition.placeholder)
 
         root.after(_REFRESH_MS, refresh)
