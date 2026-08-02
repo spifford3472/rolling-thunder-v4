@@ -1,10 +1,11 @@
-"""U.S. Census adapter for generalized state outlines used by the POTA overlay."""
+"""Administrative outline adapter for U.S. and DX POTA overlays."""
 
 from collections.abc import Mapping, Sequence
 from json import JSONDecodeError, loads
 from urllib.error import URLError
 from urllib.parse import urlencode
 
+from rolling_thunder.geoboundaries_outline import GeoBoundariesOutlineProvider
 from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
 from rolling_thunder.pota_enrichment import StateOutline
 
@@ -17,11 +18,11 @@ _USER_AGENT = "RollingThunder/4.1 POTA mobile client"
 
 
 class CensusStateOutlineError(OSError):
-    """Raised when a Census state outline cannot be retrieved or validated."""
+    """Raised when an administrative outline cannot be retrieved or validated."""
 
 
 class CensusStateOutlineProvider:
-    """Fetch one generalized U.S. state polygon for background rendering."""
+    """Fetch Census U.S. states and geoBoundaries DX subdivisions/countries."""
 
     def __init__(
         self,
@@ -35,12 +36,16 @@ class CensusStateOutlineProvider:
         self._timeout_s = timeout_s
         self._transport = transport or UrllibHttpTransport()
         self._endpoint = endpoint
+        self._dx_provider = GeoBoundariesOutlineProvider(
+            timeout_s=timeout_s,
+            transport=self._transport,
+        )
 
     def fetch_outline(self, location_code: str | None) -> StateOutline | None:
-        """Return a generalized outline for a POTA location such as ``US-OH``."""
+        """Return a U.S. state, DX subdivision, or DX country outline."""
         state_code = self._state_code(location_code)
         if state_code is None:
-            return None
+            return self._dx_provider.fetch_outline(location_code)
 
         query = urlencode(
             {
