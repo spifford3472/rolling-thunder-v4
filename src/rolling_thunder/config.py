@@ -48,12 +48,37 @@ class OperatorConfig(ConfigurationModel):
     home_grid: MaidenheadGrid
 
 
+class HardwareAdapterMode(StrEnum):
+    """Whether one hardware adapter uses a mock or physical implementation."""
+
+    MOCK = "mock"
+    REAL = "real"
+
+
 class HardwareConfig(ConfigurationModel):
-    """Hardware selection and mock-mode settings."""
+    """Hardware adapter selection and serial-device settings."""
 
     mock: bool = True
+    radio_mode: HardwareAdapterMode | None = None
+    gps_mode: HardwareAdapterMode | None = None
     radio_device: Path | None = None
     gps_device: Path | None = None
+    gps_baud_rate: int = Field(default=9_600, ge=1, le=4_000_000)
+    gps_timeout_s: float = Field(default=2.0, gt=0, le=60)
+
+    @property
+    def effective_radio_mode(self) -> HardwareAdapterMode:
+        """Resolve explicit radio mode or fall back to legacy global mock mode."""
+        if self.radio_mode is not None:
+            return self.radio_mode
+        return HardwareAdapterMode.MOCK if self.mock else HardwareAdapterMode.REAL
+
+    @property
+    def effective_gps_mode(self) -> HardwareAdapterMode:
+        """Resolve explicit GPS mode or fall back to legacy global mock mode."""
+        if self.gps_mode is not None:
+            return self.gps_mode
+        return HardwareAdapterMode.MOCK if self.mock else HardwareAdapterMode.REAL
 
     @field_validator("radio_device", "gps_device", mode="before")
     @classmethod
@@ -77,21 +102,23 @@ class HardwareConfig(ConfigurationModel):
 
     @model_validator(mode="after")
     def validate_real_hardware_devices(self) -> Self:
-        """Require device preferences when real hardware mode is selected."""
-        if self.mock:
-            return self
-
+        """Require only the devices selected for physical hardware operation."""
         missing: list[str] = []
 
-        if self.radio_device is None:
+        if (
+            self.effective_radio_mode is HardwareAdapterMode.REAL
+            and self.radio_device is None
+        ):
             missing.append("hardware.radio_device")
 
-        if self.gps_device is None:
+        if self.effective_gps_mode is HardwareAdapterMode.REAL and self.gps_device is None:
             missing.append("hardware.gps_device")
 
         if missing:
             missing_fields = ", ".join(missing)
-            raise ValueError(f"{missing_fields} must be configured when hardware.mock is false")
+            raise ValueError(
+                f"{missing_fields} must be configured when its selected hardware mode is real"
+            )
 
         return self
 
