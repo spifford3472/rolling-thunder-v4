@@ -252,6 +252,7 @@ Completed and verified:
 Current issue #16 warning slice:
 
 - publish only from a verified `band_changed` result and target band
+- use three explicit short encoder presses to stage, confirm, and execute the selected receive-only tune
 - display `BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120`
 - show no warning for same-band tuning
 - retain the warning across POTA selection, filter, context, and result cleanup

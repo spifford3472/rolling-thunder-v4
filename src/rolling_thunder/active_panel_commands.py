@@ -44,6 +44,9 @@ class PotaTuneCommands(Protocol):
     def retune_warning_active(self) -> bool:
         """Return whether an ATAS-120 warning awaits acknowledgement."""
 
+    def advance(self) -> bool:
+        """Advance the guarded stage, confirm, and execute workflow once."""
+
     def request(self) -> PotaTuneIntent | None:
         """Stage an intent for the selected POTA row without radio access."""
 
@@ -126,10 +129,10 @@ class ActivePanelCommandController:
         return self._pota_panel.selected_index != previous_index
 
     def activate_selection(self) -> bool:
-        """Stage the active selection without confirming or executing it."""
+        """Advance one guarded POTA tune step for the active selection."""
         if not self._pota_is_active():
             return False
-        return self._pota_tune.request() is not None
+        return self._pota_tune.advance()
 
     def back(self) -> bool:
         """Acknowledge warnings globally, then handle active-panel Back."""

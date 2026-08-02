@@ -9,7 +9,7 @@ from rolling_thunder.pota_tune_execution_controller import (
     PotaTuneExecutionController,
     PotaTuneIntentExecutor,
 )
-from rolling_thunder.pota_tune_intent import PotaTuneIntent
+from rolling_thunder.pota_tune_intent import PotaTuneIntent, PotaTuneIntentStatus
 from rolling_thunder.pota_tune_presentation import (
     PotaTunePresentation,
     build_pota_tune_presentation,
@@ -74,6 +74,27 @@ class PotaTuneUiController:
             self._dashboard.tune_intent,
             self._execution.result,
         )
+
+    def advance(self) -> bool:
+        """Advance exactly one guarded stage, confirm, or execute step."""
+        self._synchronize_context()
+        intent = self._dashboard.tune_intent
+
+        if intent is None or intent.status is PotaTuneIntentStatus.CANCELLED:
+            return self.request() is not None
+
+        if intent.status is PotaTuneIntentStatus.PENDING_CONFIRMATION:
+            confirmed = self.confirm()
+            return (
+                confirmed is not None
+                and confirmed.status is PotaTuneIntentStatus.CONFIRMED
+            )
+
+        if self._execution.result is not None:
+            return False
+
+        self.execute()
+        return True
 
     def request(self) -> PotaTuneIntent | None:
         """Stage the selected POTA spot and clear prior execution state."""

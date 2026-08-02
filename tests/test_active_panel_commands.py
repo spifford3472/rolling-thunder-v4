@@ -34,7 +34,11 @@ class RecordingExecutor:
 
 
 class BandChangeExecutor:
+    def __init__(self) -> None:
+        self.calls: list[PotaTuneIntent] = []
+
     def execute(self, intent: PotaTuneIntent) -> PotaReceiveTuneResult:
+        self.calls.append(intent)
         return PotaReceiveTuneResult(
             status=PotaReceiveTuneResultStatus.SUCCEEDED,
             frequency=intent.frequency,
@@ -204,6 +208,48 @@ def test_activate_stages_intent_without_confirming_or_executing() -> None:
     assert intent is not None
     assert intent.status is PotaTuneIntentStatus.PENDING_CONFIRMATION
     assert executor.calls == []
+
+
+def test_encoder_short_advances_stage_confirm_execute_once() -> None:
+    navigation = ContextNavigationController(ContextId.POTA)
+    dashboard = PotaDashboardController(
+        StaticProvider(available_state()),
+        clock=lambda: datetime(2026, 8, 1, 23, 5, tzinfo=UTC),
+    )
+    filters = PotaDashboardFilterController(dashboard)
+    filters.activate_for_frequency(Frequency(hz=14_250_000))
+    dashboard.select_next()
+    executor = BandChangeExecutor()
+    tune = PotaTuneUiController(dashboard, executor)
+    commands = ActivePanelCommandController(
+        navigation,
+        dashboard,
+        filters,
+        tune,
+        RecordingOverlay(),
+    )
+
+    assert commands.activate_selection() is True
+    assert dashboard.tune_intent is not None
+    assert (
+        dashboard.tune_intent.status
+        is PotaTuneIntentStatus.PENDING_CONFIRMATION
+    )
+    assert executor.calls == []
+
+    assert commands.activate_selection() is True
+    assert dashboard.tune_intent is not None
+    assert dashboard.tune_intent.status is PotaTuneIntentStatus.CONFIRMED
+    assert executor.calls == []
+
+    assert commands.activate_selection() is True
+    assert len(executor.calls) == 1
+    assert tune.result is not None
+    assert tune.result.status is PotaReceiveTuneResultStatus.SUCCEEDED
+    assert tune.retune_warning_active is True
+
+    assert commands.activate_selection() is False
+    assert len(executor.calls) == 1
 
 
 def test_back_cancels_intent_before_clearing_selection() -> None:

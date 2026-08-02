@@ -199,6 +199,7 @@ BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
 The warning behavior is intentionally narrow and explicit:
 
 - same-band frequency or mode changes publish no warning
+- three short encoder presses stage, confirm, and execute the selected receive-only tune
 - a verified cross-band result publishes the verified target band
 - the warning survives POTA selection, filter, and execution-result cleanup
 - a later same-band tune does not clear an existing warning
