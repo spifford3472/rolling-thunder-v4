@@ -1,4 +1,4 @@
-"""Tests for deterministic automatic radio polling."""
+"""Tests for deterministic automatic radio polling and recovery."""
 
 from datetime import UTC, datetime
 
@@ -51,12 +51,28 @@ class ManualScheduler:
 class ScriptedRadio:
     def __init__(self) -> None:
         self.state = connected_state()
+        self.connect_count = 0
         self.refresh_count = 0
+        self.next_connect_state: RadioState | None = None
         self.next_refresh_state: RadioState | None = None
+        self.connect_error: RadioConnectionError | None = None
         self.refresh_error: RadioConnectionError | None = None
         self.during_refresh: PollCallback | None = None
 
     def connect(self) -> RadioState:
+        self.connect_count += 1
+        if self.connect_error is not None:
+            self.state = RadioState(
+                connection_state=RadioConnectionState.ERROR,
+                frequency=self.state.frequency,
+                mode=self.state.mode,
+                transmitting=False,
+                updated_at=timestamp(),
+                last_error=str(self.connect_error),
+            )
+            raise self.connect_error
+        if self.next_connect_state is not None:
+            self.state = self.next_connect_state
         return self.state
 
     def disconnect(self) -> RadioState:
@@ -78,6 +94,7 @@ class ScriptedRadio:
                 connection_state=RadioConnectionState.ERROR,
                 frequency=self.state.frequency,
                 mode=self.state.mode,
+                transmitting=False,
                 updated_at=timestamp(),
                 last_error=str(self.refresh_error),
             )
@@ -100,7 +117,7 @@ class ScriptedRadio:
 
 
 def timestamp() -> datetime:
-    return datetime(2026, 7, 25, 6, 0, tzinfo=UTC)
+    return datetime(2026, 8, 2, 17, 0, tzinfo=UTC)
 
 
 def connected_state(
@@ -120,19 +137,55 @@ def connected_state(
 def test_start_schedules_configured_interval() -> None:
     radio = ScriptedRadio()
     scheduler = ManualScheduler()
-    service = RadioPollingService(radio, scheduler, interval_s=0.5)
+    service = RadioPollingService(
+        radio,
+        scheduler,
+        interval_s=0.5,
+        clock=timestamp,
+    )
 
     state = service.start()
 
     assert state is radio.state
     assert service.is_running is True
     assert scheduler.interval_s == 0.5
+    assert radio.connect_count == 0
+
+
+def test_start_connects_initially_disconnected_radio() -> None:
+    radio = ScriptedRadio()
+    radio.disconnect()
+    radio.next_connect_state = connected_state()
+    scheduler = ManualScheduler()
+    service = RadioPollingService(radio, scheduler, clock=timestamp)
+
+    state = service.start()
+
+    assert state.connection_state is RadioConnectionState.CONNECTED
+    assert service.is_running is True
+    assert radio.connect_count == 1
+
+
+def test_start_failure_publishes_error_and_keeps_retry_scheduled() -> None:
+    radio = ScriptedRadio()
+    radio.disconnect()
+    radio.connect_error = RadioConnectionError("CAT device unavailable")
+    scheduler = ManualScheduler()
+    service = RadioPollingService(radio, scheduler, clock=timestamp)
+
+    state = service.start()
+
+    assert state.connection_state is RadioConnectionState.ERROR
+    assert state.last_error == "CAT device unavailable"
+    assert service.is_running is True
+    assert scheduler.poll is not None
+    assert scheduler.poll.cancelled is False
 
 
 def test_poll_publishes_manual_radio_change() -> None:
     radio = ScriptedRadio()
     scheduler = ManualScheduler()
-    service = RadioPollingService(radio, scheduler)
+    service = RadioPollingService(radio, scheduler, clock=timestamp)
     service.start()
     radio.next_refresh_state = connected_state(
         frequency=Frequency(hz=7_255_000),
@@ -147,27 +200,49 @@ def test_poll_publishes_manual_radio_change() -> None:
     assert service.is_running is True
 
 
-def test_refresh_failure_stops_polling_and_publishes_error_state() -> None:
+def test_refresh_failure_keeps_polling_and_publishes_error_state() -> None:
     radio = ScriptedRadio()
     scheduler = ManualScheduler()
-    service = RadioPollingService(radio, scheduler)
+    service = RadioPollingService(radio, scheduler, clock=timestamp)
     service.start()
     radio.refresh_error = RadioConnectionError("USB serial device disappeared")
 
     scheduler.fire()
 
-    assert service.is_running is False
+    assert service.is_running is True
     assert scheduler.poll is not None
-    assert scheduler.poll.cancelled is True
+    assert scheduler.poll.cancelled is False
     assert service.latest_state.connection_state is RadioConnectionState.ERROR
     assert service.latest_state.last_error == "USB serial device disappeared"
     assert service.latest_state.frequency == Frequency(hz=14_250_000)
 
 
+def test_poll_reconnects_after_refresh_failure() -> None:
+    radio = ScriptedRadio()
+    scheduler = ManualScheduler()
+    service = RadioPollingService(radio, scheduler, clock=timestamp)
+    service.start()
+    radio.refresh_error = RadioConnectionError("USB serial device disappeared")
+    scheduler.fire()
+
+    radio.refresh_error = None
+    radio.next_connect_state = connected_state(
+        frequency=Frequency(hz=7_273_020),
+        mode=RadioMode.LSB,
+    )
+    scheduler.fire()
+
+    assert service.latest_state.connection_state is RadioConnectionState.CONNECTED
+    assert service.latest_state.frequency == Frequency(hz=7_273_020)
+    assert service.latest_state.mode is RadioMode.LSB
+    assert radio.connect_count == 1
+    assert service.is_running is True
+
+
 def test_stop_cancels_future_refreshes() -> None:
     radio = ScriptedRadio()
     scheduler = ManualScheduler()
-    service = RadioPollingService(radio, scheduler)
+    service = RadioPollingService(radio, scheduler, clock=timestamp)
     service.start()
 
     service.stop()
@@ -178,26 +253,21 @@ def test_stop_cancels_future_refreshes() -> None:
 
 
 def test_repeated_start_is_rejected() -> None:
-    service = RadioPollingService(ScriptedRadio(), ManualScheduler())
+    service = RadioPollingService(
+        ScriptedRadio(),
+        ManualScheduler(),
+        clock=timestamp,
+    )
     service.start()
 
     with pytest.raises(RuntimeError, match="already running"):
         service.start()
 
 
-def test_start_requires_connected_radio() -> None:
-    radio = ScriptedRadio()
-    radio.disconnect()
-    service = RadioPollingService(radio, ManualScheduler())
-
-    with pytest.raises(RadioConnectionError, match="requires a connected radio"):
-        service.start()
-
-
 def test_reentrant_callback_does_not_overlap_refresh() -> None:
     radio = ScriptedRadio()
     scheduler = ManualScheduler()
-    service = RadioPollingService(radio, scheduler)
+    service = RadioPollingService(radio, scheduler, clock=timestamp)
     service.start()
     radio.during_refresh = scheduler.fire
 
@@ -213,4 +283,5 @@ def test_polling_interval_must_be_positive(interval_s: float) -> None:
             ScriptedRadio(),
             ManualScheduler(),
             interval_s=interval_s,
+            clock=timestamp,
         )

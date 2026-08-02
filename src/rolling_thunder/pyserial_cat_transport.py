@@ -1,5 +1,6 @@
 """PySerial implementation of the CAT transport boundary."""
 
+import termios
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, cast
@@ -89,7 +90,7 @@ class PySerialCatTransport:
                 self._baud_rate,
                 self._timeout_s,
             )
-        except (OSError, serial.SerialException) as error:
+        except (OSError, serial.SerialException, termios.error) as error:
             raise RadioConnectionError(
                 f"Could not open FT-891 CAT device {self._device}: {error}"
             ) from error
@@ -102,7 +103,7 @@ class PySerialCatTransport:
             return
         try:
             port.close()
-        except (OSError, serial.SerialException) as error:
+        except (OSError, serial.SerialException, termios.error) as error:
             raise RadioConnectionError(
                 f"Could not close FT-891 CAT device {self._device}: {error}"
             ) from error
@@ -124,7 +125,7 @@ class PySerialCatTransport:
                     return bytes(reply)
         except RadioConnectionError:
             raise
-        except (OSError, serial.SerialException) as error:
+        except (OSError, serial.SerialException, termios.error) as error:
             raise RadioConnectionError(
                 f"Could not read from FT-891 CAT device {self._device}: {error}"
             ) from error
@@ -150,7 +151,7 @@ class PySerialCatTransport:
         try:
             port.reset_input_buffer()
             written = port.write(command)
-        except (OSError, serial.SerialException) as error:
+        except (OSError, serial.SerialException, termios.error) as error:
             raise RadioConnectionError(
                 f"Could not write to FT-891 CAT device {self._device}: {error}"
             ) from error

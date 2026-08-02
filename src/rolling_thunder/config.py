@@ -62,6 +62,8 @@ class HardwareConfig(ConfigurationModel):
     radio_mode: HardwareAdapterMode | None = None
     gps_mode: HardwareAdapterMode | None = None
     radio_device: Path | None = None
+    radio_baud_rate: int = Field(default=38_400, ge=1, le=4_000_000)
+    radio_timeout_s: float = Field(default=1.0, gt=0, le=60)
     gps_device: Path | None = None
     gps_baud_rate: int = Field(default=9_600, ge=1, le=4_000_000)
     gps_timeout_s: float = Field(default=2.0, gt=0, le=60)
