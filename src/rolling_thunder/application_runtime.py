@@ -10,6 +10,9 @@ from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.census_state_outline import CensusStateOutlineProvider
 from rolling_thunder.config import ApplicationConfig, HardwareAdapterMode
 from rolling_thunder.contact_logging import ContactLoggingService
+from rolling_thunder.contact_qrz_enrichment import (
+    ContactQrzEnrichmentService,
+)
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
@@ -75,6 +78,7 @@ class ApplicationRuntime:
     live_map: LiveMapService | None = None
     home_platform_client: HomePlatformClient | None = None
     home_platform_health: HomePlatformHealthService | None = None
+    contact_qrz_enrichment: ContactQrzEnrichmentService | None = None
     contact_sync: ContactSyncService | None = None
     network_keepalive: NetworkKeepaliveService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
@@ -90,6 +94,7 @@ class ApplicationRuntime:
         scheduler: PollScheduler | None = None,
         gps_scheduler: PollScheduler | None = None,
         home_platform_scheduler: PollScheduler | None = None,
+        contact_qrz_enrichment_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         pota_scheduler: PollScheduler | None = None,
@@ -192,17 +197,29 @@ class ApplicationRuntime:
 
         resolved_secrets = secrets or ApplicationSecrets()
         qrz_provider = None
+        qrz_timeout_s = config.pota_spots.request_timeout_s
+        if resolved_secrets.qrz is not None:
+            qrz_provider = QrzXmlCallsignNameProvider(
+                resolved_secrets.qrz,
+                timeout_s=qrz_timeout_s,
+                transport=qrz_transport,
+            )
+
+        contact_qrz_enrichment = None
+        if qrz_provider is not None:
+            contact_qrz_enrichment = ContactQrzEnrichmentService(
+                repository,
+                qrz_provider,
+                contact_qrz_enrichment_scheduler
+                or ThreadingPollScheduler(),
+            )
+
         qrz_photo_provider = None
         weather_provider = None
         state_outline_provider = None
         if config.pota_spots.enabled:
             timeout_s = config.pota_spots.request_timeout_s
-            if resolved_secrets.qrz is not None:
-                qrz_provider = QrzXmlCallsignNameProvider(
-                    resolved_secrets.qrz,
-                    timeout_s=timeout_s,
-                    transport=qrz_transport,
-                )
+            if qrz_provider is not None:
                 qrz_photo_provider = QrzProfileImageProvider(
                     timeout_s=timeout_s,
                     transport=image_transport,
@@ -249,7 +266,10 @@ class ApplicationRuntime:
                 polling_scheduler,
                 interval_s=interval_s,
             ),
-            contact_logging=ContactLoggingService(repository),
+            contact_logging=ContactLoggingService(
+                repository,
+                qrz_fallback_available=qrz_provider is not None,
+            ),
             gps=gps,
             gps_polling=GPSPollingService(
                 gps,
@@ -259,6 +279,7 @@ class ApplicationRuntime:
             live_map=live_map,
             home_platform_client=home_platform_client,
             home_platform_health=home_platform_health,
+            contact_qrz_enrichment=contact_qrz_enrichment,
             contact_sync=contact_sync,
             network_keepalive=network_keepalive,
             pota_spot_polling=pota_spot_polling,
@@ -312,6 +333,8 @@ class ApplicationRuntime:
             self.live_map.start()
         if self.home_platform_health is not None:
             self.home_platform_health.start()
+        if self.contact_qrz_enrichment is not None:
+            self.contact_qrz_enrichment.start()
         if self.contact_sync is not None:
             self.contact_sync.start()
         if self.network_keepalive is not None:
@@ -334,6 +357,8 @@ class ApplicationRuntime:
             self.network_keepalive.stop()
         if self.contact_sync is not None:
             self.contact_sync.stop()
+        if self.contact_qrz_enrichment is not None:
+            self.contact_qrz_enrichment.stop()
         if self.home_platform_health is not None:
             self.home_platform_health.stop()
         if self.live_map is not None:
