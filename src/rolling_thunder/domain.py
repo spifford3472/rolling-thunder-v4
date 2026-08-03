@@ -15,7 +15,11 @@ from pydantic import (
     model_validator,
 )
 
-from rolling_thunder.value_types import Callsign, MaidenheadGrid
+from rolling_thunder.value_types import (
+    Callsign,
+    MaidenheadGrid,
+    PotaReference,
+)
 
 _SIGNAL_REPORT_PATTERN = re.compile(r"^(?:[1-5][1-9][1-9]?|[+-]?[0-9]{1,2})$")
 
@@ -54,6 +58,20 @@ class SynchronizationState(StrEnum):
     PENDING = "pending"
     SYNCHRONIZED = "synchronized"
     FAILED = "failed"
+
+
+class ContactGridSource(StrEnum):
+    """Source used for a contacted station or location grid."""
+
+    POTA_PARK = "pota_park"
+    QRZ = "qrz"
+
+
+class ContactEnrichmentState(StrEnum):
+    """Whether optional post-commit metadata work is outstanding."""
+
+    READY = "ready"
+    PENDING_QRZ = "pending_qrz"
 
 
 class DomainModel(BaseModel):
@@ -149,14 +167,9 @@ class RadioState(DomainModel):
                 raise ValueError("transmitting requires a connected radio")
 
             if self.frequency is None or self.mode is None:
-                raise ValueError(
-                    "transmitting requires a known frequency and mode"
-                )
+                raise ValueError("transmitting requires a known frequency and mode")
 
-        if (
-            self.connection_state is RadioConnectionState.ERROR
-            and self.last_error is None
-        ):
+        if self.connection_state is RadioConnectionState.ERROR and self.last_error is None:
             raise ValueError("error radio state requires last_error")
 
         return self
@@ -217,18 +230,13 @@ class GPSPosition(DomainModel):
                 raise ValueError("no-fix GPS position cannot contain altitude")
 
             if self.speed_m_s is not None or self.heading_degrees is not None:
-                raise ValueError(
-                    "no-fix GPS position cannot contain movement information"
-                )
+                raise ValueError("no-fix GPS position cannot contain movement information")
 
         else:
             if not has_latitude or not has_longitude:
                 raise ValueError("GPS fix requires latitude and longitude")
 
-        if (
-            self.fix_state is GPSFixState.TWO_DIMENSIONAL
-            and self.altitude_m is not None
-        ):
+        if self.fix_state is GPSFixState.TWO_DIMENSIONAL and self.altitude_m is not None:
             raise ValueError("2d GPS fix cannot contain altitude")
 
         return self
@@ -250,6 +258,10 @@ class Contact(DomainModel):
     rst_sent: str
     rst_received: str
     grid: MaidenheadGrid | None = None
+    my_grid: MaidenheadGrid | None = None
+    pota_reference: PotaReference | None = None
+    grid_source: ContactGridSource | None = None
+    enrichment_state: ContactEnrichmentState = ContactEnrichmentState.READY
     notes: str | None = Field(default=None, max_length=2_000)
     synchronization_state: SynchronizationState = SynchronizationState.PENDING
 
@@ -278,11 +290,17 @@ class Contact(DomainModel):
         normalized = value.strip()
 
         if not _SIGNAL_REPORT_PATTERN.fullmatch(normalized):
-            raise ValueError(
-                "must be a conventional report such as 59, 599, or -10"
-            )
+            raise ValueError("must be a conventional report such as 59, 599, or -10")
 
         return normalized
+
+    @field_validator("grid_source", "enrichment_state", mode="before")
+    @classmethod
+    def normalize_contact_enums(cls, value: object) -> object:
+        """Normalize optional contact metadata enum strings."""
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
     @field_validator("notes")
     @classmethod
@@ -293,6 +311,20 @@ class Contact(DomainModel):
 
         normalized = value.strip()
         return normalized or None
+
+    @model_validator(mode="after")
+    def validate_contact_metadata(self) -> "Contact":
+        """Reject contradictory contact-location metadata."""
+        if self.grid_source is not None and self.grid is None:
+            raise ValueError("grid_source requires a contacted grid")
+
+        if self.grid_source is ContactGridSource.POTA_PARK and self.pota_reference is None:
+            raise ValueError("POTA park grid source requires pota_reference")
+
+        if self.enrichment_state is ContactEnrichmentState.PENDING_QRZ and self.grid is not None:
+            raise ValueError("pending QRZ enrichment requires an empty grid")
+
+        return self
 
     @field_serializer("started_at")
     def serialize_started_at(self, value: datetime) -> str:

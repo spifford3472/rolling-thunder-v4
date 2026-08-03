@@ -10,7 +10,10 @@ from typing import Final
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.storage import StorageError
 
-CONTACT_EXPORT_FORMAT_VERSION: Final = 1
+CONTACT_EXPORT_FORMAT_VERSION: Final = 2
+SUPPORTED_CONTACT_EXPORT_FORMAT_VERSIONS: Final[frozenset[int]] = frozenset(
+    {1, CONTACT_EXPORT_FORMAT_VERSION}
+)
 
 
 class ContactExportError(Exception):
@@ -25,9 +28,7 @@ def export_contacts_to_json(
 ) -> int:
     """Atomically export all contacts and return the exported record count."""
     if destination.exists() and destination.is_dir():
-        raise ContactExportError(
-            f"Contact export destination is a directory: {destination}"
-        )
+        raise ContactExportError(f"Contact export destination is a directory: {destination}")
 
     timestamp = exported_at or datetime.now(UTC)
 
@@ -40,10 +41,7 @@ def export_contacts_to_json(
     document = {
         "format_version": CONTACT_EXPORT_FORMAT_VERSION,
         "exported_at": _format_utc_datetime(timestamp),
-        "contacts": [
-            contact.model_dump(mode="json")
-            for contact in contacts
-        ],
+        "contacts": [contact.model_dump(mode="json") for contact in contacts],
     }
 
     temporary_path: Path | None = None

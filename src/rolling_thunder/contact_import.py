@@ -7,7 +7,9 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from rolling_thunder.contact_export import CONTACT_EXPORT_FORMAT_VERSION
+from rolling_thunder.contact_export import (
+    SUPPORTED_CONTACT_EXPORT_FORMAT_VERSIONS,
+)
 from rolling_thunder.contact_repository import (
     ContactConflictError,
     ContactRepository,
@@ -120,9 +122,7 @@ def _read_document(source: Path) -> object:
 def _validate_document(document: object) -> list[Contact]:
     """Validate export metadata and every contact before any database write."""
     if not isinstance(document, dict):
-        raise ContactImportError(
-            "Contact import document must be a JSON object."
-        )
+        raise ContactImportError("Contact import document must be a JSON object.")
 
     document_keys = set(document)
 
@@ -130,21 +130,19 @@ def _validate_document(document: object) -> list[Contact]:
         missing = sorted(_REQUIRED_DOCUMENT_KEYS - document_keys)
         unexpected = sorted(document_keys - _REQUIRED_DOCUMENT_KEYS)
         raise ContactImportError(
-            "Contact import document has invalid keys: "
-            f"missing={missing}, unexpected={unexpected}."
+            f"Contact import document has invalid keys: missing={missing}, unexpected={unexpected}."
         )
 
     version = document["format_version"]
 
     if isinstance(version, bool) or not isinstance(version, int):
-        raise ContactImportError(
-            "Contact import format_version must be an integer."
-        )
+        raise ContactImportError("Contact import format_version must be an integer.")
 
-    if version != CONTACT_EXPORT_FORMAT_VERSION:
+    if version not in SUPPORTED_CONTACT_EXPORT_FORMAT_VERSIONS:
         raise ContactImportError(
             f"Unsupported contact import format version: {version}; "
-            f"supported version is {CONTACT_EXPORT_FORMAT_VERSION}."
+            "supported versions are "
+            f"{sorted(SUPPORTED_CONTACT_EXPORT_FORMAT_VERSIONS)}."
         )
 
     _validate_export_timestamp(document["exported_at"])
@@ -152,24 +150,16 @@ def _validate_document(document: object) -> list[Contact]:
     raw_contacts = document["contacts"]
 
     if not isinstance(raw_contacts, list):
-        raise ContactImportError(
-            "Contact import contacts value must be a JSON array."
-        )
+        raise ContactImportError("Contact import contacts value must be a JSON array.")
 
     contacts: list[Contact] = []
 
     for index, raw_contact in enumerate(raw_contacts):
         if not isinstance(raw_contact, dict):
-            raise ContactImportError(
-                f"Contact import record {index} must be a JSON object."
-            )
+            raise ContactImportError(f"Contact import record {index} must be a JSON object.")
 
         try:
-            contacts.append(
-                Contact.model_validate(
-                    raw_contact
-                )
-            )
+            contacts.append(Contact.model_validate(raw_contact))
         except ValidationError as error:
             raise ContactImportError(
                 f"Contact import record {index} is invalid: {error}"
@@ -181,18 +171,12 @@ def _validate_document(document: object) -> list[Contact]:
 def _validate_export_timestamp(value: object) -> None:
     """Require an ISO-8601 timestamp containing timezone information."""
     if not isinstance(value, str):
-        raise ContactImportError(
-            "Contact import exported_at must be a string."
-        )
+        raise ContactImportError("Contact import exported_at must be a string.")
 
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError as error:
-        raise ContactImportError(
-            f"Contact import exported_at is invalid: {value}."
-        ) from error
+        raise ContactImportError(f"Contact import exported_at is invalid: {value}.") from error
 
     if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ContactImportError(
-            "Contact import exported_at must include a timezone."
-        )
+        raise ContactImportError("Contact import exported_at must include a timezone.")

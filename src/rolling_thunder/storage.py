@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 5
+CURRENT_SCHEMA_VERSION: Final = 6
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -111,6 +111,31 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         "ALTER TABLE pota_spot_cache ADD COLUMN latitude REAL",
         "ALTER TABLE pota_spot_cache ADD COLUMN longitude REAL",
     ),
+    6: (
+        "ALTER TABLE contacts ADD COLUMN my_grid TEXT",
+        "ALTER TABLE contacts ADD COLUMN pota_reference TEXT",
+        """
+        ALTER TABLE contacts
+        ADD COLUMN grid_source TEXT
+        CHECK (
+            grid_source IS NULL
+            OR grid_source IN ('pota_park', 'qrz')
+        )
+        """,
+        """
+        ALTER TABLE contacts
+        ADD COLUMN enrichment_state TEXT NOT NULL DEFAULT 'ready'
+        CHECK (enrichment_state IN ('ready', 'pending_qrz'))
+        """,
+        """
+        CREATE INDEX contacts_sync_enrichment_index
+        ON contacts (
+            synchronization_state,
+            enrichment_state,
+            started_at
+        )
+        """,
+    ),
 }
 
 
@@ -146,9 +171,7 @@ def _read_schema_version(connection: sqlite3.Connection) -> int:
     ).fetchone()
 
     if result is None:
-        raise StorageError(
-            "Database schema metadata is missing its required version record."
-        )
+        raise StorageError("Database schema metadata is missing its required version record.")
 
     version = result[0]
 
@@ -174,9 +197,7 @@ def _apply_migrations(
         migration = _MIGRATIONS.get(target_version)
 
         if migration is None:
-            raise StorageError(
-                f"Database migration {target_version} is not available."
-            )
+            raise StorageError(f"Database migration {target_version} is not available.")
 
         try:
             connection.execute("BEGIN")
@@ -210,14 +231,11 @@ def initialize_database(database_path: Path) -> int:
         with sqlite3.connect(database_path) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
 
-            foreign_keys_enabled = connection.execute(
-                "PRAGMA foreign_keys"
-            ).fetchone()
+            foreign_keys_enabled = connection.execute("PRAGMA foreign_keys").fetchone()
 
             if foreign_keys_enabled != (1,):
                 raise StorageError(
-                    "SQLite foreign-key enforcement could not be enabled: "
-                    f"{database_path}"
+                    f"SQLite foreign-key enforcement could not be enabled: {database_path}"
                 )
 
             current_version = _read_schema_version(connection)

@@ -1,15 +1,12 @@
 """Typed POTA spot domain models and deterministic filtering."""
 
-import re
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
 from pydantic import Field, field_validator
 
 from rolling_thunder.domain import DomainModel, Frequency, RadioMode
-from rolling_thunder.value_types import Callsign
-
-_PARK_REFERENCE_PATTERN = re.compile(r"^[A-Z0-9]{1,4}-[0-9]{4,6}$")
+from rolling_thunder.value_types import Callsign, PotaReference
 
 
 class AmateurBand(StrEnum):
@@ -75,27 +72,11 @@ _DATA_SPOT_MODES = frozenset(
 class ParkReference(DomainModel):
     """Normalized Parks on the Air program reference and location metadata."""
 
-    reference: str
+    reference: PotaReference
     name: str | None = Field(default=None, max_length=200)
     location_code: str | None = Field(default=None, max_length=100)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
-
-    @field_validator("reference", mode="before")
-    @classmethod
-    def normalize_reference(cls, value: object) -> object:
-        """Normalize string references before structural validation."""
-        if isinstance(value, str):
-            return value.strip().upper()
-        return value
-
-    @field_validator("reference")
-    @classmethod
-    def validate_reference(cls, value: str) -> str:
-        """Require a program prefix and four-to-six digit park number."""
-        if not _PARK_REFERENCE_PATTERN.fullmatch(value):
-            raise ValueError("must be a POTA reference such as US-1234")
-        return value
 
     @field_validator("name", "location_code")
     @classmethod

@@ -23,6 +23,10 @@ def make_export_contact(
     started_at: datetime,
     synchronization_state: SynchronizationState,
     grid: str | None = None,
+    my_grid: str | None = None,
+    pota_reference: str | None = None,
+    grid_source: str | None = None,
+    enrichment_state: str = "ready",
     notes: str | None = None,
 ) -> Contact:
     """Create a representative export contact."""
@@ -35,6 +39,10 @@ def make_export_contact(
         rst_sent="59",
         rst_received="57",
         grid=grid,
+        my_grid=my_grid,
+        pota_reference=pota_reference,
+        grid_source=grid_source,
+        enrichment_state=enrichment_state,
         notes=notes,
         synchronization_state=synchronization_state,
     )
@@ -57,7 +65,10 @@ def test_export_writes_versioned_deterministic_json(tmp_path: Path) -> None:
         callsign="KI5VNB/P",
         started_at=datetime(2026, 7, 25, 2, 0, tzinfo=UTC),
         synchronization_state=SynchronizationState.FAILED,
-        grid="EM79xm",
+        grid="EN80aa",
+        my_grid="EM79xm",
+        pota_reference="US-1234",
+        grid_source="pota_park",
         notes="Mobile contact",
     )
 
@@ -75,10 +86,7 @@ def test_export_writes_versioned_deterministic_json(tmp_path: Path) -> None:
     assert count == 2
     assert document["format_version"] == CONTACT_EXPORT_FORMAT_VERSION
     assert document["exported_at"] == "2026-07-25T02:30:00Z"
-    assert [
-        contact["contact_id"]
-        for contact in document["contacts"]
-    ] == [
+    assert [contact["contact_id"] for contact in document["contacts"]] == [
         str(newer.contact_id),
         str(older.contact_id),
     ]
@@ -87,12 +95,20 @@ def test_export_writes_versioned_deterministic_json(tmp_path: Path) -> None:
     assert exported_newer["callsign"] == "KI5VNB/P"
     assert exported_newer["mode"] == "USB"
     assert exported_newer["started_at"] == "2026-07-25T02:00:00Z"
-    assert exported_newer["grid"] == "EM79xm"
+    assert exported_newer["grid"] == "EN80aa"
+    assert exported_newer["my_grid"] == "EM79xm"
+    assert exported_newer["pota_reference"] == "US-1234"
+    assert exported_newer["grid_source"] == "pota_park"
+    assert exported_newer["enrichment_state"] == "ready"
     assert exported_newer["notes"] == "Mobile contact"
     assert exported_newer["synchronization_state"] == "failed"
 
     exported_older = document["contacts"][1]
     assert exported_older["grid"] is None
+    assert exported_older["my_grid"] is None
+    assert exported_older["pota_reference"] is None
+    assert exported_older["grid_source"] is None
+    assert exported_older["enrichment_state"] == "ready"
     assert exported_older["notes"] is None
 
 
