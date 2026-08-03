@@ -28,8 +28,11 @@ def make_backup_contact() -> Contact:
         started_at=datetime(2026, 7, 25, 1, 0, tzinfo=UTC),
         rst_sent="59",
         rst_received="59",
-        grid="EM79xm",
-        notes="Backup verification",
+        grid="EN80ma",
+        my_grid="EM79wm",
+        pota_reference="US-1234",
+        grid_source="pota_park",
+        notes="POTA US-1234",
         synchronization_state=SynchronizationState.PENDING,
     )
 
@@ -59,10 +62,7 @@ def test_backup_creates_and_verifies_timestamped_export(
         created_at=created_at,
     )
 
-    expected_path = (
-        backup_directory
-        / "rolling-thunder-contacts-20260725T030405.123456Z.json"
-    )
+    expected_path = backup_directory / "rolling-thunder-contacts-20260725T030405.123456Z.json"
 
     assert result == ContactBackupResult(
         path=expected_path,
@@ -73,7 +73,14 @@ def test_backup_creates_and_verifies_timestamped_export(
     document = json.loads(expected_path.read_text(encoding="utf-8"))
 
     assert document["exported_at"] == "2026-07-25T03:04:05.123456Z"
-    assert document["contacts"][0]["callsign"] == "W8O"
+    exported = document["contacts"][0]
+    assert exported["callsign"] == "W8O"
+    assert exported["grid"] == "EN80ma"
+    assert exported["my_grid"] == "EM79wm"
+    assert exported["pota_reference"] == "US-1234"
+    assert exported["grid_source"] == "pota_park"
+    assert exported["enrichment_state"] == "ready"
+    assert exported["notes"] == "POTA US-1234"
 
 
 def test_backup_retains_only_configured_newest_backups(
@@ -83,10 +90,7 @@ def test_backup_retains_only_configured_newest_backups(
     repository = ContactRepository(tmp_path / "contacts.db")
     backup_directory = tmp_path / "backups"
 
-    timestamps = [
-        datetime(2026, 7, 25, hour, tzinfo=UTC)
-        for hour in (1, 2, 3, 4)
-    ]
+    timestamps = [datetime(2026, 7, 25, hour, tzinfo=UTC) for hour in (1, 2, 3, 4)]
 
     for timestamp in timestamps:
         create_contact_backup(
@@ -122,13 +126,7 @@ def test_backup_never_deletes_unrelated_files(tmp_path: Path) -> None:
         )
 
     assert unrelated.read_text(encoding="utf-8") == "keep me"
-    assert len(
-        list(
-            backup_directory.glob(
-                "rolling-thunder-contacts-*.json"
-            )
-        )
-    ) == 1
+    assert len(list(backup_directory.glob("rolling-thunder-contacts-*.json"))) == 1
 
 
 def test_backup_removes_new_file_when_verification_fails(

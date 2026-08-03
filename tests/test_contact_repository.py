@@ -701,3 +701,19 @@ def test_repository_completes_unsuccessful_enrichment_without_grid(
     assert completed.grid is None
     assert completed.grid_source is None
     assert completed.enrichment_state is ContactEnrichmentState.READY
+
+
+def test_repository_recovery_preserves_contact_enrichment_fields(
+    tmp_path: Path,
+) -> None:
+    """Recovery must retain station, contacted-grid, and POTA metadata."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    recovered_contact = make_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000106"),
+        synchronization_state=SynchronizationState.PENDING,
+    )
+
+    result = repository.recover_contacts([recovered_contact])
+
+    assert result == (1, 0)
+    assert repository.get(recovered_contact.contact_id) == recovered_contact

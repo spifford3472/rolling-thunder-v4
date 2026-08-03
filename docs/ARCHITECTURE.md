@@ -226,8 +226,51 @@ The Pi client is local-first:
 
 1. A callsign is captured or selected and held as pending state.
 2. No QSO is written until the operator explicitly presses Commit.
-3. Commit captures the valid current operating state and writes immediately to
-   SQLite.
+3. Commit snapshots radio state, the latest cached GPS state, the active
+   dashboard context, and the current filtered/ranked POTA list.
+4. Local GPS and uniquely matched POTA metadata are resolved without hardware,
+   database, or network I/O in Tkinter.
+5. The complete QSO is written immediately and durably to SQLite.
+6. Optional QRZ contacted-grid fallback runs afterward in a bounded,
+   restart-safe background service.
+
+Contact location fields intentionally follow ADIF semantics even though the
+current backup format is typed JSON:
+
+- `my_grid` is the mobile/operator location (`MY_GRIDSQUARE` semantics).
+- `grid` is the contacted station or contacted park location
+  (`GRIDSQUARE` semantics).
+- `pota_reference` identifies the uniquely matched contacted park
+  (`POTA_REF` semantics).
+- `grid_source` records whether `grid` came from `pota_park` or `qrz`.
+
+The vehicle GPS locator must never be stored in `grid`.
+
+POTA association is attempted only in the active POTA context. The callsign
+must match the activator, frequency must be within plus or minus 250 Hz, mode
+must be compatible, and exactly one distinct park reference must match.
+Ambiguous or incomplete matches are ignored rather than guessed. Park
+coordinates take precedence over QRZ and are converted locally to a
+six-character Maidenhead locator. A unique match also adds
+`POTA <reference>` to the contact notes.
+
+When QRZ credentials are configured and no contacted grid is available, the
+durable QSO is written with `enrichment_state=pending_qrz`. The background QRZ
+worker uses the configured HTTP timeout, validates the returned locator, and
+atomically changes the contact to `ready`. Timeout, authentication failure,
+connection failure, not-found, missing grid, or invalid grid releases the
+contact to `ready` without a grid. A storage failure leaves it pending for a
+later restart-safe retry.
+
+Synchronization queries include only `enrichment_state=ready`, preventing an
+incomplete contact from racing ahead of QRZ completion. The local SQLite
+database remains authoritative.
+
+SQLite schema version 6 adds `my_grid`, `pota_reference`, `grid_source`, and
+`enrichment_state`, plus an index supporting synchronization and enrichment
+queries. The fields are preserved through create, retrieve, list, update,
+recovery, verified JSON backup/export, import, and Home Station Platform upload.
+Older version-1 exports remain importable with the new fields defaulting safely.
 4. The contact remains locally available regardless of network state.
 5. Synchronization occurs later through an idempotent remote boundary with
    persisted retry eligibility.
@@ -376,6 +419,7 @@ cache.
 
 Optional enrichment is background-only and independently degradable:
 
+- restart-safe QRZ contacted-grid fallback for committed contacts
 - QRZ XML callsign names and optional primary profile photos
 - Open-Meteo temperature, WMO condition, day/night state, and park-local time
 - U.S. Census generalized state outlines

@@ -38,9 +38,7 @@ class RecordingTransport:
     def __init__(self, response: FakeResponse | None = None) -> None:
         self.response = response or FakeResponse(200, b"{}")
         self.error: Exception | None = None
-        self.calls: list[
-            tuple[str, str, Mapping[str, str], bytes | None, float]
-        ] = []
+        self.calls: list[tuple[str, str, Mapping[str, str], bytes | None, float]] = []
 
     def request(
         self,
@@ -70,16 +68,16 @@ def contact() -> Contact:
         started_at=timestamp(),
         rst_sent="59",
         rst_received="59",
-        grid="EM79",
-        notes="special event",
+        grid="EN80ma",
+        my_grid="EM79wm",
+        pota_reference="US-1234",
+        grid_source="pota_park",
+        notes="POTA US-1234",
     )
 
 
 def health_body(availability: str = "available") -> bytes:
-    return (
-        f'{{"availability":"{availability}",'
-        '"checked_at":"2026-07-26T20:00:00Z"}'
-    ).encode()
+    return (f'{{"availability":"{availability}","checked_at":"2026-07-26T20:00:00Z"}}').encode()
 
 
 def upload_body(
@@ -175,15 +173,19 @@ def test_contact_upload_sends_idempotency_header_and_typed_body() -> None:
     assert payload["frequency_hz"] == 14_250_000
     assert payload["mode"] == "USB"
     assert payload["started_at"] == "2026-07-26T20:00:00Z"
+    assert payload["grid"] == "EN80ma"
+    assert payload["my_grid"] == "EM79wm"
+    assert payload["pota_reference"] == "US-1234"
+    assert payload["grid_source"] == "pota_park"
+    assert payload["enrichment_state"] == "ready"
+    assert payload["notes"] == "POTA US-1234"
     assert payload["synchronization_state"] == "pending"
 
 
 def test_already_existing_contact_is_a_valid_upload_result() -> None:
     client = HttpHomePlatformClient(
         "https://forge.test",
-        transport=RecordingTransport(
-            FakeResponse(200, upload_body(disposition="already_exists"))
-        ),
+        transport=RecordingTransport(FakeResponse(200, upload_body(disposition="already_exists"))),
     )
 
     result = client.upload_contact(ContactUploadRequest(contact=contact()))
@@ -271,9 +273,7 @@ def test_upload_rejects_mismatched_contact_id() -> None:
     other_id = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
     client = HttpHomePlatformClient(
         "https://forge.test",
-        transport=RecordingTransport(
-            FakeResponse(200, upload_body(contact_id=other_id))
-        ),
+        transport=RecordingTransport(FakeResponse(200, upload_body(contact_id=other_id))),
     )
 
     with pytest.raises(HomePlatformUploadError, match="different contact ID"):

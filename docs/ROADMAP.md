@@ -112,9 +112,13 @@ time. Live receiver integration is scheduled as Milestone 10 Phase A so the
 actual device path, baud rate, permissions, sentence mix, startup behavior, and
 recovery behavior can be validated on `anvilmobile`.
 
-Trusted GPS UTC, speed, heading, stationary/moving hysteresis, and commit-time
-GPS capture remain architecture-aligned follow-up capabilities. They should be
-added only after the real receiver is proven stable.
+Commit-time GPS capture is now implemented: a current valid fix is converted
+to a six-character mobile-station grid and stored separately from the contacted
+station grid. GPS loss or stale data leaves that field empty without preventing
+local Commit.
+
+Trusted GPS UTC, speed, heading, and stationary/moving hysteresis remain
+architecture-aligned follow-up capabilities.
 
 ## Milestone 7: Home Station Platform Connectivity
 
@@ -256,8 +260,7 @@ mode verification
 
 ### Phase C: Mapping and Operating Intelligence
 
-Status: first live-map slice implemented under GitHub issue #120 and awaiting
-full automated, GitHub Actions, and owner-visible acceptance.
+Status: first live-map slice complete and approved through pull request #121.
 
 The current first slice provides:
 
@@ -316,16 +319,21 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Complete GitHub issue #120, `Implement first live GPS map slice`.
+Complete GitHub issue #122, `Enrich committed contacts with GPS, POTA, and QRZ
+metadata`.
 
 The current feature must:
 
+- preserve `my_grid` as the mobile/operator locator and `grid` as the contacted
+  station or contacted park locator
+- associate POTA only from one unique callsign, frequency, and compatible-mode
+  match in the active POTA context
+- prefer POTA park coordinates over optional QRZ fallback
+- keep QRZ and all potentially blocking work outside Tkinter
+- preserve enrichment fields through SQLite, recovery, verified backup/export,
+  import, synchronization, and Home Station Platform upload
+- keep the local database authoritative and local Commit available during GPS,
+  POTA, QRZ, Home Station Platform, or internet failure
 - pass Ruff, strict MyPy, full pytest, pre-commit, and GitHub Actions
-- preserve the existing dashboard layout, POTA overlay, and global ticker
-- validate live positioning with the installed GPS on `anvilmobile`
-- validate clear stale and last-known behavior
-- validate fresh tile loading and cache-only degradation
-- confirm map or network failure does not disrupt logging or radio state
-- record full-screen acceptance in the draft pull request
-- remain draft until the owner accepts the visible behavior
+- add no PTT, MOX, keying, tuner, power, or unattended transmit authority
 - remain unmerged without explicit owner authorization
