@@ -8,10 +8,14 @@ from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.domain import (
     Contact,
     Frequency,
+    GPSFixState,
+    GPSPosition,
     RadioConnectionState,
     RadioMode,
     RadioState,
 )
+from rolling_thunder.gps import GPSConnectionState, GPSState
+from rolling_thunder.pota_spots import ParkReference, PotaSpot
 from rolling_thunder.storage import StorageError
 
 
@@ -73,6 +77,54 @@ def test_controller_commits_once_and_reports_success() -> None:
     assert controller.status.committing is False
     assert controller.status.committed_contact is not None
     assert controller.status.last_error is None
+
+
+def test_controller_snapshots_cached_gps_and_pota_context() -> None:
+    repository = BlockingRepository()
+    succeeded = Event()
+    now = datetime(2026, 7, 25, 14, 0, tzinfo=UTC)
+    position = GPSPosition(
+        fix_state=GPSFixState.THREE_DIMENSIONAL,
+        latitude=39.5309,
+        longitude=-84.0866,
+        altitude_m=250.0,
+        updated_at=now,
+    )
+    gps_state = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=position,
+        updated_at=now,
+    )
+    pota_spot = PotaSpot(
+        activator="KI5VNB",
+        park=ParkReference(
+            reference="US-1234",
+            latitude=40.0,
+            longitude=-83.0,
+        ),
+        frequency=Frequency(hz=14_250_000),
+        mode=RadioMode.USB,
+        spotted_at=now,
+    )
+    controller = ContactCommitController(
+        ContactLoggingService(repository, FixedClock()),
+        on_started=lambda callsign: None,
+        on_succeeded=lambda callsign: succeeded.set(),
+        on_failed=lambda message: None,
+        gps_state_provider=lambda: gps_state,
+        pota_context_provider=lambda: True,
+        pota_spots_provider=lambda: (pota_spot,),
+    )
+
+    assert controller.start_commit("KI5VNB", connected_radio()) is True
+    assert repository.started.wait(timeout=2)
+    repository.release.set()
+    assert succeeded.wait(timeout=2)
+
+    contact = repository.contacts[0]
+    assert contact.my_grid == "EM79wm"
+    assert contact.grid == "EN80ma"
+    assert contact.pota_reference == "US-1234"
 
 
 def test_controller_reports_storage_failure() -> None:

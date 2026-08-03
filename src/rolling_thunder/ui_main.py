@@ -221,6 +221,11 @@ def run_dashboard(
         on_started=commit_started,
         on_succeeded=commit_succeeded,
         on_failed=commit_failed,
+        gps_state_provider=lambda: runtime.latest_gps_state,
+        pota_context_provider=lambda: (
+            context_navigation.state.selected is ContextId.POTA
+        ),
+        pota_spots_provider=lambda: pota_dashboard.visible_spots,
     )
     operator_commands = OperatorCommandController(
         capture,

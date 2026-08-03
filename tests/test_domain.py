@@ -8,6 +8,8 @@ from pydantic import ValidationError
 
 from rolling_thunder.domain import (
     Contact,
+    ContactEnrichmentState,
+    ContactGridSource,
     RadioMode,
     SynchronizationState,
 )
@@ -29,7 +31,11 @@ def make_contact(**overrides: object) -> Contact:
         ),
         "rst_sent": "59",
         "rst_received": "59",
-        "grid": "em79XM",
+        "grid": "en80AA",
+        "my_grid": "em79XM",
+        "pota_reference": " us-1234 ",
+        "grid_source": "POTA_PARK",
+        "enrichment_state": "READY",
         "notes": " Wright Brothers special event ",
     }
     values.update(overrides)
@@ -42,7 +48,11 @@ def test_contact_normalizes_operator_entered_values() -> None:
 
     assert contact.callsign == "W8O"
     assert contact.mode is RadioMode.USB
-    assert contact.grid == "EM79xm"
+    assert contact.grid == "EN80aa"
+    assert contact.my_grid == "EM79xm"
+    assert contact.pota_reference == "US-1234"
+    assert contact.grid_source is ContactGridSource.POTA_PARK
+    assert contact.enrichment_state is ContactEnrichmentState.READY
     assert contact.notes == "Wright Brothers special event"
     assert contact.synchronization_state is SynchronizationState.PENDING
 
@@ -156,10 +166,29 @@ def test_contact_serialization_is_stable_and_json_compatible() -> None:
         "started_at": "2026-09-19T15:30:00Z",
         "rst_sent": "59",
         "rst_received": "59",
-        "grid": "EM79xm",
+        "grid": "EN80aa",
+        "my_grid": "EM79xm",
+        "pota_reference": "US-1234",
+        "grid_source": "pota_park",
+        "enrichment_state": "ready",
         "notes": "Wright Brothers special event",
         "synchronization_state": "synchronized",
     }
+
+
+def test_contact_rejects_grid_source_without_grid() -> None:
+    with pytest.raises(ValidationError, match="grid_source requires"):
+        make_contact(grid=None, grid_source="qrz")
+
+
+def test_contact_rejects_pota_grid_without_reference() -> None:
+    with pytest.raises(ValidationError, match="requires pota_reference"):
+        make_contact(pota_reference=None)
+
+
+def test_contact_rejects_pending_qrz_with_existing_grid() -> None:
+    with pytest.raises(ValidationError, match="requires an empty grid"):
+        make_contact(enrichment_state="pending_qrz")
 
 
 def test_contact_rejects_unknown_fields() -> None:

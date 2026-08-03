@@ -10,6 +10,8 @@ from pydantic import ValidationError
 
 from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingService
 from rolling_thunder.domain import Contact, RadioState
+from rolling_thunder.gps import GPSState
+from rolling_thunder.pota_spots import PotaSpot
 from rolling_thunder.storage import StorageError
 
 
@@ -32,11 +34,17 @@ class ContactCommitController:
         on_started: Callable[[str], None],
         on_succeeded: Callable[[str], None],
         on_failed: Callable[[str], None],
+        gps_state_provider: Callable[[], GPSState | None] | None = None,
+        pota_context_provider: Callable[[], bool] | None = None,
+        pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
     ) -> None:
         self._service = service
         self._on_started = on_started
         self._on_succeeded = on_succeeded
         self._on_failed = on_failed
+        self._gps_state_provider = gps_state_provider or (lambda: None)
+        self._pota_context_provider = pota_context_provider or (lambda: False)
+        self._pota_spots_provider = pota_spots_provider or (lambda: ())
         self._lock = Lock()
         self._status = ContactCommitStatus()
 
@@ -54,21 +62,46 @@ class ContactCommitController:
                 return False
             self._status = ContactCommitStatus(committing=True)
 
+        gps_state = self._gps_state_provider()
+        pota_context_active = self._pota_context_provider()
+        pota_spots = self._pota_spots_provider() if pota_context_active else ()
+
         self._on_started(callsign)
         Thread(
             target=self._commit_worker,
-            args=(callsign, radio_state),
+            args=(
+                callsign,
+                radio_state,
+                gps_state,
+                pota_context_active,
+                pota_spots,
+            ),
             daemon=True,
         ).start()
         return True
 
-    def _commit_worker(self, callsign: str, radio_state: RadioState) -> None:
+    def _commit_worker(
+        self,
+        callsign: str,
+        radio_state: RadioState,
+        gps_state: GPSState | None,
+        pota_context_active: bool,
+        pota_spots: tuple[PotaSpot, ...],
+    ) -> None:
         try:
             contact = self._service.commit(
                 pending_callsign=callsign,
                 radio_state=radio_state,
+                gps_state=gps_state,
+                pota_context_active=pota_context_active,
+                pota_spots=pota_spots,
             )
-        except (ContactCommitError, StorageError, ValidationError) as error:
+        except (
+            ContactCommitError,
+            StorageError,
+            ValidationError,
+            ValueError,
+        ) as error:
             message = str(error)
             self._on_failed(message)
             with self._lock:

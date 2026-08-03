@@ -117,9 +117,7 @@ def read_table_columns(
 ) -> dict[str, tuple[object, ...]]:
     """Return SQLite table metadata keyed by column name."""
     with sqlite3.connect(database_path) as connection:
-        rows = connection.execute(
-            f"PRAGMA table_info({table_name})"
-        ).fetchall()
+        rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
 
     return {str(row[1]): row for row in rows}
 
@@ -127,9 +125,7 @@ def read_table_columns(
 def read_index_names(database_path: Path, table_name: str) -> set[str]:
     """Return index names associated with a SQLite table."""
     with sqlite3.connect(database_path) as connection:
-        rows = connection.execute(
-            f"PRAGMA index_list({table_name})"
-        ).fetchall()
+        rows = connection.execute(f"PRAGMA index_list({table_name})").fetchall()
 
     return {str(row[1]) for row in rows}
 
@@ -175,6 +171,10 @@ def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
         "rst_sent",
         "rst_received",
         "grid",
+        "my_grid",
+        "pota_reference",
+        "grid_source",
+        "enrichment_state",
         "notes",
         "synchronization_state",
         "created_at",
@@ -187,6 +187,7 @@ def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
     assert columns["mode"][3] == 1
     assert columns["started_at"][3] == 1
     assert columns["synchronization_state"][4] == "'pending'"
+    assert columns["enrichment_state"][4] == "'ready'"
 
 
 def test_initialize_database_creates_pota_cache_metadata_columns(
@@ -217,6 +218,7 @@ def test_initialize_database_creates_contact_indexes(tmp_path: Path) -> None:
         "contacts_started_at_index",
         "contacts_synchronization_state_index",
         "contacts_callsign_index",
+        "contacts_sync_enrichment_index",
     }.issubset(indexes)
 
 

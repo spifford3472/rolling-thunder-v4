@@ -7,8 +7,14 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from rolling_thunder.domain import Contact, SynchronizationState
+from rolling_thunder.domain import (
+    Contact,
+    ContactEnrichmentState,
+    ContactGridSource,
+    SynchronizationState,
+)
 from rolling_thunder.storage import StorageError, initialize_database
+from rolling_thunder.value_types import MaidenheadGrid
 
 _MAX_LIST_LIMIT = 1_000
 
@@ -44,6 +50,10 @@ class ContactRepository:
             "rst_sent": contact.rst_sent,
             "rst_received": contact.rst_received,
             "grid": contact.grid,
+            "my_grid": contact.my_grid,
+            "pota_reference": contact.pota_reference,
+            "grid_source": (contact.grid_source.value if contact.grid_source is not None else None),
+            "enrichment_state": contact.enrichment_state.value,
             "notes": contact.notes,
             "synchronization_state": contact.synchronization_state.value,
         }
@@ -61,6 +71,10 @@ class ContactRepository:
                         rst_sent,
                         rst_received,
                         grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
                         notes,
                         synchronization_state
                     )
@@ -73,6 +87,10 @@ class ContactRepository:
                         :rst_sent,
                         :rst_received,
                         :grid,
+                        :my_grid,
+                        :pota_reference,
+                        :grid_source,
+                        :enrichment_state,
                         :notes,
                         :synchronization_state
                     )
@@ -112,6 +130,10 @@ class ContactRepository:
                         rst_sent,
                         rst_received,
                         grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
                         notes,
                         synchronization_state
                     FROM contacts
@@ -121,8 +143,7 @@ class ContactRepository:
                 ).fetchone()
         except sqlite3.Error as error:
             raise StorageError(
-                f"Contact could not be read from "
-                f"{self._database_path}: {contact_id}: {error}"
+                f"Contact could not be read from {self._database_path}: {contact_id}: {error}"
             ) from error
 
         if row is None:
@@ -144,6 +165,10 @@ class ContactRepository:
             "rst_sent": contact.rst_sent,
             "rst_received": contact.rst_received,
             "grid": contact.grid,
+            "my_grid": contact.my_grid,
+            "pota_reference": contact.pota_reference,
+            "grid_source": (contact.grid_source.value if contact.grid_source is not None else None),
+            "enrichment_state": contact.enrichment_state.value,
             "notes": contact.notes,
             "synchronization_state": contact.synchronization_state.value,
         }
@@ -160,6 +185,10 @@ class ContactRepository:
                         rst_sent = :rst_sent,
                         rst_received = :rst_received,
                         grid = :grid,
+                        my_grid = :my_grid,
+                        pota_reference = :pota_reference,
+                        grid_source = :grid_source,
+                        enrichment_state = :enrichment_state,
                         notes = :notes,
                         synchronization_state = :synchronization_state,
                         updated_at = CURRENT_TIMESTAMP
@@ -169,9 +198,7 @@ class ContactRepository:
                 )
 
                 if result.rowcount == 0:
-                    raise ContactNotFoundError(
-                        f"Contact does not exist: {contact.contact_id}"
-                    )
+                    raise ContactNotFoundError(f"Contact does not exist: {contact.contact_id}")
 
                 connection.commit()
         except ContactNotFoundError:
@@ -190,9 +217,7 @@ class ContactRepository:
         updated_contact = self.get(contact.contact_id)
 
         if updated_contact is None:
-            raise StorageError(
-                f"Contact disappeared after update: {contact.contact_id}"
-            )
+            raise StorageError(f"Contact disappeared after update: {contact.contact_id}")
 
         return updated_contact
 
@@ -212,6 +237,10 @@ class ContactRepository:
                         rst_sent,
                         rst_received,
                         grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
                         notes,
                         synchronization_state
                     FROM contacts
@@ -221,9 +250,7 @@ class ContactRepository:
                 ).fetchone()
 
                 if row is None:
-                    raise ContactNotFoundError(
-                        f"Contact does not exist: {contact_id}"
-                    )
+                    raise ContactNotFoundError(f"Contact does not exist: {contact_id}")
 
                 contact = self._contact_from_row(row, contact_id)
 
@@ -246,8 +273,7 @@ class ContactRepository:
             raise
         except sqlite3.Error as error:
             raise StorageError(
-                f"Contact could not be deleted from "
-                f"{self._database_path}: {contact_id}: {error}"
+                f"Contact could not be deleted from {self._database_path}: {contact_id}: {error}"
             ) from error
 
         return contact
@@ -259,9 +285,7 @@ class ContactRepository:
     ) -> Contact:
         """Persist and return a contact's new synchronization state."""
         if not isinstance(state, SynchronizationState):
-            raise TypeError(
-                "Synchronization state must be a SynchronizationState."
-            )
+            raise TypeError("Synchronization state must be a SynchronizationState.")
 
         try:
             with sqlite3.connect(self._database_path) as connection:
@@ -276,9 +300,7 @@ class ContactRepository:
                 )
 
                 if result.rowcount == 0:
-                    raise ContactNotFoundError(
-                        f"Contact does not exist: {contact_id}"
-                    )
+                    raise ContactNotFoundError(f"Contact does not exist: {contact_id}")
 
                 connection.commit()
         except ContactNotFoundError:
@@ -293,8 +315,7 @@ class ContactRepository:
 
         if updated_contact is None:
             raise StorageError(
-                f"Contact disappeared after synchronization-state update: "
-                f"{contact_id}"
+                f"Contact disappeared after synchronization-state update: {contact_id}"
             )
 
         return updated_contact
@@ -323,6 +344,10 @@ class ContactRepository:
                             rst_sent,
                             rst_received,
                             grid,
+                            my_grid,
+                            pota_reference,
+                            grid_source,
+                            enrichment_state,
                             notes,
                             synchronization_state
                         FROM contacts
@@ -342,8 +367,7 @@ class ContactRepository:
                             continue
 
                         raise ContactConflictError(
-                            "Contact recovery conflict for UUID "
-                            f"{contact.contact_id}."
+                            f"Contact recovery conflict for UUID {contact.contact_id}."
                         )
 
                     connection.execute(
@@ -357,10 +381,14 @@ class ContactRepository:
                             rst_sent,
                             rst_received,
                             grid,
+                            my_grid,
+                            pota_reference,
+                            grid_source,
+                            enrichment_state,
                             notes,
                             synchronization_state
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             str(contact.contact_id),
@@ -374,6 +402,14 @@ class ContactRepository:
                             contact.rst_sent,
                             contact.rst_received,
                             contact.grid,
+                            contact.my_grid,
+                            contact.pota_reference,
+                            (
+                                contact.grid_source.value
+                                if contact.grid_source is not None
+                                else None
+                            ),
+                            contact.enrichment_state.value,
                             contact.notes,
                             contact.synchronization_state.value,
                         ),
@@ -385,8 +421,7 @@ class ContactRepository:
             raise
         except sqlite3.Error as error:
             raise StorageError(
-                f"Contacts could not be recovered into "
-                f"{self._database_path}: {error}"
+                f"Contacts could not be recovered into {self._database_path}: {error}"
             ) from error
 
         return imported_count, skipped_count
@@ -407,6 +442,10 @@ class ContactRepository:
                         rst_sent,
                         rst_received,
                         grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
                         notes,
                         synchronization_state
                     FROM contacts
@@ -415,8 +454,7 @@ class ContactRepository:
                 ).fetchall()
         except sqlite3.Error as error:
             raise StorageError(
-                f"Contacts could not be listed from "
-                f"{self._database_path}: {error}"
+                f"Contacts could not be listed from {self._database_path}: {error}"
             ) from error
 
         return self._contacts_from_rows(rows)
@@ -439,6 +477,10 @@ class ContactRepository:
                         rst_sent,
                         rst_received,
                         grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
                         notes,
                         synchronization_state
                     FROM contacts
@@ -449,8 +491,7 @@ class ContactRepository:
                 ).fetchall()
         except sqlite3.Error as error:
             raise StorageError(
-                f"Contacts could not be listed from "
-                f"{self._database_path}: {error}"
+                f"Contacts could not be listed from {self._database_path}: {error}"
             ) from error
 
         return self._contacts_from_rows(rows)
@@ -478,6 +519,10 @@ class ContactRepository:
                         rst_sent,
                         rst_received,
                         grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
                         notes,
                         synchronization_state
                     FROM contacts
@@ -496,6 +541,168 @@ class ContactRepository:
 
         return self._contacts_from_rows(rows)
 
+    def list_synchronization_eligible(
+        self,
+        state: SynchronizationState,
+        *,
+        limit: int = 100,
+    ) -> list[Contact]:
+        """List contacts ready for remote synchronization."""
+        self._validate_limit(limit)
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    WHERE synchronization_state = ?
+                      AND enrichment_state = 'ready'
+                    ORDER BY started_at DESC, contact_id ASC
+                    LIMIT ?
+                    """,
+                    (state.value, limit),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Synchronization-eligible contacts could not be listed from "
+                f"{self._database_path}: synchronization_state="
+                f"{state.value}: {error}"
+            ) from error
+
+        return self._contacts_from_rows(rows)
+
+    def list_by_enrichment_state(
+        self,
+        state: ContactEnrichmentState,
+        *,
+        limit: int = 100,
+    ) -> list[Contact]:
+        """List contacts in one enrichment state, newest first."""
+        self._validate_limit(limit)
+
+        if not isinstance(state, ContactEnrichmentState):
+            raise TypeError("Contact enrichment state must be a ContactEnrichmentState.")
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    WHERE enrichment_state = ?
+                    ORDER BY started_at DESC, contact_id ASC
+                    LIMIT ?
+                    """,
+                    (state.value, limit),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contacts could not be listed from "
+                f"{self._database_path}: enrichment_state="
+                f"{state.value}: {error}"
+            ) from error
+
+        return self._contacts_from_rows(rows)
+
+    def complete_enrichment(
+        self,
+        contact_id: UUID,
+        *,
+        grid: MaidenheadGrid | None,
+        grid_source: ContactGridSource | None,
+    ) -> Contact:
+        """Atomically complete optional contacted-grid enrichment."""
+        existing = self.get(contact_id)
+        if existing is None:
+            raise ContactNotFoundError(f"Contact does not exist: {contact_id}")
+
+        candidate = Contact.model_validate(
+            {
+                **existing.model_dump(mode="python"),
+                "grid": grid,
+                "grid_source": grid_source,
+                "enrichment_state": ContactEnrichmentState.READY,
+            }
+        )
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                result = connection.execute(
+                    """
+                    UPDATE contacts
+                    SET grid = ?,
+                        grid_source = ?,
+                        enrichment_state = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE contact_id = ?
+                      AND enrichment_state = ?
+                    """,
+                    (
+                        candidate.grid,
+                        (
+                            candidate.grid_source.value
+                            if candidate.grid_source is not None
+                            else None
+                        ),
+                        ContactEnrichmentState.READY.value,
+                        str(contact_id),
+                        ContactEnrichmentState.PENDING_QRZ.value,
+                    ),
+                )
+                connection.commit()
+        except sqlite3.IntegrityError as error:
+            raise StorageError(
+                "Contact enrichment could not be completed because it "
+                f"violates the database schema: {contact_id}: {error}"
+            ) from error
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contact enrichment could not be completed in "
+                f"{self._database_path}: {contact_id}: {error}"
+            ) from error
+
+        if result.rowcount == 0:
+            current = self.get(contact_id)
+            if current is not None and current.enrichment_state is ContactEnrichmentState.READY:
+                return current
+            raise StorageError(f"Contact enrichment state changed unexpectedly: {contact_id}")
+
+        completed = self.get(contact_id)
+        if completed is None:
+            raise StorageError(f"Contact disappeared after enrichment: {contact_id}")
+        return completed
+
     @staticmethod
     def _validate_limit(limit: int) -> None:
         """Require a bounded positive contact-list limit."""
@@ -503,9 +710,7 @@ class ContactRepository:
             raise TypeError("Contact list limit must be an integer.")
 
         if limit < 1 or limit > _MAX_LIST_LIMIT:
-            raise ValueError(
-                f"Contact list limit must be between 1 and {_MAX_LIST_LIMIT}."
-            )
+            raise ValueError(f"Contact list limit must be between 1 and {_MAX_LIST_LIMIT}.")
 
     @classmethod
     def _contacts_from_rows(
@@ -513,10 +718,7 @@ class ContactRepository:
         rows: list[sqlite3.Row],
     ) -> list[Contact]:
         """Reconstruct and validate contacts from database rows."""
-        return [
-            cls._contact_from_row(row, row["contact_id"])
-            for row in rows
-        ]
+        return [cls._contact_from_row(row, row["contact_id"]) for row in rows]
 
     @staticmethod
     def _contact_from_row(
@@ -533,6 +735,10 @@ class ContactRepository:
             "rst_sent": row["rst_sent"],
             "rst_received": row["rst_received"],
             "grid": row["grid"],
+            "my_grid": row["my_grid"],
+            "pota_reference": row["pota_reference"],
+            "grid_source": row["grid_source"],
+            "enrichment_state": row["enrichment_state"],
             "notes": row["notes"],
             "synchronization_state": row["synchronization_state"],
         }

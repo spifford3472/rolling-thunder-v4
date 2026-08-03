@@ -541,10 +541,34 @@ At the moment Commit is pressed:
 - GPS UTC time
 - System-clock time if GPS time is unavailable
 - GPS latitude and longitude if available
-- Maidenhead grid if available
+- Mobile/operator Maidenhead locator as `my_grid` if a current GPS fix exists
+- Contacted station or contacted park Maidenhead locator as `grid` if available
+- Contacted-grid source (`pota_park` or `qrz`) when `grid` is populated
+- Unique contacted POTA reference and `POTA <reference>` note when matched
 - Active operating context if applicable
 - Unique immutable QSO ID
 - Local synchronization state
+
+### Contact Location Semantics
+
+`my_grid` and `grid` are separate facts:
+
+- `my_grid` follows `MY_GRIDSQUARE` semantics and describes the mobile station.
+- `grid` follows `GRIDSQUARE` semantics and describes the contacted station or
+  contacted park.
+- The current vehicle GPS grid must never be written into `grid`.
+- `pota_reference` follows `POTA_REF` semantics for the uniquely matched
+  contacted park.
+
+POTA matching is permitted only in the active POTA context and requires an
+exact normalized activator callsign, frequency within plus or minus 250 Hz,
+compatible mode, and exactly one distinct park. Park coordinates take
+precedence and are converted locally to a six-character locator.
+
+When no contacted grid is available and QRZ credentials exist, the QSO is
+written locally first and a bounded background lookup may supply `grid`.
+QRZ failure, timeout, invalid data, missing credentials, or no result must not
+prevent or undo the local QSO.
 
 ### Timestamp Rule
 

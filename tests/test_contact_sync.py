@@ -7,7 +7,12 @@ from uuid import UUID
 import pytest
 
 from rolling_thunder.contact_sync import ContactSyncResult, ContactSyncService
-from rolling_thunder.domain import Contact, RadioMode, SynchronizationState
+from rolling_thunder.domain import (
+    Contact,
+    ContactEnrichmentState,
+    RadioMode,
+    SynchronizationState,
+)
 from rolling_thunder.home_platform import ContactUploadRequest, ContactUploadResult
 from rolling_thunder.mock_home_platform import MockHomePlatformClient
 from rolling_thunder.radio_polling import PollCallback
@@ -51,7 +56,7 @@ class MemoryContactRepository:
         self.list_calls: list[tuple[SynchronizationState, int]] = []
         self.updated_states: list[tuple[UUID, SynchronizationState]] = []
 
-    def list_by_synchronization_state(
+    def list_synchronization_eligible(
         self,
         state: SynchronizationState,
         *,
@@ -61,7 +66,10 @@ class MemoryContactRepository:
         return [
             contact
             for contact in self.contacts.values()
-            if contact.synchronization_state is state
+            if (
+                contact.synchronization_state is state
+                and contact.enrichment_state is ContactEnrichmentState.READY
+            )
         ][:limit]
 
     def update_synchronization_state(
@@ -146,6 +154,26 @@ def test_scheduled_run_synchronizes_pending_contacts() -> None:
     ]
 
 
+def test_pending_qrz_contact_is_not_uploaded() -> None:
+    pending = contact("33333333-3333-3333-3333-333333333330").model_copy(
+        update={
+            "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
+        }
+    )
+    repository = MemoryContactRepository([pending])
+    client = MockHomePlatformClient(clock=timestamp)
+    service, _ = build_service(repository, client)
+
+    result = service.synchronize_now()
+
+    assert result == ContactSyncResult(
+        attempted=0,
+        synchronized=0,
+        failed=0,
+    )
+    assert repository.updated_states == []
+
+
 def test_already_existing_remote_contact_is_synchronized() -> None:
     pending = contact("33333333-3333-3333-3333-333333333333")
     repository = MemoryContactRepository([pending])
@@ -179,10 +207,7 @@ def test_typed_platform_failure_marks_contact_failed_and_continues() -> None:
 
 
 def test_batch_size_limits_each_run() -> None:
-    contacts = [
-        contact(f"00000000-0000-0000-0000-{index:012d}")
-        for index in range(1, 4)
-    ]
+    contacts = [contact(f"00000000-0000-0000-0000-{index:012d}") for index in range(1, 4)]
     repository = MemoryContactRepository(contacts)
     client = MockHomePlatformClient(clock=timestamp)
     service, _ = build_service(repository, client, batch_size=2)

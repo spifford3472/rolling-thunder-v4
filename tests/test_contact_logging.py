@@ -7,12 +7,17 @@ import pytest
 from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingService
 from rolling_thunder.domain import (
     Contact,
+    ContactEnrichmentState,
     Frequency,
+    GPSFixState,
+    GPSPosition,
     RadioConnectionState,
     RadioMode,
     RadioState,
     SynchronizationState,
 )
+from rolling_thunder.gps import GPSConnectionState, GPSState
+from rolling_thunder.pota_spots import ParkReference, PotaSpot
 
 
 class FixedClock:
@@ -74,6 +79,48 @@ def test_commit_persists_normalized_contact_with_radio_state() -> None:
     assert contact.synchronization_state is SynchronizationState.PENDING
 
 
+def test_commit_persists_gps_and_unique_pota_metadata() -> None:
+    repository = RecordingRepository()
+    started_at = datetime(2026, 7, 25, 14, 5, tzinfo=UTC)
+    service = ContactLoggingService(repository, FixedClock(started_at))
+    position = GPSPosition(
+        fix_state=GPSFixState.THREE_DIMENSIONAL,
+        latitude=39.5309,
+        longitude=-84.0866,
+        altitude_m=250.0,
+        updated_at=started_at,
+    )
+    gps_state = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=position,
+        updated_at=started_at,
+    )
+    pota_spot = PotaSpot(
+        activator="KI5VNB",
+        park=ParkReference(
+            reference="US-1234",
+            latitude=40.0,
+            longitude=-83.0,
+        ),
+        frequency=Frequency(hz=14_250_000),
+        mode=RadioMode.USB,
+        spotted_at=started_at,
+    )
+
+    contact = service.commit(
+        pending_callsign="KI5VNB",
+        radio_state=connected_radio_state(),
+        gps_state=gps_state,
+        pota_context_active=True,
+        pota_spots=(pota_spot,),
+    )
+
+    assert contact.my_grid == "EM79wm"
+    assert contact.grid == "EN80ma"
+    assert contact.pota_reference == "US-1234"
+    assert contact.notes == "POTA US-1234"
+
+
 def test_commit_supports_explicit_signal_reports() -> None:
     """Later UI workflows may provide reports without changing persistence logic."""
     repository = RecordingRepository()
@@ -129,3 +176,22 @@ def test_storage_failure_is_not_reported_as_success() -> None:
             pending_callsign="KI5VNB",
             radio_state=connected_radio_state(),
         )
+
+
+def test_commit_marks_qrz_fallback_pending_before_durable_write() -> None:
+    repository = RecordingRepository()
+    started_at = datetime(2026, 7, 25, 14, 5, tzinfo=UTC)
+    service = ContactLoggingService(
+        repository,
+        FixedClock(started_at),
+        qrz_fallback_available=True,
+    )
+
+    contact = service.commit(
+        pending_callsign="W8O",
+        radio_state=connected_radio_state(),
+    )
+
+    assert repository.contacts == [contact]
+    assert contact.grid is None
+    assert contact.enrichment_state is ContactEnrichmentState.PENDING_QRZ

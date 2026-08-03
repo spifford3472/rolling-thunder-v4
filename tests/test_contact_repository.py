@@ -12,7 +12,13 @@ from rolling_thunder.contact_repository import (
     ContactNotFoundError,
     ContactRepository,
 )
-from rolling_thunder.domain import Contact, RadioMode, SynchronizationState
+from rolling_thunder.domain import (
+    Contact,
+    ContactEnrichmentState,
+    ContactGridSource,
+    RadioMode,
+    SynchronizationState,
+)
 from rolling_thunder.storage import StorageError
 
 _DEFAULT_CONTACT_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -34,7 +40,11 @@ def make_contact(
         started_at=started_at,
         rst_sent="59",
         rst_received="57",
-        grid="em79XM",
+        grid="en80AA",
+        my_grid="em79XM",
+        pota_reference="us-1234",
+        grid_source="pota_park",
+        enrichment_state="ready",
         notes="Mobile contact",
         synchronization_state=synchronization_state,
     )
@@ -66,7 +76,11 @@ def test_repository_adds_and_retrieves_complete_contact(
     assert retrieved.callsign == "KI5VNB/P"
     assert retrieved.mode is RadioMode.USB
     assert retrieved.started_at == datetime(2026, 7, 25, 0, 30, tzinfo=UTC)
-    assert retrieved.grid == "EM79xm"
+    assert retrieved.grid == "EN80aa"
+    assert retrieved.my_grid == "EM79xm"
+    assert retrieved.pota_reference == "US-1234"
+    assert retrieved.grid_source is ContactGridSource.POTA_PARK
+    assert retrieved.enrichment_state is ContactEnrichmentState.READY
     assert retrieved.synchronization_state is SynchronizationState.FAILED
 
 
@@ -95,9 +109,7 @@ def test_repository_returns_none_for_missing_contact(tmp_path: Path) -> None:
     """Retrieving an unknown UUID should not be treated as an error."""
     repository = ContactRepository(tmp_path / "contacts.db")
 
-    result = repository.get(
-        UUID("00000000-0000-0000-0000-000000000999")
-    )
+    result = repository.get(UUID("00000000-0000-0000-0000-000000000999"))
 
     assert result is None
 
@@ -138,6 +150,10 @@ def test_repository_preserves_optional_null_values(tmp_path: Path) -> None:
     assert retrieved == contact
     assert retrieved is not None
     assert retrieved.grid is None
+    assert retrieved.my_grid is None
+    assert retrieved.pota_reference is None
+    assert retrieved.grid_source is None
+    assert retrieved.enrichment_state is ContactEnrichmentState.READY
     assert retrieved.notes is None
 
 
@@ -225,9 +241,7 @@ def test_repository_applies_list_limit(tmp_path: Path) -> None:
     for index in range(1, 4):
         repository.add(
             make_contact(
-                contact_id=UUID(
-                    f"00000000-0000-0000-0000-{index:012d}"
-                ),
+                contact_id=UUID(f"00000000-0000-0000-0000-{index:012d}"),
                 started_at=datetime(
                     2026,
                     7,
@@ -268,9 +282,7 @@ def test_repository_lists_by_synchronization_state(
     repository.add(synchronized)
     repository.add(failed)
 
-    contacts = repository.list_by_synchronization_state(
-        SynchronizationState.PENDING
-    )
+    contacts = repository.list_by_synchronization_state(SynchronizationState.PENDING)
 
     assert contacts == [pending]
 
@@ -347,9 +359,7 @@ def test_repository_updates_synchronization_state(
     """A synchronization transition should return the updated contact."""
     database_path = tmp_path / "contacts.db"
     repository = ContactRepository(database_path)
-    contact = make_contact(
-        synchronization_state=SynchronizationState.PENDING
-    )
+    contact = make_contact(synchronization_state=SynchronizationState.PENDING)
     repository.add(contact)
 
     with sqlite3.connect(database_path) as connection:
@@ -377,6 +387,10 @@ def test_repository_updates_synchronization_state(
     assert updated.rst_sent == contact.rst_sent
     assert updated.rst_received == contact.rst_received
     assert updated.grid == contact.grid
+    assert updated.my_grid == contact.my_grid
+    assert updated.pota_reference == contact.pota_reference
+    assert updated.grid_source == contact.grid_source
+    assert updated.enrichment_state == contact.enrichment_state
     assert updated.notes == contact.notes
 
     with sqlite3.connect(database_path) as connection:
@@ -399,9 +413,7 @@ def test_repository_state_update_changes_filter_results(
 ) -> None:
     """A transitioned contact should move between synchronization queries."""
     repository = ContactRepository(tmp_path / "contacts.db")
-    contact = make_contact(
-        synchronization_state=SynchronizationState.PENDING
-    )
+    contact = make_contact(synchronization_state=SynchronizationState.PENDING)
     repository.add(contact)
 
     repository.update_synchronization_state(
@@ -409,20 +421,12 @@ def test_repository_state_update_changes_filter_results(
         SynchronizationState.SYNCHRONIZED,
     )
 
-    pending = repository.list_by_synchronization_state(
-        SynchronizationState.PENDING
-    )
-    synchronized = repository.list_by_synchronization_state(
-        SynchronizationState.SYNCHRONIZED
-    )
+    pending = repository.list_by_synchronization_state(SynchronizationState.PENDING)
+    synchronized = repository.list_by_synchronization_state(SynchronizationState.SYNCHRONIZED)
 
     assert pending == []
     assert synchronized == [
-        contact.model_copy(
-            update={
-                "synchronization_state": SynchronizationState.SYNCHRONIZED
-            }
-        )
+        contact.model_copy(update={"synchronization_state": SynchronizationState.SYNCHRONIZED})
     ]
 
 
@@ -469,9 +473,7 @@ def test_repository_lists_all_contacts_without_limit(tmp_path: Path) -> None:
     for index in range(1, 1_002):
         repository.add(
             make_contact(
-                contact_id=UUID(
-                    f"00000000-0000-0000-0000-{index:012d}"
-                ),
+                contact_id=UUID(f"00000000-0000-0000-0000-{index:012d}"),
                 started_at=shared_time,
             )
         )
@@ -479,12 +481,8 @@ def test_repository_lists_all_contacts_without_limit(tmp_path: Path) -> None:
     contacts = repository.list_all()
 
     assert len(contacts) == 1_001
-    assert contacts[0].contact_id == UUID(
-        "00000000-0000-0000-0000-000000000001"
-    )
-    assert contacts[-1].contact_id == UUID(
-        "00000000-0000-0000-0000-000000001001"
-    )
+    assert contacts[0].contact_id == UUID("00000000-0000-0000-0000-000000000001")
+    assert contacts[-1].contact_id == UUID("00000000-0000-0000-0000-000000001001")
 
 
 def test_repository_atomically_updates_complete_contact(
@@ -573,9 +571,7 @@ def test_repository_delete_does_not_affect_other_contacts(
     repository = ContactRepository(tmp_path / "contacts.db")
     deleted_contact = make_contact()
     retained_contact = make_contact(
-        contact_id=UUID(
-            "00000000-0000-0000-0000-000000000002"
-        ),
+        contact_id=UUID("00000000-0000-0000-0000-000000000002"),
         started_at=datetime(2026, 7, 25, 1, 30, tzinfo=UTC),
     )
     repository.add(deleted_contact)
@@ -592,12 +588,132 @@ def test_repository_delete_rejects_missing_contact(
 ) -> None:
     """Deleting an absent UUID should raise contact-not-found."""
     repository = ContactRepository(tmp_path / "contacts.db")
-    missing_id = UUID(
-        "00000000-0000-0000-0000-000000000003"
-    )
+    missing_id = UUID("00000000-0000-0000-0000-000000000003")
 
     with pytest.raises(
         ContactNotFoundError,
         match=f"Contact does not exist: {missing_id}",
     ):
         repository.delete(missing_id)
+
+
+def test_repository_lists_only_synchronization_ready_contacts(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    ready = make_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000101"),
+        synchronization_state=SynchronizationState.PENDING,
+    )
+    pending_qrz = Contact.model_validate(
+        {
+            **make_contact(
+                contact_id=UUID("00000000-0000-0000-0000-000000000102"),
+                synchronization_state=SynchronizationState.PENDING,
+            ).model_dump(mode="python"),
+            "grid": None,
+            "grid_source": None,
+            "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
+        }
+    )
+    repository.add(ready)
+    repository.add(pending_qrz)
+
+    eligible = repository.list_synchronization_eligible(SynchronizationState.PENDING)
+
+    assert eligible == [ready]
+
+
+def test_repository_lists_contacts_by_enrichment_state(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    pending = Contact.model_validate(
+        {
+            **make_contact(contact_id=UUID("00000000-0000-0000-0000-000000000103")).model_dump(
+                mode="python"
+            ),
+            "grid": None,
+            "grid_source": None,
+            "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
+        }
+    )
+    repository.add(pending)
+
+    contacts = repository.list_by_enrichment_state(ContactEnrichmentState.PENDING_QRZ)
+
+    assert contacts == [pending]
+
+
+def test_repository_completes_qrz_enrichment_atomically(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    pending = Contact.model_validate(
+        {
+            **make_contact(contact_id=UUID("00000000-0000-0000-0000-000000000104")).model_dump(
+                mode="python"
+            ),
+            "grid": None,
+            "grid_source": None,
+            "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
+        }
+    )
+    repository.add(pending)
+
+    completed = repository.complete_enrichment(
+        pending.contact_id,
+        grid="EN80aa",
+        grid_source=ContactGridSource.QRZ,
+    )
+
+    assert completed.grid == "EN80aa"
+    assert completed.grid_source is ContactGridSource.QRZ
+    assert completed.enrichment_state is ContactEnrichmentState.READY
+    assert completed.my_grid == pending.my_grid
+    assert completed.pota_reference == pending.pota_reference
+    assert completed.notes == pending.notes
+    assert completed.synchronization_state == pending.synchronization_state
+
+
+def test_repository_completes_unsuccessful_enrichment_without_grid(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    pending = Contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000105"),
+        callsign="W8O",
+        frequency_hz=14_250_000,
+        mode=RadioMode.USB,
+        started_at=_DEFAULT_STARTED_AT,
+        rst_sent="59",
+        rst_received="59",
+        enrichment_state=ContactEnrichmentState.PENDING_QRZ,
+    )
+    repository.add(pending)
+
+    completed = repository.complete_enrichment(
+        pending.contact_id,
+        grid=None,
+        grid_source=None,
+    )
+
+    assert completed.grid is None
+    assert completed.grid_source is None
+    assert completed.enrichment_state is ContactEnrichmentState.READY
+
+
+def test_repository_recovery_preserves_contact_enrichment_fields(
+    tmp_path: Path,
+) -> None:
+    """Recovery must retain station, contacted-grid, and POTA metadata."""
+    repository = ContactRepository(tmp_path / "contacts.db")
+    recovered_contact = make_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000106"),
+        synchronization_state=SynchronizationState.PENDING,
+    )
+
+    result = repository.recover_contacts([recovered_contact])
+
+    assert result == (1, 0)
+    assert repository.get(recovered_contact.contact_id) == recovered_contact

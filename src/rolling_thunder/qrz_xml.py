@@ -6,13 +6,16 @@ from urllib.error import URLError
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 
+from pydantic import TypeAdapter, ValidationError
+
 from rolling_thunder.application_secrets import QrzCredentials
 from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
-from rolling_thunder.value_types import Callsign
+from rolling_thunder.value_types import Callsign, MaidenheadGrid
 
 _QRZ_XML_ENDPOINT = "https://xmldata.qrz.com/xml/current/"
 _AGENT = "RollingThunder-v4.1"
 _XML_ACCEPT = "application/xml,text/xml"
+_GRID_ADAPTER = TypeAdapter(MaidenheadGrid)
 
 
 class QrzLookupError(Exception):
@@ -38,6 +41,7 @@ class QrzCallsignProfile:
     callsign: str
     name: str | None
     image_url: str | None
+    grid: MaidenheadGrid | None = None
 
 
 def normalize_qrz_callsign(callsign: Callsign | str) -> str:
@@ -99,11 +103,13 @@ class QrzXmlCallsignNameProvider:
             display_name = self._format_name(first_name, last_name)
             returned_callsign = self._child_text(callsign_node, "call") or callsign
             image_url = self._child_text(callsign_node, "image")
+            grid = self._validated_grid(self._child_text(callsign_node, "grid"))
             self._refresh_session_key(root)
             return QrzCallsignProfile(
                 callsign=returned_callsign,
                 name=display_name,
                 image_url=image_url,
+                grid=grid,
             )
 
         error = self._session_text(root, "Error")
@@ -132,9 +138,7 @@ class QrzXmlCallsignNameProvider:
             error = self._session_text(root, "Error")
             if error:
                 raise QrzAuthenticationError(f"QRZ authentication failed: {error}")
-            raise QrzAuthenticationError(
-                "QRZ authentication did not return a session key."
-            )
+            raise QrzAuthenticationError("QRZ authentication did not return a session key.")
         self._session_key = key
         return key
 
@@ -157,9 +161,7 @@ class QrzXmlCallsignNameProvider:
             raise QrzConnectionError(f"QRZ {operation} could not be completed.") from error
 
         if not 200 <= response.status_code < 300:
-            raise QrzConnectionError(
-                f"QRZ {operation} returned HTTP {response.status_code}."
-            )
+            raise QrzConnectionError(f"QRZ {operation} returned HTTP {response.status_code}.")
 
         try:
             return ElementTree.fromstring(response.body)
@@ -197,6 +199,16 @@ class QrzXmlCallsignNameProvider:
             normalized = child.text.strip()
             return normalized or None
         return None
+
+    @staticmethod
+    def _validated_grid(value: str | None) -> MaidenheadGrid | None:
+        """Return a normalized QRZ grid, ignoring unusable values."""
+        if value is None:
+            return None
+        try:
+            return _GRID_ADAPTER.validate_python(value)
+        except ValidationError:
+            return None
 
     @staticmethod
     def _is_not_found(message: str) -> bool:

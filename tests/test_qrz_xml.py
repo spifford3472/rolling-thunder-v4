@@ -70,6 +70,7 @@ def test_lookup_logs_in_once_and_reuses_session_key() -> None:
                     <fname>Geoff</fname>
                     <name>KLINE</name>
                     <image>https://cdn-xml.qrz.com/ki5vnb.jpg</image>
+                    <grid>em79XM</grid>
                   </Callsign>
                   <Session><Key>SESSION-1</Key></Session>
                 </QRZDatabase>
@@ -99,6 +100,7 @@ def test_lookup_logs_in_once_and_reuses_session_key() -> None:
     assert profile.callsign == "KI5VNB"
     assert profile.name == "Geoff KLINE"
     assert profile.image_url == "https://cdn-xml.qrz.com/ki5vnb.jpg"
+    assert profile.grid == "EM79xm"
     assert provider.lookup_name("W8O") == "Special Event"
 
     assert len(transport.requests) == 3
@@ -107,6 +109,31 @@ def test_lookup_logs_in_once_and_reuses_session_key() -> None:
     assert "s=SESSION-1" in transport.requests[1][0]
     assert "callsign=KI5VNB" in transport.requests[1][0]
     assert "s=SESSION-1" in transport.requests[2][0]
+
+
+def test_lookup_ignores_invalid_qrz_grid() -> None:
+    transport = SequenceTransport(
+        [
+            xml("<QRZDatabase><Session><Key>SESSION</Key></Session></QRZDatabase>"),
+            xml(
+                """
+                <QRZDatabase>
+                  <Callsign>
+                    <call>W8O</call>
+                    <grid>INVALID</grid>
+                  </Callsign>
+                  <Session><Key>SESSION</Key></Session>
+                </QRZDatabase>
+                """
+            ),
+        ]
+    )
+    provider = QrzXmlCallsignNameProvider(credentials(), transport=transport)
+
+    profile = provider.lookup_profile("W8O")
+
+    assert profile is not None
+    assert profile.grid is None
 
 
 def test_lookup_returns_none_for_unknown_callsign() -> None:

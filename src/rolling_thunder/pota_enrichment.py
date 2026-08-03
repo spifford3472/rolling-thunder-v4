@@ -10,7 +10,7 @@ from typing import Generic, Protocol, TypeVar
 
 from rolling_thunder.pota_spots import ParkReference
 from rolling_thunder.qrz_xml import QrzCallsignProfile, QrzLookupError, normalize_qrz_callsign
-from rolling_thunder.value_types import Callsign
+from rolling_thunder.value_types import Callsign, MaidenheadGrid
 
 
 class CallsignProfileProvider(Protocol):
@@ -76,6 +76,7 @@ class CallsignProfileSnapshot:
     callsign: str
     name: str | None
     image_url: str | None
+    grid: MaidenheadGrid | None = None
     photo_png: bytes | None = None
     photo_error: str | None = None
 
@@ -300,10 +301,7 @@ class PotaEnrichmentService:
 
             if (
                 not self._started
-                or (
-                    self._weather_provider is None
-                    and self._state_outline_provider is None
-                )
+                or (self._weather_provider is None and self._state_outline_provider is None)
                 or self._executor is None
             ):
                 unavailable = ParkDetailSnapshot(
@@ -353,6 +351,7 @@ class PotaEnrichmentService:
                         callsign=callsign,
                         name=profile.name,
                         image_url=profile.image_url,
+                        grid=profile.grid,
                     )
                     ttl = self._success_ttl
         except QrzLookupError:
@@ -432,9 +431,7 @@ class PotaEnrichmentService:
             if self._state_outline_provider is None:
                 map_error = "Map unavailable"
             else:
-                outline = self._state_outline_provider.fetch_outline(
-                    park.location_code
-                )
+                outline = self._state_outline_provider.fetch_outline(park.location_code)
                 if outline is None:
                     map_error = "Map unavailable"
         except (OSError, TimeoutError, ValueError):

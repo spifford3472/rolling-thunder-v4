@@ -183,6 +183,38 @@ def test_import_validates_every_record_before_writing(tmp_path: Path) -> None:
     assert repository.list_all() == []
 
 
+def test_import_accepts_legacy_version_one_without_new_fields(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    source = tmp_path / "legacy.json"
+    contact = make_import_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000099"),
+        callsign="W8O",
+        started_at=datetime(2026, 7, 25, 2, 0, tzinfo=UTC),
+    )
+    legacy = contact_json(contact)
+    for field in (
+        "my_grid",
+        "pota_reference",
+        "grid_source",
+        "enrichment_state",
+    ):
+        legacy.pop(field)
+
+    write_document(source, [legacy], format_version=1)
+
+    result = import_contacts_from_json(repository, source)
+    restored = repository.get(contact.contact_id)
+
+    assert result == ContactImportResult(imported=1, skipped=0)
+    assert restored is not None
+    assert restored.my_grid is None
+    assert restored.pota_reference is None
+    assert restored.grid_source is None
+    assert restored.enrichment_state.value == "ready"
+
+
 def test_import_rejects_unsupported_format_version(tmp_path: Path) -> None:
     """Unknown export formats must not be interpreted speculatively."""
     repository = ContactRepository(tmp_path / "contacts.db")
@@ -295,9 +327,7 @@ def test_preview_contact_import_reports_uuid_conflict(
     )
     repository.add(existing)
     source = tmp_path / "backup.json"
-    conflicting = existing.model_copy(
-        update={"callsign": "W8O"}
-    )
+    conflicting = existing.model_copy(update={"callsign": "W8O"})
     write_document(source, [contact_json(conflicting)])
 
     result = preview_contact_import(repository, source)
