@@ -5,7 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Protocol
 
+from rolling_thunder.contact_metadata import resolve_contact_metadata
 from rolling_thunder.domain import Contact, RadioConnectionState, RadioState
+from rolling_thunder.gps import GPSState
+from rolling_thunder.pota_spots import PotaSpot
 
 
 class ContactCommitError(RuntimeError):
@@ -48,6 +51,9 @@ class ContactLoggingService:
         radio_state: RadioState,
         rst_sent: str = "59",
         rst_received: str = "59",
+        gps_state: GPSState | None = None,
+        pota_context_active: bool = False,
+        pota_spots: tuple[PotaSpot, ...] = (),
     ) -> Contact:
         """Persist one contact, returning it only after the durable write succeeds."""
         callsign = pending_callsign.strip().upper()
@@ -62,13 +68,29 @@ class ContactLoggingService:
         if radio_state.transmitting:
             raise ContactCommitError("Commit is unavailable while the radio is transmitting.")
 
+        started_at = self._clock.now()
+        metadata = resolve_contact_metadata(
+            callsign=callsign,
+            frequency_hz=radio_state.frequency.hz,
+            mode=radio_state.mode,
+            reference_time=started_at,
+            gps_state=gps_state,
+            pota_context_active=pota_context_active,
+            pota_spots=pota_spots,
+        )
         contact = Contact(
             callsign=callsign,
             frequency_hz=radio_state.frequency.hz,
             mode=radio_state.mode,
-            started_at=self._clock.now(),
+            started_at=started_at,
             rst_sent=rst_sent,
             rst_received=rst_received,
+            grid=metadata.grid,
+            my_grid=metadata.my_grid,
+            pota_reference=metadata.pota_reference,
+            grid_source=metadata.grid_source,
+            enrichment_state=metadata.enrichment_state,
+            notes=metadata.notes,
         )
         self._repository.add(contact)
         return contact

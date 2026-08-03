@@ -90,6 +90,11 @@ class PotaDashboardController:
         """Return the currently selected typed spot from the live filtered view."""
         return self._selected_spot(self._clock())
 
+    @property
+    def visible_spots(self) -> tuple[PotaSpot, ...]:
+        """Return the current filtered and ranked typed spot snapshot."""
+        return self._visible_spots(self._clock())
+
     def set_maximum_spot_age(
         self,
         maximum_spot_age: timedelta | None,
@@ -232,10 +237,7 @@ class PotaDashboardController:
     def confirm_tune_intent(self) -> PotaTuneIntent | None:
         """Confirm only a pending intent that still matches selection."""
         intent = self._tune_intent
-        if (
-            intent is None
-            or intent.status is not PotaTuneIntentStatus.PENDING_CONFIRMATION
-        ):
+        if intent is None or intent.status is not PotaTuneIntentStatus.PENDING_CONFIRMATION:
             return intent
 
         selected_spot = self._selected_spot(self._clock())
@@ -291,11 +293,13 @@ class PotaDashboardController:
             selected_index=selected_index,
         )
 
-    def _selected_spot(self, reference_time: datetime) -> PotaSpot | None:
-        """Resolve selection against the current filtered ranked snapshot."""
+    def _visible_spots(
+        self,
+        reference_time: datetime,
+    ) -> tuple[PotaSpot, ...]:
         source_state = self._provider.latest_pota_spot_state
-        if source_state is None or self._selected_index is None:
-            return None
+        if source_state is None:
+            return ()
 
         filtered = filter_pota_spots(
             list(source_state.spots),
@@ -313,6 +317,14 @@ class PotaDashboardController:
                 preferred_mode=self._mode,
             ),
         )
-        if self._selected_index >= len(ranked):
+        return tuple(item.spot for item in ranked)
+
+    def _selected_spot(self, reference_time: datetime) -> PotaSpot | None:
+        """Resolve selection against the current filtered ranked snapshot."""
+        if self._selected_index is None:
             return None
-        return ranked[self._selected_index].spot
+
+        visible_spots = self._visible_spots(reference_time)
+        if self._selected_index >= len(visible_spots):
+            return None
+        return visible_spots[self._selected_index]

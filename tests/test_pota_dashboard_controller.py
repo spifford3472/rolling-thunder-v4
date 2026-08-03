@@ -373,9 +373,7 @@ def test_confirm_tune_intent_rejects_changed_selected_spot() -> None:
 
     provider.latest_pota_spot_state = PotaSpotServiceState(
         availability=PotaSpotSourceAvailability.AVAILABLE,
-        spots=(
-            spot("W8NEW", "US-7777", 14_300_000, RadioMode.USB),
-        ),
+        spots=(spot("W8NEW", "US-7777", 14_300_000, RadioMode.USB),),
         last_attempt_at=datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
         last_success_at=datetime(2026, 7, 27, 1, 0, tzinfo=UTC),
     )
@@ -413,3 +411,19 @@ def test_confirmed_intent_cannot_be_confirmed_again() -> None:
     assert repeated is confirmed
     assert repeated is not None
     assert repeated.status is PotaTuneIntentStatus.CONFIRMED
+
+
+def test_visible_spots_exposes_current_filtered_ranked_snapshot() -> None:
+    controller = PotaDashboardController(
+        MutableProvider(available_state()),
+        clock=lambda: datetime(2026, 7, 26, 12, 30, tzinfo=UTC),
+    )
+    controller.select_band(AmateurBand.BAND_20M)
+
+    visible = controller.visible_spots
+
+    assert [str(item.activator) for item in visible] == [
+        "KI5VNB",
+        "N0XYZ",
+    ]
+    assert all(isinstance(item, PotaSpot) for item in visible)
