@@ -7,8 +7,14 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from rolling_thunder.domain import Contact, SynchronizationState
+from rolling_thunder.domain import (
+    Contact,
+    ContactEnrichmentState,
+    ContactGridSource,
+    SynchronizationState,
+)
 from rolling_thunder.storage import StorageError, initialize_database
+from rolling_thunder.value_types import MaidenheadGrid
 
 _MAX_LIST_LIMIT = 1_000
 
@@ -534,6 +540,168 @@ class ContactRepository:
             ) from error
 
         return self._contacts_from_rows(rows)
+
+    def list_synchronization_eligible(
+        self,
+        state: SynchronizationState,
+        *,
+        limit: int = 100,
+    ) -> list[Contact]:
+        """List contacts ready for remote synchronization."""
+        self._validate_limit(limit)
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    WHERE synchronization_state = ?
+                      AND enrichment_state = 'ready'
+                    ORDER BY started_at DESC, contact_id ASC
+                    LIMIT ?
+                    """,
+                    (state.value, limit),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Synchronization-eligible contacts could not be listed from "
+                f"{self._database_path}: synchronization_state="
+                f"{state.value}: {error}"
+            ) from error
+
+        return self._contacts_from_rows(rows)
+
+    def list_by_enrichment_state(
+        self,
+        state: ContactEnrichmentState,
+        *,
+        limit: int = 100,
+    ) -> list[Contact]:
+        """List contacts in one enrichment state, newest first."""
+        self._validate_limit(limit)
+
+        if not isinstance(state, ContactEnrichmentState):
+            raise TypeError("Contact enrichment state must be a ContactEnrichmentState.")
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT
+                        contact_id,
+                        callsign,
+                        frequency_hz,
+                        mode,
+                        started_at,
+                        rst_sent,
+                        rst_received,
+                        grid,
+                        my_grid,
+                        pota_reference,
+                        grid_source,
+                        enrichment_state,
+                        notes,
+                        synchronization_state
+                    FROM contacts
+                    WHERE enrichment_state = ?
+                    ORDER BY started_at DESC, contact_id ASC
+                    LIMIT ?
+                    """,
+                    (state.value, limit),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contacts could not be listed from "
+                f"{self._database_path}: enrichment_state="
+                f"{state.value}: {error}"
+            ) from error
+
+        return self._contacts_from_rows(rows)
+
+    def complete_enrichment(
+        self,
+        contact_id: UUID,
+        *,
+        grid: MaidenheadGrid | None,
+        grid_source: ContactGridSource | None,
+    ) -> Contact:
+        """Atomically complete optional contacted-grid enrichment."""
+        existing = self.get(contact_id)
+        if existing is None:
+            raise ContactNotFoundError(f"Contact does not exist: {contact_id}")
+
+        candidate = Contact.model_validate(
+            {
+                **existing.model_dump(mode="python"),
+                "grid": grid,
+                "grid_source": grid_source,
+                "enrichment_state": ContactEnrichmentState.READY,
+            }
+        )
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                result = connection.execute(
+                    """
+                    UPDATE contacts
+                    SET grid = ?,
+                        grid_source = ?,
+                        enrichment_state = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE contact_id = ?
+                      AND enrichment_state = ?
+                    """,
+                    (
+                        candidate.grid,
+                        (
+                            candidate.grid_source.value
+                            if candidate.grid_source is not None
+                            else None
+                        ),
+                        ContactEnrichmentState.READY.value,
+                        str(contact_id),
+                        ContactEnrichmentState.PENDING_QRZ.value,
+                    ),
+                )
+                connection.commit()
+        except sqlite3.IntegrityError as error:
+            raise StorageError(
+                "Contact enrichment could not be completed because it "
+                f"violates the database schema: {contact_id}: {error}"
+            ) from error
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contact enrichment could not be completed in "
+                f"{self._database_path}: {contact_id}: {error}"
+            ) from error
+
+        if result.rowcount == 0:
+            current = self.get(contact_id)
+            if current is not None and current.enrichment_state is ContactEnrichmentState.READY:
+                return current
+            raise StorageError(f"Contact enrichment state changed unexpectedly: {contact_id}")
+
+        completed = self.get(contact_id)
+        if completed is None:
+            raise StorageError(f"Contact disappeared after enrichment: {contact_id}")
+        return completed
 
     @staticmethod
     def _validate_limit(limit: int) -> None:

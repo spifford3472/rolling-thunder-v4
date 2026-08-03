@@ -595,3 +595,109 @@ def test_repository_delete_rejects_missing_contact(
         match=f"Contact does not exist: {missing_id}",
     ):
         repository.delete(missing_id)
+
+
+def test_repository_lists_only_synchronization_ready_contacts(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    ready = make_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000101"),
+        synchronization_state=SynchronizationState.PENDING,
+    )
+    pending_qrz = Contact.model_validate(
+        {
+            **make_contact(
+                contact_id=UUID("00000000-0000-0000-0000-000000000102"),
+                synchronization_state=SynchronizationState.PENDING,
+            ).model_dump(mode="python"),
+            "grid": None,
+            "grid_source": None,
+            "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
+        }
+    )
+    repository.add(ready)
+    repository.add(pending_qrz)
+
+    eligible = repository.list_synchronization_eligible(SynchronizationState.PENDING)
+
+    assert eligible == [ready]
+
+
+def test_repository_lists_contacts_by_enrichment_state(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    pending = Contact.model_validate(
+        {
+            **make_contact(contact_id=UUID("00000000-0000-0000-0000-000000000103")).model_dump(
+                mode="python"
+            ),
+            "grid": None,
+            "grid_source": None,
+            "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
+        }
+    )
+    repository.add(pending)
+
+    contacts = repository.list_by_enrichment_state(ContactEnrichmentState.PENDING_QRZ)
+
+    assert contacts == [pending]
+
+
+def test_repository_completes_qrz_enrichment_atomically(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    pending = Contact.model_validate(
+        {
+            **make_contact(contact_id=UUID("00000000-0000-0000-0000-000000000104")).model_dump(
+                mode="python"
+            ),
+            "grid": None,
+            "grid_source": None,
+            "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
+        }
+    )
+    repository.add(pending)
+
+    completed = repository.complete_enrichment(
+        pending.contact_id,
+        grid="EN80aa",
+        grid_source=ContactGridSource.QRZ,
+    )
+
+    assert completed.grid == "EN80aa"
+    assert completed.grid_source is ContactGridSource.QRZ
+    assert completed.enrichment_state is ContactEnrichmentState.READY
+    assert completed.my_grid == pending.my_grid
+    assert completed.pota_reference == pending.pota_reference
+    assert completed.notes == pending.notes
+    assert completed.synchronization_state == pending.synchronization_state
+
+
+def test_repository_completes_unsuccessful_enrichment_without_grid(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    pending = Contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000105"),
+        callsign="W8O",
+        frequency_hz=14_250_000,
+        mode=RadioMode.USB,
+        started_at=_DEFAULT_STARTED_AT,
+        rst_sent="59",
+        rst_received="59",
+        enrichment_state=ContactEnrichmentState.PENDING_QRZ,
+    )
+    repository.add(pending)
+
+    completed = repository.complete_enrichment(
+        pending.contact_id,
+        grid=None,
+        grid_source=None,
+    )
+
+    assert completed.grid is None
+    assert completed.grid_source is None
+    assert completed.enrichment_state is ContactEnrichmentState.READY

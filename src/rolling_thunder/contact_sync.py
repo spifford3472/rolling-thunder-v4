@@ -7,7 +7,12 @@ from uuid import UUID
 
 from pydantic import Field
 
-from rolling_thunder.domain import Contact, DomainModel, SynchronizationState
+from rolling_thunder.domain import (
+    Contact,
+    ContactEnrichmentState,
+    DomainModel,
+    SynchronizationState,
+)
 from rolling_thunder.home_platform import (
     ContactUploadRequest,
     HomePlatformClient,
@@ -29,13 +34,13 @@ class ContactSyncRepository(Protocol):
         """Return one contact by UUID, or None when absent."""
         ...
 
-    def list_by_synchronization_state(
+    def list_synchronization_eligible(
         self,
         state: SynchronizationState,
         *,
         limit: int = 100,
     ) -> list[Contact]:
-        """Return contacts matching one synchronization state."""
+        """Return synchronization-ready contacts in one state."""
         ...
 
     def update_synchronization_state(
@@ -103,8 +108,7 @@ class ContactSyncService:
             raise ValueError("Contact synchronization retry delays must be positive.")
         if retry_max_delay_s < retry_initial_delay_s:
             raise ValueError(
-                "Contact synchronization maximum retry delay must not be below "
-                "the initial delay."
+                "Contact synchronization maximum retry delay must not be below the initial delay."
             )
 
         self._repository = repository
@@ -209,7 +213,7 @@ class ContactSyncService:
             self._synchronizing = False
 
     def _eligible_contacts(self) -> list[Contact]:
-        contacts = self._repository.list_by_synchronization_state(
+        contacts = self._repository.list_synchronization_eligible(
             SynchronizationState.PENDING,
             limit=self._batch_size,
         )
@@ -222,7 +226,7 @@ class ContactSyncService:
             limit=remaining,
         ):
             contact = self._repository.get(contact_id)
-            if contact is not None:
+            if contact is not None and contact.enrichment_state is ContactEnrichmentState.READY:
                 contacts.append(contact)
         return contacts
 
