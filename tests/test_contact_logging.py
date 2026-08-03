@@ -7,6 +7,7 @@ import pytest
 from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingService
 from rolling_thunder.domain import (
     Contact,
+    ContactEnrichmentState,
     Frequency,
     GPSFixState,
     GPSPosition,
@@ -175,3 +176,22 @@ def test_storage_failure_is_not_reported_as_success() -> None:
             pending_callsign="KI5VNB",
             radio_state=connected_radio_state(),
         )
+
+
+def test_commit_marks_qrz_fallback_pending_before_durable_write() -> None:
+    repository = RecordingRepository()
+    started_at = datetime(2026, 7, 25, 14, 5, tzinfo=UTC)
+    service = ContactLoggingService(
+        repository,
+        FixedClock(started_at),
+        qrz_fallback_available=True,
+    )
+
+    contact = service.commit(
+        pending_callsign="W8O",
+        radio_state=connected_radio_state(),
+    )
+
+    assert repository.contacts == [contact]
+    assert contact.grid is None
+    assert contact.enrichment_state is ContactEnrichmentState.PENDING_QRZ

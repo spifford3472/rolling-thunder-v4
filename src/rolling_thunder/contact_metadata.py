@@ -40,6 +40,7 @@ def resolve_contact_metadata(
     gps_state: GPSState | None = None,
     pota_context_active: bool = False,
     pota_spots: tuple[PotaSpot, ...] = (),
+    qrz_fallback_available: bool = False,
     gps_maximum_age: timedelta = DEFAULT_GPS_MAXIMUM_AGE,
     frequency_tolerance_hz: int = POTA_FREQUENCY_TOLERANCE_HZ,
 ) -> ContactMetadata:
@@ -58,7 +59,13 @@ def resolve_contact_metadata(
     )
 
     if not pota_context_active:
-        return ContactMetadata(my_grid=my_grid)
+        return ContactMetadata(
+            my_grid=my_grid,
+            enrichment_state=_enrichment_state(
+                grid=None,
+                qrz_fallback_available=qrz_fallback_available,
+            ),
+        )
 
     normalized_callsign = callsign.strip().upper()
     matching_parks: dict[str, PotaSpot] = {}
@@ -73,7 +80,13 @@ def resolve_contact_metadata(
         matching_parks.setdefault(spot.park.reference, spot)
 
     if len(matching_parks) != 1:
-        return ContactMetadata(my_grid=my_grid)
+        return ContactMetadata(
+            my_grid=my_grid,
+            enrichment_state=_enrichment_state(
+                grid=None,
+                qrz_fallback_available=qrz_fallback_available,
+            ),
+        )
 
     spot = next(iter(matching_parks.values()))
     park_reference = spot.park.reference
@@ -92,8 +105,22 @@ def resolve_contact_metadata(
         my_grid=my_grid,
         pota_reference=park_reference,
         grid_source=grid_source,
+        enrichment_state=_enrichment_state(
+            grid=grid,
+            qrz_fallback_available=qrz_fallback_available,
+        ),
         notes=f"POTA {park_reference}",
     )
+
+
+def _enrichment_state(
+    *,
+    grid: MaidenheadGrid | None,
+    qrz_fallback_available: bool,
+) -> ContactEnrichmentState:
+    if grid is None and qrz_fallback_available:
+        return ContactEnrichmentState.PENDING_QRZ
+    return ContactEnrichmentState.READY
 
 
 def _current_my_grid(

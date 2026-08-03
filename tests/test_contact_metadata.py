@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from rolling_thunder.contact_metadata import resolve_contact_metadata
 from rolling_thunder.domain import (
+    ContactEnrichmentState,
     ContactGridSource,
     Frequency,
     GPSFixState,
@@ -64,6 +65,7 @@ def resolve(
     gps: GPSState | None = None,
     active: bool = True,
     spots: tuple[PotaSpot, ...] = (),
+    qrz_available: bool = False,
 ):
     return resolve_contact_metadata(
         callsign=callsign,
@@ -73,6 +75,7 @@ def resolve(
         gps_state=gps,
         pota_context_active=active,
         pota_spots=spots,
+        qrz_fallback_available=qrz_available,
     )
 
 
@@ -165,3 +168,35 @@ def test_duplicate_spots_for_same_park_remain_unambiguous() -> None:
     )
 
     assert metadata.pota_reference == "US-1234"
+
+
+def test_qrz_fallback_marks_contact_pending_without_contacted_grid() -> None:
+    metadata = resolve(
+        active=False,
+        qrz_available=True,
+    )
+
+    assert metadata.grid is None
+    assert metadata.enrichment_state is ContactEnrichmentState.PENDING_QRZ
+
+
+def test_pota_grid_takes_precedence_over_qrz_fallback() -> None:
+    metadata = resolve(
+        spots=(spot(),),
+        qrz_available=True,
+    )
+
+    assert metadata.grid == "EN80ma"
+    assert metadata.grid_source is ContactGridSource.POTA_PARK
+    assert metadata.enrichment_state is ContactEnrichmentState.READY
+
+
+def test_pota_reference_without_coordinates_uses_qrz_fallback() -> None:
+    metadata = resolve(
+        spots=(spot(latitude=None, longitude=None),),
+        qrz_available=True,
+    )
+
+    assert metadata.pota_reference == "US-1234"
+    assert metadata.grid is None
+    assert metadata.enrichment_state is ContactEnrichmentState.PENDING_QRZ

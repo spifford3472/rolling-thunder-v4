@@ -40,9 +40,16 @@ class SystemClock:
 class ContactLoggingService:
     """Validate and transactionally persist one operator-confirmed QSO."""
 
-    def __init__(self, repository: ContactWriter, clock: Clock | None = None) -> None:
+    def __init__(
+        self,
+        repository: ContactWriter,
+        clock: Clock | None = None,
+        *,
+        qrz_fallback_available: bool = False,
+    ) -> None:
         self._repository = repository
         self._clock = clock or SystemClock()
+        self._qrz_fallback_available = qrz_fallback_available
 
     def commit(
         self,
@@ -77,6 +84,7 @@ class ContactLoggingService:
             gps_state=gps_state,
             pota_context_active=pota_context_active,
             pota_spots=pota_spots,
+            qrz_fallback_available=self._qrz_fallback_available,
         )
         contact = Contact(
             callsign=callsign,
