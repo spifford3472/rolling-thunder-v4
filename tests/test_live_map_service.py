@@ -1,6 +1,6 @@
 """Tests for background live-map tile loading and degradation."""
 
-from concurrent.futures import Future
+from concurrent.futures import Executor, Future
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from typing import Any
@@ -21,7 +21,7 @@ def png_tile(value: int = 20) -> bytes:
     return output.getvalue()
 
 
-class ImmediateExecutor:
+class ImmediateExecutor(Executor):
     def submit(
         self,
         function: Any,
@@ -274,3 +274,138 @@ def test_service_stop_is_idempotent() -> None:
     live_map.stop()
 
     assert live_map.is_running is False
+
+
+class ManualExecutor(Executor):
+    """Retain submitted work until a test explicitly runs it."""
+
+    def __init__(self) -> None:
+        self.tasks: list[
+            tuple[
+                Future[Any],
+                Any,
+                tuple[Any, ...],
+                dict[str, Any],
+            ]
+        ] = []
+
+    def submit(
+        self,
+        function: Any,
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Future[Any]:
+        future: Future[Any] = Future()
+        self.tasks.append((future, function, args, kwargs))
+        return future
+
+    def run_next(self) -> None:
+        future, function, args, kwargs = self.tasks.pop(0)
+        try:
+            future.set_result(function(*args, **kwargs))
+        except BaseException as exc:
+            future.set_exception(exc)
+            raise
+
+
+def test_newer_viewport_supersedes_obsolete_network_work() -> None:
+    from rolling_thunder.map_tiles import build_map_viewport
+
+    first_position = GeoPoint(39.53, -84.08)
+    latest_position = GeoPoint(39.96, -82.99)
+    executor = ManualExecutor()
+    client = FakeClient()
+    cache = FakeCache()
+    live_map = LiveMapService(
+        client,  # type: ignore[arg-type]
+        cache,  # type: ignore[arg-type]
+        zoom=13,
+        clock=lambda: NOW,
+        executor=executor,
+    )
+    live_map.start()
+
+    live_map.request_viewport(
+        first_position,
+        width_px=600,
+        height_px=400,
+    )
+    live_map.request_viewport(
+        latest_position,
+        width_px=600,
+        height_px=400,
+    )
+
+    queued_state = live_map.latest_state
+    assert queued_state.status is MapDataStatus.LOADING
+    assert queued_state.viewport is not None
+    assert queued_state.viewport.center == latest_position
+    assert len(executor.tasks) == 1
+
+    executor.run_next()
+
+    assert client.requests == []
+    assert len(executor.tasks) == 1
+    assert live_map.latest_state.viewport is not None
+    assert live_map.latest_state.viewport.center == latest_position
+
+    executor.run_next()
+
+    expected_keys = build_map_viewport(
+        latest_position,
+        zoom=13,
+        width_px=600,
+        height_px=400,
+    ).tile_keys
+
+    assert set(client.requests) == set(expected_keys)
+    assert live_map.latest_state.status is MapDataStatus.READY
+    assert live_map.latest_state.viewport is not None
+    assert live_map.latest_state.viewport.center == latest_position
+
+
+def test_repeated_queued_viewport_does_not_submit_duplicate_work() -> None:
+    first_position = GeoPoint(39.53, -84.08)
+    queued_position = GeoPoint(39.96, -82.99)
+    moved_inside_same_tiles = GeoPoint(39.96001, -82.99001)
+    executor = ManualExecutor()
+    live_map = LiveMapService(
+        FakeClient(),  # type: ignore[arg-type]
+        FakeCache(),  # type: ignore[arg-type]
+        zoom=13,
+        clock=lambda: NOW,
+        executor=executor,
+    )
+    live_map.start()
+
+    live_map.request_viewport(
+        first_position,
+        width_px=600,
+        height_px=400,
+    )
+    live_map.request_viewport(
+        queued_position,
+        width_px=600,
+        height_px=400,
+    )
+    live_map.request_viewport(
+        moved_inside_same_tiles,
+        width_px=600,
+        height_px=400,
+    )
+
+    assert len(executor.tasks) == 1
+    assert live_map.latest_state.viewport is not None
+    assert live_map.latest_state.viewport.center == moved_inside_same_tiles
+
+    executor.run_next()
+
+    assert len(executor.tasks) == 1
+
+    executor.run_next()
+
+    assert executor.tasks == []
+    assert live_map.latest_state.status is MapDataStatus.READY
+    assert live_map.latest_state.viewport is not None
+    assert live_map.latest_state.viewport.center == moved_inside_same_tiles

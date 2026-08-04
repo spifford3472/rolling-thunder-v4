@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from base64 import b64encode
+from collections import OrderedDict
+from dataclasses import dataclass
 from math import cos, radians, sin
 from typing import Any
 
 from rolling_thunder.live_map import LiveMapGpsStatus, LiveMapPresentation
-from rolling_thunder.live_map_service import LiveMapSnapshot, MapDataStatus
+from rolling_thunder.live_map_service import (
+    LiveMapSnapshot,
+    MapDataStatus,
+    MapTileSnapshot,
+)
+from rolling_thunder.map_tiles import MapTileKey
 
 _BACKGROUND = "#0d1418"
 _MISSING_TILE = "#17242a"
@@ -19,6 +26,7 @@ _FAILURE = "#ff7070"
 _MARKER = "#ff4040"
 _MARKER_OUTLINE = "#ffffff"
 _STATUS_BACKGROUND = "#10191e"
+_PHOTO_CACHE_LIMIT = 128
 
 
 def rotate_marker_points(
@@ -80,6 +88,60 @@ def live_map_status_lines(
     return tuple(lines)
 
 
+@dataclass(frozen=True)
+class TileUpdatePlan:
+    """Describe the minimum canvas work between two map snapshots."""
+
+    remove: tuple[MapTileKey, ...]
+    redraw: tuple[MapTileKey, ...]
+    move: tuple[MapTileKey, ...]
+
+
+def plan_tile_updates(
+    previous: LiveMapSnapshot | None,
+    current: LiveMapSnapshot | None,
+) -> TileUpdatePlan:
+    """Return tile removals, content redraws, and placement-only moves."""
+    previous_tiles = _snapshot_tiles_by_key(previous)
+    current_tiles = _snapshot_tiles_by_key(current)
+
+    previous_keys = set(previous_tiles)
+    current_keys = set(current_tiles)
+
+    remove = tuple(sorted(previous_keys - current_keys))
+    redraw = tuple(
+        sorted(
+            key
+            for key in current_keys
+            if (key not in previous_tiles or previous_tiles[key].png != current_tiles[key].png)
+        )
+    )
+    move = tuple(
+        sorted(
+            key
+            for key in previous_keys & current_keys
+            if (
+                previous_tiles[key].png == current_tiles[key].png
+                and previous_tiles[key].placement != current_tiles[key].placement
+            )
+        )
+    )
+
+    return TileUpdatePlan(
+        remove=remove,
+        redraw=redraw,
+        move=move,
+    )
+
+
+def _snapshot_tiles_by_key(
+    snapshot: LiveMapSnapshot | None,
+) -> dict[MapTileKey, MapTileSnapshot]:
+    if snapshot is None:
+        return {}
+    return {tile.placement.key: tile for tile in snapshot.tiles}
+
+
 class LiveMapWidgets:
     """Render live map snapshots without performing tile, cache, or GPS I/O."""
 
@@ -93,7 +155,16 @@ class LiveMapWidgets:
             highlightthickness=0,
         )
         self._canvas.pack(fill="both", expand=True)
-        self._tile_photos: list[Any] = []
+
+        self._tile_items: dict[MapTileKey, int] = {}
+        self._tile_item_kinds: dict[MapTileKey, str] = {}
+        self._active_photos: dict[MapTileKey, Any] = {}
+        self._photo_cache: OrderedDict[
+            MapTileKey,
+            tuple[bytes, Any],
+        ] = OrderedDict()
+        self._attribution_item: int | None = None
+
         self._last_snapshot: LiveMapSnapshot | None = None
         self._last_size = (0, 0)
 
@@ -110,13 +181,19 @@ class LiveMapWidgets:
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
     ) -> None:
-        """Redraw changed base-map data and lightweight current overlays."""
+        """Update changed map tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
         size = (width, height)
-        if snapshot is not self._last_snapshot or size != self._last_size:
+        snapshot_changed = snapshot is not self._last_snapshot
+        size_changed = size != self._last_size
+
+        if size_changed:
             self._draw_base(snapshot, width, height)
-            self._last_snapshot = snapshot
-            self._last_size = size
+        elif snapshot_changed:
+            self._update_base(self._last_snapshot, snapshot, width, height)
+
+        self._last_snapshot = snapshot
+        self._last_size = size
 
         self._canvas.delete("map-overlay")
         if presentation.position is not None:
@@ -136,7 +213,11 @@ class LiveMapWidgets:
     ) -> None:
         canvas = self._canvas
         canvas.delete("map-base")
-        self._tile_photos.clear()
+        self._tile_items.clear()
+        self._tile_item_kinds.clear()
+        self._active_photos.clear()
+        self._attribution_item = None
+
         canvas.create_rectangle(
             0,
             0,
@@ -152,7 +233,7 @@ class LiveMapWidgets:
         else:
             self._draw_reference_grid(width, height)
 
-        canvas.create_text(
+        self._attribution_item = canvas.create_text(
             width - 12,
             height - 10,
             text="© OpenStreetMap contributors",
@@ -162,33 +243,129 @@ class LiveMapWidgets:
             tags="map-base",
         )
 
-    def _draw_tiles(self, snapshot: LiveMapSnapshot) -> None:
-        canvas = self._canvas
-        for tile in snapshot.tiles:
-            placement = tile.placement
-            if tile.png is None:
-                canvas.create_rectangle(
-                    placement.x_px,
-                    placement.y_px,
-                    placement.x_px + 256,
-                    placement.y_px + 256,
-                    fill=_MISSING_TILE,
-                    outline=_GRID_LINE,
-                    tags="map-base",
-                )
-                continue
+    def _update_base(
+        self,
+        previous: LiveMapSnapshot | None,
+        current: LiveMapSnapshot | None,
+        width: int,
+        height: int,
+    ) -> None:
+        previous_viewport = previous.viewport if previous is not None else None
+        current_viewport = current.viewport if current is not None else None
 
-            photo = self._tk.PhotoImage(
-                data=b64encode(tile.png).decode("ascii"),
+        if previous_viewport is None or current_viewport is None:
+            self._draw_base(current, width, height)
+            return
+
+        if previous_viewport.zoom != current_viewport.zoom:
+            self._draw_base(current, width, height)
+            return
+
+        plan = plan_tile_updates(previous, current)
+        current_tiles = _snapshot_tiles_by_key(current)
+
+        for key in plan.remove:
+            self._remove_tile(key)
+
+        for key in plan.redraw:
+            self._upsert_tile(current_tiles[key])
+
+        for key in plan.move:
+            self._move_tile(current_tiles[key])
+
+    def _draw_tiles(self, snapshot: LiveMapSnapshot) -> None:
+        for tile in snapshot.tiles:
+            self._upsert_tile(tile)
+
+    def _upsert_tile(self, tile: MapTileSnapshot) -> None:
+        key = tile.placement.key
+        placement = tile.placement
+        self._remove_tile(key)
+
+        if tile.png is None:
+            item = self._canvas.create_rectangle(
+                placement.x_px,
+                placement.y_px,
+                placement.x_px + 256,
+                placement.y_px + 256,
+                fill=_MISSING_TILE,
+                outline=_GRID_LINE,
+                tags="map-base",
             )
-            self._tile_photos.append(photo)
-            canvas.create_image(
+            self._tile_item_kinds[key] = "rectangle"
+        else:
+            photo = self._photo_for_tile(key, tile.png)
+            self._active_photos[key] = photo
+            item = self._canvas.create_image(
                 placement.x_px,
                 placement.y_px,
                 image=photo,
                 anchor="nw",
                 tags="map-base",
             )
+            self._tile_item_kinds[key] = "image"
+
+        self._tile_items[key] = item
+        if self._attribution_item is not None:
+            self._canvas.tag_lower(item, self._attribution_item)
+
+        self._trim_photo_cache()
+
+    def _move_tile(self, tile: MapTileSnapshot) -> None:
+        key = tile.placement.key
+        item = self._tile_items.get(key)
+        kind = self._tile_item_kinds.get(key)
+
+        if item is None or kind is None:
+            self._upsert_tile(tile)
+            return
+
+        placement = tile.placement
+        if kind == "image":
+            self._canvas.coords(
+                item,
+                placement.x_px,
+                placement.y_px,
+            )
+        else:
+            self._canvas.coords(
+                item,
+                placement.x_px,
+                placement.y_px,
+                placement.x_px + 256,
+                placement.y_px + 256,
+            )
+
+    def _remove_tile(self, key: MapTileKey) -> None:
+        item = self._tile_items.pop(key, None)
+        if item is not None:
+            self._canvas.delete(item)
+
+        self._tile_item_kinds.pop(key, None)
+        self._active_photos.pop(key, None)
+
+    def _photo_for_tile(self, key: MapTileKey, png: bytes) -> Any:
+        cached = self._photo_cache.get(key)
+        if cached is not None and cached[0] == png:
+            self._photo_cache.move_to_end(key)
+            return cached[1]
+
+        photo = self._tk.PhotoImage(
+            data=b64encode(png).decode("ascii"),
+        )
+        self._photo_cache[key] = (png, photo)
+        self._photo_cache.move_to_end(key)
+        return photo
+
+    def _trim_photo_cache(self) -> None:
+        while len(self._photo_cache) > _PHOTO_CACHE_LIMIT:
+            removable = next(
+                (key for key in self._photo_cache if key not in self._active_photos),
+                None,
+            )
+            if removable is None:
+                return
+            self._photo_cache.pop(removable, None)
 
     def _draw_reference_grid(self, width: int, height: int) -> None:
         canvas = self._canvas
