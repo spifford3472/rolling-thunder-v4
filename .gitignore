@@ -242,3 +242,7 @@ hardware-local/
 # IDE and local tools
 .vscode/
 .idea/
+
+# Installed and partially transferred offline map packages
+*.mbtiles
+*.mbtiles.partial

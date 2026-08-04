@@ -24,6 +24,7 @@ from rolling_thunder.map_tiles import (
 
 NOW = datetime(2026, 8, 3, 20, 0, tzinfo=UTC)
 KEY = MapTileKey(zoom=3, x=2, y=3)
+OUTSIDE_KEY = MapTileKey(zoom=3, x=0, y=0)
 
 
 def png_tile(value: int) -> bytes:
@@ -43,6 +44,7 @@ def write_mbtiles(
     style: str = "day",
     priority: int = 0,
     tile_format: str = "png",
+    tile_scheme: str = "tms",
 ) -> None:
     """Create a minimal raster MBTiles package for testing."""
     connection = sqlite3.connect(path)
@@ -64,6 +66,7 @@ def write_mbtiles(
     metadata = {
         "name": f"Test package {identifier}",
         "format": tile_format,
+        "scheme": tile_scheme,
         "bounds": "-84.82,38.40,-80.52,42.00",
         "minzoom": str(key.zoom),
         "maxzoom": str(key.zoom),
@@ -281,3 +284,91 @@ def test_missing_or_invalid_package_does_not_block_cache(
     assert len(resolver.diagnostics) == 2
 
     resolver.close()
+
+
+def test_package_declared_bounds_define_tile_coverage(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ohio.mbtiles"
+    write_mbtiles(path, png=png_tile(20))
+
+    package = RasterMbtilesPackage(path)
+
+    assert package.metadata.covers(KEY) is True
+    assert package.metadata.covers(OUTSIDE_KEY) is False
+
+    package.close()
+
+
+def test_missing_tile_inside_installed_coverage_never_uses_network(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ohio.mbtiles"
+    write_mbtiles(path)
+
+    cache = FakeCache()
+    online = FakeOnline()
+    resolver = MapTileResolver(
+        InstalledMapRegistry.load((path,)),
+        cache,
+        online,
+    )
+
+    local = resolver.read_local(KEY)
+    refreshed = resolver.refresh_online(KEY, local)
+
+    assert local.png is None
+    assert local.source is MapTileSource.MISSING
+    assert local.online_refresh_allowed is False
+    assert refreshed == local
+    assert cache.reads == [KEY]
+    assert online.requests == []
+    assert cache.writes == []
+
+    resolver.close()
+
+
+def test_missing_tile_outside_installed_coverage_may_use_network(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ohio.mbtiles"
+    write_mbtiles(path)
+
+    cache = FakeCache()
+    online = FakeOnline(png=png_tile(85))
+    resolver = MapTileResolver(
+        InstalledMapRegistry.load((path,)),
+        cache,
+        online,
+    )
+
+    local = resolver.read_local(OUTSIDE_KEY)
+    refreshed = resolver.refresh_online(OUTSIDE_KEY, local)
+
+    assert local.source is MapTileSource.MISSING
+    assert local.online_refresh_allowed is True
+    assert refreshed.source is MapTileSource.NETWORK
+    assert refreshed.png == png_tile(85)
+    assert online.requests == [OUTSIDE_KEY]
+    assert cache.writes == [(OUTSIDE_KEY, png_tile(85))]
+
+    resolver.close()
+
+
+def test_mbtiles_rejects_non_tms_tile_scheme(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "xyz.mbtiles"
+    write_mbtiles(
+        path,
+        png=png_tile(25),
+        tile_scheme="xyz",
+    )
+
+    registry = InstalledMapRegistry.load((path,))
+
+    assert registry.packages == ()
+    assert len(registry.errors) == 1
+    assert "TMS tile scheme" in registry.errors[0]
+
+    registry.close()

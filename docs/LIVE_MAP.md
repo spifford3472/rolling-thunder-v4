@@ -12,12 +12,16 @@ no radio-control or transmit authority.
 map:
   enabled: true
   tile_url_template: https://tile.openstreetmap.org/{z}/{x}/{y}.png
-  zoom: 17
+  zoom: 15
   request_timeout_s: 4.0
   gps_stale_after_s: 10.0
   cache_directory: data/map-tiles
   cache_retention_days: 7
   maximum_cached_tiles: 2048
+  installed_packages:
+    - ../data/maps/rolling-thunder-i71-corridor-night-z0-z15-v1.mbtiles
+  style: night
+  online_attribution: © OpenStreetMap contributors
 ```
 
 The cache directory is resolved relative to the active YAML file unless an
@@ -82,9 +86,41 @@ Rolling Thunder:
 - performs no regional bulk downloading
 - performs no background offline seeding
 
-The ordinary cache is degradation support, not a complete offline map. A future
-packaged offline implementation must use a source and format that explicitly
-permit that use.
+The ordinary runtime cache is degradation support, not a complete offline map.
+Offline regional coverage is supplied through separately generated, licensed
+MBTiles packages. Missing tiles inside installed coverage are never filled from
+the ordinary online provider.
+
+## Installed Offline Package
+
+The first supported offline package is the dark I-71 corridor map used for the
+normal Waynesville-to-Delaware drive.
+
+- package ID: `i71-corridor-night`
+- version: `1.0.0`
+- style: `night`
+- bounds: `-84.18,39.43,-82.82,40.42`
+- zoom range: `0–15`
+- tile count: `19,880`
+- installed size: approximately `206 MB`
+- SHA-256: `13ae1cf9c171b005f827710a2cc10034f71d4695ab33b6194e05b0a7c2ddfd41`
+
+Expected installation path:
+
+```text
+/home/geoff/projects/rolling-thunder-v4/data/maps/rolling-thunder-i71-corridor-night-z0-z15-v1.mbtiles
+```
+
+Installed packages must contain PNG raster tiles stored with TMS tile rows and
+must provide valid bounds, minimum and maximum zoom, attribution, and version
+metadata. When `scheme` is present, it must be `tms`.
+
+An installed package is authoritative inside its declared bounds and zoom
+range. A missing or invalid tile inside that coverage does not authorize an
+online request. Outside installed coverage, cache and online fallback remain
+available.
+
+Generated MBTiles files are runtime data and must not be committed to Git.
 
 ## Safety and Failure Isolation
 
@@ -103,24 +139,23 @@ POTA operation, physical controls, or radio state polling.
 
 ## Manual Acceptance on anvilmobile
 
-1. Enable the `map` section in the active local YAML.
-2. Start the full-screen dashboard with the installed GPS and normal network.
-3. Confirm the right side displays local map tiles rather than the placeholder.
-4. Confirm the vehicle marker is centered and the displayed grid and coordinates
-   agree with the dashboard GPS state.
-5. Drive above approximately 2 mph and confirm the vehicle marker follows the
-   course of travel, then retains its last reliable heading when stopped.
-7. Leave the dashboard running long enough to confirm ordinary GPS updates do not
-   cause visible flicker or UI stalls.
-6. Open a POTA detail overlay and confirm it appears above the persistent map.
-8. Confirm the global ticker still spans both columns.
-9. Confirm a retained ATAS-120 warning still overrides routine ticker text.
-10. Remove public-internet access after tiles have been cached and confirm cached
-   map data remains visible with an offline/cache status.
-11. Restore connectivity and confirm normal map state recovers.
-12. Stop or disconnect GPS and confirm the marker is explicitly labeled
-    last-known rather than current.
-13. Confirm logging, POTA selection, controls, and radio polling remain usable
-    throughout map and network degradation.
+1. Confirm the active configuration uses zoom 15, style `night`, and the
+   installed I-71 corridor package path.
+2. Start the full-screen dashboard with GPS and normal network access.
+3. Confirm the dark local map, vehicle marker, grid, coordinates, and
+   attribution are displayed correctly.
+4. Disable public-internet access while remaining inside package coverage.
+5. Move to a previously unseen viewport and confirm the map remains available
+   without online tile requests.
+6. Confirm the marker follows course while moving and retains its heading when
+   stopped.
+7. Confirm GPS updates do not cause visible flicker or UI stalls.
+8. Confirm POTA overlays, the global ticker, and ATAS-120 warnings still work.
+9. Restore connectivity and confirm online fallback works outside package
+   coverage.
+10. Disconnect GPS and confirm the marker is labeled last-known rather than
+    current.
+11. Confirm logging, POTA selection, physical controls, and radio polling remain
+    usable throughout map and network degradation.
 
 Record the visible results in the draft pull request before approval.

@@ -242,7 +242,7 @@ class LiveMapService:
             local = self._resolver.read_local(key)
             loaded[key] = local
 
-            if local.source in {
+            if local.online_refresh_allowed and local.source in {
                 MapTileSource.STALE_CACHE,
                 MapTileSource.MISSING,
             }:
