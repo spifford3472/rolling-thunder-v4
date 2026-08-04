@@ -16,6 +16,10 @@ from pydantic import (
     model_validator,
 )
 
+from rolling_thunder.map_sources import (
+    DEFAULT_MAP_ATTRIBUTION,
+    MapPackageStyle,
+)
 from rolling_thunder.physical_controls import ControlAction
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
 
@@ -228,6 +232,9 @@ class MapConfig(ConfigurationModel):
     cache_directory: Path = Path("data/map-tiles")
     cache_retention_days: int = Field(default=7, ge=7, le=365)
     maximum_cached_tiles: int = Field(default=2_048, ge=1, le=100_000)
+    installed_packages: tuple[Path, ...] = ()
+    style: MapPackageStyle = MapPackageStyle.DAY
+    online_attribution: str = DEFAULT_MAP_ATTRIBUTION
 
     @field_validator("tile_url_template")
     @classmethod
@@ -251,6 +258,37 @@ class MapConfig(ConfigurationModel):
         if isinstance(value, (str, Path)) and str(Path(value)) == ".":
             raise ValueError("must name a cache directory")
         return value
+
+    @field_validator("installed_packages")
+    @classmethod
+    def validate_installed_packages(
+        cls,
+        value: tuple[Path, ...],
+    ) -> tuple[Path, ...]:
+        """Require distinct MBTiles file paths without requiring installation yet."""
+        normalized: list[Path] = []
+        seen: set[Path] = set()
+
+        for package_path in value:
+            if str(package_path) in {"", "."}:
+                raise ValueError("package paths must name MBTiles files")
+            if package_path.suffix.lower() != ".mbtiles":
+                raise ValueError(f"package path must end in .mbtiles: {package_path}")
+            if package_path in seen:
+                raise ValueError(f"duplicate installed package path: {package_path}")
+            seen.add(package_path)
+            normalized.append(package_path)
+
+        return tuple(normalized)
+
+    @field_validator("online_attribution")
+    @classmethod
+    def validate_online_attribution(cls, value: str) -> str:
+        """Require visible attribution for online and cached map tiles."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be blank")
+        return normalized
 
 
 class PhysicalControlTransport(StrEnum):
@@ -427,6 +465,19 @@ def resolve_map_cache_directory(
     return (config_path.parent / directory).resolve()
 
 
+def resolve_map_package_paths(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> tuple[Path, ...]:
+    """Resolve installed MBTiles paths relative to the YAML file."""
+    return tuple(
+        package_path
+        if package_path.is_absolute()
+        else (config_path.parent / package_path).resolve()
+        for package_path in config.map.installed_packages
+    )
+
+
 def _format_validation_error(error: ValidationError) -> str:
     """Convert Pydantic validation details into actionable configuration paths."""
     messages: list[str] = []
@@ -489,7 +540,10 @@ def load_config(path: Path) -> ApplicationConfig:
         update={"model_path": resolve_speech_model_path(config, path)}
     )
     resolved_map = config.map.model_copy(
-        update={"cache_directory": resolve_map_cache_directory(config, path)}
+        update={
+            "cache_directory": resolve_map_cache_directory(config, path),
+            "installed_packages": resolve_map_package_paths(config, path),
+        }
     )
     return config.model_copy(
         update={

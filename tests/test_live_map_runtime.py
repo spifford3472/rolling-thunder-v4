@@ -56,6 +56,7 @@ def config(tmp_path: Path, *, map_enabled: bool) -> ApplicationConfig:
             "map": {
                 "enabled": map_enabled,
                 "cache_directory": tmp_path / "map-cache",
+                "installed_packages": ([tmp_path / "missing-ohio.mbtiles"] if map_enabled else []),
             },
             "storage": {
                 "database_path": tmp_path / "rolling-thunder.db",
@@ -86,6 +87,9 @@ def test_runtime_starts_and_stops_enabled_map(tmp_path: Path) -> None:
     assert runtime.live_map is not None
     assert runtime.latest_live_map_state is not None
     assert runtime.latest_live_map_state.status is MapDataStatus.IDLE
+    assert runtime.live_map.installed_packages == ()
+    assert len(runtime.live_map.source_diagnostics) == 1
+    assert "missing-ohio.mbtiles" in runtime.live_map.source_diagnostics[0]
 
     runtime.start()
 
