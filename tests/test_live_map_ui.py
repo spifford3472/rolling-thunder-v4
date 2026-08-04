@@ -127,11 +127,9 @@ def test_marker_rotation_follows_compass_heading(
 
 
 def test_tile_update_plan_separates_remove_redraw_and_move() -> None:
-    from rolling_thunder.live_map_service import (
-        MapTileSnapshot,
-        MapTileSource,
-    )
+    from rolling_thunder.live_map_service import MapTileSnapshot
     from rolling_thunder.live_map_ui import plan_tile_updates
+    from rolling_thunder.map_sources import MapTileSource
     from rolling_thunder.map_tiles import (
         MapTileKey,
         MapTilePlacement,

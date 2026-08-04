@@ -14,6 +14,7 @@ from rolling_thunder.live_map_service import (
     MapDataStatus,
     MapTileSnapshot,
 )
+from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
 
 _BACKGROUND = "#0d1418"
@@ -236,7 +237,7 @@ class LiveMapWidgets:
         self._attribution_item = canvas.create_text(
             width - 12,
             height - 10,
-            text="© OpenStreetMap contributors",
+            text=(snapshot.attribution if snapshot is not None else DEFAULT_MAP_ATTRIBUTION),
             fill=_MUTED,
             font=("DejaVu Sans", 11, "bold"),
             anchor="se",
@@ -272,6 +273,12 @@ class LiveMapWidgets:
 
         for key in plan.move:
             self._move_tile(current_tiles[key])
+
+        if self._attribution_item is not None and current is not None:
+            self._canvas.itemconfigure(
+                self._attribution_item,
+                text=current.attribution,
+            )
 
     def _draw_tiles(self, snapshot: LiveMapSnapshot) -> None:
         for tile in snapshot.tiles:

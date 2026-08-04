@@ -10,10 +10,14 @@ from enum import StrEnum
 from threading import Lock
 
 from rolling_thunder.live_map import GeoPoint
+from rolling_thunder.map_sources import (
+    DEFAULT_MAP_ATTRIBUTION,
+    InstalledMapMetadata,
+    MapTileResolver,
+    MapTileSource,
+    ResolvedMapTile,
+)
 from rolling_thunder.map_tiles import (
-    MapTileCache,
-    MapTileClient,
-    MapTileError,
     MapTileKey,
     MapTilePlacement,
     MapViewport,
@@ -32,15 +36,6 @@ class MapDataStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
-class MapTileSource(StrEnum):
-    """Origin or availability of one rendered tile."""
-
-    NETWORK = "network"
-    CACHE = "cache"
-    STALE_CACHE = "stale_cache"
-    MISSING = "missing"
-
-
 @dataclass(frozen=True)
 class MapTileSnapshot:
     """One viewport placement and its optional validated PNG bytes."""
@@ -48,6 +43,7 @@ class MapTileSnapshot:
     placement: MapTilePlacement
     png: bytes | None
     source: MapTileSource
+    attribution: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,12 +55,7 @@ class LiveMapSnapshot:
     tiles: tuple[MapTileSnapshot, ...]
     detail: str
     updated_at: datetime
-
-
-@dataclass(frozen=True)
-class _LoadedTile:
-    png: bytes | None
-    source: MapTileSource
+    attribution: str = DEFAULT_MAP_ATTRIBUTION
 
 
 def _utc_now() -> datetime:
@@ -76,8 +67,7 @@ class LiveMapService:
 
     def __init__(
         self,
-        tile_client: MapTileClient,
-        cache: MapTileCache,
+        resolver: MapTileResolver,
         *,
         zoom: int = 13,
         clock: Callable[[], datetime] = _utc_now,
@@ -86,8 +76,7 @@ class LiveMapService:
         if not 0 <= zoom <= 22:
             raise ValueError("Live-map zoom must be between 0 and 22.")
 
-        self._tile_client = tile_client
-        self._cache = cache
+        self._resolver = resolver
         self._zoom = zoom
         self._clock = clock
         self._executor = executor
@@ -121,6 +110,16 @@ class LiveMapService:
         with self._lock:
             return self._latest
 
+    @property
+    def installed_packages(self) -> tuple[InstalledMapMetadata, ...]:
+        """Return validated installed packages in lookup order."""
+        return self._resolver.installed_packages
+
+    @property
+    def source_diagnostics(self) -> tuple[str, ...]:
+        """Return non-fatal installed-package loading or read failures."""
+        return self._resolver.diagnostics
+
     def start(self) -> None:
         """Start the single bounded background map worker."""
         if self._started:
@@ -151,6 +150,8 @@ class LiveMapService:
             self._pending_viewport = None
             self._queued_generation = None
             self._queued_viewport = None
+
+        self._resolver.close()
 
     def request_viewport(
         self,
@@ -234,24 +235,18 @@ class LiveMapService:
         requested_viewport: MapViewport,
         generation: int,
     ) -> None:
-        loaded: dict[MapTileKey, _LoadedTile] = {}
+        loaded: dict[MapTileKey, ResolvedMapTile] = {}
         refresh_keys: list[MapTileKey] = []
 
         for key in requested_viewport.tile_keys:
-            cached = self._cache.read(key)
-            if cached is not None and cached.is_fresh:
-                loaded[key] = _LoadedTile(cached.png, MapTileSource.CACHE)
-                continue
+            local = self._resolver.read_local(key)
+            loaded[key] = local
 
-            if cached is not None:
-                loaded[key] = _LoadedTile(
-                    cached.png,
-                    MapTileSource.STALE_CACHE,
-                )
-            else:
-                loaded[key] = _LoadedTile(None, MapTileSource.MISSING)
-
-            refresh_keys.append(key)
+            if local.source in {
+                MapTileSource.STALE_CACHE,
+                MapTileSource.MISSING,
+            }:
+                refresh_keys.append(key)
 
         self._publish_progress(
             requested_viewport,
@@ -279,25 +274,15 @@ class LiveMapService:
     def _refresh_tile(
         self,
         key: MapTileKey,
-        fallback: _LoadedTile,
-    ) -> _LoadedTile:
-        try:
-            png = self._tile_client.fetch(key)
-            self._cache.write(key, png)
-            return _LoadedTile(png, MapTileSource.NETWORK)
-        except MapTileError:
-            if fallback.png is not None:
-                return _LoadedTile(
-                    fallback.png,
-                    MapTileSource.STALE_CACHE,
-                )
-            return _LoadedTile(None, MapTileSource.MISSING)
+        fallback: ResolvedMapTile,
+    ) -> ResolvedMapTile:
+        return self._resolver.refresh_online(key, fallback)
 
     def _publish_progress(
         self,
         requested_viewport: MapViewport,
         generation: int,
-        loaded: dict[MapTileKey, _LoadedTile],
+        loaded: dict[MapTileKey, ResolvedMapTile],
     ) -> None:
         with self._lock:
             if (
@@ -321,7 +306,7 @@ class LiveMapService:
         self,
         requested_viewport: MapViewport,
         generation: int,
-        loaded: dict[MapTileKey, _LoadedTile],
+        loaded: dict[MapTileKey, ResolvedMapTile],
     ) -> None:
         next_viewport: MapViewport | None = None
         next_generation: int | None = None
@@ -368,7 +353,7 @@ class LiveMapService:
     def _build_snapshot(
         self,
         viewport: MapViewport,
-        loaded: dict[MapTileKey, _LoadedTile],
+        loaded: dict[MapTileKey, ResolvedMapTile],
         *,
         loading: bool,
     ) -> LiveMapSnapshot:
@@ -377,9 +362,12 @@ class LiveMapService:
                 placement=placement,
                 png=loaded[placement.key].png,
                 source=loaded[placement.key].source,
+                attribution=loaded[placement.key].attribution,
             )
             for placement in viewport.placements
         )
+
+        attribution = self._attribution_for_tiles(tiles)
 
         if loading:
             return LiveMapSnapshot(
@@ -388,6 +376,7 @@ class LiveMapService:
                 tiles=tiles,
                 detail="LOADING MAP DATA",
                 updated_at=self._aware_now(),
+                attribution=attribution,
             )
 
         sources = {tile.source for tile in tiles}
@@ -413,6 +402,7 @@ class LiveMapService:
             tiles=tiles,
             detail=detail,
             updated_at=self._aware_now(),
+            attribution=attribution,
         )
 
     def _loading_snapshot(
@@ -420,12 +410,14 @@ class LiveMapService:
         viewport: MapViewport,
         existing: dict[MapTileKey, MapTileSnapshot],
     ) -> LiveMapSnapshot:
+        tiles = self._reuse_tiles(viewport, existing)
         return LiveMapSnapshot(
             status=MapDataStatus.LOADING,
             viewport=viewport,
-            tiles=self._reuse_tiles(viewport, existing),
+            tiles=tiles,
             detail="LOADING MAP DATA",
             updated_at=self._aware_now(),
+            attribution=self._attribution_for_tiles(tiles),
         )
 
     def _reframe_latest_if_matching(
@@ -460,11 +452,13 @@ class LiveMapService:
                     placement=placement,
                     png=existing[placement.key].png,
                     source=existing[placement.key].source,
+                    attribution=existing[placement.key].attribution,
                 )
                 for placement in viewport.placements
             ),
             detail=snapshot.detail,
             updated_at=self._aware_now(),
+            attribution=snapshot.attribution,
         )
 
     @staticmethod
@@ -481,9 +475,21 @@ class LiveMapService:
                     if placement.key in existing
                     else MapTileSource.MISSING
                 ),
+                attribution=(
+                    existing[placement.key].attribution if placement.key in existing else None
+                ),
             )
             for placement in viewport.placements
         )
+
+    @staticmethod
+    def _attribution_for_tiles(
+        tiles: tuple[MapTileSnapshot, ...],
+    ) -> str:
+        attributions = tuple(
+            dict.fromkeys(tile.attribution for tile in tiles if tile.attribution is not None)
+        )
+        return " | ".join(attributions) or DEFAULT_MAP_ATTRIBUTION
 
     @staticmethod
     def _tiles_by_key(

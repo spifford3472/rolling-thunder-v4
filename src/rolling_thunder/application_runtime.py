@@ -24,6 +24,10 @@ from rolling_thunder.home_platform import HomePlatformClient
 from rolling_thunder.home_platform_health import HomePlatformHealthService
 from rolling_thunder.http_home_platform import HttpHomePlatformClient, HttpTransport
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
+from rolling_thunder.map_sources import (
+    InstalledMapRegistry,
+    MapTileResolver,
+)
 from rolling_thunder.map_tiles import MapTileCache, MapTileClient
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
@@ -189,9 +193,7 @@ class ApplicationRuntime:
             config.pota_spots,
             pota_scheduler or ThreadingPollScheduler(),
             database_path=config.storage.database_path,
-            mock_mode=(
-                config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK
-            ),
+            mock_mode=(config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK),
             transport=pota_transport,
         )
 
@@ -210,8 +212,7 @@ class ApplicationRuntime:
             contact_qrz_enrichment = ContactQrzEnrichmentService(
                 repository,
                 qrz_provider,
-                contact_qrz_enrichment_scheduler
-                or ThreadingPollScheduler(),
+                contact_qrz_enrichment_scheduler or ThreadingPollScheduler(),
             )
 
         qrz_photo_provider = None
@@ -244,17 +245,25 @@ class ApplicationRuntime:
         live_map: LiveMapService | None = None
         map_config = config.map
         if map_config.enabled:
+            map_cache = MapTileCache(
+                map_config.cache_directory,
+                retention=timedelta(days=map_config.cache_retention_days),
+                maximum_tiles=map_config.maximum_cached_tiles,
+            )
+            map_client = MapTileClient(
+                map_config.tile_url_template,
+                timeout_s=map_config.request_timeout_s,
+                transport=map_transport,
+            )
+            map_resolver = MapTileResolver(
+                InstalledMapRegistry.load(map_config.installed_packages),
+                map_cache,
+                map_client,
+                style=map_config.style,
+                online_attribution=map_config.online_attribution,
+            )
             live_map = LiveMapService(
-                MapTileClient(
-                    map_config.tile_url_template,
-                    timeout_s=map_config.request_timeout_s,
-                    transport=map_transport,
-                ),
-                MapTileCache(
-                    map_config.cache_directory,
-                    retention=timedelta(days=map_config.cache_retention_days),
-                    maximum_tiles=map_config.maximum_cached_tiles,
-                ),
+                map_resolver,
                 zoom=map_config.zoom,
                 executor=map_executor,
             )
@@ -289,9 +298,7 @@ class ApplicationRuntime:
     @property
     def pota_receive_tune_executor(self) -> PotaReceiveTuneExecutor:
         """Return POTA tuning through the ordered receive-tuning service."""
-        return PotaReceiveTuneExecutor(
-            ReceiveTuningService(self.radio)
-        )
+        return PotaReceiveTuneExecutor(ReceiveTuningService(self.radio))
 
     @property
     def latest_radio_state(self) -> RadioState:

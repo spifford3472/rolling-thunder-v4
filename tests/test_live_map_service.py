@@ -8,7 +8,12 @@ from typing import Any
 from PIL import Image
 
 from rolling_thunder.live_map import GeoPoint
-from rolling_thunder.live_map_service import LiveMapService, MapDataStatus, MapTileSource
+from rolling_thunder.live_map_service import LiveMapService, MapDataStatus
+from rolling_thunder.map_sources import (
+    InstalledMapRegistry,
+    MapTileResolver,
+    MapTileSource,
+)
 from rolling_thunder.map_tiles import CachedMapTile, MapTileError, MapTileKey
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
@@ -90,8 +95,11 @@ def service(
     cache: FakeCache,
 ) -> LiveMapService:
     return LiveMapService(
-        client,  # type: ignore[arg-type]
-        cache,  # type: ignore[arg-type]
+        MapTileResolver(
+            InstalledMapRegistry(),
+            cache,
+            client,
+        ),
         zoom=13,
         clock=lambda: NOW,
         executor=ImmediateExecutor(),
@@ -318,8 +326,11 @@ def test_newer_viewport_supersedes_obsolete_network_work() -> None:
     client = FakeClient()
     cache = FakeCache()
     live_map = LiveMapService(
-        client,  # type: ignore[arg-type]
-        cache,  # type: ignore[arg-type]
+        MapTileResolver(
+            InstalledMapRegistry(),
+            cache,
+            client,
+        ),
         zoom=13,
         clock=lambda: NOW,
         executor=executor,
@@ -371,8 +382,11 @@ def test_repeated_queued_viewport_does_not_submit_duplicate_work() -> None:
     moved_inside_same_tiles = GeoPoint(39.96001, -82.99001)
     executor = ManualExecutor()
     live_map = LiveMapService(
-        FakeClient(),  # type: ignore[arg-type]
-        FakeCache(),  # type: ignore[arg-type]
+        MapTileResolver(
+            InstalledMapRegistry(),
+            FakeCache(),
+            FakeClient(),
+        ),
         zoom=13,
         clock=lambda: NOW,
         executor=executor,

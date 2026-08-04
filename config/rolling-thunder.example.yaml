@@ -66,6 +66,9 @@ map:
   cache_directory: data/map-tiles
   cache_retention_days: 7
   maximum_cached_tiles: 2048
+  installed_packages: []
+  style: day
+  online_attribution: © OpenStreetMap contributors
 
 physical_controls:
   enabled: false
