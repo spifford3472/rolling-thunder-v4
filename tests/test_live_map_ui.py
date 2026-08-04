@@ -124,3 +124,65 @@ def test_marker_rotation_follows_compass_heading(
     )
 
     assert rotated == pytest.approx(expected)
+
+
+def test_tile_update_plan_separates_remove_redraw_and_move() -> None:
+    from rolling_thunder.live_map_service import (
+        MapTileSnapshot,
+        MapTileSource,
+    )
+    from rolling_thunder.live_map_ui import plan_tile_updates
+    from rolling_thunder.map_tiles import (
+        MapTileKey,
+        MapTilePlacement,
+    )
+
+    removed_key = MapTileKey(zoom=13, x=100, y=200)
+    moved_key = MapTileKey(zoom=13, x=101, y=200)
+    changed_key = MapTileKey(zoom=13, x=102, y=200)
+    new_key = MapTileKey(zoom=13, x=103, y=200)
+
+    def tile(
+        key: MapTileKey,
+        *,
+        x_px: int,
+        png: bytes | None,
+    ) -> MapTileSnapshot:
+        return MapTileSnapshot(
+            placement=MapTilePlacement(
+                key=key,
+                x_px=x_px,
+                y_px=20,
+            ),
+            png=png,
+            source=MapTileSource.CACHE,
+        )
+
+    previous = LiveMapSnapshot(
+        status=MapDataStatus.READY,
+        viewport=None,
+        tiles=(
+            tile(removed_key, x_px=0, png=b"removed"),
+            tile(moved_key, x_px=256, png=b"same"),
+            tile(changed_key, x_px=512, png=b"old"),
+        ),
+        detail="MAP READY",
+        updated_at=NOW,
+    )
+    current = LiveMapSnapshot(
+        status=MapDataStatus.LOADING,
+        viewport=None,
+        tiles=(
+            tile(moved_key, x_px=240, png=b"same"),
+            tile(changed_key, x_px=496, png=b"new"),
+            tile(new_key, x_px=752, png=None),
+        ),
+        detail="LOADING MAP DATA",
+        updated_at=NOW,
+    )
+
+    plan = plan_tile_updates(previous, current)
+
+    assert plan.remove == (removed_key,)
+    assert plan.redraw == (changed_key, new_key)
+    assert plan.move == (moved_key,)
