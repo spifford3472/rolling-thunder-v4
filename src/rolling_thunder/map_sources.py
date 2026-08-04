@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -18,6 +19,27 @@ from rolling_thunder.map_tiles import (
 )
 
 DEFAULT_MAP_ATTRIBUTION = "© OpenStreetMap contributors"
+
+_WEB_MERCATOR_LATITUDE_LIMIT = 85.05112878
+
+
+def _longitude_to_tile_x(longitude: float, zoom: int) -> int:
+    """Convert longitude to a clamped XYZ tile column."""
+    tile_count = 1 << zoom
+    column = math.floor((longitude + 180.0) / 360.0 * tile_count)
+    return min(max(column, 0), tile_count - 1)
+
+
+def _latitude_to_tile_y(latitude: float, zoom: int) -> int:
+    """Convert latitude to a clamped XYZ tile row."""
+    tile_count = 1 << zoom
+    clamped_latitude = min(
+        max(latitude, -_WEB_MERCATOR_LATITUDE_LIMIT),
+        _WEB_MERCATOR_LATITUDE_LIMIT,
+    )
+    latitude_radians = math.radians(clamped_latitude)
+    row = math.floor((1.0 - math.asinh(math.tan(latitude_radians)) / math.pi) / 2.0 * tile_count)
+    return min(max(row, 0), tile_count - 1)
 
 
 class MapPackageError(RuntimeError):
@@ -55,6 +77,20 @@ class InstalledMapMetadata:
     style: MapPackageStyle
     priority: int
 
+    def covers(self, key: MapTileKey) -> bool:
+        """Return whether the declared package bounds cover one XYZ tile."""
+        if not self.min_zoom <= key.zoom <= self.max_zoom:
+            return False
+
+        west, south, east, north = self.bounds
+
+        minimum_x = _longitude_to_tile_x(west, key.zoom)
+        maximum_x = _longitude_to_tile_x(east, key.zoom)
+        minimum_y = _latitude_to_tile_y(north, key.zoom)
+        maximum_y = _latitude_to_tile_y(south, key.zoom)
+
+        return minimum_x <= key.x <= maximum_x and minimum_y <= key.y <= maximum_y
+
 
 @dataclass(frozen=True)
 class InstalledMapTile:
@@ -65,6 +101,14 @@ class InstalledMapTile:
 
 
 @dataclass(frozen=True)
+class InstalledMapLookup:
+    """Installed tile lookup plus declared offline-coverage state."""
+
+    tile: InstalledMapTile | None
+    covering_package: InstalledMapMetadata | None
+
+
+@dataclass(frozen=True)
 class ResolvedMapTile:
     """One tile result from the local-first resolution chain."""
 
@@ -72,6 +116,7 @@ class ResolvedMapTile:
     source: MapTileSource
     package_id: str | None = None
     attribution: str | None = None
+    online_refresh_allowed: bool = True
 
 
 class RuntimeMapTileCache(Protocol):
@@ -193,6 +238,12 @@ class RasterMbtilesPackage:
         if tile_format != "png":
             raise MapPackageError(
                 f"Installed map package must contain PNG raster tiles: {self._path}"
+            )
+
+        tile_scheme = metadata.get("scheme", "tms").lower()
+        if tile_scheme != "tms":
+            raise MapPackageError(
+                f"Installed map package must use the TMS tile scheme: {self._path}"
             )
 
         min_zoom = self._parse_zoom(metadata, "minzoom")
@@ -340,21 +391,34 @@ class InstalledMapRegistry:
         with self._lock:
             return tuple(self._errors)
 
-    def read(
+    def lookup(
         self,
         key: MapTileKey,
         *,
         style: MapPackageStyle,
-    ) -> InstalledMapTile | None:
-        """Return the highest-priority installed tile for one style."""
+    ) -> InstalledMapLookup:
+        """Resolve a tile while retaining declared package coverage."""
         with self._lock:
             if self._closed:
-                return None
+                return InstalledMapLookup(
+                    tile=None,
+                    covering_package=None,
+                )
             packages = self._packages
 
+        covering_package: InstalledMapMetadata | None = None
+
         for package in packages:
-            if package.metadata.style is not style:
+            metadata = package.metadata
+
+            if metadata.style is not style:
                 continue
+
+            if not metadata.covers(key):
+                continue
+
+            if covering_package is None:
+                covering_package = metadata
 
             try:
                 png = package.read(key)
@@ -364,12 +428,27 @@ class InstalledMapRegistry:
                 continue
 
             if png is not None:
-                return InstalledMapTile(
-                    png=png,
-                    package=package.metadata,
+                return InstalledMapLookup(
+                    tile=InstalledMapTile(
+                        png=png,
+                        package=metadata,
+                    ),
+                    covering_package=metadata,
                 )
 
-        return None
+        return InstalledMapLookup(
+            tile=None,
+            covering_package=covering_package,
+        )
+
+    def read(
+        self,
+        key: MapTileKey,
+        *,
+        style: MapPackageStyle,
+    ) -> InstalledMapTile | None:
+        """Return the highest-priority installed tile for one style."""
+        return self.lookup(key, style=style).tile
 
     def close(self) -> None:
         """Close every installed package idempotently."""
@@ -417,26 +496,35 @@ class MapTileResolver:
 
     def read_local(self, key: MapTileKey) -> ResolvedMapTile:
         """Resolve installed package first, then the runtime cache."""
-        installed = self._installed.read(key, style=self._style)
-        if installed is not None:
+        installed = self._installed.lookup(
+            key,
+            style=self._style,
+        )
+
+        if installed.tile is not None:
             return ResolvedMapTile(
-                png=installed.png,
+                png=installed.tile.png,
                 source=MapTileSource.INSTALLED,
-                package_id=installed.package.identifier,
-                attribution=installed.package.attribution,
+                package_id=installed.tile.package.identifier,
+                attribution=installed.tile.package.attribution,
+                online_refresh_allowed=False,
             )
+
+        online_refresh_allowed = installed.covering_package is None
 
         cached = self._cache.read(key)
         if cached is None:
             return ResolvedMapTile(
                 png=None,
                 source=MapTileSource.MISSING,
+                online_refresh_allowed=online_refresh_allowed,
             )
 
         return ResolvedMapTile(
             png=cached.png,
             source=(MapTileSource.CACHE if cached.is_fresh else MapTileSource.STALE_CACHE),
             attribution=self._online_attribution,
+            online_refresh_allowed=online_refresh_allowed,
         )
 
     def refresh_online(
@@ -445,6 +533,9 @@ class MapTileResolver:
         fallback: ResolvedMapTile,
     ) -> ResolvedMapTile:
         """Refresh from the network while preserving local fallback data."""
+        if not fallback.online_refresh_allowed:
+            return fallback
+
         try:
             png = self._online.fetch(key)
             self._cache.write(key, png)

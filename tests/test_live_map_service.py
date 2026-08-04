@@ -13,6 +13,7 @@ from rolling_thunder.map_sources import (
     InstalledMapRegistry,
     MapTileResolver,
     MapTileSource,
+    ResolvedMapTile,
 )
 from rolling_thunder.map_tiles import CachedMapTile, MapTileError, MapTileKey
 
@@ -79,6 +80,32 @@ class FakeClient:
         return self.body
 
 
+class OfflineCoverageResolver(MapTileResolver):
+    """Return missing installed-coverage tiles without network authority."""
+
+    def __init__(self) -> None:
+        self.refreshes: list[MapTileKey] = []
+        self.closed = False
+
+    def read_local(self, key: MapTileKey) -> ResolvedMapTile:
+        return ResolvedMapTile(
+            png=None,
+            source=MapTileSource.MISSING,
+            online_refresh_allowed=False,
+        )
+
+    def refresh_online(
+        self,
+        key: MapTileKey,
+        fallback: ResolvedMapTile,
+    ) -> ResolvedMapTile:
+        self.refreshes.append(key)
+        return fallback
+
+    def close(self) -> None:
+        self.closed = True
+
+
 def requested_keys() -> tuple[MapTileKey, ...]:
     from rolling_thunder.map_tiles import build_map_viewport
 
@@ -140,6 +167,36 @@ def test_service_loads_missing_tiles_and_publishes_ready_snapshot() -> None:
     assert {tile.source for tile in state.tiles} == {MapTileSource.NETWORK}
     assert set(client.requests) == set(requested_keys())
     assert {key for key, _ in cache.writes} == set(requested_keys())
+
+
+def test_service_never_refreshes_missing_installed_coverage() -> None:
+    resolver = OfflineCoverageResolver()
+    live_map = LiveMapService(
+        resolver,
+        zoom=13,
+        clock=lambda: NOW,
+        executor=ImmediateExecutor(),
+    )
+    live_map.start()
+
+    live_map.request_viewport(
+        GeoPoint(39.53, -84.08),
+        width_px=600,
+        height_px=400,
+    )
+
+    state = live_map.latest_state
+
+    assert state.status is MapDataStatus.UNAVAILABLE
+    assert state.detail == "MAP DATA UNAVAILABLE"
+    assert state.tiles
+    assert all(tile.png is None for tile in state.tiles)
+    assert {tile.source for tile in state.tiles} == {MapTileSource.MISSING}
+    assert resolver.refreshes == []
+
+    live_map.stop()
+
+    assert resolver.closed is True
 
 
 def test_service_uses_fresh_cache_without_network() -> None:
