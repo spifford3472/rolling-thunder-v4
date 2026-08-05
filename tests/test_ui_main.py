@@ -1,23 +1,30 @@
 """Tests for pure full-screen dashboard presentation helpers."""
 
+import pytest
+
+from rolling_thunder.status_messages import StatusPresentation
 from rolling_thunder.ui_main import (
     _BRIGHT,
+    _FAILURE,
+    _MUTED,
+    _SUCCESS,
     _WARNING,
-    _ticker_presentation,
+    _status_foreground,
 )
 
 
-def test_normal_ticker_uses_routine_text_and_color() -> None:
-    assert _ticker_presentation("RADIO CONNECTED", None) == (
-        "RADIO CONNECTED",
-        _BRIGHT,
-    )
-
-
-def test_atas_warning_overrides_routine_ticker_globally() -> None:
-    warning = "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
-
-    assert _ticker_presentation("RADIO CONNECTED", warning) == (
-        warning,
-        _WARNING,
-    )
+@pytest.mark.parametrize(
+    ("presentation", "expected"),
+    [
+        (StatusPresentation.NORMAL, _BRIGHT),
+        (StatusPresentation.AMBER, _WARNING),
+        (StatusPresentation.SUCCESS, _SUCCESS),
+        (StatusPresentation.ERROR, _FAILURE),
+        (StatusPresentation.MUTED, _MUTED),
+    ],
+)
+def test_status_presentation_maps_to_dashboard_foreground(
+    presentation: StatusPresentation,
+    expected: str,
+) -> None:
+    assert _status_foreground(presentation) == expected

@@ -18,6 +18,7 @@ from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.radio_polling import PollCallback
 from rolling_thunder.serial_gps import SerialGPSReceiver
+from rolling_thunder.status_messages import StatusMessageService
 
 
 class ManualScheduledPoll:
@@ -124,6 +125,7 @@ def test_runtime_composes_and_starts_mock_hardware() -> None:
     assert runtime.gps_polling is not None
     assert runtime.gps_polling.is_running is True
     assert runtime.pota_enrichment.is_running is True
+    assert isinstance(runtime.status_messages, StatusMessageService)
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
     assert gps_state.connection_state is GPSConnectionState.CONNECTED

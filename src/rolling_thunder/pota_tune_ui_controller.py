@@ -14,7 +14,14 @@ from rolling_thunder.pota_tune_presentation import (
     PotaTunePresentation,
     build_pota_tune_presentation,
 )
-from rolling_thunder.radio import RadioBand
+from rolling_thunder.status_messages import (
+    StatusMessageService,
+    StatusPresentation,
+)
+
+ATAS_RETUNE_STATUS_KEY = "radio.atas-retune"
+ATAS_RETUNE_STATUS_PRIORITY = 100
+ATAS_RETUNE_STATUS_DURATION_S = 10.0
 
 
 class UnavailablePotaTuneExecutor:
@@ -31,40 +38,27 @@ class UnavailablePotaTuneExecutor:
 
 
 class PotaTuneUiController:
-    """Coordinate tune intent, execution, warning, and presentation state."""
+    """Coordinate tune intent, execution, status publication, and presentation."""
 
     def __init__(
         self,
         dashboard: PotaDashboardController,
         executor: PotaTuneIntentExecutor | None = None,
+        status_messages: StatusMessageService | None = None,
     ) -> None:
         self._dashboard = dashboard
         self._execution = PotaTuneExecutionController(
             executor or UnavailablePotaTuneExecutor(),
         )
-        self._retune_warning_band: RadioBand | None = None
+        self._status_messages = (
+            status_messages if status_messages is not None else StatusMessageService()
+        )
 
     @property
     def result(self) -> PotaReceiveTuneResult | None:
         """Return the current execution result after context synchronization."""
         self._synchronize_context()
         return self._execution.result
-
-    @property
-    def retune_warning_active(self) -> bool:
-        """Return whether an ATAS-120 retune warning awaits acknowledgement."""
-        return self._retune_warning_band is not None
-
-    @property
-    def retune_warning_line(self) -> str | None:
-        """Return the sticky ATAS-120 warning for the verified target band."""
-        band = self._retune_warning_band
-        if band is None:
-            return None
-        band_label = band.value.removesuffix("m")
-        return (
-            f"BAND CHANGED TO {band_label} METERS — RETUNE ATAS-120"
-        )
 
     @property
     def presentation(self) -> PotaTunePresentation:
@@ -85,10 +79,7 @@ class PotaTuneUiController:
 
         if intent.status is PotaTuneIntentStatus.PENDING_CONFIRMATION:
             confirmed = self.confirm()
-            return (
-                confirmed is not None
-                and confirmed.status is PotaTuneIntentStatus.CONFIRMED
-            )
+            return confirmed is not None and confirmed.status is PotaTuneIntentStatus.CONFIRMED
 
         if self._execution.result is not None:
             return False
@@ -111,24 +102,23 @@ class PotaTuneUiController:
         self._synchronize_context()
         result = self._execution.execute(self._dashboard.tune_intent)
         if result.band_changed and result.target_band is not None:
-            self._retune_warning_band = result.target_band
+            band_label = result.target_band.value.removesuffix("m")
+            self._status_messages.publish(
+                replacement_key=ATAS_RETUNE_STATUS_KEY,
+                text=f"BAND CHANGED TO {band_label} METERS — RETUNE ATAS-120",
+                presentation=StatusPresentation.AMBER,
+                priority=ATAS_RETUNE_STATUS_PRIORITY,
+                duration_s=ATAS_RETUNE_STATUS_DURATION_S,
+            )
         return result
 
     def cancel(self) -> PotaTuneIntent | None:
-        """Cancel the current intent and acknowledge any retune warning."""
+        """Cancel the current intent without changing timed status messages."""
         self._execution.clear()
-        self.acknowledge_retune_warning()
         return self._dashboard.cancel_tune_intent()
 
-    def acknowledge_retune_warning(self) -> bool:
-        """Clear the sticky warning only after an explicit operator action."""
-        if self._retune_warning_band is None:
-            return False
-        self._retune_warning_band = None
-        return True
-
     def _synchronize_context(self) -> None:
-        """Clear stale results without clearing a safety warning."""
+        """Clear stale execution results without changing independent status."""
         executed_intent = self._execution.executed_intent
         current_intent = self._dashboard.tune_intent
 

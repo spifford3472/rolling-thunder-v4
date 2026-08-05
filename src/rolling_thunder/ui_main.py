@@ -49,6 +49,7 @@ from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
+from rolling_thunder.status_messages import StatusPresentation
 
 _REFRESH_MS = 250
 _BACKGROUND = "#080808"
@@ -118,15 +119,15 @@ def _callsign_font_size(callsign: str) -> int:
     return 44
 
 
-def _ticker_presentation(
-    normal_text: str,
-    retune_warning: str | None,
-) -> tuple[str, str]:
-    """Give a retained ATAS warning priority over routine ticker status."""
-    if retune_warning is not None:
-        return retune_warning, _WARNING
-
-    return normal_text, _BRIGHT
+def _status_foreground(presentation: StatusPresentation) -> str:
+    """Map a status presentation token to the dashboard foreground color."""
+    return {
+        StatusPresentation.NORMAL: _BRIGHT,
+        StatusPresentation.AMBER: _WARNING,
+        StatusPresentation.SUCCESS: _SUCCESS,
+        StatusPresentation.ERROR: _FAILURE,
+        StatusPresentation.MUTED: _MUTED,
+    }[presentation]
 
 
 def run_dashboard(
@@ -185,6 +186,7 @@ def run_dashboard(
     pota_tune_ui = PotaTuneUiController(
         pota_dashboard,
         pota_tune_executor or runtime.pota_receive_tune_executor,
+        status_messages=runtime.status_messages,
     )
     active_panel_commands = ActivePanelCommandController(
         context_navigation,
@@ -212,9 +214,7 @@ def run_dashboard(
         on_succeeded=commit_succeeded,
         on_failed=commit_failed,
         gps_state_provider=lambda: runtime.latest_gps_state,
-        pota_context_provider=lambda: (
-            context_navigation.state.selected is ContextId.POTA
-        ),
+        pota_context_provider=lambda: context_navigation.state.selected is ContextId.POTA,
         pota_spots_provider=lambda: pota_dashboard.visible_spots,
     )
     operator_commands = OperatorCommandController(
@@ -446,9 +446,7 @@ def run_dashboard(
 
     pota_card_frames: list[tk.Frame] = []
     pota_card_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
-    pota_card_texts: list[
-        tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]
-    ] = []
+    pota_card_texts: list[tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]] = []
 
     for card_index in range(_POTA_VISIBLE_CARD_COUNT):
         card_frame = tk.Frame(
@@ -526,12 +524,8 @@ def run_dashboard(
         location_label.grid(row=3, column=0, sticky="ew")
 
         pota_card_frames.append(card_frame)
-        pota_card_labels.append(
-            (callsign_label, frequency_label, park_label, location_label)
-        )
-        pota_card_texts.append(
-            (callsign_var, frequency_var, park_var, location_var)
-        )
+        pota_card_labels.append((callsign_label, frequency_label, park_label, location_label))
+        pota_card_texts.append((callsign_var, frequency_var, park_var, location_var))
         card_frame.grid_remove()
 
     pota_more_below_text = tk.StringVar(value="")
@@ -677,10 +671,7 @@ def run_dashboard(
 
         gps_state = runtime.latest_gps_state
         live_map_presentation = live_map_controller.update(gps_state)
-        if (
-            runtime.live_map is not None
-            and live_map_presentation.position is not None
-        ):
+        if runtime.live_map is not None and live_map_presentation.position is not None:
             map_width, map_height = live_map_widgets.viewport_size
             if map_width >= 64 and map_height >= 64:
                 runtime.live_map.request_viewport(
@@ -729,30 +720,32 @@ def run_dashboard(
         last_result_text.set(f"Last Result: {last_result[:18]}")
         ticker_message = view.ticker
         if view.grid != "—":
-            ticker_message = (
-                f"{ticker_message} — GRID {view.grid.upper()}"
-            )
+            ticker_message = f"{ticker_message} — GRID {view.grid.upper()}"
         ticker_message = (
             f"{ticker_message} — NETWORK {view.network_state}"
             f" — HOME {view.home_platform_state}"
             f" — SYNC {view.synchronization_state}"
         )
         if view.connectivity_detail != "CONNECTIVITY READY":
-            ticker_message = (
-                f"{ticker_message} — {view.connectivity_detail}"
-            )
-        ticker_value, ticker_color = _ticker_presentation(
-            ticker_message,
-            pota_tune_ui.retune_warning_line,
+            ticker_message = f"{ticker_message} — {view.connectivity_detail}"
+        runtime.status_messages.publish(
+            replacement_key="dashboard.routine",
+            text=ticker_message,
+            presentation=StatusPresentation.NORMAL,
+            priority=0,
         )
-        ticker_text.set(ticker_value)
-        ticker.configure(fg=ticker_color)
+        current_status = runtime.status_messages.snapshot().current
+        if current_status is None:
+            ticker_text.set(ticker_message)
+            ticker.configure(fg=_BRIGHT)
+        else:
+            ticker_text.set(current_status.text)
+            ticker.configure(
+                fg=_status_foreground(current_status.presentation),
+            )
 
         selected_context = context_navigation.state
-        if (
-            selected_context.selected is ContextId.POTA
-            and previous_context is not ContextId.POTA
-        ):
+        if selected_context.selected is ContextId.POTA and previous_context is not ContextId.POTA:
             pota_filters.activate_for_frequency(runtime.latest_radio_state.frequency)
         previous_context = selected_context.selected
 
@@ -761,13 +754,9 @@ def run_dashboard(
             show_pota_context_body()
             filter_state = pota_filters.state
             panel = build_pota_dashboard_panel(filter_state.dashboard)
-            runtime.pota_enrichment.prefetch_callsigns(
-                row.activator for row in panel.rows
-            )
+            runtime.pota_enrichment.prefetch_callsigns(row.activator for row in panel.rows)
             context_title_text.set(filter_state.display_line)
-            context_title_label.configure(
-                font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold")
-            )
+            context_title_label.configure(font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold"))
 
             available_wrap_width = max(480, pota_panel_frame.winfo_width() - 36)
             pota_status_label.configure(wraplength=available_wrap_width)
@@ -790,12 +779,8 @@ def run_dashboard(
             else:
                 pota_status_label.grid_remove()
                 pota_cards_container.grid()
-                pota_more_above_text.set(
-                    "▲ MORE ▲" if panel.hidden_above_count else ""
-                )
-                pota_more_below_text.set(
-                    "▼ MORE ▼" if panel.hidden_below_count else ""
-                )
+                pota_more_above_text.set("▲ MORE ▲" if panel.hidden_above_count else "")
+                pota_more_below_text.set("▼ MORE ▼" if panel.hidden_below_count else "")
 
                 for card_index, card_frame in enumerate(pota_card_frames):
                     if card_index >= len(panel.rows):
@@ -804,15 +789,13 @@ def run_dashboard(
 
                     row = panel.rows[card_index]
                     card_frame.grid()
-                    callsign_var, frequency_var, park_var, location_var = (
-                        pota_card_texts[card_index]
-                    )
+                    callsign_var, frequency_var, park_var, location_var = pota_card_texts[
+                        card_index
+                    ]
                     callsign_var.set(
                         format_enriched_callsign(
                             row.activator,
-                            runtime.pota_enrichment.get_callsign_name(
-                                row.activator
-                            ),
+                            runtime.pota_enrichment.get_callsign_name(row.activator),
                         )
                     )
                     frequency_var.set(row.frequency)
@@ -827,9 +810,7 @@ def run_dashboard(
                         if row.is_selected
                         else _POTA_CARD_NORMAL_BORDER_PX
                     )
-                    invisible_border_width = (
-                        _POTA_CARD_OUTER_PAD_PX - visible_border_width
-                    )
+                    invisible_border_width = _POTA_CARD_OUTER_PAD_PX - visible_border_width
                     border_color = _BRIGHT if row.is_selected else _BORDER
                     card_frame.configure(
                         bg=selected_background,

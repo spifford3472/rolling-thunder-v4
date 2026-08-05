@@ -13,10 +13,30 @@ from rolling_thunder.pota_tune_intent import (
     PotaTuneIntent,
     PotaTuneIntentStatus,
 )
-from rolling_thunder.pota_tune_ui_controller import PotaTuneUiController
+from rolling_thunder.pota_tune_ui_controller import (
+    ATAS_RETUNE_STATUS_DURATION_S,
+    ATAS_RETUNE_STATUS_KEY,
+    ATAS_RETUNE_STATUS_PRIORITY,
+    PotaTuneUiController,
+)
 from rolling_thunder.radio import RadioBand
+from rolling_thunder.status_messages import (
+    StatusMessageService,
+    StatusPresentation,
+)
 
 NOW = datetime(2026, 7, 27, 1, 0, tzinfo=UTC)
+
+
+class FakeMonotonicClock:
+    def __init__(self, value: float = 100.0) -> None:
+        self.value = value
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
 
 
 class FakeProvider:
@@ -62,13 +82,20 @@ class FakeExecutor:
         )
 
 
-def build_controller(executor=None):
+def build_controller(
+    executor=None,
+    status_messages: StatusMessageService | None = None,
+):
     dashboard = PotaDashboardController(
         FakeProvider(),
         clock=lambda: NOW,
     )
     dashboard.select_next()
-    return dashboard, PotaTuneUiController(dashboard, executor)
+    return dashboard, PotaTuneUiController(
+        dashboard,
+        executor,
+        status_messages=status_messages,
+    )
 
 
 def execute_confirmed(controller: PotaTuneUiController) -> PotaReceiveTuneResult:
@@ -146,88 +173,95 @@ def test_success_result_is_available_to_presentation() -> None:
     assert presentation.detail_line == "14.250 MHz USB"
 
 
-def test_verified_band_change_publishes_exact_atas_warning() -> None:
+def test_verified_band_change_publishes_amber_warning_for_ten_seconds() -> None:
+    clock = FakeMonotonicClock()
+    status_messages = StatusMessageService(clock=clock)
     executor = FakeExecutor([(True, RadioBand.BAND_40M)])
-    _dashboard, controller = build_controller(executor)
+    _dashboard, controller = build_controller(executor, status_messages)
 
     execute_confirmed(controller)
 
-    assert controller.retune_warning_active is True
-    assert controller.retune_warning_line == (
-        "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
-    )
+    warning = status_messages.snapshot().current
+    assert warning is not None
+    assert warning.replacement_key == ATAS_RETUNE_STATUS_KEY
+    assert warning.text == "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
+    assert warning.presentation is StatusPresentation.AMBER
+    assert warning.priority == ATAS_RETUNE_STATUS_PRIORITY
+    assert warning.expires_at_monotonic == (100.0 + ATAS_RETUNE_STATUS_DURATION_S)
     assert controller.presentation.detail_line == "14.250 MHz USB"
+
+    clock.advance(9.999)
+    assert status_messages.snapshot().current == warning
+    clock.advance(0.001)
+    assert status_messages.snapshot().current is None
 
 
 def test_same_band_tune_publishes_no_atas_warning() -> None:
+    status_messages = StatusMessageService(clock=lambda: 100.0)
     executor = FakeExecutor([(False, RadioBand.BAND_20M)])
-    _dashboard, controller = build_controller(executor)
+    _dashboard, controller = build_controller(executor, status_messages)
 
     execute_confirmed(controller)
 
-    assert controller.retune_warning_active is False
-    assert controller.retune_warning_line is None
+    assert status_messages.snapshot().current is None
 
 
-def test_warning_survives_selection_and_result_cleanup() -> None:
+def test_warning_survives_selection_and_result_cleanup_until_expiration() -> None:
+    status_messages = StatusMessageService(clock=lambda: 100.0)
     executor = FakeExecutor([(True, RadioBand.BAND_40M)])
-    dashboard, controller = build_controller(executor)
+    dashboard, controller = build_controller(executor, status_messages)
     execute_confirmed(controller)
+    warning = status_messages.snapshot().current
 
     dashboard.clear_selection()
 
     assert controller.result is None
-    assert controller.retune_warning_active is True
-    assert controller.retune_warning_line == (
-        "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
-    )
+    assert warning is not None
+    assert status_messages.snapshot().current == warning
     assert controller.presentation.summary_line is None
     assert controller.presentation.detail_line is None
 
 
-def test_later_same_band_tune_does_not_clear_existing_warning() -> None:
+def test_later_same_band_tune_does_not_replace_existing_warning() -> None:
+    status_messages = StatusMessageService(clock=lambda: 100.0)
     executor = FakeExecutor(
         [
             (True, RadioBand.BAND_40M),
             (False, RadioBand.BAND_40M),
         ]
     )
-    _dashboard, controller = build_controller(executor)
+    _dashboard, controller = build_controller(executor, status_messages)
 
     execute_confirmed(controller)
+    original_warning = status_messages.snapshot().current
     execute_confirmed(controller)
 
-    assert controller.retune_warning_line == (
-        "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
-    )
+    assert original_warning is not None
+    assert status_messages.snapshot().current == original_warning
 
 
-def test_later_band_change_replaces_warning_band() -> None:
+def test_later_band_change_replaces_warning_and_restarts_duration() -> None:
+    clock = FakeMonotonicClock()
+    status_messages = StatusMessageService(clock=clock)
     executor = FakeExecutor(
         [
             (True, RadioBand.BAND_40M),
             (True, RadioBand.BAND_20M),
         ]
     )
-    _dashboard, controller = build_controller(executor)
+    _dashboard, controller = build_controller(executor, status_messages)
 
     execute_confirmed(controller)
+    first_warning = status_messages.snapshot().current
+    clock.advance(3.0)
     execute_confirmed(controller)
+    replacement = status_messages.snapshot().current
 
-    assert controller.retune_warning_line == (
-        "BAND CHANGED TO 20 METERS — RETUNE ATAS-120"
-    )
-
-
-def test_explicit_acknowledgement_clears_warning() -> None:
-    executor = FakeExecutor([(True, RadioBand.BAND_40M)])
-    _dashboard, controller = build_controller(executor)
-    execute_confirmed(controller)
-
-    assert controller.acknowledge_retune_warning() is True
-    assert controller.retune_warning_active is False
-    assert controller.retune_warning_line is None
-    assert controller.acknowledge_retune_warning() is False
+    assert first_warning is not None
+    assert replacement is not None
+    assert replacement.sequence > first_warning.sequence
+    assert replacement.text == "BAND CHANGED TO 20 METERS — RETUNE ATAS-120"
+    assert replacement.expires_at_monotonic == 113.0
 
 
 def test_selection_change_clears_stale_execution_result() -> None:
@@ -255,22 +289,21 @@ def test_new_staged_intent_clears_previous_result() -> None:
     controller.request()
 
     assert controller.result is None
-    assert controller.presentation.status_line == (
-        "PRESS ENTER TO CONFIRM — NO RADIO CHANGE"
-    )
+    assert controller.presentation.status_line == ("PRESS ENTER TO CONFIRM — NO RADIO CHANGE")
 
 
-def test_cancel_clears_execution_result_and_warning() -> None:
+def test_cancel_clears_result_without_clearing_timed_warning() -> None:
+    status_messages = StatusMessageService(clock=lambda: 100.0)
     executor = FakeExecutor([(True, RadioBand.BAND_40M)])
-    _dashboard, controller = build_controller(executor)
+    _dashboard, controller = build_controller(executor, status_messages)
     controller.request()
     controller.confirm()
     controller.execute()
+    warning = status_messages.snapshot().current
 
     controller.cancel()
 
     assert controller.result is None
-    assert controller.retune_warning_active is False
-    assert controller.presentation.status_line == (
-        "TUNE INTENT CANCELLED — NO RADIO CHANGE"
-    )
+    assert warning is not None
+    assert status_messages.snapshot().current == warning
+    assert controller.presentation.status_line == ("TUNE INTENT CANCELLED — NO RADIO CHANGE")

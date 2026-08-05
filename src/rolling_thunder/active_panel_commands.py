@@ -38,11 +38,7 @@ class PotaFilterCommands(Protocol):
 
 
 class PotaTuneCommands(Protocol):
-    """UI-safe POTA tune-intent and retune-warning capabilities."""
-
-    @property
-    def retune_warning_active(self) -> bool:
-        """Return whether an ATAS-120 warning awaits acknowledgement."""
+    """UI-safe POTA tune-intent capabilities."""
 
     def advance(self) -> bool:
         """Advance the guarded stage, confirm, and execute workflow once."""
@@ -52,9 +48,6 @@ class PotaTuneCommands(Protocol):
 
     def cancel(self) -> PotaTuneIntent | None:
         """Cancel the current POTA intent without radio access."""
-
-    def acknowledge_retune_warning(self) -> bool:
-        """Acknowledge the current ATAS-120 warning when present."""
 
 
 class ActivePanelCommandController:
@@ -119,20 +112,14 @@ class ActivePanelCommandController:
         return self._pota_tune.advance()
 
     def back(self) -> bool:
-        """Acknowledge warnings globally, then handle active-panel Back."""
-        if self._pota_tune.retune_warning_active:
-            return self._pota_tune.acknowledge_retune_warning()
-
+        """Handle Back within the currently active panel."""
         if not self._pota_is_active():
             return False
 
         intent = self._pota_panel.tune_intent
         if intent is not None and intent.status is not PotaTuneIntentStatus.CANCELLED:
             cancelled = self._pota_tune.cancel()
-            return (
-                cancelled is not None
-                and cancelled.status is PotaTuneIntentStatus.CANCELLED
-            )
+            return cancelled is not None and cancelled.status is PotaTuneIntentStatus.CANCELLED
 
         if self._pota_panel.selected_index is None:
             return False

@@ -17,6 +17,7 @@ from rolling_thunder.pota_spots import ParkReference, PotaSpot
 from rolling_thunder.pota_tune_intent import PotaTuneIntent, PotaTuneIntentStatus
 from rolling_thunder.pota_tune_ui_controller import PotaTuneUiController
 from rolling_thunder.radio import RadioBand
+from rolling_thunder.status_messages import StatusMessageService
 
 
 class StaticProvider:
@@ -188,7 +189,12 @@ def test_encoder_short_advances_stage_confirm_execute_once() -> None:
     filters.activate_for_frequency(Frequency(hz=14_250_000))
     dashboard.select_next()
     executor = BandChangeExecutor()
-    tune = PotaTuneUiController(dashboard, executor)
+    status_messages = StatusMessageService(clock=lambda: 100.0)
+    tune = PotaTuneUiController(
+        dashboard,
+        executor,
+        status_messages=status_messages,
+    )
     commands = ActivePanelCommandController(
         navigation,
         dashboard,
@@ -198,10 +204,7 @@ def test_encoder_short_advances_stage_confirm_execute_once() -> None:
 
     assert commands.activate_selection() is True
     assert dashboard.tune_intent is not None
-    assert (
-        dashboard.tune_intent.status
-        is PotaTuneIntentStatus.PENDING_CONFIRMATION
-    )
+    assert dashboard.tune_intent.status is PotaTuneIntentStatus.PENDING_CONFIRMATION
     assert executor.calls == []
 
     assert commands.activate_selection() is True
@@ -213,7 +216,9 @@ def test_encoder_short_advances_stage_confirm_execute_once() -> None:
     assert len(executor.calls) == 1
     assert tune.result is not None
     assert tune.result.status is PotaReceiveTuneResultStatus.SUCCEEDED
-    assert tune.retune_warning_active is True
+    warning = status_messages.snapshot().current
+    assert warning is not None
+    assert warning.text == "BAND CHANGED TO 20 METERS — RETUNE ATAS-120"
 
     assert commands.activate_selection() is False
     assert len(executor.calls) == 1
@@ -237,7 +242,7 @@ def test_back_cancels_intent_before_clearing_selection() -> None:
     assert executor.calls == []
 
 
-def test_back_acknowledges_warning_from_any_context_before_intent() -> None:
+def test_back_outside_pota_does_not_clear_timed_warning_or_intent() -> None:
     navigation = ContextNavigationController(ContextId.POTA)
     dashboard = PotaDashboardController(
         StaticProvider(available_state()),
@@ -246,7 +251,12 @@ def test_back_acknowledges_warning_from_any_context_before_intent() -> None:
     filters = PotaDashboardFilterController(dashboard)
     filters.activate_for_frequency(Frequency(hz=14_250_000))
     dashboard.select_next()
-    tune = PotaTuneUiController(dashboard, BandChangeExecutor())
+    status_messages = StatusMessageService(clock=lambda: 100.0)
+    tune = PotaTuneUiController(
+        dashboard,
+        BandChangeExecutor(),
+        status_messages=status_messages,
+    )
     commands = ActivePanelCommandController(
         navigation,
         dashboard,
@@ -257,12 +267,13 @@ def test_back_acknowledges_warning_from_any_context_before_intent() -> None:
     tune.confirm()
     tune.execute()
     original_intent = dashboard.tune_intent
+    original_warning = status_messages.snapshot().current
     navigation.select(ContextId.SETTINGS)
 
-    assert tune.retune_warning_active is True
+    assert original_warning is not None
     assert navigation.state.selected is ContextId.SETTINGS
-    assert commands.back() is True
-    assert tune.retune_warning_active is False
+    assert commands.back() is False
+    assert status_messages.snapshot().current == original_warning
     assert dashboard.selected_index == 0
     assert dashboard.tune_intent is original_intent
     assert dashboard.tune_intent is not None
