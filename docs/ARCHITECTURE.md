@@ -178,6 +178,30 @@ longer dismisses alerts. Future APRS, MeshCore, weather, DX, and radio-status
 publishers must use the same arbitration boundary rather than adding direct
 ticker overrides.
 
+## Shared Spot Domain Foundation
+
+The provider-neutral shared spot foundation defines immutable POTA and DX spot
+records, deterministic stable identities, canonical complete snapshots, stable
+selection, and UI-independent staged actions. Unknown operator names and grids
+remain typed `None`; `<UNKNOWN>` is introduced only at the presentation boundary.
+
+POTA identity is provider plus park reference plus integer frequency. DX identity
+is provider plus normalized callsign plus integer frequency. Complete snapshots
+collapse duplicate identities deterministically and order records by explicit
+amateur-band rank, integer frequency, and stable tie-breakers independent of
+provider arrival order.
+
+Selection is preserved by stable identity across snapshot replacement. If the
+selected identity disappears, selection and staging clear without choosing a
+neighboring row. A staged action captures identity, callsign, frequency, and
+radio mode so refreshed data cannot silently change the later confirmed target.
+
+These primitives perform no Tkinter, Forge, network, SQLite, filesystem, CAT,
+hardware, or background work. They cannot tune or transmit. The existing typed
+`ReceiveTuningService` remains the only receive-tuning authority, and the running
+POTA dashboard retains its existing workflow in this checkpoint. See
+`docs/SHARED_SPOT_DOMAIN.md` for the complete rules.
+
 ## Runtime Composition and Lifecycle
 
 `ApplicationRuntime` is the current composition root for radio, GPS, logging,
