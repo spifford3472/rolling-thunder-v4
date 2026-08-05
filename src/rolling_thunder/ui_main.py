@@ -40,11 +40,7 @@ from rolling_thunder.physical_controls import (
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
 from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
 from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
-from rolling_thunder.pota_detail_overlay import PotaDetailOverlayController
-from rolling_thunder.pota_enrichment_ui import (
-    PotaDetailOverlayWidgets,
-    format_enriched_callsign,
-)
+from rolling_thunder.pota_enrichment_ui import format_enriched_callsign
 from rolling_thunder.pota_tune_execution_controller import (
     PotaTuneIntentExecutor,
 )
@@ -190,17 +186,11 @@ def run_dashboard(
         pota_dashboard,
         pota_tune_executor or runtime.pota_receive_tune_executor,
     )
-    pota_detail_overlay = PotaDetailOverlayController(
-        context_navigation,
-        pota_dashboard,
-        runtime.pota_enrichment,
-    )
     active_panel_commands = ActivePanelCommandController(
         context_navigation,
         pota_dashboard,
         pota_filters,
         pota_tune_ui,
-        pota_detail_overlay,
     )
 
     def capture_state() -> CallsignCaptureState:
@@ -653,7 +643,6 @@ def run_dashboard(
         stale_after=timedelta(seconds=config.map.gps_stale_after_s)
     )
     live_map_widgets = LiveMapWidgets(situational)
-    pota_overlay_widgets = PotaDetailOverlayWidgets(situational)
 
     ticker_text = tk.StringVar(value="STARTING ROLLING THUNDER")
     ticker = tk.Label(
@@ -901,7 +890,6 @@ def run_dashboard(
             context_body_label.configure(font=("DejaVu Sans", 22), wraplength=560)
             context_body_text.set(selected_context.definition.placeholder)
 
-        pota_overlay_widgets.update(pota_detail_overlay.state)
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:

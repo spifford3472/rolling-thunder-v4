@@ -48,24 +48,6 @@ class BandChangeExecutor:
         )
 
 
-class RecordingOverlay:
-    def __init__(self) -> None:
-        self.show_calls = 0
-        self.hide_calls = 0
-        self.visible = False
-
-    def show_selected(self) -> bool:
-        self.show_calls += 1
-        self.visible = True
-        return True
-
-    def hide(self) -> bool:
-        self.hide_calls += 1
-        was_visible = self.visible
-        self.visible = False
-        return was_visible
-
-
 def spot(
     callsign: str,
     reference: str,
@@ -101,7 +83,6 @@ def controller(
     PotaDashboardController,
     PotaDashboardFilterController,
     RecordingExecutor,
-    RecordingOverlay,
 ]:
     navigation = ContextNavigationController(context)
     dashboard = PotaDashboardController(
@@ -112,27 +93,22 @@ def controller(
     filters.activate_for_frequency(Frequency(hz=14_250_000))
     executor = RecordingExecutor()
     tune = PotaTuneUiController(dashboard, executor)
-    overlay = RecordingOverlay()
     return (
         ActivePanelCommandController(
             navigation,
             dashboard,
             filters,
             tune,
-            overlay,
         ),
         navigation,
         dashboard,
         filters,
         executor,
-        overlay,
     )
 
 
 def test_non_pota_context_rejects_panel_actions() -> None:
-    commands, _navigation, dashboard, filters, executor, overlay = controller(
-        ContextId.DX
-    )
+    commands, _navigation, dashboard, filters, executor = controller(ContextId.DX)
     initial_filter = filters.state
 
     assert commands.primary() is False
@@ -148,12 +124,10 @@ def test_non_pota_context_rejects_panel_actions() -> None:
     assert dashboard.selected_index is None
     assert dashboard.tune_intent is None
     assert executor.calls == []
-    assert overlay.show_calls == 0
-    assert overlay.hide_calls == 0
 
 
 def test_primary_and_secondary_cycle_pota_filters() -> None:
-    commands, _navigation, _dashboard, filters, _executor, _overlay = controller()
+    commands, _navigation, _dashboard, filters, _executor = controller()
 
     assert filters.state.band_label == "20"
     assert filters.state.mode_label == "SSB"
@@ -165,21 +139,15 @@ def test_primary_and_secondary_cycle_pota_filters() -> None:
     assert filters.state.mode_label == "CW"
 
 
-def test_tertiary_controls_show_and_hide_pota_overlay() -> None:
-    commands, _navigation, _dashboard, _filters, _executor, overlay = controller()
+def test_pota_tertiary_actions_are_unassigned() -> None:
+    commands, _navigation, _dashboard, _filters, _executor = controller()
 
-    assert commands.tertiary() is True
-    assert overlay.visible is True
-    assert overlay.show_calls == 1
-
-    assert commands.tertiary_long() is True
-    assert overlay.visible is False
-    assert overlay.hide_calls == 1
+    assert commands.tertiary() is False
     assert commands.tertiary_long() is False
 
 
 def test_encoder_rotation_moves_pota_selection_without_wrapping() -> None:
-    commands, _navigation, dashboard, _filters, _executor, _overlay = controller()
+    commands, _navigation, dashboard, _filters, _executor = controller()
 
     assert commands.move_next() is True
     assert dashboard.selected_index == 0
@@ -191,7 +159,7 @@ def test_encoder_rotation_moves_pota_selection_without_wrapping() -> None:
 
 
 def test_activate_requires_an_explicit_pota_selection() -> None:
-    commands, _navigation, dashboard, _filters, executor, _overlay = controller()
+    commands, _navigation, dashboard, _filters, executor = controller()
 
     assert commands.activate_selection() is False
     assert dashboard.tune_intent is None
@@ -199,7 +167,7 @@ def test_activate_requires_an_explicit_pota_selection() -> None:
 
 
 def test_activate_stages_intent_without_confirming_or_executing() -> None:
-    commands, _navigation, dashboard, _filters, executor, _overlay = controller()
+    commands, _navigation, dashboard, _filters, executor = controller()
     commands.move_next()
 
     assert commands.activate_selection() is True
@@ -226,7 +194,6 @@ def test_encoder_short_advances_stage_confirm_execute_once() -> None:
         dashboard,
         filters,
         tune,
-        RecordingOverlay(),
     )
 
     assert commands.activate_selection() is True
@@ -253,7 +220,7 @@ def test_encoder_short_advances_stage_confirm_execute_once() -> None:
 
 
 def test_back_cancels_intent_before_clearing_selection() -> None:
-    commands, _navigation, dashboard, _filters, executor, _overlay = controller()
+    commands, _navigation, dashboard, _filters, executor = controller()
     commands.move_next()
     commands.activate_selection()
 
@@ -280,13 +247,11 @@ def test_back_acknowledges_warning_from_any_context_before_intent() -> None:
     filters.activate_for_frequency(Frequency(hz=14_250_000))
     dashboard.select_next()
     tune = PotaTuneUiController(dashboard, BandChangeExecutor())
-    overlay = RecordingOverlay()
     commands = ActivePanelCommandController(
         navigation,
         dashboard,
         filters,
         tune,
-        overlay,
     )
     tune.request()
     tune.confirm()
@@ -305,7 +270,7 @@ def test_back_acknowledges_warning_from_any_context_before_intent() -> None:
 
 
 def test_context_change_prevents_encoder_from_mutating_pota_state() -> None:
-    commands, navigation, dashboard, _filters, _executor, _overlay = controller()
+    commands, navigation, dashboard, _filters, _executor = controller()
     commands.move_next()
     commands.activate_selection()
     pending = dashboard.tune_intent

@@ -150,7 +150,7 @@ POTA operation, physical controls, or radio state polling.
 6. Confirm the marker follows course while moving and retains its heading when
    stopped.
 7. Confirm GPS updates do not cause visible flicker or UI stalls.
-8. Confirm POTA overlays, the global ticker, and ATAS-120 warnings still work.
+8. Confirm POTA cards, the global ticker, and ATAS-120 warnings still work.
 9. Restore connectivity and confirm online fallback works outside package
    coverage.
 10. Disconnect GPS and confirm the marker is labeled last-known rather than
