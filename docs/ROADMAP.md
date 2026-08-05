@@ -323,21 +323,50 @@ thread boundaries.
 - additional radio adapters
 - mobile-safe audible prompts
 
+## Shared Spot Domain Checkpoint
+
+Status: implemented on the checkpoint branch and pending pull-request review,
+GitHub Actions, owner approval, and merge.
+
+Checkpoint 3 of GitHub issue #129 provides:
+
+- immutable provider-neutral POTA and DX spot records
+- deterministic POTA and DX stable identities
+- optional operator name and grid retained as typed `None`
+- `<UNKNOWN>` formatting only at the presentation boundary
+- explicit amateur-band and integer-frequency ordering
+- provider-arrival-independent stable tie-breakers
+- deterministic same-park/same-frequency POTA duplicate collapse
+- canonical immutable spot snapshots
+- stable identity-based selection across reordered snapshot replacement
+- selection and staging removal when the selected identity disappears
+- no neighboring-row fallback
+- immutable action-critical staged state
+- staged-action invalidation when callsign, frequency, or mode changes
+- explicit cancellation, context, radio, and failure invalidation paths
+- no Tkinter, Forge, network, SQLite, filesystem, CAT, or hardware work
+- no changes to the running POTA dashboard or three-action tune workflow
+- no PTT, MOX, keying, tuner, power, or unattended transmit authority
+
+See `docs/SHARED_SPOT_DOMAIN.md` for the identity, canonicalization, selection,
+staging, and radio-safety rules.
+
 ## Immediate Next Feature
 
-Implement checkpoint 3 of GitHub issue #129: add the shared provider-neutral spot
-domain, deterministic ordering, stable selection, and staged-action primitives.
+After checkpoint 3 is approved and merged, implement checkpoint 4 of GitHub issue
+#129: the Forge aggregation core and initial POTA provider.
 
-The next checkpoint must:
+That checkpoint must:
 
-- define immutable POTA/DX-neutral spot records and snapshots
-- preserve selection by stable identity across snapshot replacement
-- clear selection and staged action when a selected spot disappears
-- order by explicit amateur-band rank, frequency, and deterministic tie-breakers
-- collapse duplicate same-park/same-frequency POTA entries deterministically
-- display unknown operator names and grids as `<UNKNOWN>`
-- remain independent of Forge, public internet, Tkinter, SQLite, CAT, and hardware
-- preserve the existing `ReceiveTuningService` as the only tuning authority
-- add no PTT, MOX, keying, tuner, power, or unattended transmit authority
+- refresh configured providers outside request handlers
+- normalize POTA data into the shared immutable spot domain
+- validate complete candidate snapshots before activation
+- retain the previous active provider slice on provider failure
+- persist complete snapshots transactionally in SQLite
+- expose versioned REST endpoints and health state
+- log bounded actionable provider and persistence failures
+- perform no radio, CAT, tuning, or transmit-control work
+- remain independently testable without public internet, credentials, or hardware
+- preserve local-first Pi logging and all existing radio-safety boundaries
 - pass Ruff, strict MyPy, full pytest, pre-commit, and GitHub Actions
 - remain unmerged without explicit owner authorization
