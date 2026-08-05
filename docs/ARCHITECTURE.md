@@ -134,6 +134,7 @@ Current examples include:
 - physical-control event mapping, gating, and dispatch
 - POTA enrichment and timed detail-overlay state
 - navigation and context-sensitive panel commands
+- thread-safe status-message arbitration for the global ticker and alerts
 
 The shared operator-command boundary is important: physical buttons and the GUI
 invoke the same Commit, Discard, Voice, navigation, and active-panel behavior.
@@ -155,10 +156,32 @@ must not:
 UI refreshes may read cached snapshots and drain bounded, nonblocking application
 queues. Slow hardware and network work belongs in workers owned by services.
 
+## Status Message Arbitration
+
+`StatusMessageService` is the runtime-owned, thread-safe boundary for the global
+bottom status bar. Publishers submit immutable messages with a stable
+replacement key, text, presentation token, integer priority, and optional
+monotonic expiration. Reading a snapshot prunes expired entries and selects the
+highest-priority active message; the newest message wins when priorities are
+equal.
+
+Replacement keys let one producer update or clear only its own message. An
+unexpired lower-priority message remains retained and resumes automatically when
+a higher-priority message expires or is cleared. Tkinter renders only the
+immutable selected snapshot and maps presentation tokens to UI colors. The
+service performs no Tkinter, network, filesystem, SQLite, CAT, or hardware work.
+
+The routine connectivity ticker uses a stable replacement key. A verified
+cross-band receive-tune result publishes an amber ATAS-120 reminder for exactly
+10 seconds. Same-band tuning publishes no ATAS reminder, and the Back command no
+longer dismisses alerts. Future APRS, MeshCore, weather, DX, and radio-status
+publishers must use the same arbitration boundary rather than adding direct
+ticker overrides.
+
 ## Runtime Composition and Lifecycle
 
 `ApplicationRuntime` is the current composition root for radio, GPS, logging,
-connectivity, POTA, enrichment, and live-map services. The UI composes additional
+connectivity, POTA, enrichment, live-map, and status-message services. The UI composes additional
 presentation controllers and the physical-control source lifecycle around that
 runtime.
 

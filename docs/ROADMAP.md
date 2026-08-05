@@ -243,8 +243,9 @@ Completed and verified:
 - same-band and controlled cross-band hardware validation
 - isolated FT-891 band-memory behavior validation
 - Standard Com Port remaining unopened
-- sticky global ATAS-120 retune warning after verified band changes
-- same-band warning suppression, retention, replacement, and acknowledgement
+- amber global ATAS-120 retune warning for 10 seconds after verified band changes
+- same-band warning suppression and replacement-key updates through generic
+  status arbitration
 - no PTT, MOX, keying, tuner, power, or unattended transmit authority
 
 The required receive-tuning order remains:
@@ -274,7 +275,7 @@ The current first slice provides:
 - validated atomic raster-tile cache with configured bounds
 - on-demand visible-tile retrieval with no route or regional prefetching
 - existing POTA overlay above the map
-- unchanged global ticker and sticky ATAS-120 warning priority
+- global ticker rendered through priority-arbitrated immutable status snapshots
 - no Home Station Platform dependency
 - no radio or transmit-control changes
 
@@ -301,6 +302,11 @@ is being added incrementally around the implemented radio, voice, logging,
 storage, context, health, GPS, connectivity, POTA, enrichment, physical-input,
 and live-map capabilities.
 
+The runtime now owns a thread-safe immutable status-message service. The routine
+ticker and verified ATAS-120 reminder publish through stable replacement keys,
+priority arbitration, and monotonic expiration. This is the approved extension
+point for future APRS, MeshCore, weather, DX, and radio alerts.
+
 An in-process event bus remains an architectural direction, not a requirement to
 retrofit prematurely. Its implementation should be driven by demonstrated
 service-coordination needs while preserving the current safe Tkinter and worker-
@@ -319,21 +325,19 @@ thread boundaries.
 
 ## Immediate Next Feature
 
-Complete GitHub issue #122, `Enrich committed contacts with GPS, POTA, and QRZ
-metadata`.
+Implement checkpoint 3 of GitHub issue #129: add the shared provider-neutral spot
+domain, deterministic ordering, stable selection, and staged-action primitives.
 
-The current feature must:
+The next checkpoint must:
 
-- preserve `my_grid` as the mobile/operator locator and `grid` as the contacted
-  station or contacted park locator
-- associate POTA only from one unique callsign, frequency, and compatible-mode
-  match in the active POTA context
-- prefer POTA park coordinates over optional QRZ fallback
-- keep QRZ and all potentially blocking work outside Tkinter
-- preserve enrichment fields through SQLite, recovery, verified backup/export,
-  import, synchronization, and Home Station Platform upload
-- keep the local database authoritative and local Commit available during GPS,
-  POTA, QRZ, Home Station Platform, or internet failure
-- pass Ruff, strict MyPy, full pytest, pre-commit, and GitHub Actions
+- define immutable POTA/DX-neutral spot records and snapshots
+- preserve selection by stable identity across snapshot replacement
+- clear selection and staged action when a selected spot disappears
+- order by explicit amateur-band rank, frequency, and deterministic tie-breakers
+- collapse duplicate same-park/same-frequency POTA entries deterministically
+- display unknown operator names and grids as `<UNKNOWN>`
+- remain independent of Forge, public internet, Tkinter, SQLite, CAT, and hardware
+- preserve the existing `ReceiveTuningService` as the only tuning authority
 - add no PTT, MOX, keying, tuner, power, or unattended transmit authority
+- pass Ruff, strict MyPy, full pytest, pre-commit, and GitHub Actions
 - remain unmerged without explicit owner authorization

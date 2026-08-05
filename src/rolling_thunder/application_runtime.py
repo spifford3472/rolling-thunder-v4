@@ -48,6 +48,7 @@ from rolling_thunder.radio import Radio
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.serial_gps import SerialGPSReceiver
+from rolling_thunder.status_messages import StatusMessageService
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
 GPSFactory = Callable[..., GPSReceiver]
@@ -87,6 +88,7 @@ class ApplicationRuntime:
     network_keepalive: NetworkKeepaliveService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
+    status_messages: StatusMessageService = field(default_factory=StatusMessageService)
     _started: bool = False
 
     @classmethod
