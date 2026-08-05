@@ -203,7 +203,7 @@ logged or included in tests, issues, pull requests, or chat.
 
 The first Milestone 10 Phase C slice replaces the reserved right-side panel with
 a north-up map centered on the latest valid GPS position. It preserves the
-existing dashboard proportions, global ticker, and timed POTA detail overlay.
+existing dashboard proportions and global ticker.
 
 `LiveMapController` converts immutable `GPSState` snapshots into current, stale,
 last-known, waiting, or error presentation without performing I/O.
