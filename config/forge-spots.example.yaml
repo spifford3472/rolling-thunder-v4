@@ -1,0 +1,19 @@
+server:
+  # Loopback-only by default. Production exposure is intentionally deferred.
+  bind_host: 127.0.0.1
+  bind_port: 8765
+
+storage:
+  # Relative paths resolve from this configuration file.
+  database_path: ../data/forge-spots.db
+
+aggregation:
+  refresh_interval_s: 60.0
+  refresh_on_start: true
+
+pota:
+  enabled: true
+  base_url: https://api.pota.app
+  request_timeout_s: 5.0
+
+logging_level: INFO
