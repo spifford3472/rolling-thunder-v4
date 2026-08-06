@@ -40,7 +40,7 @@ class ThreadedScheduledPoll(ScheduledPoll):
         while not self._stopped.wait(self._interval_s):
             try:
                 self._callback()
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - isolate scheduled callbacks
                 # Scheduled work is isolated so one unexpected callback failure
                 # cannot silently terminate every future refresh attempt.
                 self._error_handler(error)

@@ -186,7 +186,7 @@ def test_spots_endpoint_serializes_complete_canonical_snapshot_and_provider_age(
     assert payload["snapshot_revision"] == 7
     assert payload["generated_at"] == "2026-08-05T20:00:00Z"
     assert payload["spots"][0]["callsign"] == "KI5VNB"
-    assert payload["spots"][0]["frequency"] == {"hz": 14_250_000}
+    assert payload["spots"][0]["frequency"] == 14_250_000
     assert payload["spots"][0]["identity"]["provider"] == "pota"
     assert payload["spots"][0]["pota"]["park_reference"] == "US-1234"
     assert payload["providers"][0]["last_success_at"] == "2026-08-05T20:00:00Z"

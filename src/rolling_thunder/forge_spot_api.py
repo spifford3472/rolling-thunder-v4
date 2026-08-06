@@ -128,6 +128,7 @@ class ForgeSpotApiApplication:
             for health in state.providers
         )
 
+        payload: ForgeHealthResponse | ForgeSpotsResponse
         if path == "/api/v1/health":
             payload = ForgeHealthResponse(
                 service_status=derive_service_status(state),
