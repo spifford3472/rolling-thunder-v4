@@ -1,8 +1,8 @@
 """Bounded DXSpider snapshot-session adapter for the independent Forge service."""
 
+import socket
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-import socket
 from typing import Protocol
 
 from rolling_thunder.forge_config import ForgeDxSpiderProviderConfig
