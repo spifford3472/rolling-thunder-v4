@@ -16,4 +16,27 @@ pota:
   base_url: https://api.pota.app
   request_timeout_s: 5.0
 
+dxspider:
+  # Replace these example values before enabling a public callsign-login node.
+  enabled: false
+  host: cluster.example.invalid
+  port: 7300
+  login_callsign: N0CALL
+  connect_timeout_s: 5.0
+  read_timeout_s: 5.0
+  max_response_bytes: 262144
+  max_spots: 250
+  max_spot_age_s: 3600.0
+
+qrz:
+  # Credentials come only from ROLLING_THUNDER_QRZ_USERNAME and
+  # ROLLING_THUNDER_QRZ_PASSWORD. They never belong in this file.
+  enabled: false
+  request_timeout_s: 5.0
+  minimum_request_interval_s: 1.0
+  max_lookups_per_refresh: 25
+  positive_ttl_s: 86400.0
+  negative_ttl_s: 3600.0
+  max_cache_entries: 2000
+
 logging_level: INFO
