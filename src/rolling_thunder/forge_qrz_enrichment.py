@@ -159,9 +159,16 @@ class ForgeQrzEnricher:
                 try:
                     enriched = SpotRecord.model_validate(
                         {
-                            **spot.model_dump(mode="python"),
+                            "identity": spot.identity,
+                            "callsign": spot.callsign,
                             "operator_name": operator_name,
                             "grid": grid,
+                            "frequency": spot.frequency,
+                            "mode": spot.mode,
+                            "display_mode": spot.display_mode,
+                            "spotted_at": spot.spotted_at,
+                            "source_metadata": spot.source_metadata,
+                            "pota": spot.pota,
                         }
                     )
                 except ValidationError as error:
