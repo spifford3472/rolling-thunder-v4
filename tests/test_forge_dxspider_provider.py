@@ -130,8 +130,8 @@ def provider_for(
 def test_provider_executes_bounded_snapshot_session_and_closes() -> None:
     session = FakeDxSpiderSession(
         [
-            b"Welcome\r\n"
-            b"DX de K1ABC: 14074.0 W1AW FT8 FN31 0204Z\r\n",
+            (b"Welcome\r\n"
+            b"DX de K1ABC: 14074.0 W1AW FT8 FN31 0204Z\r\n"),
             b"",
         ]
     )
@@ -234,8 +234,8 @@ def test_open_failure_is_mapped_without_creating_session() -> None:
 def test_spot_age_filter_retains_only_recent_records() -> None:
     session = FakeDxSpiderSession(
         [
-            b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n"
-            b"DX de K1ABC: 14250.0 K2OLD SSB 0000Z\r\n",
+            (b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n"
+            b"DX de K1ABC: 14250.0 K2OLD SSB 0000Z\r\n"),
             b"",
         ]
     )
@@ -270,8 +270,8 @@ def test_all_malformed_spot_like_lines_are_typed_failure() -> None:
 def test_malformed_line_does_not_discard_valid_records() -> None:
     session = FakeDxSpiderSession(
         [
-            b"DX de K1ABC: 14074.0005 NOT-A-CALL FT8 0204Z\r\n"
-            b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n",
+            (b"DX de K1ABC: 14074.0005 NOT-A-CALL FT8 0204Z\r\n"
+            b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n"),
             b"",
         ]
     )
@@ -285,8 +285,8 @@ def test_malformed_line_does_not_discard_valid_records() -> None:
 def test_maximum_spot_count_bounds_accepted_slice() -> None:
     session = FakeDxSpiderSession(
         [
-            b"DX de K1ABC: 7002.0 W1AAA CW 0204Z\r\n"
-            b"DX de K1ABC: 7003.0 W1BBB CW 0204Z\r\n",
+            (b"DX de K1ABC: 7002.0 W1AAA CW 0204Z\r\n"
+            b"DX de K1ABC: 7003.0 W1BBB CW 0204Z\r\n"),
             b"",
         ]
     )
@@ -300,8 +300,8 @@ def test_maximum_spot_count_bounds_accepted_slice() -> None:
 def test_duplicate_identity_collapses_to_newest_record() -> None:
     session = FakeDxSpiderSession(
         [
-            b"DX de K1ABC: 14074.0 W1AW FT8 first 0203Z\r\n"
-            b"DX de K2ABC: 14074.0 W1AW FT8 second 0204Z\r\n",
+            (b"DX de K1ABC: 14074.0 W1AW FT8 first 0203Z\r\n"
+            b"DX de K2ABC: 14074.0 W1AW FT8 second 0204Z\r\n"),
             b"",
         ]
     )
@@ -322,7 +322,7 @@ def test_naive_clock_value_is_rejected_before_opening_session() -> None:
     provider = ForgeDxSpiderSpotProvider(
         dx_config(),
         session_factory=factory,
-        clock=lambda: datetime(2026, 8, 6, 2, 5),
+        clock=lambda: datetime(2026, 8, 6, 2, 5),  # noqa: DTZ001
     )
 
     with pytest.raises(ValueError, match="aware datetime"):
