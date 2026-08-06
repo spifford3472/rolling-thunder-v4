@@ -66,7 +66,7 @@ class ForgeProviderHealth(DomainModel):
         return normalized[:_MAX_ERROR_LENGTH] or None
 
     @model_validator(mode="after")
-    def validate_consistency(self) -> "ForgeProviderHealth":
+    def validate_consistency(self) -> ForgeProviderHealth:
         """Keep published status, timestamps, and errors internally consistent."""
         if self.status is ForgeProviderHealthStatus.STARTING:
             if self.last_attempt_at is not None or self.last_error is not None:
@@ -186,7 +186,13 @@ class ForgeSpotAggregationService:
             previous_health = dict(self._provider_health)
             previous_state = self._state
 
-        attempted_at = self._aware_now()
+        try:
+            attempted_at = self._aware_now()
+        except ValueError:
+            with self._lock:
+                self._refreshing = False
+            raise
+
         try:
             provider_slice = adapter.fetch_slice()
             if provider_slice.provider is not provider:

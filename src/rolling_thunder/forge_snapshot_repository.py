@@ -17,6 +17,7 @@ from rolling_thunder.spot_domain import (
     DxSpotIdentity,
     PotaSpotIdentity,
     PotaSpotMetadata,
+    SpotIdentity,
     SpotProvider,
     SpotRecord,
     SpotSnapshot,
@@ -53,7 +54,7 @@ class ForgeStoredSnapshot(DomainModel):
         return ordered
 
     @model_validator(mode="after")
-    def validate_complete_snapshot(self) -> "ForgeStoredSnapshot":
+    def validate_complete_snapshot(self) -> ForgeStoredSnapshot:
         """Require provider slices to compose the complete canonical snapshot."""
         combined = canonicalize_spots(
             spot
@@ -370,7 +371,8 @@ class SqliteForgeSnapshotRepository:
         connection = sqlite3.connect(self._database_path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
-        if connection.execute("PRAGMA foreign_keys").fetchone() != (1,):
+        foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()
+        if foreign_keys is None or foreign_keys[0] != 1:
             connection.close()
             raise ForgeSnapshotStorageError(
                 f"SQLite foreign-key enforcement could not be enabled: {self._database_path}"
@@ -402,6 +404,7 @@ class SqliteForgeSnapshotRepository:
         callsign = cls._require_text(row["callsign"], "callsign")
         park_reference = cls._optional_text(row["pota_park_reference"])
 
+        identity: SpotIdentity
         if provider is SpotProvider.POTA:
             if park_reference is None:
                 raise ValueError("stored POTA spot is missing its park reference")
