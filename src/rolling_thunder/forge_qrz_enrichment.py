@@ -33,10 +33,10 @@ class ForgeQrzEnrichmentDiagnostics(DomainModel):
     """Immutable bounded diagnostics for one provider-slice enrichment attempt."""
 
     enabled: bool
-    requested_callsigns: int = Field(ge=0)
-    cache_hits: int = Field(ge=0)
-    live_lookups: int = Field(ge=0)
-    enriched_spots: int = Field(ge=0)
+    requested_callsigns: int = Field(default=0, ge=0)
+    cache_hits: int = Field(default=0, ge=0)
+    live_lookups: int = Field(default=0, ge=0)
+    enriched_spots: int = Field(default=0, ge=0)
     budget_exhausted: bool = False
     last_error: str | None = Field(default=None, max_length=_MAX_ERROR_LENGTH)
 
