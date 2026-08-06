@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
-from re import IGNORECASE, compile as compile_pattern
+from re import IGNORECASE
+from re import compile as compile_pattern
 from typing import Literal
 
 from pydantic import TypeAdapter, ValidationError
