@@ -105,7 +105,7 @@ def test_slice_requires_timezone_aware_fetch_time() -> None:
     with pytest.raises(ValidationError, match="timezone"):
         ForgeProviderSlice.from_spots(
             provider=SpotProvider.POTA,
-            fetched_at=datetime(2026, 8, 5, 20, 0),
+            fetched_at=BASE_TIME.replace(tzinfo=None),
             spots=(),
         )
 
