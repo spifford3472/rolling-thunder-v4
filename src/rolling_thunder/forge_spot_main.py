@@ -10,13 +10,24 @@ from pathlib import Path
 from threading import Thread
 from typing import Protocol
 
+from rolling_thunder.application_secrets import (
+    ApplicationSecrets,
+    SecretConfigurationError,
+    load_application_secrets,
+)
 from rolling_thunder.forge_config import (
     ForgeApplicationConfig,
     ForgeConfigurationError,
     ForgeLogLevel,
     load_forge_config,
 )
+from rolling_thunder.forge_dxspider_provider import (
+    DxSpiderSessionFactory,
+    ForgeDxSpiderSpotProvider,
+)
 from rolling_thunder.forge_pota_provider import ForgePotaSpotProvider
+from rolling_thunder.forge_qrz_enrichment import ForgeQrzEnricher
+from rolling_thunder.forge_qrz_provider import ForgeQrzEnrichedSpotProvider
 from rolling_thunder.forge_snapshot_repository import (
     ForgeSnapshotStorageError,
     SqliteForgeSnapshotRepository,
@@ -27,8 +38,10 @@ from rolling_thunder.forge_spot_api import (
     ForgeSpotApiApplication,
 )
 from rolling_thunder.forge_spot_polling import ForgeSpotPollingService
+from rolling_thunder.forge_spot_provider import ForgeSpotProvider
 from rolling_thunder.http_home_platform import HttpTransport
 from rolling_thunder.http_pota_spot_source import HttpPotaSpotSource
+from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
 from rolling_thunder.radio_polling import PollScheduler
 from rolling_thunder.threaded_poll_scheduler import ThreadedPollScheduler
 
@@ -135,29 +148,74 @@ def configure_forge_logging(level: ForgeLogLevel) -> logging.Logger:
     return logger
 
 
+def validate_forge_secrets(
+    config: ForgeApplicationConfig,
+    secrets: ApplicationSecrets,
+) -> None:
+    """Require environment-backed QRZ credentials when enrichment is enabled."""
+    if config.qrz.enabled and secrets.qrz is None:
+        raise SecretConfigurationError(
+            "QRZ enrichment is enabled, but ROLLING_THUNDER_QRZ_USERNAME and "
+            "ROLLING_THUNDER_QRZ_PASSWORD are not both configured."
+        )
+
+
 def build_forge_runtime(
     config: ForgeApplicationConfig,
     *,
     scheduler: PollScheduler | None = None,
     server_factory: ForgeServerFactory | None = None,
     transport: HttpTransport | None = None,
+    dxspider_session_factory: DxSpiderSessionFactory | None = None,
+    secrets: ApplicationSecrets | None = None,
     logger: logging.Logger | None = None,
 ) -> ForgeSpotRuntime:
-    """Compose Forge providers, durability, polling, and read-only HTTP."""
+    """Compose Forge providers, enrichment, durability, polling, and REST."""
     process_logger = logger or logging.getLogger(_LOGGER_NAME)
-    if not config.pota.enabled:
-        raise ForgeRuntimeConfigurationError(
-            "No Forge spot provider is enabled; enable the POTA provider."
+    providers: list[ForgeSpotProvider] = []
+
+    if config.pota.enabled:
+        source = HttpPotaSpotSource(
+            str(config.pota.base_url).rstrip("/"),
+            timeout_s=config.pota.request_timeout_s,
+            transport=transport,
+        )
+        providers.append(ForgePotaSpotProvider(source))
+
+    if config.dxspider.enabled:
+        providers.append(
+            ForgeDxSpiderSpotProvider(
+                config.dxspider,
+                session_factory=dxspider_session_factory,
+            )
         )
 
+    if not providers:
+        raise ForgeRuntimeConfigurationError(
+            "No Forge spot provider is enabled; enable POTA or DXSpider."
+        )
+
+    runtime_secrets = secrets or ApplicationSecrets()
+    try:
+        validate_forge_secrets(config, runtime_secrets)
+    except SecretConfigurationError as error:
+        raise ForgeRuntimeConfigurationError(str(error)) from error
+
+    if config.qrz.enabled:
+        assert runtime_secrets.qrz is not None
+        lookup = QrzXmlCallsignNameProvider(
+            runtime_secrets.qrz,
+            timeout_s=config.qrz.request_timeout_s,
+            transport=transport,
+        )
+        enricher = ForgeQrzEnricher(config.qrz, lookup)
+        providers = [
+            ForgeQrzEnrichedSpotProvider(provider, enricher)
+            for provider in providers
+        ]
+
     repository = SqliteForgeSnapshotRepository(config.storage.database_path)
-    source = HttpPotaSpotSource(
-        str(config.pota.base_url).rstrip("/"),
-        timeout_s=config.pota.request_timeout_s,
-        transport=transport,
-    )
-    provider = ForgePotaSpotProvider(source)
-    aggregation = ForgeSpotAggregationService((provider,), repository)
+    aggregation = ForgeSpotAggregationService(tuple(providers), repository)
     polling_scheduler = scheduler or ThreadedPollScheduler()
     polling = ForgeSpotPollingService(
         aggregation,
@@ -193,13 +251,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         config = load_forge_config(args.config)
-    except ForgeConfigurationError as error:
+        secrets = load_application_secrets()
+        validate_forge_secrets(config, secrets)
+    except (ForgeConfigurationError, SecretConfigurationError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return EXIT_CONFIGURATION_ERROR
 
     logger = configure_forge_logging(config.logging_level)
     try:
-        runtime = build_forge_runtime(config, logger=logger)
+        runtime = build_forge_runtime(config, secrets=secrets, logger=logger)
     except (ForgeRuntimeConfigurationError, ForgeSnapshotStorageError, OSError) as error:
         logger.error("Forge spot service could not start: %s", error)
         return EXIT_RUNTIME_ERROR

@@ -14,6 +14,8 @@ from pydantic import (
     field_validator,
 )
 
+from rolling_thunder.value_types import BaseCallsign
+
 
 class ForgeConfigurationError(Exception):
     """Base exception for Forge configuration failures."""
@@ -94,6 +96,49 @@ class ForgePotaProviderConfig(ForgeConfigurationModel):
     request_timeout_s: float = Field(default=5.0, gt=0, le=60)
 
 
+class ForgeDxSpiderProviderConfig(ForgeConfigurationModel):
+    """Bounded public DXSpider snapshot-session settings."""
+
+    enabled: bool = False
+    host: str = Field(
+        default="cluster.example.invalid",
+        min_length=1,
+        max_length=255,
+    )
+    port: int = Field(default=7300, ge=1, le=65_535)
+    login_callsign: BaseCallsign = "N0CALL"
+    connect_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    read_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    max_response_bytes: int = Field(
+        default=262_144,
+        ge=4_096,
+        le=4_194_304,
+    )
+    max_spots: int = Field(default=250, ge=1, le=5_000)
+    max_spot_age_s: float = Field(default=3_600.0, gt=0, le=86_400)
+
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: str) -> str:
+        """Trim the cluster host and reject blank values."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be blank")
+        return normalized
+
+
+class ForgeQrzEnrichmentConfig(ForgeConfigurationModel):
+    """Optional bounded Forge-side QRZ enrichment settings."""
+
+    enabled: bool = False
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    minimum_request_interval_s: float = Field(default=1.0, ge=0, le=60)
+    max_lookups_per_refresh: int = Field(default=25, ge=1, le=1_000)
+    positive_ttl_s: float = Field(default=86_400.0, gt=0, le=31_536_000)
+    negative_ttl_s: float = Field(default=3_600.0, gt=0, le=604_800)
+    max_cache_entries: int = Field(default=2_000, ge=1, le=100_000)
+
+
 class ForgeApplicationConfig(ForgeConfigurationModel):
     """Complete independent Forge spot-service configuration."""
 
@@ -101,6 +146,8 @@ class ForgeApplicationConfig(ForgeConfigurationModel):
     storage: ForgeStorageConfig = ForgeStorageConfig()
     aggregation: ForgeAggregationConfig = ForgeAggregationConfig()
     pota: ForgePotaProviderConfig = ForgePotaProviderConfig()
+    dxspider: ForgeDxSpiderProviderConfig = ForgeDxSpiderProviderConfig()
+    qrz: ForgeQrzEnrichmentConfig = ForgeQrzEnrichmentConfig()
     logging_level: ForgeLogLevel = ForgeLogLevel.INFO
 
     @field_validator("logging_level", mode="before")
