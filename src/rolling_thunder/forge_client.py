@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from json import JSONDecodeError, loads
@@ -13,7 +13,11 @@ from urllib.parse import urlparse
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from rolling_thunder.domain import DomainModel, Frequency, RadioMode
-from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
+from rolling_thunder.http_home_platform import (
+    HttpResponse,
+    HttpTransport,
+    UrllibHttpTransport,
+)
 from rolling_thunder.spot_domain import (
     DxSpotIdentity,
     PotaSpotIdentity,
@@ -23,11 +27,12 @@ from rolling_thunder.spot_domain import (
     SpotSnapshot,
     SpotSourceMetadataItem,
 )
-from rolling_thunder.value_types import Callsign, MaidenheadGrid
+from rolling_thunder.value_types import Callsign, MaidenheadGrid, PotaReference
 
 _JSON_ACCEPT = "application/json"
 _USER_AGENT = "RollingThunder-v4.1"
 _MAX_ERROR_LENGTH = 500
+_MAX_FREQUENCY_HZ = 300_000_000_000
 
 
 class ForgeClientError(Exception):
@@ -60,7 +65,7 @@ class ForgeRemoteProviderHealth(DomainModel):
 
     provider: SpotProvider
     status: ForgeRemoteProviderStatus
-    active_spot_count: int = Field(ge=0)
+    active_spot_count: int = Field(ge=0, strict=True)
     last_attempt_at: datetime | None = None
     last_success_at: datetime | None = None
     last_error: str | None = Field(default=None, max_length=_MAX_ERROR_LENGTH)
@@ -100,20 +105,32 @@ class ForgeRemoteProviderHealth(DomainModel):
         return self
 
 
+class _ForgeWirePotaIdentity(DomainModel):
+    provider: Literal["pota"]
+    park_reference: PotaReference
+    frequency: int = Field(gt=0, le=_MAX_FREQUENCY_HZ, strict=True)
+
+
+class _ForgeWireDxIdentity(DomainModel):
+    provider: Literal["dx"]
+    callsign: Callsign
+    frequency: int = Field(gt=0, le=_MAX_FREQUENCY_HZ, strict=True)
+
+
 SpotWireIdentity = Annotated[
-    PotaSpotIdentity | DxSpotIdentity,
+    _ForgeWirePotaIdentity | _ForgeWireDxIdentity,
     Field(discriminator="provider"),
 ]
 
 
 class _ForgeWireSpotRecord(DomainModel):
-    """Wire DTO using an explicit discriminator for stable spot identities."""
+    """Wire DTO matching Forge's integer-hertz JSON representation."""
 
     identity: SpotWireIdentity
     callsign: Callsign
     operator_name: str | None = Field(default=None, max_length=200)
     grid: MaidenheadGrid | None = None
-    frequency: Frequency
+    frequency: int = Field(gt=0, le=_MAX_FREQUENCY_HZ, strict=True)
     mode: RadioMode
     display_mode: str = Field(min_length=1, max_length=40)
     spotted_at: datetime
@@ -122,12 +139,23 @@ class _ForgeWireSpotRecord(DomainModel):
 
     def to_domain(self) -> SpotRecord:
         """Rebuild the canonical shared domain record with full validation."""
+        frequency = Frequency(hz=self.frequency)
+        if isinstance(self.identity, _ForgeWirePotaIdentity):
+            identity = PotaSpotIdentity(
+                park_reference=self.identity.park_reference,
+                frequency=Frequency(hz=self.identity.frequency),
+            )
+        else:
+            identity = DxSpotIdentity(
+                callsign=self.identity.callsign,
+                frequency=Frequency(hz=self.identity.frequency),
+            )
         return SpotRecord(
-            identity=self.identity,
+            identity=identity,
             callsign=self.callsign,
             operator_name=self.operator_name,
             grid=self.grid,
-            frequency=self.frequency,
+            frequency=frequency,
             mode=self.mode,
             display_mode=self.display_mode,
             spotted_at=self.spotted_at,
@@ -140,7 +168,7 @@ class _ForgeWireSpotsResponse(DomainModel):
     """Strict version-1 Forge spots response before publication on the Pi."""
 
     api_schema_version: Literal["1"]
-    snapshot_revision: int = Field(ge=0)
+    snapshot_revision: int = Field(ge=0, strict=True)
     generated_at: datetime
     spots: tuple[_ForgeWireSpotRecord, ...] = ()
     providers: tuple[ForgeRemoteProviderHealth, ...] = Field(min_length=1)
@@ -163,13 +191,14 @@ class _ForgeWireSpotsResponse(DomainModel):
 
         domain_spots = tuple(item.to_domain() for item in self.spots)
         snapshot = SpotSnapshot(generated_at=self.generated_at, spots=domain_spots)
+        represented = {spot.provider for spot in snapshot.spots}
+        if not represented.issubset(set(provider_ids)):
+            raise ValueError("spot provider is missing corresponding provider health")
+
         counts = {
             provider: sum(spot.provider is provider for spot in snapshot.spots)
             for provider in provider_ids
         }
-        represented = {spot.provider for spot in snapshot.spots}
-        if not represented.issubset(set(provider_ids)):
-            raise ValueError("spot provider is missing corresponding provider health")
         for health in self.providers:
             if health.active_spot_count != counts[health.provider]:
                 raise ValueError("provider active spot count does not match snapshot")
@@ -191,7 +220,7 @@ class _ForgeWireSpotsResponse(DomainModel):
 class ForgeSpotClientResult(DomainModel):
     """One complete validated Forge snapshot received by the Pi."""
 
-    snapshot_revision: int = Field(ge=0)
+    snapshot_revision: int = Field(ge=0, strict=True)
     snapshot: SpotSnapshot
     providers: tuple[ForgeRemoteProviderHealth, ...]
     received_at: datetime
@@ -214,7 +243,7 @@ class HttpForgeSpotClient:
         timeout_s: float = 5.0,
         max_response_bytes: int = 1_048_576,
         transport: HttpTransport | None = None,
-        clock: callable | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._api_url = self._validate_api_url(api_url)
         if timeout_s <= 0:
@@ -248,16 +277,14 @@ class HttpForgeSpotClient:
         try:
             wire = _ForgeWireSpotsResponse.model_validate(payload)
         except ValidationError as error:
-            raise ForgeClientValidationError(
-                self._validation_message(error)
-            ) from error
+            raise ForgeClientValidationError(self._validation_message(error)) from error
 
         received_at = self._clock()
         if received_at.tzinfo is None or received_at.utcoffset() is None:
             raise ValueError("Forge client clock must return an aware datetime.")
         return wire.to_result(received_at=received_at.astimezone(UTC))
 
-    def _request_spots(self):
+    def _request_spots(self) -> HttpResponse:
         url = f"{self._api_url}/api/v1/spots"
         try:
             response = self._transport.request(
