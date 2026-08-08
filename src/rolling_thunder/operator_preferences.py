@@ -8,6 +8,10 @@ from enum import StrEnum
 from pathlib import Path
 from threading import Lock
 
+from rolling_thunder.map_zoom import (
+    OPERATOR_MAXIMUM_MAP_ZOOM,
+    OPERATOR_MINIMUM_MAP_ZOOM,
+)
 from rolling_thunder.storage import StorageError, initialize_database
 
 
@@ -33,14 +37,17 @@ class OperatorPreferenceRepository:
             zoom = int(raw)
         except ValueError:
             return None
-        if not 0 <= zoom <= 22:
+        if not OPERATOR_MINIMUM_MAP_ZOOM <= zoom <= OPERATOR_MAXIMUM_MAP_ZOOM:
             return None
         return zoom
 
     def write_map_zoom(self, zoom: int) -> None:
         """Persist one validated map zoom atomically."""
-        if not 0 <= zoom <= 22:
-            raise ValueError("Map zoom preference must be between 0 and 22.")
+        if not OPERATOR_MINIMUM_MAP_ZOOM <= zoom <= OPERATOR_MAXIMUM_MAP_ZOOM:
+            raise ValueError(
+                "Map zoom preference must be between "
+                f"{OPERATOR_MINIMUM_MAP_ZOOM} and {OPERATOR_MAXIMUM_MAP_ZOOM}."
+            )
         self._write_text(OperatorPreferenceKey.MAP_ZOOM, str(zoom))
 
     def _read_text(self, key: OperatorPreferenceKey) -> str | None:
@@ -112,8 +119,11 @@ class OperatorPreferenceService:
 
     def persist_map_zoom(self, zoom: int) -> bool:
         """Queue one map-zoom write without blocking the caller."""
-        if not 0 <= zoom <= 22:
-            raise ValueError("Map zoom preference must be between 0 and 22.")
+        if not OPERATOR_MINIMUM_MAP_ZOOM <= zoom <= OPERATOR_MAXIMUM_MAP_ZOOM:
+            raise ValueError(
+                "Map zoom preference must be between "
+                f"{OPERATOR_MINIMUM_MAP_ZOOM} and {OPERATOR_MAXIMUM_MAP_ZOOM}."
+            )
 
         with self._lock:
             if self._stopped:
