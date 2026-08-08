@@ -126,9 +126,14 @@ class PiForgeSpotState(DomainModel):
         if (self.error_kind is None) != (self.last_error is None):
             raise ValueError("Pi Forge error kind and error text must be present together")
 
-        if self.error_kind is PiForgeSpotErrorKind.CACHE_READ:
-            if self.kind is not PiForgeSpotStateKind.EMPTY or self.last_attempt_at is not None:
-                raise ValueError("cache-read failures are startup-only empty states")
+        if (
+            self.error_kind is PiForgeSpotErrorKind.CACHE_READ
+            and (
+                self.kind is not PiForgeSpotStateKind.EMPTY
+                or self.last_attempt_at is not None
+            )
+        ):
+            raise ValueError("cache-read failures are startup-only empty states")
 
         return self
 
