@@ -64,10 +64,10 @@ def test_installed_active_style_defines_effective_zoom_bounds() -> None:
     assert effective_map_zoom_bounds(
         packages,
         style=MapPackageStyle.NIGHT,
-    ) == MapZoomBounds(0, 15)
+    ) == MapZoomBounds(6, 15)
 
 
-def test_no_installed_active_style_uses_generic_xyz_bounds() -> None:
+def test_no_installed_active_style_uses_generic_operator_bounds() -> None:
     packages = (
         metadata("day", style=MapPackageStyle.DAY, minimum=3, maximum=18),
     )
@@ -75,16 +75,17 @@ def test_no_installed_active_style_uses_generic_xyz_bounds() -> None:
     assert effective_map_zoom_bounds(
         packages,
         style=MapPackageStyle.NIGHT,
-    ) == MapZoomBounds(0, 22)
+    ) == MapZoomBounds(6, 22)
 
 
 def test_valid_stored_zoom_wins_over_configured_zoom() -> None:
-    assert resolve_initial_map_zoom(12, 15, MapZoomBounds(0, 15)) == 12
+    assert resolve_initial_map_zoom(12, 15, MapZoomBounds(6, 15)) == 12
 
 
 def test_invalid_stored_zoom_falls_back_to_clamped_configuration() -> None:
-    assert resolve_initial_map_zoom(16, 17, MapZoomBounds(0, 15)) == 15
-    assert resolve_initial_map_zoom(None, 17, MapZoomBounds(0, 15)) == 15
+    assert resolve_initial_map_zoom(16, 17, MapZoomBounds(6, 15)) == 15
+    assert resolve_initial_map_zoom(5, 13, MapZoomBounds(6, 15)) == 13
+    assert resolve_initial_map_zoom(None, 3, MapZoomBounds(6, 15)) == 6
 
 
 def test_settings_encoder_changes_zoom_and_queues_persistence() -> None:
@@ -92,7 +93,7 @@ def test_settings_encoder_changes_zoom_and_queues_persistence() -> None:
     persistence = FakePersistence()
     settings = MapZoomSettingsController(
         live_map,
-        MapZoomBounds(0, 15),
+        MapZoomBounds(6, 15),
         persistence,
     )
 
@@ -108,13 +109,20 @@ def test_settings_encoder_changes_zoom_and_queues_persistence() -> None:
 
 
 def test_settings_zoom_does_not_wrap_past_effective_bounds() -> None:
-    live_map = FakeLiveMap(15)
+    live_map = FakeLiveMap(6)
     persistence = FakePersistence()
     settings = MapZoomSettingsController(
         live_map,
-        MapZoomBounds(0, 15),
+        MapZoomBounds(6, 15),
         persistence,
     )
+
+    assert settings.zoom_out() is False
+    assert live_map.zoom == 6
+    assert persistence.values == []
+
+    live_map.set_zoom(15)
+    live_map.changes.clear()
 
     assert settings.zoom_in() is False
     assert live_map.zoom == 15
@@ -124,13 +132,13 @@ def test_settings_zoom_does_not_wrap_past_effective_bounds() -> None:
 def test_settings_state_exposes_compact_operator_text() -> None:
     settings = MapZoomSettingsController(
         FakeLiveMap(13),
-        MapZoomBounds(0, 15),
+        MapZoomBounds(6, 15),
         FakePersistence(),
     )
 
     assert settings.state.lines == (
         "MAP ZOOM",
         "13",
-        "RANGE 0-15",
+        "RANGE 6-15",
         "TURN ENCODER: OUT / IN",
     )
