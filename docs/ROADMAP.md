@@ -22,103 +22,100 @@ Status: substantially complete.
 
 Status: complete and audited.
 
-- Add a typed application configuration model.
-- Load configuration from a local YAML file.
-- Validate callsign, grid, URLs, paths, and mode selections.
-- Support mock-hardware mode.
-- Provide clear configuration errors.
-- Add full automated tests.
-- Include an example configuration without secrets.
+- typed application configuration model
+- local YAML loading and validation
+- callsign, grid, URL, path, and mode validation
+- mock-hardware mode
+- clear configuration errors
+- automated tests
+- example configuration without secrets
 
 ## Milestone 2: Core Domain Models
 
 Status: complete and audited.
 
-- Contact model
-- Frequency and radio-mode types
-- Radio-state model
+- contact model
+- frequency and radio-mode types
+- radio-state model
 - GPS-position model
-- Synchronization-state model
-- Callsign and grid validation
-- Serialization boundaries with tests
+- synchronization-state model
+- callsign and grid validation
+- serialization boundaries with tests
 
 ## Milestone 3: Local Contact Logging
 
 Status: complete and audited.
 
 - SQLite-backed contact repository
-- Create and retrieve contacts
-- Pending/synchronized status
-- Duplicate-protection strategy
-- Durable writes
-- Export or recovery mechanism
-- Tests using temporary databases
+- create and retrieve contacts
+- pending/synchronized status
+- duplicate-protection strategy
+- durable writes
+- export and recovery support
+- tests using temporary databases
 
 ## Milestone 4: Radio Abstraction
 
 Status: complete for the current FT-891 software scope.
 
-- Typed radio interface
-- Deterministic mock radio
-- Frequency and mode readout
-- Band-context handling and frequency setting
-- Connection-state reporting
+- typed `Radio` and `CatTransport` boundaries
+- deterministic mock radio
+- frequency and mode readout
+- band-context handling and frequency setting
+- connection-state reporting
 - FT-891 CAT adapter
-- Safe handling of disconnects and malformed replies
-- Background radio polling outside the UI thread
+- safe disconnect/malformed-reply handling
+- background radio polling outside the UI thread
 
-The installed Yaesu FT-891 integration has now been validated through the typed
-`Radio` and `ReceiveTuningService` boundaries. The approved scope remains
-receive-only and contains no PTT, MOX, keying, tuner, power, or unattended
+The installed Yaesu FT-891 integration is validated through the typed `Radio`
+and `ReceiveTuningService` boundaries. The approved scope remains receive-only
+and contains no PTT, MOX, keying, tuner, power, automatic transmit, or unattended
 transmit authority.
 
 ## Milestone 5: Basic Pi User Interface
 
 Status: substantially complete for the current mobile-logging slice.
 
-- Full-screen Raspberry Pi application shell
+- full-screen Raspberry Pi application shell
 - direct navigation among primary contexts
 - live radio status area
-- pending-callsign voice workflow
+- pending-callsign Voice workflow
 - explicit Commit and Discard controls
 - durable local contact commits
-- large, readable in-vehicle presentation
-- high-contrast layout
+- large high-contrast in-vehicle presentation
 - station-health presentation
-- no blocking radio, voice, or storage work in the UI thread
+- no blocking radio, voice, storage, map, or network work in the UI thread
 
-Remaining Milestone 5 work should be focused architecture-aligned integration
-and usability refinements rather than a broad dashboard rewrite.
+Remaining Milestone 5 work should remain focused architecture-aligned integration
+and usability refinement rather than a broad dashboard rewrite.
 
 ## Milestone 6: GPS and Location
 
-Status: complete and audited for the approved software scope.
+Status: complete and audited for the approved current-position scope.
 
-- Typed GPS interface
-- mock GPS source
-- serial GPS adapter
+- typed GPS interface
+- deterministic mock GPS source
+- serial NMEA adapter
 - Maidenhead grid calculation
 - current position display
+- speed and heading capture from the installed mixed-NMEA stream
+- live-map heading presentation with stopped-vehicle heading retention
 - graceful loss and reacquisition of GPS
-
-The implemented GPS path includes typed immutable state, deterministic mock and
-serial-NMEA adapters, Station State and dashboard integration, independent
-background polling, visible degraded/error state, and automatic recovery after
-transient read or parse failures.
+- independent background polling and automatic recovery
 
 Commit-time GPS capture is implemented: a current valid fix is converted to a
 six-character mobile-station grid and stored separately from the contacted
 station grid. GPS loss or stale data leaves that field empty without preventing
 local Commit.
 
-Trusted GPS UTC, speed, heading, and stationary/moving hysteresis remain
-architecture-aligned follow-up capabilities.
+Trusted GPS UTC suitable for host-clock verification/synchronization remains a
+follow-up capability under issue #158 and #159.
 
 ## Milestone 7: Home Station Platform Connectivity
 
 Status: complete and audited for the approved roadmap scope.
 
-- Typed remote API interface
+- typed remote API interface
 - health and reachability checks
 - queued synchronization
 - retry with persisted exponential backoff
@@ -130,39 +127,71 @@ Status: complete and audited for the approved roadmap scope.
 The implemented connectivity path includes a transport-independent Home Station
 Platform boundary, deterministic mock and HTTP clients, lifecycle-managed health
 polling, queued contact synchronization, durable retry eligibility, typed network
-keepalive configuration and service, runtime composition, and pure connectivity
+keepalive configuration/service, runtime composition, and pure connectivity
 presentation state.
 
-## Milestone 8: POTA Assistance
+## Milestone 8: POTA Assistance and Shared POTA/DX Spots
 
 Status: complete for the current shared-spot architecture.
 
-The original POTA-only path established:
+The original POTA-only path established typed POTA retrieval/cache, filtering,
+ranking, selection, POTA contact-context metadata, and enrichment. The later
+shared POTA/DX work supersedes the POTA-only live-provider path when Forge is
+enabled.
 
-- typed POTA spot retrieval and durable cache
-- band/mode filtering and ranking
-- explicit receive-only operator confirmation
-- offline presentation
-- POTA contact-context metadata
-- QRZ/weather/boundary enrichment
+GitHub issue #129 checkpoints 1 through 8 are complete and merged. PR #150
+completed the final shared POTA/DX receive-tuning and Forge-deployment slice.
 
-The later shared POTA/DX work supersedes the POTA-only live-provider path when
-Forge is enabled. POTA now uses the provider-neutral shared snapshot and shared
-operator workflow described below.
+The completed shared path provides:
 
-The completed scope does not permit voice-originated tuning, unattended tuning,
-PTT, MOX, keying, tuner, power, or transmission.
+- provider-neutral immutable POTA/DX records and canonical snapshots
+- stable identity-based selection
+- exact action-critical `StagedSpotAction` values
+- Forge POTA and configurable DXSpider aggregation
+- optional bounded Forge-side QRZ enrichment
+- transactional Forge persistence and versioned REST
+- typed Pi Forge client and durable retained shared snapshots
+- one shared POTA/DX controller and presentation path
+- independent POTA/DX band and mode filter state
+- supported shared bands 80/40/20/17/15/12/10 meters
+- shared mode groups SSB/CW/FT4/FT8/DATA/ALL
+- POTA age filtering without leaking that rule into DX
+- current-radio-band activation default with 20-meter fallback
+- exact two-press shared receive tuning
+- first activation stages only and performs no CAT
+- second activation submits only the same still-valid staged target
+- staging invalidation on selection, context, filter, disappearance,
+  action-critical mutation, Back/Cancel, or invalid radio state
+- background shared receive tuning outside Tkinter
+- `ReceiveTuningService` as the sole receive-tuning authority
+- timed success/failure status and 10-second cross-band manual band/ATAS reminder
+- no duplicate Pi-side public-POTA polling while Forge is enabled
+- local SQLite contact logging remaining authoritative
+- no new transmit authority
+
+The shared execution path is:
+
+```text
+installed control / keyboard
+    -> operator command
+    -> shared active-panel controller
+    -> background shared tune controller
+    -> ReceiveTuningService
+    -> typed Radio
+```
+
+No POTA- or DX-specific CAT executor is part of the accepted path.
 
 ## Milestone 9: Physical Controls
 
 Status: complete and audited for the approved physical-input scope.
 
-- typed, transport-independent control actions and input events
+- typed transport-independent control actions/input events
 - configuration-driven mappings from opaque ESP32 identifiers to approved
   application actions
 - deterministic mock control source
 - strict versioned `RTCTRL/1 EVENT` parser
-- bounded, nonblocking pyserial control source
+- bounded nonblocking pyserial control source
 - startup, refresh-dispatch, shutdown, and failure lifecycle integration
 - physical Voice, Commit, and Discard controls
 - direct context-selection and panel-action controls
@@ -183,19 +212,23 @@ Status: in progress.
 
 ### Phase A: Real GPS Integration
 
-Status: complete and approved.
+Status: complete and approved for current-position/speed/heading behavior.
 
 - stable real GPS device identity and permissions
 - actual 9,600-baud mixed-NMEA receiver behavior
 - typed `GPSReceiver` boundary and mock source preserved
-- live position, fix state, Maidenhead grid, loss, reacquisition, and UI status
+- live position, fix state, Maidenhead grid, speed, heading, loss, reacquisition,
+  and UI status
 - background serial work and automatic recovery
 - setup, troubleshooting, and recovery documentation
 
+Trusted GPS UTC and GPS-assisted host clock synchronization are intentionally
+separate follow-up checkpoints #158 and #159.
+
 ### Phase B: Real Yaesu FT-891 Integration
 
-Status: complete for the approved receive-only architecture; checkpoint-8 shared
-POTA/DX installed-hardware acceptance is complete.
+Status: complete for the approved receive-only architecture and shared POTA/DX
+installed-hardware acceptance.
 
 Completed and verified:
 
@@ -227,21 +260,19 @@ manual SET BAND / TUNE ATAS operator handoff after cross-band success
 ```
 
 Successful memory recall is not treated as authoritative FT-891 front-panel band
-selection. That behavior is parked in issue #149 for a future firmware/CAT
-revisit.
+selection. That behavior remains parked in issue #149.
 
 ### Phase C: Mapping and Operating Intelligence
 
-Status: local-first live-map foundation implemented; broader regional coverage,
-automatic day/night policy, and operating overlays remain in progress under
-issue #124.
+Status: local-first live-map foundation implemented; additional situational
+awareness is now split between issue #124 and approved umbrella issue #154.
 
-The implemented map path now includes work from pull requests #121, #125, #126,
-and #127:
+The implemented map path includes work from PRs #121, #125, #126, #127, and
+#152:
 
-- north-up live map in the right-side situational area
+- north-up live map in the situational area
 - latest valid GPS position centered in the viewport
-- prominent current or last-known vehicle marker
+- prominent current/last-known vehicle marker
 - Maidenhead grid, coordinates, GPS state, and map-data state
 - explicit waiting, stale, last-known, cache-only, partial, and unavailable
   presentation
@@ -255,37 +286,21 @@ and #127:
 - typed installed raster-MBTiles package discovery and priority
 - local-first resolution: installed package -> runtime cache -> online provider
 - authoritative installed coverage that does not silently require public internet
-- an installed offline I-71 corridor package proven on `anvilmobile`
+- installed offline I-71 corridor package proven on `anvilmobile`
+- amortized full cache pruning from PR #152 / issue #151
 - map failure isolated from GPS, logging, shared spots, controls, and radio state
 
-Pull request #125 completed the viewport coalescing and incremental-rendering
-foundation. Pull request #126 added installed package source/resolver boundaries.
-Pull request #127 added authoritative installed offline corridor coverage.
-
-Issue #151 completes the remaining checkpoint-1 cache-maintenance cost by
-amortizing full cache pruning instead of recursively scanning and sorting the
-entire cache after every successful tile write. The first successful write
-performs an initial prune check; later full prune passes occur on a bounded
-successful-write cadence. Atomic tile writes and oldest-mtime eviction remain
-unchanged.
-
-Still deferred under issue #124:
+Issue #124 now tracks the remaining broad map-specific work:
 
 - broader Ohio offline coverage
-- surrounding-state offline packages through the same package mechanism
+- surrounding-state packages through the same mechanism
 - automatic location/time-based day/night selection
 - typed manual day/night override
 - separate operating-overlay provider/snapshot architecture
 - future PAD-US park-boundary rendering and spatial indexing
-- panning or operator zoom controls
-- movement trail
-- contact visualization
-- persistent POTA markers
-- routing and repeater overlays
-- weather radar and analytics
-- automatic zoom
-- persisted location history
-- broad dashboard redesign
+
+Persistent operator zoom is tracked in #157. Future weather radar is parked in
+#163 so it does not distort the first retained-weather implementation.
 
 ## Cross-Cutting Architecture Work
 
@@ -302,59 +317,11 @@ through replacement keys, priority arbitration, and bounded expiration.
 An in-process event bus remains an architectural direction rather than a reason
 to retrofit completed services prematurely.
 
-## Shared POTA/DX Spot Architecture
-
-Status: checkpoint 8 implementation, Forge production deployment, and installed
-FT-891/shared-control physical acceptance are complete on the feature branch;
-documentation review, final quality gates, pull-request review, CI, owner
-approval, and merge remain.
-
-GitHub issue #129 checkpoints 1 through 8 now provide:
-
-- provider-neutral immutable POTA/DX records and canonical snapshots
-- stable identity-based selection
-- exact action-critical `StagedSpotAction` values
-- Forge POTA and configurable DXSpider aggregation
-- optional bounded Forge-side QRZ enrichment
-- transactional Forge persistence and versioned read-only REST
-- typed Pi Forge client and durable retained shared snapshots
-- one shared POTA/DX controller and presentation path
-- independent POTA/DX band and mode filter state
-- supported shared bands 80/40/20/17/15/12/10 meters
-- shared mode groups SSB/CW/FT4/FT8/DATA/ALL
-- POTA age filtering without leaking that rule into DX
-- current-radio-band activation default with 20-meter fallback
-- exact two-press shared receive tuning
-- first activation stages only and performs no CAT
-- second activation submits only the same still-valid staged target
-- staging invalidation on selection, context, filter, disappearance,
-  action-critical mutation, Back/Cancel, or invalid radio state
-- background shared receive tuning outside Tkinter
-- `ReceiveTuningService` as the sole receive-tuning authority
-- timed success/failure status and 10-second cross-band manual band/ATAS reminder
-- no duplicate Pi-side public-POTA polling while Forge is enabled
-- local SQLite contact logging remaining authoritative
-- no new radio transmit authority
-
-The shared execution path is:
-
-```text
-installed control / keyboard
-    -> operator command
-    -> shared active-panel controller
-    -> background shared tune controller
-    -> ReceiveTuningService
-    -> typed Radio
-```
-
-No POTA- or DX-specific CAT executor is part of the checkpoint-8 path.
-
 ## Forge Production Deployment
 
-Status: complete and live on Forge.
+Status: complete and live for the current shared-spot service.
 
-Checkpoint 8 converted the temporary bench process into a supported systemd
-service:
+The supported deployment uses:
 
 - dedicated service account `rollingthunder`
 - application `/opt/rolling-thunder-forge`
@@ -366,47 +333,52 @@ service:
 - active and enabled at boot
 - journald diagnostics
 - QRZ credentials excluded from YAML and Git
-- private RadioLAN/CarLAN-over-WireGuard trust boundary documented
-- no public port forward or UPnP assumption
+- private RadioLAN/CarLAN-over-WireGuard trust boundary
+- no public port-forward or UPnP assumption
 - explicit rollback procedure
 
-The production cutover verified the exact deployed code commit, dedicated
-service UID, SQLite integrity, live healthy POTA and DX refreshes, process
-identity, listener, and real Pi requests to `/api/v1/spots`.
+The production path has been physically accepted from Forge through the Pi
+shared POTA/DX panel and installed FT-891 controls. See
+`docs/FORGE_DEPLOYMENT.md`.
 
-See `docs/FORGE_DEPLOYMENT.md`.
+## Approved Post-PR-152 Workstream
 
-## Current Checkpoint-8 Acceptance Work
+Umbrella issue #154 is the approved next development sequence. It is intentionally
+split so map, GPS time, Forge weather, repeater data/UI, and FT-891 repeater CAT
+do not become one broad implementation branch.
 
-Installed physical acceptance is complete.
+Sequence:
 
-Verified on `anvilmobile`:
+0. #155 — reconcile roadmap, architecture, and issue state
+1. #156 — map information box and explicit MAP/GPS health
+2. #157 — persistent Map Zoom operator setting
+3. #158 — trusted GPS UTC observations
+4. #159 — GPS-assisted Raspberry Pi clock synchronization
+5. #160 — Forge mobile-location write API and retained domain
+6. #161 — publish valid Pi GPS fixes to Forge
+7. #162 — retained Forge weather domain, provider, and API
+8. #164 — Pi retained weather client and immutable state
+9. #165 — weather panel and map-temperature integration
+10. #166 — 6 m repeater data, Active overrides, and geospatial filtering
+11. #167 — 6 m repeater panel and operator Active controls
+12. #168 — typed FT-891 FM repeater receive capabilities
+13. #169 — two-press 6 m repeater radio configuration integration
 
-1. POTA and DX filters and current-band/fallback behavior
-2. first press stages without changing the radio
-3. same-band POTA and DX second-press exact receive tuning
-4. cross-band POTA and DX exact receive frequency/mode tuning
-5. explicit manual `SET BAND TO <BAND> METERS — TUNE ATAS-120` handoff
-6. staging invalidation for selection, band filter, mode filter, Back, and radio
-   invalidation
-7. radio disconnect/recovery without stale staged execution
-8. Enhanced CAT ownership with the Standard TX-capable port closed
-9. retained shared spots during controlled Forge interruption
-10. isolated local SQLite logging while Forge is unavailable
-11. production contact count unchanged by the isolated offline test
-12. Forge recovery and cleanup after the controlled interruption
-13. no PTT/MOX/keying/tuner/power/transmit path
+Issue #163 is a parking-lot item for a future weather-radar map overlay and is not
+part of the initial #154 completion sequence.
 
-The unresolved automatic FT-891 band-context behavior is non-blocking and
-tracked in issue #149.
+The workstream preserves these permanent rules:
 
-Remaining checkpoint-8 work:
-
-1. finish documentation alignment
-2. run Ruff, strict MyPy, full pytest, pre-commit, and `git diff --check`
-3. prepare/review the checkpoint-8 pull request
-4. require GitHub Actions success
-5. remain unmerged until explicit repository-owner authorization
+- local SQLite contact logging remains authoritative
+- Forge/weather/public internet failure never prevents basic logging
+- Tkinter performs no blocking serial/network/filesystem/SQLite/CAT work
+- provider-specific data is normalized behind typed provider-neutral boundaries
+- first operator activation stages only where a two-press action is required
+- radio work routes only through typed application/radio boundaries
+- no PTT, MOX, keying, tuner, power, automatic transmit, voice-originated tuning,
+  or unattended transmit authority
+- significant installed display, GPS, Forge deployment, physical-control, and
+  FT-891 behavior requires owner acceptance before merge
 
 ## Later Possibilities
 
@@ -418,3 +390,5 @@ Remaining checkpoint-8 work:
 - remote-station status
 - additional radio adapters
 - mobile-safe audible prompts
+- movement trails, contact visualization, persistent POTA markers, and routing
+  when justified by operator value and safe presentation
