@@ -90,10 +90,7 @@ class SharedSpotTuneStatusController:
                 band_label = outcome.target_band.value.removesuffix("m")
                 self._status_messages.publish(
                     replacement_key=ATAS_RETUNE_STATUS_KEY,
-                    text=(
-                        f"BAND CHANGED TO {band_label} METERS "
-                        "— RETUNE ATAS-120"
-                    ),
+                    text=f"SET BAND TO {band_label} METERS — TUNE ATAS-120",
                     presentation=StatusPresentation.AMBER,
                     priority=ATAS_RETUNE_STATUS_PRIORITY,
                     duration_s=ATAS_RETUNE_STATUS_DURATION_S,
