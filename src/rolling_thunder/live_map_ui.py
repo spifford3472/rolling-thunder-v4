@@ -27,6 +27,7 @@ _MISSING_TILE = "#17242a"
 _GRID_LINE = "#26363d"
 _MUTED = "#a8b4ba"
 _READY = "#42ff72"
+_HEALTHY = "#66ccff"
 _WARNING = "#ffd24a"
 _FAILURE = "#ff7070"
 _MARKER = "#ff4040"
@@ -95,9 +96,9 @@ def live_map_status_lines(
 
 
 def live_map_health_color(level: LiveMapHealthLevel) -> str:
-    """Return the approved green/yellow/gray subsystem health color."""
+    """Return the approved light-blue/yellow/gray subsystem health color."""
     if level is LiveMapHealthLevel.HEALTHY:
-        return _READY
+        return _HEALTHY
     if level is LiveMapHealthLevel.DEGRADED:
         return _WARNING
     return _MUTED
@@ -109,10 +110,6 @@ def live_map_info_lines(info: LiveMapInfoPresentation) -> tuple[str, ...]:
         f"LOCAL  {info.local_time}",
         f"UTC    {info.utc_time}",
         f"GRID   {info.grid}",
-        (
-            f"TEMP   {info.temperature_f} / {info.temperature_c}"
-            f" — {info.temperature_detail}"
-        ),
     )
 
 
@@ -535,8 +532,8 @@ class LiveMapWidgets:
         canvas.create_rectangle(
             12,
             12,
-            520,
-            216,
+            430,
+            174,
             fill=_STATUS_BACKGROUND,
             outline=_MUTED,
             width=3,
@@ -553,8 +550,8 @@ class LiveMapWidgets:
             tags="map-overlay",
         )
 
-        health_left = 540
         health_right = width - 12
+        health_left = health_right - 360
         canvas.create_rectangle(
             health_left,
             12,
