@@ -89,6 +89,15 @@ class MobileLocationState(DomainModel):
         normalized = value.strip()
         return normalized[:_MAX_ERROR_LENGTH] or None
 
+    @model_validator(mode="after")
+    def validate_retained_state(self) -> MobileLocationState:
+        """Keep the durable revision and retained-location presence consistent."""
+        if self.revision == 0 and self.location is not None:
+            raise ValueError("revision 0 cannot contain a retained mobile location")
+        if self.revision > 0 and self.location is None:
+            raise ValueError("positive revision requires a retained mobile location")
+        return self
+
 
 class ForgeMobileLocationRepository(Protocol):
     """Durable singleton-location boundary consumed by the publication service."""
