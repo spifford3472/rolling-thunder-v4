@@ -210,6 +210,11 @@ class SharedSpotPanelController:
         return self._selection_state().selected_identity
 
     @property
+    def staged_identity(self) -> SpotIdentity | None:
+        """Return the currently valid staged identity after source synchronization."""
+        return self._selection_state().staged_identity
+
+    @property
     def selected_spot(self) -> SpotRecord | None:
         """Return the selected shared-domain record, if still visible."""
         return self._selection_state().selected_spot
