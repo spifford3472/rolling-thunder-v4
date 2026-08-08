@@ -109,6 +109,7 @@ def test_first_valid_rmc_is_not_trusted_until_utc_advances() -> None:
     assert first.utc.fix_valid is True
     assert first.utc.advancing is False
     assert first.utc.fresh is True
+    assert first.utc.received_monotonic_s == pytest.approx(100.0)
     assert first.utc.trusted is False
 
     monotonic_now[0] = 101.0
@@ -116,12 +117,13 @@ def test_first_valid_rmc_is_not_trusted_until_utc_advances() -> None:
 
     assert second.utc.value == datetime(2026, 8, 2, 13, 16, 46, tzinfo=UTC)
     assert second.utc.age_s == pytest.approx(0.0)
+    assert second.utc.received_monotonic_s == pytest.approx(101.0)
     assert second.utc.advancing is True
     assert second.utc.fresh is True
     assert second.utc.trusted is True
 
 
-def test_duplicate_rmc_does_not_refresh_sample_age() -> None:
+def test_duplicate_rmc_does_not_refresh_sample_age_or_receipt_anchor() -> None:
     monotonic_now = [100.0]
     port = FakeSerialPort(
         [
@@ -144,16 +146,20 @@ def test_duplicate_rmc_does_not_refresh_sample_age() -> None:
     receiver.connect()
 
     monotonic_now[0] = 101.0
-    assert receiver.refresh_state().utc.trusted is True
+    second = receiver.refresh_state()
+    assert second.utc.trusted is True
+    assert second.utc.received_monotonic_s == pytest.approx(101.0)
 
     monotonic_now[0] = 102.0
     duplicate = receiver.refresh_state()
     assert duplicate.utc.age_s == pytest.approx(1.0)
+    assert duplicate.utc.received_monotonic_s == pytest.approx(101.0)
     assert duplicate.utc.trusted is True
 
     monotonic_now[0] = 107.0
     stale = receiver.refresh_state()
     assert stale.utc.age_s == pytest.approx(6.0)
+    assert stale.utc.received_monotonic_s == pytest.approx(101.0)
     assert stale.utc.fresh is False
     assert stale.utc.trusted is False
 
