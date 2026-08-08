@@ -298,6 +298,7 @@ class ForgeSpotCacheRepository:
         provider = SpotProvider(row["provider"])
         frequency = Frequency(hz=row["frequency_hz"])
         callsign = row["callsign"]
+        identity: PotaSpotIdentity | DxSpotIdentity
         pota: PotaSpotMetadata | None
 
         if provider is SpotProvider.POTA:
