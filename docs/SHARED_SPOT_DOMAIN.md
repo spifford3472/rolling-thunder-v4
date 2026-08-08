@@ -6,9 +6,10 @@ The shared spot domain provides provider-neutral foundations for unified POTA
 and DX operating intelligence.
 
 It defines immutable domain records, canonical snapshots, stable selection, and
-staged-action primitives. Forge now uses the domain for public POTA and bounded
-DXSpider snapshots. The running Raspberry Pi dashboard has not yet migrated to
-the Forge client or unified panel.
+staged-action primitives. Forge uses the domain for public POTA and bounded
+DXSpider snapshots, and the Raspberry Pi now has a separate optional Forge
+client/cache path that reconstructs and retains the same shared snapshot domain.
+The running POTA dashboard has not yet migrated to the unified panel.
 
 ## Domain Records
 
@@ -109,10 +110,17 @@ The implementation does not use enum declaration order as an implicit band
 ranking.
 
 A complete Forge snapshot may contain both POTA and DX records. Provider slices
-remain independently replaceable so one provider failure can retain only that
-provider's previous records while another provider refresh succeeds.
+remain independently replaceable on Forge so one provider failure can retain
+only that provider's previous records while another provider refresh succeeds.
+
+The Pi client does not recanonicalize a malformed Forge response. It reconstructs
+`SpotSnapshot` directly and rejects duplicate or noncanonical server ordering so
+a corrupt or incomplete wire response cannot silently become a different local
+snapshot.
 
 ## Durable Representation
+
+### Forge service
 
 Forge persists the same canonical `SpotRecord` fields used in memory, including:
 
@@ -125,13 +133,33 @@ Forge persists the same canonical `SpotRecord` fields used in memory, including:
 - bounded source metadata
 - optional POTA metadata
 
-Startup reconstruction revalidates identities, providers, ordering, timestamps,
-duplicate collapse, and POTA metadata consistency before publishing retained
-state.
+Forge startup reconstruction revalidates identities, providers, ordering,
+timestamps, duplicate collapse, and POTA metadata consistency before publishing
+retained server state.
+
+### Raspberry Pi shared cache
+
+Pi application schema version 7 adds independent shared-cache tables in the
+existing application database. They do not replace or alter contacts or the
+legacy `pota_spot_cache` tables.
+
+The Pi cache stores the accepted Forge revision, original Forge generation time,
+Pi receive/success time, canonical shared records, ordered source metadata, and
+accepted upstream provider health. Complete replacement is transactional.
+Loading reconstructs and revalidates the immutable snapshot before publication.
+A malformed cache is a local-storage failure rather than usable spot state.
+
+The Pi follows persistence-before-publication ordering: fetch, validate, build
+the complete candidate, persist transactionally, then atomically publish. A
+failed write leaves both the previous durable snapshot and previous published
+snapshot active.
 
 Enriched fields remain non-action-critical after persistence. A retained QRZ
 name or grid does not gain identity or tuning authority merely because it was
 stored durably.
+
+See `docs/PI_FORGE_CLIENT.md` for the complete Pi HTTP, SQLite, lifecycle,
+offline, and diagnostics contract.
 
 ## Stable Selection
 
@@ -182,22 +210,42 @@ Staging also clears on:
 - radio invalidation
 - later-stage failure
 
+## Pi Retained and Live State
+
+The optional Pi Forge service distinguishes:
+
+- `empty`: no valid shared snapshot yet
+- `cached`: durable state restored at process startup
+- `live`: a live Forge response validated, persisted, and published
+- `retained`: a live attempt failed while the previous snapshot remains usable
+
+Published diagnostics preserve the original Forge `generated_at`, Pi
+`received_at`, last live attempt, bounded failure category/text, revision, active
+spot count, and upstream provider health. Restarting the Pi does not make old
+data appear fresh.
+
+Forge refresh-on-start is submitted to a background worker. `ApplicationRuntime`
+and Tkinter only read already-published immutable state; they do not perform
+Forge HTTP or shared-cache SQLite work on the caller/UI thread.
+
 ## Safety Boundary
 
-The shared spot domain, Forge provider adapters, QRZ enrichment, and selection
-controller perform no:
+The shared spot domain, Forge provider adapters, Forge-side QRZ enrichment, Pi
+Forge client/cache/service/poller, and selection controller perform no:
 
-- Tkinter work
 - radio or hardware access
 - CAT commands
 - band, frequency, or mode changes
+- receive tuning
 - PTT, MOX, keying, tuner, power, or transmit control
-- Pi contact logging
-- modification of the Pi contact database
+- unattended radio action
+- contact modification as part of shared-spot refresh
+- Tkinter network or SQLite work
 
-Forge networking and SQLite work occur outside request handlers and outside the
-Pi application. The existing typed `ReceiveTuningService` remains the only
-receive-tuning authority.
+Forge server networking and persistence occur outside REST request handlers. Pi
+Forge networking and shared-cache persistence occur only on the background
+worker. The existing typed `ReceiveTuningService` remains the only receive-tuning
+authority.
 
 ## Current Integration Status
 
@@ -211,14 +259,22 @@ Completed foundations now include:
 - Forge bounded DXSpider snapshot ingestion
 - Forge best-effort QRZ name and grid enrichment
 - Forge transactional combined persistence and read-only REST
+- typed Pi `GET /api/v1/spots` client with complete-response validation
+- Pi application schema v7 durable combined shared snapshot cache
+- transactional Pi persistence-before-publication behavior
+- truthful cached/live/retained/error state and provider-health diagnostics
+- background-only Pi Forge polling and runtime lifecycle composition
 
 The running POTA dashboard remains intentionally unchanged. The following remain
 separate checkpoints:
 
-- Pi Forge HTTP client
-- Pi durable shared-spot snapshots
-- migration of the POTA panel
+- migration of the POTA panel to the shared snapshot
 - unified POTA and DX presentation
 - operator-confirmed two-press receive tuning
+- deployment authentication/TLS hardening
 
-No current Forge or shared-domain component has radio or transmit authority.
+The checkpoint-6 Pi Forge path may run in parallel with the legacy direct-POTA
+path until checkpoint 7 performs the presentation migration.
+
+No current Forge, Pi shared-spot, or shared-domain component has transmit
+authority.
