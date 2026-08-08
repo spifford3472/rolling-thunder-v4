@@ -2,7 +2,7 @@
 
 **Product Version:** 4.1.0  
 **Document Version:** 4.1.0  
-**Status:** Approved Architecture Baseline through Platform Services and Ring 1, aligned through checkpoint 8 shared POTA/DX acceptance  
+**Status:** Approved Architecture Baseline through Platform Services and Ring 1, aligned through checkpoint 8 shared POTA/DX acceptance
 **Milestone:** M1 — Mobile Logging MVP  
 **Target:** Functional end-to-end MVP by Sunday morning  
 **Build Numbering:** Independent from product and document versioning
