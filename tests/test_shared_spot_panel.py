@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.forge_client import (
     ForgeRemoteProviderHealth,
@@ -390,9 +392,5 @@ def test_naive_panel_clock_is_rejected() -> None:
     naive = NOW.replace(tzinfo=None)
     source = FakeSharedSource(None)
 
-    try:
+    with pytest.raises(ValueError, match="aware datetime"):
         SharedSpotPanelController(source, clock=lambda: naive)
-    except ValueError as error:
-        assert "aware datetime" in str(error)
-    else:
-        raise AssertionError("expected a timezone-aware clock validation failure")
