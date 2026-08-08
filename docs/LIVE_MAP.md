@@ -41,9 +41,8 @@ snapshots. Identical loaded viewport requests are no-ops.
 
 `LiveMapInfoController` is a pure presentation projection. It consumes the
 already-published GPS/map state, retains only the timestamp of the last usable
-map publication, and produces immutable local-time, UTC, grid, temperature
-placeholder, MAP-health, and GPS-health state. It performs no network, disk,
-serial, CAT, or SQLite work.
+map publication, and produces immutable local-time, UTC, grid, MAP-health, and
+GPS-health state. It performs no network, disk, serial, CAT, or SQLite work.
 
 `MapTileClient` and `MapTileCache` perform all HTTP and disk work. Tkinter only
 renders immutable state and never contacts the provider or cache directly.
@@ -53,21 +52,20 @@ renders immutable state and never contacts the provider or cache directly.
 The live-map overlay is split into two independent areas rather than using one
 combined GPS/map status color.
 
-The information box shows:
+The compact information box at the upper left shows:
 
 - local system time
 - UTC
 - current/last-known Maidenhead grid when available
-- local temperature in Fahrenheit and Celsius
 
-Until the retained Forge weather work is implemented, temperature is
-intentionally shown as `--°F / --°C — UNAVAILABLE`. The map does not contact a
-public weather provider directly.
+Temperature is intentionally not rendered in this checkpoint. Weather state and
+its final map presentation belong to the later retained Forge weather work.
 
-The separate MAP/GPS health box uses typed state and timestamps rather than
-parsing rendered status strings:
+The separate MAP/GPS health box is a fixed-width panel aligned to the upper
+right so the status presentation does not consume most of the top of the map.
+It uses typed state and timestamps rather than parsing rendered status strings:
 
-- **green** — the subsystem is usable now
+- **light blue** — the subsystem is usable now
 - **yellow** — degraded, or a previously usable subsystem has been unavailable
   for less than 30 seconds
 - **gray** — unavailable for 30 seconds or more, disabled, or never usable since
@@ -75,8 +73,8 @@ parsing rendered status strings:
 
 A complete map supplied from stale runtime cache is still considered usable for
 MAP health because Rolling Thunder is local-first. `MAP OFFLINE CACHE` therefore
-remains green. Partial map data and map loading with already-visible tiles are
-yellow.
+remains light blue. Partial map data and map loading with already-visible tiles
+are yellow.
 
 For MAP health, a fresh `LiveMapSnapshot.updated_at` on an unavailable/error
 publication does not reset health. `LiveMapInfoController` retains the timestamp
@@ -184,27 +182,29 @@ contact logging, POTA/DX operation, physical controls, or radio state polling.
 1. Confirm the active configuration uses zoom 15, style `night`, and the
    installed I-71 corridor package path.
 2. Start the full-screen dashboard with GPS and normal network access.
-3. Confirm the information box shows correct local time, UTC, Maidenhead grid,
-   and `--°F / --°C — UNAVAILABLE`.
-4. Confirm MAP and GPS health are independent and both green with a current fix
-   and complete usable map.
-5. Disable public-internet access while remaining inside installed package
-   coverage and confirm MAP remains green while local tiles continue working.
-6. Move to a previously unseen viewport inside installed coverage and confirm the
+3. Confirm the compact upper-left information box shows correct local time, UTC,
+   and Maidenhead grid without a temperature row.
+4. Confirm the MAP/GPS health panel is narrow and aligned to the upper right.
+5. Confirm MAP and GPS health are independent and both light blue with a current
+   fix and complete usable map.
+6. Disable public-internet access while remaining inside installed package
+   coverage and confirm MAP remains light blue while local tiles continue
+   working.
+7. Move to a previously unseen viewport inside installed coverage and confirm the
    map remains available without online tile requests.
-7. Confirm the marker follows course while moving and retains its heading when
+8. Confirm the marker follows course while moving and retains its heading when
    stopped.
-8. Confirm GPS updates do not cause visible flicker or UI stalls.
-9. Confirm POTA/DX cards, the global ticker, and ATAS-120 warnings still work.
-10. Restore connectivity and confirm online fallback works outside package
+9. Confirm GPS updates do not cause visible flicker or UI stalls.
+10. Confirm POTA/DX cards, the global ticker, and ATAS-120 warnings still work.
+11. Restore connectivity and confirm online fallback works outside package
     coverage.
-11. Disconnect GPS after a current fix and confirm GPS health becomes yellow
+12. Disconnect GPS after a current fix and confirm GPS health becomes yellow
     during the recent-loss window and gray after 30 seconds while the marker
     remains last-known rather than current.
-12. Force or observe a map-unavailable condition after a usable map and confirm
+13. Force or observe a map-unavailable condition after a usable map and confirm
     MAP health becomes yellow for less than 30 seconds and gray at 30 seconds,
     even though unavailable snapshots continue updating.
-13. Confirm logging, POTA/DX selection, physical controls, and radio polling
+14. Confirm logging, POTA/DX selection, physical controls, and radio polling
     remain usable throughout map/GPS/network degradation.
 
 Record the visible results in the draft pull request before approval.
