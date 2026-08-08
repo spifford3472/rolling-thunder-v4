@@ -27,10 +27,15 @@ Then read every file those documents explicitly identify as relevant to the
 current task. For the current product state, that commonly includes:
 
 - `config/rolling-thunder.example.yaml`
-- `docs/POTA_ENRICHMENT.md`
+- `docs/LIVE_MAP.md`
+- `docs/REAL_GPS_INTEGRATION.md`
+- `docs/REAL_FT891_INTEGRATION.md`
+- `docs/SHARED_SPOT_DOMAIN.md`
+- `docs/PI_FORGE_CLIENT.md`
+- `docs/FORGE_DEPLOYMENT.md`
 - `firmware/esp32-controls/README.md`
-- the source modules and tests named by the applicable roadmap phase
-- any open GitHub issue or merged pull request referenced by the documentation
+- the source modules and tests named by the applicable roadmap checkpoint
+- the current GitHub issue and any merged pull requests it depends on
 
 Do not rely on a prior chat summary when it conflicts with the repository. Do
 not assume a feature is missing or complete until the current code, tests,
@@ -80,14 +85,14 @@ WireGuard, cellular service, or the public internet is unavailable.
 
 The product should help the operator safely and efficiently:
 
-- discover stations
-- select useful POTA opportunities
-- tune the receiver through explicit safe actions
+- discover stations and operating opportunities
+- select useful POTA, DX, and later repeater opportunities
+- tune/configure the receiver through explicit safe actions
 - capture a callsign
 - attempt a QSO
 - commit a successful contact
 - discard an unsuccessful pending callsign
-- maintain location and station awareness
+- maintain location, map, weather, connectivity, and station awareness
 
 The software exists to reduce operator workload. Technology that does not serve
 safe operating, logging, recovery, or situational awareness should not be added
@@ -153,11 +158,11 @@ work, and PR iteration within the available tools.
 
 The repository owner remains the final product and safety authority.
 
-For larger changes, especially hardware, full-screen UI, radio, GPS, speech, or
-physical-control changes, the owner should:
+For larger changes, especially hardware, full-screen UI, radio, GPS, speech,
+physical-control, Forge deployment, or system-time changes, the owner should:
 
-- run the supplied live test on `anvilmobile`
-- describe or photograph the observed behavior
+- run the supplied live test on the applicable system
+- describe or photograph the observed behavior where useful
 - approve or reject user-visible behavior
 - request corrections when the implementation does not match actual operation
 - explicitly approve the pull request before merge
@@ -207,36 +212,58 @@ boundaries.
 
 ## Current Implemented Product State
 
-The repository is no longer at the initial foundation stage. The implemented and
-audited system includes:
+The repository is well beyond the initial foundation stage. As of the
+post-PR-152 baseline, implemented and audited behavior includes:
 
-- typed YAML configuration and example configuration
+- typed YAML configuration and safe example configuration
 - validated domain and value types
-- durable SQLite contact logging and recovery/export support
+- durable SQLite contact logging, synchronization state, recovery, and export
 - pending-callsign Voice, Commit, and Discard workflow
-- typed `Radio` and CAT transport boundaries
-- deterministic mock radio and FT-891 CAT adapter
-- typed `GPSReceiver`, mock GPS, serial NMEA adapter, and background polling
+- typed `Radio` and `CatTransport` boundaries
+- deterministic mock radio and installed FT-891 CAT adapter
+- background radio polling, disconnect detection, and recovery
+- typed `GPSReceiver`, mock GPS, serial mixed-NMEA adapter, and background polling
+- live GPS position, Maidenhead grid, speed, heading, stale/last-known state, and
+  automatic recovery
 - full-screen Tkinter dashboard and context navigation
-- first live GPS map slice with stale and last-known presentation
-- bounded raster-tile retrieval and validated local cache
 - station-health and connectivity presentation
 - Home Station Platform health, queued synchronization, durable retries, and
   network keepalive
-- POTA retrieval, filtering, ranking, selection, receive-only tune intent, and
-  persistent cache
-- asynchronous QRZ, weather, local-time, U.S. state, and DX boundary enrichment
-- timed POTA park-detail overlay with park marker and operator photo/badge
-- typed physical-control actions, mappings, mock and serial sources
-- strict `RTCTRL/1 EVENT` parser and complete ESP32 panel firmware
+- runtime-owned generic thread-safe status-message arbitration
+- typed physical-control actions, mappings, mock/serial sources, strict
+  `RTCTRL/1 EVENT` parsing, and installed ESP32 panel firmware
 - Voice, Commit, Discard, Panel, Context, and encoder integration through shared
-  operator commands
+  application/operator commands
+- provider-neutral shared POTA/DX domain, stable selection, and exact staged
+  action values
+- Forge POTA/DXSpider aggregation, optional QRZ enrichment, transactional
+  snapshots, versioned REST, and supported systemd production deployment
+- typed Pi Forge background client, durable retained shared snapshots, and
+  truthful cached/live/retained diagnostics
+- one shared POTA/DX panel with independent band/mode filters
+- exact two-press POTA/DX receive tuning through background execution and
+  `ReceiveTuningService`
+- explicit cross-band manual `SET BAND ... — TUNE ATAS-120` handoff where the
+  FT-891 CAT behavior cannot authoritatively establish front-panel band context
+- north-up live map with current/last-known vehicle marker and immutable
+  map/GPS presentation state
+- generation-aware/coalesced viewport requests and stale-publication suppression
+- progressive local-first tile publication and incremental Tk rendering
+- installed raster-MBTiles source/resolver architecture
+- installed offline I-71 corridor package proven on `anvilmobile`
+- source priority installed package -> runtime cache -> online provider ->
+  unavailable
+- amortized map-cache pruning rather than a full cache scan/sort after every
+  successful tile write
 - automated CI and pre-commit quality gates
 
+The obsolete POTA park-detail overlay is removed. The current POTA and DX UI is
+the shared spot panel; documentation or code that assumes the old overlay/live
+provider-specific path must not be reintroduced.
+
 Milestone 9 is complete for the approved physical-input scope. The ESP32 link is
-intentionally one-way from ESP32 to Pi. Bidirectional LED feedback is not
-implemented and is a later typed output enhancement, not hidden unfinished input
-work.
+intentionally one-way from ESP32 to Pi. Bidirectional LED feedback remains a
+later typed output enhancement, not hidden unfinished input work.
 
 ## Architectural Boundaries
 
@@ -248,8 +275,9 @@ The domain layer contains stable project concepts and validation rules, such as:
 - contact and synchronization state
 - frequency, band, and radio mode
 - radio and GPS state
-- POTA spot, park, and tune intent
-- immutable service and presentation snapshots
+- shared spot identities/records/snapshots
+- map coordinates, source metadata, and immutable presentation snapshots
+- immutable service state suitable for safe cross-thread publication
 
 Domain code must not depend on GUI frameworks, serial libraries, audio
 libraries, HTTP clients, SQLite details, Raspberry Pi packages, or Forge
@@ -262,11 +290,11 @@ Application code coordinates use cases, including:
 - recording or discarding a pending callsign
 - displaying radio and GPS state
 - requesting map viewports and presenting immutable cached map state
-- selecting and confirming POTA receive tuning
+- selecting/staging/confirming shared receive tuning
 - synchronizing pending contacts
 - dispatching physical input through approved operator commands
-- requesting background enrichment and presenting cached state
-- handling online, offline, stale, degraded, and error transitions
+- consuming already-published Forge/shared state
+- handling online, offline, stale, retained, degraded, and error transitions
 
 Application services depend on typed ports rather than concrete hardware or
 network implementations.
@@ -281,10 +309,14 @@ examples include:
 - `GPSReceiver`
 - `ControlSource`
 - repositories
-- remote platform and enrichment providers
+- map tile/package sources
+- Home Station Platform clients
+- Forge/shared-spot clients/providers
 
-Interfaces expose capabilities required by Rolling Thunder. They must not expose
-raw vendor power or bypass application safeguards.
+Future weather, system-clock, mobile-location publication, and repeater
+capabilities must follow the same pattern. Interfaces expose only the authority
+Rolling Thunder requires; they must not expose raw vendor power or bypass
+application safeguards.
 
 ### Adapters
 
@@ -296,21 +328,26 @@ Adapters implement ports using real or simulated resources, including:
 - mock radio, GPS, and controls
 - SQLite repositories
 - Home Station Platform HTTP
-- POTA, QRZ, Open-Meteo, Census, and geoBoundaries HTTP clients
+- Forge provider/client HTTP
+- POTA, DXSpider, QRZ, Open-Meteo, Census, and geoBoundaries integrations where
+  currently applicable
+- raster MBTiles installed packages and online map fallback
 
-Device paths, baud rates, protocol parsing, and transport exceptions belong in
-configuration, factories, and adapters only.
+Device paths, baud rates, protocol parsing, HTTP/provider details, and transport
+exceptions belong in configuration, factories, and adapters only.
 
 ### User Interface
 
-The UI presents state and invokes application controllers. It must not:
+The UI presents immutable state and invokes application controllers. It must not:
 
 - open serial devices
 - capture or parse hardware protocols directly
 - issue raw CAT commands
 - execute blocking HTTP requests
+- read/write SQLite directly
+- perform map tile/package filesystem work
 - own database implementation details
-- decide retry or synchronization policy
+- decide retry, retention, or synchronization policy
 - create special authority for physical buttons
 
 ## Local-First and Offline Requirements
@@ -323,9 +360,13 @@ At minimum:
 4. Network failure never loses a completed local contact.
 5. Synchronization resumes later without duplicate upload.
 6. Forge unavailability does not prevent basic logging.
-7. Public enrichment failure does not prevent POTA selection or logging.
-8. Temporary radio, GPS, speech, or ESP32 loss does not crash the application.
-9. Online, offline, stale, degraded, disabled, and error state is visible.
+7. Public provider failure does not prevent basic logging or invalidate unrelated
+   retained/local state.
+8. Temporary radio, GPS, speech, ESP32, map, or Forge loss does not crash the
+   application.
+9. Online, offline, stale, retained, degraded, disabled, and error state is
+   visible where relevant.
+10. Installed offline map coverage does not silently require public internet.
 
 Remote services enhance the Pi client. They do not become hidden prerequisites
 for local operation.
@@ -346,12 +387,13 @@ Every hardware capability should normally be developed in this sequence:
 8. Add explicit startup, timeout, malformed-data, disconnect, and recovery
    behavior.
 9. Open a focused draft PR.
-10. Ask the owner to perform a precise hardware test on `anvilmobile`.
+10. Ask the owner to perform a precise hardware test on `anvilmobile` or the
+    applicable production host.
 11. Incorporate the result, update documentation, and obtain owner approval
     before merge.
 
-Do not combine unrelated hardware devices in the same first integration pull
-request.
+Do not combine unrelated hardware devices or privilege boundaries in the same
+first integration pull request.
 
 ## Radio Safety Rules
 
@@ -362,15 +404,22 @@ These are permanent constraints:
 - no CW keying
 - no voice keying
 - no unattended transmit
+- no automatic transmit
 - no voice command may directly tune or transmit
 - no ESP32 event may name a raw CAT command
 - physical controls use the same application-command and confirmation boundaries
   as the UI
-- receive-only tuning must require the existing explicit operator intent and
-  confirmation flow
+- operator-confirmed receive/repeater configuration must use typed application
+  services and the typed `Radio` boundary
+- the first press of a two-press radio action stages only and performs no CAT
 - radio state in the current scope remains `transmitting=False`
 
 A proposal that violates these rules must be rejected or redesigned.
+
+The existing FT-891 cross-band limitation is also part of the safety contract:
+regular-memory CAT recall is best-effort context only and must not be described
+as authoritative front-panel band selection. Use the explicit manual band/ATAS
+handoff until new physical evidence proves a safer typed capability.
 
 ## Physical-Control Rules
 
@@ -399,10 +448,13 @@ Potentially blocking work must not run in the Tkinter thread, including:
 
 - CAT and GPS serial operations
 - speech capture and recognition
-- HTTP requests and image normalization
-- map tile retrieval, validation, and cache I/O
+- HTTP/provider requests and image normalization
+- map tile retrieval, validation, package lookup, and cache I/O
 - synchronization and retries
-- database maintenance
+- database maintenance and preference persistence
+- Forge publication/polling
+- weather retrieval
+- system-clock operations
 - long calculations
 
 Every worker or polling service must define:
@@ -412,7 +464,7 @@ Every worker or polling service must define:
 - timeout behavior
 - cancellation or stop behavior
 - stale-state rules
-- device-loss behavior
+- device/provider-loss behavior
 - retry or recovery policy
 - bounded work
 - observable errors
@@ -426,6 +478,10 @@ Configuration is typed, validated, centralized, and test-constructible.
 Machine-specific paths belong in local YAML. Safe example values belong in
 `config/rolling-thunder.example.yaml`.
 
+Operator preferences that change through the running UI should normally use a
+typed persistence boundary rather than rewriting YAML from Tkinter/application
+controllers.
+
 Never commit or display:
 
 - passwords
@@ -436,28 +492,23 @@ Never commit or display:
 - authentication responses
 - personal credentials
 
-Optional QRZ credentials are loaded through the centralized application-secrets
-boundary from a local environment file. Do not scatter environment lookups
-through feature modules.
+Optional credentials are loaded through centralized secret/environment
+boundaries. Do not scatter environment lookups through feature modules.
 
 ## Git and Pull-Request Workflow
 
 Never develop directly on `main`.
 
-Use one focused branch for one logical change:
-
-```text
-feature/<short-description>
-fix/<short-description>
-docs/<short-description>
-```
+Use one focused branch for one logical change. Existing repository conventions
+may use `feature/`, `fix/`, `docs/`, or automation-specific `agent/` branches,
+but the branch must remain single-purpose and reviewable.
 
 The AI assistant should normally:
 
-1. verify repository, branch, and working-tree state
+1. verify repository, branch, and working-tree/remote state
 2. inspect applicable issues, pull requests, documentation, code, and tests
 3. propose the smallest clean slice
-4. create or instruct creation of the focused branch
+4. create the focused branch
 5. implement code, tests, configuration examples, and documentation
 6. run or verify:
 
@@ -466,13 +517,14 @@ The AI assistant should normally:
    mypy src
    pytest
    pre-commit run --all-files
+   git diff --check
    ```
 
 7. push the branch and open a draft pull request
 8. inspect GitHub Actions and correct failures
-9. provide a focused live-test procedure
-10. keep the PR in draft until significant hardware or UI behavior is approved
-11. request explicit owner approval before merge
+9. provide a focused live-test procedure when hardware/UI/deployment is involved
+10. keep the PR unmerged until significant hardware/UI behavior is approved
+11. request explicit owner authorization before merge
 
 The owner should not be asked to manually write routine production code that the
 assistant can implement. The owner should be asked to test real hardware,
@@ -497,63 +549,82 @@ Important decisions must live in the repository rather than only in a chat.
 Documentation must distinguish implemented behavior, validated hardware
 behavior, deferred work, and long-term architectural direction.
 
+GitHub issue bodies must also be reconciled when their original baseline is
+superseded by merged work; an open umbrella issue must not continue to describe
+completed checkpoints as future implementation.
+
 ## Current Development Direction: Milestone 10
 
-Milestone 10 is `Hardware-Backed Mapping and Operating Intelligence` and must be
-executed in separate phases.
+Milestone 10 remains `Hardware-Backed Mapping and Operating Intelligence`, but
+the original GPS-first/radio-second development guidance has been completed.
+Do not restart those original phases as if the repository were still at its
+pre-hardware baseline.
 
 ### Phase A: Real GPS Integration
 
-Start with GitHub issue #10, `Implement real GPS provider`.
+Status: complete for installed current-position, speed, heading, loss, recovery,
+and live-map use.
 
-Before coding:
+Follow-up GPS time work is intentionally separate:
 
-- inspect the actual issue and current repository state
-- read `GPSReceiver`, `SerialGPSReceiver`, GPS polling, configuration, runtime,
-  Station State, dashboard integration, and all GPS tests
-- observe the connected receiver's stable device path, permissions, baud rate,
-  and emitted NMEA sentence mix on `anvilmobile`
-
-The first GPS PR should be the smallest live-hardware slice. It should establish
-safe startup and read-only current position through the existing typed boundary.
-Preserve mock mode. Add sentence support only when the real receiver demonstrates
-that it is needed. Validate fix state, position, grid, loss, reacquisition, and
-visible status. Update setup and recovery documentation.
-
-Do not include FT-891 changes in the GPS branch.
+- #158 adds trusted GPS UTC observations without changing the OS clock
+- #159 adds bounded least-privilege GPS-assisted Pi clock verification/sync only
+  after the real `anvilmobile` time-service/polkit state is inspected
 
 ### Phase B: Real Yaesu FT-891 Integration
 
-After the GPS PR is approved and merged, use a separate branch and PR for the
-installed FT-891.
+Status: complete for the approved receive-only and shared POTA/DX scope.
 
-Begin with:
+The installed path includes read-only polling, exact receive frequency/mode
+changes, shared two-press tuning, disconnect/recovery safety, and the manual
+cross-band band/ATAS handoff. Issue #149 retains the unresolved automatic
+front-panel band-context question.
 
-- stable CAT device identity and permissions
-- correct serial settings
-- read-only connection
-- current frequency and mode
-- background polling
-- disconnect and recovery
-
-Only after read-only behavior is approved should the same focused effort validate
-explicit receive-only frequency, mode, band, and confirmed POTA tuning. Preserve
-the typed `Radio` and `CatTransport` boundaries and the mock radio. Add no PTT,
-MOX, keying, or unattended transmit authority.
+Future six-meter repeater work must first prove each additional FT-891 FM/
+repeater CAT capability in isolation under #168 before panel integration under
+#169. Unsupported or unverifiable behavior must remain an explicit operator
+handoff.
 
 ### Phase C: Mapping and Operating Intelligence
 
-After real GPS and radio state are reliable, expand:
+Status: active.
 
-- live current-location mapping
-- movement presentation
-- contact visualization
-- POTA locations and details
-- station and connectivity status
-- selected Home Station Platform-assisted analytics
-- caching and offline behavior
+Issue #124 remains the map-specific umbrella for:
 
-Do not design Phase C around unproven hardware assumptions.
+- broad Ohio and surrounding-state offline packages
+- deterministic automatic day/night policy
+- typed manual day/night override
+- separate operating-overlay provider/snapshot architecture
+- future PAD-US boundary work
+
+The local-first foundation is already implemented through PRs #125, #126, #127,
+and #152 and must be reused rather than rebuilt.
+
+### Approved Post-PR-152 Workstream
+
+Umbrella issue #154 defines the next approved sequence:
+
+0. #155 — reconcile roadmap, architecture, and issue state
+1. #156 — map information box and explicit MAP/GPS health
+2. #157 — persistent Map Zoom operator setting
+3. #158 — trusted GPS UTC observations
+4. #159 — GPS-assisted Raspberry Pi clock synchronization
+5. #160 — Forge mobile-location write API and retained domain
+6. #161 — publish valid Pi GPS fixes to Forge
+7. #162 — retained Forge weather domain, provider, and API
+8. #164 — Pi retained weather client and immutable state
+9. #165 — weather panel and map-temperature integration
+10. #166 — 6 m repeater data, Active overrides, and geospatial filtering
+11. #167 — 6 m repeater panel and operator Active controls
+12. #168 — typed FT-891 FM repeater receive capabilities
+13. #169 — two-press 6 m repeater radio configuration integration
+
+Issue #163 is a parking-lot item for future weather-radar map overlays and is not
+part of the initial #154 completion sequence.
+
+The sequence is intentional. Do not collapse the GPS trust/OS privilege boundary,
+Forge write/weather boundary, repeater data/UI boundary, or FT-891 capability/
+integration boundary into one large pull request.
 
 ## Definition of Done
 
@@ -566,34 +637,39 @@ A feature is complete when all applicable criteria are satisfied:
 - mocks and fakes remain usable
 - normal and important failure behavior is tested
 - Ruff passes
-- MyPy passes
+- strict MyPy passes
 - pytest passes
 - pre-commit passes
+- `git diff --check` passes
 - GitHub Actions passes
-- relevant hardware or full-screen testing is completed on `anvilmobile`
-- the owner approves significant user-visible or hardware behavior
+- relevant hardware, Forge, system-time, or full-screen testing is completed on
+  the applicable real system
+- the owner approves significant user-visible, deployment, privilege, or hardware
+  behavior
 - offline behavior is preserved
 - errors are actionable and visible
 - secrets are not committed or exposed
 - documentation and roadmap are updated
 - assumptions, limitations, and deferred work are recorded
 - the pull request is focused and reviewable
+- no merge occurs without explicit repository-owner authorization
 
 ## New AI-Assisted Session Checklist
 
 At the start of a new session:
 
 1. Confirm the repository is `spifford3472/rolling-thunder-v4`.
-2. Confirm the local directory is `/home/geoff/projects/rolling-thunder-v4`.
+2. Confirm the intended local directory is `/home/geoff/projects/rolling-thunder-v4`.
 3. Read the required documents in the order listed at the top of this file.
 4. Follow links and file references in those documents that apply to the task.
 5. Use connected GitHub access to inspect the current issue, PR history, code,
    tests, and CI rather than relying on memory.
-6. Confirm the active branch and working tree before changing anything.
+6. Confirm the active branch/remote state before changing anything.
 7. Act as Chief Software Architect, Senior Technical Lead, and implementer.
 8. Keep work in small focused branches and draft pull requests.
 9. Handle coding, tests, documentation, CI corrections, and PR preparation.
-10. Have the owner test and approve larger hardware and UI changes before merge.
+10. Have the owner test and approve larger hardware, UI, deployment, or privilege
+    changes before merge.
 11. Treat the repository as more authoritative than previous chat summaries.
-12. Begin Milestone 10 with real GPS only; do not combine the initial GPS work
-    with FT-891 changes.
+12. Start from the currently approved issue/checkpoint sequence; do not restart
+    historical Milestone 10 phases that are already complete.
