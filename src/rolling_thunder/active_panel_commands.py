@@ -123,6 +123,16 @@ class SharedSpotTuneCommands(Protocol):
         """Submit one exact staged receive action without blocking."""
 
 
+class SettingsPanelCommands(Protocol):
+    """Nonblocking operator commands owned by the Settings context."""
+
+    def zoom_out(self) -> bool:
+        """Decrease map zoom one step when possible."""
+
+    def zoom_in(self) -> bool:
+        """Increase map zoom one step when possible."""
+
+
 class ActivePanelCommandController:
     """Route generic selection controls to the legacy active POTA panel."""
 
@@ -210,7 +220,7 @@ class ActivePanelCommandController:
 
 
 class SharedSpotActivePanelCommandController:
-    """Route POTA/DX controls through one shared provider-neutral panel."""
+    """Route POTA/DX and Settings controls through the active context."""
 
     def __init__(
         self,
@@ -220,12 +230,14 @@ class SharedSpotActivePanelCommandController:
         current_frequency: Callable[[], Frequency | None],
         radio_state: Callable[[], RadioState] | None = None,
         shared_tuning: SharedSpotTuneCommands | None = None,
+        settings_panel: SettingsPanelCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._shared_panel = shared_panel
         self._current_frequency = current_frequency
         self._radio_state = radio_state
         self._shared_tuning = shared_tuning
+        self._settings_panel = settings_panel
         self.activate_context(context_navigation.state.selected)
 
     def activate_context(self, context_id: ContextId) -> None:
@@ -273,7 +285,9 @@ class SharedSpotActivePanelCommandController:
         return False
 
     def move_previous(self) -> bool:
-        """Move shared stable selection without wrapping."""
+        """Move selection, or zoom out when Settings owns the encoder."""
+        if self._settings_is_active():
+            return self._settings_panel is not None and self._settings_panel.zoom_out()
         if not self._shared_spot_is_active():
             return False
         previous_identity = self._shared_panel.selected_identity
@@ -281,7 +295,9 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def move_next(self) -> bool:
-        """Move shared stable selection without wrapping."""
+        """Move selection, or zoom in when Settings owns the encoder."""
+        if self._settings_is_active():
+            return self._settings_panel is not None and self._settings_panel.zoom_in()
         if not self._shared_spot_is_active():
             return False
         previous_identity = self._shared_panel.selected_identity
@@ -350,3 +366,6 @@ class SharedSpotActivePanelCommandController:
 
     def _dx_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.DX
+
+    def _settings_is_active(self) -> bool:
+        return self._context_navigation.state.selected is ContextId.SETTINGS

@@ -210,7 +210,7 @@ def test_schema_v7_migration_preserves_contacts_and_legacy_pota_cache(tmp_path: 
 
     version = initialize_database(database_path)
 
-    assert version == CURRENT_SCHEMA_VERSION == 7
+    assert version == CURRENT_SCHEMA_VERSION
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT contact_id, callsign FROM contacts"

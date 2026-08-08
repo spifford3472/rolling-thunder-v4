@@ -10,9 +10,7 @@ from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.census_state_outline import CensusStateOutlineProvider
 from rolling_thunder.config import ApplicationConfig, HardwareAdapterMode
 from rolling_thunder.contact_logging import ContactLoggingService
-from rolling_thunder.contact_qrz_enrichment import (
-    ContactQrzEnrichmentService,
-)
+from rolling_thunder.contact_qrz_enrichment import ContactQrzEnrichmentService
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
@@ -24,11 +22,13 @@ from rolling_thunder.home_platform import HomePlatformClient
 from rolling_thunder.home_platform_health import HomePlatformHealthService
 from rolling_thunder.http_home_platform import HttpHomePlatformClient, HttpTransport
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
-from rolling_thunder.map_sources import (
-    InstalledMapRegistry,
-    MapTileResolver,
-)
+from rolling_thunder.map_sources import InstalledMapRegistry, MapTileResolver
 from rolling_thunder.map_tiles import MapTileCache, MapTileClient
+from rolling_thunder.map_zoom import (
+    MapZoomSettingsController,
+    effective_map_zoom_bounds,
+    resolve_initial_map_zoom,
+)
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.network_keepalive import (
@@ -36,11 +36,12 @@ from rolling_thunder.network_keepalive import (
     NetworkKeepaliveTransport,
 )
 from rolling_thunder.open_meteo import OpenMeteoParkWeatherProvider
-from rolling_thunder.pi_forge_runtime import build_pi_forge_spot_polling
-from rolling_thunder.pi_forge_spot_polling import (
-    ExecutorFactory,
-    PiForgeSpotPollingService,
+from rolling_thunder.operator_preferences import (
+    OperatorPreferenceRepository,
+    OperatorPreferenceService,
 )
+from rolling_thunder.pi_forge_runtime import build_pi_forge_spot_polling
+from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotState
 from rolling_thunder.pota_enrichment import PotaEnrichmentService
 from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
@@ -87,6 +88,8 @@ class ApplicationRuntime:
     gps: GPSReceiver | None = None
     gps_polling: GPSPollingService | None = None
     live_map: LiveMapService | None = None
+    map_zoom_settings: MapZoomSettingsController | None = None
+    operator_preferences: OperatorPreferenceService | None = None
     home_platform_client: HomePlatformClient | None = None
     home_platform_health: HomePlatformHealthService | None = None
     contact_qrz_enrichment: ContactQrzEnrichmentService | None = None
@@ -159,6 +162,8 @@ class ApplicationRuntime:
         polling_scheduler = scheduler or ThreadingPollScheduler()
         gps_polling_scheduler = gps_scheduler or ThreadingPollScheduler()
         repository = ContactRepository(config.storage.database_path)
+        preference_repository = OperatorPreferenceRepository(config.storage.database_path)
+        operator_preferences = OperatorPreferenceService(preference_repository)
 
         home_platform_client: HomePlatformClient | None = None
         home_platform_health: HomePlatformHealthService | None = None
@@ -209,9 +214,6 @@ class ApplicationRuntime:
             executor_factory=forge_executor_factory,
         )
 
-        # The shared Forge path owns live POTA/DX ingestion when enabled.
-        # Keep the legacy direct-POTA poller only as a rollback path for
-        # configurations that have not enabled Forge.
         pota_spot_polling: PotaSpotPollingService | None = None
         if not config.forge.enabled:
             pota_spot_polling = build_pota_spot_polling(
@@ -271,6 +273,7 @@ class ApplicationRuntime:
         )
 
         live_map: LiveMapService | None = None
+        map_zoom_settings: MapZoomSettingsController | None = None
         map_config = config.map
         if map_config.enabled:
             map_cache = MapTileCache(
@@ -283,8 +286,18 @@ class ApplicationRuntime:
                 timeout_s=map_config.request_timeout_s,
                 transport=map_transport,
             )
+            installed_registry = InstalledMapRegistry.load(map_config.installed_packages)
+            zoom_bounds = effective_map_zoom_bounds(
+                installed_registry.packages,
+                style=map_config.style,
+            )
+            effective_zoom = resolve_initial_map_zoom(
+                preference_repository.read_map_zoom(),
+                map_config.zoom,
+                zoom_bounds,
+            )
             map_resolver = MapTileResolver(
-                InstalledMapRegistry.load(map_config.installed_packages),
+                installed_registry,
                 map_cache,
                 map_client,
                 style=map_config.style,
@@ -292,8 +305,13 @@ class ApplicationRuntime:
             )
             live_map = LiveMapService(
                 map_resolver,
-                zoom=map_config.zoom,
+                zoom=effective_zoom,
                 executor=map_executor,
+            )
+            map_zoom_settings = MapZoomSettingsController(
+                live_map,
+                zoom_bounds,
+                operator_preferences,
             )
 
         return cls(
@@ -314,6 +332,8 @@ class ApplicationRuntime:
                 interval_s=gps_interval_s,
             ),
             live_map=live_map,
+            map_zoom_settings=map_zoom_settings,
+            operator_preferences=operator_preferences,
             home_platform_client=home_platform_client,
             home_platform_health=home_platform_health,
             contact_qrz_enrichment=contact_qrz_enrichment,
@@ -410,6 +430,8 @@ class ApplicationRuntime:
             self.home_platform_health.stop()
         if self.live_map is not None:
             self.live_map.stop()
+        if self.operator_preferences is not None:
+            self.operator_preferences.stop()
         if self.gps_polling is not None:
             self.gps_polling.stop()
         self.polling.stop()

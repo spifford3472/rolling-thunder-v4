@@ -185,9 +185,7 @@ def run_dashboard(
     capture = live_capture if live_capture is not None else mock_transcripts
     context_navigation = ContextNavigationController()
     shared_spot_panel = SharedSpotPanelController(runtime)
-    shared_spot_tuning = SharedSpotTuneController(
-        ReceiveTuningService(runtime.radio)
-    )
+    shared_spot_tuning = SharedSpotTuneController(ReceiveTuningService(runtime.radio))
     shared_spot_tune_status = SharedSpotTuneStatusController(
         shared_spot_tuning,
         runtime.status_messages,
@@ -198,6 +196,7 @@ def run_dashboard(
         current_frequency=lambda: runtime.latest_radio_state.frequency,
         radio_state=lambda: runtime.latest_radio_state,
         shared_tuning=shared_spot_tuning,
+        settings_panel=runtime.map_zoom_settings,
     )
     # Retained only for run_dashboard API compatibility with legacy callers.
     _ = pota_tune_executor
@@ -785,12 +784,8 @@ def run_dashboard(
             else:
                 pota_status_label.grid_remove()
                 pota_cards_container.grid()
-                pota_more_above_text.set(
-                    "▲ MORE ▲" if panel.hidden_above_count else ""
-                )
-                pota_more_below_text.set(
-                    "▼ MORE ▼" if panel.hidden_below_count else ""
-                )
+                pota_more_above_text.set("▲ MORE ▲" if panel.hidden_above_count else "")
+                pota_more_below_text.set("▼ MORE ▼" if panel.hidden_below_count else "")
 
                 for card_index, card_frame in enumerate(pota_card_frames):
                     if card_index >= len(panel.cards):
@@ -799,9 +794,7 @@ def run_dashboard(
 
                     card = panel.cards[card_index]
                     card_frame.grid()
-                    line1_var, line2_var, line3_var, line4_var = pota_card_texts[
-                        card_index
-                    ]
+                    line1_var, line2_var, line3_var, line4_var = pota_card_texts[card_index]
                     line1_var.set(card.line1)
                     line2_var.set(card.line2)
                     line3_var.set(card.line3)
@@ -815,9 +808,7 @@ def run_dashboard(
                         if card.selected
                         else _POTA_CARD_NORMAL_BORDER_PX
                     )
-                    invisible_border_width = (
-                        _POTA_CARD_OUTER_PAD_PX - visible_border_width
-                    )
+                    invisible_border_width = _POTA_CARD_OUTER_PAD_PX - visible_border_width
                     border_color = _BRIGHT if card.selected else _BORDER
                     card_frame.configure(
                         bg=selected_background,
@@ -834,9 +825,7 @@ def run_dashboard(
             if panel.error_line:
                 footer_lines.append(panel.error_line)
             if panel_state.staged_identity is not None:
-                footer_lines.append(
-                    "STAGED — PRESS AGAIN TO TUNE — BACK CANCELS"
-                )
+                footer_lines.append("STAGED — PRESS AGAIN TO TUNE — BACK CANCELS")
             else:
                 footer_lines.append("SELECT A SPOT — PRESS TO STAGE")
             pota_footer_text.set("\n".join(footer_lines))
@@ -844,8 +833,19 @@ def run_dashboard(
             show_standard_context_body()
             context_title_text.set(selected_context.definition.title)
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
-            context_body_label.configure(font=("DejaVu Sans", 22), wraplength=560)
-            context_body_text.set("")
+            zoom_settings = runtime.map_zoom_settings
+            if zoom_settings is None:
+                context_body_label.configure(
+                    font=("DejaVu Sans Mono", 30, "bold"),
+                    wraplength=560,
+                )
+                context_body_text.set("MAP ZOOM\nDISABLED")
+            else:
+                context_body_label.configure(
+                    font=("DejaVu Sans Mono", 30, "bold"),
+                    wraplength=560,
+                )
+                context_body_text.set("\n".join(zoom_settings.state.lines))
 
             health = build_station_health(
                 runtime.latest_radio_state,

@@ -111,6 +111,12 @@ class LiveMapService:
             return self._latest
 
     @property
+    def zoom(self) -> int:
+        """Return the active in-memory zoom without performing I/O."""
+        with self._lock:
+            return self._zoom
+
+    @property
     def installed_packages(self) -> tuple[InstalledMapMetadata, ...]:
         """Return validated installed packages in lookup order."""
         return self._resolver.installed_packages
@@ -119,6 +125,16 @@ class LiveMapService:
     def source_diagnostics(self) -> tuple[str, ...]:
         """Return non-fatal installed-package loading or read failures."""
         return self._resolver.diagnostics
+
+    def set_zoom(self, zoom: int) -> bool:
+        """Change zoom in memory; the next normal viewport request loads it."""
+        if not 0 <= zoom <= 22:
+            raise ValueError("Live-map zoom must be between 0 and 22.")
+        with self._lock:
+            if zoom == self._zoom:
+                return False
+            self._zoom = zoom
+        return True
 
     def start(self) -> None:
         """Start the single bounded background map worker."""
@@ -164,9 +180,12 @@ class LiveMapService:
         if not self._started:
             return
 
+        with self._lock:
+            zoom = self._zoom
+
         viewport = build_map_viewport(
             center,
-            zoom=self._zoom,
+            zoom=zoom,
             width_px=max(1, width_px),
             height_px=max(1, height_px),
         )
