@@ -6,12 +6,16 @@ from rolling_thunder.cat_transport import CatTransport
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.ft891_cat import (
     Ft891CatError,
+    encode_memory_to_vfo_a,
     encode_read_frequency,
+    encode_read_memory_channel,
     encode_read_mode,
-    encode_select_band,
+    encode_select_band_memory,
     encode_set_frequency,
     encode_set_mode,
+    memory_channel_for_band,
     parse_frequency_reply,
+    parse_memory_channel_reply,
     parse_mode_reply,
 )
 from rolling_thunder.radio import RadioBand
@@ -45,40 +49,77 @@ def test_fake_transport_satisfies_cat_transport_protocol() -> None:
     assert isinstance(transport, CatTransport)
 
 
-
 @pytest.mark.parametrize(
-    ("band", "command"),
+    ("band", "memory", "command"),
     [
-        (RadioBand.BAND_160M, b"BS00;"),
-        (RadioBand.BAND_80M, b"BS01;"),
-        (RadioBand.BAND_40M, b"BS03;"),
-        (RadioBand.BAND_30M, b"BS04;"),
-        (RadioBand.BAND_20M, b"BS05;"),
-        (RadioBand.BAND_17M, b"BS06;"),
-        (RadioBand.BAND_15M, b"BS07;"),
-        (RadioBand.BAND_12M, b"BS08;"),
-        (RadioBand.BAND_10M, b"BS09;"),
-        (RadioBand.BAND_6M, b"BS10;"),
+        (RadioBand.BAND_160M, 1, b"MC001;"),
+        (RadioBand.BAND_80M, 2, b"MC002;"),
+        (RadioBand.BAND_40M, 3, b"MC003;"),
+        (RadioBand.BAND_30M, 4, b"MC004;"),
+        (RadioBand.BAND_20M, 5, b"MC005;"),
+        (RadioBand.BAND_17M, 6, b"MC006;"),
+        (RadioBand.BAND_15M, 7, b"MC007;"),
+        (RadioBand.BAND_12M, 8, b"MC008;"),
+        (RadioBand.BAND_10M, 9, b"MC009;"),
+        (RadioBand.BAND_6M, 10, b"MC010;"),
     ],
 )
-def test_band_select_commands_use_dedicated_ft891_codes(
+def test_band_memories_use_operator_mapping(
     band: RadioBand,
+    memory: int,
     command: bytes,
 ) -> None:
-    assert encode_select_band(band) == command
+    assert memory_channel_for_band(band) == memory
+    assert encode_select_band_memory(band) == command
 
 
-def test_band_select_rejects_unsupported_60m_without_guessing() -> None:
+def test_band_memory_selection_rejects_unsupported_60m_without_guessing() -> None:
     with pytest.raises(
         Ft891CatError,
-        match="band selection does not support 60m",
+        match="memory band selection does not support 60m",
     ):
-        encode_select_band(RadioBand.BAND_60M)
+        encode_select_band_memory(RadioBand.BAND_60M)
 
 
-def test_band_select_requires_radio_band_value() -> None:
+def test_band_memory_selection_requires_radio_band_value() -> None:
     with pytest.raises(TypeError, match="band must be a RadioBand"):
-        encode_select_band("40m")  # type: ignore[arg-type]
+        encode_select_band_memory("40m")  # type: ignore[arg-type]
+
+
+def test_memory_commands_match_verified_ft891_sequence() -> None:
+    assert encode_read_memory_channel() == b"MC;"
+    assert encode_memory_to_vfo_a() == b"MA;"
+
+
+@pytest.mark.parametrize(
+    ("reply", "channel"),
+    [
+        (b"MC001;", 1),
+        (b"MC005;", 5),
+        (b"MC010;", 10),
+        (b"MC099;", 99),
+    ],
+)
+def test_memory_channel_reply_parses_selected_channel(
+    reply: bytes,
+    channel: int,
+) -> None:
+    assert parse_memory_channel_reply(reply) == channel
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [b"", b"MC;", b"MC01;", b"MC0001;", b"MCABC;", b"MC010"],
+)
+def test_memory_channel_reply_rejects_malformed_data(reply: bytes) -> None:
+    with pytest.raises(Ft891CatError, match="Malformed FT-891 memory-channel reply"):
+        parse_memory_channel_reply(reply)
+
+
+def test_memory_channel_reply_rejects_channel_zero() -> None:
+    with pytest.raises(Ft891CatError, match="outside the supported range"):
+        parse_memory_channel_reply(b"MC000;")
+
 
 def test_frequency_read_and_set_commands_match_ft891_format() -> None:
     assert encode_read_frequency() == b"FA;"
