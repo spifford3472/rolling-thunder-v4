@@ -5,6 +5,8 @@ from concurrent.futures import Executor, Future
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from rolling_thunder.operator_preferences import (
     OperatorPreferenceRepository,
     OperatorPreferenceService,
@@ -77,11 +79,27 @@ def test_malformed_or_out_of_range_map_zoom_falls_back_as_missing(tmp_path: Path
     with sqlite3.connect(database_path) as connection:
         connection.execute(
             "UPDATE operator_preferences SET preference_value = ? WHERE preference_key = ?",
+            ("5", "map.zoom"),
+        )
+        connection.commit()
+
+    assert repository.read_map_zoom() is None
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE operator_preferences SET preference_value = ? WHERE preference_key = ?",
             ("99", "map.zoom"),
         )
         connection.commit()
 
     assert repository.read_map_zoom() is None
+
+
+def test_repository_rejects_map_zoom_below_operator_floor(tmp_path: Path) -> None:
+    repository = OperatorPreferenceRepository(tmp_path / "rolling-thunder.db")
+
+    with pytest.raises(ValueError, match="between 6 and 22"):
+        repository.write_map_zoom(5)
 
 
 def test_preference_service_submits_zoom_write_without_changing_api_contract(
