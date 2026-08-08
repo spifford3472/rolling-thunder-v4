@@ -22,7 +22,8 @@ stable key `map.zoom`.
 Startup reads the stored value before the dashboard begins. A stored zoom is used
 only when it is a valid integer and lies inside the effective zoom bounds. Missing,
 malformed, or out-of-range data falls back to the configured zoom, clamped into
-the effective range.
+the effective range. Stored values below zoom 6 are invalid and cannot restore an
+unusable wide-area view after restart.
 
 Runtime persistence is asynchronous. Tkinter and physical-control dispatch only
 change the in-memory zoom and queue a short SQLite write on the preference worker.
@@ -30,13 +31,17 @@ They do not perform SQLite, filesystem, map-package, or network work directly.
 
 ## Effective bounds
 
-When installed map packages exist for the configured visual style, their validated
-MBTiles metadata defines the operator-selectable zoom interval. The current dark
-I-71 package declares zoom `0-15`, so the installed vehicle configuration exposes
-Map Zoom range `0-15`.
+Rolling Thunder defines **zoom 6 as the minimum useful operator zoom level**. The
+operator-facing setting therefore never goes below 6 even when an installed map
+package contains lower zoom levels.
 
-If no installed package exists for the active style, the generic raster-map range
-`0-22` is used.
+When installed map packages exist for the configured visual style, their validated
+MBTiles metadata still defines the upper end of the operator-selectable interval.
+The current dark I-71 package declares zoom `0-15`, so the installed vehicle
+configuration exposes Map Zoom range `6-15`.
+
+If no installed package exists for the active style, the generic operator range
+`6-22` is used.
 
 The bounds affect only the operator setting. Tile resolution remains local-first:
 installed package, runtime cache, then allowed online fallback. Changing Map Zoom
@@ -50,7 +55,7 @@ shows:
 ```text
 MAP ZOOM
 15
-RANGE 0-15
+RANGE 6-15
 TURN ENCODER: OUT / IN
 ```
 
@@ -66,11 +71,11 @@ single background map worker.
 
 1. Update `anvilmobile` to the exact PR head and start the dashboard normally.
 2. Select **SETTINGS** and confirm Map Zoom displays the current value and range
-   `0-15` with the installed I-71 night package.
+   `6-15` with the installed I-71 night package.
 3. Rotate the encoder one step toward zoom out and confirm the displayed value
    decreases by one and the live map reframes without UI stalls.
 4. Rotate the encoder toward zoom in and confirm the value increases by one.
-5. Confirm the setting stops at `0` and `15` rather than wrapping.
+5. Confirm the setting stops at `6` and `15` rather than wrapping.
 6. Change the zoom to an easy-to-remember value such as `13`.
 7. Stop Rolling Thunder through the normal SSH process, start it again, return to
    Settings, and confirm Map Zoom remains `13`.
