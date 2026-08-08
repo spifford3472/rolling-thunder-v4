@@ -44,4 +44,4 @@ restore_ntp_sampling
 trap - EXIT HUP INT TERM
 
 printf 'Clock sample accepted by chronyd: %s UTC\n' "$TARGET"
-printf 'NTP sources returned online and burst sampling requested.\n'
+printf 'NTP source recovery requested: online + burst 2/4.\n'
