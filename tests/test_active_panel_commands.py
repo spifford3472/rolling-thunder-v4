@@ -218,7 +218,7 @@ def test_encoder_short_advances_stage_confirm_execute_once() -> None:
     assert tune.result.status is PotaReceiveTuneResultStatus.SUCCEEDED
     warning = status_messages.snapshot().current
     assert warning is not None
-    assert warning.text == "BAND CHANGED TO 20 METERS — RETUNE ATAS-120"
+    assert warning.text == "SET BAND TO 20 METERS — TUNE ATAS-120"
 
     assert commands.activate_selection() is False
     assert len(executor.calls) == 1
