@@ -114,7 +114,7 @@ class DeferredExecutor(Executor):
         if future.set_running_or_notify_cancel():
             try:
                 result = fn(*args, **kwargs)
-            except BaseException as error:
+            except Exception as error:
                 future.set_exception(error)
             else:
                 future.set_result(result)
