@@ -464,6 +464,7 @@ class SerialGPSReceiver:
             advancing=self._utc_advancing,
             fresh=age_s <= self._maximum_utc_age_s,
             age_s=age_s,
+            received_monotonic_s=received_at,
         )
 
     def _reset_utc_tracking(self) -> None:
