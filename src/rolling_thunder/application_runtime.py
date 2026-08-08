@@ -36,6 +36,12 @@ from rolling_thunder.network_keepalive import (
     NetworkKeepaliveTransport,
 )
 from rolling_thunder.open_meteo import OpenMeteoParkWeatherProvider
+from rolling_thunder.pi_forge_runtime import build_pi_forge_spot_polling
+from rolling_thunder.pi_forge_spot_polling import (
+    ExecutorFactory,
+    PiForgeSpotPollingService,
+)
+from rolling_thunder.pi_forge_spot_service import PiForgeSpotState
 from rolling_thunder.pota_enrichment import PotaEnrichmentService
 from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
 from rolling_thunder.pota_runtime import build_pota_spot_polling
@@ -86,6 +92,7 @@ class ApplicationRuntime:
     contact_qrz_enrichment: ContactQrzEnrichmentService | None = None
     contact_sync: ContactSyncService | None = None
     network_keepalive: NetworkKeepaliveService | None = None
+    pi_forge_spot_polling: PiForgeSpotPollingService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
@@ -103,6 +110,7 @@ class ApplicationRuntime:
         contact_qrz_enrichment_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
+        forge_scheduler: PollScheduler | None = None,
         pota_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
         gps_interval_s: float = 1.0,
@@ -110,12 +118,14 @@ class ApplicationRuntime:
         gps_factory: GPSFactory = SerialGPSReceiver,
         home_platform_transport: HttpTransport | None = None,
         network_keepalive_transport: NetworkKeepaliveTransport | None = None,
+        forge_transport: HttpTransport | None = None,
         pota_transport: HttpTransport | None = None,
         qrz_transport: HttpTransport | None = None,
         weather_transport: HttpTransport | None = None,
         image_transport: HttpTransport | None = None,
         state_map_transport: HttpTransport | None = None,
         map_transport: HttpTransport | None = None,
+        forge_executor_factory: ExecutorFactory | None = None,
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
@@ -190,6 +200,14 @@ class ApplicationRuntime:
                 timeout_s=keepalive_config.timeout_s,
                 transport=network_keepalive_transport,
             )
+
+        pi_forge_spot_polling = build_pi_forge_spot_polling(
+            config.forge,
+            database_path=config.storage.database_path,
+            scheduler=forge_scheduler,
+            transport=forge_transport,
+            executor_factory=forge_executor_factory,
+        )
 
         pota_spot_polling = build_pota_spot_polling(
             config.pota_spots,
@@ -293,6 +311,7 @@ class ApplicationRuntime:
             contact_qrz_enrichment=contact_qrz_enrichment,
             contact_sync=contact_sync,
             network_keepalive=network_keepalive,
+            pi_forge_spot_polling=pi_forge_spot_polling,
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
         )
@@ -324,6 +343,13 @@ class ApplicationRuntime:
         return self.live_map.latest_state
 
     @property
+    def latest_forge_spot_state(self) -> PiForgeSpotState | None:
+        """Return the latest Forge-derived shared-spot state without I/O."""
+        if self.pi_forge_spot_polling is None:
+            return None
+        return self.pi_forge_spot_polling.latest_state
+
+    @property
     def latest_pota_spot_state(self) -> PotaSpotServiceState | None:
         """Return the latest POTA spot snapshot available to consumers."""
         if self.pota_spot_polling is None:
@@ -348,6 +374,8 @@ class ApplicationRuntime:
             self.contact_sync.start()
         if self.network_keepalive is not None:
             self.network_keepalive.start()
+        if self.pi_forge_spot_polling is not None:
+            self.pi_forge_spot_polling.start()
         self.pota_enrichment.start()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.start()
@@ -362,6 +390,8 @@ class ApplicationRuntime:
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.stop()
         self.pota_enrichment.stop()
+        if self.pi_forge_spot_polling is not None:
+            self.pi_forge_spot_polling.stop()
         if self.network_keepalive is not None:
             self.network_keepalive.stop()
         if self.contact_sync is not None:
