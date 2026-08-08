@@ -97,6 +97,12 @@ class SharedSpotPanelCommands(Protocol):
     def next_pota_mode(self) -> object:
         """Cycle the migrated POTA mode filter."""
 
+    def next_dx_band(self) -> object:
+        """Cycle the shared DX band filter."""
+
+    def next_dx_mode(self) -> object:
+        """Cycle the shared DX mode filter."""
+
 
 class ActivePanelCommandController:
     """Route generic selection controls to the legacy active POTA panel."""
@@ -208,23 +214,32 @@ class SharedSpotActivePanelCommandController:
             )
             return
         if context_id is ContextId.DX:
-            self._shared_panel.activate(SpotProvider.DX)
+            self._shared_panel.activate(
+                SpotProvider.DX,
+                current_frequency=self._current_frequency(),
+            )
             return
         self._shared_panel.cancel_staging()
 
     def primary(self) -> bool:
-        """Cycle the POTA band filter; DX has no primary filter yet."""
-        if not self._pota_is_active():
-            return False
-        self._shared_panel.next_pota_band()
-        return True
+        """Cycle the active shared provider's band filter."""
+        if self._pota_is_active():
+            self._shared_panel.next_pota_band()
+            return True
+        if self._dx_is_active():
+            self._shared_panel.next_dx_band()
+            return True
+        return False
 
     def secondary(self) -> bool:
-        """Cycle the POTA mode filter; DX has no secondary filter yet."""
-        if not self._pota_is_active():
-            return False
-        self._shared_panel.next_pota_mode()
-        return True
+        """Cycle the active shared provider's mode filter."""
+        if self._pota_is_active():
+            self._shared_panel.next_pota_mode()
+            return True
+        if self._dx_is_active():
+            self._shared_panel.next_dx_mode()
+            return True
+        return False
 
     def tertiary(self) -> bool:
         """Return false while the shared panel has no tertiary command."""
@@ -276,3 +291,6 @@ class SharedSpotActivePanelCommandController:
 
     def _pota_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.POTA
+
+    def _dx_is_active(self) -> bool:
+        return self._context_navigation.state.selected is ContextId.DX

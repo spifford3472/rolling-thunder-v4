@@ -93,6 +93,8 @@ def panel_state(
         pota_band=RadioBand.BAND_20M,
         pota_mode_filter=SharedSpotModeFilter.SSB,
         pota_maximum_age=timedelta(minutes=15),
+        dx_band=RadioBand.BAND_20M,
+        dx_mode_filter=SharedSpotModeFilter.ALL,
     )
 
 

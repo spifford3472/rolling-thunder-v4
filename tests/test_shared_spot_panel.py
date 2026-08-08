@@ -254,25 +254,42 @@ def test_pota_filter_controls_preserve_existing_mobile_sequence() -> None:
     assert [row.park_reference for row in mode_state.rows] == ["US-3002"]
 
 
-def test_dx_uses_same_controller_without_inheriting_pota_filters() -> None:
+def test_dx_uses_same_controller_with_independent_dx_filters() -> None:
     pota = pota_spot("US-4001", 14_250_000)
-    dx_twenty = dx_spot("K1DX", 14_020_000, operator_name="DX One", grid="FN31pr")
+    dx_twenty = dx_spot(
+        "K1DX",
+        14_020_000,
+        operator_name="DX One",
+        grid="FN31pr",
+    )
     dx_forty = dx_spot("W9DX", 7_025_000)
-    _, controller = controller_for(published_state((pota, dx_twenty, dx_forty)))
+    _, controller = controller_for(
+        published_state((pota, dx_twenty, dx_forty))
+    )
 
-    state = controller.activate(SpotProvider.DX)
+    controller.next_pota_mode()
+    state = controller.activate(
+        SpotProvider.DX,
+        current_frequency=Frequency(hz=14_200_000),
+    )
 
     assert state.provider is SpotProvider.DX
-    assert state.filter_label == "DX    ALL BANDS / ALL MODES"
-    assert [row.callsign for row in state.rows] == ["W9DX", "K1DX"]
-    unknown = state.rows[0]
-    assert unknown.operator_name is None
-    assert unknown.grid is None
-    assert unknown.operator_name_text == "<UNKNOWN>"
-    assert unknown.grid_text == "<UNKNOWN>"
-    assert state.rows[1].operator_name_text == "DX One"
-    assert state.rows[1].grid_text == "FN31pr"
+    assert state.pota_mode_filter is SharedSpotModeFilter.CW
+    assert state.dx_band is RadioBand.BAND_20M
+    assert state.dx_mode_filter is SharedSpotModeFilter.ALL
+    assert state.filter_label == "DX    BAND: 20    MODE: ALL"
+    assert [row.callsign for row in state.rows] == ["K1DX"]
+    assert state.rows[0].operator_name_text == "DX One"
+    assert state.rows[0].grid_text == "FN31pr"
 
+    forty = controller.previous_dx_band()
+
+    assert forty.dx_band is RadioBand.BAND_40M
+    assert [row.callsign for row in forty.rows] == ["W9DX"]
+    assert forty.rows[0].operator_name is None
+    assert forty.rows[0].grid is None
+    assert forty.rows[0].operator_name_text == "<UNKNOWN>"
+    assert forty.rows[0].grid_text == "<UNKNOWN>"
 
 def test_selection_survives_snapshot_replacement_by_stable_identity() -> None:
     selected = pota_spot("US-5001", 14_250_000)
@@ -394,3 +411,110 @@ def test_naive_panel_clock_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="aware datetime"):
         SharedSpotPanelController(source, clock=lambda: naive)
+
+
+def test_dx_activation_defaults_to_current_supported_radio_band() -> None:
+    twenty = dx_spot("K1DX", 14_020_000)
+    forty = dx_spot("W9DX", 7_025_000)
+    _, controller = controller_for(published_state((twenty, forty)))
+
+    state = controller.activate(
+        SpotProvider.DX,
+        current_frequency=Frequency(hz=7_150_000),
+    )
+
+    assert state.dx_band is RadioBand.BAND_40M
+    assert state.dx_mode_filter is SharedSpotModeFilter.ALL
+    assert [row.callsign for row in state.rows] == ["W9DX"]
+    assert state.filter_label == "DX    BAND: 40    MODE: ALL"
+
+
+def test_dx_band_and_mode_filters_use_shared_filtering() -> None:
+    forty_ssb = dx_spot(
+        "W4SSB",
+        7_200_000,
+        mode=RadioMode.LSB,
+        display_mode="SSB",
+    )
+    twenty_cw = dx_spot("K1CW", 14_020_000)
+    twenty_ssb = dx_spot(
+        "K2SSB",
+        14_250_000,
+        mode=RadioMode.USB,
+        display_mode="SSB",
+    )
+    _, controller = controller_for(
+        published_state((forty_ssb, twenty_cw, twenty_ssb))
+    )
+
+    all_modes = controller.activate(
+        SpotProvider.DX,
+        current_frequency=Frequency(hz=14_200_000),
+    )
+    assert {row.callsign for row in all_modes.rows} == {"K1CW", "K2SSB"}
+
+    ssb = controller.next_dx_mode()
+    assert ssb.dx_mode_filter is SharedSpotModeFilter.SSB
+    assert [row.callsign for row in ssb.rows] == ["K2SSB"]
+
+    forty = controller.previous_dx_band()
+    assert forty.dx_band is RadioBand.BAND_40M
+    assert [row.callsign for row in forty.rows] == ["W4SSB"]
+
+
+def test_pota_and_dx_mode_filter_state_are_independent() -> None:
+    pota_cw = pota_spot(
+        "US-9201",
+        14_030_000,
+        mode=RadioMode.CW,
+        display_mode="CW",
+    )
+    dx_ssb = dx_spot(
+        "K3SSB",
+        14_250_000,
+        mode=RadioMode.USB,
+        display_mode="SSB",
+    )
+    _, controller = controller_for(published_state((pota_cw, dx_ssb)))
+
+    pota_state = controller.next_pota_mode()
+    assert pota_state.pota_mode_filter is SharedSpotModeFilter.CW
+
+    dx_state = controller.activate(
+        SpotProvider.DX,
+        current_frequency=Frequency(hz=14_200_000),
+    )
+    assert dx_state.dx_mode_filter is SharedSpotModeFilter.ALL
+
+    dx_state = controller.next_dx_mode()
+    assert dx_state.dx_mode_filter is SharedSpotModeFilter.SSB
+
+    pota_state = controller.activate(
+        SpotProvider.POTA,
+        current_frequency=Frequency(hz=14_200_000),
+    )
+    assert pota_state.pota_mode_filter is SharedSpotModeFilter.CW
+
+
+def test_dx_filter_change_cancels_staging_even_when_selection_remains_visible() -> None:
+    spot = dx_spot(
+        "K4SSB",
+        14_250_000,
+        mode=RadioMode.USB,
+        display_mode="SSB",
+    )
+    _, controller = controller_for(published_state((spot,)))
+    controller.activate(
+        SpotProvider.DX,
+        current_frequency=Frequency(hz=14_200_000),
+    )
+    controller.select_next()
+
+    staged = controller.stage_selected()
+    assert staged.staged_identity == spot.identity
+
+    filtered = controller.next_dx_mode()
+
+    assert filtered.dx_mode_filter is SharedSpotModeFilter.SSB
+    assert filtered.selected_identity == spot.identity
+    assert filtered.staged_identity is None

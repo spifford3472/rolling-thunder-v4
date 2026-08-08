@@ -72,6 +72,14 @@ class RecordingSharedPanel:
         self.calls.append("next_pota_mode")
         return object()
 
+    def next_dx_band(self) -> object:
+        self.calls.append("next_dx_band")
+        return object()
+
+    def next_dx_mode(self) -> object:
+        self.calls.append("next_dx_mode")
+        return object()
+
 
 def build_controller(
     context: ContextId = ContextId.POTA,
@@ -116,17 +124,22 @@ def test_pota_primary_secondary_and_selection_route_through_shared_panel() -> No
     assert panel.staged_identity == panel.selected_identity
 
 
-def test_dx_uses_shared_selection_but_does_not_inherit_pota_filter_commands() -> None:
+def test_dx_uses_shared_band_mode_and_selection_commands() -> None:
     commands, _navigation, panel = build_controller(ContextId.DX)
     panel.calls.clear()
 
     assert panel.provider is SpotProvider.DX
-    assert commands.primary() is False
-    assert commands.secondary() is False
+    assert commands.primary() is True
+    assert commands.secondary() is True
     assert commands.move_next() is True
     assert commands.activate_selection() is True
 
-    assert panel.calls == ["select_next", "stage_selected"]
+    assert panel.calls == [
+        "next_dx_band",
+        "next_dx_mode",
+        "select_next",
+        "stage_selected",
+    ]
     assert isinstance(panel.selected_identity, DxSpotIdentity)
 
 
@@ -142,7 +155,7 @@ def test_pota_to_dx_context_change_invalidates_shared_staging_immediately() -> N
     assert panel.provider is SpotProvider.DX
     assert panel.selected_identity is None
     assert panel.staged_identity is None
-    assert panel.calls[-1] == "activate:dx:None"
+    assert panel.calls[-1] == "activate:dx:7150000"
 
 
 def test_non_spot_context_cancels_staging_without_mutating_selection() -> None:
