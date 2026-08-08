@@ -27,10 +27,12 @@ EPOCH="$1"
 TARGET="$($DATE -u -d "@$EPOCH" '+%Y-%m-%d %H:%M:%S')" \
     || fail "UTC epoch could not be converted"
 
-manual_off() {
+restore_ntp_sampling() {
     "$CHRONYC" -n manual off >/dev/null 2>&1 || true
+    "$CHRONYC" -n online >/dev/null 2>&1 || true
+    "$CHRONYC" -n burst 2/4 >/dev/null 2>&1 || true
 }
-trap manual_off EXIT HUP INT TERM
+trap restore_ntp_sampling EXIT HUP INT TERM
 
 "$CHRONYC" -n manual on >/dev/null \
     || fail "chronyd rejected temporary manual-input enable"
@@ -38,7 +40,8 @@ trap manual_off EXIT HUP INT TERM
 TZ=UTC "$CHRONYC" -n settime "$TARGET" \
     || fail "chronyd rejected the UTC time sample"
 
-manual_off
+restore_ntp_sampling
 trap - EXIT HUP INT TERM
 
 printf 'Clock sample accepted by chronyd: %s UTC\n' "$TARGET"
+printf 'NTP sources returned online and burst sampling requested.\n'
