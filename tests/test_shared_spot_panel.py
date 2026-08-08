@@ -518,3 +518,55 @@ def test_dx_filter_change_cancels_staging_even_when_selection_remains_visible() 
     assert filtered.dx_mode_filter is SharedSpotModeFilter.SSB
     assert filtered.selected_identity == spot.identity
     assert filtered.staged_identity is None
+
+
+def test_mode_change_under_same_identity_invalidates_staged_action() -> None:
+    original = pota_spot(
+        "US-8201",
+        14_250_000,
+        callsign="K1AAA",
+        mode=RadioMode.USB,
+        display_mode="SSB",
+    )
+    source, controller = controller_for(published_state((original,)))
+    controller.select_next()
+
+    staged = controller.stage_selected()
+    assert staged.staged_identity is not None
+    assert controller.staged_action is not None
+
+    changed = pota_spot(
+        "US-8201",
+        14_250_000,
+        callsign="K1AAA",
+        mode=RadioMode.LSB,
+        display_mode="SSB",
+    )
+    source.latest_forge_spot_state = published_state((changed,))
+
+    state = controller.state
+
+    assert state.selected_identity == original.identity
+    assert state.staged_identity is None
+    assert controller.staged_action is None
+
+
+def test_frequency_identity_change_while_staged_clears_without_fallback() -> None:
+    original = pota_spot("US-8202", 14_250_000, callsign="K1AAA")
+    source, controller = controller_for(published_state((original,)))
+    controller.select_next()
+
+    staged = controller.stage_selected()
+    assert staged.staged_identity is not None
+    assert controller.staged_action is not None
+
+    replacement = pota_spot("US-8202", 14_260_000, callsign="K1AAA")
+    source.latest_forge_spot_state = published_state((replacement,))
+
+    state = controller.state
+
+    assert state.selected_identity is None
+    assert state.staged_identity is None
+    assert controller.staged_action is None
+    assert [row.frequency.hz for row in state.rows] == [14_260_000]
+    assert all(row.selected is False for row in state.rows)

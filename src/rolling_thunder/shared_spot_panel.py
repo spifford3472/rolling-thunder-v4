@@ -21,7 +21,11 @@ from rolling_thunder.spot_domain import (
     SpotSourceMetadataItem,
     format_optional_spot_value,
 )
-from rolling_thunder.spot_selection import SpotSelectionController, SpotSelectionState
+from rolling_thunder.spot_selection import (
+    SpotSelectionController,
+    SpotSelectionState,
+    StagedSpotAction,
+)
 
 Clock = Callable[[], datetime]
 _DEFAULT_POTA_BAND = RadioBand.BAND_20M
@@ -220,6 +224,11 @@ class SharedSpotPanelController:
     def staged_identity(self) -> SpotIdentity | None:
         """Return the currently valid staged identity after source synchronization."""
         return self._selection_state().staged_identity
+
+    @property
+    def staged_action(self) -> StagedSpotAction | None:
+        """Return the exact still-valid staged receive action."""
+        return self._selection_state().staged_action
 
     @property
     def selected_spot(self) -> SpotRecord | None:

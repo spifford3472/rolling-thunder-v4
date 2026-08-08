@@ -7,6 +7,7 @@ from rolling_thunder.context_navigation import ContextId, ContextNavigationContr
 from rolling_thunder.domain import Frequency
 from rolling_thunder.pota_tune_intent import PotaTuneIntent, PotaTuneIntentStatus
 from rolling_thunder.spot_domain import SpotIdentity, SpotProvider
+from rolling_thunder.spot_selection import StagedSpotAction
 
 
 class PotaPanelCommands(Protocol):
@@ -68,6 +69,10 @@ class SharedSpotPanelCommands(Protocol):
     def staged_identity(self) -> SpotIdentity | None:
         """Return the currently valid staged identity, if any."""
 
+    @property
+    def staged_action(self) -> StagedSpotAction | None:
+        """Return the exact still-valid staged receive action, if any."""
+
     def activate(
         self,
         provider: SpotProvider,
@@ -102,6 +107,13 @@ class SharedSpotPanelCommands(Protocol):
 
     def next_dx_mode(self) -> object:
         """Cycle the shared DX mode filter."""
+
+
+class SharedSpotTuneCommands(Protocol):
+    """Background receive tuning after explicit second activation."""
+
+    def start_tune(self, action: StagedSpotAction) -> bool:
+        """Submit one exact staged receive action without blocking."""
 
 
 class ActivePanelCommandController:
@@ -199,10 +211,12 @@ class SharedSpotActivePanelCommandController:
         shared_panel: SharedSpotPanelCommands,
         *,
         current_frequency: Callable[[], Frequency | None],
+        shared_tuning: SharedSpotTuneCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._shared_panel = shared_panel
         self._current_frequency = current_frequency
+        self._shared_tuning = shared_tuning
         self.activate_context(context_navigation.state.selected)
 
     def activate_context(self, context_id: ContextId) -> None:
@@ -266,13 +280,23 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def activate_selection(self) -> bool:
-        """Stage one selected POTA/DX target without radio execution."""
+        """Stage first; submit the exact still-valid target on second press."""
         if not self._shared_spot_is_active():
             return False
-        previous = self._shared_panel.staged_identity
-        self._shared_panel.stage_selected()
-        staged = self._shared_panel.staged_identity
-        return staged is not None and staged != previous
+
+        staged = self._shared_panel.staged_action
+        if staged is None:
+            self._shared_panel.stage_selected()
+            return self._shared_panel.staged_action is not None
+
+        tuning = self._shared_tuning
+        if tuning is None:
+            return False
+        if not tuning.start_tune(staged):
+            return False
+
+        self._shared_panel.cancel_staging()
+        return True
 
     def back(self) -> bool:
         """Cancel staging first, then clear selection on a later Back action."""
