@@ -63,7 +63,33 @@ The installed privilege boundary is:
 
 Rolling Thunder itself does not receive shell, service-management, package-management, or arbitrary root authority.
 
+## Runtime composition and enablement
+
+`ApplicationRuntime` owns the clock-synchronization lifecycle alongside GPS polling.
+
+The production path is intentionally disabled unless the process environment contains exactly:
+
+```text
+ROLLING_THUNDER_GPS_CLOCK_SYNC=1
+```
+
+This keeps deployment opt-in while the feature is accepted on the installed vehicle Pi. The runtime refuses to enable clock synchronization when the configured GPS adapter is in mock mode.
+
+When enabled:
+
+1. real GPS polling starts first
+2. `ClockSynchronizationService` starts on its own `ThreadingPollScheduler`
+3. the service consumes only the immutable latest GPS state already published by GPS polling
+4. no helper call can occur until trusted GPS UTC has remained continuously available for approximately 60 seconds
+5. normal in-tolerance operation performs verification only and makes no privileged call
+6. an out-of-tolerance system clock reaches only the typed `ChronyHelperClockSetter`
+7. shutdown stops clock synchronization before GPS polling is stopped
+
+The scheduler is thread-backed, so helper invocation never runs in Tkinter callbacks or on the UI thread.
+
 ## Installed acceptance history
+
+### Initial helper attempt
 
 On 2026-08-08 at head `5523d4313798f2cb8d9ffd8e6af61df2861b3ba0`:
 
@@ -73,13 +99,30 @@ On 2026-08-08 at head `5523d4313798f2cb8d9ffd8e6af61df2861b3ba0`:
 - a near-current manual time sample was accepted by chronyd
 - immediately after that sample, chrony reported Stratum 0 / `Not synchronised`, while `timedatectl` reported `System clock synchronized: no`
 
-That result **failed** the helper-health acceptance gate. Runtime wiring remained blocked and the installed helper must not be invoked again until the revised helper is installed.
+That result **failed** the helper-health acceptance gate. Runtime wiring remained blocked.
 
-The helper was revised so its cleanup also issues chrony `online` and `burst 2/4` requests after manual input. The revised helper must pass installed acceptance showing normal NTP source selection returns promptly before runtime wiring is allowed.
+Normal service was restored using `chronyc online`, `chronyc burst 2/4`, and `chronyc waitsync`. Recovery completed with an external `^*` source, Stratum 3, `Leap status: Normal`, `System clock synchronized: yes`, NTP active, and `chrony.service` active.
 
-## Recovery after the failed acceptance sample
+### Corrected helper acceptance
 
-If the installed Pi is left unsynchronised after the older helper test, recover normal chrony service without changing configuration:
+The helper was revised so cleanup also issues chrony `online` and `burst 2/4` after manual input.
+
+Installed acceptance on 2026-08-08 at exact head `4cb321ae2ad4a61811e247735c62297293058866` passed:
+
+- repository and installed helper SHA-256 hashes matched
+- starting chrony state was healthy with an external `^*` source, Stratum 3, and `Leap status: Normal`
+- malformed input was rejected
+- a near-current UTC sample was accepted with helper return code 0
+- the helper explicitly requested NTP source recovery
+- the first `waitsync` observation briefly showed no selected source, as expected immediately after manual input
+- the second observation reselected the external NTP source
+- final state returned to external `^*` source selection, Stratum 3, `Leap status: Normal`, `System clock synchronized: yes`, NTP active, and `chrony.service` active
+
+This passes the privileged-helper health gate and permits final runtime wiring and installed runtime acceptance.
+
+## Recovery procedure
+
+If a future manual-helper test leaves chrony temporarily without a selected source, recover normal sampling without changing configuration:
 
 ```bash
 sudo chronyc online
@@ -91,16 +134,18 @@ timedatectl status
 systemctl is-active chrony.service
 ```
 
-Do not reinstall or retest the helper until the revised branch head passes CI.
+## Final installed runtime acceptance
 
-## Installed acceptance procedure
+Before enabling the production runtime flag, confirm the branch passes CI on the final runtime-wiring head.
 
-1. Confirm the Pi is already synchronized before testing.
-2. Validate malformed input rejection.
-3. Submit only a near-current UTC sample; do not deliberately skew the Pi clock.
-4. Confirm the helper exits successfully.
-5. Confirm chrony returns to a selected external source and `Leap status: Normal`.
-6. Confirm `timedatectl` reports NTP active and system clock synchronized.
-7. Confirm `chrony.service` remains active.
+Then start Rolling Thunder with `ROLLING_THUNDER_GPS_CLOCK_SYNC=1` and confirm:
 
-Only after those gates pass may the clock synchronization service be wired into `ApplicationRuntime`.
+1. normal dashboard startup remains responsive
+2. GPS reaches trusted UTC normally
+3. no helper invocation occurs during the first approximately 60 seconds
+4. because the Pi is already NTP-synchronized within the two-second tolerance, the first opportunity reaches `VERIFIED` without a clock write
+5. chrony remains on an external source with `Leap status: Normal`
+6. `timedatectl` continues to report system clock synchronized and NTP active
+7. stopping Rolling Thunder stops the clock-sync scheduler cleanly
+
+Do not deliberately skew the installed Pi clock merely to force the write path; deterministic tests cover the out-of-tolerance setter path.
