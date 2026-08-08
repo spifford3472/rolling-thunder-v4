@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 7
+CURRENT_SCHEMA_VERSION: Final = 8
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -218,6 +218,19 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
             last_error TEXT CHECK (
                 last_error IS NULL OR length(last_error) <= 500
             )
+        )
+        """,
+    ),
+    8: (
+        """
+        CREATE TABLE operator_preferences (
+            preference_key TEXT PRIMARY KEY CHECK (
+                length(preference_key) >= 1 AND length(preference_key) <= 100
+            ),
+            preference_value TEXT NOT NULL CHECK (
+                length(preference_value) <= 500
+            ),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """,
     ),
