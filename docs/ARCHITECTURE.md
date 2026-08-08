@@ -170,15 +170,16 @@ Checkpoint-8 shared receive tuning publishes:
 - normal `TUNING ...` status while the tune is active
 - success status for 5 seconds
 - failure status for 8 seconds
-- verified cross-band ATAS-120 reminder for 10 seconds at higher priority
+- cross-band manual band/ATAS-120 reminder for 10 seconds at higher priority
 
-The ATAS reminder text is:
+The cross-band reminder text is:
 
 ```text
-BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
+SET BAND TO <BAND> METERS — TUNE ATAS-120
 ```
 
-It is a timed status message, not a tuner command or antenna verification.
+It is a timed operator handoff, not a claim that CAT authoritatively changed the
+FT-891 band state, not a tuner command, and not antenna verification.
 
 ## Shared POTA/DX Architecture
 
@@ -289,7 +290,7 @@ Within shared POTA/DX state, Back:
 1. cancels staging if staged
 2. otherwise clears the selected row if selected
 
-Back does not acknowledge the timed ATAS status and does not create a radio
+Back does not acknowledge the timed band/ATAS status and does not create a radio
 action.
 
 See `docs/SHARED_SPOT_DOMAIN.md` for the complete domain and operator contract.
@@ -417,6 +418,12 @@ separate typed fields.
 Forge failure, WireGuard loss, provider failure, or rejected shared data must not
 prevent local Commit or Discard.
 
+Checkpoint-8 acceptance additionally proved this boundary with an isolated
+temporary SQLite database while Forge was intentionally unavailable. The test
+contact was created and read back locally, the production contact count remained
+unchanged, the UI remained running, Forge recovered, and all temporary artifacts
+were removed.
+
 ## Radio Architecture and Safety
 
 The `Radio` boundary and `Ft891Radio` adapter support only the approved
@@ -425,7 +432,7 @@ receive-side scope:
 - connect/disconnect
 - read current VFO-A frequency and receive mode
 - background state refresh/recovery
-- independent band selection
+- independent best-effort band-context operation
 - independent same-band frequency change
 - independent receive-mode change
 - verified ordered receive-only tuning
@@ -437,11 +444,13 @@ resolve target band
 read current radio state
 
 if target band differs:
-    select band
-    read state
-    verify selected band
+    select mapped regular memory with MCxxx;
+    verify selected memory with MC;
+    copy memory to VFO-A with MA;
+    read recalled state;
+    verify recalled frequency belongs to target amateur band
 
-set target frequency
+set exact target frequency
 read frequency
 verify exact target
 
@@ -450,9 +459,21 @@ read mode
 verify requested mode
 ```
 
-A direct cross-band `set_frequency()` request fails before an `FA` command.
-Failed band verification stops frequency/mode work; failed frequency verification
-stops mode work.
+A direct cross-band `set_frequency()` request remains guarded. Failed
+best-effort memory-context verification stops that ordered attempt; failed exact
+frequency verification stops mode work.
+
+Successful memory recall is not treated as proof that the FT-891 changed its
+authoritative operator-visible band state. After a successful cross-band receive
+tune, Rolling Thunder explicitly hands control back to the operator with:
+
+```text
+SET BAND TO <BAND> METERS — TUNE ATAS-120
+```
+
+The operator manually sets/confirms the band and tunes the ATAS-120 before
+transmitting. The unresolved CAT/front-panel band-context behavior is tracked in
+issue #149.
 
 The FT-891 Standard Com Port remains unopened. No component exposes PTT, MOX, CW
 keying, voice keying, digital TX control, tuner control, power control, or
@@ -461,8 +482,8 @@ unattended transmit authority.
 Voice input and ESP32 input are operator-input mechanisms, not direct radio
 control.
 
-See `docs/REAL_FT891_INTEGRATION.md` for the hardware and live-acceptance
-procedure.
+See `docs/REAL_FT891_INTEGRATION.md` for the hardware and physical acceptance
+evidence.
 
 ## GPS Architecture
 
@@ -521,29 +542,44 @@ stale-state semantics, bounded work, and observable error state.
 
 ## Checkpoint-8 Acceptance Status
 
-Implemented and infrastructure-accepted on the feature branch:
+Checkpoint-8 implementation, Forge production deployment, and installed-hardware
+acceptance are complete on the feature branch.
+
+Accepted on `anvilmobile` with the real FT-891 and installed controls:
 
 - DX band/mode filtering
 - independent POTA/DX filter state
-- current-band activation default
+- current-band activation default with 20-meter fallback
 - exact two-press POTA/DX staging
-- background receive tuning
-- `ReceiveTuningService` sole authority
-- radio-state invalidation
-- timed tune and ATAS status
+- no radio change on first press
+- same-band POTA exact receive tuning
+- same-band DX exact receive tuning
+- cross-band POTA exact receive frequency/mode tuning
+- cross-band DX exact receive frequency/mode tuning
+- explicit `SET BAND TO <BAND> METERS — TUNE ATAS-120` handoff for cross-band
+  operation
+- no false band/ATAS warning on same-band operation
+- staging invalidation on selection, band filter, mode filter, Back, and invalid
+  radio state
+- radio power-loss/recovery without resurrection of stale staging
+- Enhanced CAT remains active and the Standard TX-capable FT-891 interface
+  remains closed
 - production Forge systemd deployment
 - live healthy POTA/DX provider refreshes
 - Pi requests reaching production `/api/v1/spots`
+- retained POTA/DX snapshot presentation during controlled Forge loss
+- isolated local SQLite contact commit/readback while Forge is unavailable
+- production contact count unchanged by the isolated offline test
+- Forge recovery after controlled interruption and clean removal of test artifacts
+- no PTT, MOX, keying, tuner, power, or transmit authority
 
-Remaining before issue #148 is complete:
+Automatic authoritative FT-891 band-state selection is explicitly not claimed;
+the best-effort memory-context mechanism and future firmware/CAT investigation
+are documented in issue #149.
 
-- final real FT-891 shared POTA/DX same-band and cross-band bench
-- first-press no-radio-change proof on the final build
-- filter/context/Back invalidation acceptance
-- ATAS warning acceptance for shared cross-band tunes
-- controlled Forge interruption with retained spots and local logging continuity
-- full Ruff, strict MyPy, pytest, pre-commit, diff, and CI gates
-- owner review and explicit merge authorization
+Remaining checkpoint-8 closure work is final documentation review, full
+repository quality gates, pull-request preparation/review, GitHub Actions, and
+explicit owner authorization before merge.
 
 ## Development and Approval Model
 
