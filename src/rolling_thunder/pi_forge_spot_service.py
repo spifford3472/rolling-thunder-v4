@@ -111,9 +111,8 @@ class PiForgeSpotState(DomainModel):
         if self.kind is not PiForgeSpotStateKind.EMPTY and not has_snapshot:
             raise ValueError("non-empty Pi Forge state requires a snapshot")
 
-        if self.kind in {PiForgeSpotStateKind.EMPTY, PiForgeSpotStateKind.CACHED}:
-            if self.last_attempt_at is not None:
-                raise ValueError("startup Pi Forge state cannot contain a live attempt timestamp")
+        if self.kind is PiForgeSpotStateKind.CACHED and self.last_attempt_at is not None:
+            raise ValueError("cached startup state cannot contain a live attempt timestamp")
 
         if self.kind is PiForgeSpotStateKind.LIVE:
             if self.last_attempt_at is None:
@@ -126,6 +125,10 @@ class PiForgeSpotState(DomainModel):
 
         if (self.error_kind is None) != (self.last_error is None):
             raise ValueError("Pi Forge error kind and error text must be present together")
+
+        if self.error_kind is PiForgeSpotErrorKind.CACHE_READ:
+            if self.kind is not PiForgeSpotStateKind.EMPTY or self.last_attempt_at is not None:
+                raise ValueError("cache-read failures are startup-only empty states")
 
         return self
 
@@ -181,36 +184,37 @@ class PiForgeSpotService:
             self._refreshing = True
             previous_state = self._state
 
-        attempted_at = self._aware_now()
         try:
-            result = self._client.fetch_spots()
-            self._cache.replace(result)
-        except ForgeClientError as error:
-            return self._publish_failure(
-                previous_state,
-                attempted_at=attempted_at,
-                error_kind=PiForgeSpotErrorKind.CLIENT,
-                error=error,
+            attempted_at = self._aware_now()
+            try:
+                result = self._client.fetch_spots()
+                self._cache.replace(result)
+            except ForgeClientError as error:
+                return self._publish_failure(
+                    previous_state,
+                    attempted_at=attempted_at,
+                    error_kind=PiForgeSpotErrorKind.CLIENT,
+                    error=error,
+                )
+            except StorageError as error:
+                return self._publish_failure(
+                    previous_state,
+                    attempted_at=attempted_at,
+                    error_kind=PiForgeSpotErrorKind.CACHE_WRITE,
+                    error=error,
+                )
+
+            state = self._state_from_result(
+                result,
+                kind=PiForgeSpotStateKind.LIVE,
+                last_attempt_at=attempted_at,
             )
-        except StorageError as error:
-            return self._publish_failure(
-                previous_state,
-                attempted_at=attempted_at,
-                error_kind=PiForgeSpotErrorKind.CACHE_WRITE,
-                error=error,
-            )
+            with self._lock:
+                self._state = state
+                return self._state
         finally:
             with self._lock:
                 self._refreshing = False
-
-        state = self._state_from_result(
-            result,
-            kind=PiForgeSpotStateKind.LIVE,
-            last_attempt_at=attempted_at,
-        )
-        with self._lock:
-            self._state = state
-            return self._state
 
     def _load_initial_state(self) -> PiForgeSpotState:
         try:
