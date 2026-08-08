@@ -39,14 +39,56 @@ the last valid position needed for truthful stale and last-known presentation.
 loads cached tiles, retrieves missing visible tiles, and publishes immutable
 snapshots. Identical loaded viewport requests are no-ops.
 
+`LiveMapInfoController` is a pure presentation projection. It consumes the
+already-published GPS/map state, retains only the timestamp of the last usable
+map publication, and produces immutable local-time, UTC, grid, temperature
+placeholder, MAP-health, and GPS-health state. It performs no network, disk,
+serial, CAT, or SQLite work.
+
 `MapTileClient` and `MapTileCache` perform all HTTP and disk work. Tkinter only
 renders immutable state and never contacts the provider or cache directly.
 
 ## Operator Presentation
 
-A fresh fix displays GPS readiness, map readiness, Maidenhead grid, and current
-coordinates. An old connected fix is marked stale and is not described as
-current.
+The live-map overlay is split into two independent areas rather than using one
+combined GPS/map status color.
+
+The information box shows:
+
+- local system time
+- UTC
+- current/last-known Maidenhead grid when available
+- local temperature in Fahrenheit and Celsius
+
+Until the retained Forge weather work is implemented, temperature is
+intentionally shown as `--°F / --°C — UNAVAILABLE`. The map does not contact a
+public weather provider directly.
+
+The separate MAP/GPS health box uses typed state and timestamps rather than
+parsing rendered status strings:
+
+- **green** — the subsystem is usable now
+- **yellow** — degraded, or a previously usable subsystem has been unavailable
+  for less than 30 seconds
+- **gray** — unavailable for 30 seconds or more, disabled, or never usable since
+  application start
+
+A complete map supplied from stale runtime cache is still considered usable for
+MAP health because Rolling Thunder is local-first. `MAP OFFLINE CACHE` therefore
+remains green. Partial map data and map loading with already-visible tiles are
+yellow.
+
+For MAP health, a fresh `LiveMapSnapshot.updated_at` on an unavailable/error
+publication does not reset health. `LiveMapInfoController` retains the timestamp
+of the last publication that actually contained usable map data. This prevents a
+stream of fresh failure snapshots from being mistaken for a healthy map.
+
+For GPS health, `LiveMapPresentation.fix_time` is the last usable fix timestamp.
+A stale or last-known fix remains yellow for less than 30 seconds, then becomes
+gray. GPS startup with no valid fix yet is gray rather than falsely healthy.
+
+A fresh GPS fix still displays and centers the current position. An old connected
+fix is marked stale and is not described as current.
 
 The installed serial adapter combines GGA position data with RMC
 course-over-ground and speed. The prominent top-down vehicle marker rotates to
@@ -55,13 +97,13 @@ the latest reliable course while moving at least 0.9 metres per second
 heading to avoid stoplight jitter. Before the first reliable movement reading,
 the marker points north.
 
-Loss after a prior valid fix retains the map and marker but displays
-`LAST KNOWN POSITION`.
+Loss after a prior valid fix retains the map and marker but displays last-known
+state through the typed GPS presentation.
 
-Without any valid fix since startup, the map requests no tiles and displays
-`WAITING FOR GPS FIX`.
+Without any valid fix since startup, the map requests no tiles and waits for a
+GPS fix.
 
-Map degradation is independent from GPS:
+Map degradation remains independent from GPS:
 
 - fresh cache or successful network retrieval: `MAP READY`
 - expired cached tiles after network failure: `MAP DATA OFFLINE — USING CACHE`
@@ -134,28 +176,35 @@ The live map does not:
 - alter physical-control authority
 - replace or suppress the global ATAS-120 warning
 
-Tile, cache, or provider failure must not stop GPS polling, contact logging,
-POTA operation, physical controls, or radio state polling.
+Tile, cache, provider, or health-presentation failure must not stop GPS polling,
+contact logging, POTA/DX operation, physical controls, or radio state polling.
 
 ## Manual Acceptance on anvilmobile
 
 1. Confirm the active configuration uses zoom 15, style `night`, and the
    installed I-71 corridor package path.
 2. Start the full-screen dashboard with GPS and normal network access.
-3. Confirm the dark local map, vehicle marker, grid, coordinates, and
-   attribution are displayed correctly.
-4. Disable public-internet access while remaining inside package coverage.
-5. Move to a previously unseen viewport and confirm the map remains available
-   without online tile requests.
-6. Confirm the marker follows course while moving and retains its heading when
+3. Confirm the information box shows correct local time, UTC, Maidenhead grid,
+   and `--°F / --°C — UNAVAILABLE`.
+4. Confirm MAP and GPS health are independent and both green with a current fix
+   and complete usable map.
+5. Disable public-internet access while remaining inside installed package
+   coverage and confirm MAP remains green while local tiles continue working.
+6. Move to a previously unseen viewport inside installed coverage and confirm the
+   map remains available without online tile requests.
+7. Confirm the marker follows course while moving and retains its heading when
    stopped.
-7. Confirm GPS updates do not cause visible flicker or UI stalls.
-8. Confirm POTA cards, the global ticker, and ATAS-120 warnings still work.
-9. Restore connectivity and confirm online fallback works outside package
-   coverage.
-10. Disconnect GPS and confirm the marker is labeled last-known rather than
-    current.
-11. Confirm logging, POTA selection, physical controls, and radio polling remain
-    usable throughout map and network degradation.
+8. Confirm GPS updates do not cause visible flicker or UI stalls.
+9. Confirm POTA/DX cards, the global ticker, and ATAS-120 warnings still work.
+10. Restore connectivity and confirm online fallback works outside package
+    coverage.
+11. Disconnect GPS after a current fix and confirm GPS health becomes yellow
+    during the recent-loss window and gray after 30 seconds while the marker
+    remains last-known rather than current.
+12. Force or observe a map-unavailable condition after a usable map and confirm
+    MAP health becomes yellow for less than 30 seconds and gray at 30 seconds,
+    even though unavailable snapshots continue updating.
+13. Confirm logging, POTA/DX selection, physical controls, and radio polling
+    remain usable throughout map/GPS/network degradation.
 
 Record the visible results in the draft pull request before approval.
