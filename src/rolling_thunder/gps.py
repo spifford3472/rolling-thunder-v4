@@ -33,6 +33,7 @@ class GPSUTCObservation:
     advancing: bool = False
     fresh: bool = False
     age_s: float | None = None
+    received_monotonic_s: float | None = None
 
     def __post_init__(self) -> None:
         if self.value is None:
@@ -42,6 +43,8 @@ class GPSUTCObservation:
                 raise ValueError("Unavailable GPS UTC cannot carry trust flags.")
             if self.age_s is not None:
                 raise ValueError("Unavailable GPS UTC cannot have an age.")
+            if self.received_monotonic_s is not None:
+                raise ValueError("Unavailable GPS UTC cannot have a receipt timestamp.")
             return
 
         if self.value.tzinfo is None or self.value.utcoffset() is None:
@@ -54,6 +57,8 @@ class GPSUTCObservation:
             raise ValueError("Available GPS UTC must be marked valid.")
         if self.age_s is None or self.age_s < 0:
             raise ValueError("Available GPS UTC requires a non-negative age.")
+        if self.received_monotonic_s is not None and self.received_monotonic_s < 0:
+            raise ValueError("GPS UTC receipt timestamp cannot be negative.")
 
     @property
     def trusted(self) -> bool:
