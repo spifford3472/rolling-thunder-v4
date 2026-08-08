@@ -4,14 +4,16 @@ Checkpoint #159 uses the trusted GPS UTC observation from Checkpoint #158 as a b
 
 ## Safety and privilege boundary
 
-Rolling Thunder must continue running as the normal `geoff` user. The dashboard process must never run as root merely to set system time.
+Rolling Thunder continues running as the normal `geoff` user. The dashboard process must never run as root merely to set system time.
 
 The application policy is separated from operating-system authorization:
 
 - `ClockSynchronizationService` decides when a trusted GPS UTC value may be compared with or applied to the Pi clock.
 - `SystemClockSetter` is a narrow typed port for the privileged operating-system operation.
-- The final concrete `anvilmobile` adapter and authorization mechanism must be selected only after inspecting the installed NTP/timedated/polkit configuration.
-- Failure to verify or set the clock is degraded clock-sync state only; it must not prevent startup or affect GPS, map, logging, controls, radio, or other runtime services.
+- `ChronyHelperClockSetter` invokes only `/usr/local/sbin/rolling-thunder-chrony-settime` through `sudo -n`.
+- the helper accepts exactly one decimal UTC epoch and rejects timestamps outside 2020-2100.
+- the helper temporarily enables chrony's manual-input mode, submits one UTC sample, and disables manual input on exit.
+- failure to verify or set the clock is degraded clock-sync state only; it must not prevent startup or affect GPS, map, logging, controls, radio, or other runtime services.
 
 ## Approved cadence
 
@@ -38,45 +40,74 @@ If the current Pi UTC differs from trusted GPS UTC by no more than the tolerance
 
 If the difference exceeds the tolerance, the service requests `SystemClockSetter.set_utc()` and records `SYNCHRONIZED` only when that call succeeds.
 
-## Mandatory `anvilmobile` inspection before deployment
+## Installed `anvilmobile` time-service inspection
 
-Before a concrete clock-setting adapter is selected or enabled on the vehicle Pi, capture all of the following from the installed system:
+Inspection on 2026-08-08 established:
+
+- local zone: `America/New_York`
+- system clock reported synchronized
+- NTP service reported active
+- `systemd-timesyncd` is not installed
+- `chrony.service` is enabled and active; `chronyd.service` is its active alias
+- `org.freedesktop.timedate1` is present and reports NTP enabled/synchronized
+- timedated set-time and set-NTP actions require administrator authentication through polkit
+- `geoff` is in the normal `sudo` group but has no existing non-interactive passwordless sudo authorization
+- there is no RTC reported by timedated
+
+This makes chrony the installed normal time authority. GPS fallback should cooperate with chrony rather than disabling NTP or replacing chronyd as the clock controller.
+
+## Accepted deployment path
+
+The deployment uses a narrow root-owned helper instead of granting the application direct root or general chrony control.
+
+Repository templates:
+
+- `deploy/rolling-thunder-chrony-settime`
+- `deploy/rolling-thunder-clock-sync.sudoers`
+
+Install them with:
 
 ```bash
-printf '===== DATE / CLOCK =====\n'
-date --iso-8601=seconds
-date -u --iso-8601=seconds
+sudo install -o root -g root -m 0755 \
+  deploy/rolling-thunder-chrony-settime \
+  /usr/local/sbin/rolling-thunder-chrony-settime
 
-printf '\n===== TIMEDATECTL =====\n'
-timedatectl status || true
+sudo install -o root -g root -m 0440 \
+  deploy/rolling-thunder-clock-sync.sudoers \
+  /etc/sudoers.d/rolling-thunder-clock-sync
 
-printf '\n===== TIMESYNCD =====\n'
-systemctl is-enabled systemd-timesyncd.service 2>&1 || true
-systemctl is-active systemd-timesyncd.service 2>&1 || true
-systemctl status systemd-timesyncd.service --no-pager -n 20 2>&1 || true
-
-printf '\n===== OTHER TIME DAEMONS =====\n'
-systemctl is-active chrony.service chronyd.service ntp.service ntpd.service 2>&1 || true
-systemctl is-enabled chrony.service chronyd.service ntp.service ntpd.service 2>&1 || true
-
-printf '\n===== TIMEDATED DBUS =====\n'
-busctl introspect org.freedesktop.timedate1 /org/freedesktop/timedate1 org.freedesktop.timedate1 2>&1 || true
-
-printf '\n===== POLKIT =====\n'
-pkaction --action-id org.freedesktop.timedate1.set-time --verbose 2>&1 || true
-pkaction --action-id org.freedesktop.timedate1.set-ntp --verbose 2>&1 || true
-
-printf '\n===== USER / GROUPS =====\n'
-id
-
-printf '\n===== SUDO CLOCK COMMAND CHECK =====\n'
-sudo -n -l 2>&1 || true
+sudo visudo -cf /etc/sudoers.d/rolling-thunder-clock-sync
 ```
 
-The inspection is read-only except for `sudo -n -l`, which only lists non-interactive sudo authorization and does not perform a privileged operation.
+The sudoers rule authorizes `geoff` to run only the fixed helper as root without an interactive password. The helper itself must remain root-owned and non-writable by `geoff`.
 
-## Deployment decision
+The helper does not disable chrony or timedated. It performs this bounded sequence:
 
-The concrete adapter is intentionally **not finalized yet**. The preferred mechanism will be whichever narrow path best cooperates with the actual installed time service while granting only the minimum additional authority required.
+1. validate one decimal epoch argument and the 2020-2100 safety range;
+2. enable chrony manual input with `chronyc manual on`;
+3. submit one UTC sample with `chronyc settime`;
+4. disable manual input on exit, including failure/termination cleanup.
 
-Candidates include systemd-timedated over D-Bus/polkit or a narrowly authorized root-owned helper. Rolling Thunder will not disable normal NTP or broadly grant root execution merely to implement GPS fallback time.
+## Helper acceptance before runtime wiring
+
+Before Rolling Thunder is allowed to invoke the helper automatically, validate the installed files and a near-no-op clock sample:
+
+```bash
+command -v chronyc
+ls -l \
+  /usr/local/sbin/rolling-thunder-chrony-settime \
+  /etc/sudoers.d/rolling-thunder-clock-sync
+sudo -n -l
+
+EPOCH="$(date -u +%s)"
+sudo -n /usr/local/sbin/rolling-thunder-chrony-settime "$EPOCH"
+
+chronyc tracking
+timedatectl status
+```
+
+Do not deliberately skew the vehicle Pi clock for this acceptance test. The deterministic test suite covers the out-of-tolerance write path; installed acceptance verifies that the real helper can submit a valid sample without breaking chrony/NTP operation.
+
+## Runtime wiring gate
+
+The helper is installed and accepted before `ApplicationRuntime` automatically composes the GPS clock-sync service. This prevents a new privileged path from being activated before its root ownership, sudoers syntax, non-interactive authorization, and chrony behavior have been proven on `anvilmobile`.
