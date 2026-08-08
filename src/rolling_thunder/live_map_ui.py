@@ -9,6 +9,11 @@ from math import cos, radians, sin
 from typing import Any
 
 from rolling_thunder.live_map import LiveMapGpsStatus, LiveMapPresentation
+from rolling_thunder.live_map_info import (
+    LiveMapHealthLevel,
+    LiveMapInfoController,
+    LiveMapInfoPresentation,
+)
 from rolling_thunder.live_map_service import (
     LiveMapSnapshot,
     MapDataStatus,
@@ -22,6 +27,7 @@ _MISSING_TILE = "#17242a"
 _GRID_LINE = "#26363d"
 _MUTED = "#a8b4ba"
 _READY = "#42ff72"
+_HEALTHY = "#66ccff"
 _WARNING = "#ffd24a"
 _FAILURE = "#ff7070"
 _MARKER = "#ff4040"
@@ -57,7 +63,7 @@ def live_map_status_color(
     gps_status: LiveMapGpsStatus,
     map_status: MapDataStatus | None,
 ) -> str:
-    """Return a stable status color for the combined GPS and map condition."""
+    """Return the legacy combined status color for pure regression coverage."""
     if gps_status is LiveMapGpsStatus.ERROR:
         return _FAILURE
     if map_status is MapDataStatus.UNAVAILABLE:
@@ -75,7 +81,7 @@ def live_map_status_lines(
     presentation: LiveMapPresentation,
     snapshot: LiveMapSnapshot | None,
 ) -> tuple[str, ...]:
-    """Build compact operator-facing map status lines."""
+    """Build the legacy compact status lines for pure regression coverage."""
     lines = [presentation.detail]
     if snapshot is None:
         lines.append("MAP DISABLED")
@@ -87,6 +93,24 @@ def live_map_status_lines(
     if presentation.position is not None:
         lines.append(f"{presentation.position.latitude:.5f}, {presentation.position.longitude:.5f}")
     return tuple(lines)
+
+
+def live_map_health_color(level: LiveMapHealthLevel) -> str:
+    """Return the approved light-blue/yellow/gray subsystem health color."""
+    if level is LiveMapHealthLevel.HEALTHY:
+        return _HEALTHY
+    if level is LiveMapHealthLevel.DEGRADED:
+        return _WARNING
+    return _MUTED
+
+
+def live_map_info_lines(info: LiveMapInfoPresentation) -> tuple[str, ...]:
+    """Build the compact information-box lines from immutable presentation state."""
+    return (
+        f"LOCAL  {info.local_time}",
+        f"UTC    {info.utc_time}",
+        f"GRID   {info.grid}",
+    )
 
 
 @dataclass(frozen=True)
@@ -168,6 +192,7 @@ class LiveMapWidgets:
 
         self._last_snapshot: LiveMapSnapshot | None = None
         self._last_size = (0, 0)
+        self._info_controller = LiveMapInfoController()
 
     @property
     def viewport_size(self) -> tuple[int, int]:
@@ -499,26 +524,84 @@ class LiveMapWidgets:
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
     ) -> None:
-        map_status = snapshot.status if snapshot is not None else None
-        lines = live_map_status_lines(presentation, snapshot)
-        text = "\n".join(lines)
-        color = live_map_status_color(presentation.status, map_status)
-        self._canvas.create_rectangle(
+        info = self._info_controller.update(presentation, snapshot)
+        lines = live_map_info_lines(info)
+        canvas = self._canvas
+        width = max(900, canvas.winfo_width())
+
+        canvas.create_rectangle(
             12,
             12,
-            880,
-            54 + len(lines) * 52,
+            430,
+            174,
             fill=_STATUS_BACKGROUND,
-            outline=color,
+            outline=_MUTED,
             width=3,
             tags="map-overlay",
         )
-        self._canvas.create_text(
-            32,
-            28,
-            text=text,
+        canvas.create_text(
+            30,
+            26,
+            text="\n".join(lines),
+            fill=_MARKER_OUTLINE,
+            font=("DejaVu Sans Mono", 26, "bold"),
+            anchor="nw",
+            justify="left",
+            tags="map-overlay",
+        )
+
+        health_right = width - 12
+        health_left = health_right - 420
+        canvas.create_rectangle(
+            health_left,
+            12,
+            health_right,
+            156,
+            fill=_STATUS_BACKGROUND,
+            outline=_MUTED,
+            width=3,
+            tags="map-overlay",
+        )
+
+        self._draw_health_line(
+            "MAP",
+            info.map_health.level,
+            info.map_health.detail,
+            health_left + 22,
+            34,
+        )
+        self._draw_health_line(
+            "GPS",
+            info.gps_health.level,
+            info.gps_health.detail,
+            health_left + 22,
+            94,
+        )
+
+    def _draw_health_line(
+        self,
+        name: str,
+        level: LiveMapHealthLevel,
+        detail: str,
+        x: int,
+        y: int,
+    ) -> None:
+        color = live_map_health_color(level)
+        self._canvas.create_oval(
+            x,
+            y + 4,
+            x + 24,
+            y + 28,
             fill=color,
-            font=("DejaVu Sans", 34, "bold"),
+            outline=color,
+            tags="map-overlay",
+        )
+        self._canvas.create_text(
+            x + 38,
+            y,
+            text=f"{name}  {detail}",
+            fill=color,
+            font=("DejaVu Sans", 25, "bold"),
             anchor="nw",
             justify="left",
             tags="map-overlay",
