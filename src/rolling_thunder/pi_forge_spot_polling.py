@@ -84,7 +84,7 @@ class PiForgeSpotPollingService:
                     self._interval_s,
                     self._poll_once,
                 )
-            except Exception:  # noqa: BLE001 - restore lifecycle state on scheduler failure
+            except Exception:
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
 
@@ -124,7 +124,7 @@ class PiForgeSpotPollingService:
 
         try:
             executor.submit(self._run_refresh)
-        except Exception:  # noqa: BLE001 - restore queue state if submission fails
+        except Exception:
             with self._lock:
                 self._worker_pending = False
             raise
@@ -132,10 +132,9 @@ class PiForgeSpotPollingService:
     def _run_refresh(self) -> None:
         try:
             self._service.refresh()
-        except Exception as error:  # noqa: BLE001 - keep future refreshes alive
+        except Exception:
             _LOGGER.exception(
-                "Unexpected Pi Forge spot refresh failure; future attempts will continue: %s",
-                error,
+                "Unexpected Pi Forge spot refresh failure; future attempts will continue."
             )
         finally:
             with self._lock:
