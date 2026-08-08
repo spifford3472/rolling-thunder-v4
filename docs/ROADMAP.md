@@ -61,7 +61,7 @@ Status: complete for the current FT-891 software scope.
 - Typed radio interface
 - Deterministic mock radio
 - Frequency and mode readout
-- Band change and frequency setting
+- Band-context handling and frequency setting
 - Connection-state reporting
 - FT-891 CAT adapter
 - Safe handling of disconnects and malformed replies
@@ -195,7 +195,7 @@ Status: complete and approved.
 ### Phase B: Real Yaesu FT-891 Integration
 
 Status: complete for the approved receive-only architecture; checkpoint-8 shared
-POTA/DX acceptance is the remaining current hardware validation slice.
+POTA/DX installed-hardware acceptance is complete.
 
 Completed and verified:
 
@@ -203,24 +203,32 @@ Completed and verified:
 - 38,400-baud, 8-N-2 serial configuration
 - read-only frequency, mode, polling, disconnect, and recovery
 - typed `Radio` and `CatTransport` boundaries
-- independent band, frequency, and mode operations
-- hard band-before-frequency ordering for cross-band changes
-- band, frequency, and mode read-back verification
-- unsupported 60-meter CAT band selection failing closed
+- independent typed band-context, frequency, and mode operations
+- best-effort regular-memory band-context recall for cross-band receive tuning
+- selected-memory and recalled-frequency target-band verification
+- exact frequency and receive-mode read-back verification
+- same-band tuning bypassing memory recall
 - same-band and controlled cross-band receive-only validation
+- explicit manual band/ATAS operator handoff after cross-band success
 - Standard Com Port remaining unopened
 - no PTT, MOX, keying, tuner, power, or unattended transmit authority
 
-The required receive-tuning order remains:
+The approved receive-tuning order is:
 
 ```text
-band selection when required
-band verification
-frequency setting
-frequency verification
+best-effort regular-memory band context when crossing bands
+selected-memory verification
+recalled-frequency target-band verification
+exact frequency setting
+exact frequency verification
 mode setting when needed
 mode verification
+manual SET BAND / TUNE ATAS operator handoff after cross-band success
 ```
+
+Successful memory recall is not treated as authoritative FT-891 front-panel band
+selection. That behavior is parked in issue #149 for a future firmware/CAT
+revisit.
 
 ### Phase C: Mapping and Operating Intelligence
 
@@ -262,7 +270,7 @@ storage, context, health, GPS, connectivity, shared spots, physical input, and
 mapping capabilities.
 
 The runtime owns a thread-safe immutable status-message service. Routine status,
-shared tuning status, and the verified cross-band ATAS-120 reminder publish
+shared tuning status, and the cross-band manual band/ATAS-120 reminder publish
 through replacement keys, priority arbitration, and bounded expiration.
 
 An in-process event bus remains an architectural direction rather than a reason
@@ -270,9 +278,10 @@ to retrofit completed services prematurely.
 
 ## Shared POTA/DX Spot Architecture
 
-Status: checkpoint 8 implementation and Forge production deployment complete on
-the feature branch; final FT-891 shared-spot bench, full quality gates, pull
-request review, CI, owner approval, and merge remain.
+Status: checkpoint 8 implementation, Forge production deployment, and installed
+FT-891/shared-control physical acceptance are complete on the feature branch;
+documentation review, final quality gates, pull-request review, CI, owner
+approval, and merge remain.
 
 GitHub issue #129 checkpoints 1 through 8 now provide:
 
@@ -296,7 +305,7 @@ GitHub issue #129 checkpoints 1 through 8 now provide:
   action-critical mutation, Back/Cancel, or invalid radio state
 - background shared receive tuning outside Tkinter
 - `ReceiveTuningService` as the sole receive-tuning authority
-- timed success/failure status and 10-second cross-band ATAS reminder
+- timed success/failure status and 10-second cross-band manual band/ATAS reminder
 - no duplicate Pi-side public-POTA polling while Forge is enabled
 - local SQLite contact logging remaining authoritative
 - no new radio transmit authority
@@ -343,24 +352,35 @@ See `docs/FORGE_DEPLOYMENT.md`.
 
 ## Current Checkpoint-8 Acceptance Work
 
-The remaining acceptance before issue #148 is ready for owner approval/merge is:
+Installed physical acceptance is complete.
 
-1. run the final shared POTA/DX workflow on the installed `anvilmobile` controls
-   and real FT-891 while parked
-2. verify POTA and DX band/mode filters and current-band defaults
-3. verify first press stages with no FT-891 frequency/mode change
-4. verify same-band POTA second-press receive tuning
-5. verify cross-band POTA band-before-frequency tuning and ATAS warning
-6. verify same-band DX second-press receive tuning
-7. verify cross-band DX band-before-frequency tuning and ATAS warning
-8. verify staging invalidation for selection, filter, provider/context, Back, and
-   stale/action-mutated target behavior
-9. verify no PTT/MOX/keying/tuner/power/transmit path
-10. verify retained shared spots and local logging continuity during a controlled
-    Forge interruption
-11. run Ruff, strict MyPy, full pytest, pre-commit, and `git diff --check`
-12. open/review the checkpoint-8 pull request and require GitHub Actions success
-13. remain unmerged until explicit repository-owner authorization
+Verified on `anvilmobile`:
+
+1. POTA and DX filters and current-band/fallback behavior
+2. first press stages without changing the radio
+3. same-band POTA and DX second-press exact receive tuning
+4. cross-band POTA and DX exact receive frequency/mode tuning
+5. explicit manual `SET BAND TO <BAND> METERS — TUNE ATAS-120` handoff
+6. staging invalidation for selection, band filter, mode filter, Back, and radio
+   invalidation
+7. radio disconnect/recovery without stale staged execution
+8. Enhanced CAT ownership with the Standard TX-capable port closed
+9. retained shared spots during controlled Forge interruption
+10. isolated local SQLite logging while Forge is unavailable
+11. production contact count unchanged by the isolated offline test
+12. Forge recovery and cleanup after the controlled interruption
+13. no PTT/MOX/keying/tuner/power/transmit path
+
+The unresolved automatic FT-891 band-context behavior is non-blocking and
+tracked in issue #149.
+
+Remaining checkpoint-8 work:
+
+1. finish documentation alignment
+2. run Ruff, strict MyPy, full pytest, pre-commit, and `git diff --check`
+3. prepare/review the checkpoint-8 pull request
+4. require GitHub Actions success
+5. remain unmerged until explicit repository-owner authorization
 
 ## Later Possibilities
 
