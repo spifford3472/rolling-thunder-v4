@@ -1,8 +1,16 @@
 """Tests for shared POTA/DX active-panel command routing."""
 
+from collections.abc import Callable
+from datetime import UTC, datetime
+
 from rolling_thunder.active_panel_commands import SharedSpotActivePanelCommandController
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.domain import Frequency, RadioMode
+from rolling_thunder.domain import (
+    Frequency,
+    RadioConnectionState,
+    RadioMode,
+    RadioState,
+)
 from rolling_thunder.spot_domain import (
     DxSpotIdentity,
     PotaSpotIdentity,
@@ -90,6 +98,12 @@ class RecordingSharedPanel:
         self.staged_action = None
         return object()
 
+    def invalidate_radio(self) -> object:
+        self.calls.append("invalidate_radio")
+        self.staged_identity = None
+        self.staged_action = None
+        return object()
+
     def next_pota_band(self) -> object:
         self.calls.append("next_pota_band")
         return object()
@@ -119,10 +133,33 @@ class RecordingSharedTuning:
         return self.accept
 
 
+def connected_radio_state(
+    *,
+    transmitting: bool = False,
+) -> RadioState:
+    """Return one usable immutable radio snapshot."""
+    return RadioState(
+        connection_state=RadioConnectionState.CONNECTED,
+        frequency=Frequency(hz=7_150_000),
+        mode=RadioMode.LSB,
+        transmitting=transmitting,
+        updated_at=datetime(2026, 8, 8, 3, 55, tzinfo=UTC),
+    )
+
+
+def disconnected_radio_state() -> RadioState:
+    """Return one unavailable immutable radio snapshot."""
+    return RadioState(
+        connection_state=RadioConnectionState.DISCONNECTED,
+        updated_at=datetime(2026, 8, 8, 3, 55, tzinfo=UTC),
+    )
+
+
 def build_controller(
     context: ContextId = ContextId.POTA,
     *,
     tuning: RecordingSharedTuning | None = None,
+    radio_state: Callable[[], RadioState] | None = None,
 ) -> tuple[
     SharedSpotActivePanelCommandController,
     ContextNavigationController,
@@ -134,6 +171,7 @@ def build_controller(
         navigation,
         panel,
         current_frequency=lambda: Frequency(hz=7_150_000),
+        radio_state=radio_state or connected_radio_state,
         shared_tuning=tuning,
     )
     return commands, navigation, panel
@@ -301,3 +339,46 @@ def test_second_press_without_tuning_boundary_does_nothing() -> None:
 
     assert panel.calls == []
     assert panel.staged_action == staged
+
+
+def test_disconnect_invalidates_stage_before_background_tuning() -> None:
+    current = [connected_radio_state()]
+    tuning = RecordingSharedTuning()
+    commands, _navigation, panel = build_controller(
+        tuning=tuning,
+        radio_state=lambda: current[0],
+    )
+    commands.move_next()
+    assert commands.activate_selection() is True
+    assert panel.staged_action is not None
+
+    current[0] = disconnected_radio_state()
+    panel.calls.clear()
+
+    assert commands.synchronize_radio_state() is False
+
+    assert panel.calls == ["invalidate_radio"]
+    assert panel.staged_action is None
+    assert tuning.actions == []
+
+
+def test_transmitting_radio_rejects_second_press_before_worker_start() -> None:
+    current = [connected_radio_state()]
+    tuning = RecordingSharedTuning()
+    commands, _navigation, panel = build_controller(
+        ContextId.DX,
+        tuning=tuning,
+        radio_state=lambda: current[0],
+    )
+    commands.move_next()
+    assert commands.activate_selection() is True
+    assert panel.staged_action is not None
+
+    current[0] = connected_radio_state(transmitting=True)
+    panel.calls.clear()
+
+    assert commands.activate_selection() is False
+
+    assert panel.calls == ["invalidate_radio"]
+    assert panel.staged_action is None
+    assert tuning.actions == []

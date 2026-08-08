@@ -4,7 +4,11 @@ from collections.abc import Callable
 from typing import Protocol
 
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.domain import Frequency
+from rolling_thunder.domain import (
+    Frequency,
+    RadioConnectionState,
+    RadioState,
+)
 from rolling_thunder.pota_tune_intent import PotaTuneIntent, PotaTuneIntentStatus
 from rolling_thunder.spot_domain import SpotIdentity, SpotProvider
 from rolling_thunder.spot_selection import StagedSpotAction
@@ -95,6 +99,9 @@ class SharedSpotPanelCommands(Protocol):
 
     def cancel_staging(self) -> object:
         """Cancel shared staging without external work."""
+
+    def invalidate_radio(self) -> object:
+        """Invalidate staging after an unsafe or unavailable radio state."""
 
     def next_pota_band(self) -> object:
         """Cycle the migrated POTA band filter."""
@@ -211,11 +218,13 @@ class SharedSpotActivePanelCommandController:
         shared_panel: SharedSpotPanelCommands,
         *,
         current_frequency: Callable[[], Frequency | None],
+        radio_state: Callable[[], RadioState] | None = None,
         shared_tuning: SharedSpotTuneCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._shared_panel = shared_panel
         self._current_frequency = current_frequency
+        self._radio_state = radio_state
         self._shared_tuning = shared_tuning
         self.activate_context(context_navigation.state.selected)
 
@@ -284,6 +293,9 @@ class SharedSpotActivePanelCommandController:
         if not self._shared_spot_is_active():
             return False
 
+        if not self.synchronize_radio_state():
+            return False
+
         staged = self._shared_panel.staged_action
         if staged is None:
             self._shared_panel.stage_selected()
@@ -297,6 +309,26 @@ class SharedSpotActivePanelCommandController:
 
         self._shared_panel.cancel_staging()
         return True
+
+    def synchronize_radio_state(self) -> bool:
+        """Invalidate pending staging when radio state is unsafe for retuning."""
+        provider = self._radio_state
+        if provider is None:
+            return True
+
+        state = provider()
+        usable = (
+            state.connection_state is RadioConnectionState.CONNECTED
+            and state.frequency is not None
+            and state.mode is not None
+            and not state.transmitting
+        )
+        if usable:
+            return True
+
+        if self._shared_panel.staged_action is not None:
+            self._shared_panel.invalidate_radio()
+        return False
 
     def back(self) -> bool:
         """Cancel staging first, then clear selection on a later Back action."""

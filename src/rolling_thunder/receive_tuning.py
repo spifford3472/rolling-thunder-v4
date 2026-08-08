@@ -74,6 +74,11 @@ class ReceiveTuningService:
                 "with a known current frequency."
             )
 
+        if state.transmitting:
+            raise RadioConnectionError(
+                "Ordered receive tuning is unavailable while the radio is transmitting."
+            )
+
         try:
             current_band: RadioBand | None = resolve_radio_band(
                 state.frequency

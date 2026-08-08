@@ -325,6 +325,11 @@ class SharedSpotPanelController:
         self._selection.cancel_staging()
         return self.state
 
+    def invalidate_radio(self) -> SharedSpotPanelState:
+        """Invalidate staging when the latest radio state is unsafe for tuning."""
+        self._selection.invalidate_radio()
+        return self.state
+
     def previous_pota_band(self) -> SharedSpotPanelState:
         """Cycle to the previous supported POTA band and invalidate staging."""
         self._selection.cancel_staging()

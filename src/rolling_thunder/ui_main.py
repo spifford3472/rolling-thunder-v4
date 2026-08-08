@@ -196,6 +196,7 @@ def run_dashboard(
         context_navigation,
         shared_spot_panel,
         current_frequency=lambda: runtime.latest_radio_state.frequency,
+        radio_state=lambda: runtime.latest_radio_state,
         shared_tuning=shared_spot_tuning,
     )
     # Retained only for run_dashboard API compatibility with legacy callers.
@@ -673,6 +674,7 @@ def run_dashboard(
         if control_dispatcher is not None:
             control_dispatcher.dispatch_available()
 
+        active_panel_commands.synchronize_radio_state()
         shared_spot_tune_status.refresh()
 
         gps_state = runtime.latest_gps_state
