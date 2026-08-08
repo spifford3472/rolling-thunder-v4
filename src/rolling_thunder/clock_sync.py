@@ -41,6 +41,40 @@ class ClockSyncStatus(StrEnum):
 
 
 @dataclass(frozen=True)
+class ClockSyncResult:
+    """Persistent in-memory record of the most recently completed opportunity."""
+
+    status: ClockSyncStatus
+    monotonic_s: float
+    gps_utc: datetime | None = None
+    offset_s: float | None = None
+    clock_written: bool = False
+    last_error: str | None = None
+
+    def __post_init__(self) -> None:
+        allowed = {
+            ClockSyncStatus.VERIFIED,
+            ClockSyncStatus.SYNCHRONIZED,
+            ClockSyncStatus.WINDOW_EXPIRED,
+        }
+        if self.status not in allowed:
+            raise ValueError("Clock-sync result status must represent a completed opportunity.")
+        if self.monotonic_s < 0:
+            raise ValueError("Clock-sync result monotonic timestamp cannot be negative.")
+        if self.gps_utc is not None:
+            if self.gps_utc.tzinfo is None or self.gps_utc.utcoffset() is None:
+                raise ValueError("Clock-sync result GPS UTC must include timezone information.")
+            object.__setattr__(self, "gps_utc", self.gps_utc.astimezone(UTC))
+        if self.last_error is not None:
+            normalized = self.last_error.strip()
+            if not normalized:
+                raise ValueError("Clock-sync result error text cannot be blank.")
+            object.__setattr__(self, "last_error", normalized)
+        if self.clock_written and self.status is not ClockSyncStatus.SYNCHRONIZED:
+            raise ValueError("Only a synchronized result may report a clock write.")
+
+
+@dataclass(frozen=True)
 class ClockSyncState:
     """Immutable observation of the clock-synchronization policy state."""
 
@@ -50,6 +84,7 @@ class ClockSyncState:
     offset_s: float | None = None
     clock_written: bool = False
     last_error: str | None = None
+    last_result: ClockSyncResult | None = None
 
     def __post_init__(self) -> None:
         if self.monotonic_s < 0:
@@ -128,6 +163,7 @@ class ClockSynchronizationService:
         self._opportunity_started_s: float | None = None
         self._next_attempt_s: float | None = None
         self._next_opportunity_s = initial_now
+        self._last_result: ClockSyncResult | None = None
         self._state = ClockSyncState(ClockSyncStatus.STOPPED, initial_now)
 
     @property
@@ -149,7 +185,8 @@ class ClockSynchronizationService:
         self._opportunity_started_s = None
         self._next_attempt_s = None
         self._next_opportunity_s = now
-        self._state = ClockSyncState(ClockSyncStatus.WAITING_FOR_TRUST, now)
+        self._last_result = None
+        self._state = self._build_state(ClockSyncStatus.WAITING_FOR_TRUST, now)
         self._scheduled_poll = self._scheduler.schedule_repeating(
             self._poll_interval_s,
             self._poll_once,
@@ -163,7 +200,7 @@ class ClockSynchronizationService:
         if scheduled is not None:
             scheduled.cancel()
         now = self._now()
-        self._state = ClockSyncState(ClockSyncStatus.STOPPED, now)
+        self._state = self._build_state(ClockSyncStatus.STOPPED, now)
         return self._state
 
     def _poll_once(self) -> None:
@@ -179,7 +216,7 @@ class ClockSynchronizationService:
             return
 
         if now < self._next_opportunity_s:
-            self._state = ClockSyncState(
+            self._state = self._build_state(
                 ClockSyncStatus.WAITING_FOR_CADENCE,
                 now,
                 gps_utc=gps_utc,
@@ -188,11 +225,11 @@ class ClockSynchronizationService:
 
         trusted_since = self._trusted_since_s
         if gps_utc is None or trusted_since is None:
-            self._state = ClockSyncState(ClockSyncStatus.WAITING_FOR_TRUST, now)
+            self._state = self._build_state(ClockSyncStatus.WAITING_FOR_TRUST, now)
             return
 
         if now - trusted_since < self._initial_trust_s:
-            self._state = ClockSyncState(
+            self._state = self._build_state(
                 ClockSyncStatus.WARMING_UP,
                 now,
                 gps_utc=gps_utc,
@@ -216,11 +253,18 @@ class ClockSynchronizationService:
             self._opportunity_started_s = None
             self._next_attempt_s = None
             self._next_opportunity_s = started + self._success_interval_s
-            self._state = ClockSyncState(
+            result = ClockSyncResult(
                 ClockSyncStatus.WINDOW_EXPIRED,
                 now,
                 gps_utc=gps_utc,
                 last_error="Clock synchronization retry window expired without success.",
+            )
+            self._last_result = result
+            self._state = self._build_state(
+                ClockSyncStatus.WINDOW_EXPIRED,
+                now,
+                gps_utc=gps_utc,
+                last_error=result.last_error,
             )
             return
 
@@ -228,7 +272,7 @@ class ClockSynchronizationService:
         if next_attempt is None:
             raise RuntimeError("Clock-sync retry state is inconsistent.")
         if now < next_attempt:
-            self._state = ClockSyncState(
+            self._state = self._build_state(
                 ClockSyncStatus.RETRY_PENDING,
                 now,
                 gps_utc=gps_utc,
@@ -278,7 +322,7 @@ class ClockSynchronizationService:
         offset_s: float | None = None,
     ) -> None:
         self._next_attempt_s = now + self._retry_interval_s
-        self._state = ClockSyncState(
+        self._state = self._build_state(
             ClockSyncStatus.RETRY_PENDING,
             now,
             gps_utc=gps_utc,
@@ -298,12 +342,40 @@ class ClockSynchronizationService:
         self._opportunity_started_s = None
         self._next_attempt_s = None
         self._next_opportunity_s = now + self._success_interval_s
-        self._state = ClockSyncState(
+        result = ClockSyncResult(
             status,
             now,
             gps_utc=gps_utc,
             offset_s=offset_s,
             clock_written=clock_written,
+        )
+        self._last_result = result
+        self._state = self._build_state(
+            status,
+            now,
+            gps_utc=gps_utc,
+            offset_s=offset_s,
+            clock_written=clock_written,
+        )
+
+    def _build_state(
+        self,
+        status: ClockSyncStatus,
+        now: float,
+        *,
+        gps_utc: datetime | None = None,
+        offset_s: float | None = None,
+        clock_written: bool = False,
+        last_error: str | None = None,
+    ) -> ClockSyncState:
+        return ClockSyncState(
+            status,
+            now,
+            gps_utc=gps_utc,
+            offset_s=offset_s,
+            clock_written=clock_written,
+            last_error=last_error,
+            last_result=self._last_result,
         )
 
     def _update_trust_window(self, now: float, gps_utc: datetime | None) -> None:
