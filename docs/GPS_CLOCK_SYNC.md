@@ -73,9 +73,25 @@ On 2026-08-08 at head `5523d4313798f2cb8d9ffd8e6af61df2861b3ba0`:
 - a near-current manual time sample was accepted by chronyd
 - immediately after that sample, chrony reported Stratum 0 / `Not synchronised`, while `timedatectl` reported `System clock synchronized: no`
 
-That result failed the helper-health acceptance gate. Runtime wiring remained blocked.
+That result **failed** the helper-health acceptance gate. Runtime wiring remained blocked and the installed helper must not be invoked again until the revised helper is installed.
 
 The helper was revised so its cleanup also issues chrony `online` and `burst 2/4` requests after manual input. The revised helper must pass installed acceptance showing normal NTP source selection returns promptly before runtime wiring is allowed.
+
+## Recovery after the failed acceptance sample
+
+If the installed Pi is left unsynchronised after the older helper test, recover normal chrony service without changing configuration:
+
+```bash
+sudo chronyc online
+sudo chronyc burst 2/4
+chronyc waitsync 30 0.5 0 1 || true
+chronyc tracking
+chronyc sources -v
+timedatectl status
+systemctl is-active chrony.service
+```
+
+Do not reinstall or retest the helper until the revised branch head passes CI.
 
 ## Installed acceptance procedure
 
