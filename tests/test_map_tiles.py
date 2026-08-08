@@ -1,6 +1,6 @@
 """Tests for raster-map tile math, validation, retrieval, and caching."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -63,6 +63,30 @@ class RecordingTransport:
         if self.error is not None:
             raise self.error
         return self.response
+
+
+class CountingPruneMapTileCache(MapTileCache):
+    """Record full prune passes while preserving the real cache behavior."""
+
+    def __init__(
+        self,
+        root: Path,
+        *,
+        maximum_tiles: int = 2_048,
+        prune_interval_writes: int,
+        clock: Callable[[], datetime],
+    ) -> None:
+        self.prune_calls = 0
+        super().__init__(
+            root,
+            maximum_tiles=maximum_tiles,
+            prune_interval_writes=prune_interval_writes,
+            clock=clock,
+        )
+
+    def _prune(self) -> None:
+        self.prune_calls += 1
+        super()._prune()
 
 
 def test_web_mercator_places_zero_zero_at_world_center() -> None:
@@ -199,6 +223,73 @@ def test_cache_removes_corrupt_entry(tmp_path: Path) -> None:
     assert path.exists() is False
 
 
+def test_cache_first_write_prunes_then_amortizes_full_scans(
+    tmp_path: Path,
+) -> None:
+    mutable_now = [NOW]
+    cache = CountingPruneMapTileCache(
+        tmp_path,
+        prune_interval_writes=3,
+        clock=lambda: mutable_now[0],
+    )
+    keys = tuple(MapTileKey(zoom=3, x=1, y=index) for index in range(4))
+
+    cache.write(keys[0], png_tile(20))
+    assert cache.prune_calls == 1
+
+    for index, key in enumerate(keys[1:3], start=1):
+        mutable_now[0] = NOW + timedelta(seconds=index)
+        cache.write(key, png_tile(20 + index))
+
+    assert cache.prune_calls == 1
+
+    mutable_now[0] = NOW + timedelta(seconds=3)
+    cache.write(keys[3], png_tile(23))
+
+    assert cache.prune_calls == 2
+
+
+def test_cache_prune_cadence_bounds_temporary_overshoot(
+    tmp_path: Path,
+) -> None:
+    mutable_now = [NOW]
+    keys = tuple(MapTileKey(zoom=3, x=1, y=index) for index in range(6))
+    seed = MapTileCache(
+        tmp_path,
+        maximum_tiles=2,
+        prune_interval_writes=1,
+        clock=lambda: mutable_now[0],
+    )
+
+    for index, key in enumerate(keys[:2]):
+        mutable_now[0] = NOW + timedelta(seconds=index)
+        seed.write(key, png_tile(20 + index))
+
+    cache = MapTileCache(
+        tmp_path,
+        maximum_tiles=2,
+        prune_interval_writes=3,
+        clock=lambda: mutable_now[0],
+    )
+
+    mutable_now[0] = NOW + timedelta(seconds=2)
+    cache.write(keys[2], png_tile(22))
+    assert len(tuple(tmp_path.glob("*/*/*.png"))) == 2
+
+    for index, key in enumerate(keys[3:5], start=3):
+        mutable_now[0] = NOW + timedelta(seconds=index)
+        cache.write(key, png_tile(20 + index))
+
+    assert len(tuple(tmp_path.glob("*/*/*.png"))) == 4
+
+    mutable_now[0] = NOW + timedelta(seconds=5)
+    cache.write(keys[5], png_tile(25))
+
+    assert len(tuple(tmp_path.glob("*/*/*.png"))) == 2
+    assert cache.read(keys[4]) is not None
+    assert cache.read(keys[5]) is not None
+
+
 def test_cache_prunes_oldest_tiles_to_configured_bound(
     tmp_path: Path,
 ) -> None:
@@ -206,6 +297,7 @@ def test_cache_prunes_oldest_tiles_to_configured_bound(
     cache = MapTileCache(
         tmp_path,
         maximum_tiles=2,
+        prune_interval_writes=1,
         clock=lambda: mutable_now[0],
     )
     keys = [
@@ -225,3 +317,8 @@ def test_cache_prunes_oldest_tiles_to_configured_bound(
 def test_cache_requires_at_least_seven_day_retention(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="at least seven days"):
         MapTileCache(tmp_path, retention=timedelta(days=6))
+
+
+def test_cache_requires_positive_prune_interval(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="prune interval"):
+        MapTileCache(tmp_path, prune_interval_writes=0)

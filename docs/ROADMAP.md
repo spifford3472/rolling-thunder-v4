@@ -232,32 +232,58 @@ revisit.
 
 ### Phase C: Mapping and Operating Intelligence
 
-Status: first live-map slice complete and approved through pull request #121.
+Status: local-first live-map foundation implemented; broader regional coverage,
+automatic day/night policy, and operating overlays remain in progress under
+issue #124.
 
-The current first slice provides:
+The implemented map path now includes work from pull requests #121, #125, #126,
+and #127:
 
 - north-up live map in the right-side situational area
-- latest valid GPS position centered at a typed fixed zoom
+- latest valid GPS position centered in the viewport
 - prominent current or last-known vehicle marker
 - Maidenhead grid, coordinates, GPS state, and map-data state
 - explicit waiting, stale, last-known, cache-only, partial, and unavailable
   presentation
-- one bounded background worker for map HTTP/cache work
-- validated atomic raster-tile cache with configured bounds
-- on-demand visible-tile retrieval
-- global ticker through priority-arbitrated immutable status snapshots
-- no Home Station Platform dependency
-- no radio or transmit-control changes
+- generation-aware viewport requests and stale-publication suppression
+- one bounded queued viewport with newer work superseding obsolete work
+- identical and same-tile-set request deduplication
+- prompt publication of locally available tiles before online refresh completes
+- progressive current-viewport publication
+- incremental Tk canvas tile move/redraw/remove behavior
+- retained canvas objects and bounded Tk `PhotoImage` reuse
+- typed installed raster-MBTiles package discovery and priority
+- local-first resolution: installed package -> runtime cache -> online provider
+- authoritative installed coverage that does not silently require public internet
+- an installed offline I-71 corridor package proven on `anvilmobile`
+- map failure isolated from GPS, logging, shared spots, controls, and radio state
 
-Still deferred:
+Pull request #125 completed the viewport coalescing and incremental-rendering
+foundation. Pull request #126 added installed package source/resolver boundaries.
+Pull request #127 added authoritative installed offline corridor coverage.
 
-- panning or zoom controls
-- movement trail, heading, or speed arrow
+Issue #151 completes the remaining checkpoint-1 cache-maintenance cost by
+amortizing full cache pruning instead of recursively scanning and sorting the
+entire cache after every successful tile write. The first successful write
+performs an initial prune check; later full prune passes occur on a bounded
+successful-write cadence. Atomic tile writes and oldest-mtime eviction remain
+unchanged.
+
+Still deferred under issue #124:
+
+- broader Ohio offline coverage
+- surrounding-state offline packages through the same package mechanism
+- automatic location/time-based day/night selection
+- typed manual day/night override
+- separate operating-overlay provider/snapshot architecture
+- future PAD-US park-boundary rendering and spatial indexing
+- panning or operator zoom controls
+- movement trail
 - contact visualization
 - persistent POTA markers
-- routing, repeaters, weather radar, and analytics
+- routing and repeater overlays
+- weather radar and analytics
 - automatic zoom
-- packaged regional offline maps, MBTiles, or vector tiles
 - persisted location history
 - broad dashboard redesign
 

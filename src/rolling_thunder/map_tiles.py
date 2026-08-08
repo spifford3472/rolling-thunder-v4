@@ -24,6 +24,7 @@ DEFAULT_MAP_USER_AGENT = (
     "(amateur-radio mobile dashboard; "
     "https://github.com/spifford3472/rolling-thunder-v4)"
 )
+DEFAULT_MAP_CACHE_PRUNE_INTERVAL_WRITES = 64
 _MAX_TILE_BYTES = 2_000_000
 
 
@@ -223,7 +224,7 @@ def _utc_now() -> datetime:
 
 
 class MapTileCache:
-    """Bounded validated raster-tile cache with atomic writes."""
+    """Bounded validated raster-tile cache with amortized pruning."""
 
     def __init__(
         self,
@@ -231,15 +232,20 @@ class MapTileCache:
         *,
         retention: timedelta = timedelta(days=7),
         maximum_tiles: int = 2_048,
+        prune_interval_writes: int = DEFAULT_MAP_CACHE_PRUNE_INTERVAL_WRITES,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         if retention < timedelta(days=7):
             raise ValueError("Map tile cache retention must be at least seven days.")
         if maximum_tiles < 1:
             raise ValueError("Map tile cache size must be positive.")
+        if prune_interval_writes < 1:
+            raise ValueError("Map tile cache prune interval must be positive.")
         self._root = root
         self._retention = retention
         self._maximum_tiles = maximum_tiles
+        self._prune_interval_writes = prune_interval_writes
+        self._writes_since_prune = prune_interval_writes - 1
         self._clock = clock
 
     def read(self, key: MapTileKey) -> CachedMapTile | None:
@@ -271,7 +277,7 @@ class MapTileCache:
         )
 
     def write(self, key: MapTileKey, png: bytes) -> None:
-        """Atomically persist one validated tile and prune oldest excess entries."""
+        """Atomically persist one validated tile and prune on a bounded cadence."""
         validated = validate_map_tile_png(png)
         path = self._path_for(key)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -299,7 +305,10 @@ class MapTileCache:
                 except OSError:
                     pass
 
-        self._prune()
+        self._writes_since_prune += 1
+        if self._writes_since_prune >= self._prune_interval_writes:
+            self._prune()
+            self._writes_since_prune = 0
 
     def _prune(self) -> None:
         try:
