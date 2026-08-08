@@ -390,15 +390,86 @@ placed in tests, issues, pull requests, or documentation examples.
 
 ## Live Map Architecture
 
-The live-map slice provides a north-up map centered on the latest valid GPS
-position while preserving the global ticker and other dashboard behavior.
+The live-map subsystem is local-first and keeps map storage and network work out
+of Tkinter.
 
 `LiveMapController` converts immutable GPS state into presentation without I/O.
-`LiveMapService` owns background work. Map HTTP/cache failure is isolated from
-GPS polling, logging, shared spots, physical controls, radio polling, and
-receive-only tuning.
+`LiveMapService` owns bounded background viewport work and publishes immutable
+map snapshots. Map failure remains isolated from GPS polling, logging, shared
+spots, physical controls, radio polling, and receive-only tuning.
 
-Tkinter does not open map network connections or cache files directly.
+### Viewport scheduling and publication
+
+Viewport requests are generation-aware. A newer request can supersede obsolete
+queued work; stale work is prevented from publishing over the newest viewport
+and stops before making unnecessary additional online tile requests.
+
+Identical loaded viewports are ignored. Movement that retains the same visible
+tile set can reframe those tiles without additional tile I/O. Locally available
+tiles are published before slower online refresh completes, and current-viewport
+online results may be published progressively.
+
+### Rendering
+
+Tkinter does not rebuild the complete base-map layer for every viewport update.
+The presentation path plans tile changes as remove, redraw, or move. Unchanged
+canvas tile objects are retained, and tiles whose image content is unchanged but
+whose screen position moved are repositioned rather than decoded and recreated.
+A bounded Tk `PhotoImage` cache reuses unchanged decoded tile images.
+
+### Tile source resolution
+
+Installed raster MBTiles packages are represented through typed package and
+resolver boundaries. The resolution order is:
+
+```text
+installed package
+    -> runtime tile cache
+    -> online provider
+    -> unavailable
+```
+
+Installed packages are opened read-only and carry validated identity, bounds,
+zoom range, PNG raster format, TMS scheme, style, attribution, version, and
+priority metadata. Higher-priority matching packages are consulted first.
+
+Declared installed coverage is authoritative. If a coordinate lies inside a
+package's declared bounds and zoom range, a missing tile there does not silently
+grant the online provider authority for that location. This preserves genuine
+offline behavior instead of unexpectedly consuming cellular data.
+
+The first production package proven through this architecture covers the normal
+I-71 mobile corridor and is installed outside Git on `anvilmobile`. Broader Ohio
+and surrounding-state package coverage remains follow-up work under issue #124.
+
+### Runtime tile cache
+
+The runtime cache remains separate from installed offline packages. Tile writes
+are PNG validated, written through a temporary file, flushed and `fsync`ed,
+atomically replaced, and timestamped for retention and oldest-entry eviction.
+
+Historically every successful cache write immediately performed a recursive
+enumeration, stat, complete mtime sort, and prune. That made a multi-tile online
+viewport repeatedly rescan the same cache.
+
+Issue #151 changes pruning to a deterministic bounded successful-write cadence.
+The first successful write performs the initial prune check so an already
+oversized cache is corrected promptly; later full prune passes are amortized
+across writes. A prune failure remains non-fatal and does not invalidate a tile
+that was successfully written.
+
+### Failure isolation
+
+Map HTTP, installed-package, cache, or rendering-data failure must not disable
+GPS polling, callsign capture, Commit or Discard, local SQLite logging, shared
+POTA/DX state, physical controls, radio polling, or receive-only tuning.
+
+Tkinter does not open map network connections, query MBTiles databases, or
+perform runtime-cache filesystem maintenance directly.
+
+Automatic day/night selection, broader regional package coverage, and the
+separate future operating-overlay/PAD-US path remain follow-up work in issue
+#124.
 
 ## Local Logging and Offline Operation
 
