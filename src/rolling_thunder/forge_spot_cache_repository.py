@@ -423,7 +423,7 @@ class ForgeSpotCacheRepository:
     def _parse_timestamp(value: object) -> datetime:
         if not isinstance(value, str):
             raise TypeError("cached timestamp must be text")
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             raise ValueError("cached timestamp must include a timezone")
         return parsed.astimezone(UTC)
