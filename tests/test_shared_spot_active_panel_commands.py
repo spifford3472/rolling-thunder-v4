@@ -117,7 +117,7 @@ def test_pota_primary_secondary_and_selection_route_through_shared_panel() -> No
 
 
 def test_dx_uses_shared_selection_but_does_not_inherit_pota_filter_commands() -> None:
-    commands, navigation, panel = build_controller(ContextId.DX)
+    commands, _navigation, panel = build_controller(ContextId.DX)
     panel.calls.clear()
 
     assert panel.provider is SpotProvider.DX
