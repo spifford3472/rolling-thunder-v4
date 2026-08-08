@@ -91,7 +91,11 @@ class MutableGPSState:
         return self.state
 
 
-def trusted_state(value: datetime = _BASE_UTC) -> GPSState:
+def trusted_state(
+    value: datetime = _BASE_UTC,
+    *,
+    received_monotonic_s: float | None = None,
+) -> GPSState:
     position = GPSPosition(
         fix_state=GPSFixState.THREE_DIMENSIONAL,
         latitude=39.53,
@@ -112,6 +116,7 @@ def trusted_state(value: datetime = _BASE_UTC) -> GPSState:
             advancing=True,
             fresh=True,
             age_s=0.2,
+            received_monotonic_s=received_monotonic_s,
         ),
     )
 
@@ -202,6 +207,56 @@ def test_first_opportunity_requires_sixty_seconds_of_continuous_trust() -> None:
     assert state.last_result.status is ClockSyncStatus.VERIFIED
     assert state.last_result.offset_s == pytest.approx(-1.0)
     assert state.last_result.clock_written is False
+    assert setter.values == []
+
+
+def test_receipt_anchor_projects_delayed_gps_sample_to_comparison_time() -> None:
+    gps = MutableGPSState(trusted_state(received_monotonic_s=100.0))
+    monotonic = MutableMonotonic(100.0)
+    wall = MutableWallClock(_BASE_UTC + timedelta(seconds=60.5))
+    setter = FakeClockSetter()
+    scheduler = ManualScheduler()
+    service = build_service(gps, monotonic, wall, setter, scheduler)
+    service.start()
+
+    scheduler.fire()
+    assert service.latest_state.status is ClockSyncStatus.WARMING_UP
+
+    monotonic.advance(60.0)
+    gps.state = trusted_state(
+        _BASE_UTC + timedelta(seconds=57),
+        received_monotonic_s=157.0,
+    )
+    scheduler.fire()
+
+    state = service.latest_state
+    assert state.status is ClockSyncStatus.VERIFIED
+    assert state.gps_utc == _BASE_UTC + timedelta(seconds=60)
+    assert state.offset_s == pytest.approx(-0.5)
+    assert state.clock_written is False
+    assert setter.values == []
+
+
+def test_receipt_anchor_rejects_sample_that_aged_past_clock_sync_bound() -> None:
+    gps = MutableGPSState(trusted_state(received_monotonic_s=100.0))
+    monotonic = MutableMonotonic(100.0)
+    wall = MutableWallClock(_BASE_UTC + timedelta(seconds=60))
+    setter = FakeClockSetter()
+    scheduler = ManualScheduler()
+    service = build_service(gps, monotonic, wall, setter, scheduler)
+    service.start()
+
+    scheduler.fire()
+    assert service.latest_state.status is ClockSyncStatus.WARMING_UP
+
+    monotonic.advance(60.0)
+    gps.state = trusted_state(
+        _BASE_UTC + timedelta(seconds=50),
+        received_monotonic_s=150.0,
+    )
+    scheduler.fire()
+
+    assert service.latest_state.status is ClockSyncStatus.WAITING_FOR_TRUST
     assert setter.values == []
 
 
@@ -434,6 +489,7 @@ def test_stop_cancels_future_policy_evaluation() -> None:
         ({"retry_window_s": 30.0}, "retry window"),
         ({"success_interval_s": 600.0}, "success interval"),
         ({"tolerance_s": -0.1}, "tolerance"),
+        ({"maximum_gps_sample_age_s": 0.0}, "maximum GPS sample age"),
     ],
 )
 def test_policy_configuration_is_validated(
