@@ -82,10 +82,9 @@ mode provenance remain presentation/source metadata.
 
 ## Canonical Snapshots
 
-`SpotSnapshot` collapses duplicate identities and orders records
-canonically. Ordering is deterministic by amateur-band rank, integer frequency,
-provider rank, serialized identity, callsign, normalized radio mode, and display
-mode.
+`SpotSnapshot` collapses duplicate identities and orders records canonically.
+Ordering is deterministic by amateur-band rank, integer frequency, provider
+rank, serialized identity, callsign, normalized radio mode, and display mode.
 
 A complete Forge snapshot may contain both POTA and DX records. Forge maintains
 provider slices independently so a failed provider refresh can retain only that
@@ -269,9 +268,35 @@ The shared panel, Tkinter code, physical-control adapter, Forge client, and Forg
 service issue no CAT commands.
 
 `ReceiveTuningService` remains the sole receive-tuning authority and preserves
-band-before-frequency ordering and read-back verification for the FT-891.
+guarded cross-band sequencing, best-effort FT-891 band-context recall, and exact
+frequency/mode read-back verification.
 
 No provider-specific POTA or DX tune executor is introduced by checkpoint 8.
+
+## FT-891 Cross-Band Contract
+
+The FT-891 adapter may use the operator-programmed regular memory for the target
+band as best-effort context before setting the exact selected spot frequency.
+The memory is selected and verified with `MCxxx;` / `MC;`, copied to VFO-A with
+`MA;`, and its recalled frequency must resolve to the target amateur band before
+the ordered tune continues.
+
+That successful recall is not treated as proof that the FT-891 changed its
+authoritative operator-visible band state. The final cross-band operator
+contract is therefore:
+
+```text
+second press succeeds
+    -> exact selected receive frequency/mode is reached
+    -> SET BAND TO <BAND> METERS — TUNE ATAS-120
+    -> operator manually sets/confirms band and tunes ATAS-120 before transmit
+```
+
+Same-band receive tuning bypasses memory recall and produces no band/ATAS
+warning.
+
+The unresolved FT-891 CAT/front-panel band-context behavior is intentionally
+parked in issue #149 and does not block checkpoint 8.
 
 ## Background Tuning and Presentation
 
@@ -293,17 +318,17 @@ Current status behavior is:
 - tuning message: normal priority status while tuning
 - success message: green/success presentation for 5 seconds
 - failure message: error presentation for 8 seconds
-- verified cross-band result: amber ATAS-120 reminder for 10 seconds
+- successful cross-band result: amber manual band/ATAS reminder for 10 seconds
 
-The ATAS warning text is:
+The cross-band warning text is:
 
 ```text
-BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
+SET BAND TO <BAND> METERS — TUNE ATAS-120
 ```
 
-The warning states only that a verified receive band change occurred. Rolling
-Thunder does not tune or verify the ATAS-120 and does not claim the antenna is
-safe to transmit.
+The warning is an explicit operator handoff. It does not claim that the FT-891
+changed its authoritative front-panel band state, does not tune or verify the
+ATAS-120, and does not claim the antenna is safe to transmit.
 
 ## Back / Cancel Behavior
 
@@ -365,7 +390,7 @@ receive-tuning path.
 
 ## Checkpoint-8 Integration Status
 
-Checkpoint 8 now includes:
+Checkpoint 8 includes:
 
 - DX band and mode filtering through the shared controller
 - independent POTA/DX filter state
@@ -375,14 +400,31 @@ Checkpoint 8 now includes:
 - radio-state invalidation before staging/tuning
 - background shared receive tuning
 - shared tuning/success/failure presentation
-- timed cross-band ATAS-120 warning
+- timed cross-band manual band/ATAS warning
 - production Forge systemd deployment under the dedicated `rollingthunder`
   service account
 - production Forge POTA and DXSpider live-health acceptance
 
-The remaining checkpoint-8 acceptance work is the final real FT-891 shared POTA
-and DX bench: same-band and cross-band two-press operation, first-press no-change
-verification, filter/context invalidation, ATAS warning behavior, retained Forge
-behavior, and local logging continuity.
+Physical checkpoint-8 acceptance is complete on `anvilmobile`:
+
+- POTA and DX first press: stage only, no radio change
+- same-band POTA receive tuning: pass
+- same-band DX receive tuning: pass
+- cross-band POTA receive frequency/mode tuning plus manual band/ATAS handoff:
+  pass
+- cross-band DX receive frequency/mode tuning plus manual band/ATAS handoff:
+  pass
+- selection-change and Back invalidation: pass
+- band-filter invalidation: pass
+- mode-filter invalidation: pass
+- radio-loss invalidation and safe reconnect without stale execution: pass
+- Standard TX-capable FT-891 port remains closed
+- retained POTA/DX presentation during controlled Forge interruption: pass
+- isolated local SQLite logging while Forge is unavailable: pass
+- production contact count unchanged by the isolated offline test
+- Forge connectivity restored and temporary test artifacts removed
+
+Automatic authoritative FT-891 band-state behavior is explicitly outside the
+checkpoint-8 acceptance claim and remains tracked in issue #149.
 
 No shared-spot component has transmit authority.
