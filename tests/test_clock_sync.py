@@ -169,6 +169,7 @@ def test_start_waits_for_trusted_gps_without_writing_clock() -> None:
     scheduler.fire()
 
     assert state.status is ClockSyncStatus.WAITING_FOR_TRUST
+    assert state.last_result is None
     assert service.latest_state.status is ClockSyncStatus.WAITING_FOR_TRUST
     assert scheduler.interval_s == 1.0
     assert setter.values == []
@@ -193,9 +194,14 @@ def test_first_opportunity_requires_sixty_seconds_of_continuous_trust() -> None:
     monotonic.advance(1.0)
     scheduler.fire()
 
-    assert service.latest_state.status is ClockSyncStatus.VERIFIED
-    assert service.latest_state.offset_s == pytest.approx(-1.0)
-    assert service.latest_state.clock_written is False
+    state = service.latest_state
+    assert state.status is ClockSyncStatus.VERIFIED
+    assert state.offset_s == pytest.approx(-1.0)
+    assert state.clock_written is False
+    assert state.last_result is not None
+    assert state.last_result.status is ClockSyncStatus.VERIFIED
+    assert state.last_result.offset_s == pytest.approx(-1.0)
+    assert state.last_result.clock_written is False
     assert setter.values == []
 
 
@@ -241,10 +247,14 @@ def test_out_of_tolerance_clock_is_set_from_trusted_gps() -> None:
     monotonic.advance(60.0)
     scheduler.fire()
 
+    state = service.latest_state
     assert setter.values == [_BASE_UTC]
-    assert service.latest_state.status is ClockSyncStatus.SYNCHRONIZED
-    assert service.latest_state.clock_written is True
-    assert service.latest_state.offset_s == pytest.approx(300.0)
+    assert state.status is ClockSyncStatus.SYNCHRONIZED
+    assert state.clock_written is True
+    assert state.offset_s == pytest.approx(300.0)
+    assert state.last_result is not None
+    assert state.last_result.status is ClockSyncStatus.SYNCHRONIZED
+    assert state.last_result.clock_written is True
 
 
 def test_clock_set_failure_retries_no_more_often_than_sixty_seconds() -> None:
@@ -319,12 +329,18 @@ def test_retry_window_expires_and_defers_until_next_twelve_hour_opportunity() ->
 
     monotonic.advance(600.0)
     scheduler.fire()
-    assert service.latest_state.status is ClockSyncStatus.WINDOW_EXPIRED
+    expired = service.latest_state
+    assert expired.status is ClockSyncStatus.WINDOW_EXPIRED
+    assert expired.last_result is not None
+    assert expired.last_result.status is ClockSyncStatus.WINDOW_EXPIRED
 
     setter.error = None
     monotonic.advance(1.0)
     scheduler.fire()
-    assert service.latest_state.status is ClockSyncStatus.WAITING_FOR_CADENCE
+    waiting = service.latest_state
+    assert waiting.status is ClockSyncStatus.WAITING_FOR_CADENCE
+    assert waiting.last_result is not None
+    assert waiting.last_result.status is ClockSyncStatus.WINDOW_EXPIRED
     assert setter.values == []
 
     monotonic.value = 60.0 + 43_200.0
@@ -334,7 +350,42 @@ def test_retry_window_expires_and_defers_until_next_twelve_hour_opportunity() ->
     assert service.latest_state.status is ClockSyncStatus.SYNCHRONIZED
 
 
-def test_successful_verification_defers_next_attempt_for_twelve_hours() -> None:
+def test_successful_verification_defers_next_attempt_and_retains_result() -> None:
+    gps = MutableGPSState(trusted_state())
+    monotonic = MutableMonotonic()
+    wall = MutableWallClock(_BASE_UTC)
+    setter = FakeClockSetter()
+    scheduler = ManualScheduler()
+    service = build_service(gps, monotonic, wall, setter, scheduler)
+    service.start()
+
+    scheduler.fire()
+    monotonic.advance(60.0)
+    scheduler.fire()
+    verified = service.latest_state
+    assert verified.status is ClockSyncStatus.VERIFIED
+    assert verified.last_result is not None
+    assert verified.last_result.status is ClockSyncStatus.VERIFIED
+
+    monotonic.advance(1.0)
+    scheduler.fire()
+    waiting = service.latest_state
+    assert waiting.status is ClockSyncStatus.WAITING_FOR_CADENCE
+    assert waiting.last_result is not None
+    assert waiting.last_result.status is ClockSyncStatus.VERIFIED
+    assert waiting.last_result.offset_s == pytest.approx(0.0)
+    assert waiting.last_result.clock_written is False
+
+    monotonic.advance(43_198.0)
+    scheduler.fire()
+    waiting = service.latest_state
+    assert waiting.status is ClockSyncStatus.WAITING_FOR_CADENCE
+    assert waiting.last_result is not None
+    assert waiting.last_result.status is ClockSyncStatus.VERIFIED
+    assert setter.values == []
+
+
+def test_stop_preserves_last_completed_result_for_observation() -> None:
     gps = MutableGPSState(trusted_state())
     monotonic = MutableMonotonic()
     wall = MutableWallClock(_BASE_UTC)
@@ -348,10 +399,12 @@ def test_successful_verification_defers_next_attempt_for_twelve_hours() -> None:
     scheduler.fire()
     assert service.latest_state.status is ClockSyncStatus.VERIFIED
 
-    monotonic.advance(43_199.0)
-    scheduler.fire()
-    assert service.latest_state.status is ClockSyncStatus.WAITING_FOR_CADENCE
-    assert setter.values == []
+    state = service.stop()
+
+    assert state.status is ClockSyncStatus.STOPPED
+    assert state.last_result is not None
+    assert state.last_result.status is ClockSyncStatus.VERIFIED
+    assert state.last_result.clock_written is False
 
 
 def test_stop_cancels_future_policy_evaluation() -> None:
