@@ -1,4 +1,4 @@
-"""Independent console process for Forge spot aggregation and read-only REST."""
+"""Independent console process for Forge aggregation and private REST."""
 
 from __future__ import annotations
 
@@ -24,6 +24,13 @@ from rolling_thunder.forge_config import (
 from rolling_thunder.forge_dxspider_provider import (
     DxSpiderSessionFactory,
     ForgeDxSpiderSpotProvider,
+)
+from rolling_thunder.forge_mobile_location import (
+    ForgeMobileLocationService,
+    ForgeMobileLocationStorageError,
+)
+from rolling_thunder.forge_mobile_location_repository import (
+    SqliteForgeMobileLocationRepository,
 )
 from rolling_thunder.forge_pota_provider import ForgePotaSpotProvider
 from rolling_thunder.forge_qrz_enrichment import ForgeQrzEnricher
@@ -81,17 +88,19 @@ ForgeServerFactory = Callable[[str, int, ForgeSpotApiApplication], ForgeServer]
 
 
 class ForgeSpotRuntime:
-    """Own the independent Forge polling and HTTP server lifecycles."""
+    """Own the independent Forge polling, retained location, and HTTP lifecycles."""
 
     def __init__(
         self,
         polling: ForgeSpotPollingService,
         server: ForgeServer,
+        mobile_location: ForgeMobileLocationService,
         *,
         logger: logging.Logger,
     ) -> None:
         self.polling = polling
         self.server = server
+        self.mobile_location = mobile_location
         self._logger = logger
 
     def run(self) -> None:
@@ -103,7 +112,7 @@ class ForgeSpotRuntime:
             daemon=True,
         )
         server_thread.start()
-        self._logger.info("Forge spot API listening on http://%s:%s", host, port)
+        self._logger.info("Forge API listening on http://%s:%s", host, port)
 
         try:
             self.polling.start()
@@ -116,7 +125,7 @@ class ForgeSpotRuntime:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the independent Forge spot-service argument parser."""
+    """Build the independent Forge service argument parser."""
     parser = argparse.ArgumentParser(
         prog="rolling-thunder-forge-spots",
         description="Forge POTA and DX spot aggregation service",
@@ -170,7 +179,7 @@ def build_forge_runtime(
     secrets: ApplicationSecrets | None = None,
     logger: logging.Logger | None = None,
 ) -> ForgeSpotRuntime:
-    """Compose Forge providers, enrichment, durability, polling, and REST."""
+    """Compose Forge providers, durability, mobile location, polling, and REST."""
     process_logger = logger or logging.getLogger(_LOGGER_NAME)
     providers: list[ForgeSpotProvider] = []
 
@@ -214,8 +223,11 @@ def build_forge_runtime(
             for provider in providers
         ]
 
-    repository = SqliteForgeSnapshotRepository(config.storage.database_path)
-    aggregation = ForgeSpotAggregationService(tuple(providers), repository)
+    snapshot_repository = SqliteForgeSnapshotRepository(config.storage.database_path)
+    aggregation = ForgeSpotAggregationService(tuple(providers), snapshot_repository)
+    mobile_repository = SqliteForgeMobileLocationRepository(config.storage.database_path)
+    mobile_location = ForgeMobileLocationService(mobile_repository)
+
     polling_scheduler = scheduler or ThreadedPollScheduler()
     polling = ForgeSpotPollingService(
         aggregation,
@@ -223,14 +235,22 @@ def build_forge_runtime(
         interval_s=config.aggregation.refresh_interval_s,
         refresh_on_start=config.aggregation.refresh_on_start,
     )
-    application = ForgeSpotApiApplication(aggregation)
+    application = ForgeSpotApiApplication(
+        aggregation,
+        mobile_location=mobile_location,
+    )
     factory = server_factory or _default_server_factory
     server = factory(
         config.server.bind_host,
         config.server.bind_port,
         application,
     )
-    return ForgeSpotRuntime(polling, server, logger=process_logger)
+    return ForgeSpotRuntime(
+        polling,
+        server,
+        mobile_location,
+        logger=process_logger,
+    )
 
 
 def _default_server_factory(
@@ -260,16 +280,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger = configure_forge_logging(config.logging_level)
     try:
         runtime = build_forge_runtime(config, secrets=secrets, logger=logger)
-    except (ForgeRuntimeConfigurationError, ForgeSnapshotStorageError, OSError) as error:
-        logger.error("Forge spot service could not start: %s", error)
+    except (
+        ForgeRuntimeConfigurationError,
+        ForgeSnapshotStorageError,
+        ForgeMobileLocationStorageError,
+        OSError,
+    ) as error:
+        logger.error("Forge service could not start: %s", error)
         return EXIT_RUNTIME_ERROR
 
     try:
         runtime.run()
     except KeyboardInterrupt:
-        logger.info("Forge spot service interrupted; shutting down.")
+        logger.info("Forge service interrupted; shutting down.")
     except OSError as error:
-        logger.error("Forge spot service failed: %s", error)
+        logger.error("Forge service failed: %s", error)
         return EXIT_RUNTIME_ERROR
     return EXIT_SUCCESS
 
