@@ -1,8 +1,8 @@
 """Tests for the narrow chrony helper clock-setting adapter."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Sequence
 
 import pytest
 
@@ -53,9 +53,10 @@ def test_setter_normalizes_aware_non_utc_timestamp() -> None:
 def test_setter_rejects_naive_timestamp_before_runner() -> None:
     runner = RecordingRunner()
     setter = ChronyHelperClockSetter(runner=runner)
+    naive = datetime(2026, 8, 8, 21, 23, 12, tzinfo=UTC).replace(tzinfo=None)
 
     with pytest.raises(ClockSetError, match="timezone"):
-        setter.set_utc(datetime(2026, 8, 8, 21, 23, 12))
+        setter.set_utc(naive)
 
     assert runner.calls == []
 
