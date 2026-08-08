@@ -10,8 +10,8 @@ versioned Forge snapshot, validates it, persists it in the existing application
 SQLite database, and publishes one immutable last-known shared state for future
 presentation work.
 
-The current dashboard still uses the legacy direct public-POTA polling/cache
-path. That presentation migration belongs to checkpoint 7.
+Checkpoint 7 now uses the durable Forge shared snapshot for both POTA and DX
+presentation through the shared panel.
 
 ## Configuration
 
@@ -198,23 +198,30 @@ route current POTA presentation or tuning through the new shared path.
 
 ## Coexistence with the Legacy POTA Path
 
-Checkpoint 6 intentionally runs the new shared Forge path in parallel with the
-existing direct-POTA path when both are enabled.
+Checkpoint 7 makes Forge authoritative for live POTA/DX ingestion whenever
+`forge.enabled` is true.
 
-Checkpoint 6 does not change:
+When Forge is enabled, the Pi Forge polling/cache and shared POTA/DX panel are
+active, and the legacy direct-POTA runtime poller is not composed.
 
-- current direct public-POTA retrieval used by the running POTA panel
-- legacy `pota_spot_cache` tables
-- POTA selection presentation
-- existing three-action POTA receive-tuning workflow
-- physical-control routing
-- `ReceiveTuningService`
-- local contact logging
-- map/MBTiles behavior
-- Pi-side QRZ contact fallback
+When Forge is disabled, the legacy direct-POTA implementation remains available
+as a rollback/compatibility path according to `pota_spots` configuration.
 
-Checkpoint 7 is responsible for switching POTA presentation to the shared
-snapshot and adding the combined POTA/DX panel.
+The legacy source modules and `pota_spot_cache` tables remain intact. Checkpoint 7
+performs no destructive database migration or cache deletion.
+
+Local SQLite contact logging remains authoritative regardless of Forge state.
+Shared POTA records provide compatible contact-context metadata without requiring
+a live Forge request during Commit.
+
+The real checkpoint-7 bench validated live POTA and DXSpider data through Forge,
+WireGuard/CarLAN, the Pi durable cache, the shared dashboard, and the installed
+physical controls. Encoder activation staged the selected record without changing
+the FT-891 frequency.
+
+Permanent Forge installation, systemd lifecycle, service-account configuration,
+firewall policy, authentication/TLS, and deployment hardening remain checkpoint-8
+work.
 
 ## Offline-First and Radio-Safety Boundary
 

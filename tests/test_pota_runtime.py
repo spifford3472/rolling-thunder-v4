@@ -80,10 +80,19 @@ def mock_application_config(
     *,
     database_path: Path | None = None,
     pota_enabled: bool = False,
+    forge_enabled: bool = False,
 ) -> ApplicationConfig:
     values: dict[str, object] = {
         "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
         "hardware": {"mock": True},
+        "forge": {
+            "enabled": forge_enabled,
+            "api_url": (
+                "http://forge.example.test:8766"
+                if forge_enabled
+                else None
+            ),
+        },
         "pota_spots": {
             "enabled": pota_enabled,
             "refresh_interval_s": 45.0,
@@ -160,6 +169,29 @@ def test_runtime_leaves_pota_state_absent_when_disabled() -> None:
 
     assert runtime.pota_spot_polling is None
     assert runtime.latest_pota_spot_state is None
+
+
+def test_forge_enabled_runtime_does_not_build_legacy_pota_poller(
+    tmp_path: Path,
+) -> None:
+    transport = RecordingTransport(live_spot_payload())
+
+    runtime = ApplicationRuntime.from_config(
+        mock_application_config(
+            database_path=tmp_path / "contacts.sqlite3",
+            pota_enabled=True,
+            forge_enabled=True,
+        ),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        pota_scheduler=ManualScheduler(),
+        pota_transport=transport,
+    )
+
+    assert runtime.pi_forge_spot_polling is not None
+    assert runtime.pota_spot_polling is None
+    assert runtime.latest_pota_spot_state is None
+    assert transport.urls == []
 
 
 def test_real_pota_composition_uses_configured_http_settings(tmp_path: Path) -> None:

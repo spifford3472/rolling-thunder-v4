@@ -7,9 +7,12 @@ and DX operating intelligence.
 
 It defines immutable domain records, canonical snapshots, stable selection, and
 staged-action primitives. Forge uses the domain for public POTA and bounded
-DXSpider snapshots, and the Raspberry Pi now has a separate optional Forge
-client/cache path that reconstructs and retains the same shared snapshot domain.
-The running POTA dashboard has not yet migrated to the unified panel.
+DXSpider snapshots, and the Raspberry Pi reconstructs and durably retains the
+same shared snapshot domain.
+
+Checkpoint 7 migrates the running POTA presentation and the DX context to one
+shared provider-neutral controller and presentation path backed only by the
+already-published Pi Forge snapshot.
 
 ## Domain Records
 
@@ -265,16 +268,25 @@ Completed foundations now include:
 - truthful cached/live/retained/error state and provider-health diagnostics
 - background-only Pi Forge polling and runtime lifecycle composition
 
-The running POTA dashboard remains intentionally unchanged. The following remain
-separate checkpoints:
+Checkpoint 7 now routes both POTA and DX through one shared panel backed by
+`ApplicationRuntime.latest_forge_spot_state`.
 
-- migration of the POTA panel to the shared snapshot
-- unified POTA and DX presentation
-- operator-confirmed two-press receive tuning
-- deployment authentication/TLS hardening
+When Forge is enabled, the Pi no longer composes the legacy direct-POTA poller.
+The legacy implementation and `pota_spot_cache` tables remain available as a
+non-destructive rollback/compatibility path when Forge is disabled.
 
-The checkpoint-6 Pi Forge path may run in parallel with the legacy direct-POTA
-path until checkpoint 7 performs the presentation migration.
+The real checkpoint-7 bench validated:
 
-No current Forge, Pi shared-spot, or shared-domain component has transmit
-authority.
+- live POTA and DXSpider data through Forge
+- WireGuard/CarLAN delivery to `anvilmobile`
+- durable Pi shared-cache publication
+- POTA and DX display on the installed dashboard
+- encoder navigation and staging
+- staged-action invalidation on context change
+- no FT-891 frequency change when a spot is staged
+
+Checkpoint 8 remains responsible for second-press receive tuning through
+`ReceiveTuningService` and permanent Forge deployment/security hardening.
+
+No current Forge, Pi shared-spot, shared-panel, or shared-domain component has
+transmit authority.

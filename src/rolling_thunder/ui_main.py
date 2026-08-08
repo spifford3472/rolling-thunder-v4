@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import timedelta
 from pathlib import Path
 
-from rolling_thunder.active_panel_commands import ActivePanelCommandController
+from rolling_thunder.active_panel_commands import (
+    SharedSpotActivePanelCommandController,
+)
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.application_secrets import (
     SecretConfigurationError,
@@ -37,16 +39,14 @@ from rolling_thunder.physical_controls import (
     ControlEventGate,
     ControlSource,
 )
-from rolling_thunder.pota_dashboard_controller import PotaDashboardController
-from rolling_thunder.pota_dashboard_filters import PotaDashboardFilterController
-from rolling_thunder.pota_dashboard_panel import build_pota_dashboard_panel
-from rolling_thunder.pota_enrichment_ui import format_enriched_callsign
 from rolling_thunder.pota_tune_execution_controller import (
     PotaTuneIntentExecutor,
 )
-from rolling_thunder.pota_tune_ui_controller import PotaTuneUiController
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
+from rolling_thunder.shared_pota_contact import shared_pota_spots_for_contact
+from rolling_thunder.shared_spot_panel import SharedSpotPanelController
+from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
 from rolling_thunder.status_messages import StatusPresentation
@@ -181,19 +181,15 @@ def run_dashboard(
 
     capture = live_capture if live_capture is not None else mock_transcripts
     context_navigation = ContextNavigationController()
-    pota_dashboard = PotaDashboardController(runtime)
-    pota_filters = PotaDashboardFilterController(pota_dashboard)
-    pota_tune_ui = PotaTuneUiController(
-        pota_dashboard,
-        pota_tune_executor or runtime.pota_receive_tune_executor,
-        status_messages=runtime.status_messages,
-    )
-    active_panel_commands = ActivePanelCommandController(
+    shared_spot_panel = SharedSpotPanelController(runtime)
+    active_panel_commands = SharedSpotActivePanelCommandController(
         context_navigation,
-        pota_dashboard,
-        pota_filters,
-        pota_tune_ui,
+        shared_spot_panel,
+        current_frequency=lambda: runtime.latest_radio_state.frequency,
     )
+    # Kept only for run_dashboard API compatibility during checkpoint 7.
+    # Shared receive tuning is intentionally deferred to checkpoint 8.
+    _ = pota_tune_executor
 
     def capture_state() -> CallsignCaptureState:
         """Return the active capture controller's immutable state."""
@@ -215,7 +211,9 @@ def run_dashboard(
         on_failed=commit_failed,
         gps_state_provider=lambda: runtime.latest_gps_state,
         pota_context_provider=lambda: context_navigation.state.selected is ContextId.POTA,
-        pota_spots_provider=lambda: pota_dashboard.visible_spots,
+        pota_spots_provider=lambda: shared_pota_spots_for_contact(
+            shared_spot_panel.visible_spots
+        ),
     )
     operator_commands = OperatorCommandController(
         capture,
@@ -651,8 +649,6 @@ def run_dashboard(
     )
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
-    previous_context: ContextId | None = None
-
     def show_standard_context_body() -> None:
         """Show the reusable text body and hide the POTA card viewport."""
         pota_panel_frame.grid_remove()
@@ -664,8 +660,6 @@ def run_dashboard(
         pota_panel_frame.grid()
 
     def refresh() -> None:
-        nonlocal previous_context
-
         if control_dispatcher is not None:
             control_dispatcher.dispatch_available()
 
@@ -745,18 +739,16 @@ def run_dashboard(
             )
 
         selected_context = context_navigation.state
-        if selected_context.selected is ContextId.POTA and previous_context is not ContextId.POTA:
-            pota_filters.activate_for_frequency(runtime.latest_radio_state.frequency)
-        previous_context = selected_context.selected
 
-        if selected_context.selected is ContextId.POTA:
+        if selected_context.selected in {ContextId.POTA, ContextId.DX}:
             health_frame.grid_remove()
             show_pota_context_body()
-            filter_state = pota_filters.state
-            panel = build_pota_dashboard_panel(filter_state.dashboard)
-            runtime.pota_enrichment.prefetch_callsigns(row.activator for row in panel.rows)
-            context_title_text.set(filter_state.display_line)
-            context_title_label.configure(font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold"))
+            panel_state = shared_spot_panel.state
+            panel = build_shared_spot_viewport(panel_state)
+            context_title_text.set(panel.title)
+            context_title_label.configure(
+                font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold")
+            )
 
             available_wrap_width = max(480, pota_panel_frame.winfo_width() - 36)
             pota_status_label.configure(wraplength=available_wrap_width)
@@ -765,12 +757,12 @@ def run_dashboard(
                 labels[0].configure(wraplength=available_wrap_width)
                 labels[2].configure(wraplength=available_wrap_width)
 
-            if filter_state.dashboard.status != "READY":
+            if not panel.has_cards:
                 pota_cards_container.grid_remove()
                 pota_status_label.grid()
                 status_lines = [panel.detail_line, panel.status_line]
                 if panel.error_line:
-                    status_lines.append(panel.error_line)
+                    status_lines.append(f"ERROR: {panel.error_line}")
                 pota_status_text.set("\n".join(status_lines))
                 pota_more_above_text.set("")
                 pota_more_below_text.set("")
@@ -779,39 +771,40 @@ def run_dashboard(
             else:
                 pota_status_label.grid_remove()
                 pota_cards_container.grid()
-                pota_more_above_text.set("▲ MORE ▲" if panel.hidden_above_count else "")
-                pota_more_below_text.set("▼ MORE ▼" if panel.hidden_below_count else "")
+                pota_more_above_text.set(
+                    "▲ MORE ▲" if panel.hidden_above_count else ""
+                )
+                pota_more_below_text.set(
+                    "▼ MORE ▼" if panel.hidden_below_count else ""
+                )
 
                 for card_index, card_frame in enumerate(pota_card_frames):
-                    if card_index >= len(panel.rows):
+                    if card_index >= len(panel.cards):
                         card_frame.grid_remove()
                         continue
 
-                    row = panel.rows[card_index]
+                    card = panel.cards[card_index]
                     card_frame.grid()
-                    callsign_var, frequency_var, park_var, location_var = pota_card_texts[
+                    line1_var, line2_var, line3_var, line4_var = pota_card_texts[
                         card_index
                     ]
-                    callsign_var.set(
-                        format_enriched_callsign(
-                            row.activator,
-                            runtime.pota_enrichment.get_callsign_name(row.activator),
-                        )
-                    )
-                    frequency_var.set(row.frequency)
-                    park_var.set(f"{row.park_reference} - {row.park_name}")
-                    location_var.set(row.location_code)
+                    line1_var.set(card.line1)
+                    line2_var.set(card.line2)
+                    line3_var.set(card.line3)
+                    line4_var.set(card.line4)
 
                     selected_background = (
-                        _CONTEXT_SELECTED if row.is_selected else _PANEL_BACKGROUND
+                        _CONTEXT_SELECTED if card.selected else _PANEL_BACKGROUND
                     )
                     visible_border_width = (
                         _POTA_CARD_SELECTED_BORDER_PX
-                        if row.is_selected
+                        if card.selected
                         else _POTA_CARD_NORMAL_BORDER_PX
                     )
-                    invisible_border_width = _POTA_CARD_OUTER_PAD_PX - visible_border_width
-                    border_color = _BRIGHT if row.is_selected else _BORDER
+                    invisible_border_width = (
+                        _POTA_CARD_OUTER_PAD_PX - visible_border_width
+                    )
+                    border_color = _BRIGHT if card.selected else _BORDER
                     card_frame.configure(
                         bg=selected_background,
                         highlightbackground=border_color,
@@ -823,16 +816,15 @@ def run_dashboard(
                     for card_label in pota_card_labels[card_index]:
                         card_label.configure(bg=selected_background)
 
-            tune_presentation = pota_tune_ui.presentation
-            footer_lines = [
-                line
-                for line in (
-                    tune_presentation.summary_line,
-                    tune_presentation.status_line,
-                    tune_presentation.detail_line,
+            footer_lines = [panel.status_line]
+            if panel.error_line:
+                footer_lines.append(panel.error_line)
+            if panel_state.staged_identity is not None:
+                footer_lines.append(
+                    "STAGED — BACK CANCELS — RECEIVE TUNING ENABLED IN CHECKPOINT 8"
                 )
-                if line is not None
-            ]
+            else:
+                footer_lines.append("SELECT A SPOT — ACTIVATE STAGES ONLY")
             pota_footer_text.set("\n".join(footer_lines))
         elif selected_context.selected is ContextId.SETTINGS:
             show_standard_context_body()
@@ -906,48 +898,49 @@ def run_dashboard(
         lambda _event: operator_commands.execute(ControlAction.DISCARD),
     )
 
-    def handle_pota_filter_key(event: tk.Event[tk.Misc]) -> None:
-        if context_navigation.state.selected is ContextId.POTA:
-            pota_filters.handle_key(event.char)
+    def execute_panel_action(action: ControlAction) -> None:
+        operator_commands.execute(action)
 
-    for key in ("[", "]", ",", ".", "/"):
-        root.bind(key, handle_pota_filter_key)
-
-    def select_previous_pota_spot(_event: tk.Event[tk.Misc]) -> None:
-        if context_navigation.state.selected is ContextId.POTA:
-            pota_dashboard.select_previous()
-
-    def select_next_pota_spot(_event: tk.Event[tk.Misc]) -> None:
-        if context_navigation.state.selected is ContextId.POTA:
-            pota_dashboard.select_next()
-
-    root.bind("<Up>", select_previous_pota_spot)
-    root.bind("<Down>", select_next_pota_spot)
-
-    def request_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
-        if context_navigation.state.selected is ContextId.POTA:
-            pota_tune_ui.request()
-
-    def confirm_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
-        if context_navigation.state.selected is ContextId.POTA:
-            pota_tune_ui.confirm()
-
-    def cancel_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
-        if context_navigation.state.selected is ContextId.POTA:
-            pota_tune_ui.cancel()
-
-    def execute_pota_tune_intent(_event: tk.Event[tk.Misc]) -> None:
-        if context_navigation.state.selected is ContextId.POTA:
-            pota_tune_ui.execute()
-
-    root.bind("<Return>", confirm_pota_tune_intent)
-    root.bind("<KP_Enter>", confirm_pota_tune_intent)
-    root.bind("<t>", request_pota_tune_intent)
-    root.bind("<T>", request_pota_tune_intent)
-    root.bind("<e>", execute_pota_tune_intent)
-    root.bind("<E>", execute_pota_tune_intent)
-    root.bind("<x>", cancel_pota_tune_intent)
-    root.bind("<X>", cancel_pota_tune_intent)
+    root.bind(
+        "<Up>",
+        lambda _event: execute_panel_action(ControlAction.MOVE_PREVIOUS),
+    )
+    root.bind(
+        "<Down>",
+        lambda _event: execute_panel_action(ControlAction.MOVE_NEXT),
+    )
+    root.bind(
+        "<Return>",
+        lambda _event: execute_panel_action(ControlAction.ACTIVATE_SELECTION),
+    )
+    root.bind(
+        "<KP_Enter>",
+        lambda _event: execute_panel_action(ControlAction.ACTIVATE_SELECTION),
+    )
+    root.bind(
+        "<t>",
+        lambda _event: execute_panel_action(ControlAction.ACTIVATE_SELECTION),
+    )
+    root.bind(
+        "<T>",
+        lambda _event: execute_panel_action(ControlAction.ACTIVATE_SELECTION),
+    )
+    root.bind(
+        "<x>",
+        lambda _event: execute_panel_action(ControlAction.BACK),
+    )
+    root.bind(
+        "<X>",
+        lambda _event: execute_panel_action(ControlAction.BACK),
+    )
+    root.bind(
+        "]",
+        lambda _event: execute_panel_action(ControlAction.PANEL_PRIMARY),
+    )
+    root.bind(
+        ".",
+        lambda _event: execute_panel_action(ControlAction.PANEL_SECONDARY),
+    )
 
     context_shortcut_actions = {
         "1": ControlAction.SELECT_POTA,
