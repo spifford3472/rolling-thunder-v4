@@ -1,0 +1,42 @@
+[Unit]
+Description=Rolling Thunder Forge Spot Aggregation Service
+Documentation=file:/opt/rolling-thunder-forge/docs/FORGE_SPOT_SERVICE.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=rollingthunder
+Group=rollingthunder
+WorkingDirectory=/opt/rolling-thunder-forge
+
+EnvironmentFile=-/etc/rolling-thunder/forge-spots.env
+
+ExecStart=/opt/rolling-thunder-forge/.venv/bin/rolling-thunder-forge-spots --config /etc/rolling-thunder/forge-spots.yaml
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+StateDirectory=rolling-thunder
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
