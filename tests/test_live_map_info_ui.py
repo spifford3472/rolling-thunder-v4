@@ -20,7 +20,7 @@ def health(
     )
 
 
-def test_info_lines_show_required_map_information() -> None:
+def test_info_lines_show_compact_map_information() -> None:
     info = LiveMapInfoPresentation(
         local_time="3:11 PM",
         utc_time="19:11 UTC",
@@ -36,11 +36,10 @@ def test_info_lines_show_required_map_information() -> None:
         "LOCAL  3:11 PM",
         "UTC    19:11 UTC",
         "GRID   EM79XM",
-        "TEMP   --°F / --°C — UNAVAILABLE",
     )
 
 
-def test_health_colors_use_green_yellow_and_gray() -> None:
-    assert live_map_health_color(LiveMapHealthLevel.HEALTHY) == "#42ff72"
+def test_health_colors_use_light_blue_yellow_and_gray() -> None:
+    assert live_map_health_color(LiveMapHealthLevel.HEALTHY) == "#66ccff"
     assert live_map_health_color(LiveMapHealthLevel.DEGRADED) == "#ffd24a"
     assert live_map_health_color(LiveMapHealthLevel.UNAVAILABLE) == "#a8b4ba"
