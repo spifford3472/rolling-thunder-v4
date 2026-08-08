@@ -9,7 +9,7 @@ from rolling_thunder.radio import RadioBand, RadioError
 
 
 class BlockingBandTransport:
-    """Fake CAT transport that can hold one band-verification frequency read."""
+    """Fake CAT transport that can hold one recalled-band verification read."""
 
     def __init__(self) -> None:
         self.opened = False
@@ -17,6 +17,7 @@ class BlockingBandTransport:
         self.replies: dict[bytes, bytes] = {
             b"FA;": b"FA014250000;",
             b"MD0;": b"MD02;",
+            b"MC;": b"MC003;",
         }
         self.band_verify_started = Event()
         self.release_band_verify = Event()
@@ -30,7 +31,7 @@ class BlockingBandTransport:
 
     def command(self, command: bytes) -> None:
         self.commands.append(command)
-        if command == b"BS03;":
+        if command == b"MA;":
             self._block_next_frequency_query = True
 
     def query(self, command: bytes) -> bytes:
@@ -47,7 +48,7 @@ def fixed_clock() -> datetime:
     return datetime(2026, 8, 8, 11, 30, tzinfo=UTC)
 
 
-def test_refresh_cannot_interleave_with_band_selection_verification() -> None:
+def test_refresh_cannot_interleave_with_band_memory_verification() -> None:
     transport = BlockingBandTransport()
     radio = Ft891Radio(transport, clock=fixed_clock)
     radio.connect()
@@ -74,14 +75,14 @@ def test_refresh_cannot_interleave_with_band_selection_verification() -> None:
     band_thread.start()
 
     assert transport.band_verify_started.wait(timeout=1.0)
-    assert transport.commands[-1] == b"BS03;"
+    assert transport.commands[-3:] == [b"MC003;", b"MC;", b"MA;"]
 
     refresh_thread = Thread(target=refresh)
     refresh_thread.start()
     refresh_thread.join(timeout=0.2)
 
     assert refresh_thread.is_alive()
-    assert transport.commands[-1] == b"BS03;"
+    assert transport.commands[-1] == b"MA;"
 
     transport.release_band_verify.set()
     band_thread.join(timeout=1.0)
@@ -95,8 +96,10 @@ def test_refresh_cannot_interleave_with_band_selection_verification() -> None:
     assert band_results[0].frequency is not None
     assert band_results[0].frequency.hz == 7_200_000
     assert band_results[0].mode is RadioMode.LSB
-    assert transport.commands[-5:] == [
-        b"BS03;",
+    assert transport.commands[-7:] == [
+        b"MC003;",
+        b"MC;",
+        b"MA;",
         b"FA;",
         b"MD0;",
         b"FA;",
