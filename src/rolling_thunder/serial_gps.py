@@ -350,6 +350,8 @@ class SerialGPSReceiver:
             self._publish_error(message)
             raise GPSConnectionError(message)
 
+        self._discard_buffered_input(port)
+
         for _ in range(self._maximum_sentences_per_refresh):
             try:
                 raw_sentence = port.readline()
@@ -414,6 +416,19 @@ class SerialGPSReceiver:
         )
         self._publish_error(message)
         raise GPSConnectionError(message)
+
+    def _discard_buffered_input(self, port: SerialLinePort) -> None:
+        """Discard queued serial bytes so UTC receipt timing reflects live NMEA data."""
+        reset_input_buffer = getattr(port, "reset_input_buffer", None)
+        if reset_input_buffer is None:
+            return
+        try:
+            reset_input_buffer()
+        except (OSError, serial.SerialException) as error:
+            self._close_failed_port()
+            message = f"Could not discard buffered GPS data from {self._device}: {error}"
+            self._publish_error(message)
+            raise GPSConnectionError(message) from error
 
     def _record_utc_sample(self, movement: RmcMovement) -> None:
         sample = movement.utc
