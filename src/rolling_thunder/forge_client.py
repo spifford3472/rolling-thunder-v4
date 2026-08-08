@@ -140,6 +140,7 @@ class _ForgeWireSpotRecord(DomainModel):
     def to_domain(self) -> SpotRecord:
         """Rebuild the canonical shared domain record with full validation."""
         frequency = Frequency(hz=self.frequency)
+        identity: PotaSpotIdentity | DxSpotIdentity
         if isinstance(self.identity, _ForgeWirePotaIdentity):
             identity = PotaSpotIdentity(
                 park_reference=self.identity.park_reference,
