@@ -139,7 +139,7 @@ def test_cross_band_success_publishes_higher_priority_atas_warning() -> None:
     current = messages.snapshot().current
     assert current is not None
     assert current.replacement_key == ATAS_RETUNE_STATUS_KEY
-    assert current.text == "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
+    assert current.text == "SET BAND TO 40 METERS — TUNE ATAS-120"
     assert current.presentation is StatusPresentation.AMBER
     assert provider.clear_count == 1
 
