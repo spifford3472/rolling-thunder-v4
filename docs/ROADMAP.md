@@ -323,50 +323,53 @@ thread boundaries.
 - additional radio adapters
 - mobile-safe audible prompts
 
-## Shared Spot Domain Checkpoint
+## Shared POTA/DX Spot Architecture
 
-Status: implemented on the checkpoint branch and pending pull-request review,
-GitHub Actions, owner approval, and merge.
+Status: checkpoint 7 implemented and live-bench validated on the feature branch;
+pending final automated gates, pull-request review, GitHub Actions, owner
+approval, and merge.
 
-Checkpoint 3 of GitHub issue #129 provides:
+GitHub issue #129 checkpoints 1 through 7 now provide:
 
-- immutable provider-neutral POTA and DX spot records
-- deterministic POTA and DX stable identities
-- optional operator name and grid retained as typed `None`
-- `<UNKNOWN>` formatting only at the presentation boundary
-- explicit amateur-band and integer-frequency ordering
-- provider-arrival-independent stable tie-breakers
-- deterministic same-park/same-frequency POTA duplicate collapse
-- canonical immutable spot snapshots
-- stable identity-based selection across reordered snapshot replacement
-- selection and staging removal when the selected identity disappears
-- no neighboring-row fallback
-- immutable action-critical staged state
-- staged-action invalidation when callsign, frequency, or mode changes
-- explicit cancellation, context, radio, and failure invalidation paths
-- no Tkinter, Forge, network, SQLite, filesystem, CAT, or hardware work
-- no changes to the running POTA dashboard or three-action tune workflow
-- no PTT, MOX, keying, tuner, power, or unattended transmit authority
+- provider-neutral POTA/DX records and canonical snapshots
+- stable identity-based selection and staged-action invalidation
+- Forge POTA and configurable DXSpider aggregation
+- optional bounded Forge-side QRZ enrichment
+- transactional Forge persistence and versioned read-only REST
+- typed Pi Forge client and durable retained shared snapshots
+- one shared POTA/DX controller and presentation path
+- POTA band, mode-group, and age filtering
+- DX callsign, frequency, mode, age, optional name/grid, and metadata
+- shared keyboard and physical-controller navigation
+- POTA contact-context compatibility using shared records
+- no duplicate Pi-side public-POTA polling when Forge is enabled
+- no new radio or transmit authority
 
-See `docs/SHARED_SPOT_DOMAIN.md` for the identity, canonicalization, selection,
-staging, and radio-safety rules.
+The real checkpoint-7 bench proved POTA and DXSpider through Forge,
+WireGuard/CarLAN, the durable Pi cache, the shared dashboard, and the installed
+physical controls. Encoder staging worked and did not change FT-891 frequency.
+
+The legacy direct-POTA implementation and cache remain as a non-destructive
+rollback/compatibility path when Forge is disabled.
 
 ## Immediate Next Feature
 
-After checkpoint 3 is approved and merged, implement checkpoint 4 of GitHub issue
-#129: the Forge aggregation core and initial POTA provider.
+After checkpoint 7 is approved and merged, implement checkpoint 8 of GitHub
+issue #129.
 
-That checkpoint must:
+Checkpoint 8 must:
 
-- refresh configured providers outside request handlers
-- normalize POTA data into the shared immutable spot domain
-- validate complete candidate snapshots before activation
-- retain the previous active provider slice on provider failure
-- persist complete snapshots transactionally in SQLite
-- expose versioned REST endpoints and health state
-- log bounded actionable provider and persistence failures
-- perform no radio, CAT, tuning, or transmit-control work
-- remain independently testable without public internet, credentials, or hardware
-- preserve local-first Pi logging and all existing radio-safety boundaries
-- pass Ruff, strict MyPy, full pytest, pre-commit, and GitHub Actions
+- implement explicit two-press shared-spot receive tuning
+- require first press to stage and second press to confirm
+- route every receive change only through `ReceiveTuningService`
+- clear staging on rotation, selection/context change, disappearance,
+  radio invalidation, cancellation, action-critical mutation, or failure
+- preserve all no-PTT/MOX/keying/tuner/power/transmit safety boundaries
+- complete end-to-end integration acceptance
+- formalize Forge installation and systemd lifecycle
+- document service account, installation path, firewall, and recovery
+- add appropriate authentication/TLS deployment hardening
+- retain offline-first local SQLite logging
+- pass Ruff, strict MyPy, full pytest, pre-commit, `git diff --check`, and CI
+- complete target-Pi and vehicle acceptance
 - remain unmerged without explicit owner authorization

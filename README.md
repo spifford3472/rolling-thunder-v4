@@ -21,25 +21,36 @@ The authoritative design is:
 
 ## Current Milestone
 
-**Milestone 4 — Radio Abstraction**
+**Milestone 10 — Hardware-Backed Mapping and Operating Intelligence**
 
-Milestones 1 through 3 have been implemented and audited:
+The current checkpoint implements the shared POTA/DX operating-intelligence
+panel tracked by GitHub issues #129 and #146.
 
-- typed YAML configuration with validation and mock-hardware mode
-- core contact, radio-state, GPS-position, and synchronization domain models
-- durable SQLite contact logging, duplicate protection, export, backup, and recovery
+The running Raspberry Pi dashboard now provides:
 
-The current milestone establishes the hardware-independent radio boundary:
+- one provider-neutral shared panel for POTA and DX
+- durable Forge-derived last-known spot snapshots
+- POTA band, mode-group, and age filtering
+- DX callsign, frequency, mode, age, optional name/grid, and bounded metadata
+- stable identity-based selection across snapshot refreshes
+- physical-controller and keyboard navigation through the same command path
+- first-action staging with explicit cancellation and invalidation
+- truthful live, cached, retained, disabled, and provider-health presentation
+- local-first contact logging independent of Forge availability
 
-- a typed radio interface
-- a deterministic mock radio
-- frequency, mode, and connection-state reporting
-- safe band and frequency changes
-- an FT-891 CAT adapter
-- actionable disconnect and malformed-reply handling
+When Forge is enabled, live POTA and DX ingestion is owned by Forge. The Pi does
+not also poll the public POTA API directly. The legacy direct-POTA
+implementation and cache remain only as a rollback/compatibility path when
+Forge is disabled.
 
-The broader mobile logging workflow remains the product MVP and will be built
-incrementally through the milestones documented in `docs/ROADMAP.md`.
+Checkpoint 7 intentionally does not tune the radio from the new shared panel.
+Activation stages the selected spot only. Checkpoint 8 will connect the second
+explicit operator confirmation to the existing typed `ReceiveTuningService`.
+
+The temporary checkpoint-7 Forge-to-Pi bench has been validated with real POTA
+and DXSpider data and the installed physical controls. Permanent Forge systemd,
+service-account, firewall, authentication/TLS, and deployment hardening remain
+checkpoint-8 work.
 
 ## Configuration
 

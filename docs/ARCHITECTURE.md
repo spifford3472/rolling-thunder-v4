@@ -39,18 +39,18 @@ implemented software architecture and the near-term integration direction.
 | Raspberry Pi 4: anvilmobile                                        |
 |                                                                    |
 |  +-------------------------- Tkinter UI -------------------------+  |
-|  | persistent dashboard | POTA panel | overlays | status ticker |  |
+|  | dashboard | POTA/DX panel | status ticker                    |  |
 |  +------------------------------+--------------------------------+  |
 |                                 |                                   |
 |  +---------------- Application Controllers ---------------------+  |
-|  | operator commands | logging | POTA selection/tune intent      |  |
-|  | active-panel commands | navigation | connectivity presentation |  |
+|  | operator commands | logging | spot selection/staging         |  |
+|  | panel commands | navigation | connectivity presentation      |  |
 |  +------------------------------+--------------------------------+  |
 |                                 |                                   |
 |  +------------------- Runtime / Application Services ------------+  |
-|  | radio polling | GPS polling | speech | contact sync            |  |
-|  | POTA polling/cache | enrichment | network keepalive            |  |
-|  | physical-control dispatch and lifecycle                         |  |
+|  | radio polling | GPS polling | speech | contact sync          |  |
+|  | Forge spots | enrichment | network keepalive                 |  |
+|  | physical controls | dispatch | lifecycle                     |  |
 |  +------------------------------+--------------------------------+  |
 |                                 |                                   |
 |  +-------------------- Typed Ports and Domain --------------------+ |
@@ -180,27 +180,37 @@ ticker overrides.
 
 ## Shared Spot Domain Foundation
 
-The provider-neutral shared spot foundation defines immutable POTA and DX spot
+The provider-neutral shared spot architecture defines immutable POTA and DX
 records, deterministic stable identities, canonical complete snapshots, stable
-selection, and UI-independent staged actions. Unknown operator names and grids
-remain typed `None`; `<UNKNOWN>` is introduced only at the presentation boundary.
+selection, and UI-independent staged actions.
 
-POTA identity is provider plus park reference plus integer frequency. DX identity
-is provider plus normalized callsign plus integer frequency. Complete snapshots
-collapse duplicate identities deterministically and order records by explicit
-amateur-band rank, integer frequency, and stable tie-breakers independent of
-provider arrival order.
+Forge owns public POTA and DXSpider provider access. The Pi receives complete
+shared snapshots only through the typed Forge client, validates them before
+activation, persists them transactionally, and retains the previous valid
+snapshot when a live attempt fails.
 
-Selection is preserved by stable identity across snapshot replacement. If the
-selected identity disappears, selection and staging clear without choosing a
-neighboring row. A staged action captures identity, callsign, frequency, and
-radio mode so refreshed data cannot silently change the later confirmed target.
+The running POTA and DX contexts now use one `SharedSpotPanelController`.
+Dashboard refresh reads only immutable already-published Pi Forge state and
+performs no HTTP, SQLite, filesystem, provider, QRZ, or CAT work.
 
-These primitives perform no Tkinter, Forge, network, SQLite, filesystem, CAT,
-hardware, or background work. They cannot tune or transmit. The existing typed
-`ReceiveTuningService` remains the only receive-tuning authority, and the running
-POTA dashboard retains its existing workflow in this checkpoint. See
-`docs/SHARED_SPOT_DOMAIN.md` for the complete rules.
+Selection is preserved by `SpotIdentity`, never by row index. If the selected
+identity disappears, selection and staging clear without choosing a neighboring
+record. A staged action captures identity, callsign, frequency, and mode.
+
+When Forge is enabled, `ApplicationRuntime` does not compose the legacy direct
+public-POTA poller. The legacy implementation and `pota_spot_cache` remain as a
+non-destructive rollback/compatibility path when Forge is disabled.
+
+Checkpoint 7 stops at staging. Physical or keyboard activation of a shared POTA
+or DX record cannot tune the radio. Checkpoint 8 will connect a second explicit
+operator confirmation only through the existing typed `ReceiveTuningService`.
+
+The real checkpoint-7 bench verified POTA and DXSpider through Forge,
+WireGuard/CarLAN, the Pi durable cache, the shared dashboard, and the installed
+physical controller. Staging did not change the FT-891 frequency.
+
+See `docs/SHARED_SPOT_DOMAIN.md` and `docs/PI_FORGE_CLIENT.md` for the detailed
+domain, persistence, failure, and presentation contracts.
 
 ## Runtime Composition and Lifecycle
 
