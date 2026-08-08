@@ -5,7 +5,7 @@ from threading import Event, Thread
 
 from rolling_thunder.domain import RadioMode, RadioState
 from rolling_thunder.ft891_radio import Ft891Radio
-from rolling_thunder.radio import RadioBand
+from rolling_thunder.radio import RadioBand, RadioError
 
 
 class BlockingBandTransport:
@@ -56,18 +56,18 @@ def test_refresh_cannot_interleave_with_band_selection_verification() -> None:
 
     band_results: list[RadioState] = []
     refresh_results: list[RadioState] = []
-    errors: list[Exception] = []
+    errors: list[RadioError] = []
 
     def select_band() -> None:
         try:
             band_results.append(radio.select_band(RadioBand.BAND_40M))
-        except Exception as error:
+        except RadioError as error:
             errors.append(error)
 
     def refresh() -> None:
         try:
             refresh_results.append(radio.refresh_state())
-        except Exception as error:
+        except RadioError as error:
             errors.append(error)
 
     band_thread = Thread(target=select_band)
