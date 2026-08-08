@@ -173,7 +173,7 @@ def test_success_result_is_available_to_presentation() -> None:
     assert presentation.detail_line == "14.250 MHz USB"
 
 
-def test_verified_band_change_publishes_amber_warning_for_ten_seconds() -> None:
+def test_cross_band_tune_publishes_amber_warning_for_ten_seconds() -> None:
     clock = FakeMonotonicClock()
     status_messages = StatusMessageService(clock=clock)
     executor = FakeExecutor([(True, RadioBand.BAND_40M)])
@@ -184,7 +184,7 @@ def test_verified_band_change_publishes_amber_warning_for_ten_seconds() -> None:
     warning = status_messages.snapshot().current
     assert warning is not None
     assert warning.replacement_key == ATAS_RETUNE_STATUS_KEY
-    assert warning.text == "BAND CHANGED TO 40 METERS — RETUNE ATAS-120"
+    assert warning.text == "SET BAND TO 40 METERS — TUNE ATAS-120"
     assert warning.presentation is StatusPresentation.AMBER
     assert warning.priority == ATAS_RETUNE_STATUS_PRIORITY
     assert warning.expires_at_monotonic == (100.0 + ATAS_RETUNE_STATUS_DURATION_S)
@@ -260,7 +260,7 @@ def test_later_band_change_replaces_warning_and_restarts_duration() -> None:
     assert first_warning is not None
     assert replacement is not None
     assert replacement.sequence > first_warning.sequence
-    assert replacement.text == "BAND CHANGED TO 20 METERS — RETUNE ATAS-120"
+    assert replacement.text == "SET BAND TO 20 METERS — TUNE ATAS-120"
     assert replacement.expires_at_monotonic == 113.0
 
 
