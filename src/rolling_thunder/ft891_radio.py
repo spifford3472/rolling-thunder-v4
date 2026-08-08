@@ -13,12 +13,16 @@ from rolling_thunder.domain import (
 )
 from rolling_thunder.ft891_cat import (
     Ft891CatError,
+    encode_memory_to_vfo_a,
     encode_read_frequency,
+    encode_read_memory_channel,
     encode_read_mode,
-    encode_select_band,
+    encode_select_band_memory,
     encode_set_frequency,
     encode_set_mode,
+    memory_channel_for_band,
     parse_frequency_reply,
+    parse_memory_channel_reply,
     parse_mode_reply,
 )
 from rolling_thunder.radio import (
@@ -201,10 +205,23 @@ class Ft891Radio:
             return self._state
 
     def select_band(self, band: RadioBand) -> RadioState:
-        """Select one FT-891 band and verify it through hardware read-back."""
+        """Recall the dedicated band memory to VFO-A and verify the result."""
         with self._operation_lock:
             self._require_connected()
-            self._transport.command(encode_select_band(band))
+            expected_memory = memory_channel_for_band(band)
+
+            self._transport.command(encode_select_band_memory(band))
+            selected_memory = parse_memory_channel_reply(
+                self._transport.query(encode_read_memory_channel())
+            )
+            if selected_memory != expected_memory:
+                raise RadioVerificationError(
+                    "FT-891 band-memory verification failed: requested memory "
+                    f"{expected_memory:03d} for {band.value} but read back "
+                    f"{selected_memory:03d}."
+                )
+
+            self._transport.command(encode_memory_to_vfo_a())
             frequency, mode = self._read_hardware_state()
 
             self._state = RadioState(
@@ -219,14 +236,15 @@ class Ft891Radio:
                 verified_band = resolve_radio_band(frequency)
             except RadioBandResolutionError as error:
                 raise RadioVerificationError(
-                    "FT-891 band verification failed because the read-back "
-                    f"frequency {frequency.hz} Hz is outside supported bands."
+                    "FT-891 band-memory verification failed because the recalled "
+                    f"VFO-A frequency {frequency.hz} Hz is outside supported bands."
                 ) from error
 
             if verified_band is not band:
                 raise RadioVerificationError(
-                    "FT-891 band verification failed: requested "
-                    f"{band.value} but read back {verified_band.value}."
+                    "FT-891 band-memory verification failed: requested "
+                    f"{band.value} via memory {expected_memory:03d} but recalled "
+                    f"{verified_band.value}."
                 )
 
             return self._state
