@@ -209,13 +209,21 @@ class ApplicationRuntime:
             executor_factory=forge_executor_factory,
         )
 
-        pota_spot_polling = build_pota_spot_polling(
-            config.pota_spots,
-            pota_scheduler or ThreadingPollScheduler(),
-            database_path=config.storage.database_path,
-            mock_mode=(config.hardware.effective_radio_mode is HardwareAdapterMode.MOCK),
-            transport=pota_transport,
-        )
+        # The shared Forge path owns live POTA/DX ingestion when enabled.
+        # Keep the legacy direct-POTA poller only as a rollback path for
+        # configurations that have not enabled Forge.
+        pota_spot_polling: PotaSpotPollingService | None = None
+        if not config.forge.enabled:
+            pota_spot_polling = build_pota_spot_polling(
+                config.pota_spots,
+                pota_scheduler or ThreadingPollScheduler(),
+                database_path=config.storage.database_path,
+                mock_mode=(
+                    config.hardware.effective_radio_mode
+                    is HardwareAdapterMode.MOCK
+                ),
+                transport=pota_transport,
+            )
 
         resolved_secrets = secrets or ApplicationSecrets()
         qrz_provider = None
