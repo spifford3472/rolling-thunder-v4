@@ -1,15 +1,23 @@
-"""Read-only serial GPS adapter for NMEA position and movement sentences."""
+"""Read-only serial GPS adapter for NMEA position, movement, and UTC sentences."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from time import monotonic
 from typing import Protocol, cast
 
 import serial
 
 from rolling_thunder.domain import GPSFixState, GPSPosition
-from rolling_thunder.gps import GPSConnectionError, GPSConnectionState, GPSError, GPSState
+from rolling_thunder.gps import (
+    GPSConnectionError,
+    GPSConnectionState,
+    GPSError,
+    GPSState,
+    GPSUTCObservation,
+    GPSUTCSource,
+)
 
 
 class GPSParseError(GPSError):
@@ -35,10 +43,12 @@ class SerialLinePort(Protocol):
 
 SerialFactory = Callable[[Path, int, float], SerialLinePort]
 Clock = Callable[[], datetime]
+MonotonicClock = Callable[[], float]
 _SUPPORTED_GGA_SENTENCE_TYPES = frozenset({"GPGGA", "GNGGA"})
 _SUPPORTED_RMC_SENTENCE_TYPES = frozenset({"GPRMC", "GNRMC"})
 _KNOTS_TO_METRES_PER_SECOND = 0.514444
 _DEFAULT_MAXIMUM_SENTENCES_PER_REFRESH = 32
+_DEFAULT_MAXIMUM_UTC_AGE_S = 5.0
 
 
 def _open_serial(device: Path, baud_rate: int, timeout_s: float) -> SerialLinePort:
@@ -102,6 +112,47 @@ def _parse_coordinate(value: str, hemisphere: str, *, latitude: bool) -> float:
     return coordinate
 
 
+def _parse_rmc_utc(time_text: str, date_text: str) -> datetime | None:
+    """Parse RMC UTC time/date without consulting the host wall clock."""
+    if not time_text or not date_text:
+        return None
+
+    if len(date_text) != 6 or not date_text.isdigit():
+        raise GPSParseError("RMC date must use DDMMYY digits.")
+
+    whole_time, separator, fraction = time_text.partition(".")
+    if len(whole_time) != 6 or not whole_time.isdigit():
+        raise GPSParseError("RMC UTC time must use HHMMSS with optional fractional seconds.")
+    if separator:
+        if not fraction or not fraction.isdigit() or len(fraction) > 6:
+            raise GPSParseError("RMC fractional seconds must contain one to six digits.")
+        microsecond = int(fraction.ljust(6, "0"))
+    else:
+        microsecond = 0
+
+    day = int(date_text[0:2])
+    month = int(date_text[2:4])
+    year_two_digits = int(date_text[4:6])
+    year = 2000 + year_two_digits if year_two_digits < 80 else 1900 + year_two_digits
+    hour = int(whole_time[0:2])
+    minute = int(whole_time[2:4])
+    second = int(whole_time[4:6])
+
+    try:
+        return datetime(
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            microsecond,
+            tzinfo=UTC,
+        )
+    except ValueError as error:
+        raise GPSParseError("RMC UTC time/date is outside the valid calendar range.") from error
+
+
 def parse_gga_sentence(sentence: str, *, updated_at: datetime) -> GPSPosition:
     """Parse one checksummed GGA sentence into a validated position snapshot."""
     normalized = sentence.strip()
@@ -148,14 +199,16 @@ def parse_gga_sentence(sentence: str, *, updated_at: datetime) -> GPSPosition:
 
 @dataclass(frozen=True)
 class RmcMovement:
-    """Validated movement data from one supported RMC sentence."""
+    """Validated movement and UTC data from one supported RMC sentence."""
 
     speed_m_s: float | None
     heading_degrees: float | None
+    utc: datetime | None = None
+    fix_valid: bool = False
 
 
 def parse_rmc_sentence(sentence: str) -> RmcMovement:
-    """Parse one checksummed RMC sentence into optional movement data."""
+    """Parse one checksummed RMC sentence into movement and receiver UTC data."""
     normalized = sentence.strip()
     payload = _validate_checksum(normalized)
     fields = payload.split(",")
@@ -165,8 +218,15 @@ def parse_rmc_sentence(sentence: str) -> RmcMovement:
     status = fields[2]
     if status not in {"A", "V"}:
         raise GPSParseError("RMC status must be 'A' or 'V'.")
+
+    utc = _parse_rmc_utc(fields[1], fields[9])
     if status == "V":
-        return RmcMovement(speed_m_s=None, heading_degrees=None)
+        return RmcMovement(
+            speed_m_s=None,
+            heading_degrees=None,
+            utc=utc,
+            fix_valid=False,
+        )
 
     try:
         speed_m_s = float(fields[7]) * _KNOTS_TO_METRES_PER_SECOND if fields[7] else None
@@ -182,6 +242,8 @@ def parse_rmc_sentence(sentence: str) -> RmcMovement:
     return RmcMovement(
         speed_m_s=speed_m_s,
         heading_degrees=heading_degrees,
+        utc=utc,
+        fix_valid=True,
     )
 
 
@@ -195,8 +257,10 @@ class SerialGPSReceiver:
         baud_rate: int = 9_600,
         timeout_s: float = 2.0,
         maximum_sentences_per_refresh: int = _DEFAULT_MAXIMUM_SENTENCES_PER_REFRESH,
+        maximum_utc_age_s: float = _DEFAULT_MAXIMUM_UTC_AGE_S,
         serial_factory: SerialFactory = _open_serial,
         clock: Clock = _utc_now,
+        monotonic_clock: MonotonicClock = monotonic,
     ) -> None:
         if not device.is_absolute():
             raise ValueError("GPS serial device must be an absolute path.")
@@ -206,15 +270,23 @@ class SerialGPSReceiver:
             raise ValueError("GPS timeout must be positive.")
         if maximum_sentences_per_refresh <= 0:
             raise ValueError("Maximum GPS sentences per refresh must be positive.")
+        if maximum_utc_age_s <= 0:
+            raise ValueError("Maximum GPS UTC age must be positive.")
         self._device = device
         self._baud_rate = baud_rate
         self._timeout_s = timeout_s
         self._maximum_sentences_per_refresh = maximum_sentences_per_refresh
+        self._maximum_utc_age_s = maximum_utc_age_s
         self._serial_factory = serial_factory
         self._clock = clock
+        self._monotonic_clock = monotonic_clock
         self._port: SerialLinePort | None = None
         self._latest_speed_m_s: float | None = None
         self._latest_heading_degrees: float | None = None
+        self._latest_utc_value: datetime | None = None
+        self._latest_utc_received_monotonic: float | None = None
+        self._latest_utc_source_fix_valid = False
+        self._utc_advancing = False
         self._state = GPSState(
             connection_state=GPSConnectionState.DISCONNECTED,
             position=None,
@@ -226,6 +298,7 @@ class SerialGPSReceiver:
         if self._port is None or not self._port.is_open:
             self._latest_speed_m_s = None
             self._latest_heading_degrees = None
+            self._reset_utc_tracking()
             try:
                 self._port = self._serial_factory(
                     self._device,
@@ -257,6 +330,7 @@ class SerialGPSReceiver:
                 raise GPSConnectionError(message) from error
         self._latest_speed_m_s = None
         self._latest_heading_degrees = None
+        self._reset_utc_tracking()
         self._state = GPSState(
             connection_state=GPSConnectionState.DISCONNECTED,
             position=None,
@@ -308,6 +382,7 @@ class SerialGPSReceiver:
                     movement = parse_rmc_sentence(sentence)
                     self._latest_speed_m_s = movement.speed_m_s
                     self._latest_heading_degrees = movement.heading_degrees
+                    self._record_utc_sample(movement)
                     continue
                 if sentence_type not in _SUPPORTED_GGA_SENTENCE_TYPES:
                     continue
@@ -328,6 +403,7 @@ class SerialGPSReceiver:
                 connection_state=GPSConnectionState.CONNECTED,
                 position=position,
                 updated_at=position.updated_at,
+                utc=self._build_utc_observation(position),
             )
             return self._state
 
@@ -338,6 +414,63 @@ class SerialGPSReceiver:
         )
         self._publish_error(message)
         raise GPSConnectionError(message)
+
+    def _record_utc_sample(self, movement: RmcMovement) -> None:
+        sample = movement.utc
+        if sample is None:
+            return
+
+        received_at = self._monotonic_clock()
+        current = self._latest_utc_value
+        if current is None:
+            self._latest_utc_value = sample
+            self._latest_utc_received_monotonic = received_at
+            self._latest_utc_source_fix_valid = movement.fix_valid
+            self._utc_advancing = False
+            return
+
+        if sample > current:
+            self._latest_utc_value = sample
+            self._latest_utc_received_monotonic = received_at
+            self._latest_utc_source_fix_valid = movement.fix_valid
+            self._utc_advancing = True
+            return
+
+        if sample == current:
+            # A duplicate sentence does not make an old timestamp fresh again.
+            self._latest_utc_source_fix_valid = movement.fix_valid
+            return
+
+        # A backward UTC sample invalidates the advancing-sequence criterion. Keep the
+        # latest newer value so a subsequent sample must actually move beyond it.
+        self._latest_utc_source_fix_valid = movement.fix_valid
+        self._utc_advancing = False
+
+    def _build_utc_observation(self, position: GPSPosition) -> GPSUTCObservation:
+        value = self._latest_utc_value
+        received_at = self._latest_utc_received_monotonic
+        if value is None or received_at is None:
+            return GPSUTCObservation.unavailable()
+
+        age_s = max(0.0, self._monotonic_clock() - received_at)
+        return GPSUTCObservation(
+            value=value,
+            source=GPSUTCSource.RMC,
+            valid=True,
+            fix_valid=(
+                self._latest_utc_source_fix_valid
+                and position.fix_state is not GPSFixState.NO_FIX
+            ),
+            advancing=self._utc_advancing,
+            fresh=age_s <= self._maximum_utc_age_s,
+            age_s=age_s,
+        )
+
+    def _reset_utc_tracking(self) -> None:
+        self._latest_utc_value = None
+        self._latest_utc_received_monotonic = None
+        self._latest_utc_source_fix_valid = False
+        self._utc_advancing = False
 
     def _publish_error(self, message: str) -> GPSState:
         self._state = GPSState(
