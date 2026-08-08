@@ -123,6 +123,7 @@ class ForgeMobileLocationService:
         self._repository = repository
         self._now = now or (lambda: datetime.now(UTC))
         self._lock = RLock()
+        startup_error: str | None
 
         try:
             stored = repository.load()
