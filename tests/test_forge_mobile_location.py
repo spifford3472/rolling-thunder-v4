@@ -61,11 +61,11 @@ def test_record_normalizes_timestamps_to_utc() -> None:
 
 def test_record_rejects_impossible_coordinates_motion_and_timing() -> None:
     with pytest.raises(ValidationError):
-        location().model_copy(update={"latitude": 91.0}, deep=True).model_validate(
-            {
-                **location().model_dump(),
-                "latitude": 91.0,
-            }
+        MobileLocationRecord(
+            latitude=91.0,
+            longitude=-84.1,
+            fix_at=BASE_TIME,
+            received_at=BASE_TIME + timedelta(seconds=1),
         )
 
     with pytest.raises(ValidationError):
@@ -103,6 +103,14 @@ def test_record_rejects_impossible_coordinates_motion_and_timing() -> None:
         )
 
 
+def test_state_requires_revision_and_location_to_agree() -> None:
+    with pytest.raises(ValidationError, match="revision 0"):
+        MobileLocationState(revision=0, location=location())
+
+    with pytest.raises(ValidationError, match="positive revision"):
+        MobileLocationState(revision=1)
+
+
 def test_service_persists_before_publishing() -> None:
     repository = RecordingRepository()
     service = ForgeMobileLocationService(
@@ -121,14 +129,20 @@ def test_service_persists_before_publishing() -> None:
 
 def test_service_rejects_old_or_future_received_time_before_persistence() -> None:
     repository = RecordingRepository()
-    service = ForgeMobileLocationService(repository, now=lambda: BASE_TIME + timedelta(minutes=5))
+    service = ForgeMobileLocationService(
+        repository,
+        now=lambda: BASE_TIME + timedelta(minutes=5),
+    )
 
     with pytest.raises(InvalidMobileLocationTimingError, match="120 seconds old"):
         service.publish(location())
     assert repository.replacements == []
 
     future_repository = RecordingRepository()
-    future_service = ForgeMobileLocationService(future_repository, now=lambda: BASE_TIME)
+    future_service = ForgeMobileLocationService(
+        future_repository,
+        now=lambda: BASE_TIME,
+    )
     future = MobileLocationRecord(
         latitude=39.5,
         longitude=-84.1,
