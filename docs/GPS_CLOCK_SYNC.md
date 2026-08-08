@@ -38,6 +38,16 @@ If the current Pi UTC differs from trusted GPS UTC by no more than the tolerance
 
 If the difference exceeds the tolerance, the service requests `SystemClockSetter.set_utc()` and records `SYNCHRONIZED` only when that call succeeds.
 
+## Completed-result observability
+
+The current policy status and the result of the most recently completed synchronization opportunity are separate concepts.
+
+After a successful verification, the current status normally advances from `VERIFIED` to `WAITING_FOR_CADENCE` on the next poll because another attempt is not permitted for 12 hours. A one-poll `VERIFIED` state is too transient for a UI, diagnostic sampler, or acceptance script to observe reliably.
+
+`ClockSyncState.last_result` therefore retains an immutable `ClockSyncResult` for the lifetime of the running service. It records the most recent completed opportunity as `VERIFIED`, `SYNCHRONIZED`, or `WINDOW_EXPIRED`, including the GPS UTC, measured offset, whether a clock write occurred, and any completion error. The current status can continue to describe cadence or shutdown while `last_result` remains available as durable in-memory evidence of what actually happened.
+
+Starting a new `ClockSynchronizationService` lifecycle clears the previous in-memory result. No checkpoint-159 result is persisted across process restarts.
+
 ## `anvilmobile` deployment decision
 
 Inspection on 2026-08-08 established:
@@ -120,6 +130,22 @@ Installed acceptance on 2026-08-08 at exact head `4cb321ae2ad4a61811e247735c6229
 
 This passes the privileged-helper health gate and permits final runtime wiring and installed runtime acceptance.
 
+### First runtime acceptance observation
+
+Installed runtime acceptance on 2026-08-08 at head `b82f07a0d9c08a1c524fb085253bc4af54c4c3f5` established:
+
+- focused clock-sync tests passed 26/26 on `anvilmobile`
+- chrony was healthy before the runtime test: Stratum 3, `Leap status: Normal`, system clock synchronized, and NTP active
+- the acceptance runtime composed successfully with real GPS and mock radio
+- trusted GPS UTC became available normally
+- no clock write was observed
+- after the roughly 60-second trust gate, the sampled current status changed from `WARMING_UP` to `WAITING_FOR_CADENCE`
+- chrony remained healthy after the run: Stratum 3, `Leap status: Normal`, system clock synchronized, NTP active, and `chrony.service` active
+
+The acceptance script reported failure because it sampled every five seconds and required the transient current status to equal `VERIFIED`. Code inspection showed that `VERIFIED` was immediately followed by `WAITING_FOR_CADENCE` on the next one-second policy poll. Reaching cadence within a few seconds of warm-up cannot be caused by the ten-minute retry-window expiry; it indicates a completed verification or synchronization. Because no clock write occurred and the Pi was in tolerance, the completed action was verification.
+
+This exposed an **observability defect**, not a clock-setting or cadence failure: the completed verification was not retained after the next policy poll. The service was revised to retain `ClockSyncState.last_result`, and final installed acceptance must observe that durable completed result instead of relying on a transient current status.
+
 ## Recovery procedure
 
 If a future manual-helper test leaves chrony temporarily without a selected source, recover normal sampling without changing configuration:
@@ -136,16 +162,18 @@ systemctl is-active chrony.service
 
 ## Final installed runtime acceptance
 
-Before enabling the production runtime flag, confirm the branch passes CI on the final runtime-wiring head.
+Before enabling the production runtime flag, confirm the branch passes CI on the final runtime-observability head.
 
-Then start Rolling Thunder with `ROLLING_THUNDER_GPS_CLOCK_SYNC=1` and confirm:
+Then run the isolated real-GPS/mock-radio acceptance and confirm:
 
-1. normal dashboard startup remains responsive
+1. runtime composition succeeds
 2. GPS reaches trusted UTC normally
 3. no helper invocation occurs during the first approximately 60 seconds
-4. because the Pi is already NTP-synchronized within the two-second tolerance, the first opportunity reaches `VERIFIED` without a clock write
-5. chrony remains on an external source with `Leap status: Normal`
-6. `timedatectl` continues to report system clock synchronized and NTP active
-7. stopping Rolling Thunder stops the clock-sync scheduler cleanly
+4. because the Pi is already NTP-synchronized within the two-second tolerance, `last_result.status` becomes `VERIFIED`
+5. `last_result.clock_written` remains false
+6. the current status may be `WAITING_FOR_CADENCE` after verification; that is expected
+7. chrony remains on an external source with `Leap status: Normal`
+8. `timedatectl` continues to report system clock synchronized and NTP active
+9. stopping the runtime preserves the completed result for final observation and stops the clock-sync scheduler cleanly
 
 Do not deliberately skew the installed Pi clock merely to force the write path; deterministic tests cover the out-of-tolerance setter path.
