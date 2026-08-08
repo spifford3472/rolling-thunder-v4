@@ -11,11 +11,11 @@ The implementation establishes and validates:
 - read-only CAT connection and background polling
 - current VFO-A frequency and receive mode
 - disconnect detection and automatic recovery
-- independent band, frequency, and mode operations
-- hard band-before-frequency ordering for cross-band receive changes
-- exact read-back verification
+- independent typed band-context, frequency, and mode operations
+- guarded cross-band receive tuning
+- exact frequency and receive-mode read-back verification
 - shared POTA/DX two-press receive tuning through `ReceiveTuningService`
-- timed ATAS-120 operator warning after a verified band change
+- explicit manual band/ATAS-120 operator handoff after a cross-band receive tune
 
 This work adds no PTT, MOX, CW keying, voice keying, tuner control, power control,
 automatic transmission, or unattended transmit authority.
@@ -27,10 +27,10 @@ Labs CP2105 dual UART with serial number `011F42E9`.
 
 The two interfaces have different safety roles:
 
-| Interface | Stable path suffix | Observed tty | Purpose |
+| Interface | Stable path suffix | Checkpoint-8 observed tty | Purpose |
 | --- | --- | --- | --- |
-| Enhanced Com Port | `if00-port0` | `/dev/ttyUSB1` | CAT state and approved receive control |
-| Standard Com Port | `if01-port0` | `/dev/ttyUSB2` | PTT, CW keying, and digital TX control |
+| Enhanced Com Port | `if00-port0` | `/dev/ttyUSB2` | CAT state and approved receive control |
+| Standard Com Port | `if01-port0` | `/dev/ttyUSB3` | PTT, CW keying, and digital TX control |
 
 Rolling Thunder must use only the Enhanced Com Port:
 
@@ -40,6 +40,10 @@ Rolling Thunder must use only the Enhanced Com Port:
 
 The Standard Com Port must not be configured as `hardware.radio_device` and must
 remain unopened.
+
+The transient `/dev/ttyUSB*` numbers are diagnostic observations only. They may
+change after reconnects or other USB enumeration changes; configuration must use
+the stable `/dev/serial/by-id` path.
 
 ## Verified Serial Settings
 
@@ -61,9 +65,9 @@ MD0;
 Read-only hardware tests confirmed current frequency and mode,
 disconnect/reconnect recovery, and `transmitting=False`.
 
-## Band, Frequency, and Mode Separation
+## Band Context, Frequency, and Mode Separation
 
-Band selection, frequency setting, and mode setting remain independent typed
+Band context, exact frequency setting, and mode setting remain independent typed
 operations:
 
 ```text
@@ -72,63 +76,127 @@ set_frequency(frequency)
 set_mode(mode)
 ```
 
-Band selection does not choose the final target frequency or receive mode.
+The installed FT-891 does not provide a physically reliable CAT mechanism that
+Rolling Thunder can treat as authoritative automatic operator-visible band
+selection.
 
-The FT-891 CAT commands are:
+Checkpoint-8 bench testing established the final contract:
+
+- exact receive frequency and mode changes are supported and verified
+- same-band tuning does not recall a memory
+- cross-band tuning may use an operator-programmed regular memory as
+  **best-effort band context**
+- successful memory recall does not prove that the radio's operator-visible band
+  context changed correctly
+- Rolling Thunder therefore never claims that a cross-band tune automatically
+  selected the required band
+- the operator remains responsible for manually setting/confirming the band and
+  tuning the ATAS-120 before transmitting
+
+The unresolved FT-891 CAT/front-panel band-context behavior is intentionally
+parked in GitHub issue #149 and does not block checkpoint 8.
+
+## Operator-Programmed Band Memories
+
+The accepted regular-memory map is:
+
+| Memory | Band |
+| --- | --- |
+| `001` | 160 m |
+| `002` | 80 m |
+| `003` | 40 m |
+| `004` | 30 m |
+| `005` | 20 m |
+| `006` | 17 m |
+| `007` | 15 m |
+| `008` | 12 m |
+| `009` | 10 m |
+| `010` | 6 m |
+
+The approved memory-context CAT operations are:
 
 ```text
-BSxx;          select band
-FA#########;   set VFO-A frequency
-MD0x;          set main receive mode
+MCxxx;    select regular memory xxx
+MC;       read selected regular memory
+MA;       copy selected memory to VFO-A
+FA;       read VFO-A frequency
+MD0;      read main receive mode
 ```
 
-Supported CAT band-selection commands are:
+Rolling Thunder does not write these memories. `MW` and `MT` are outside the
+approved path.
 
-| Band | Command |
-| --- | --- |
-| 160 m | `BS00;` |
-| 80 m | `BS01;` |
-| 40 m | `BS03;` |
-| 30 m | `BS04;` |
-| 20 m | `BS05;` |
-| 17 m | `BS06;` |
-| 15 m | `BS07;` |
-| 12 m | `BS08;` |
-| 10 m | `BS09;` |
-| 6 m | `BS10;` |
+Raw physical testing verified, for example:
 
-The FT-891 CAT table has no dedicated 60-meter `BS` value. Software selection of
-60 meters therefore fails closed.
+```text
+MC010;
+MC;      -> MC010;
+MA;
+FA;      -> 50.100 MHz
+MD0;     -> USB
+
+MC005;
+MC;      -> MC005;
+MA;
+FA;      -> 14.150 MHz
+MD0;     -> USB
+```
+
+The memory-to-VFO operation is therefore physically real, but it is retained as
+best-effort context only because the radio's complete band-state behavior was
+not reliable enough to claim authoritative automatic band selection.
+
+The older `BSxx` encoder remains in the CAT module for compatibility with code
+that may reference it, but checkpoint-8 shared spot tuning does not rely on
+`BSxx` as its authoritative band-state mechanism.
 
 ## Required Receive-Tuning Order
 
-`ReceiveTuningService` owns the approved receive-only sequence:
+`ReceiveTuningService` remains the sole approved receive-only tuning authority.
+
+For a same-band target:
 
 ```text
-Determine target band from requested frequency
-Read current radio state
-
-If target band differs:
-    send BSxx;
-    read FA; and MD0;
-    verify returned frequency belongs to target band
-
-send FA#########;
-read FA;
-verify exact requested frequency
-
-send MD0x; when requested mode differs
-read MD0;
-verify requested mode
+read current radio state
+set exact target frequency
+read and verify exact target frequency
+set receive mode when needed
+read and verify receive mode
 ```
 
-A direct cross-band `set_frequency()` call raises `BandChangeRequiredError`
-before an `FA` command is transmitted.
+For a cross-band target:
 
-A failed band verification prevents frequency and mode changes. A failed
-frequency verification prevents the mode change.
+```text
+read current radio state
 
-Same-band tuning skips the `BS` command but still verifies frequency and mode.
+best-effort band context:
+    select mapped regular memory with MCxxx;
+    verify selected memory with MC;
+    copy memory to VFO-A with MA;
+    read FA; / MD0;
+    require recalled frequency to belong to the target amateur band
+
+set exact target frequency with FA#########;
+read FA;
+verify exact target frequency
+
+set MD0x; when requested mode differs
+read MD0;
+verify requested receive mode
+
+return a cross-band result
+publish the manual operator handoff:
+    SET BAND TO <BAND> METERS — TUNE ATAS-120
+```
+
+A direct cross-band `set_frequency()` call remains guarded and raises
+`BandChangeRequiredError` before an unapproved raw frequency jump is sent.
+
+A failed best-effort memory recall prevents the remainder of that ordered
+receive-tune attempt. A successful recall, however, is not interpreted as proof
+of authoritative FT-891 front-panel band selection.
+
+Same-band tuning bypasses memory recall and still verifies frequency and mode.
 
 `ReceiveTuningService` also refuses ordered receive tuning while the current
 radio state reports `transmitting=True`.
@@ -187,23 +255,21 @@ The second press does not perform blocking CAT work in Tkinter.
 A busy background tuning boundary rejects a second concurrent submission rather
 than creating overlapping receive-tune operations.
 
+FT-891 CAT operations are serialized by the adapter's operation lock so polling
+and receive tuning do not interleave command/response transactions.
+
 ## Configuration
 
-A real radio can be tested while GPS remains mocked:
+The installed radio configuration uses the Enhanced CAT stable device path:
 
 ```yaml
 hardware:
-  mock: true
   radio_mode: real
-  gps_mode: mock
   radio_device: /dev/serial/by-id/usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_011F42E9-if00-port0
-  radio_baud_rate: 38400
-  radio_timeout_s: 1.0
-  gps_device: null
 ```
 
-Use the stable `/dev/serial/by-id` path rather than `/dev/ttyUSB1`, because tty
-numbers can change after USB reconnects.
+Use the stable `/dev/serial/by-id` path rather than a transient `/dev/ttyUSB*`
+number.
 
 The configured user must have serial-device access. User `geoff` is a member of
 `dialout` on the verified Pi.
@@ -220,45 +286,50 @@ At startup:
 - local services and GPS continue running
 - polling remains scheduled and retries the stable device path
 
-After a CAT failure or physical disconnect:
+After a CAT failure or physical radio power-off:
 
-- the adapter closes the failed transport
-- the last known frequency and mode remain available with error state
-- software transmit state remains false
+- the adapter closes or marks the failed transport/state appropriately
+- staged shared-spot actions are invalidated when radio state becomes unusable
 - polling continues
 - reconnection refreshes current hardware state without restarting the app
+- an old staged target is not resurrected or automatically executed after
+  recovery
 
 Shared receive-tuning operations use the ordered application service only after
 explicit operator confirmation. Blocking CAT work must not run directly from a
 Tkinter widget callback.
 
-## ATAS-120 Retune Warning
+## ATAS-120 Manual Band / Tune Warning
 
-Band selection and receive frequency changes do not imply that the ATAS-120 is
-tuned or safe to transmit.
+A cross-band receive frequency change does not imply that the FT-891 is in the
+correct operator-visible band context, and it never implies that the ATAS-120
+is tuned or safe to transmit.
 
-After a successful shared receive tune reports a verified band change, the
-shared tune status controller publishes this amber status message:
+After a successful shared receive tune whose starting band differs from the
+target band, the shared tune status controller publishes this amber message:
 
 ```text
-BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
+SET BAND TO <BAND> METERS — TUNE ATAS-120
 ```
 
 Current checkpoint-8 behavior is:
 
-- same-band receive tuning publishes no ATAS warning
-- verified cross-band receive tuning publishes the verified target band
-- the ATAS message uses higher status priority than the normal tune result
-- the ATAS message expires automatically after 10 seconds
+- same-band receive tuning publishes no band/ATAS warning
+- successful cross-band receive tuning publishes the target-band manual handoff
+- the warning has higher status priority than the normal tune-result message
+- the warning expires automatically after 10 seconds
 - success status is shown for 5 seconds
 - failure status is shown for 8 seconds
+- the warning does not claim that CAT changed the radio's authoritative band
+  state
+- the warning does not claim that the ATAS-120 is tuned
 
 Back is not the ATAS acknowledgement mechanism in checkpoint 8. Within the
 shared POTA/DX panel, Back cancels staging first and clears selection on a later
-Back action. The ATAS reminder is a timed `StatusMessageService` message.
+Back action. The band/ATAS reminder is a timed `StatusMessageService` message.
 
-The warning is presentation only. Rolling Thunder cannot tune or verify the
-ATAS-120 and must never claim that the antenna is safe to transmit.
+The operator must manually set/confirm the FT-891 band and tune the ATAS-120
+before transmitting.
 
 ## Safety Boundary
 
@@ -285,108 +356,63 @@ service, and Tkinter do not issue raw CAT commands.
 Automated tests use fakes, mock radios, fake CAT transports, fake tuning
 boundaries, and deterministic schedulers. Coverage includes:
 
-- exact `BSxx;` command encoding
-- unsupported 60-meter selection
+- regular-memory `MCxxx` mapping for the configured 160 m through 6 m memories
+- `MC;` selected-memory verification
+- `MA;` memory-to-VFO-A recall
+- no `MW` or `MT` memory-write command
 - shared frequency-to-band resolution
-- same-band frequency changes
+- same-band tuning bypassing memory recall
 - prohibited direct cross-band frequency changes
-- band, frequency, and mode read-back verification
-- failures stopping subsequent operations
+- recalled-frequency target-band verification
+- exact frequency and receive-mode read-back verification
+- failures stopping subsequent ordered operations
 - ordered receive-tuning call sequence
-- same-band tuning skipping band selection
 - receive-tuning rejection while transmitting
+- serialized FT-891 CAT operations
 - first shared activation staging only
 - second shared activation submitting the exact staged action
 - POTA and DX sharing the same execution boundary
 - stale/action-mutated staging rejection
-- radio-state invalidation
+- selection, filter, context, Back, and radio-state invalidation
 - background tune success and failure state
-- exact timed ATAS-120 warning after verified band changes
-- no ATAS warning for same-band tuning
-- absence of PTT, MOX, keying, tuner, and power commands
+- exact timed `SET BAND TO <BAND> METERS — TUNE ATAS-120` warning
+- no band/ATAS warning for same-band tuning
+- absence of PTT, MOX, keying, tuner, power, and Standard-Com-Port authority
 
 Automated tests never open a physical serial device.
 
-## Controlled Live Checkpoint-8 Validation
+## Physical Checkpoint-8 Acceptance
 
-Perform live validation only while parked, with no PTT action and no
-transmission.
+Checkpoint-8 physical acceptance was completed on the installed `anvilmobile`
+Raspberry Pi with the real FT-891 and installed physical controller while
+parked.
 
-### Preparation
+Accepted results include:
 
-1. Confirm the radio uses the Enhanced CAT stable device path.
-2. Confirm the Standard Com Port is not open.
-3. Confirm CAT speed is 38,400 baud.
-4. Confirm Rolling Thunder reports the radio connected with known frequency and
-   mode.
-5. Note the starting frequency and mode.
-6. Do not transmit; receive tuning does not tune the ATAS-120.
+- POTA first press stages only and does not change the radio
+- DX first press stages only and does not change the radio
+- same-band POTA second press tunes the selected receive frequency as expected
+- same-band DX second press tunes the exact selected DX frequency
+- same-band operation produces no false `SET BAND ... TUNE ATAS-120` warning
+- cross-band POTA exact receive frequency/mode tuning succeeds with the manual
+  band/ATAS handoff
+- cross-band DX exact receive frequency/mode tuning succeeds with the manual
+  band/ATAS handoff
+- selection change invalidates staging
+- band-filter change invalidates staging
+- mode-filter change invalidates staging
+- Back cancels staging without tuning
+- radio power loss invalidates staging
+- reconnection does not resurrect or execute an old staged target
+- Enhanced CAT remains the only FT-891 interface owned by Rolling Thunder
+- the Standard TX-capable USB interface remains closed
+- no PTT, MOX, keying, tuner, power, or transmit operation occurs
+- retained POTA/DX data remains usable during a controlled Forge interruption
+- local SQLite logging remains functional while Forge is unavailable
+- the isolated offline-log acceptance test leaves the production contact count
+  unchanged
+- Forge hostname resolution and API access recover after the controlled outage
+- all temporary outage/logging test artifacts are removed afterward
 
-### First-Press Safety Test
-
-For both a POTA target and a DX target:
-
-1. Select the target with the installed controls.
-2. Note the current FT-891 frequency and mode.
-3. Press the encoder once.
-4. Confirm the UI reports the target staged / press again to tune.
-5. Confirm FT-891 frequency and mode have not changed.
-6. Rotate to another row and confirm staging clears.
-
-### Same-Band POTA Test
-
-1. Select a POTA target on the current band.
-2. First press stages only; verify no radio change.
-3. Second press submits the tune.
-4. Confirm no `BS` band selection is required.
-5. Confirm final frequency read-back matches exactly.
-6. Confirm requested receive mode read-back matches.
-7. Confirm no ATAS warning is displayed.
-8. Confirm no transmit action occurs.
-
-### Cross-Band POTA Test
-
-1. Select a POTA target on another supported band.
-2. First press stages only; verify no radio change.
-3. Second press submits the tune.
-4. Confirm band selection occurs before target frequency.
-5. Confirm band, frequency, and mode read-backs succeed.
-6. Confirm the amber ATAS message names the verified target band.
-7. Confirm it expires after the timed status duration.
-8. Confirm no PTT/MOX/keying/tuner/power action occurs.
-
-### Same-Band DX Test
-
-Repeat the same-band procedure using a DX target and verify the exact same
-operator-command, background-tune, and `ReceiveTuningService` path.
-
-### Cross-Band DX Test
-
-Repeat the cross-band procedure using a DX target and verify band-before-
-frequency ordering, exact read-back, timed ATAS warning, and no transmit action.
-
-### Invalidation Tests
-
-With a staged target, separately verify that staging clears on:
-
-- encoder movement
-- provider/context change
-- band-filter change
-- mode-filter change
-- Back/Cancel
-
-Where practical with test state rather than unsafe live manipulation, also verify
-that disconnected/invalid radio state prevents submission.
-
-### Offline Continuity
-
-During a controlled Forge interruption:
-
-1. confirm retained/cached POTA/DX data remains presentable when a valid prior
-   snapshot exists
-2. confirm local contact logging still works
-3. confirm Forge failure does not create any alternate radio-control path
-
-Record the observed starting state, selected target, first-press state, final
-read-back state, ATAS status behavior, and any recovery behavior before issue
-#148 is approved for merge.
+Automatic FT-891 band-state behavior is deliberately not claimed as accepted.
+That future investigation remains tracked in issue #149.
