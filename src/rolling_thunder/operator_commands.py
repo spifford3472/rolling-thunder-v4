@@ -35,6 +35,9 @@ class ContactCommitCommands(Protocol):
 class ActivePanelCommands(Protocol):
     """Context-aware capabilities for the active dashboard panel."""
 
+    def activate_context(self, context_id: ContextId) -> None:
+        """Synchronize panel state after an explicit context change."""
+
     def primary(self) -> bool:
         """Run the active panel's first context-sensitive command."""
 
@@ -106,11 +109,13 @@ class OperatorCommandController:
             )
 
         if action is ControlAction.NEXT_CONTEXT:
-            self._context_navigation.select_next()
+            state = self._context_navigation.select_next()
+            self._activate_context(state.selected)
             return True
 
         if action is ControlAction.HOME_CONTEXT:
-            self._context_navigation.select_home()
+            state = self._context_navigation.select_home()
+            self._activate_context(state.selected)
             return True
 
         if action is ControlAction.PANEL_PRIMARY:
@@ -147,4 +152,9 @@ class OperatorCommandController:
         if context_id is None:
             return False
         self._context_navigation.select(context_id)
+        self._activate_context(context_id)
         return True
+
+    def _activate_context(self, context_id: ContextId) -> None:
+        if self._active_panel is not None:
+            self._active_panel.activate_context(context_id)
