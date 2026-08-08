@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Final, Protocol
 
 from rolling_thunder.map_sources import InstalledMapMetadata, MapPackageStyle
+
+OPERATOR_MINIMUM_MAP_ZOOM: Final = 6
+OPERATOR_MAXIMUM_MAP_ZOOM: Final = 22
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,10 +19,16 @@ class MapZoomBounds:
     maximum: int
 
     def __post_init__(self) -> None:
-        if not 0 <= self.minimum <= 22:
-            raise ValueError("Minimum map zoom must be between 0 and 22.")
-        if not 0 <= self.maximum <= 22:
-            raise ValueError("Maximum map zoom must be between 0 and 22.")
+        if not OPERATOR_MINIMUM_MAP_ZOOM <= self.minimum <= OPERATOR_MAXIMUM_MAP_ZOOM:
+            raise ValueError(
+                "Minimum operator map zoom must be between "
+                f"{OPERATOR_MINIMUM_MAP_ZOOM} and {OPERATOR_MAXIMUM_MAP_ZOOM}."
+            )
+        if not OPERATOR_MINIMUM_MAP_ZOOM <= self.maximum <= OPERATOR_MAXIMUM_MAP_ZOOM:
+            raise ValueError(
+                "Maximum operator map zoom must be between "
+                f"{OPERATOR_MINIMUM_MAP_ZOOM} and {OPERATOR_MAXIMUM_MAP_ZOOM}."
+            )
         if self.minimum > self.maximum:
             raise ValueError("Minimum map zoom must not exceed maximum map zoom.")
 
@@ -37,13 +46,16 @@ def effective_map_zoom_bounds(
     *,
     style: MapPackageStyle,
 ) -> MapZoomBounds:
-    """Use active-style installed metadata when present, otherwise generic XYZ bounds."""
+    """Use installed metadata while enforcing the useful operator minimum zoom."""
     matching = tuple(package for package in packages if package.style is style)
     if not matching:
-        return MapZoomBounds(0, 22)
+        return MapZoomBounds(OPERATOR_MINIMUM_MAP_ZOOM, OPERATOR_MAXIMUM_MAP_ZOOM)
+
+    package_minimum = min(package.min_zoom for package in matching)
+    package_maximum = max(package.max_zoom for package in matching)
     return MapZoomBounds(
-        min(package.min_zoom for package in matching),
-        max(package.max_zoom for package in matching),
+        max(OPERATOR_MINIMUM_MAP_ZOOM, package_minimum),
+        package_maximum,
     )
 
 
