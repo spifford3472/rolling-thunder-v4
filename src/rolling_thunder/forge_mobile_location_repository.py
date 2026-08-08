@@ -242,7 +242,7 @@ class SqliteForgeMobileLocationRepository:
     def _parse_timestamp(cls, value: object) -> datetime:
         if not isinstance(value, str):
             raise TypeError("stored timestamp must be text")
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             raise ValueError("stored Forge mobile-location timestamp must include timezone")
         return parsed.astimezone(UTC)
