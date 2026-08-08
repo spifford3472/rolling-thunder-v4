@@ -43,9 +43,12 @@ from rolling_thunder.pota_tune_execution_controller import (
     PotaTuneIntentExecutor,
 )
 from rolling_thunder.radio import RadioConnectionError
+from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
 from rolling_thunder.shared_pota_contact import shared_pota_spots_for_contact
 from rolling_thunder.shared_spot_panel import SharedSpotPanelController
+from rolling_thunder.shared_spot_tune_status import SharedSpotTuneStatusController
+from rolling_thunder.shared_spot_tuning import SharedSpotTuneController
 from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
@@ -182,13 +185,20 @@ def run_dashboard(
     capture = live_capture if live_capture is not None else mock_transcripts
     context_navigation = ContextNavigationController()
     shared_spot_panel = SharedSpotPanelController(runtime)
+    shared_spot_tuning = SharedSpotTuneController(
+        ReceiveTuningService(runtime.radio)
+    )
+    shared_spot_tune_status = SharedSpotTuneStatusController(
+        shared_spot_tuning,
+        runtime.status_messages,
+    )
     active_panel_commands = SharedSpotActivePanelCommandController(
         context_navigation,
         shared_spot_panel,
         current_frequency=lambda: runtime.latest_radio_state.frequency,
+        shared_tuning=shared_spot_tuning,
     )
-    # Kept only for run_dashboard API compatibility during checkpoint 7.
-    # Shared receive tuning is intentionally deferred to checkpoint 8.
+    # Retained only for run_dashboard API compatibility with legacy callers.
     _ = pota_tune_executor
 
     def capture_state() -> CallsignCaptureState:
@@ -663,6 +673,8 @@ def run_dashboard(
         if control_dispatcher is not None:
             control_dispatcher.dispatch_available()
 
+        shared_spot_tune_status.refresh()
+
         gps_state = runtime.latest_gps_state
         live_map_presentation = live_map_controller.update(gps_state)
         if runtime.live_map is not None and live_map_presentation.position is not None:
@@ -821,10 +833,10 @@ def run_dashboard(
                 footer_lines.append(panel.error_line)
             if panel_state.staged_identity is not None:
                 footer_lines.append(
-                    "STAGED — BACK CANCELS — RECEIVE TUNING ENABLED IN CHECKPOINT 8"
+                    "STAGED — PRESS AGAIN TO TUNE — BACK CANCELS"
                 )
             else:
-                footer_lines.append("SELECT A SPOT — ACTIVATE STAGES ONLY")
+                footer_lines.append("SELECT A SPOT — PRESS TO STAGE")
             pota_footer_text.set("\n".join(footer_lines))
         elif selected_context.selected is ContextId.SETTINGS:
             show_standard_context_body()

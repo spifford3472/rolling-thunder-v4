@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from threading import Event, get_ident
-from time import monotonic, sleep
+from time import monotonic
 
 from rolling_thunder.domain import (
     Frequency,
@@ -57,8 +57,9 @@ def wait_until_complete(
 ) -> None:
     """Wait only for a deterministic test worker to publish completion."""
     deadline = monotonic() + timeout_s
-    while controller.status.tuning and monotonic() < deadline:
-        sleep(0.005)
+    while controller.status.tuning:
+        if monotonic() >= deadline:
+            raise AssertionError("background tune did not complete")
 
     assert not controller.status.tuning
 
