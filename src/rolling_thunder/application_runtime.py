@@ -12,8 +12,8 @@ from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.census_state_outline import CensusStateOutlineProvider
 from rolling_thunder.chrony_clock import ChronyHelperClockSetter
 from rolling_thunder.clock_sync import (
-    ClockSyncState,
     ClockSynchronizationService,
+    ClockSyncState,
     SystemClockSetter,
 )
 from rolling_thunder.config import ApplicationConfig, HardwareAdapterMode
