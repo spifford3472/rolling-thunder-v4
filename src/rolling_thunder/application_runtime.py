@@ -1,13 +1,21 @@
 """Application composition root for the first persistent Pi dashboard."""
 
+import os
 from collections.abc import Callable
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
+from time import monotonic
 
 from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.census_state_outline import CensusStateOutlineProvider
+from rolling_thunder.chrony_clock import ChronyHelperClockSetter
+from rolling_thunder.clock_sync import (
+    ClockSyncState,
+    ClockSynchronizationService,
+    SystemClockSetter,
+)
 from rolling_thunder.config import ApplicationConfig, HardwareAdapterMode
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_qrz_enrichment import ContactQrzEnrichmentService
@@ -60,6 +68,12 @@ from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
 GPSFactory = Callable[..., GPSReceiver]
 RadioFactory = Callable[..., Radio]
+_CLOCK_SYNC_ENV = "ROLLING_THUNDER_GPS_CLOCK_SYNC"
+
+
+def _clock_sync_enabled_from_environment() -> bool:
+    """Enable the production clock-sync path only through an explicit runtime flag."""
+    return os.environ.get(_CLOCK_SYNC_ENV, "").strip() == "1"
 
 
 def _build_serial_radio(
@@ -80,13 +94,14 @@ def _build_serial_radio(
 
 @dataclass
 class ApplicationRuntime:
-    """Own composed radio, GPS, logging, polling, and enrichment lifecycle."""
+    """Own composed radio, GPS, logging, polling, clock, and enrichment lifecycle."""
 
     radio: Radio
     polling: RadioPollingService
     contact_logging: ContactLoggingService
     gps: GPSReceiver | None = None
     gps_polling: GPSPollingService | None = None
+    clock_sync: ClockSynchronizationService | None = None
     live_map: LiveMapService | None = None
     map_zoom_settings: MapZoomSettingsController | None = None
     operator_preferences: OperatorPreferenceService | None = None
@@ -109,6 +124,7 @@ class ApplicationRuntime:
         secrets: ApplicationSecrets | None = None,
         scheduler: PollScheduler | None = None,
         gps_scheduler: PollScheduler | None = None,
+        clock_sync_scheduler: PollScheduler | None = None,
         home_platform_scheduler: PollScheduler | None = None,
         contact_qrz_enrichment_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
@@ -119,6 +135,8 @@ class ApplicationRuntime:
         gps_interval_s: float = 1.0,
         radio_factory: RadioFactory = _build_serial_radio,
         gps_factory: GPSFactory = SerialGPSReceiver,
+        clock_sync_setter: SystemClockSetter | None = None,
+        clock_sync_enabled: bool | None = None,
         home_platform_transport: HttpTransport | None = None,
         network_keepalive_transport: NetworkKeepaliveTransport | None = None,
         forge_transport: HttpTransport | None = None,
@@ -161,6 +179,28 @@ class ApplicationRuntime:
 
         polling_scheduler = scheduler or ThreadingPollScheduler()
         gps_polling_scheduler = gps_scheduler or ThreadingPollScheduler()
+        gps_polling = GPSPollingService(
+            gps,
+            gps_polling_scheduler,
+            interval_s=gps_interval_s,
+        )
+
+        enable_clock_sync = (
+            _clock_sync_enabled_from_environment()
+            if clock_sync_enabled is None
+            else clock_sync_enabled
+        )
+        clock_sync: ClockSynchronizationService | None = None
+        if enable_clock_sync:
+            if config.hardware.effective_gps_mode is not HardwareAdapterMode.REAL:
+                raise ValueError("GPS clock synchronization requires real GPS hardware mode.")
+            clock_sync = ClockSynchronizationService(
+                lambda: gps_polling.latest_state,
+                clock_sync_setter or ChronyHelperClockSetter(),
+                clock_sync_scheduler or ThreadingPollScheduler(),
+                monotonic_clock=monotonic,
+            )
+
         repository = ContactRepository(config.storage.database_path)
         preference_repository = OperatorPreferenceRepository(config.storage.database_path)
         operator_preferences = OperatorPreferenceService(preference_repository)
@@ -326,11 +366,8 @@ class ApplicationRuntime:
                 qrz_fallback_available=qrz_provider is not None,
             ),
             gps=gps,
-            gps_polling=GPSPollingService(
-                gps,
-                gps_polling_scheduler,
-                interval_s=gps_interval_s,
-            ),
+            gps_polling=gps_polling,
+            clock_sync=clock_sync,
             live_map=live_map,
             map_zoom_settings=map_zoom_settings,
             operator_preferences=operator_preferences,
@@ -364,6 +401,13 @@ class ApplicationRuntime:
         return self.gps.get_state()
 
     @property
+    def latest_clock_sync_state(self) -> ClockSyncState | None:
+        """Return the latest GPS-assisted system-clock state without performing I/O."""
+        if self.clock_sync is None:
+            return None
+        return self.clock_sync.latest_state
+
+    @property
     def latest_live_map_state(self) -> LiveMapSnapshot | None:
         """Return the latest immutable map snapshot without performing I/O."""
         if self.live_map is None:
@@ -392,6 +436,8 @@ class ApplicationRuntime:
         state = self.polling.start()
         if self.gps_polling is not None:
             self.gps_polling.start()
+        if self.clock_sync is not None:
+            self.clock_sync.start()
         if self.live_map is not None:
             self.live_map.start()
         if self.home_platform_health is not None:
@@ -432,6 +478,8 @@ class ApplicationRuntime:
             self.live_map.stop()
         if self.operator_preferences is not None:
             self.operator_preferences.stop()
+        if self.clock_sync is not None:
+            self.clock_sync.stop()
         if self.gps_polling is not None:
             self.gps_polling.stop()
         self.polling.stop()
