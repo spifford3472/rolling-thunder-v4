@@ -167,9 +167,27 @@ class SpeechConfig(ConfigurationModel):
 
 
 class ForgeConfig(ConfigurationModel):
-    """Optional Forge service settings."""
+    """Optional Pi-side Forge shared-spot client settings."""
 
+    enabled: bool = False
     api_url: AnyHttpUrl | None = None
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    refresh_interval_s: float = Field(default=60.0, gt=0, le=3_600)
+    refresh_on_start: bool = True
+    max_response_bytes: int = Field(
+        default=1_048_576,
+        ge=1_024,
+        le=16_777_216,
+    )
+
+    @model_validator(mode="after")
+    def validate_enabled_forge(self) -> Self:
+        """Require a Forge API URL only when Pi-side polling is enabled."""
+        if self.enabled and self.api_url is None:
+            raise ValueError(
+                "forge.api_url must be configured when forge.enabled is true"
+            )
+        return self
 
 
 class HomePlatformConfig(ConfigurationModel):
