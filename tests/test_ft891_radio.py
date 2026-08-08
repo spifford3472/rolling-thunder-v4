@@ -23,6 +23,7 @@ class FakeTransport:
         self.replies: dict[bytes, bytes] = {
             b"FA;": b"FA014250000;",
             b"MD0;": b"MD02;",
+            b"MC;": b"MC003;",
         }
         self.open_error: RadioConnectionError | None = None
         self.query_errors: dict[bytes, RadioConnectionError] = {}
@@ -159,16 +160,23 @@ def test_same_band_frequency_and_mode_changes_use_verified_commands() -> None:
     assert state.mode is RadioMode.LSB
 
 
-def test_select_band_sends_band_command_before_verification_reads() -> None:
+def test_select_band_recalls_mapped_memory_before_verification_reads() -> None:
     transport = FakeTransport()
     radio = Ft891Radio(transport, clock=fixed_clock)
     radio.connect()
+    transport.replies[b"MC;"] = b"MC003;"
     transport.replies[b"FA;"] = b"FA007200000;"
     transport.replies[b"MD0;"] = b"MD01;"
 
     state = radio.select_band(RadioBand.BAND_40M)
 
-    assert transport.commands[-3:] == [b"BS03;", b"FA;", b"MD0;"]
+    assert transport.commands[-5:] == [
+        b"MC003;",
+        b"MC;",
+        b"MA;",
+        b"FA;",
+        b"MD0;",
+    ]
     assert state.frequency == Frequency(hz=7_200_000)
     assert state.mode is RadioMode.LSB
 
@@ -188,18 +196,41 @@ def test_cross_band_frequency_change_requires_band_selection() -> None:
     assert transport.commands == commands_before
 
 
-def test_failed_band_verification_stops_after_read_back() -> None:
+def test_wrong_selected_memory_stops_before_memory_to_vfo() -> None:
     transport = FakeTransport()
     radio = Ft891Radio(transport, clock=fixed_clock)
     radio.connect()
+    transport.replies[b"MC;"] = b"MC005;"
 
     with pytest.raises(
         RadioVerificationError,
-        match="requested 40m but read back 20m",
+        match="requested memory 003 for 40m but read back 005",
     ):
         radio.select_band(RadioBand.BAND_40M)
 
-    assert transport.commands[-3:] == [b"BS03;", b"FA;", b"MD0;"]
+    assert transport.commands[-2:] == [b"MC003;", b"MC;"]
+    assert b"MA;" not in transport.commands
+
+
+def test_wrong_recalled_band_fails_after_memory_to_vfo_read_back() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"MC;"] = b"MC003;"
+
+    with pytest.raises(
+        RadioVerificationError,
+        match="requested 40m via memory 003 but recalled 20m",
+    ):
+        radio.select_band(RadioBand.BAND_40M)
+
+    assert transport.commands[-5:] == [
+        b"MC003;",
+        b"MC;",
+        b"MA;",
+        b"FA;",
+        b"MD0;",
+    ]
 
 
 def test_unsupported_60m_band_selection_sends_no_command() -> None:
@@ -210,7 +241,7 @@ def test_unsupported_60m_band_selection_sends_no_command() -> None:
 
     with pytest.raises(
         RadioError,
-        match="band selection does not support 60m",
+        match="memory band selection does not support 60m",
     ):
         radio.select_band(RadioBand.BAND_60M)
 
