@@ -100,22 +100,22 @@ class OperatorCommandController:
             return after != before
 
         if action is ControlAction.COMMIT:
-            state = self._capture.state
-            if state.commit_state != "READY" or not state.pending_callsign:
+            capture_state = self._capture.state
+            if capture_state.commit_state != "READY" or not capture_state.pending_callsign:
                 return False
             return self._contact_commit.start_commit(
-                state.pending_callsign,
+                capture_state.pending_callsign,
                 self._radio_state(),
             )
 
         if action is ControlAction.NEXT_CONTEXT:
-            state = self._context_navigation.select_next()
-            self._activate_context(state.selected)
+            navigation_state = self._context_navigation.select_next()
+            self._activate_context(navigation_state.selected)
             return True
 
         if action is ControlAction.HOME_CONTEXT:
-            state = self._context_navigation.select_home()
-            self._activate_context(state.selected)
+            navigation_state = self._context_navigation.select_home()
+            self._activate_context(navigation_state.selected)
             return True
 
         if action is ControlAction.PANEL_PRIMARY:
