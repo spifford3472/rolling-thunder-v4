@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
@@ -129,6 +129,7 @@ class ClockSynchronizationService:
         retry_window_s: float = 600.0,
         success_interval_s: float = 43_200.0,
         tolerance_s: float = 2.0,
+        maximum_gps_sample_age_s: float = 5.0,
     ) -> None:
         if poll_interval_s <= 0:
             raise ValueError("Clock-sync poll interval must be positive.")
@@ -142,6 +143,8 @@ class ClockSynchronizationService:
             raise ValueError("Clock-sync success interval must exceed the retry window.")
         if tolerance_s < 0:
             raise ValueError("Clock-sync tolerance cannot be negative.")
+        if maximum_gps_sample_age_s <= 0:
+            raise ValueError("Clock-sync maximum GPS sample age must be positive.")
 
         self._gps_state_provider = gps_state_provider
         self._clock_setter = clock_setter
@@ -154,6 +157,7 @@ class ClockSynchronizationService:
         self._retry_window_s = retry_window_s
         self._success_interval_s = success_interval_s
         self._tolerance_s = tolerance_s
+        self._maximum_gps_sample_age_s = maximum_gps_sample_age_s
 
         initial_now = self._monotonic_clock()
         if initial_now < 0:
@@ -208,7 +212,7 @@ class ClockSynchronizationService:
             return
 
         now = self._now()
-        gps_utc = self._trusted_gps_utc()
+        gps_utc = self._trusted_gps_utc(now)
         self._update_trust_window(now, gps_utc)
 
         if self._opportunity_started_s is not None:
@@ -385,11 +389,23 @@ class ClockSynchronizationService:
         if self._trusted_since_s is None:
             self._trusted_since_s = now
 
-    def _trusted_gps_utc(self) -> datetime | None:
+    def _trusted_gps_utc(self, now: float) -> datetime | None:
         state = self._gps_state_provider()
         if state is None or not state.utc.trusted or state.utc.value is None:
             return None
-        return _normalize_utc(state.utc.value, label="Trusted GPS UTC")
+
+        gps_utc = _normalize_utc(state.utc.value, label="Trusted GPS UTC")
+        received_at = state.utc.received_monotonic_s
+        if received_at is None:
+            return gps_utc
+        if received_at > now:
+            return None
+
+        sample_age_s = now - received_at
+        if sample_age_s > self._maximum_gps_sample_age_s:
+            return None
+
+        return gps_utc + timedelta(seconds=sample_age_s)
 
     def _now(self) -> float:
         now = self._monotonic_clock()
