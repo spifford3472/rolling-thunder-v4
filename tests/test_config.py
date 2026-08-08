@@ -72,7 +72,12 @@ def test_models_can_be_constructed_directly() -> None:
     assert config.hardware.effective_gps_mode is HardwareAdapterMode.MOCK
     assert config.hardware.gps_baud_rate == 9_600
     assert config.hardware.gps_timeout_s == 2.0
+    assert config.forge.enabled is False
     assert config.forge.api_url is None
+    assert config.forge.request_timeout_s == 5.0
+    assert config.forge.refresh_interval_s == 60.0
+    assert config.forge.refresh_on_start is True
+    assert config.forge.max_response_bytes == 1_048_576
     assert config.storage.database_path == Path("data/rolling-thunder.db")
 
 
@@ -133,6 +138,62 @@ forge:
     )
 
     with pytest.raises(ConfigurationValidationError, match=r"forge\.api_url"):
+        load_config(path)
+
+
+def test_enabled_forge_requires_api_url(tmp_path: Path) -> None:
+    """Enabled Pi-side Forge polling should require its service URL."""
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+forge:
+  enabled: true
+""",
+    )
+
+    with pytest.raises(ConfigurationValidationError) as error_info:
+        load_config(path)
+
+    message = str(error_info.value)
+    assert "forge" in message
+    assert "api_url" in message
+
+
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [
+        ("request_timeout_s", 0),
+        ("request_timeout_s", 61),
+        ("refresh_interval_s", 0),
+        ("refresh_interval_s", 3601),
+        ("max_response_bytes", 1023),
+        ("max_response_bytes", 16_777_217),
+    ],
+)
+def test_invalid_forge_polling_bounds_are_actionable(
+    tmp_path: Path,
+    setting: str,
+    value: object,
+) -> None:
+    """Unsafe Forge client bounds should identify the affected setting."""
+    path = write_config(
+        tmp_path,
+        f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+forge:
+  {setting}: {value}
+""",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match=rf"forge\.{setting}",
+    ):
         load_config(path)
 
 
