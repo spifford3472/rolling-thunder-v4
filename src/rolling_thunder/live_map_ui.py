@@ -551,7 +551,7 @@ class LiveMapWidgets:
         )
 
         health_right = width - 12
-        health_left = health_right - 360
+        health_left = health_right - 420
         canvas.create_rectangle(
             health_left,
             12,
