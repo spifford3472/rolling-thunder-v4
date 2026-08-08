@@ -2,7 +2,7 @@
 
 **Product Version:** 4.1.0  
 **Document Version:** 4.1.0  
-**Status:** Approved Architecture Baseline through Platform Services and Ring 1  
+**Status:** Approved Architecture Baseline through Platform Services and Ring 1, aligned through checkpoint 8 shared POTA/DX acceptance
 **Milestone:** M1 — Mobile Logging MVP  
 **Target:** Functional end-to-end MVP by Sunday morning  
 **Build Numbering:** Independent from product and document versioning
@@ -44,7 +44,7 @@ This revision replaces the earlier fragmented specification and addendum documen
 - Voice Input as a required MVP capability
 - Station State Service
 - FT-891 radio-control requirements
-- ATAS-120 retune warning behavior
+- ATAS-120 operator-warning behavior
 - Explicit prohibition against PTT and unattended transmit control
 - Basic dashboard and hardware-control model
 - MVP milestone scope
@@ -53,6 +53,10 @@ This revision replaces the earlier fragmented specification and addendum documen
 - Data ownership and service boundaries
 - Failure and graceful-degradation behavior
 - Event and state-flow guidance
+- Checkpoint-8 shared POTA/DX two-press receive-tuning contract
+- Final FT-891 best-effort band-context and manual band/ATAS handoff decision
+- Forge private-network trust-boundary decision
+- Installed hardware and offline-continuity acceptance evidence
 
 ### Preserved from earlier specifications
 
@@ -397,13 +401,14 @@ Own all user-visible operational notifications.
 - GPS alerts
 - Backend connectivity alerts
 - Pending synchronization count
-- ATAS-120 retune warnings
+- Manual band/ATAS-120 warnings
 
 ### Rules
 
 - Other services publish notifications.
 - Other services do not write directly to the ticker or UI.
-- Critical warnings must remain visible until acknowledged or resolved.
+- Safety-critical persistent warnings must remain visible until acknowledged or resolved.
+- Timed operational reminders, including the checkpoint-8 cross-band band/ATAS handoff, may expire automatically when explicitly designed that way.
 - Routine confirmations may expire automatically.
 - Notifications must be concise enough to read while driving.
 
@@ -419,7 +424,7 @@ QSO COMMITTED
 PENDING CALLSIGN CLEARED
 HOME STATION PLATFORM UNAVAILABLE
 3 QSOS WAITING TO SYNC
-BAND CHANGED TO 20 METERS — RETUNE ATAS-120
+SET BAND TO 20 METERS — TUNE ATAS-120
 ```
 
 ---
@@ -741,9 +746,9 @@ CAT serial control.
 
 ### Required Write Capabilities
 
-- Set band
-- Set frequency
-- Set mode
+- Prepare/set band context within the radio adapter's approved capability
+- Set exact receive frequency
+- Set receive mode
 - Refresh state
 - Reconnect after failure
 
@@ -757,49 +762,88 @@ CAT serial control.
 - Unattended operation
 - Antenna control that could imply the station is safe to transmit
 
-### FT-891 Band-Change Requirement
+### FT-891 Cross-Band Receive Requirement
 
-It is critical that a band change be performed correctly before the target frequency is set.
+The FT-891 must be handled conservatively when a requested receive frequency is
+on a different amateur band.
 
-The required logical sequence is:
+Physical checkpoint-8 testing established that CAT regular-memory recall can
+move VFO-A to a programmed band memory, but the radio's operator-visible band
+context is not reliable enough to treat that recall as authoritative automatic
+band selection.
+
+The approved logical sequence is therefore:
 
 ```text
 1. Determine the target band from the requested frequency.
-2. Compare target band with current band.
-3. If changing bands:
-   a. Issue the correct CAT band-selection operation.
-   b. Read back and verify the band.
-   c. Set the target frequency.
-   d. Set the required mode.
-   e. Read back and verify frequency, band, and mode.
-   f. Publish an ATAS-120 retune warning.
+2. Compare target band with the starting radio frequency.
+3. If crossing bands:
+   a. Perform best-effort recall of the operator-programmed regular memory for
+      the target band.
+   b. Verify the selected regular-memory number.
+   c. Copy that memory to VFO-A.
+   d. Verify the recalled frequency belongs to the target amateur band.
+   e. Set and verify the exact target frequency.
+   f. Set and verify the required receive mode.
+   g. Publish the explicit operator handoff:
+      SET BAND TO <BAND> METERS — TUNE ATAS-120
 4. If remaining on the same band:
-   a. Set frequency.
-   b. Set mode if needed.
-   c. Read back and verify.
+   a. Set and verify the exact frequency.
+   b. Set and verify mode if needed.
+   c. Publish no band/ATAS warning.
 ```
 
 ### Verified CAT Decision
 
-The verified FT-891 CAT operations are:
+The checkpoint-8 shared-spot path uses these regular-memory/VFO operations:
 
-- `BSxx;` selects the band.
-- `FA#########;` sets the VFO-A frequency.
-- `MD0x;` sets the receive mode.
+- `MCxxx;` selects regular memory `xxx`.
+- `MC;` reads the selected regular-memory number.
+- `MA;` copies the selected regular memory to VFO-A.
+- `FA#########;` sets the exact VFO-A frequency.
+- `MD0x;` sets the main receive mode.
+- `FA;` and `MD0;` provide exact receive read-back.
 
-`BS` is set-only, so band verification uses `FA;` read-back and the shared frequency-to-band resolver. The FT-891 CAT table has no dedicated 60-meter band-select value, so software selection of 60 meters fails closed.
+The operator-programmed memory mapping is:
+
+```text
+001 160 m
+002 80 m
+003 40 m
+004 30 m
+005 20 m
+006 17 m
+007 15 m
+008 12 m
+009 10 m
+010 6 m
+```
+
+Rolling Thunder does not write these memories. `MW` and `MT` are outside the
+approved path.
+
+The existing `BSxx` encoder is not the authoritative checkpoint-8 band-state
+mechanism. Future investigation of a more authoritative FT-891 CAT/front-panel
+band-context mechanism is tracked in issue #149.
 
 ### ATAS-120 Constraint
 
-The FT-891 CAT command used to tune the ATAS-120 is not considered reliable or usable for this design.
+Rolling Thunder cannot tune or verify the ATAS-120 and cannot reliably prove
+that the FT-891's operator-visible band state changed solely from the tested CAT
+band-context mechanisms.
 
-After any band change, the system must notify the operator:
+After a successful cross-band shared receive tune, the system must notify the
+operator:
 
 ```text
-BAND CHANGED TO <BAND> — RETUNE ATAS-120
+SET BAND TO <BAND> METERS — TUNE ATAS-120
 ```
 
-The system must not imply that the antenna is tuned or safe merely because frequency and mode were set.
+The operator must manually set or confirm the target band and tune the ATAS-120
+before transmitting.
+
+The system must not imply that the band or antenna is safe merely because exact
+receive frequency and mode read-back succeeded.
 
 ### Failure Behavior
 
@@ -1019,17 +1063,32 @@ The immutable QSO ID must be used to make retries idempotent.
 
 # 10. Functional Rings Beyond Ring 1
 
-These rings remain part of the architecture but are intentionally high-level until reviewed.
+These rings remain part of the architecture. Details may evolve as each ring is implemented, but they must continue to consume lower-level services rather than bypass them.
 
 ## 10.1 Ring 2 — Finding Contacts
 
-Planned capabilities:
+Capabilities include or may include:
 
 - POTA spots
 - DX Cluster
 - Callsign lookup and history
 - Favorites
 - GPS-aware repeater discovery
+
+Checkpoint 8 implements the first shared POTA/DX Ring-2 slice:
+
+- provider-neutral immutable POTA/DX snapshots
+- Forge-side POTA and DXSpider aggregation
+- durable Pi retained-cache behavior
+- provider-specific band/mode filters
+- stable identity-based selection
+- exact two-press receive-tuning staging
+- `ReceiveTuningService` as the sole radio authority
+- first press stages only and performs no CAT
+- second press tunes only the exact same still-valid target
+- selection/filter/context/Back/radio invalidation clears staging
+- cross-band success presents `SET BAND TO <BAND> METERS — TUNE ATAS-120`
+- no PTT, MOX, keying, tuner, power, or transmit authority
 
 Ring 2 must consume Platform Services and Station State rather than directly accessing hardware or storage.
 
@@ -1242,8 +1301,8 @@ If backend unavailable:
 ## 14.1 Principles
 
 - Least privilege
-- Encrypted communication
-- Mutual authentication where appropriate
+- Encrypted transport or private secure tunneling where appropriate
+- Authentication where the trust boundary requires it
 - Network segmentation
 - Input validation
 - No remote-originated PTT
@@ -1257,9 +1316,9 @@ If backend unavailable:
 Rolling Thunder may:
 
 - Read radio state
-- Set band
-- Set frequency
-- Set mode
+- Prepare best-effort band context within the approved adapter
+- Set receive frequency
+- Set receive mode
 
 Rolling Thunder may not:
 
@@ -1269,25 +1328,36 @@ Rolling Thunder may not:
 - Expose a remote PTT API
 - Allow an AI system to transmit
 - Permit unattended operation
+- Claim the FT-891 operator-visible band state changed when that cannot be verified
 - Claim the ATAS-120 is tuned without operator action
 
 Hardware PTT remains under direct operator control.
 
 ## 14.3 Network Segmentation
 
-Radio LAN remains isolated from Server LAN.
+Radio LAN remains isolated from Server LAN except through explicitly approved routed paths.
 
-Cross-boundary communication occurs only through authenticated, approved APIs.
+Checkpoint-8 Forge spot access is intentionally supported only on the trusted private RadioLAN/CarLAN-over-WireGuard path. The Forge listener binds to its private RadioLAN address rather than all interfaces.
+
+No public TCP 8766 port forward or UPnP exposure is part of the supported design.
 
 ## 14.4 Home Station Platform Security
 
-- HTTPS or secure VPN transport
-- Validated API requests
-- Device authentication
-- Minimal API scope
-- No inbound command path for PTT
-- Idempotent synchronization
-- Audit-friendly logging without exposing secrets
+The security requirement is proportional to the service boundary:
+
+- use a secure VPN/private routed path and/or HTTPS as appropriate
+- validate API requests and responses
+- keep service scope minimal
+- expose no inbound command path for PTT
+- make synchronization idempotent
+- keep logs audit-friendly without exposing secrets
+- store credentials outside repository YAML
+
+For checkpoint 8 specifically, the Forge POTA/DX read API has no application-layer TLS or authentication. This is an explicit accepted residual risk because the listener is confined to the private routed network and exposes only read-only health/spot data. Anyone who can reach the private listener can read those endpoints.
+
+If Forge is ever exposed outside the trusted private network, TLS and authentication are required before that exposure is supported.
+
+See `docs/FORGE_DEPLOYMENT.md` for the production trust boundary and rollback requirements.
 
 ---
 
@@ -1299,12 +1369,13 @@ Cross-boundary communication occurs only through authenticated, approved APIs.
 | Internet unavailable | Local logging continues |
 | GPS position unavailable | Log without position; use system time if necessary |
 | GPS time unavailable | Use system clock |
-| Radio disconnected | Commit disabled; pending callsign may remain |
+| Radio disconnected | Commit disabled; pending callsign may remain; staged shared-spot action is invalidated |
 | Voice unavailable | Ordinary manual voice-based logging unavailable |
 | Local database unwritable | Commit disabled |
 | ESP32 disconnected | UI remains visible; physical controls unavailable |
-| ATAS tuning unavailable | Warn operator after every band change |
+| Cross-band receive tune completed | Require operator to set/confirm band and tune ATAS-120 before transmit |
 | Synchronization unavailable | Store QSO as `LOCAL_ONLY` |
+| Forge unavailable | Retain last valid shared POTA/DX snapshot when present; local logging continues |
 | UI overlay failure | Logger and status remain available |
 | Individual event handler failure | Isolate failure; do not crash event bus |
 
@@ -1435,7 +1506,7 @@ The system must:
 - Leave the database unchanged after Discard.
 - Continue local logging without Home Station Platform connectivity.
 - Disable Commit when radio state or local storage is invalid.
-- Display a retune warning after band changes.
+- Display the manual band/ATAS warning after successful cross-band shared receive tuning.
 - Avoid all PTT or transmit control.
 
 ## 17.2 Quality Definition
@@ -1492,42 +1563,47 @@ The system must:
 
 ## Acceptance Test 3 — Radio Failure
 
-1. Capture a pending callsign.
-2. Disconnect or disable CAT.
+1. Capture a pending callsign or stage a shared spot.
+2. Disconnect, power off, or otherwise make CAT unavailable in a controlled parked test.
 3. Confirm the UI displays radio unavailability.
-4. Confirm Commit is disabled.
-5. Reconnect CAT.
-6. Confirm valid state returns.
-7. Confirm Commit becomes available again.
+4. Confirm Commit is disabled when required radio state is unavailable.
+5. Confirm any staged shared-spot action is cleared.
+6. Reconnect or power the radio back on.
+7. Confirm valid state returns.
+8. Confirm the old staged target is not resurrected or automatically executed.
 
-**Pass condition:** No incomplete QSO is silently written.
+**Pass condition:** No incomplete QSO or stale staged action is silently executed.
 
-## Acceptance Test 4 — Band Change and ATAS Warning
+## Acceptance Test 4 — Cross-Band Receive Tune and Operator Handoff
 
-1. Begin on one band.
-2. Request a frequency on a different band.
-3. Confirm the FT-891 changes band correctly.
-4. Confirm the frequency is set.
-5. Confirm the mode is set.
-6. Confirm read-back verification succeeds.
+1. Begin on one supported band.
+2. Select a shared POTA or DX target on a different supported band.
+3. Confirm the first activation stages only and changes nothing on the radio.
+4. Activate the same still-valid target a second time.
+5. Confirm best-effort band-context recall occurs before the exact target frequency.
+6. Confirm final receive frequency and mode are correct.
 7. Confirm the status message displays:
 
 ```text
-BAND CHANGED TO <BAND> — RETUNE ATAS-120
+SET BAND TO <BAND> METERS — TUNE ATAS-120
 ```
 
-**Pass condition:** Correct radio state and visible retune warning.
+8. Confirm the Standard TX-capable FT-891 interface remains closed.
+9. Confirm no PTT, MOX, keying, tuner, power, or transmit action occurs.
+
+**Pass condition:** Exact receive frequency/mode are reached, the operator receives the explicit manual band/ATAS handoff, and no claim is made that CAT authoritatively changed the FT-891 band state.
 
 ## Acceptance Test 5 — Offline Operation
 
-1. Disconnect the network or VPN.
-2. Confirm the UI indicates backend unavailability.
-3. Capture a callsign.
-4. Commit the QSO.
-5. Confirm the QSO is stored as `LOCAL_ONLY`.
+1. Disconnect the network or make Forge unavailable in a controlled test.
+2. Confirm the UI indicates backend/shared-data degradation while retaining the last valid POTA/DX snapshot when available.
+3. Capture a callsign or create an isolated test contact through the real local logging path.
+4. Commit/write the local QSO.
+5. Confirm the QSO is stored locally with synchronization pending/local-only semantics as applicable.
 6. Confirm the UI remains responsive.
+7. Confirm restored network/Forge access recovers without losing the local contact.
 
-**Pass condition:** Logging completes without a network.
+**Pass condition:** Logging completes without the network/Forge dependency and retained shared data remains usable when a prior valid snapshot exists.
 
 ## Acceptance Test 6 — GPS Degradation
 
@@ -1688,11 +1764,11 @@ The exact source-control policy can be finalized when the repository is establis
 
 **Reason:** Safety, security, operator control, and avoidance of unattended operation.
 
-## D-010 — ATAS-120 Requires an Operator Warning
+## D-010 — Cross-Band Receive Tuning Requires Manual Band / ATAS Handoff
 
-**Decision:** Every band change triggers a retune reminder.
+**Decision:** After a successful cross-band receive tune, Rolling Thunder displays `SET BAND TO <BAND> METERS — TUNE ATAS-120`.
 
-**Reason:** Software cannot reliably complete or verify the required ATAS tuning operation.
+**Reason:** Exact receive frequency and mode can be verified, but the tested FT-891 CAT mechanisms do not provide sufficiently authoritative operator-visible band-state behavior, and software cannot reliably tune or verify the ATAS-120. The operator therefore retains final responsibility for band confirmation and antenna tuning.
 
 ## D-011 — Log Synchronization Is Deferred but Designed In
 
@@ -1718,13 +1794,24 @@ The exact source-control policy can be finalized when the repository is establis
 
 **Reason:** This validates architecture and operator experience early.
 
+## D-015 — Forge Checkpoint-8 API Uses a Private-Network Trust Boundary
+
+**Decision:** The checkpoint-8 Forge spot API may operate without application-layer TLS/authentication only while confined to the approved private RadioLAN/CarLAN-over-WireGuard path and private bind address.
+
+**Reason:** The service is read-only, exposes no credentials or radio-control commands, and is not publicly reachable. Application-layer TLS/authentication becomes mandatory before any supported exposure outside that trust boundary.
+
+## D-016 — FT-891 Memory Recall Is Best-Effort Band Context Only
+
+**Decision:** Regular-memory selection and memory-to-VFO-A recall may be used before cross-band receive tuning, but successful recall is not treated as authoritative automatic band selection.
+
+**Reason:** Physical testing proved `MC`/`MA` recall changes VFO-A frequency/mode, but the FT-891 operator-visible band context remains insufficiently reliable. Future investigation is parked in issue #149.
+
 ---
 
 # 22. Open Questions
 
 ## Required Before or During M1
 
-- Live hardware acceptance of the verified FT-891 band-first CAT sequence
 - Initial local speech-recognition engine
 - Exact microphone and ALSA/PipeWire device configuration
 - Exact GPS hardware and device path
@@ -1734,6 +1821,12 @@ The exact source-control policy can be finalized when the repository is establis
 - Process model: one application process versus supervised service processes
 - Logging and diagnostics location
 - Systemd startup and recovery behavior
+
+## Resolved or Parked During Later Implementation
+
+- FT-891 shared POTA/DX receive-only hardware acceptance: completed for checkpoint 8
+- Authoritative automatic FT-891 band-context behavior: parked in issue #149 pending future firmware/CAT investigation
+- Forge checkpoint-8 trust boundary: private RadioLAN/CarLAN-over-WireGuard with no public exposure; TLS/auth required if that boundary expands
 
 ## Can Be Deferred
 
@@ -1768,8 +1861,8 @@ Recommended M1 implementation order:
 11. Implement Voice Input.
 12. Implement Device Input and button mappings.
 13. Connect Commit and Discard end-to-end.
-14. Add FT-891 write commands and band-change verification.
-15. Add ATAS warning.
+14. Add FT-891 receive-only write commands and guarded cross-band handling.
+15. Add manual band/ATAS warning after cross-band receive tuning.
 16. Add backend-unavailable state and `LOCAL_ONLY` metadata.
 17. Run acceptance tests.
 18. Document installation and known limitations.
@@ -1788,7 +1881,7 @@ The milestone demonstration should show:
 - The callsign remains pending during a simulated QSO attempt.
 - Commit writes the QSO.
 - Discard writes nothing.
-- A band change produces an ATAS retune warning.
+- A cross-band receive tune produces an explicit manual `SET BAND ... — TUNE ATAS-120` warning.
 - Disconnecting the network does not interrupt logging.
 - Disconnecting the radio disables Commit without crashing.
 - No path exists for PTT or unattended transmission.
@@ -1797,14 +1890,45 @@ A successful demonstration establishes that Platform Services and Ring 1 are suf
 
 ---
 
-# 25. Future Architecture Review Point
+# 25. Checkpoint-8 Physical Acceptance Record
 
-After M1, the next decision is:
+The installed checkpoint-8 shared POTA/DX path has been accepted on `anvilmobile` with the real FT-891 and installed physical controls while parked.
 
-1. Begin Ring 2 implementation, or
-2. Complete deeper Ring 2–4 architecture before adding code.
+Accepted evidence includes:
 
-The decision should be based on whether the M1 implementation reveals changes needed in Platform Services, Station State, the UI contract, or the data model.
+- POTA first press stages only and causes no radio change
+- DX first press stages only and causes no radio change
+- same-band POTA second press tunes as expected without a false band/ATAS warning
+- same-band DX second press tunes the exact selected DX frequency without a false band/ATAS warning
+- cross-band POTA receive frequency/mode tuning succeeds with the manual band/ATAS handoff
+- cross-band DX receive frequency/mode tuning succeeds with the manual band/ATAS handoff
+- selection change invalidates staging
+- band-filter change invalidates staging
+- mode-filter change invalidates staging
+- Back cancels staging without tuning
+- radio power loss invalidates staging
+- reconnection does not resurrect or execute an old staged target
+- Enhanced CAT remains the approved receive-control interface
+- the Standard TX-capable FT-891 USB interface remains closed
+- no PTT, MOX, keying, tuner, power, or transmit action occurs
+- controlled Forge loss retains the last valid POTA/DX snapshot and keeps the UI responsive
+- an isolated temporary SQLite contact can be created and read back while Forge is unavailable
+- the production contact count remains unchanged during that isolated offline test
+- Forge connectivity recovers after the controlled interruption
+- temporary outage/logging artifacts are removed and the repository returns to a clean state
+
+Automatic authoritative FT-891 band-state behavior is deliberately excluded from this acceptance claim and remains tracked in issue #149.
+
+---
+
+# 26. Future Architecture Review Point
+
+After M1 and the implemented checkpoint slices, the next decision is whether to:
+
+1. Begin the next Ring 2/3 implementation slice, or
+2. Complete deeper Ring 2–4 architecture before adding more code.
+
+The decision should be based on whether implementation reveals changes needed in Platform Services, Station State, the UI contract, the data model, or the operator-safety boundaries.
 
 The higher rings should not be allowed to bypass the stable architecture established here.
 

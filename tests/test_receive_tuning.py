@@ -11,7 +11,11 @@ from rolling_thunder.domain import (
     RadioMode,
     RadioState,
 )
-from rolling_thunder.radio import RadioBand, RadioError
+from rolling_thunder.radio import (
+    RadioBand,
+    RadioConnectionError,
+    RadioError,
+)
 from rolling_thunder.receive_tuning import (
     ReceiveTuneRadio,
     ReceiveTuningService,
@@ -21,12 +25,14 @@ from rolling_thunder.receive_tuning import (
 def radio_state(
     frequency_hz: int,
     mode: RadioMode = RadioMode.USB,
+    *,
+    transmitting: bool = False,
 ) -> RadioState:
     return RadioState(
         connection_state=RadioConnectionState.CONNECTED,
         frequency=Frequency(hz=frequency_hz),
         mode=mode,
-        transmitting=False,
+        transmitting=transmitting,
         updated_at=datetime(2026, 8, 2, 18, 0, tzinfo=UTC),
     )
 
@@ -39,9 +45,14 @@ class FakeReceiveTuneRadio:
         *,
         initial_frequency_hz: int = 14_250_000,
         initial_mode: RadioMode = RadioMode.USB,
+        transmitting: bool = False,
         fail_operation: str | None = None,
     ) -> None:
-        self.state = radio_state(initial_frequency_hz, initial_mode)
+        self.state = radio_state(
+            initial_frequency_hz,
+            initial_mode,
+            transmitting=transmitting,
+        )
         self.fail_operation = fail_operation
         self.calls: list[tuple[str, object | None]] = []
 
@@ -198,3 +209,19 @@ def test_mode_failure_occurs_only_after_band_and_frequency() -> None:
         ("set_frequency", Frequency(hz=7_255_000)),
         ("set_mode", RadioMode.LSB),
     ]
+
+
+def test_transmitting_radio_rejects_receive_tuning_before_any_change() -> None:
+    radio = FakeReceiveTuneRadio(transmitting=True)
+    service = ReceiveTuningService(radio)
+
+    with pytest.raises(
+        RadioConnectionError,
+        match="unavailable while the radio is transmitting",
+    ):
+        service.tune(
+            Frequency(hz=7_255_000),
+            RadioMode.LSB,
+        )
+
+    assert radio.calls == [("get_state", None)]

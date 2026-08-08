@@ -2,73 +2,62 @@
 
 ## Purpose
 
-The Forge spot aggregation service is an independent process that prepares
-provider-neutral POTA and DX spot snapshots for later Rolling Thunder clients.
+The Forge spot aggregation service is the independent Rolling Thunder process that prepares provider-neutral POTA and DX spot snapshots for mobile clients.
 
-It is not part of the Raspberry Pi `ApplicationRuntime`. It performs no radio,
-CAT, receive-tuning, contact-logging, Tkinter, or transmit-control work. The Pi
-remains local-first and continues to operate when Forge, WireGuard, cellular
-service, a DX cluster, QRZ, or the public internet is unavailable.
+It is deliberately separate from the Raspberry Pi `ApplicationRuntime`. Forge performs no radio, CAT, receive tuning, contact logging, Tkinter, PTT, MOX, keying, tuner, power, or transmit-control work.
 
-Checkpoint 4 of GitHub issue #129 established the independent process, typed
-configuration, complete provider slices, transactional SQLite snapshots,
-retained startup state, background refresh, and versioned read-only REST.
+The Pi remains local-first. Loss of Forge, WireGuard, cellular service, POTA, DXSpider, QRZ, or the public Internet must not prevent local contact logging or replacement of the Pi's last durable valid shared-spot snapshot with malformed/incomplete data.
 
-Checkpoint 5 adds:
+Checkpoint 8 of GitHub issue #148 completes the production deployment boundary and the Pi-side two-press shared-spot workflow while preserving `ReceiveTuningService` as the sole radio tuning authority.
 
-- a configurable bounded DXSpider snapshot provider
-- deterministic DX line parsing and mode inference
-- optional provider-neutral QRZ name and grid enrichment
-- bounded positive and negative QRZ caching
-- QRZ lookup spacing and per-provider-refresh lookup budgets
-- POTA-only, DX-only, and combined process composition
-- environment-only QRZ credentials
-- combined persistence, startup reconstruction, health, and REST behavior
+## Process boundary
 
-## Process Boundary
-
-The service runs through the separate console entry point:
+The independent console entry point is:
 
 ```text
-rolling-thunder-forge-spots --config config/forge-spots.yaml
+rolling-thunder-forge-spots --config <path>
 ```
 
 The composition root is `rolling_thunder.forge_spot_main`. It owns:
 
 1. Forge YAML loading and validation
 2. environment-backed QRZ secret loading
-3. Forge-specific SQLite initialization
+3. Forge SQLite initialization and retained snapshot reconstruction
 4. enabled POTA and DXSpider provider composition
-5. optional QRZ provider decoration
-6. aggregation and publication state
-7. background refresh scheduling
-8. the read-only HTTP listener
-9. orderly shutdown
+5. optional QRZ enrichment
+6. provider refresh scheduling
+7. transactional aggregate persistence
+8. immutable published aggregation state
+9. the read-only HTTP listener
+10. orderly shutdown
 
-The HTTP listener is started before optional refresh-on-start work. A retained
-SQLite snapshot can therefore be served immediately while the first live
-provider refresh is still running.
+The HTTP listener starts before optional refresh-on-start work. A retained SQLite snapshot can therefore be served immediately while the first live provider refresh is still running.
 
-This process is intentionally not composed into the Pi UI or
-`ApplicationRuntime`.
+Forge is not composed into the Pi UI and is not a radio-control service.
 
 ## Configuration
 
-The safe example is:
+Safe development example:
 
 ```text
 config/forge-spots.example.yaml
 ```
 
-The default production path expected by the console command is:
+Production-oriented example:
 
 ```text
-config/forge-spots.yaml
+config/forge-spots.production.example.yaml
+```
+
+Supported production deployment config:
+
+```text
+/etc/rolling-thunder/forge-spots.yaml
 ```
 
 ### Server, storage, and lifecycle
 
-The typed configuration includes:
+Typed configuration includes:
 
 - `server.bind_host`
 - `server.bind_port`
@@ -77,8 +66,7 @@ The typed configuration includes:
 - `aggregation.refresh_on_start`
 - `logging_level`
 
-The default bind address is `127.0.0.1`. The default database is a relative
-Forge-only path resolved relative to the YAML file.
+Development defaults remain conservative. The accepted production deployment binds only to Forge's RadioLAN address on TCP 8766 and stores durable state outside the application checkout.
 
 ### POTA provider
 
@@ -88,7 +76,11 @@ The `pota` section includes:
 - `base_url`
 - `request_timeout_s`
 
-POTA remains enabled by default.
+`ForgePotaSpotProvider` reuses the typed public POTA HTTP source and maps provider records into shared `SpotRecord` values.
+
+The mapping preserves normalized activator callsign, integer-hertz frequency, normalized radio mode, provider display mode, source timestamp, stable POTA identity, park reference, optional park name/location/grid coordinates, and bounded source comments.
+
+A successful empty provider result is a valid complete empty slice. A nonempty public response that yields no usable typed records is a provider failure rather than silently replacing active data with an empty slice.
 
 ### DXSpider provider
 
@@ -104,131 +96,28 @@ The `dxspider` section includes:
 - `max_spots`
 - `max_spot_age_s`
 
-DXSpider is disabled by default. The initial adapter targets public
-DXSpider-compatible nodes that accept callsign-only login. Password-authenticated
-or private cluster nodes are outside this checkpoint.
+`ForgeDxSpiderSpotProvider` uses one short-lived bounded TCP session per refresh. It does not maintain a second long-lived stream authority.
 
-### QRZ enrichment
+The adapter:
 
-The `qrz` section includes:
+1. opens a bounded TCP connection
+2. applies the configured read timeout
+3. sends the configured amateur callsign
+4. sends `set/page 0`
+5. sends `show/fdx`
+6. sends `bye`
+7. reads under the response-size bound
+8. strips common telnet negotiation sequences
+9. parses a complete bounded response
+10. closes on every success or failure path
 
-- `enabled`
-- `request_timeout_s`
-- `minimum_request_interval_s`
-- `max_lookups_per_refresh`
-- `positive_ttl_s`
-- `negative_ttl_s`
-- `max_cache_entries`
+Complete cluster responses and credentials are not logged.
 
-QRZ enrichment is disabled by default.
+A clean response with no `DX de` lines is a valid empty slice. A response containing spot-like lines but no usable records is treated as a typed provider failure.
 
-Credentials are never stored in YAML. When QRZ enrichment is enabled, both of
-the existing environment variables are required at startup:
+## DX normalization and mode resolution
 
-```text
-ROLLING_THUNDER_QRZ_USERNAME
-ROLLING_THUNDER_QRZ_PASSWORD
-```
-
-Missing or incomplete enabled QRZ credentials are a configuration error. QRZ
-runtime outages after startup are nonfatal enrichment degradation.
-
-### Validation
-
-Configuration rejects:
-
-- blank bind or DXSpider hosts
-- ports outside 1 through 65535
-- blank or current-directory-only database paths
-- invalid DXSpider login callsigns
-- nonpositive or excessive refresh and network timeouts
-- unsafe response-byte, spot-count, or spot-age bounds
-- malformed public HTTP URLs
-- invalid QRZ cache, TTL, spacing, or refresh-budget values
-- unsupported logging levels
-- unknown keys
-
-At least one of POTA or DXSpider must be enabled. POTA-only, DX-only, and
-combined operation are valid.
-
-## Provider Boundary
-
-`ForgeSpotProvider` is a synchronous provider-neutral protocol used only by the
-Forge refresh core. A provider exposes:
-
-- one `SpotProvider` family
-- one `fetch_slice()` operation
-- a complete immutable `ForgeProviderSlice`
-- a timezone-aware fetch timestamp
-- typed connection, response, and normalization failures
-
-A provider slice contains one provider family only. Its records must already be
-canonical, duplicate-free, and deterministically ordered through the shared spot
-domain.
-
-`MockForgeSpotProvider` provides deterministic provider behavior for tests and
-development.
-
-## POTA Provider
-
-`ForgePotaSpotProvider` reuses the existing typed public POTA HTTP source and
-maps `PotaSpot` records into provider-neutral `SpotRecord` values.
-
-The mapping preserves:
-
-- normalized activator callsign
-- integer-hertz frequency
-- normalized radio mode
-- provider display mode
-- provider source timestamp
-- stable POTA identity
-- park reference
-- optional park name
-- optional location code
-- optional latitude and longitude
-- bounded comments as source metadata
-
-A successful empty public provider result is a valid complete empty slice. A
-nonempty public response that produces no usable typed records is treated as a
-provider failure rather than silently activating an empty result.
-
-## DXSpider Snapshot Session
-
-`ForgeDxSpiderSpotProvider` preserves the complete-slice boundary by opening one
-short-lived bounded TCP session per DX refresh. It does not maintain a long-lived
-stream or a second independent spot authority.
-
-The adapter performs this sequence:
-
-1. open a standard-library TCP connection under the configured connect timeout
-2. apply the configured read timeout
-3. send the configured amateur callsign
-4. send `set/page 0`
-5. send `show/fdx`
-6. send `bye`
-7. read until orderly server closure under the response-byte limit
-8. strip common telnet negotiation sequences
-9. parse the complete bounded response
-10. close the session on every success or failure path
-
-Banners, prompts, and unrelated cluster lines are ignored. Complete server
-responses and credentials are never logged.
-
-The response is bounded by:
-
-- connect timeout
-- read timeout
-- maximum response bytes
-- maximum parsed spots
-- maximum accepted spot age
-
-A clean response with no `DX de` lines is a valid empty DX slice. A response
-containing spot-like lines but no usable records is a typed provider failure.
-
-## DX Parsing and Mode Resolution
-
-Canonical realtime records beginning with `DX de` are normalized into shared
-`SpotRecord` values.
+Canonical realtime DX records are normalized into shared `SpotRecord` values.
 
 The parser preserves:
 
@@ -236,39 +125,30 @@ The parser preserves:
 - stable DX identity based on callsign and integer frequency
 - exact decimal-kilohertz to integer-hertz conversion
 - UTC source time reconstructed from `HHMMZ`
-- deterministic previous-day rollover around UTC midnight
-- spotter callsign as bounded source metadata
-- bounded provider comment as source metadata
-- mode-resolution provenance as bounded source metadata
+- deterministic previous-day rollover near UTC midnight
+- bounded spotter metadata
+- bounded provider comment
+- mode-resolution provenance
 
 DX records contain no POTA metadata.
 
 Mode resolution is deterministic:
 
 1. recognized explicit comment tokens take precedence
-2. `FT8`, `FT4`, `RTTY`, `PSK`, `JT65`, `JS8`, and `DATA` map to `DATA`
-3. explicit `SSB` maps to LSB below 10 MHz and USB at or above 10 MHz
+2. `FT8`, `FT4`, `RTTY`, `PSK`, `JT65`, `JS8`, and `DATA` normalize to data-family modes
+3. explicit `SSB` resolves to LSB below 10 MHz and USB at or above 10 MHz
 4. explicit `CW`, `AM`, `FM`, `LSB`, and `USB` map directly
-5. otherwise a documented amateur-band and sub-band fallback is used
+5. otherwise the documented amateur-band/sub-band fallback is used
 
-The shared normalized radio mode drives future action staging. The original or
-inferred display mode remains available for presentation, and metadata records
-whether the result came from an explicit token or fallback.
+The normalized mode is action-critical on the Pi. Provider display mode remains available for presentation.
 
-This checkpoint does not tune a radio from a DX spot.
+## QRZ enrichment
 
-## Forge-Side QRZ Enrichment
+Forge-side QRZ enrichment is optional.
 
-`ForgeQrzEnricher` runs after a provider returns a complete validated slice and
-before aggregation persistence. `ForgeQrzEnrichedSpotProvider` applies the
-enricher without changing the underlying provider family or failure semantics.
+QRZ may fill only missing operator name and Maidenhead grid values. Provider values always win.
 
-QRZ may fill only missing:
-
-- operator name
-- Maidenhead grid
-
-Provider values always win. Enrichment never changes:
+Enrichment never changes:
 
 - provider
 - stable identity
@@ -280,157 +160,121 @@ Provider values always win. Enrichment never changes:
 - source metadata
 - POTA park metadata
 
-Lookups are deduplicated by normalized callsign within each provider refresh.
-The existing QRZ XML adapter supplies authenticated sessions, bounded HTTP
-timeouts, session renewal, not-found handling, name normalization, and validated
-optional grids.
+The cache is thread-safe and bounded, with normalized callsign keys, positive and negative entries, independent TTLs, deterministic maximum size, and LRU-style eviction.
 
-### Cache and rate limits
+Live lookups obey the configured minimum spacing and lookup budget per provider refresh. Cache hits do not consume live-lookup spacing.
 
-The thread-safe in-memory QRZ cache provides:
+QRZ lookup failures do not convert provider success into provider failure. The complete original provider slice remains usable.
 
-- normalized callsign keys
-- positive entries for usable profiles
-- negative entries for not-found results
-- independent positive and negative TTLs
-- deterministic maximum size
-- LRU-style eviction
-- no credentials, passwords, or session keys in cache values
+### Secret boundary
 
-Cache hits do not consume live-lookup spacing. Live calls obey the configured
-minimum interval and maximum lookup count for each provider refresh. When the
-budget is exhausted, remaining records stay valid and unenriched.
+Credentials are never stored in YAML. When QRZ enrichment is enabled, both environment variables are required:
 
-### Failure behavior
+```text
+ROLLING_THUNDER_QRZ_USERNAME
+ROLLING_THUNDER_QRZ_PASSWORD
+```
 
-QRZ connection, timeout, authentication, response, validation, not-found, and
-other lookup failures do not convert provider success into provider failure.
-The original complete provider slice remains usable. Per-attempt diagnostics are
-bounded and contain counts, budget state, and at most one bounded error string;
-they contain no credentials or session keys.
+The production environment file is:
 
-The Pi-side contact QRZ fallback remains independent and unchanged.
+```text
+/etc/rolling-thunder/forge-spots.env
+```
 
-## Persistence-Before-Activation Rule
+Missing enabled QRZ credentials are a startup configuration error. Runtime QRZ outages after startup are nonfatal enrichment degradation.
 
-A provider refresh follows this order:
+## Provider and aggregation boundary
+
+`ForgeSpotProvider` is a synchronous provider-neutral protocol used only by the Forge refresh core.
+
+A provider returns one complete immutable provider slice. Records must already be canonical, duplicate-free, provider-consistent, and deterministically ordered.
+
+A successful refresh follows this order:
 
 1. fetch one complete provider slice outside request handling
-2. validate and canonicalize the provider slice
+2. validate and canonicalize the slice
 3. apply bounded best-effort QRZ enrichment when enabled
-4. combine it with previously active slices from other providers
+4. combine it with retained active slices from other providers
 5. build and validate one complete candidate `SpotSnapshot`
-6. transactionally persist the complete snapshot and provider-slice metadata
-7. receive the new durable revision from the repository
-8. atomically publish the new immutable aggregation state
+6. transactionally persist the candidate and provider metadata
+7. receive the new durable revision
+8. atomically publish the immutable aggregation state
 
-The in-memory active snapshot is never changed before persistence succeeds.
+The in-memory active snapshot is never replaced before persistence succeeds.
 
-If provider fetch, parsing, normalization, candidate validation, or persistence
-fails:
+If fetch, parsing, normalization, validation, or persistence fails:
 
-- the previous slice for that provider remains active
+- the previous active slice for that provider remains active
 - successful slices from other providers remain active
-- the previous aggregate snapshot remains active until a durable replacement
-- the previous revision remains active on the failed attempt
-- health records the provider-specific failure
+- the previous aggregate snapshot remains active until a durable replacement exists
+- the prior revision remains active for the failed attempt
+- provider health records the failure
 - future scheduled refreshes continue
 
-A QRZ-only failure does not trigger this provider-failure path.
+One provider's success never hides another provider's failure.
 
-## Dedicated SQLite Storage
+## Dedicated SQLite storage
 
-`SqliteForgeSnapshotRepository` owns a Forge-specific SQLite schema. It must use
-a database separate from the Pi contact database.
+`SqliteForgeSnapshotRepository` owns a Forge-specific SQLite schema separate from the Pi contact database.
 
-The repository refuses to initialize Forge snapshot tables in a database that
-appears to contain the Rolling Thunder application contact schema.
+The repository refuses to initialize Forge snapshot tables in a database that appears to contain the Rolling Thunder application contact schema.
 
-One transaction replaces:
+One transaction replaces aggregate metadata, revision, provider fetch metadata, and all canonical spot rows.
 
-- aggregate snapshot metadata
-- monotonically increasing revision
-- provider fetch timestamps
-- all canonical spot rows
+Loading reconstructs provider slices and the complete `SpotSnapshot`, then revalidates identities, ordering, duplicate collapse, timestamps, and provider composition before publishing retained state.
 
-Stored rows preserve:
+Production database:
 
-- stable provider identity
-- normalized callsign
-- optional enriched or provider-supplied operator name
-- optional enriched or provider-supplied grid
-- integer frequency
-- normalized radio mode
-- display mode
-- UTC source timestamp
-- bounded source metadata
-- optional POTA park metadata
+```text
+/var/lib/rolling-thunder/forge-spots.db
+```
 
-Loading reconstructs provider slices and the complete `SpotSnapshot`, then
-revalidates canonical ordering, duplicate collapse, identities, timestamps, and
-provider composition before returning durable state.
+A restored or migrated database must pass SQLite integrity validation. Live databases must be copied with SQLite backup semantics rather than an uncoordinated file copy.
 
-Existing checkpoint-4 databases use the same canonical spot fields and require
-no destructive migration for DX or QRZ data.
+## Startup and degradation behavior
 
-## Startup and Degradation Behavior
-
-On process composition:
+On startup:
 
 - the last durable snapshot is loaded and revalidated when available
-- its revision and complete provider slices become the initial published state
-- retained provider health is marked degraded until a live refresh succeeds
-- the HTTP listener can serve retained combined POTA and DX state immediately
-- successful live refreshes clear degradation for their provider independently
+- its revision/provider slices become the initial published state
+- retained provider health begins degraded until live refresh succeeds
+- the REST API can serve retained data immediately
+- each provider independently becomes healthy after a successful live refresh
 
-When no durable snapshot exists, the process starts with revision `0` and an
-empty snapshot.
+If no durable snapshot exists, the process starts with revision 0 and an empty snapshot.
 
-If DX fails while POTA succeeds, the prior DX slice remains active and DX health
-is degraded or unavailable while POTA health is healthy. The reverse is also
-true. One provider's success never hides the other provider's failure.
+If DX fails while POTA succeeds, retained DX data remains active when available and DX is degraded/unavailable while POTA can remain healthy. The reverse is also true.
 
-A storage-load error is exposed through bounded health state instead of
-silently publishing malformed data. Repository initialization failure remains a
-process-start failure because no safe durability boundary exists.
+A storage-load error is exposed through health state. Repository initialization failure remains a process-start failure because there is no safe durability boundary.
 
-## Refresh Lifecycle
+## Refresh lifecycle
 
-`ForgeSpotPollingService` owns the configured refresh lifecycle.
+`ForgeSpotPollingService` owns the refresh lifecycle and supports:
 
-It provides:
-
-- a required positive interval
+- positive bounded refresh interval
 - optional immediate refresh on start
-- injected scheduling for deterministic tests
-- explicit start and stop
+- deterministic injected scheduling in tests
+- explicit start/stop
 - cancellation of future callbacks
-- no real sleeps in unit tests
-- continued future attempts after provider or persistence failures
+- continued attempts after provider/persistence failures
 
-Providers refresh in deterministic provider order. The aggregation service
-serializes refreshes. If a refresh is already executing, an overlapping request
-returns the currently published state rather than starting another provider
-operation.
+Providers refresh in deterministic provider order. Aggregation refreshes are serialized. If a refresh is already running, an overlapping request observes current published state rather than starting a second provider operation.
 
-The production `ThreadedPollScheduler` uses a cancellable daemon thread. Its
-callback boundary catches and logs unexpected exceptions so one unanticipated
-failure cannot silently terminate future refresh attempts.
+The production scheduler uses a cancellable daemon thread and catches/logs unexpected callback exceptions so one unanticipated provider failure cannot silently terminate future refresh attempts.
 
-## Published Immutable State
+## Published immutable state
 
-The aggregation service publishes one immutable `ForgeAggregationState` behind
-a small lock.
+The aggregation service publishes one immutable `ForgeAggregationState` behind a small lock.
 
 It contains:
 
 - snapshot revision
 - complete canonical `SpotSnapshot`
-- deterministic provider-health entries for all enabled provider families
+- deterministic health entries for all enabled providers
 - optional startup-storage error
 - optional persistence error
 
-Provider health contains:
+Provider health includes:
 
 - provider family
 - `starting`, `healthy`, `degraded`, or `unavailable`
@@ -439,8 +283,7 @@ Provider health contains:
 - last success timestamp
 - bounded last error
 
-A failed provider with a retained active slice is `degraded`. A failed provider
-without retained data is `unavailable`.
+A failed provider with retained active data is degraded. A failed provider without retained data is unavailable.
 
 ## Versioned REST API
 
@@ -451,149 +294,166 @@ GET /api/v1/health
 GET /api/v1/spots
 ```
 
-Both return deterministic UTF-8 JSON with:
+Responses are deterministic UTF-8 JSON with `Cache-Control: no-store`.
 
-```text
-Content-Type: application/json; charset=utf-8
-Cache-Control: no-store
-```
+Unknown paths return 404. Unsupported methods return 405 with `Allow: GET`.
 
-Unknown paths return `404`. Unsupported methods return `405` with
-`Allow: GET`.
-
-Request handlers only read the already-published immutable state. They never:
+Request handlers only read already-published immutable state. They never:
 
 - contact POTA, DXSpider, or QRZ
 - schedule a refresh
 - write SQLite
-- access radio or hardware
+- access radio/hardware
 - perform CAT or tuning
 
 ### Health response
 
-`GET /api/v1/health` contains:
+The health endpoint exposes API schema version, service status, revision, generation time, active spot count, provider health, startup-storage error, and persistence error.
 
-- `api_schema_version`
-- `service_status`
-- `snapshot_revision`
-- `snapshot_generated_at`
-- `active_spot_count`
-- deterministic health entries for every enabled provider
-- `startup_storage_error`
-- `persistence_error`
+Overall status is:
 
-Overall service status is:
-
-- `starting` when all configured providers are starting and storage is clean
-- `healthy` when all configured providers are healthy and storage is clean
-- `unavailable` when no durable/live data exists and all configured providers
-  are unavailable
+- `starting` while configured providers are starting and storage is clean
+- `healthy` when configured providers are healthy and storage is clean
+- `unavailable` when no durable/live data exists and providers are unavailable
 - `degraded` for retained data, partial provider failure, or storage errors
 
 ### Spot response
 
-`GET /api/v1/spots` contains:
+The spot endpoint exposes API schema version, snapshot revision, generation time, the complete canonical combined POTA/DX spot set, and provider health/age metadata.
 
-- `api_schema_version`
-- `snapshot_revision`
-- `generated_at`
-- complete canonical combined POTA and DX `spots`
-- provider health and age metadata
+Frequencies are serialized as integer hertz. Stable identity serialization distinguishes POTA and DX records.
 
-Shared value-type serialization is preserved. Frequencies are serialized as
-plain integer hertz, not nested objects or floating-point kilohertz. Stable
-identity serialization distinguishes `pota` and `dx` records.
+## Logging and diagnostics
 
-## Logging and Secret Boundaries
+The process logs lifecycle, HTTP access, provider, validation, persistence, and scheduler failures through `rolling_thunder.forge_spots`.
 
-The process logs lifecycle, HTTP access, provider, validation, persistence, and
-scheduler failures through the `rolling_thunder.forge_spots` logger.
+Externally derived error strings are bounded. The service does not log complete provider responses, QRZ passwords, QRZ usernames as secrets, session keys, or authentication responses.
 
-Externally derived error text exposed in state is trimmed and bounded. The
-service does not log:
+Production logging is captured by journald through systemd.
 
-- complete provider responses
-- QRZ credentials or passwords
-- QRZ session keys
-- authentication responses
+See `docs/FORGE_DEPLOYMENT.md` for lifecycle and diagnostic commands.
 
-Provider and persistence failures do not replace active data. Unsafe process
-configuration or repository initialization prevents startup and returns a
-nonzero exit code.
+## Production deployment
 
-## Security Posture
+Checkpoint 8 formalizes the supported Forge deployment.
 
-The default HTTP bind is loopback-only. This checkpoint does not provide or
-claim:
+Production runs:
 
-- public network exposure
-- TLS
-- authentication for the Forge REST API
-- reverse-proxy configuration
-- firewall rules
-- systemd installation
-- production deployment hardening
+- on host `forge`
+- as system account `rollingthunder`
+- from `/opt/rolling-thunder-forge`
+- with venv `/opt/rolling-thunder-forge/.venv`
+- with config `/etc/rolling-thunder/forge-spots.yaml`
+- with database `/var/lib/rolling-thunder/forge-spots.db`
+- through `rolling-thunder-forge-spots.service`
+- on `192.168.9.170:8766`
 
-Those concerns remain a separate deployment checkpoint before the API is
-exposed beyond a trusted local boundary.
+The service uses `Restart=on-failure` and is enabled at boot after production acceptance.
 
-## Explicit Radio-Safety Boundary
+The complete installation, update, smoke-test, lifecycle, security, recovery, and rollback procedure is authoritative in:
 
-The Forge spot service performs no:
+```text
+docs/FORGE_DEPLOYMENT.md
+```
 
-- CAT commands
-- radio connection or polling
-- band, frequency, or mode changes
-- receive tuning
-- PTT, MOX, keying, tuner, power, or transmission control
-- Tkinter work
-- contact logging
-- modification of the Pi contact database
+## Security posture
 
-`ReceiveTuningService` remains the only receive-tuning authority in the Pi
-application.
+The REST API does not currently provide TLS or application-layer authentication.
 
-## Scope Exclusions
+That is an explicit checkpoint-8 trust-boundary decision, not an implied security feature. Production binds only to the Forge RadioLAN address rather than every interface and is intended to be reachable only through the trusted private routed RadioLAN/CarLAN-over-WireGuard environment.
 
-Checkpoint 5 intentionally excludes:
+The deployment assumes:
 
-- long-lived DXSpider streaming
-- private or password-authenticated DX cluster nodes
-- Pi Forge HTTP client
-- Pi durable shared-spot snapshots
-- migration of the running POTA panel
-- a unified POTA/DX panel
-- two-press runtime tuning
-- authentication, TLS, reverse proxy, firewall, systemd, or deployment
-- Wavelog changes
-- dashboard or live-map changes
-- any radio or transmit authority
+- no public Internet port forwarding to TCP 8766
+- no UPnP exposure
+- OPNsense remains the routed security boundary
+- mobile access occurs through WireGuard
+- intended private networks only can reach the Forge API
 
-## Automated Validation
+Anyone who can reach TCP 8766 can read the health and spot endpoints. The API exposes no radio-control operations or credentials, but the lack of API authentication is an explicit residual risk.
 
-The checkpoint is covered without public internet, real credentials, hardware,
-production paths, or real sleeps.
+If the API is ever exposed outside the trusted private network, TLS and authentication must be implemented first.
 
-Tests cover:
+## Pi client and offline behavior
 
-- typed POTA, DXSpider, and QRZ configuration
-- telnet negotiation stripping
-- bounded fake DXSpider login and command exchange
-- connect/read timeout and response-size failures
-- exact DX frequency conversion and UTC rollover
-- malformed line rejection
-- deterministic mode resolution and provenance
-- valid empty and unusable nonempty DX responses
-- canonical DX identity and duplicate collapse
-- positive and negative QRZ caches
-- independent TTL expiration and deterministic eviction
-- QRZ lookup spacing and refresh budgets
-- duplicate callsign lookup collapse
-- provider-value precedence
-- QRZ failure preserving provider success
-- POTA-only, DX-only, and combined composition
-- transactional combined snapshot persistence
-- retained enriched startup reconstruction
-- provider-specific degradation and retained slices
-- deterministic combined REST serialization
-- request handlers performing no provider, enrichment, or storage work
+When Forge mode is enabled, the Pi polls Forge rather than also establishing a second direct public POTA authority.
+
+The Pi validates the complete response before atomically replacing its shared-spot snapshot and persists the latest valid snapshot locally.
+
+If Forge or transport fails, the Pi retains the previous durable valid snapshot and reports truthful age/error state. Local contact logging remains authoritative and available.
+
+## Shared POTA/DX operator workflow
+
+Checkpoint 8 completes the shared Pi-side operator workflow for both provider families.
+
+POTA and DX use the same shared selection/staging architecture with independent provider filter state.
+
+Supported mobile band filters include 80, 40, 20, 17, 15, 12, and 10 meters. Entering a provider context prefers the current supported FT-891 band and otherwise falls back safely to 20 meters.
+
+Supported mode groups are SSB, CW, FT4, FT8, DATA, and ALL. DX initially uses ALL mode while preserving its own filter state independently from POTA.
+
+Every action-critical context/filter/selection mutation clears staging when the staged exact target is no longer valid. A neighboring row is never substituted automatically.
+
+### Two-press contract
+
+The operator workflow is:
+
+```text
+navigate / selection changes
+    -> staging clears
+
+first activation
+    -> stage exact identity/callsign/frequency/mode
+    -> no CAT command
+
+second activation of the same still-valid target
+    -> submit exact staged action
+    -> ReceiveTuningService performs ordered receive tuning
+    -> staging clears on success or failure
+```
+
+Staging is invalidated by selection changes, provider/context changes, band/mode filters, identity disappearance, action-critical mutation, Back/Cancel, unusable radio state, tuning success, or tuning failure.
+
+## Explicit radio-safety boundary
+
+Forge performs no CAT and has no receive or transmit authority.
+
+On the Pi, `ReceiveTuningService` remains the sole receive-tuning authority. Shared spot UI/controllers, physical-control adapters, and background boundaries may stage/submit an exact receive action but may not issue CAT directly.
+
+The service/workflow must not add:
+
+- PTT or MOX
+- keying
+- tuner control
+- power control
+- transmit automation
+- unattended tuning
+- voice-originated tuning
+
+Receive tuning preserves the existing band-before-frequency ordering and ATAS warning behavior.
+
+## Checkpoint-8 production acceptance
+
+The first checkpoint-8 production deployment was accepted on Forge from application commit:
+
+```text
+9300cbc3cd8aa4335ca6071d6d8cfa80d267b8c0
+```
+
+Infrastructure acceptance demonstrated:
+
+- dedicated `rollingthunder` process identity
+- working directory `/opt/rolling-thunder-forge`
+- production config `/etc/rolling-thunder/forge-spots.yaml`
+- persistent SQLite integrity validation
+- side-by-side smoke execution on an isolated port/database
+- successful live DXSpider refresh
+- successful live POTA refresh
+- healthy production REST on `192.168.9.170:8766`
+- old interactive `geoff` process retired
+- `Restart=on-failure`
+- five-second restart delay
+- service active and enabled at boot
+- real Pi requests reaching `/api/v1/spots` over the private routed path
+
+Final FT-891 end-to-end operator acceptance remains a separate checkpoint-8 gate until the physical two-press receive-only bench is completed.

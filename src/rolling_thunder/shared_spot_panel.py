@@ -21,7 +21,11 @@ from rolling_thunder.spot_domain import (
     SpotSourceMetadataItem,
     format_optional_spot_value,
 )
-from rolling_thunder.spot_selection import SpotSelectionController, SpotSelectionState
+from rolling_thunder.spot_selection import (
+    SpotSelectionController,
+    SpotSelectionState,
+    StagedSpotAction,
+)
 
 Clock = Callable[[], datetime]
 _DEFAULT_POTA_BAND = RadioBand.BAND_20M
@@ -143,6 +147,8 @@ class SharedSpotPanelState:
     pota_band: RadioBand
     pota_mode_filter: SharedSpotModeFilter
     pota_maximum_age: timedelta
+    dx_band: RadioBand
+    dx_mode_filter: SharedSpotModeFilter
 
     @property
     def source_enabled(self) -> bool:
@@ -171,7 +177,10 @@ class SharedSpotPanelState:
     def filter_label(self) -> str:
         """Return the provider-appropriate compact filter summary."""
         if self.provider is SpotProvider.DX:
-            return "DX    ALL BANDS / ALL MODES"
+            return (
+                "DX    BAND: "
+                f"{self.dx_band.value.removesuffix('m')}    MODE: {self.dx_mode_filter.value}"
+            )
         return (
             "POTA    BAND: "
             f"{self.pota_band.value.removesuffix('m')}    MODE: {self.pota_mode_filter.value}"
@@ -196,6 +205,8 @@ class SharedSpotPanelController:
         self._pota_band = _DEFAULT_POTA_BAND
         self._pota_mode_filter = SharedSpotModeFilter.SSB
         self._pota_maximum_age = maximum_pota_age
+        self._dx_band = _DEFAULT_POTA_BAND
+        self._dx_mode_filter = SharedSpotModeFilter.ALL
         now = self._aware_now()
         self._selection = SpotSelectionController(SpotSnapshot.empty(generated_at=now))
 
@@ -213,6 +224,11 @@ class SharedSpotPanelController:
     def staged_identity(self) -> SpotIdentity | None:
         """Return the currently valid staged identity after source synchronization."""
         return self._selection_state().staged_identity
+
+    @property
+    def staged_action(self) -> StagedSpotAction | None:
+        """Return the exact still-valid staged receive action."""
+        return self._selection_state().staged_action
 
     @property
     def selected_spot(self) -> SpotRecord | None:
@@ -254,6 +270,8 @@ class SharedSpotPanelController:
             pota_band=self._pota_band,
             pota_mode_filter=self._pota_mode_filter,
             pota_maximum_age=self._pota_maximum_age,
+            dx_band=self._dx_band,
+            dx_mode_filter=self._dx_mode_filter,
         )
 
     def activate(
@@ -262,12 +280,21 @@ class SharedSpotPanelController:
         *,
         current_frequency: Frequency | None = None,
     ) -> SharedSpotPanelState:
-        """Activate one provider view and apply the POTA current-band default."""
+        """Activate one provider view and apply its current-band default."""
         if provider is not self._provider:
             self._selection.invalidate_context()
         self._provider = provider
+
+        band = self._supported_shared_band(current_frequency)
         if provider is SpotProvider.POTA:
-            self._pota_band = self._supported_pota_band(current_frequency)
+            if band is not self._pota_band:
+                self._selection.cancel_staging()
+            self._pota_band = band
+        else:
+            if band is not self._dx_band:
+                self._selection.cancel_staging()
+            self._dx_band = band
+
         return self.state
 
     def select_next(self) -> SharedSpotPanelState:
@@ -298,34 +325,79 @@ class SharedSpotPanelController:
         self._selection.cancel_staging()
         return self.state
 
+    def invalidate_radio(self) -> SharedSpotPanelState:
+        """Invalidate staging when the latest radio state is unsafe for tuning."""
+        self._selection.invalidate_radio()
+        return self.state
+
     def previous_pota_band(self) -> SharedSpotPanelState:
-        """Cycle to the previous legacy mobile POTA band."""
+        """Cycle to the previous supported POTA band and invalidate staging."""
+        self._selection.cancel_staging()
         current = _POTA_BANDS.index(self._pota_band)
         self._pota_band = _POTA_BANDS[(current - 1) % len(_POTA_BANDS)]
         return self.state
 
     def next_pota_band(self) -> SharedSpotPanelState:
-        """Cycle to the next legacy mobile POTA band."""
+        """Cycle to the next supported POTA band and invalidate staging."""
+        self._selection.cancel_staging()
         current = _POTA_BANDS.index(self._pota_band)
         self._pota_band = _POTA_BANDS[(current + 1) % len(_POTA_BANDS)]
         return self.state
 
     def previous_pota_mode(self) -> SharedSpotPanelState:
-        """Cycle to the previous legacy mobile POTA mode group."""
+        """Cycle to the previous POTA mode group and invalidate staging."""
+        self._selection.cancel_staging()
         current = _POTA_MODES.index(self._pota_mode_filter)
         self._pota_mode_filter = _POTA_MODES[(current - 1) % len(_POTA_MODES)]
         return self.state
 
     def next_pota_mode(self) -> SharedSpotPanelState:
-        """Cycle to the next legacy mobile POTA mode group."""
+        """Cycle to the next POTA mode group and invalidate staging."""
+        self._selection.cancel_staging()
         current = _POTA_MODES.index(self._pota_mode_filter)
         self._pota_mode_filter = _POTA_MODES[(current + 1) % len(_POTA_MODES)]
         return self.state
 
+    def previous_dx_band(self) -> SharedSpotPanelState:
+        """Cycle to the previous supported DX band and invalidate staging."""
+        self._selection.cancel_staging()
+        current = _POTA_BANDS.index(self._dx_band)
+        self._dx_band = _POTA_BANDS[(current - 1) % len(_POTA_BANDS)]
+        return self.state
+
+    def next_dx_band(self) -> SharedSpotPanelState:
+        """Cycle to the next supported DX band and invalidate staging."""
+        self._selection.cancel_staging()
+        current = _POTA_BANDS.index(self._dx_band)
+        self._dx_band = _POTA_BANDS[(current + 1) % len(_POTA_BANDS)]
+        return self.state
+
+    def previous_dx_mode(self) -> SharedSpotPanelState:
+        """Cycle to the previous DX mode group and invalidate staging."""
+        self._selection.cancel_staging()
+        current = _POTA_MODES.index(self._dx_mode_filter)
+        self._dx_mode_filter = _POTA_MODES[(current - 1) % len(_POTA_MODES)]
+        return self.state
+
+    def next_dx_mode(self) -> SharedSpotPanelState:
+        """Cycle to the next DX mode group and invalidate staging."""
+        self._selection.cancel_staging()
+        current = _POTA_MODES.index(self._dx_mode_filter)
+        self._dx_mode_filter = _POTA_MODES[(current + 1) % len(_POTA_MODES)]
+        return self.state
+
     def reset_pota_filters(self) -> SharedSpotPanelState:
         """Restore the current mobile 20-meter SSB POTA defaults."""
+        self._selection.cancel_staging()
         self._pota_band = _DEFAULT_POTA_BAND
         self._pota_mode_filter = SharedSpotModeFilter.SSB
+        return self.state
+
+    def reset_dx_filters(self) -> SharedSpotPanelState:
+        """Restore the mobile 20-meter all-mode DX defaults."""
+        self._selection.cancel_staging()
+        self._dx_band = _DEFAULT_POTA_BAND
+        self._dx_mode_filter = SharedSpotModeFilter.ALL
         return self.state
 
     def _sync_selection(self) -> SpotSelectionState:
@@ -359,17 +431,23 @@ class SharedSpotPanelController:
     def _spot_is_visible(self, spot: SpotRecord, *, now: datetime) -> bool:
         if spot.provider is not self._provider:
             return False
+
         if self._provider is SpotProvider.DX:
-            return True
+            if self._resolved_band(spot.frequency) is not self._dx_band:
+                return False
+            return self._matches_mode(spot, self._dx_mode_filter)
 
         if self._resolved_band(spot.frequency) is not self._pota_band:
             return False
-        if not self._matches_pota_mode(spot):
+        if not self._matches_mode(spot, self._pota_mode_filter):
             return False
         return now - spot.spotted_at <= self._pota_maximum_age
 
-    def _matches_pota_mode(self, spot: SpotRecord) -> bool:
-        mode_filter = self._pota_mode_filter
+    @staticmethod
+    def _matches_mode(
+        spot: SpotRecord,
+        mode_filter: SharedSpotModeFilter,
+    ) -> bool:
         if mode_filter is SharedSpotModeFilter.ALL:
             return True
         display_mode = spot.display_mode
@@ -386,7 +464,7 @@ class SharedSpotPanelController:
             return display_mode == "FT8"
         return display_mode in _DATA_DISPLAY_MODES
 
-    def _supported_pota_band(self, frequency: Frequency | None) -> RadioBand:
+    def _supported_shared_band(self, frequency: Frequency | None) -> RadioBand:
         if frequency is None:
             return _DEFAULT_POTA_BAND
         band = self._resolved_band(frequency)

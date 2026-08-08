@@ -4,9 +4,14 @@ from collections.abc import Callable
 from typing import Protocol
 
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.domain import Frequency
+from rolling_thunder.domain import (
+    Frequency,
+    RadioConnectionState,
+    RadioState,
+)
 from rolling_thunder.pota_tune_intent import PotaTuneIntent, PotaTuneIntentStatus
 from rolling_thunder.spot_domain import SpotIdentity, SpotProvider
+from rolling_thunder.spot_selection import StagedSpotAction
 
 
 class PotaPanelCommands(Protocol):
@@ -68,6 +73,10 @@ class SharedSpotPanelCommands(Protocol):
     def staged_identity(self) -> SpotIdentity | None:
         """Return the currently valid staged identity, if any."""
 
+    @property
+    def staged_action(self) -> StagedSpotAction | None:
+        """Return the exact still-valid staged receive action, if any."""
+
     def activate(
         self,
         provider: SpotProvider,
@@ -91,11 +100,27 @@ class SharedSpotPanelCommands(Protocol):
     def cancel_staging(self) -> object:
         """Cancel shared staging without external work."""
 
+    def invalidate_radio(self) -> object:
+        """Invalidate staging after an unsafe or unavailable radio state."""
+
     def next_pota_band(self) -> object:
         """Cycle the migrated POTA band filter."""
 
     def next_pota_mode(self) -> object:
         """Cycle the migrated POTA mode filter."""
+
+    def next_dx_band(self) -> object:
+        """Cycle the shared DX band filter."""
+
+    def next_dx_mode(self) -> object:
+        """Cycle the shared DX mode filter."""
+
+
+class SharedSpotTuneCommands(Protocol):
+    """Background receive tuning after explicit second activation."""
+
+    def start_tune(self, action: StagedSpotAction) -> bool:
+        """Submit one exact staged receive action without blocking."""
 
 
 class ActivePanelCommandController:
@@ -193,10 +218,14 @@ class SharedSpotActivePanelCommandController:
         shared_panel: SharedSpotPanelCommands,
         *,
         current_frequency: Callable[[], Frequency | None],
+        radio_state: Callable[[], RadioState] | None = None,
+        shared_tuning: SharedSpotTuneCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._shared_panel = shared_panel
         self._current_frequency = current_frequency
+        self._radio_state = radio_state
+        self._shared_tuning = shared_tuning
         self.activate_context(context_navigation.state.selected)
 
     def activate_context(self, context_id: ContextId) -> None:
@@ -208,23 +237,32 @@ class SharedSpotActivePanelCommandController:
             )
             return
         if context_id is ContextId.DX:
-            self._shared_panel.activate(SpotProvider.DX)
+            self._shared_panel.activate(
+                SpotProvider.DX,
+                current_frequency=self._current_frequency(),
+            )
             return
         self._shared_panel.cancel_staging()
 
     def primary(self) -> bool:
-        """Cycle the POTA band filter; DX has no primary filter yet."""
-        if not self._pota_is_active():
-            return False
-        self._shared_panel.next_pota_band()
-        return True
+        """Cycle the active shared provider's band filter."""
+        if self._pota_is_active():
+            self._shared_panel.next_pota_band()
+            return True
+        if self._dx_is_active():
+            self._shared_panel.next_dx_band()
+            return True
+        return False
 
     def secondary(self) -> bool:
-        """Cycle the POTA mode filter; DX has no secondary filter yet."""
-        if not self._pota_is_active():
-            return False
-        self._shared_panel.next_pota_mode()
-        return True
+        """Cycle the active shared provider's mode filter."""
+        if self._pota_is_active():
+            self._shared_panel.next_pota_mode()
+            return True
+        if self._dx_is_active():
+            self._shared_panel.next_dx_mode()
+            return True
+        return False
 
     def tertiary(self) -> bool:
         """Return false while the shared panel has no tertiary command."""
@@ -251,13 +289,46 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def activate_selection(self) -> bool:
-        """Stage one selected POTA/DX target without radio execution."""
+        """Stage first; submit the exact still-valid target on second press."""
         if not self._shared_spot_is_active():
             return False
-        previous = self._shared_panel.staged_identity
-        self._shared_panel.stage_selected()
-        staged = self._shared_panel.staged_identity
-        return staged is not None and staged != previous
+
+        if not self.synchronize_radio_state():
+            return False
+
+        staged = self._shared_panel.staged_action
+        if staged is None:
+            self._shared_panel.stage_selected()
+            return self._shared_panel.staged_action is not None
+
+        tuning = self._shared_tuning
+        if tuning is None:
+            return False
+        if not tuning.start_tune(staged):
+            return False
+
+        self._shared_panel.cancel_staging()
+        return True
+
+    def synchronize_radio_state(self) -> bool:
+        """Invalidate pending staging when radio state is unsafe for retuning."""
+        provider = self._radio_state
+        if provider is None:
+            return True
+
+        state = provider()
+        usable = (
+            state.connection_state is RadioConnectionState.CONNECTED
+            and state.frequency is not None
+            and state.mode is not None
+            and not state.transmitting
+        )
+        if usable:
+            return True
+
+        if self._shared_panel.staged_action is not None:
+            self._shared_panel.invalidate_radio()
+        return False
 
     def back(self) -> bool:
         """Cancel staging first, then clear selection on a later Back action."""
@@ -276,3 +347,6 @@ class SharedSpotActivePanelCommandController:
 
     def _pota_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.POTA
+
+    def _dx_is_active(self) -> bool:
+        return self._context_navigation.state.selected is ContextId.DX

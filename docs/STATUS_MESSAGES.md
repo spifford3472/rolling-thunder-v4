@@ -16,23 +16,28 @@ When a higher-priority message is active, it temporarily replaces the routine
 line. The routine line remains retained and returns automatically when the
 higher-priority message expires or is cleared.
 
-A receive tune that verifies an actual band change publishes:
+A successful shared receive tune whose starting band differs from the target
+band publishes the manual operator handoff:
 
 ```text
-BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
+SET BAND TO <BAND> METERS — TUNE ATAS-120
 ```
 
-The ATAS-120 reminder:
+The band/ATAS reminder:
 
 - appears in amber
 - lasts exactly 10 seconds
-- is published only after a verified band change
+- is published only for a successful cross-band receive tune
 - is not published for a same-band tune
-- replaces an earlier ATAS reminder when another verified band change occurs
+- names the target band
+- does not claim that CAT authoritatively changed the FT-891 operator-visible band state
+- does not claim that the ATAS-120 is tuned
+- replaces an earlier reminder through the same stable replacement key
 - expires automatically; the Back control does not dismiss it
 
-The reminder is informational only. Rolling Thunder does not operate the
-antenna tuner.
+The reminder is an explicit operator handoff. The operator manually sets or
+confirms the FT-891 band and tunes the ATAS-120 before transmitting. Rolling
+Thunder does not operate or verify the antenna tuner.
 
 ## Arbitration Rules
 
@@ -50,6 +55,14 @@ publishers.
 
 Lower-priority unexpired messages remain retained and resume automatically after
 a higher-priority message expires or is cleared.
+
+Checkpoint-8 shared receive-tune status durations are:
+
+- tuning status: active until replaced by the result
+- success status: 5 seconds
+- failure status: 8 seconds
+- cross-band manual band/ATAS reminder: 10 seconds at higher priority than the
+  normal success result
 
 ## Architecture and Safety
 
@@ -81,13 +94,19 @@ state may remain non-expiring until its owning publisher replaces or clears it.
 
 ## Target-Pi Acceptance
 
-Before merging a change to status behavior, verify on `anvilmobile` that:
+Checkpoint-8 target-Pi acceptance on `anvilmobile` verified that:
 
-1. The normal routine ticker remains visible.
-2. A verified cross-band receive tune shows the amber ATAS reminder.
-3. The reminder remains visible for approximately 10 seconds.
-4. The routine ticker resumes automatically.
+1. The normal routine ticker remains available.
+2. A successful cross-band POTA/DX receive tune shows the amber
+   `SET BAND TO <BAND> METERS — TUNE ATAS-120` reminder.
+3. The reminder is timed and does not require Back acknowledgement.
+4. The routine ticker resumes automatically after expiration.
 5. Same-band tuning does not show the reminder.
-6. Back retains its normal cancellation and navigation behavior.
-7. Logging, GPS, radio polling, physical controls, POTA, and the live map remain
-   responsive.
+6. Back retains its normal staging/selection cancellation behavior.
+7. Logging, GPS, radio polling, physical controls, POTA/DX, and the live map
+   remain responsive.
+8. The Standard TX-capable FT-891 USB interface remains closed.
+9. No PTT, MOX, keying, tuner, power, or transmit action occurs.
+
+The unresolved FT-891 CAT/front-panel band-context behavior is tracked in issue
+#149 and is not represented as a verified automatic band change by status text.

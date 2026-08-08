@@ -98,14 +98,14 @@ class PotaTuneUiController:
         return self._dashboard.confirm_tune_intent()
 
     def execute(self) -> PotaReceiveTuneResult:
-        """Execute confirmed intent and publish a verified band-change warning."""
+        """Execute confirmed intent and publish a cross-band operator warning."""
         self._synchronize_context()
         result = self._execution.execute(self._dashboard.tune_intent)
         if result.band_changed and result.target_band is not None:
             band_label = result.target_band.value.removesuffix("m")
             self._status_messages.publish(
                 replacement_key=ATAS_RETUNE_STATUS_KEY,
-                text=f"BAND CHANGED TO {band_label} METERS — RETUNE ATAS-120",
+                text=f"SET BAND TO {band_label} METERS — TUNE ATAS-120",
                 presentation=StatusPresentation.AMBER,
                 priority=ATAS_RETUNE_STATUS_PRIORITY,
                 duration_s=ATAS_RETUNE_STATUS_DURATION_S,

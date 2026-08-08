@@ -8,6 +8,7 @@ from rolling_thunder.radio import RadioBand, RadioError
 
 _FREQUENCY_REPLY_PATTERN: Final = re.compile(rb"FA([0-9]{9});")
 _MODE_REPLY_PATTERN: Final = re.compile(rb"MD0([0-9A-D]);")
+_MEMORY_CHANNEL_REPLY_PATTERN: Final = re.compile(rb"MC([0-9]{3});")
 
 _MODE_TO_CAT: Final[dict[RadioMode, bytes]] = {
     RadioMode.LSB: b"1",
@@ -30,18 +31,17 @@ _CAT_TO_MODE: Final[dict[bytes, RadioMode]] = {
     b"D": RadioMode.AM,
 }
 
-
-_BAND_TO_CAT: Final[dict[RadioBand, bytes]] = {
-    RadioBand.BAND_160M: b"00",
-    RadioBand.BAND_80M: b"01",
-    RadioBand.BAND_40M: b"03",
-    RadioBand.BAND_30M: b"04",
-    RadioBand.BAND_20M: b"05",
-    RadioBand.BAND_17M: b"06",
-    RadioBand.BAND_15M: b"07",
-    RadioBand.BAND_12M: b"08",
-    RadioBand.BAND_10M: b"09",
-    RadioBand.BAND_6M: b"10",
+_BAND_TO_MEMORY_CHANNEL: Final[dict[RadioBand, int]] = {
+    RadioBand.BAND_160M: 1,
+    RadioBand.BAND_80M: 2,
+    RadioBand.BAND_40M: 3,
+    RadioBand.BAND_30M: 4,
+    RadioBand.BAND_20M: 5,
+    RadioBand.BAND_17M: 6,
+    RadioBand.BAND_15M: 7,
+    RadioBand.BAND_12M: 8,
+    RadioBand.BAND_10M: 9,
+    RadioBand.BAND_6M: 10,
 }
 
 
@@ -49,19 +49,52 @@ class Ft891CatError(RadioError):
     """Raised when an FT-891 CAT command or reply is invalid."""
 
 
-def encode_select_band(band: RadioBand) -> bytes:
-    """Return the dedicated FT-891 CAT command for one supported band."""
+def memory_channel_for_band(band: RadioBand) -> int:
+    """Return the operator-configured FT-891 memory channel for one band."""
     if not isinstance(band, RadioBand):
         raise TypeError("band must be a RadioBand")
 
     try:
-        cat_band = _BAND_TO_CAT[band]
+        return _BAND_TO_MEMORY_CHANNEL[band]
     except KeyError as error:
         raise Ft891CatError(
-            f"FT-891 CAT band selection does not support {band.value}."
+            f"FT-891 memory band selection does not support {band.value}."
         ) from error
 
-    return b"BS" + cat_band + b";"
+
+def encode_select_band_memory(band: RadioBand) -> bytes:
+    """Select the dedicated operator memory channel for one supported band."""
+    channel = memory_channel_for_band(band)
+    return f"MC{channel:03d};".encode("ascii")
+
+
+def encode_read_memory_channel() -> bytes:
+    """Return the CAT command that reads the selected memory channel."""
+    return b"MC;"
+
+
+def parse_memory_channel_reply(reply: bytes) -> int:
+    """Parse one complete FT-891 selected-memory reply."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+
+    match = _MEMORY_CHANNEL_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 memory-channel reply: {reply!r}; expected MC###;."
+        )
+
+    channel = int(match.group(1))
+    if not 1 <= channel <= 99:
+        raise Ft891CatError(
+            f"FT-891 memory-channel reply is outside the supported range: {channel}."
+        )
+    return channel
+
+
+def encode_memory_to_vfo_a() -> bytes:
+    """Return the CAT command that copies the selected memory to VFO-A."""
+    return b"MA;"
 
 
 def encode_read_frequency() -> bytes:
