@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 6
+CURRENT_SCHEMA_VERSION: Final = 7
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -133,6 +133,91 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
             synchronization_state,
             enrichment_state,
             started_at
+        )
+        """,
+    ),
+    7: (
+        """
+        CREATE TABLE forge_spot_cache_metadata (
+            singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+            snapshot_revision INTEGER NOT NULL CHECK (snapshot_revision >= 0),
+            generated_at TEXT NOT NULL,
+            received_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE forge_spot_cache (
+            position INTEGER PRIMARY KEY CHECK (position >= 0),
+            provider TEXT NOT NULL CHECK (provider IN ('pota', 'dx')),
+            stable_key TEXT NOT NULL UNIQUE,
+            callsign TEXT NOT NULL,
+            operator_name TEXT CHECK (
+                operator_name IS NULL OR length(operator_name) <= 200
+            ),
+            grid TEXT,
+            frequency_hz INTEGER NOT NULL
+                CHECK (frequency_hz > 0 AND frequency_hz <= 300000000000),
+            mode TEXT NOT NULL
+                CHECK (mode IN ('AM', 'CW', 'DATA', 'FM', 'LSB', 'USB')),
+            display_mode TEXT NOT NULL CHECK (
+                length(display_mode) >= 1 AND length(display_mode) <= 40
+            ),
+            spotted_at TEXT NOT NULL,
+            pota_park_reference TEXT,
+            pota_park_name TEXT CHECK (
+                pota_park_name IS NULL OR length(pota_park_name) <= 200
+            ),
+            pota_location_code TEXT CHECK (
+                pota_location_code IS NULL OR length(pota_location_code) <= 100
+            ),
+            pota_latitude REAL CHECK (
+                pota_latitude IS NULL OR (pota_latitude >= -90 AND pota_latitude <= 90)
+            ),
+            pota_longitude REAL CHECK (
+                pota_longitude IS NULL OR (pota_longitude >= -180 AND pota_longitude <= 180)
+            ),
+            CHECK (
+                (provider = 'pota' AND pota_park_reference IS NOT NULL)
+                OR
+                (provider = 'dx' AND pota_park_reference IS NULL)
+            ),
+            CHECK (
+                (pota_latitude IS NULL AND pota_longitude IS NULL)
+                OR
+                (pota_latitude IS NOT NULL AND pota_longitude IS NOT NULL)
+            )
+        )
+        """,
+        """
+        CREATE TABLE forge_spot_cache_source_metadata (
+            spot_position INTEGER NOT NULL,
+            metadata_position INTEGER NOT NULL CHECK (metadata_position >= 0),
+            metadata_key TEXT NOT NULL CHECK (
+                length(metadata_key) >= 1 AND length(metadata_key) <= 100
+            ),
+            metadata_value TEXT NOT NULL CHECK (
+                length(metadata_value) >= 1 AND length(metadata_value) <= 500
+            ),
+            PRIMARY KEY (spot_position, metadata_position),
+            UNIQUE (spot_position, metadata_key),
+            FOREIGN KEY (spot_position)
+                REFERENCES forge_spot_cache (position)
+                ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE TABLE forge_spot_cache_provider_health (
+            provider TEXT PRIMARY KEY CHECK (provider IN ('pota', 'dx')),
+            status TEXT NOT NULL CHECK (
+                status IN ('starting', 'healthy', 'degraded', 'unavailable')
+            ),
+            active_spot_count INTEGER NOT NULL CHECK (active_spot_count >= 0),
+            last_attempt_at TEXT,
+            last_success_at TEXT,
+            last_error TEXT CHECK (
+                last_error IS NULL OR length(last_error) <= 500
+            )
         )
         """,
     ),
