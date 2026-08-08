@@ -114,7 +114,7 @@ class DeferredExecutor(Executor):
         if future.set_running_or_notify_cancel():
             try:
                 result = fn(*args, **kwargs)
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - mirror Executor Future semantics
                 future.set_exception(error)
             else:
                 future.set_result(result)
