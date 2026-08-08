@@ -2,17 +2,18 @@
 
 ## Purpose
 
-The shared spot domain provides provider-neutral foundations for unified POTA
+The shared spot domain provides the provider-neutral foundation for unified POTA
 and DX operating intelligence.
 
-It defines immutable domain records, canonical snapshots, stable selection, and
-staged-action primitives. Forge uses the domain for public POTA and bounded
-DXSpider snapshots, and the Raspberry Pi reconstructs and durably retains the
-same shared snapshot domain.
+It defines immutable domain records, canonical snapshots, stable selection,
+provider-specific filters, exact staged receive actions, and the two-press
+operator-confirmation contract. Forge uses the same domain for public POTA and
+bounded DXSpider snapshots, while the Raspberry Pi reconstructs and durably
+retains those snapshots for offline-first presentation.
 
-Checkpoint 7 migrates the running POTA presentation and the DX context to one
-shared provider-neutral controller and presentation path backed only by the
-already-published Pi Forge snapshot.
+Checkpoint 8 completes the shared operator path for both POTA and DX. The first
+activation stages only; the second activation of the same still-valid target may
+submit receive tuning through the existing typed `ReceiveTuningService`.
 
 ## Domain Records
 
@@ -34,8 +35,8 @@ unknown optional values to `<UNKNOWN>` only at the presentation boundary.
 
 Forge-side QRZ enrichment may fill missing operator name and grid values before
 a snapshot is persisted. Provider-supplied values take precedence. Enrichment
-never changes identity, callsign, frequency, mode, source timestamp, source
-metadata, or POTA park metadata.
+never changes identity, callsign, frequency, normalized mode, source timestamp,
+source metadata, or POTA park metadata.
 
 ## Stable Identities
 
@@ -51,242 +52,337 @@ DX identity:
 dx:<NORMALIZED_CALLSIGN>:<INTEGER_FREQUENCY_HZ>
 ```
 
-POTA activator callsign is deliberately not part of POTA identity. Reports for
-the same park and integer frequency therefore belong to one duplicate group.
+Identity never depends on row position, provider arrival order, Python object
+identity, QRZ enrichment, operator name, grid, provider comment, or locale
+sorting.
 
-Identity never depends on:
-
-- row position
-- provider arrival order
-- Python object identity
-- operator name
-- Maidenhead grid
-- QRZ enrichment state
-- provider comment text
-- locale-sensitive sorting
-
-A QRZ name or grid appearing, changing, expiring from cache, or being unavailable
-cannot change a stable selection identity.
+Selection is therefore preserved across refreshes only when the same stable
+identity remains present.
 
 ## Provider Semantics
 
 ### POTA records
 
 POTA records use park reference plus integer frequency as identity and require
-matching `PotaSpotMetadata`. Optional park name, location code, and coordinate
-pair remain presentation and operating-intelligence data rather than selection
-identity.
+matching `PotaSpotMetadata`. Park name, location code, coordinates, operator
+name, grid, and source comment remain metadata rather than identity.
 
 ### DX records
 
 DX records use normalized callsign plus integer frequency as identity and cannot
 contain POTA metadata.
 
-The DXSpider adapter reconstructs a UTC source timestamp from the provider's
-`HHMMZ` value, converts decimal kilohertz exactly to integer hertz, and retains
-bounded spotter, comment, and mode-provenance metadata.
+The DXSpider adapter reconstructs UTC source time from the provider `HHMMZ`
+value, converts decimal kilohertz exactly to integer hertz, and retains bounded
+spotter, comment, and mode-provenance metadata.
 
-DXSpider comments do not provide one guaranteed normalized radio mode field.
-The Forge parser therefore applies deterministic explicit-token and sub-band
-fallback rules. The resulting normalized mode is part of action-critical
-staging. The display mode and provenance metadata explain the provider token or
-fallback used.
+DX mode normalization uses deterministic explicit-token and sub-band fallback
+rules. The resulting normalized `RadioMode` is action-critical. Display mode and
+mode provenance remain presentation/source metadata.
 
 ## Canonical Snapshots
 
-`SpotSnapshot` collapses duplicate identities and orders records by:
+`SpotSnapshot` collapses duplicate identities and orders records
+canonically. Ordering is deterministic by amateur-band rank, integer frequency,
+provider rank, serialized identity, callsign, normalized radio mode, and display
+mode.
 
-1. explicit amateur-band rank
-2. integer frequency
-3. explicit provider rank
-4. serialized stable identity
-5. normalized callsign
-6. normalized radio mode
-7. normalized provider display mode
+A complete Forge snapshot may contain both POTA and DX records. Forge maintains
+provider slices independently so a failed provider refresh can retain only that
+provider's prior slice while another provider succeeds.
 
-Records sharing a stable identity are collapsed deterministically. The newest
-UTC source timestamp wins; normalized record content provides stable equal-time
-tie-breakers. The result is independent of provider input order.
-
-Frequencies outside the supported amateur-band table sort after known bands.
-The implementation does not use enum declaration order as an implicit band
-ranking.
-
-A complete Forge snapshot may contain both POTA and DX records. Provider slices
-remain independently replaceable on Forge so one provider failure can retain
-only that provider's previous records while another provider refresh succeeds.
-
-The Pi client does not recanonicalize a malformed Forge response. It reconstructs
-`SpotSnapshot` directly and rejects duplicate or noncanonical server ordering so
-a corrupt or incomplete wire response cannot silently become a different local
-snapshot.
+The Pi does not silently repair a malformed Forge response into a different
+snapshot. The typed client reconstructs and validates the received canonical
+shape and rejects malformed, duplicate, inconsistent, or noncanonical data.
 
 ## Durable Representation
 
-### Forge service
+### Forge
 
-Forge persists the same canonical `SpotRecord` fields used in memory, including:
+Forge persists canonical POTA/DX records and provider health transactionally in
+a dedicated Forge SQLite database. Startup reconstruction revalidates identities,
+providers, ordering, timestamps, duplicate collapse, and POTA metadata before
+publishing retained state.
 
-- stable POTA or DX identity
-- optional provider or QRZ operator name
-- optional provider or QRZ grid
-- integer frequency
-- normalized and display modes
-- UTC source timestamp
-- bounded source metadata
-- optional POTA metadata
+### Raspberry Pi
 
-Forge startup reconstruction revalidates identities, providers, ordering,
-timestamps, duplicate collapse, and POTA metadata consistency before publishing
-retained server state.
+Pi application schema version 7 stores the accepted Forge revision, original
+Forge generation time, Pi receive/success time, canonical records, ordered source
+metadata, and accepted upstream provider health in independent shared-cache
+tables.
 
-### Raspberry Pi shared cache
+Replacement is transactional. The Pi follows:
 
-Pi application schema version 7 adds independent shared-cache tables in the
-existing application database. They do not replace or alter contacts or the
-legacy `pota_spot_cache` tables.
+```text
+fetch complete response
+    -> validate complete response
+    -> build complete candidate
+    -> persist candidate transactionally
+    -> atomically publish immutable state
+```
 
-The Pi cache stores the accepted Forge revision, original Forge generation time,
-Pi receive/success time, canonical shared records, ordered source metadata, and
-accepted upstream provider health. Complete replacement is transactional.
-Loading reconstructs and revalidates the immutable snapshot before publication.
-A malformed cache is a local-storage failure rather than usable spot state.
+A failed write leaves the previous durable and published snapshots active.
 
-The Pi follows persistence-before-publication ordering: fetch, validate, build
-the complete candidate, persist transactionally, then atomically publish. A
-failed write leaves both the previous durable snapshot and previous published
-snapshot active.
+See `docs/PI_FORGE_CLIENT.md` for the HTTP, SQLite, lifecycle, and failure
+contract.
 
-Enriched fields remain non-action-critical after persistence. A retained QRZ
-name or grid does not gain identity or tuning authority merely because it was
-stored durably.
+## Provider-Specific Filtering
 
-See `docs/PI_FORGE_CLIENT.md` for the complete Pi HTTP, SQLite, lifecycle,
-offline, and diagnostics contract.
+POTA and DX use the same shared panel/controller and the same supported mobile HF
+band cycle:
+
+- 80 m
+- 40 m
+- 20 m
+- 17 m
+- 15 m
+- 12 m
+- 10 m
+
+Both providers use the same mode-group cycle:
+
+- SSB
+- CW
+- FT4
+- FT8
+- DATA
+- ALL
+
+POTA additionally applies its configured maximum spot age, currently 15 minutes
+for the mobile panel. DX does not inherit the POTA age filter.
+
+Filter state is provider-specific. Changing POTA filters does not mutate DX
+filters and vice versa.
+
+On POTA or DX context activation, the band filter defaults to the current FT-891
+band when the current frequency resolves to a supported shared-panel band.
+Otherwise the safe fallback is 20 meters.
+
+POTA starts from SSB mode filtering. DX starts from ALL mode filtering.
+
+Every band or mode filter change cancels staging. If filtering removes the
+selected identity, selection clears; no neighboring-row fallback is permitted.
 
 ## Stable Selection
 
-Selection is stored as a stable identity rather than a row index.
+Selection is stored by `SpotIdentity`, never by row number.
 
-When a complete snapshot is replaced:
+When a snapshot or filtered view is replaced:
 
-- selection remains when the identity is still present
-- the current row index is resolved from the replacement snapshot
-- selection clears when the identity disappears
-- staging also clears when the selected identity disappears
-- no neighboring row is selected as a fallback
+- selection remains only if the selected identity remains visible
+- the current row position is resolved from the replacement view
+- selection clears if the identity disappears
+- staging clears if the selected identity disappears
+- no neighboring identity becomes selected automatically
 
-Combined POTA and DX ordering therefore cannot redirect a selection merely
-because records from the other provider were inserted, removed, or refreshed.
+Rotating the encoder or otherwise changing the row selection also clears any
+staged action.
 
-## Staged Actions
+## Exact Staged Actions
 
-A staged action captures the exact action-critical values present when the
-operator performs the first action:
+A `StagedSpotAction` captures the exact action-critical values present on the
+first activation:
 
 - stable identity
 - callsign
 - frequency
-- radio mode
+- normalized radio mode
 
-This prevents a refreshed record under the same stable identity from silently
-changing the later confirmed action.
+This prevents a refresh under the same identity from silently changing a later
+confirmed action.
 
-Staging clears when the selected record disappears or its callsign, frequency,
-or radio mode changes. Non-actionable metadata may refresh without invalidating
-the staged action, including:
-
-- operator name
-- Maidenhead grid
-- park name
-- location code
-- coordinates
-- provider comment
-- spotter callsign
-- mode-provenance metadata
+Staging clears when the staged target's callsign, frequency, or normalized mode
+changes. Non-action-critical metadata may refresh without changing staging,
+including operator name, grid, park name, location code, coordinates, provider
+comment, spotter callsign, and mode-provenance metadata.
 
 Staging also clears on:
 
-- selection change
-- explicit cancellation
-- context invalidation
+- row selection change
+- provider/context change
+- POTA or DX band-filter change
+- POTA or DX mode-filter change
+- identity disappearance
+- explicit Back/Cancel
 - radio invalidation
-- later-stage failure
+- accepted second-press tune submission
+
+## Two-Press Operator Contract
+
+Both POTA and DX use one two-press contract:
+
+```text
+navigate / rotate
+    -> selection changes
+    -> staging clears
+
+first activation
+    -> stage exact identity/callsign/frequency/mode
+    -> no CAT
+    -> no radio change
+
+second activation of the same still-valid target
+    -> submit exact staged action to background tuning
+    -> clear staging after submission is accepted
+    -> ReceiveTuningService performs ordered receive-only tuning
+```
+
+There is no third confirmation step in the checkpoint-8 shared POTA/DX path.
+
+If no still-valid staged action exists, an activation stages rather than tunes.
+If the background tuning boundary is unavailable or already busy, the staged
+action is not silently redirected to another record.
+
+## Radio-State Gate
+
+Before either staging or second-press submission, the active-panel command
+controller synchronizes the current immutable radio state.
+
+The radio is usable for shared-spot action only when:
+
+- connection state is `CONNECTED`
+- frequency is known
+- mode is known
+- the radio is not transmitting
+
+If those conditions are not met, any staged action is invalidated and no tune is
+submitted.
+
+`ReceiveTuningService` independently rejects ordered receive tuning while the
+radio reports `transmitting=True`. This keeps the radio-safety rule below the UI
+and shared-panel layers as well as at the operator-command boundary.
+
+## Sole Receive-Tuning Authority
+
+Shared POTA/DX execution follows:
+
+```text
+physical or keyboard activation
+    -> OperatorCommandController
+    -> SharedSpotActivePanelCommandController
+    -> SharedSpotTuneController
+    -> ReceiveTuningService
+    -> typed Radio boundary
+```
+
+The shared panel, Tkinter code, physical-control adapter, Forge client, and Forge
+service issue no CAT commands.
+
+`ReceiveTuningService` remains the sole receive-tuning authority and preserves
+band-before-frequency ordering and read-back verification for the FT-891.
+
+No provider-specific POTA or DX tune executor is introduced by checkpoint 8.
+
+## Background Tuning and Presentation
+
+`SharedSpotTuneController` submits the exact staged frequency/mode on a background
+thread so blocking CAT work does not run in Tkinter.
+
+Published tune states are:
+
+- idle
+- tuning
+- succeeded
+- failed
+
+The UI refresh path observes immutable tune status and publishes operator status
+through `StatusMessageService`.
+
+Current status behavior is:
+
+- tuning message: normal priority status while tuning
+- success message: green/success presentation for 5 seconds
+- failure message: error presentation for 8 seconds
+- verified cross-band result: amber ATAS-120 reminder for 10 seconds
+
+The ATAS warning text is:
+
+```text
+BAND CHANGED TO <BAND> METERS — RETUNE ATAS-120
+```
+
+The warning states only that a verified receive band change occurred. Rolling
+Thunder does not tune or verify the ATAS-120 and does not claim the antenna is
+safe to transmit.
+
+## Back / Cancel Behavior
+
+Within a shared POTA/DX context, Back operates on panel state only:
+
+1. if an action is staged, cancel staging
+2. otherwise, if a row is selected, clear selection
+3. otherwise, return control to the normal surrounding navigation behavior
+
+Back does not create a radio action and does not bypass the two-press contract.
 
 ## Pi Retained and Live State
 
-The optional Pi Forge service distinguishes:
+The Pi Forge service distinguishes:
 
 - `empty`: no valid shared snapshot yet
-- `cached`: durable state restored at process startup
+- `cached`: durable state restored at startup
 - `live`: a live Forge response validated, persisted, and published
 - `retained`: a live attempt failed while the previous snapshot remains usable
 
-Published diagnostics preserve the original Forge `generated_at`, Pi
-`received_at`, last live attempt, bounded failure category/text, revision, active
-spot count, and upstream provider health. Restarting the Pi does not make old
-data appear fresh.
+Diagnostics preserve original Forge generation time, Pi receive time, last live
+attempt, bounded error category/text, revision, active spot count, and upstream
+provider health. Restarting the Pi does not make old data appear fresh.
 
-Forge refresh-on-start is submitted to a background worker. `ApplicationRuntime`
-and Tkinter only read already-published immutable state; they do not perform
-Forge HTTP or shared-cache SQLite work on the caller/UI thread.
+Forge polling is background-only. `ApplicationRuntime` and Tkinter read only
+already-published immutable state.
+
+## Forge Authority and Offline Behavior
+
+When Forge is enabled, the Pi does not compose the legacy direct public-POTA
+poller. Forge is authoritative for live POTA and DX ingestion.
+
+The legacy POTA implementation and `pota_spot_cache` tables remain intact as a
+non-destructive rollback/compatibility path when Forge is disabled.
+
+Forge, WireGuard, cellular, provider, or public-internet failure does not block
+local SQLite contact logging. The Pi retains its last valid shared snapshot when
+one exists.
+
+Production Forge deployment is documented in `docs/FORGE_DEPLOYMENT.md`.
 
 ## Safety Boundary
 
 The shared spot domain, Forge provider adapters, Forge-side QRZ enrichment, Pi
-Forge client/cache/service/poller, and selection controller perform no:
+Forge client/cache/service/poller, selection controller, and UI presentation
+perform no:
 
-- radio or hardware access
-- CAT commands
-- band, frequency, or mode changes
-- receive tuning
-- PTT, MOX, keying, tuner, power, or transmit control
-- unattended radio action
-- contact modification as part of shared-spot refresh
-- Tkinter network or SQLite work
+- PTT or MOX
+- CW or voice keying
+- tuner control
+- power control
+- unattended transmit
+- voice-originated receive tuning
+- direct CAT from Tkinter or physical-control parsing
+- contact modification as part of spot refresh
 
-Forge server networking and persistence occur outside REST request handlers. Pi
-Forge networking and shared-cache persistence occur only on the background
-worker. The existing typed `ReceiveTuningService` remains the only receive-tuning
-authority.
+Voice capture remains a callsign/input workflow and cannot invoke the shared
+receive-tuning path.
 
-## Current Integration Status
+## Checkpoint-8 Integration Status
 
-Completed foundations now include:
+Checkpoint 8 now includes:
 
-- shared immutable POTA and DX records
-- stable provider-specific identities
-- deterministic canonical combined snapshots
-- stable selection and staged-action primitives
-- Forge public POTA ingestion
-- Forge bounded DXSpider snapshot ingestion
-- Forge best-effort QRZ name and grid enrichment
-- Forge transactional combined persistence and read-only REST
-- typed Pi `GET /api/v1/spots` client with complete-response validation
-- Pi application schema v7 durable combined shared snapshot cache
-- transactional Pi persistence-before-publication behavior
-- truthful cached/live/retained/error state and provider-health diagnostics
-- background-only Pi Forge polling and runtime lifecycle composition
+- DX band and mode filtering through the shared controller
+- independent POTA/DX filter state
+- current-radio-band activation default with 20-meter fallback
+- exact two-press POTA/DX staging and receive-tune submission
+- action-critical staging invalidation
+- radio-state invalidation before staging/tuning
+- background shared receive tuning
+- shared tuning/success/failure presentation
+- timed cross-band ATAS-120 warning
+- production Forge systemd deployment under the dedicated `rollingthunder`
+  service account
+- production Forge POTA and DXSpider live-health acceptance
 
-Checkpoint 7 now routes both POTA and DX through one shared panel backed by
-`ApplicationRuntime.latest_forge_spot_state`.
+The remaining checkpoint-8 acceptance work is the final real FT-891 shared POTA
+and DX bench: same-band and cross-band two-press operation, first-press no-change
+verification, filter/context invalidation, ATAS warning behavior, retained Forge
+behavior, and local logging continuity.
 
-When Forge is enabled, the Pi no longer composes the legacy direct-POTA poller.
-The legacy implementation and `pota_spot_cache` tables remain available as a
-non-destructive rollback/compatibility path when Forge is disabled.
-
-The real checkpoint-7 bench validated:
-
-- live POTA and DXSpider data through Forge
-- WireGuard/CarLAN delivery to `anvilmobile`
-- durable Pi shared-cache publication
-- POTA and DX display on the installed dashboard
-- encoder navigation and staging
-- staged-action invalidation on context change
-- no FT-891 frequency change when a spot is staged
-
-Checkpoint 8 remains responsible for second-press receive tuning through
-`ReceiveTuningService` and permanent Forge deployment/security hardening.
-
-No current Forge, Pi shared-spot, shared-panel, or shared-domain component has
-transmit authority.
+No shared-spot component has transmit authority.
