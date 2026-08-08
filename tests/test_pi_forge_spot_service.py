@@ -359,10 +359,11 @@ def test_overlapping_refresh_returns_current_state_without_second_fetch() -> Non
 
 
 def test_naive_service_clock_releases_refresh_guard() -> None:
+    naive_time = datetime(2026, 8, 7, 19, 0, tzinfo=UTC).replace(tzinfo=None)
     service = PiForgeSpotService(
         FakeClient(),
         FakeCache(),
-        now=lambda: datetime(2026, 8, 7, 19, 0),
+        now=lambda: naive_time,
     )
 
     with pytest.raises(ValueError, match="aware datetime"):
