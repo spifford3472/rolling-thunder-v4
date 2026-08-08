@@ -73,6 +73,7 @@ class PiForgeSpotPollingService:
 
     def start(self) -> PiForgeSpotState:
         """Start polling and optionally queue an immediate background refresh."""
+        startup_state = self._service.get_state()
         with self._lock:
             if self._scheduled_poll is not None or self._executor is not None:
                 raise RuntimeError("Pi Forge spot polling service is already running.")
@@ -83,7 +84,7 @@ class PiForgeSpotPollingService:
                     self._interval_s,
                     self._poll_once,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 - restore lifecycle state on scheduler failure
                 executor.shutdown(wait=False, cancel_futures=True)
                 raise
 
@@ -92,7 +93,7 @@ class PiForgeSpotPollingService:
 
         if self._refresh_on_start:
             self._queue_refresh()
-        return self._service.get_state()
+        return startup_state
 
     def stop(self) -> PiForgeSpotState:
         """Cancel future work and shut down the owned worker cleanly."""
@@ -123,7 +124,7 @@ class PiForgeSpotPollingService:
 
         try:
             executor.submit(self._run_refresh)
-        except Exception:
+        except Exception:  # noqa: BLE001 - restore queue state if submission fails
             with self._lock:
                 self._worker_pending = False
             raise
