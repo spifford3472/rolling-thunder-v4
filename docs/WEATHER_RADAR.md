@@ -53,7 +53,7 @@ Freshness is based on the provider observation time, not merely when Forge or th
 - more than 15 minutes old: display may continue, but radar is marked stale;
 - more than 30 minutes old: radar is not rendered.
 
-Provider or Forge failures do not erase a still-eligible complete frame. When a manifest refresh fails but a cached frame is still renderable, the Pi truthfully reports `RADAR OFFLINE — USING CACHED FRAME`. After the 30-minute cutoff, that frame is removed from display.
+Provider or Forge failures do not erase a still-eligible complete frame. When a manifest refresh fails but a cached frame is still renderable, the Pi retains that frame with degraded health. After the 30-minute cutoff, that frame is removed from display.
 
 ## Display policy
 
@@ -67,6 +67,29 @@ Checkpoint #163 intentionally supports only the latest frame.
 - no regional/offline radar seeding.
 
 The dashboard displays radar above base-map tiles and below the vehicle/status overlays. NOAA/NWS attribution and the radar observation time remain visible separately from base-map attribution.
+
+The map health box always labels the radar row simply `RADAR`; transient text such as `UPDATING RADAR` is not displayed there. Color carries the compact state:
+
+- light blue: radar image ready/healthy;
+- yellow: waiting, loading, stale, or partial/degraded;
+- gray: radar image disabled or the radar capability is not configured;
+- red: radar image unavailable/error.
+
+## Operator Settings control
+
+When the radar capability is configured, the Settings page exposes a `RADAR Image` on/off switch with the helper text `Context Button #1`.
+
+Context Button #1 toggles only Pi-side radar image work. Turning the image off:
+
+- immediately clears the visible radar overlay;
+- publishes the local radar state as disabled;
+- suppresses Pi radar viewport, manifest, and tile work while disabled;
+- does not disable or reconfigure the Forge radar service;
+- does not change the base map, GPS, logging, controls, or radio authority.
+
+Turning the image back on returns the Pi radar worker to an idle/waiting state. The next normal map refresh requests the current published map viewport, shows yellow while loading, and returns to light blue when a complete healthy frame is ready.
+
+The operator choice is persisted asynchronously in the existing local `operator_preferences` SQLite table under `radar.image.enabled`. The setting survives application restarts without rewriting `rolling-thunder.yaml`.
 
 ## Forge configuration
 
@@ -88,7 +111,7 @@ Forge uses the latest retained mobile location for frame discovery. Missing loca
 
 ## Pi configuration
 
-The Pi overlay is independently opt-in and requires both the map and Forge client to be enabled.
+The Pi overlay capability is independently opt-in and requires both the map and Forge client to be enabled.
 
 ```yaml
 forge:
@@ -106,7 +129,7 @@ radar:
   opacity: 0.55
 ```
 
-`radar.enabled: true` is rejected at configuration validation time unless both `map.enabled` and `forge.enabled` are true.
+`radar.enabled: true` is rejected at configuration validation time unless both `map.enabled` and `forge.enabled` are true. This YAML setting controls whether the radar capability is composed at all. The Settings-page `RADAR Image` switch is the persistent operator runtime/display preference inside that configured capability.
 
 ## Forge API
 
@@ -139,11 +162,11 @@ A radar failure must not block or change:
 - Forge weather;
 - retained mobile location.
 
-No radar path writes the Pi application database and no radar component has radio authority.
+Radar frame/tile processing does not write the Pi application database. The only #163 database write is the explicit operator `RADAR Image` preference, queued through the existing nonblocking operator-preference service. No radar component has radio authority.
 
 ## Acceptance gates
 
-Checkpoint #163 is not complete until all of the following pass on the exact PR head:
+Checkpoint #163 is not complete until all of the following pass on the applicable exact PR head:
 
 - Ruff;
 - strict MyPy;
@@ -155,5 +178,7 @@ Checkpoint #163 is not complete until all of the following pass on the exact PR 
 - Forge `/health`, `/spots`, `/weather`, and mobile-location behavior remain healthy/independent;
 - anvilmobile loads radar through Forge only;
 - the overlay follows the current published map viewport and zoom;
-- no visible Tkinter blocking/flicker during radar retrieval;
+- radar health displays only `RADAR` using the approved state colors;
+- Settings Context Button #1 toggles the radar image off/on and the choice persists;
+- no visible Tkinter blocking/flicker during radar retrieval or toggling;
 - base map remains usable when radar is disabled or unavailable.
