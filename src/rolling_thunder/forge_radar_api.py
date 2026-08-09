@@ -13,11 +13,10 @@ from rolling_thunder.forge_radar import (
     ForgeRadarProviderError,
     ForgeRadarService,
     ForgeRadarState,
-    RadarFrame,
-    RadarProviderStatus,
 )
 from rolling_thunder.forge_spot_api import ForgeHttpResponse, ForgeSpotApiApplication
 from rolling_thunder.map_tiles import MapTileKey
+from rolling_thunder.radar_domain import RadarFrame, RadarProviderStatus
 
 _API_SCHEMA_VERSION: Literal["1"] = "1"
 _RADAR_PATH = "/api/v1/radar"
@@ -186,7 +185,12 @@ class RadarAwareForgeSpotApiApplication(ForgeSpotApiApplication):
         )
 
     @staticmethod
-    def _json_response(status_code: int, payload: object) -> ForgeHttpResponse:
+    def _json_response(
+        status_code: int,
+        payload: object,
+        *,
+        extra_headers: tuple[tuple[str, str], ...] = (),
+    ) -> ForgeHttpResponse:
         body = dumps(
             payload,
             ensure_ascii=False,
@@ -199,6 +203,7 @@ class RadarAwareForgeSpotApiApplication(ForgeSpotApiApplication):
                 ("Content-Type", "application/json; charset=utf-8"),
                 ("Content-Length", str(len(body))),
                 ("Cache-Control", "no-store"),
+                *extra_headers,
             ),
             body=body,
         )
