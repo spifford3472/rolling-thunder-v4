@@ -14,6 +14,7 @@ class ContextId(StrEnum):
     DX = "dx"
     REPEATERS = "repeaters"
     AI = "ai"
+    WEATHER = "weather"
     SETTINGS = "settings"
 
 
@@ -56,6 +57,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "4",
         "AI ADVISOR",
         "Future AI advisor details here.",
+    ),
+    ContextDefinition(
+        ContextId.WEATHER,
+        "WEATHER",
+        "6",
+        "WEATHER",
+        "Retained weather details here.",
     ),
     ContextDefinition(
         ContextId.SETTINGS,
