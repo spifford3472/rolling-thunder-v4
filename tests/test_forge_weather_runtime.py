@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import rolling_thunder.forge_spot_main as forge_spot_main
+from rolling_thunder import forge_spot_main
 from rolling_thunder.forge_config import ForgeApplicationConfig
 from rolling_thunder.forge_spot_api import ForgeSpotApiApplication
 from rolling_thunder.forge_spot_main import build_forge_runtime
