@@ -6,10 +6,10 @@ from pydantic import ValidationError
 from rolling_thunder.forge_config import ForgeApplicationConfig
 
 
-def test_weather_defaults_are_bounded_and_enabled() -> None:
+def test_weather_defaults_are_bounded_and_disabled() -> None:
     weather = ForgeApplicationConfig().weather
 
-    assert weather.enabled is True
+    assert weather.enabled is False
     assert str(weather.endpoint) == "https://api.open-meteo.com/v1/forecast"
     assert weather.request_timeout_s == 5.0
     assert weather.check_interval_s == 60.0
