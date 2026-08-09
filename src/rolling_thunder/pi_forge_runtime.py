@@ -1,20 +1,30 @@
-"""Composition helper for the Pi-side Forge shared-spot client stack."""
+"""Composition helpers for the Pi-side Forge client stack."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
+from time import monotonic
 
 from rolling_thunder.config import ForgeConfig
 from rolling_thunder.forge_client import HttpForgeSpotClient
+from rolling_thunder.forge_location_client import HttpForgeLocationClient
 from rolling_thunder.forge_spot_cache_repository import ForgeSpotCacheRepository
+from rolling_thunder.gps import GPSState
 from rolling_thunder.http_home_platform import HttpTransport
-from rolling_thunder.pi_forge_spot_polling import (
-    ExecutorFactory,
-    PiForgeSpotPollingService,
+from rolling_thunder.pi_forge_location_publisher import (
+    PiForgeLocationPublisher,
+    PiForgeLocationPublishingService,
 )
+from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotService
 from rolling_thunder.radio_polling import PollScheduler
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
+
+GPSStateSource = Callable[[], GPSState]
+Clock = Callable[[], datetime]
+MonotonicClock = Callable[[], float]
 
 
 def build_pi_forge_spot_polling(
@@ -46,5 +56,52 @@ def build_pi_forge_spot_polling(
         scheduler or ThreadingPollScheduler(),
         interval_s=config.refresh_interval_s,
         refresh_on_start=config.refresh_on_start,
+        executor_factory=executor_factory,
+    )
+
+
+def build_pi_forge_location_publishing(
+    config: ForgeConfig,
+    state_source: GPSStateSource,
+    *,
+    scheduler: PollScheduler | None = None,
+    transport: HttpTransport | None = None,
+    executor_factory: ExecutorFactory | None = None,
+    clock: Clock | None = None,
+    monotonic_clock: MonotonicClock = monotonic,
+    publish_interval_s: float = 600.0,
+    retry_interval_s: float = 60.0,
+    unusable_retry_interval_s: float = 30.0,
+    scheduler_interval_s: float = 30.0,
+    maximum_gps_sample_age_s: float = 5.0,
+) -> PiForgeLocationPublishingService | None:
+    """Build the optional background Pi-to-Forge GPS location publisher."""
+    if not config.enabled:
+        return None
+
+    api_url = config.api_url
+    if api_url is None:
+        raise ValueError("Forge API URL is required when location publishing is enabled.")
+
+    client = HttpForgeLocationClient(
+        str(api_url),
+        timeout_s=config.request_timeout_s,
+        transport=transport,
+    )
+    publisher = PiForgeLocationPublisher(
+        state_source,
+        client,
+        clock=clock,
+        monotonic_clock=monotonic_clock,
+        maximum_gps_sample_age_s=maximum_gps_sample_age_s,
+    )
+    return PiForgeLocationPublishingService(
+        publisher,
+        scheduler or ThreadingPollScheduler(),
+        scheduler_interval_s=scheduler_interval_s,
+        publish_interval_s=publish_interval_s,
+        retry_interval_s=retry_interval_s,
+        unusable_retry_interval_s=unusable_retry_interval_s,
+        monotonic_clock=monotonic_clock,
         executor_factory=executor_factory,
     )

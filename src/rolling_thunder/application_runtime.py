@@ -48,7 +48,14 @@ from rolling_thunder.operator_preferences import (
     OperatorPreferenceRepository,
     OperatorPreferenceService,
 )
-from rolling_thunder.pi_forge_runtime import build_pi_forge_spot_polling
+from rolling_thunder.pi_forge_location_publisher import (
+    PiForgeLocationPublisherState,
+    PiForgeLocationPublishingService,
+)
+from rolling_thunder.pi_forge_runtime import (
+    build_pi_forge_location_publishing,
+    build_pi_forge_spot_polling,
+)
 from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotState
 from rolling_thunder.pota_enrichment import PotaEnrichmentService
@@ -111,6 +118,7 @@ class ApplicationRuntime:
     contact_sync: ContactSyncService | None = None
     network_keepalive: NetworkKeepaliveService | None = None
     pi_forge_spot_polling: PiForgeSpotPollingService | None = None
+    pi_forge_location_publishing: PiForgeLocationPublishingService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
@@ -130,6 +138,7 @@ class ApplicationRuntime:
         contact_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
+        forge_location_scheduler: PollScheduler | None = None,
         pota_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
         gps_interval_s: float = 1.0,
@@ -140,6 +149,7 @@ class ApplicationRuntime:
         home_platform_transport: HttpTransport | None = None,
         network_keepalive_transport: NetworkKeepaliveTransport | None = None,
         forge_transport: HttpTransport | None = None,
+        forge_location_transport: HttpTransport | None = None,
         pota_transport: HttpTransport | None = None,
         qrz_transport: HttpTransport | None = None,
         weather_transport: HttpTransport | None = None,
@@ -147,6 +157,7 @@ class ApplicationRuntime:
         state_map_transport: HttpTransport | None = None,
         map_transport: HttpTransport | None = None,
         forge_executor_factory: ExecutorFactory | None = None,
+        forge_location_executor_factory: ExecutorFactory | None = None,
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
@@ -253,6 +264,19 @@ class ApplicationRuntime:
             transport=forge_transport,
             executor_factory=forge_executor_factory,
         )
+
+        pi_forge_location_publishing: PiForgeLocationPublishingService | None = None
+        if (
+            config.forge.enabled
+            and config.hardware.effective_gps_mode is HardwareAdapterMode.REAL
+        ):
+            pi_forge_location_publishing = build_pi_forge_location_publishing(
+                config.forge,
+                lambda: gps_polling.latest_state,
+                scheduler=forge_location_scheduler,
+                transport=forge_location_transport or forge_transport,
+                executor_factory=forge_location_executor_factory,
+            )
 
         pota_spot_polling: PotaSpotPollingService | None = None
         if not config.forge.enabled:
@@ -377,6 +401,7 @@ class ApplicationRuntime:
             contact_sync=contact_sync,
             network_keepalive=network_keepalive,
             pi_forge_spot_polling=pi_forge_spot_polling,
+            pi_forge_location_publishing=pi_forge_location_publishing,
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
         )
@@ -422,6 +447,15 @@ class ApplicationRuntime:
         return self.pi_forge_spot_polling.latest_state
 
     @property
+    def latest_forge_location_publisher_state(
+        self,
+    ) -> PiForgeLocationPublisherState | None:
+        """Return the latest Pi-to-Forge location publication state without I/O."""
+        if self.pi_forge_location_publishing is None:
+            return None
+        return self.pi_forge_location_publishing.latest_state
+
+    @property
     def latest_pota_spot_state(self) -> PotaSpotServiceState | None:
         """Return the latest POTA spot snapshot available to consumers."""
         if self.pota_spot_polling is None:
@@ -438,6 +472,8 @@ class ApplicationRuntime:
             self.gps_polling.start()
         if self.clock_sync is not None:
             self.clock_sync.start()
+        if self.pi_forge_location_publishing is not None:
+            self.pi_forge_location_publishing.start()
         if self.live_map is not None:
             self.live_map.start()
         if self.home_platform_health is not None:
@@ -478,6 +514,8 @@ class ApplicationRuntime:
             self.live_map.stop()
         if self.operator_preferences is not None:
             self.operator_preferences.stop()
+        if self.pi_forge_location_publishing is not None:
+            self.pi_forge_location_publishing.stop()
         if self.clock_sync is not None:
             self.clock_sync.stop()
         if self.gps_polling is not None:
