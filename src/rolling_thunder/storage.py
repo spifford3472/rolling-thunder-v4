@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 10
+CURRENT_SCHEMA_VERSION: Final = 11
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -272,6 +272,18 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         """
         CREATE INDEX weather_alert_notification_claimed_at_index
         ON weather_alert_notification_ledger (claimed_at)
+        """,
+    ),
+    11: (
+        """
+        CREATE TABLE repeater_active_overrides (
+            repeater_identity TEXT PRIMARY KEY CHECK (
+                length(repeater_identity) >= 1
+                AND length(repeater_identity) <= 500
+            ),
+            active INTEGER NOT NULL CHECK (active IN (0, 1)),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
         """,
     ),
 }
