@@ -142,7 +142,7 @@ class ForgeQrzEnrichmentConfig(ForgeConfigurationModel):
 class ForgeWeatherConfig(ForgeConfigurationModel):
     """Retained Forge weather provider and deterministic refresh settings."""
 
-    enabled: bool = True
+    enabled: bool = False
     endpoint: AnyHttpUrl = AnyHttpUrl("https://api.open-meteo.com/v1/forecast")
     request_timeout_s: float = Field(default=5.0, gt=0, le=60)
     check_interval_s: float = Field(default=60.0, gt=0, le=3_600)
