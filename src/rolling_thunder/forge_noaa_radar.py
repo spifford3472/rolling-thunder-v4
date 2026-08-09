@@ -14,8 +14,12 @@ from rolling_thunder.forge_radar import (
     RadarProviderFrame,
     RadarSourceMetadata,
 )
-from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
-from rolling_thunder.map_tiles import MapTileKey, validate_map_tile_png
+from rolling_thunder.http_home_platform import (
+    HttpResponse,
+    HttpTransport,
+    UrllibHttpTransport,
+)
+from rolling_thunder.map_tiles import MapTileError, MapTileKey, validate_map_tile_png
 from rolling_thunder.radar_tiles import web_mercator_tile_bounds
 
 DEFAULT_NOAA_RADAR_ENDPOINT = (
@@ -162,7 +166,7 @@ class NoaaNwsRadarProvider:
                 response.body,
                 maximum_bytes=self._maximum_tile_bytes,
             )
-        except Exception as error:
+        except MapTileError as error:
             raise ForgeRadarProviderError("NOAA radar returned an invalid PNG tile.") from error
 
     def _request_json(self, operation: str, params: dict[str, str]) -> dict[str, object]:
@@ -179,12 +183,17 @@ class NoaaNwsRadarProvider:
             raise ForgeRadarProviderError("NOAA radar metadata was not valid JSON.") from error
         if not isinstance(payload, dict):
             raise ForgeRadarProviderError("NOAA radar metadata root was not an object.")
-        provider_error = payload.get("error")
-        if provider_error is not None:
+        if payload.get("error") is not None:
             raise ForgeRadarProviderError("NOAA radar metadata returned a provider error.")
         return payload
 
-    def _request(self, operation: str, params: dict[str, str], *, accept: str):
+    def _request(
+        self,
+        operation: str,
+        params: dict[str, str],
+        *,
+        accept: str,
+    ) -> HttpResponse:
         url = f"{self._endpoint}/{operation}?{urlencode(params)}"
         try:
             return self._transport.request(
