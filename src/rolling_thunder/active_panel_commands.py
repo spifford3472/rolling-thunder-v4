@@ -126,6 +126,9 @@ class SharedSpotTuneCommands(Protocol):
 class SettingsPanelCommands(Protocol):
     """Nonblocking operator commands owned by the Settings context."""
 
+    def toggle_radar(self) -> bool:
+        """Toggle the Pi-side radar image through Context Button #1."""
+
     def zoom_out(self) -> bool:
         """Decrease map zoom one step when possible."""
 
@@ -257,13 +260,15 @@ class SharedSpotActivePanelCommandController:
         self._shared_panel.cancel_staging()
 
     def primary(self) -> bool:
-        """Cycle the active shared provider's band filter."""
+        """Run Context Button #1 for the active provider or Settings panel."""
         if self._pota_is_active():
             self._shared_panel.next_pota_band()
             return True
         if self._dx_is_active():
             self._shared_panel.next_dx_band()
             return True
+        if self._settings_is_active():
+            return self._settings_panel is not None and self._settings_panel.toggle_radar()
         return False
 
     def secondary(self) -> bool:

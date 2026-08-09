@@ -63,6 +63,35 @@ def test_map_zoom_round_trips_through_shared_application_database(tmp_path: Path
     assert OperatorPreferenceRepository(database_path).read_map_zoom() == 13
 
 
+def test_radar_image_choice_round_trips_through_shared_application_database(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+    repository = OperatorPreferenceRepository(database_path)
+
+    assert repository.read_radar_image_enabled() is None
+
+    repository.write_radar_image_enabled(False)
+    assert OperatorPreferenceRepository(database_path).read_radar_image_enabled() is False
+
+    repository.write_radar_image_enabled(True)
+    assert OperatorPreferenceRepository(database_path).read_radar_image_enabled() is True
+
+
+def test_malformed_radar_image_choice_falls_back_as_missing(tmp_path: Path) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+    repository = OperatorPreferenceRepository(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "INSERT INTO operator_preferences (preference_key, preference_value) VALUES (?, ?)",
+            ("radar.image.enabled", "maybe"),
+        )
+        connection.commit()
+
+    assert repository.read_radar_image_enabled() is None
+
+
 def test_malformed_or_out_of_range_map_zoom_falls_back_as_missing(tmp_path: Path) -> None:
     database_path = tmp_path / "rolling-thunder.db"
     repository = OperatorPreferenceRepository(database_path)
@@ -111,4 +140,14 @@ def test_preference_service_submits_zoom_write_without_changing_api_contract(
 
     assert service.persist_map_zoom(11) is True
     assert repository.read_map_zoom() == 11
+    assert service.last_error is None
+
+
+def test_preference_service_submits_radar_image_write_nonblocking(tmp_path: Path) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+    repository = OperatorPreferenceRepository(database_path)
+    service = OperatorPreferenceService(repository, executor=ImmediateExecutor())
+
+    assert service.persist_radar_image_enabled(False) is True
+    assert repository.read_radar_image_enabled() is False
     assert service.last_error is None

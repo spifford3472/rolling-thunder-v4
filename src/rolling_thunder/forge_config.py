@@ -151,6 +151,34 @@ class ForgeWeatherConfig(ForgeConfigurationModel):
     refresh_on_start: bool = True
 
 
+class ForgeRadarConfig(ForgeConfigurationModel):
+    """Optional NOAA/NWS radar discovery and bounded tile-cache settings."""
+
+    enabled: bool = False
+    endpoint: AnyHttpUrl = AnyHttpUrl(
+        "https://mapservices.weather.noaa.gov/eventdriven/rest/services/"
+        "radar/radar_base_reflectivity_time/ImageServer"
+    )
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    check_interval_s: float = Field(default=60.0, gt=0, le=3_600)
+    stale_after_s: float = Field(default=900.0, gt=0, le=86_400)
+    hide_after_s: float = Field(default=1_800.0, gt=0, le=86_400)
+    maximum_cached_tiles: int = Field(default=256, ge=1, le=4_096)
+    refresh_on_start: bool = True
+
+    @field_validator("hide_after_s")
+    @classmethod
+    def hide_after_must_exceed_stale_after(
+        cls,
+        value: float,
+        info: Any,
+    ) -> float:
+        stale_after = info.data.get("stale_after_s")
+        if isinstance(stale_after, (int, float)) and value <= stale_after:
+            raise ValueError("must exceed stale_after_s")
+        return value
+
+
 class ForgeApplicationConfig(ForgeConfigurationModel):
     """Complete independent Forge spot-service configuration."""
 
@@ -161,6 +189,7 @@ class ForgeApplicationConfig(ForgeConfigurationModel):
     dxspider: ForgeDxSpiderProviderConfig = ForgeDxSpiderProviderConfig()
     qrz: ForgeQrzEnrichmentConfig = ForgeQrzEnrichmentConfig()
     weather: ForgeWeatherConfig = ForgeWeatherConfig()
+    radar: ForgeRadarConfig = ForgeRadarConfig()
     logging_level: ForgeLogLevel = ForgeLogLevel.INFO
 
     @field_validator("logging_level", mode="before")

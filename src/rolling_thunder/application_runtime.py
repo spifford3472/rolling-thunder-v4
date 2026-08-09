@@ -23,6 +23,7 @@ from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.domain import RadioState
+from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
@@ -30,6 +31,7 @@ from rolling_thunder.home_platform import HomePlatformClient
 from rolling_thunder.home_platform_health import HomePlatformHealthService
 from rolling_thunder.http_home_platform import HttpHomePlatformClient, HttpTransport
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
+from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
 from rolling_thunder.map_sources import InstalledMapRegistry, MapTileResolver
 from rolling_thunder.map_tiles import MapTileCache, MapTileClient
 from rolling_thunder.map_zoom import (
@@ -110,6 +112,7 @@ class ApplicationRuntime:
     gps_polling: GPSPollingService | None = None
     clock_sync: ClockSynchronizationService | None = None
     live_map: LiveMapService | None = None
+    live_radar: LiveRadarOverlayService | None = None
     map_zoom_settings: MapZoomSettingsController | None = None
     operator_preferences: OperatorPreferenceService | None = None
     home_platform_client: HomePlatformClient | None = None
@@ -160,6 +163,7 @@ class ApplicationRuntime:
         forge_location_executor_factory: ExecutorFactory | None = None,
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
+        radar_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -337,6 +341,7 @@ class ApplicationRuntime:
         )
 
         live_map: LiveMapService | None = None
+        live_radar: LiveRadarOverlayService | None = None
         map_zoom_settings: MapZoomSettingsController | None = None
         map_config = config.map
         if map_config.enabled:
@@ -378,6 +383,24 @@ class ApplicationRuntime:
                 operator_preferences,
             )
 
+        if config.radar.enabled:
+            forge_api_url = config.forge.api_url
+            if forge_api_url is None:
+                raise ValueError("Forge API URL is required when radar is enabled.")
+            radar_client = HttpForgeRadarClient(
+                str(forge_api_url),
+                timeout_s=config.forge.request_timeout_s,
+                transport=forge_transport,
+            )
+            live_radar = LiveRadarOverlayService(
+                radar_client,
+                manifest_refresh_interval_s=config.radar.manifest_refresh_interval_s,
+                stale_after_s=config.radar.stale_after_s,
+                hide_after_s=config.radar.hide_after_s,
+                opacity=config.radar.opacity,
+                executor=radar_executor,
+            )
+
         return cls(
             radio=radio,
             polling=RadioPollingService(
@@ -393,6 +416,7 @@ class ApplicationRuntime:
             gps_polling=gps_polling,
             clock_sync=clock_sync,
             live_map=live_map,
+            live_radar=live_radar,
             map_zoom_settings=map_zoom_settings,
             operator_preferences=operator_preferences,
             home_platform_client=home_platform_client,
@@ -440,6 +464,13 @@ class ApplicationRuntime:
         return self.live_map.latest_state
 
     @property
+    def latest_live_radar_state(self) -> LiveRadarSnapshot | None:
+        """Return the latest immutable radar overlay snapshot without performing I/O."""
+        if self.live_radar is None:
+            return None
+        return self.live_radar.latest_state
+
+    @property
     def latest_forge_spot_state(self) -> PiForgeSpotState | None:
         """Return the latest Forge-derived shared-spot state without I/O."""
         if self.pi_forge_spot_polling is None:
@@ -476,6 +507,8 @@ class ApplicationRuntime:
             self.pi_forge_location_publishing.start()
         if self.live_map is not None:
             self.live_map.start()
+        if self.live_radar is not None:
+            self.live_radar.start()
         if self.home_platform_health is not None:
             self.home_platform_health.start()
         if self.contact_qrz_enrichment is not None:
@@ -510,6 +543,8 @@ class ApplicationRuntime:
             self.contact_qrz_enrichment.stop()
         if self.home_platform_health is not None:
             self.home_platform_health.stop()
+        if self.live_radar is not None:
+            self.live_radar.stop()
         if self.live_map is not None:
             self.live_map.stop()
         if self.operator_preferences is not None:

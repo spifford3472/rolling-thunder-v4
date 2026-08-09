@@ -32,10 +32,17 @@ from rolling_thunder.forge_mobile_location import (
 from rolling_thunder.forge_mobile_location_repository import (
     SqliteForgeMobileLocationRepository,
 )
+from rolling_thunder.forge_noaa_radar import NoaaNwsRadarProvider
 from rolling_thunder.forge_open_meteo_weather import OpenMeteoForgeWeatherProvider
 from rolling_thunder.forge_pota_provider import ForgePotaSpotProvider
 from rolling_thunder.forge_qrz_enrichment import ForgeQrzEnricher
 from rolling_thunder.forge_qrz_provider import ForgeQrzEnrichedSpotProvider
+from rolling_thunder.forge_radar import ForgeRadarService
+from rolling_thunder.forge_radar_api import RadarAwareForgeSpotApiApplication
+from rolling_thunder.forge_radar_polling import (
+    ExecutorFactory as RadarExecutorFactory,
+)
+from rolling_thunder.forge_radar_polling import ForgeRadarPollingService
 from rolling_thunder.forge_snapshot_repository import (
     ForgeSnapshotStorageError,
     SqliteForgeSnapshotRepository,
@@ -97,7 +104,7 @@ ForgeServerFactory = Callable[[str, int, ForgeSpotApiApplication], ForgeServer]
 
 
 class ForgeSpotRuntime:
-    """Own Forge spot, retained location, optional weather, and HTTP lifecycles."""
+    """Own Forge spot, location, weather, radar, and HTTP lifecycles."""
 
     def __init__(
         self,
@@ -107,6 +114,8 @@ class ForgeSpotRuntime:
         *,
         weather: ForgeWeatherStateSource | None = None,
         weather_polling: ForgeWeatherPollingService | None = None,
+        radar: ForgeRadarService | None = None,
+        radar_polling: ForgeRadarPollingService | None = None,
         logger: logging.Logger,
     ) -> None:
         self.polling = polling
@@ -114,6 +123,8 @@ class ForgeSpotRuntime:
         self.mobile_location = mobile_location
         self.weather = weather
         self.weather_polling = weather_polling
+        self.radar = radar
+        self.radar_polling = radar_polling
         self._logger = logger
 
     def run(self) -> None:
@@ -131,9 +142,13 @@ class ForgeSpotRuntime:
             self.polling.start()
             if self.weather_polling is not None:
                 self.weather_polling.start()
+            if self.radar_polling is not None:
+                self.radar_polling.start()
             server_thread.join()
         finally:
             self.server.shutdown()
+            if self.radar_polling is not None:
+                self.radar_polling.stop()
             if self.weather_polling is not None:
                 self.weather_polling.stop()
             self.polling.stop()
@@ -191,14 +206,16 @@ def build_forge_runtime(
     *,
     scheduler: PollScheduler | None = None,
     weather_scheduler: PollScheduler | None = None,
+    radar_scheduler: PollScheduler | None = None,
     server_factory: ForgeServerFactory | None = None,
     transport: HttpTransport | None = None,
     dxspider_session_factory: DxSpiderSessionFactory | None = None,
     weather_executor_factory: WeatherExecutorFactory | None = None,
+    radar_executor_factory: RadarExecutorFactory | None = None,
     secrets: ApplicationSecrets | None = None,
     logger: logging.Logger | None = None,
 ) -> ForgeSpotRuntime:
-    """Compose Forge spots, retained location/weather, polling, and REST."""
+    """Compose Forge spots, retained location/weather/radar, polling, and REST."""
     process_logger = logger or logging.getLogger(_LOGGER_NAME)
     providers: list[ForgeSpotProvider] = []
 
@@ -288,11 +305,35 @@ def build_forge_runtime(
                 executor_factory=weather_executor_factory,
             )
 
-    application = ForgeSpotApiApplication(
+    radar_service: ForgeRadarService | None = None
+    radar_polling: ForgeRadarPollingService | None = None
+    if config.radar.enabled:
+        radar_provider = NoaaNwsRadarProvider(
+            endpoint=str(config.radar.endpoint),
+            timeout_s=config.radar.request_timeout_s,
+            transport=transport,
+        )
+        radar_service = ForgeRadarService(
+            radar_provider,
+            mobile_location,
+            stale_after_s=config.radar.stale_after_s,
+            hide_after_s=config.radar.hide_after_s,
+            maximum_cached_tiles=config.radar.maximum_cached_tiles,
+        )
+        radar_polling = ForgeRadarPollingService(
+            radar_service,
+            radar_scheduler or ThreadedPollScheduler(),
+            check_interval_s=config.radar.check_interval_s,
+            refresh_on_start=config.radar.refresh_on_start,
+            executor_factory=radar_executor_factory,
+        )
+
+    core_application = ForgeSpotApiApplication(
         aggregation,
         mobile_location=mobile_location,
         weather=weather_state_source,
     )
+    application = RadarAwareForgeSpotApiApplication(core_application, radar_service)
     factory = server_factory or _default_server_factory
     server = factory(
         config.server.bind_host,
@@ -305,6 +346,8 @@ def build_forge_runtime(
         mobile_location,
         weather=weather_state_source,
         weather_polling=weather_polling,
+        radar=radar_service,
+        radar_polling=radar_polling,
         logger=process_logger,
     )
 
