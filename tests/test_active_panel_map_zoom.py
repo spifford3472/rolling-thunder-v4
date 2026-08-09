@@ -1,4 +1,4 @@
-"""Tests for routing generic encoder commands to Map Zoom in Settings."""
+"""Tests for routing generic Settings controls to map zoom and radar image."""
 
 from rolling_thunder.active_panel_commands import SharedSpotActivePanelCommandController
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
@@ -58,6 +58,11 @@ class FakeSettings:
     def __init__(self) -> None:
         self.out_count = 0
         self.in_count = 0
+        self.radar_toggle_count = 0
+
+    def toggle_radar(self) -> bool:
+        self.radar_toggle_count += 1
+        return True
 
     def zoom_out(self) -> bool:
         self.out_count += 1
@@ -84,7 +89,21 @@ def test_settings_context_routes_previous_next_to_map_zoom() -> None:
     assert settings.in_count == 1
 
 
-def test_non_settings_context_does_not_change_map_zoom() -> None:
+def test_settings_context_routes_primary_to_radar_image_toggle() -> None:
+    navigation = ContextNavigationController(ContextId.SETTINGS)
+    settings = FakeSettings()
+    controller = SharedSpotActivePanelCommandController(
+        navigation,
+        FakeSharedPanel(),
+        current_frequency=lambda: None,
+        settings_panel=settings,
+    )
+
+    assert controller.primary() is True
+    assert settings.radar_toggle_count == 1
+
+
+def test_non_settings_context_does_not_change_settings() -> None:
     navigation = ContextNavigationController(ContextId.AI)
     settings = FakeSettings()
     controller = SharedSpotActivePanelCommandController(
@@ -94,7 +113,9 @@ def test_non_settings_context_does_not_change_map_zoom() -> None:
         settings_panel=settings,
     )
 
+    assert controller.primary() is False
     assert controller.move_previous() is False
     assert controller.move_next() is False
+    assert settings.radar_toggle_count == 0
     assert settings.out_count == 0
     assert settings.in_count == 0
