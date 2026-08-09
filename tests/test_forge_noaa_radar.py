@@ -108,6 +108,7 @@ def test_provider_discovers_latest_covering_raster_and_locks_export_to_it() -> N
     assert export_query["imageSR"] == ["3857"]
     assert export_query["size"] == ["256,256"]
     assert export_query["format"] == ["png32"]
+    assert export_query["transparent"] == ["true"]
     mosaic_rule = loads(export_query["mosaicRule"][0])
     assert mosaic_rule["mosaicMethod"] == "esriMosaicLockRaster"
     assert mosaic_rule["lockRasterIds"] == [123]
