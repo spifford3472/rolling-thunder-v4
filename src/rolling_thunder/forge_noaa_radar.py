@@ -129,7 +129,7 @@ class NoaaNwsRadarProvider:
         )
 
     def fetch_tile(self, provider_frame_id: str, key: MapTileKey) -> bytes:
-        """Export one 256px Web Mercator PNG locked to one exact NOAA raster."""
+        """Export one transparent 256px Web Mercator PNG locked to one NOAA raster."""
         try:
             raster_id = int(provider_frame_id)
         except ValueError as error:
@@ -149,6 +149,7 @@ class NoaaNwsRadarProvider:
             "size": "256,256",
             "imageSR": "3857",
             "format": "png32",
+            "transparent": "true",
             "interpolation": "RSP_NearestNeighbor",
             "mosaicRule": mosaic_rule,
             "f": "image",
