@@ -2,11 +2,15 @@
 
 ## Purpose
 
-This document defines the supported production deployment for the Rolling Thunder Forge service established by checkpoint 8 of GitHub issue #148 and extended by checkpoint #160.
+This document defines the supported production deployment for the Rolling Thunder Forge service established by checkpoint 8 of GitHub issue #148 and extended by checkpoints #160, #161, and #162.
 
-Forge remains an independent backend process. It aggregates retained POTA/DX spot state and now accepts one bounded latest-mobile-location write on the existing private API. It has no radio, CAT, receive-tuning, PTT, MOX, keying, tuner, power, contact logging, or Tkinter authority.
+Forge remains one independent backend process on the existing private listener. It aggregates and retains POTA/DX spot state, accepts one bounded latest-mobile-location write, and can now retain provider-neutral weather derived from that latest accepted mobile location. It has no radio, CAT, receive-tuning, PTT, MOX, keying, tuner, power, contact logging, or Tkinter authority.
 
-The detailed mobile-location schema and acceptance behavior are documented in `docs/FORGE_MOBILE_LOCATION_API.md`.
+Detailed API contracts are documented in:
+
+- `docs/FORGE_MOBILE_LOCATION_API.md`
+- `docs/PI_FORGE_LOCATION_PUBLISHER.md`
+- `docs/FORGE_WEATHER_API.md`
 
 ## Production host and listener
 
@@ -19,6 +23,8 @@ The production REST listener is:
 ```
 
 Port `8765` is not used by the production Forge service. The service must not bind to `0.0.0.0`.
+
+Checkpoint #162 does not add another listener or daemon. Weather uses the same process, systemd unit, listener, and SQLite file as the existing Forge service.
 
 ## Production layout
 
@@ -47,7 +53,7 @@ Group=rollingthunder
 
 The service must not run as `root` or the interactive `geoff` account.
 
-The application tree is owned by `root:rollingthunder`; the service account has read/execute access but does not own the source tree. Persistent state is owned by `rollingthunder:rollingthunder` so the service can update its SQLite database without write access to application source or configuration.
+The application tree is owned by `root:rollingthunder`; the service account has read/execute access but does not own the source tree. Persistent state is owned by `rollingthunder:rollingthunder` so the service can update SQLite without write access to application source or configuration.
 
 ## Configuration
 
@@ -69,11 +75,40 @@ The production database path is:
 /var/lib/rolling-thunder/forge-spots.db
 ```
 
-The accepted checkpoint-8 deployment enables POTA and DXSpider, uses a 60-second aggregation refresh interval with refresh-on-start enabled, and leaves QRZ enrichment disabled until credentials are intentionally provisioned.
+The accepted base deployment enables POTA and DXSpider, uses a 60-second spot aggregation refresh interval with refresh-on-start enabled, and leaves QRZ enrichment disabled until credentials are intentionally provisioned.
 
-Checkpoint #160 does not add a second database path or a new configuration section. Retained mobile location uses independent tables inside the same configured Forge SQLite file.
+### Weather configuration
+
+Weather is deliberately disabled by the model default so an old Forge YAML file does not begin new outbound provider traffic merely because the package was upgraded. Checkpoint #162 production adoption explicitly enables weather in the deployed YAML.
+
+Supported production shape:
+
+```yaml
+weather:
+  enabled: true
+  endpoint: https://api.open-meteo.com/v1/forecast
+  request_timeout_s: 5.0
+  check_interval_s: 60.0
+  max_forecast_age_s: 1800.0
+  movement_refresh_km: 10.0
+  refresh_on_start: true
+```
+
+`check_interval_s` controls how frequently the background weather worker evaluates whether refresh is required; it does not force a provider call every interval. A provider refresh occurs when no complete forecast exists, the retained forecast reaches the configured maximum age, or the latest retained mobile location moves at least the configured distance from the forecast coordinates.
+
+Weather adds no second database path. Spot snapshots, retained mobile location, and retained weather use independent schema/table families inside the same configured Forge SQLite file.
 
 DXSpider login uses the licensed operator callsign configured in production YAML.
+
+## Open-Meteo provider and attribution
+
+Checkpoint #162 uses Open-Meteo only behind the typed Forge weather-provider boundary. Provider-specific weather codes are normalized into Rolling Thunder-owned condition/icon tokens before persistence and API publication.
+
+Open-Meteo API data require attribution under CC BY 4.0. Forge therefore includes provider name, attribution text/link, and license metadata inside every retained weather snapshot. Downstream UI work must display attribution when Open-Meteo-derived data are shown.
+
+See `docs/FORGE_WEATHER_API.md` for the normalized fields and attribution metadata.
+
+No Open-Meteo API credential is stored in Forge YAML for the initial integration.
 
 ## QRZ credentials
 
@@ -88,7 +123,7 @@ ROLLING_THUNDER_QRZ_PASSWORD
 
 Recommended ownership and mode for the environment file are `root:rollingthunder` and `0640`. When QRZ is disabled the file may remain empty.
 
-Checkpoint #160 deliberately does not introduce an application-layer mobile-location credential; the routed private network remains the authorization boundary described below.
+The retained mobile-location endpoint still does not use an application-layer credential; the routed private network remains the authorization boundary described below.
 
 ## systemd service
 
@@ -151,23 +186,48 @@ Spot snapshot:
 curl -fsS http://192.168.9.170:8766/api/v1/spots
 ```
 
+Retained weather:
+
+```bash
+curl -fsS http://192.168.9.170:8766/api/v1/weather
+```
+
 Mobile location write endpoint:
 
 ```text
 PUT http://192.168.9.170:8766/api/v1/mobile-location
 ```
 
-See `docs/FORGE_MOBILE_LOCATION_API.md` for the versioned JSON body, bounds, response codes, and smoke-test command.
+A normal accepted #162 deployment reports the core POTA/DX service healthy and weather healthy after a retained mobile location is available and a provider refresh has succeeded. Weather failure can intentionally report `degraded` or `unavailable` without changing the existing core spot-service status.
 
-A normal live deployment reports the service, DX, and POTA as healthy. Provider failures may intentionally leave retained spot data available with degraded health. Mobile-location write validation does not initiate provider refreshes.
+Mobile-location write validation and all weather GET handlers perform no provider refresh work.
 
 ## Persistence and restart behavior
 
 Forge SQLite state is independent of the Pi contact database.
 
-The service loads the last durable Forge spot snapshot during startup, so the HTTP API can serve retained spot state before the first live provider refresh has completed. Checkpoint #160 also loads the last durable mobile-location row into an independent retained state.
+The service loads the last durable Forge spot snapshot during startup so the HTTP API can serve retained spot state before the first live provider refresh. It also loads the last durable mobile-location row and the last complete retained weather snapshot from independent table families.
 
-Spot snapshot tables and mobile-location tables share the configured SQLite file but have independent schema metadata and publication services. A mobile-location write uses a SQLite transaction and does not publish the new in-memory location until commit succeeds. Malformed, stale, impossible, unsupported, or failed writes leave the previous accepted location unchanged.
+Current Forge table families include:
+
+```text
+forge_schema_metadata
+forge_snapshot_metadata
+forge_provider_slices
+forge_spots
+
+forge_mobile_location_schema_metadata
+forge_mobile_location
+
+forge_weather_schema_metadata
+forge_weather_snapshot
+```
+
+Weather stores the complete normalized snapshot transactionally as one singleton retained snapshot with a monotonically increasing revision. A replacement is committed before new weather is published in memory.
+
+Provider, transport, validation, or weather-persistence failure does not erase the previously accepted complete forecast. When a prior snapshot exists, the API continues serving it with truthful health/staleness metadata.
+
+A weather-specific initialization/storage failure is isolated from core Forge startup. Forge may continue serving spots and mobile-location behavior while weather reports unavailable.
 
 A restored or migrated database must pass:
 
@@ -177,9 +237,24 @@ PRAGMA integrity_check;
 
 A live SQLite database must be copied with SQLite backup semantics rather than with an uncoordinated file copy.
 
+## Background lifecycle boundaries
+
+Spot aggregation and weather refresh use separate lifecycle-managed background paths.
+
+Weather provider work:
+
+- never executes in an HTTP request handler
+- never executes on a Pi UI thread
+- permits only one in-flight weather refresh
+- uses explicit HTTP timeouts and bounded response size
+- checks for staleness/movement before provider retrieval
+- leaves prior retained weather available after failed refresh attempts
+
+Weather does not trigger POTA/DX/QRZ provider refreshes, and a mobile-location write does not synchronously trigger weather retrieval.
+
 ## Network trust boundary
 
-The Forge REST API provides neither TLS nor application-layer authentication. This is an explicit private-network trust-boundary decision and is acceptable only inside the trusted private Rolling Thunder routed network.
+The Forge REST API provides neither TLS nor application-layer authentication. This remains an explicit private-network trust-boundary decision and is acceptable only inside the trusted private Rolling Thunder routed network.
 
 The production listener is restricted to `192.168.9.170:8766` rather than every Forge interface.
 
@@ -203,67 +278,86 @@ The deployment assumes:
 - only intended private networks are allowed to reach the Forge RadioLAN API
 - untrusted Wi-Fi, guest networks, and arbitrary LAN segments cannot reach TCP 8766
 
-The Forge host does not rely on UFW for this service boundary. Security therefore depends on the specific bind address plus the routed OPNsense/WireGuard policy.
+The Forge host does not rely on UFW for this service boundary. Security therefore depends on the specific bind address plus routed OPNsense/WireGuard policy.
 
-The checkpoint-8 API was read-only. Checkpoint #160 materially changes the residual risk: anyone who can reach TCP 8766 can still read health/spots **and can now submit a candidate retained mobile location**. A malicious accepted write could poison later location-dependent map or weather intelligence. It still cannot directly key, tune, power, or otherwise control a radio.
+Anyone who can reach TCP 8766 can read health/spots/weather and can submit a candidate retained mobile location. A malicious accepted location could poison location-dependent weather intelligence. It still cannot directly key, tune, power, or otherwise control a radio.
 
-This network-only authorization decision is supported only for the existing trusted routed deployment. If the API is ever exposed outside that boundary, or if untrusted clients are permitted onto a network that can reach TCP 8766, TLS and application authentication must be added before that exposure is considered supported.
+This network-only authorization decision is supported only for the existing trusted routed deployment. If the API is exposed outside that boundary, or untrusted clients can reach TCP 8766, TLS and application authentication must be added before that exposure is supported.
+
+### Outbound weather traffic
+
+When weather is explicitly enabled, Forge makes bounded HTTPS GET requests to the configured Open-Meteo endpoint. This is outbound provider traffic only; it does not expose an inbound public service and does not change the private-listener trust boundary.
 
 ## Pi failure behavior
 
 Forge availability is not required for local Rolling Thunder operation.
 
-If Forge, WireGuard, cellular service, DXSpider, POTA, or the public Internet is unavailable:
+Checkpoint #161 publishes valid Pi GPS fixes to Forge on a bounded background cadence, but Forge/network failure does not stop local GPS acquisition or local application operation.
 
+If Forge, WireGuard, cellular service, weather provider, DXSpider, POTA, or the public Internet is unavailable:
+
+- local Pi SQLite contact logging remains authoritative and available
+- GPS polling continues independently
+- controls and radio polling continue independently
 - the Pi retains its most recent valid shared-spot snapshot
-- stale/error age remains visible through the Pi Forge client state
-- malformed or incomplete Forge responses do not replace the durable Pi cache
-- local SQLite contact logging remains authoritative and available
+- stale/error age remains visible through Pi-side Forge state
+- malformed/incomplete Forge responses do not replace durable Pi cache
 - no alternate public POTA polling authority is activated when Forge mode is enabled
+- weather failure does not become a prerequisite for local core functions
 
-Checkpoint #160 does not yet add the Pi mobile-location publisher; that is checkpoint #161. Therefore a Forge outage cannot affect local GPS acquisition in this checkpoint.
+Pi-side consumption/rendering of the new retained weather API belongs to checkpoints #164 and #165, not #162.
 
 ## Deployment update procedure
 
 A production update must use a known Git commit and preserve the currently working service until the new build is validated.
 
-Recommended sequence:
+Recommended checkpoint #162 sequence:
 
 1. complete and push the feature commit
-2. stage the exact commit under `/opt/rolling-thunder-forge`
-3. create the production virtual environment
-4. install the package into that virtual environment
-5. validate configuration as the `rollingthunder` service account
-6. validate a copy of the current SQLite database
-7. run the new executable side-by-side on a temporary private port
-8. require successful live POTA and DX provider refreshes
-9. smoke-test mobile-location writes against the side-by-side database copy
-10. stop the old production process
-11. take a final SQLite backup
-12. start the new systemd service on 8766
-13. require live healthy POTA and DX refreshes
-14. verify the production mobile-location endpoint on 8766
-15. verify process identity, command, working directory, listener, and commit
-16. enable the service at boot only after all checks pass
+2. require Ruff, strict MyPy, and full pytest on that exact head
+3. create an exact Git bundle/staging artifact for Forge
+4. create an SQLite-safe backup of `/var/lib/rolling-thunder/forge-spots.db`
+5. stage the exact candidate under a separate application directory
+6. install the candidate into a staging virtual environment
+7. create a separate SQLite copy for side-by-side smoke testing
+8. use a separate temporary loopback listener; never share the production SQLite file between processes
+9. configure weather enabled in the side-by-side candidate
+10. verify the copied database contains the retained mobile location used for weather
+11. start the candidate and require existing POTA/DX health plus a real Open-Meteo weather refresh
+12. verify `/api/v1/weather` contains current, at least three hourly points, solar timestamps, normalized tokens, and attribution metadata
+13. verify the candidate weather snapshot survives candidate restart
+14. verify copied-database `PRAGMA integrity_check` is `ok`
+15. stop the side-by-side candidate
+16. preserve a full rollback checkout and take a final SQLite-safe production backup
+17. deliberately add/enable the production `weather:` configuration block
+18. cut over the existing systemd service on the same production listener
+19. require existing health/spots/mobile-location behavior to remain healthy
+20. require a live production weather refresh and positive retained weather revision
+21. restart the production service and verify retained weather persists
+22. verify service account, working directory, exact commit, listener, same SQLite path, and integrity
+23. retain rollback artifacts until checkpoint acceptance is complete
 
-A side-by-side smoke test must use a separate SQLite copy and a separate port. Two Forge processes must never write the same SQLite database concurrently.
+Two Forge processes must never write the same SQLite database concurrently.
 
 ## Rollback
 
 If a newly deployed systemd service fails before acceptance:
 
 1. stop the new service
-2. disable it if it was enabled
-3. confirm TCP 8766 is no longer listening
-4. restore the last known-good application/config/database combination
-5. start the last known-good service
-6. require a successful health response before declaring rollback complete
+2. confirm TCP 8766 is no longer owned by the failed/new process
+3. restore the last known-good application/config/database combination
+4. restart the last known-good service
+5. require successful `/api/v1/health` and `/api/v1/spots` responses before declaring rollback complete
+
+Weather tables are additive, but rollback artifacts must still be preserved because checkpoint acceptance requires a reversible complete deployment.
 
 Never launch a rollback process while another process still owns TCP 8766.
 
 Retained SQLite state may be used during provider outages, but a database with failed integrity validation must never be placed into service.
 
-## Checkpoint-8 deployment acceptance
+## Historical deployment acceptance
+
+### Checkpoint 8
 
 The first checkpoint-8 production deployment was accepted on Forge using application commit:
 
@@ -271,37 +365,39 @@ The first checkpoint-8 production deployment was accepted on Forge using applica
 9300cbc3cd8aa4335ca6071d6d8cfa80d267b8c0
 ```
 
-Acceptance demonstrated:
+Acceptance demonstrated dedicated service identity, production listener/storage, live POTA/DX provider refreshes, healthy REST behavior, systemd restart policy, and real Pi requests through the private routed path.
 
-- exact deployed commit verification
-- dedicated `rollingthunder` UID
-- working directory `/opt/rolling-thunder-forge`
-- production config `/etc/rolling-thunder/forge-spots.yaml`
-- persistent SQLite integrity validation
-- live POTA refresh
-- live DXSpider refresh
-- healthy REST response on `192.168.9.170:8766`
-- systemd `Restart=on-failure`
-- five-second restart delay
-- service active under systemd
-- service enabled at boot
-- old interactive `geoff` Forge process retired
-- real Pi requests reaching `/api/v1/spots` through the private routed path
+### Checkpoint #160 — retained mobile-location API
 
-At final checkpoint-8 infrastructure acceptance the API reported both POTA and DX providers healthy with no persistence or startup-storage error.
-
-## Checkpoint-160 deployment acceptance
-
-Checkpoint #160 is not production-accepted until the exact Ready-for-review head has been deployed to the existing Forge systemd service and demonstrates:
+Checkpoint #160 was accepted and merged after production demonstrated:
 
 - the same `rollingthunder` service account
 - only the existing `192.168.9.170:8766` listener
-- existing `/api/v1/health` and `/api/v1/spots` behavior remains healthy
-- one current valid `PUT /api/v1/mobile-location` returns HTTP 200 and a retained revision
-- a deliberately stale write returns HTTP 409
-- the previously accepted row remains durable after the stale rejection
-- SQLite `PRAGMA integrity_check` remains `ok`
-- no new daemon, port, radio authority, or provider refresh is introduced by the write
+- healthy existing `/api/v1/health` and `/api/v1/spots`
+- one current valid `PUT /api/v1/mobile-location` accepted with a retained revision
+- an identical/stale write rejected with HTTP 409 without replacing the accepted row
+- retained location surviving service restart
+- SQLite integrity remaining `ok`
+- no new daemon, port, database, or radio authority
+
+### Checkpoint #161 — Pi GPS publisher
+
+Checkpoint #161 was accepted on `anvilmobile` after a real trusted GPS 3D fix was successfully published to production Forge and acknowledged as retained mobile-location revision 3. This was a Pi-side change and did not require a new Forge listener or server deployment.
+
+## Checkpoint #162 acceptance gate
+
+Checkpoint #162 is not production-accepted until the exact Ready-for-review head has been staged and deployed through the procedure above and demonstrates:
+
+- existing systemd service identity and listener unchanged
+- weather enabled deliberately in production configuration
+- latest retained mobile location drives a real Open-Meteo refresh
+- `/api/v1/weather` returns API schema version 1, positive revision, complete current/hourly/solar data, normalized condition/icon tokens, and attribution metadata
+- provider work occurs outside request handlers
+- existing health/spots/mobile-location behavior remains healthy
+- retained weather survives Forge restart
+- weather failure semantics preserve prior valid forecast
+- SQLite integrity remains `ok`
+- no second daemon, listener, database file, Pi authority, or radio authority
 
 ## Radio safety boundary
 
