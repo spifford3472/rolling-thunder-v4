@@ -23,6 +23,7 @@ from rolling_thunder.radar_tiles import apply_radar_opacity
 class RadarDataStatus(StrEnum):
     """Availability state for the optional live radar overlay."""
 
+    DISABLED = "disabled"
     IDLE = "idle"
     LOADING = "loading"
     READY = "ready"
@@ -67,6 +68,7 @@ class LiveRadarOverlayService:
         stale_after_s: float = 900.0,
         hide_after_s: float = 1_800.0,
         opacity: float = 0.55,
+        display_enabled: bool = True,
         clock: Callable[[], datetime] = _utc_now,
         monotonic_clock: Callable[[], float] = monotonic,
         executor: Executor | None = None,
@@ -88,6 +90,7 @@ class LiveRadarOverlayService:
         self._owns_executor = executor is None
         self._started = False
         self._lock = Lock()
+        self._display_enabled = display_enabled
         self._next_generation = 0
         self._pending_generation: int | None = None
         self._pending_viewport: MapViewport | None = None
@@ -95,23 +98,35 @@ class LiveRadarOverlayService:
         self._queued_viewport: MapViewport | None = None
         self._cached_manifest: ForgeRadarManifest | None = None
         self._manifest_checked_monotonic: float | None = None
-        self._latest = LiveRadarSnapshot(
-            status=RadarDataStatus.IDLE,
-            viewport=None,
-            frame=None,
-            tiles=(),
-            detail="RADAR WAITING FOR MAP",
-            updated_at=self._aware_now(),
-        )
+        self._latest = self._idle_snapshot() if display_enabled else self._disabled_snapshot()
 
     @property
     def is_running(self) -> bool:
         return self._started
 
     @property
+    def display_enabled(self) -> bool:
+        """Return whether Pi-side radar image work is currently enabled."""
+        with self._lock:
+            return self._display_enabled
+
+    @property
     def latest_state(self) -> LiveRadarSnapshot:
         with self._lock:
             return self._latest
+
+    def set_display_enabled(self, enabled: bool) -> bool:
+        """Enable or disable Pi-side radar image work without changing Forge."""
+        with self._lock:
+            if self._display_enabled is enabled:
+                return False
+            self._display_enabled = enabled
+            self._pending_generation = None
+            self._pending_viewport = None
+            self._queued_generation = None
+            self._queued_viewport = None
+            self._latest = self._idle_snapshot() if enabled else self._disabled_snapshot()
+            return True
 
     def start(self) -> None:
         """Start the single bounded overlay worker."""
@@ -146,6 +161,8 @@ class LiveRadarOverlayService:
         submit_viewport: MapViewport | None = None
         submit_generation: int | None = None
         with self._lock:
+            if not self._display_enabled:
+                return
             if self._pending_generation is not None:
                 pending = self._pending_viewport
                 if pending is not None and pending.tile_keys == viewport.tile_keys:
@@ -282,7 +299,7 @@ class LiveRadarOverlayService:
         next_viewport: MapViewport | None = None
         next_generation: int | None = None
         with self._lock:
-            if not self._started or self._pending_generation != generation:
+            if not self._started or not self._display_enabled or self._pending_generation != generation:
                 return
             queued = self._queued_viewport
             queued_generation = self._queued_generation
@@ -321,7 +338,7 @@ class LiveRadarOverlayService:
         detail: str,
     ) -> None:
         with self._lock:
-            if not self._started or self._pending_generation != generation:
+            if not self._started or not self._display_enabled or self._pending_generation != generation:
                 return
             publish = self._pending_viewport or requested
             if self._can_retain_previous_locked(publish):
@@ -351,7 +368,7 @@ class LiveRadarOverlayService:
         next_viewport: MapViewport | None = None
         next_generation: int | None = None
         with self._lock:
-            if not self._started or self._pending_generation != generation:
+            if not self._started or not self._display_enabled or self._pending_generation != generation:
                 return
             queued = self._queued_viewport
             queued_generation = self._queued_generation
@@ -530,6 +547,7 @@ class LiveRadarOverlayService:
         with self._lock:
             return (
                 not self._started
+                or not self._display_enabled
                 or self._pending_generation != generation
                 or self._queued_viewport is not None
             )
@@ -553,6 +571,26 @@ class LiveRadarOverlayService:
     def _new_generation_locked(self) -> int:
         self._next_generation += 1
         return self._next_generation
+
+    def _idle_snapshot(self) -> LiveRadarSnapshot:
+        return LiveRadarSnapshot(
+            status=RadarDataStatus.IDLE,
+            viewport=None,
+            frame=None,
+            tiles=(),
+            detail="RADAR WAITING FOR MAP",
+            updated_at=self._aware_now(),
+        )
+
+    def _disabled_snapshot(self) -> LiveRadarSnapshot:
+        return LiveRadarSnapshot(
+            status=RadarDataStatus.DISABLED,
+            viewport=None,
+            frame=None,
+            tiles=(),
+            detail="RADAR DISABLED",
+            updated_at=self._aware_now(),
+        )
 
     def _aware_now(self) -> datetime:
         value = self._clock()
