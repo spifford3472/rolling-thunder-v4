@@ -83,7 +83,7 @@ class ForgeWeatherPollingService:
             self._scheduled_poll = scheduled_poll
 
         if self._refresh_on_start:
-            self._queue_refresh()
+            self._queue_refresh(force=True)
         return self._service.get_state()
 
     def stop(self) -> ForgeWeatherState:
@@ -104,9 +104,9 @@ class ForgeWeatherPollingService:
         return self._service.get_state()
 
     def _poll_once(self) -> None:
-        self._queue_refresh()
+        self._queue_refresh(force=False)
 
-    def _queue_refresh(self) -> None:
+    def _queue_refresh(self, *, force: bool) -> None:
         with self._lock:
             executor = self._executor
             if executor is None or self._scheduled_poll is None or self._worker_pending:
@@ -114,15 +114,15 @@ class ForgeWeatherPollingService:
             self._worker_pending = True
 
         try:
-            executor.submit(self._run_refresh)
+            executor.submit(self._run_refresh, force)
         except Exception:
             with self._lock:
                 self._worker_pending = False
             raise
 
-    def _run_refresh(self) -> None:
+    def _run_refresh(self, force: bool) -> None:
         try:
-            self._service.refresh_if_needed()
+            self._service.refresh_if_needed(force=force)
         except Exception:
             _LOGGER.exception(
                 "Unexpected Forge weather refresh failure; future attempts will continue."
