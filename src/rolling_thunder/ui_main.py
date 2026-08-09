@@ -33,6 +33,7 @@ from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.operator_commands import OperatorCommandController
+from rolling_thunder.operator_preferences import OperatorPreferenceRepository
 from rolling_thunder.physical_controls import (
     ControlAction,
     ControlActionMapper,
@@ -45,6 +46,8 @@ from rolling_thunder.pota_tune_execution_controller import (
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
+from rolling_thunder.settings_panel import DashboardSettingsController
+from rolling_thunder.settings_ui import SettingsWidgets
 from rolling_thunder.shared_pota_contact import shared_pota_spots_for_contact
 from rolling_thunder.shared_spot_panel import SharedSpotPanelController
 from rolling_thunder.shared_spot_tune_status import SharedSpotTuneStatusController
@@ -159,6 +162,21 @@ def run_dashboard(
         return 2
 
     runtime = ApplicationRuntime.from_config(config, secrets=secrets)
+    stored_radar_image = OperatorPreferenceRepository(
+        config.storage.database_path
+    ).read_radar_image_enabled()
+    if runtime.live_radar is not None and stored_radar_image is not None:
+        runtime.live_radar.set_display_enabled(stored_radar_image)
+
+    preference_service = runtime.operator_preferences
+    if preference_service is None:
+        raise RuntimeError("Operator preferences are required by the Settings panel.")
+    settings_panel = DashboardSettingsController(
+        runtime.map_zoom_settings,
+        runtime.live_radar,
+        preference_service,
+    )
+
     try:
         runtime.start()
     except (RadioConnectionError, RuntimeError, ValueError) as error:
@@ -196,7 +214,7 @@ def run_dashboard(
         current_frequency=lambda: runtime.latest_radio_state.frequency,
         radio_state=lambda: runtime.latest_radio_state,
         shared_tuning=shared_spot_tuning,
-        settings_panel=runtime.map_zoom_settings,
+        settings_panel=settings_panel,
     )
     _ = pota_tune_executor
 
@@ -415,6 +433,8 @@ def run_dashboard(
         wraplength=560,
     )
     context_body_label.grid(row=1, column=0, sticky="nsew")
+
+    settings_widgets = SettingsWidgets(context_content)
 
     pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     pota_panel_frame.grid(row=1, column=0, sticky="nsew")
@@ -659,14 +679,22 @@ def run_dashboard(
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     def show_standard_context_body() -> None:
-        """Show the reusable text body and hide the POTA card viewport."""
+        """Show the reusable text body and hide specialized context viewports."""
         pota_panel_frame.grid_remove()
+        settings_widgets.hide()
         context_body_label.grid()
 
     def show_pota_context_body() -> None:
-        """Show the POTA card viewport and hide the generic text body."""
+        """Show the POTA card viewport and hide other context bodies."""
         context_body_label.grid_remove()
+        settings_widgets.hide()
         pota_panel_frame.grid()
+
+    def show_settings_context_body() -> None:
+        """Show Settings controls and hide the generic/POTA context bodies."""
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        settings_widgets.show()
 
     def refresh() -> None:
         if control_dispatcher is not None:
@@ -837,22 +865,10 @@ def run_dashboard(
                 footer_lines.append("SELECT A SPOT — PRESS TO STAGE")
             pota_footer_text.set("\n".join(footer_lines))
         elif selected_context.selected is ContextId.SETTINGS:
-            show_standard_context_body()
+            show_settings_context_body()
             context_title_text.set(selected_context.definition.title)
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
-            zoom_settings = runtime.map_zoom_settings
-            if zoom_settings is None:
-                context_body_label.configure(
-                    font=("DejaVu Sans Mono", 30, "bold"),
-                    wraplength=560,
-                )
-                context_body_text.set("MAP ZOOM\nDISABLED")
-            else:
-                context_body_label.configure(
-                    font=("DejaVu Sans Mono", 30, "bold"),
-                    wraplength=560,
-                )
-                context_body_text.set("\n".join(zoom_settings.state.lines))
+            settings_widgets.update(settings_panel.state)
 
             health = build_station_health(
                 runtime.latest_radio_state,
