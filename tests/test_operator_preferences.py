@@ -32,6 +32,7 @@ def test_schema_migration_creates_operator_preferences_table(tmp_path: Path) -> 
     initialize_database(database_path)
 
     with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP TABLE forge_weather_cache")
         connection.execute("DROP TABLE operator_preferences")
         connection.execute(
             "UPDATE schema_metadata SET schema_version = 7 WHERE singleton_id = 1"
