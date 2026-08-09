@@ -6,6 +6,7 @@ from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotStateKind
+from rolling_thunder.pi_forge_weather_service import PiForgeWeatherStateKind
 from rolling_thunder.radio_polling import PollCallback
 
 
@@ -37,6 +38,7 @@ def config(
     tmp_path: Path,
     *,
     forge_enabled: bool,
+    weather_enabled: bool = False,
     real_gps: bool = False,
 ) -> ApplicationConfig:
     hardware: dict[str, object] = {"mock": True}
@@ -59,6 +61,12 @@ def config(
             "api_url": "http://forge.example.invalid",
             "refresh_interval_s": 45.0,
             "refresh_on_start": False,
+            "weather": {
+                "enabled": weather_enabled,
+                "refresh_interval_s": 900.0,
+                "refresh_on_start": False,
+                "stale_after_s": 1_800.0,
+            },
         }
     return ApplicationConfig.model_validate(payload)
 
@@ -71,8 +79,10 @@ def test_runtime_leaves_pi_forge_stack_absent_when_disabled(tmp_path: Path) -> N
     )
 
     assert runtime.pi_forge_spot_polling is None
+    assert runtime.pi_forge_weather_polling is None
     assert runtime.pi_forge_location_publishing is None
     assert runtime.latest_forge_spot_state is None
+    assert runtime.latest_forge_weather_state.kind is PiForgeWeatherStateKind.DISABLED
     assert runtime.latest_forge_location_publisher_state is None
 
 
@@ -94,6 +104,8 @@ def test_runtime_composes_and_manages_enabled_pi_forge_polling(tmp_path: Path) -
     assert initial.kind is PiForgeSpotStateKind.EMPTY
     assert initial.snapshot is None
     assert forge_polling.is_running is False
+    assert runtime.pi_forge_weather_polling is None
+    assert runtime.latest_forge_weather_state.kind is PiForgeWeatherStateKind.DISABLED
 
     # Mock/development GPS must never publish fake coordinates to Forge.
     assert runtime.pi_forge_location_publishing is None
@@ -111,6 +123,40 @@ def test_runtime_composes_and_manages_enabled_pi_forge_polling(tmp_path: Path) -
 
     assert forge_polling.is_running is False
     assert forge_scheduler.poll.cancelled is True
+
+
+def test_runtime_composes_retained_weather_on_independent_15_minute_schedule(
+    tmp_path: Path,
+) -> None:
+    radio_scheduler = ManualScheduler()
+    gps_scheduler = ManualScheduler()
+    forge_scheduler = ManualScheduler()
+    weather_scheduler = ManualScheduler()
+    runtime = ApplicationRuntime.from_config(
+        config(tmp_path, forge_enabled=True, weather_enabled=True),
+        scheduler=radio_scheduler,
+        gps_scheduler=gps_scheduler,
+        forge_scheduler=forge_scheduler,
+        forge_weather_scheduler=weather_scheduler,
+    )
+
+    weather_polling = runtime.pi_forge_weather_polling
+    assert weather_polling is not None
+    assert weather_polling.is_running is False
+    assert runtime.latest_forge_weather_state.kind is PiForgeWeatherStateKind.NO_DATA
+
+    runtime.start()
+
+    assert weather_polling.is_running is True
+    assert weather_polling.is_refreshing is False
+    assert weather_scheduler.interval_s == 900.0
+    assert weather_scheduler.poll is not None
+    assert runtime.latest_forge_weather_state is weather_polling.latest_state
+
+    runtime.stop()
+
+    assert weather_polling.is_running is False
+    assert weather_scheduler.poll.cancelled is True
 
 
 def test_real_gps_mode_composes_and_manages_location_publisher(tmp_path: Path) -> None:
