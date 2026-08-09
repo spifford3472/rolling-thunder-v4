@@ -166,8 +166,17 @@ class SpeechConfig(ConfigurationModel):
         return self
 
 
+class ForgeWeatherClientConfig(ConfigurationModel):
+    """Optional Pi-side retained-weather polling settings under Forge."""
+
+    enabled: bool = False
+    refresh_interval_s: float = Field(default=900.0, gt=0, le=86_400)
+    refresh_on_start: bool = True
+    stale_after_s: float = Field(default=1_800.0, gt=0, le=172_800)
+
+
 class ForgeConfig(ConfigurationModel):
-    """Optional Pi-side Forge shared-spot client settings."""
+    """Optional Pi-side Forge client settings."""
 
     enabled: bool = False
     api_url: AnyHttpUrl | None = None
@@ -179,14 +188,17 @@ class ForgeConfig(ConfigurationModel):
         ge=1_024,
         le=16_777_216,
     )
+    weather: ForgeWeatherClientConfig = ForgeWeatherClientConfig()
 
     @model_validator(mode="after")
     def validate_enabled_forge(self) -> Self:
-        """Require a Forge API URL only when Pi-side polling is enabled."""
+        """Require a Forge API URL and parent enablement for active Pi clients."""
         if self.enabled and self.api_url is None:
             raise ValueError(
                 "forge.api_url must be configured when forge.enabled is true"
             )
+        if self.weather.enabled and not self.enabled:
+            raise ValueError("forge.enabled must be true when forge.weather.enabled is true")
         return self
 
 
@@ -360,7 +372,7 @@ class PhysicalControlsConfig(ConfigurationModel):
             if str(path) in {"", "."}:
                 raise ValueError("must name a serial device")
             if not path.is_absolute():
-                raise ValueError("must be an absolute device path, such as /dev/ttyACM0")
+                raise ValueError("must be an absolute serial-device path, such as /dev/ttyACM0")
         return path
 
     @field_validator("mappings")
