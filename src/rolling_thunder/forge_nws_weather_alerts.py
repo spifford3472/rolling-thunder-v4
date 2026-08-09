@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from json import JSONDecodeError, loads
 from typing import Final, cast
@@ -44,7 +44,7 @@ class NwsWeatherAlertProvider:
         endpoint: str = _DEFAULT_ENDPOINT,
         timeout_s: float = 5.0,
         transport: HttpTransport | None = None,
-        now: callable[[], datetime] | None = None,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         normalized_agent = user_agent.strip()
         if not normalized_agent:
