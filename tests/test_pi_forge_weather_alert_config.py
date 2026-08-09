@@ -127,3 +127,23 @@ def test_enabled_alerts_reject_refresh_on_start() -> None:
                 },
             }
         )
+
+
+def test_alert_audio_device_defaults_to_alsa_default() -> None:
+    assert ForgeConfig().weather_alerts.audio_device == "default"
+
+
+def test_alert_audio_device_rejects_blank_value() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="audio_device",
+    ):
+        ForgeConfig.model_validate(
+            {
+                "enabled": True,
+                "api_url": "http://forge.example.invalid",
+                "weather_alerts": {
+                    "audio_device": "   ",
+                },
+            }
+        )

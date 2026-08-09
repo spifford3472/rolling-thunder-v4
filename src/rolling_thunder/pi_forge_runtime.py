@@ -44,6 +44,10 @@ from rolling_thunder.pi_weather_alert_location_guard import (
 )
 from rolling_thunder.radio_polling import PollScheduler
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
+from rolling_thunder.weather_alert_audio import (
+    AplayWeatherAlertAudioPlayer,
+    WeatherAlertAudioPlayer,
+)
 from rolling_thunder.weather_alert_notification_policy import (
     WeatherAlertNotificationController,
 )
@@ -135,6 +139,7 @@ def build_pi_forge_weather_alert_polling(
     scheduler: PollScheduler | None = None,
     transport: HttpTransport | None = None,
     executor_factory: WeatherAlertExecutorFactory | None = None,
+    audio_player: WeatherAlertAudioPlayer | None = None,
     clock: Clock | None = None,
     monotonic_clock: MonotonicClock = monotonic,
 ) -> PiForgeWeatherAlertPollingService | None:
@@ -185,6 +190,13 @@ def build_pi_forge_weather_alert_polling(
         now=clock,
     )
 
+    effective_audio_player = audio_player
+
+    if effective_audio_player is None:
+        effective_audio_player = AplayWeatherAlertAudioPlayer(
+            audio_device=alert_config.audio_device,
+        )
+
     return PiForgeWeatherAlertPollingService(
         service,
         location_guard,
@@ -193,6 +205,7 @@ def build_pi_forge_weather_alert_polling(
         interval_s=alert_config.refresh_interval_s,
         refresh_on_start=alert_config.refresh_on_start,
         executor_factory=executor_factory,
+        audio_player=effective_audio_player,
     )
 
 

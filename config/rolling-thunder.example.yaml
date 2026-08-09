@@ -56,6 +56,10 @@ forge:
     refresh_on_start: false
     location_publish_interval_s: 15.0
 
+    # Audible cues are synthesized locally and played through ALSA.
+    # They are deliberately not EAS tones.
+    audio_device: default
+
 home_platform:
   enabled: false
   base_url: null

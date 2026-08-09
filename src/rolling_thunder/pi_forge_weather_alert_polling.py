@@ -19,6 +19,10 @@ from rolling_thunder.radio_polling import (
     PollScheduler,
     ScheduledPoll,
 )
+from rolling_thunder.weather_alert_audio import (
+    WeatherAlertAudioError,
+    WeatherAlertAudioPlayer,
+)
 from rolling_thunder.weather_alert_notification_policy import (
     WeatherAlertNotificationController,
     WeatherAlertNotificationDecision,
@@ -49,6 +53,7 @@ class PiForgeWeatherAlertNotificationBatch:
         ...,
     ] = ()
     persistence_error: str | None = None
+    audio_error: str | None = None
 
 
 class PiForgeWeatherAlertPollingService:
@@ -64,6 +69,7 @@ class PiForgeWeatherAlertPollingService:
         interval_s: float = 30.0,
         refresh_on_start: bool = False,
         executor_factory: WeatherAlertExecutorFactory | None = None,
+        audio_player: WeatherAlertAudioPlayer | None = None,
     ) -> None:
         if interval_s <= 0:
             raise ValueError(
@@ -74,6 +80,7 @@ class PiForgeWeatherAlertPollingService:
         self._service = service
         self._location_guard = location_guard
         self._notifications = notifications
+        self._audio_player = audio_player
         self._scheduler = scheduler
         self._interval_s = interval_s
         self._refresh_on_start = refresh_on_start
@@ -214,7 +221,14 @@ class PiForgeWeatherAlertPollingService:
                 effective
             )
 
-            self._record_evaluation(evaluation)
+            audio_error = self._play_decisions(
+                evaluation.decisions
+            )
+
+            self._record_evaluation(
+                evaluation,
+                audio_error=audio_error,
+            )
         except Exception:
             _LOGGER.exception(
                 "Unexpected Pi Forge weather-alert refresh "
@@ -225,13 +239,53 @@ class PiForgeWeatherAlertPollingService:
                 self._refresh_count += 1
                 self._worker_pending = False
 
+    def _play_decisions(
+        self,
+        decisions: tuple[
+            WeatherAlertNotificationDecision,
+            ...,
+        ],
+    ) -> str | None:
+        player = self._audio_player
+
+        if player is None or not decisions:
+            return None
+
+        errors: list[str] = []
+
+        for decision in decisions:
+            try:
+                player.play(decision.cue)
+            except WeatherAlertAudioError as error:
+                errors.append(
+                    str(error).strip()
+                    or error.__class__.__name__
+                )
+            except Exception as error:
+                _LOGGER.exception(
+                    "Unexpected weather-alert audio failure; "
+                    "the durable alert claim remains consumed."
+                )
+                errors.append(
+                    str(error).strip()
+                    or error.__class__.__name__
+                )
+
+        if not errors:
+            return None
+
+        return "; ".join(errors)[:500]
+
     def _record_evaluation(
         self,
         evaluation: WeatherAlertNotificationEvaluation,
+        *,
+        audio_error: str | None,
     ) -> None:
         if (
             not evaluation.decisions
             and evaluation.persistence_error is None
+            and audio_error is None
         ):
             return
 
@@ -245,5 +299,6 @@ class PiForgeWeatherAlertPollingService:
                     persistence_error=(
                         evaluation.persistence_error
                     ),
+                    audio_error=audio_error,
                 )
             )

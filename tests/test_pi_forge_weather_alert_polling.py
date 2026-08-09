@@ -302,3 +302,124 @@ def test_untrusted_local_gps_blocks_notification_claim() -> None:
     assert ledger.claimed == set()
 
     polling.stop()
+
+
+class RecordingAudioPlayer:
+    def __init__(
+        self,
+        *,
+        fail: bool = False,
+    ) -> None:
+        self.fail = fail
+        self.cues: list[WeatherAlertAudioCue] = []
+
+    def play(
+        self,
+        cue: WeatherAlertAudioCue,
+    ) -> None:
+        from rolling_thunder.weather_alert_audio import (
+            WeatherAlertAudioError,
+        )
+
+        self.cues.append(cue)
+
+        if self.fail:
+            raise WeatherAlertAudioError(
+                "test audio device failed"
+            )
+
+
+def test_new_claimed_warning_plays_once_in_background_worker() -> None:
+    service = FakeService(warning_state())
+    scheduler = ManualScheduler()
+    ledger = MemoryLedger()
+    audio = RecordingAudioPlayer()
+
+    polling = PiForgeWeatherAlertPollingService(
+        service,  # type: ignore[arg-type]
+        PiWeatherAlertLocationGuard(
+            lambda: gps_state(),
+            monotonic_clock=lambda: 102.0,
+        ),
+        WeatherAlertNotificationController(
+            ledger,
+            now=lambda: NOW,
+        ),
+        scheduler,
+        interval_s=30.0,
+        refresh_on_start=False,
+        executor_factory=ImmediateExecutor,
+        audio_player=audio,
+    )
+
+    polling.start()
+
+    assert scheduler.poll is not None
+    scheduler.poll.callback()
+
+    assert audio.cues == [
+        WeatherAlertAudioCue.URGENT
+    ]
+
+    first_batch = polling.latest_notification_batch
+    assert first_batch.sequence == 1
+    assert first_batch.audio_error is None
+
+    # Same stable provider alert ID is already durably claimed.
+    scheduler.poll.callback()
+
+    assert audio.cues == [
+        WeatherAlertAudioCue.URGENT
+    ]
+    assert polling.latest_notification_batch.sequence == 1
+
+    polling.stop()
+
+
+def test_audio_failure_isolated_and_not_retried_for_claimed_alert() -> None:
+    service = FakeService(warning_state())
+    scheduler = ManualScheduler()
+    ledger = MemoryLedger()
+    audio = RecordingAudioPlayer(
+        fail=True,
+    )
+
+    polling = PiForgeWeatherAlertPollingService(
+        service,  # type: ignore[arg-type]
+        PiWeatherAlertLocationGuard(
+            lambda: gps_state(),
+            monotonic_clock=lambda: 102.0,
+        ),
+        WeatherAlertNotificationController(
+            ledger,
+            now=lambda: NOW,
+        ),
+        scheduler,
+        interval_s=30.0,
+        refresh_on_start=False,
+        executor_factory=ImmediateExecutor,
+        audio_player=audio,
+    )
+
+    polling.start()
+
+    assert scheduler.poll is not None
+    scheduler.poll.callback()
+
+    batch = polling.latest_notification_batch
+
+    assert batch.sequence == 1
+    assert batch.audio_error == "test audio device failed"
+    assert audio.cues == [
+        WeatherAlertAudioCue.URGENT
+    ]
+
+    # Claim-before-play deliberately prevents a sound storm.
+    scheduler.poll.callback()
+
+    assert audio.cues == [
+        WeatherAlertAudioCue.URGENT
+    ]
+    assert polling.latest_notification_batch.sequence == 1
+
+    polling.stop()

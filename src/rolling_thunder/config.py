@@ -190,6 +190,23 @@ class ForgeWeatherAlertClientConfig(ConfigurationModel):
         ge=5.0,
         le=30.0,
     )
+    audio_device: str = "default"
+
+    @field_validator("audio_device")
+    @classmethod
+    def validate_audio_device(
+        cls,
+        value: str,
+    ) -> str:
+        """Require a nonblank ALSA playback-device selector."""
+        normalized = value.strip()
+
+        if not normalized:
+            raise ValueError(
+                "forge.weather_alerts.audio_device must not be blank"
+            )
+
+        return normalized
 
     @model_validator(mode="after")
     def validate_location_freshness(
