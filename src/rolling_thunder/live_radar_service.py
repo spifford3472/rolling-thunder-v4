@@ -16,7 +16,7 @@ from rolling_thunder.forge_radar_client import (
     HttpForgeRadarClient,
 )
 from rolling_thunder.map_tiles import MapTileKey, MapTilePlacement, MapViewport
-from rolling_thunder.radar_domain import RadarFrame
+from rolling_thunder.radar_domain import RadarFrame, RadarProviderStatus
 from rolling_thunder.radar_tiles import apply_radar_opacity
 
 
@@ -249,7 +249,21 @@ class LiveRadarOverlayService:
             if cached is not None and cached.frame is not None and self._locally_renderable(
                 cached.frame
             ):
-                return cached, str(error)
+                checked_at = self._aware_now()
+                degraded_health = cached.health.model_copy(
+                    update={
+                        "status": RadarProviderStatus.DEGRADED,
+                        "last_attempt_at": checked_at,
+                        "last_error": str(error)[:500] or "Forge radar manifest unavailable",
+                    }
+                )
+                degraded = cached.model_copy(
+                    update={
+                        "health": degraded_health,
+                        "received_at": checked_at,
+                    }
+                )
+                return degraded, str(error)
             return None, str(error)
         with self._lock:
             self._cached_manifest = manifest
@@ -391,6 +405,9 @@ class LiveRadarOverlayService:
         elif errors:
             status = RadarDataStatus.PARTIAL
             detail = "RADAR DATA PARTIAL"
+        elif manifest.health.status is not RadarProviderStatus.HEALTHY:
+            status = RadarDataStatus.STALE
+            detail = "RADAR OFFLINE — USING CACHED FRAME"
         elif self._locally_stale(frame) or manifest.health.stale:
             status = RadarDataStatus.STALE
             detail = "RADAR STALE"
