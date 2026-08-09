@@ -198,7 +198,6 @@ def run_dashboard(
         shared_tuning=shared_spot_tuning,
         settings_panel=runtime.map_zoom_settings,
     )
-    # Retained only for run_dashboard API compatibility with legacy callers.
     _ = pota_tune_executor
 
     def capture_state() -> CallsignCaptureState:
@@ -686,9 +685,17 @@ def run_dashboard(
                     width_px=map_width,
                     height_px=map_height,
                 )
+        live_map_snapshot = runtime.latest_live_map_state
+        if (
+            runtime.live_radar is not None
+            and live_map_snapshot is not None
+            and live_map_snapshot.viewport is not None
+        ):
+            runtime.live_radar.request_viewport(live_map_snapshot.viewport)
         live_map_widgets.update(
             live_map_presentation,
-            runtime.latest_live_map_state,
+            live_map_snapshot,
+            runtime.latest_live_radar_state,
         )
 
         connectivity = build_runtime_connectivity_status(
