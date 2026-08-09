@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 8
+CURRENT_SCHEMA_VERSION: Final = 9
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -230,6 +230,18 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
             preference_value TEXT NOT NULL CHECK (
                 length(preference_value) <= 500
             ),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+    ),
+    9: (
+        """
+        CREATE TABLE forge_weather_cache (
+            singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+            revision INTEGER NOT NULL CHECK (revision > 0),
+            source_at TEXT NOT NULL,
+            received_at TEXT NOT NULL,
+            payload_json TEXT NOT NULL CHECK (length(payload_json) >= 2),
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """,

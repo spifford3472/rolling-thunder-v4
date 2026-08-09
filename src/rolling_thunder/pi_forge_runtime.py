@@ -11,6 +11,8 @@ from rolling_thunder.config import ForgeConfig
 from rolling_thunder.forge_client import HttpForgeSpotClient
 from rolling_thunder.forge_location_client import HttpForgeLocationClient
 from rolling_thunder.forge_spot_cache_repository import ForgeSpotCacheRepository
+from rolling_thunder.forge_weather_cache_repository import ForgeWeatherCacheRepository
+from rolling_thunder.forge_weather_client import HttpForgeWeatherClient
 from rolling_thunder.gps import GPSState
 from rolling_thunder.http_home_platform import HttpTransport
 from rolling_thunder.pi_forge_location_publisher import (
@@ -19,6 +21,11 @@ from rolling_thunder.pi_forge_location_publisher import (
 )
 from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotService
+from rolling_thunder.pi_forge_weather_polling import (
+    PiForgeWeatherPollingService,
+    WeatherExecutorFactory,
+)
+from rolling_thunder.pi_forge_weather_service import PiForgeWeatherService
 from rolling_thunder.radio_polling import PollScheduler
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
@@ -56,6 +63,44 @@ def build_pi_forge_spot_polling(
         scheduler or ThreadingPollScheduler(),
         interval_s=config.refresh_interval_s,
         refresh_on_start=config.refresh_on_start,
+        executor_factory=executor_factory,
+    )
+
+
+def build_pi_forge_weather_polling(
+    config: ForgeConfig,
+    *,
+    database_path: Path,
+    scheduler: PollScheduler | None = None,
+    transport: HttpTransport | None = None,
+    executor_factory: WeatherExecutorFactory | None = None,
+) -> PiForgeWeatherPollingService | None:
+    """Build the optional retained Forge weather polling stack for the Pi."""
+    weather_config = config.weather
+    if not weather_config.enabled:
+        return None
+
+    api_url = config.api_url
+    if not config.enabled or api_url is None:
+        raise ValueError("Forge must be enabled with an API URL for retained weather.")
+
+    client = HttpForgeWeatherClient(
+        str(api_url),
+        timeout_s=config.request_timeout_s,
+        max_response_bytes=config.max_response_bytes,
+        transport=transport,
+    )
+    cache = ForgeWeatherCacheRepository(database_path)
+    service = PiForgeWeatherService(
+        client,
+        cache,
+        stale_after_s=weather_config.stale_after_s,
+    )
+    return PiForgeWeatherPollingService(
+        service,
+        scheduler or ThreadingPollScheduler(),
+        interval_s=weather_config.refresh_interval_s,
+        refresh_on_start=weather_config.refresh_on_start,
         executor_factory=executor_factory,
     )
 
