@@ -14,9 +14,11 @@ from rolling_thunder.forge_weather_alerts import (
     WeatherAlertSourceMetadata,
 )
 from rolling_thunder.pi_forge_weather_alert_service import (
+    PiForgeWeatherAlertErrorKind,
     PiForgeWeatherAlertService,
     PiForgeWeatherAlertStateKind,
 )
+from rolling_thunder.storage import StorageError
 
 NOW = datetime(2026, 8, 9, 6, 20, tzinfo=UTC)
 
@@ -90,6 +92,16 @@ class MemoryCache:
         self.replacements += 1
 
 
+
+class FailingReplaceCache(MemoryCache):
+    def replace(
+        self,
+        value: ForgeWeatherAlertClientResult,
+    ) -> None:
+        del value
+        raise StorageError("alert cache write failed")
+
+
 def test_restart_downgrades_cached_verified_state_to_unverified() -> None:
     service = PiForgeWeatherAlertService(
         FakeClient(result()),
@@ -126,27 +138,90 @@ def test_successful_verified_refresh_persists_then_publishes_live() -> None:
     assert state.is_verified_current is True
 
 
-def test_successful_unverified_forge_result_never_becomes_verified() -> None:
+def test_successful_unverified_forge_result_is_not_cached() -> None:
+    cache = MemoryCache()
+
     service = PiForgeWeatherAlertService(
         FakeClient(
             result(
+                revision=5,
                 applicability=(
                     WeatherAlertApplicability.RETAINED_UNVERIFIED
-                )
+                ),
             )
         ),
-        MemoryCache(),
+        cache,
+        now=lambda: NOW,
+    )
+
+    state = service.refresh()
+
+    assert cache.replacements == 0
+    assert cache.stored is None
+    assert state.kind is PiForgeWeatherAlertStateKind.RETAINED
+    assert state.snapshot_revision == 5
+    assert (
+        state.applicability
+        is WeatherAlertApplicability.RETAINED_UNVERIFIED
+    )
+    assert state.is_verified_current is False
+
+
+def test_unverified_result_preserves_last_verified_cached_snapshot() -> None:
+    cached = result(revision=4)
+    cache = MemoryCache(cached)
+
+    service = PiForgeWeatherAlertService(
+        FakeClient(
+            result(
+                revision=5,
+                applicability=(
+                    WeatherAlertApplicability.RETAINED_UNVERIFIED
+                ),
+            )
+        ),
+        cache,
+        now=lambda: NOW,
+    )
+
+    state = service.refresh()
+
+    assert cache.replacements == 0
+    assert cache.stored == cached
+    assert state.kind is PiForgeWeatherAlertStateKind.RETAINED
+    assert state.snapshot_revision == 4
+    assert state.snapshot == cached.snapshot
+    assert (
+        state.applicability
+        is WeatherAlertApplicability.RETAINED_UNVERIFIED
+    )
+    assert state.is_verified_current is False
+
+
+def test_verified_result_survives_cache_write_failure() -> None:
+    current = result(revision=6)
+
+    service = PiForgeWeatherAlertService(
+        FakeClient(current),
+        FailingReplaceCache(),
         now=lambda: NOW,
     )
 
     state = service.refresh()
 
     assert state.kind is PiForgeWeatherAlertStateKind.LIVE
+    assert state.snapshot_revision == 6
+    assert state.snapshot == current.snapshot
     assert (
         state.applicability
-        is WeatherAlertApplicability.RETAINED_UNVERIFIED
+        is WeatherAlertApplicability.VERIFIED_CURRENT
     )
-    assert state.is_verified_current is False
+    assert state.is_verified_current is True
+    assert (
+        state.error_kind
+        is PiForgeWeatherAlertErrorKind.STORAGE_WRITE
+    )
+    assert state.last_error == "alert cache write failed"
 
 
 def test_transport_failure_retains_data_but_removes_applicability() -> None:

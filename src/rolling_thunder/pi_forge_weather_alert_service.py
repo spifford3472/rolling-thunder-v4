@@ -213,9 +213,14 @@ class PiForgeWeatherAlertState(DomainModel):
                 raise ValueError(
                     "live Pi weather-alert state requires a success timestamp"
                 )
-            if self.error_kind is not None or self.last_error is not None:
+            if (
+                self.error_kind is not None
+                and self.error_kind
+                is not PiForgeWeatherAlertErrorKind.STORAGE_WRITE
+            ):
                 raise ValueError(
-                    "live Pi weather-alert state cannot contain local errors"
+                    "live Pi weather-alert state can only carry "
+                    "a storage-write diagnostic"
                 )
 
         if (
@@ -314,22 +319,61 @@ class PiForgeWeatherAlertService:
                     attempted_at=attempted_at,
                 )
 
+            if (
+                result.health.applicability
+                is not WeatherAlertApplicability.VERIFIED_CURRENT
+            ):
+                if previous.snapshot is not None:
+                    return self._publish(
+                        self._retained_from_previous(
+                            previous,
+                            attempted_at=attempted_at,
+                            health=result.health,
+                        )
+                    )
+
+                return self._publish(
+                    PiForgeWeatherAlertState(
+                        kind=PiForgeWeatherAlertStateKind.RETAINED,
+                        snapshot_revision=result.revision,
+                        snapshot=result.snapshot,
+                        health=result.health,
+                        applicability=(
+                            WeatherAlertApplicability.RETAINED_UNVERIFIED
+                        ),
+                        last_attempt_at=attempted_at,
+                        last_success_at=result.received_at,
+                    )
+                )
+
             try:
                 self._cache.replace(result)
             except StorageError as error:
-                return self._publish_failure(
-                    previous,
-                    attempted_at=attempted_at,
-                    error_kind=PiForgeWeatherAlertErrorKind.STORAGE_WRITE,
-                    error=error,
+                state = PiForgeWeatherAlertState(
+                    kind=PiForgeWeatherAlertStateKind.LIVE,
+                    snapshot_revision=result.revision,
+                    snapshot=result.snapshot,
+                    health=result.health,
+                    applicability=(
+                        WeatherAlertApplicability.VERIFIED_CURRENT
+                    ),
+                    last_attempt_at=attempted_at,
+                    last_success_at=result.received_at,
+                    error_kind=(
+                        PiForgeWeatherAlertErrorKind.STORAGE_WRITE
+                    ),
+                    last_error=self._bounded_error(error),
                 )
+                return self._publish(state)
 
             state = PiForgeWeatherAlertState(
                 kind=PiForgeWeatherAlertStateKind.LIVE,
                 snapshot_revision=result.revision,
                 snapshot=result.snapshot,
                 health=result.health,
-                applicability=result.health.applicability,
+                applicability=(
+                    WeatherAlertApplicability.VERIFIED_CURRENT
+                ),
                 last_attempt_at=attempted_at,
                 last_success_at=result.received_at,
             )
