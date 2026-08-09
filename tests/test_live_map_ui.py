@@ -16,8 +16,13 @@ from rolling_thunder.live_map_service import (
 from rolling_thunder.live_map_ui import (
     live_map_status_color,
     live_map_status_lines,
+    radar_matches_map,
+    radar_status_color,
+    radar_status_detail,
     rotate_marker_points,
 )
+from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
+from rolling_thunder.map_tiles import build_map_viewport
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
 
@@ -184,3 +189,70 @@ def test_tile_update_plan_separates_remove_redraw_and_move() -> None:
     assert plan.remove == (removed_key,)
     assert plan.redraw == (changed_key, new_key)
     assert plan.move == (moved_key,)
+
+
+def test_radar_is_eligible_only_for_exact_published_map_viewport() -> None:
+    map_viewport = build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=7,
+        width_px=512,
+        height_px=512,
+    )
+    other_viewport = build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=8,
+        width_px=512,
+        height_px=512,
+    )
+    map_snapshot = LiveMapSnapshot(
+        status=MapDataStatus.READY,
+        viewport=map_viewport,
+        tiles=(),
+        detail="MAP READY",
+        updated_at=NOW,
+    )
+    matching = LiveRadarSnapshot(
+        status=RadarDataStatus.READY,
+        viewport=map_viewport,
+        frame=None,
+        tiles=(),
+        detail="RADAR READY",
+        updated_at=NOW,
+    )
+    mismatched = LiveRadarSnapshot(
+        status=RadarDataStatus.READY,
+        viewport=other_viewport,
+        frame=None,
+        tiles=(),
+        detail="RADAR READY",
+        updated_at=NOW,
+    )
+
+    assert radar_matches_map(matching, map_snapshot) is True
+    assert radar_matches_map(mismatched, map_snapshot) is False
+    assert radar_matches_map(None, map_snapshot) is False
+
+
+def test_radar_health_helpers_keep_optional_failure_non_alarmist() -> None:
+    unavailable = LiveRadarSnapshot(
+        status=RadarDataStatus.UNAVAILABLE,
+        viewport=None,
+        frame=None,
+        tiles=(),
+        detail="RADAR UNAVAILABLE",
+        updated_at=NOW,
+    )
+    stale = unavailable.__class__(
+        status=RadarDataStatus.STALE,
+        viewport=None,
+        frame=None,
+        tiles=(),
+        detail="RADAR OFFLINE — RETAINING PRIOR FRAME",
+        updated_at=NOW,
+    )
+
+    assert radar_status_color(RadarDataStatus.UNAVAILABLE) == "#a8b4ba"
+    assert radar_status_color(RadarDataStatus.STALE) == "#ffd24a"
+    assert radar_status_detail(unavailable) == "RADAR UNAVAILABLE"
+    assert radar_status_detail(stale) == "RADAR OFFLINE — RETAINING PRIOR FRAME"
+    assert radar_status_detail(None) == "OFF"
