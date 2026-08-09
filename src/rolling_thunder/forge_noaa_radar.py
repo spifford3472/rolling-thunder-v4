@@ -8,18 +8,17 @@ from urllib.error import URLError
 from urllib.parse import urlencode
 
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
-from rolling_thunder.forge_radar import (
-    ForgeRadarProviderError,
-    RadarProductToken,
-    RadarProviderFrame,
-    RadarSourceMetadata,
-)
+from rolling_thunder.forge_radar import ForgeRadarProviderError, RadarProviderFrame
 from rolling_thunder.http_home_platform import (
     HttpResponse,
     HttpTransport,
     UrllibHttpTransport,
 )
 from rolling_thunder.map_tiles import MapTileError, MapTileKey, validate_map_tile_png
+from rolling_thunder.radar_domain import (
+    RadarProductToken,
+    RadarSourceMetadata,
+)
 from rolling_thunder.radar_tiles import web_mercator_tile_bounds
 
 DEFAULT_NOAA_RADAR_ENDPOINT = (
