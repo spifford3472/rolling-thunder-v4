@@ -14,14 +14,10 @@ from rolling_thunder.forge_spot_cache_repository import ForgeSpotCacheRepository
 from rolling_thunder.gps import GPSState
 from rolling_thunder.http_home_platform import HttpTransport
 from rolling_thunder.pi_forge_location_publisher import (
-    ExecutorFactory as LocationExecutorFactory,
     PiForgeLocationPublisher,
     PiForgeLocationPublishingService,
 )
-from rolling_thunder.pi_forge_spot_polling import (
-    ExecutorFactory as SpotExecutorFactory,
-    PiForgeSpotPollingService,
-)
+from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotService
 from rolling_thunder.radio_polling import PollScheduler
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
@@ -37,7 +33,7 @@ def build_pi_forge_spot_polling(
     database_path: Path,
     scheduler: PollScheduler | None = None,
     transport: HttpTransport | None = None,
-    executor_factory: SpotExecutorFactory | None = None,
+    executor_factory: ExecutorFactory | None = None,
 ) -> PiForgeSpotPollingService | None:
     """Build the optional Pi Forge spot polling stack from validated config."""
     if not config.enabled:
@@ -70,7 +66,7 @@ def build_pi_forge_location_publishing(
     *,
     scheduler: PollScheduler | None = None,
     transport: HttpTransport | None = None,
-    executor_factory: LocationExecutorFactory | None = None,
+    executor_factory: ExecutorFactory | None = None,
     clock: Clock | None = None,
     monotonic_clock: MonotonicClock = monotonic,
     publish_interval_s: float = 600.0,
