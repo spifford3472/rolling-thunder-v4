@@ -81,3 +81,64 @@ def test_enabled_forge_builds_durable_polling_stack(tmp_path: Path) -> None:
     assert scheduler.poll is not None
     assert scheduler.poll.cancelled is True
     assert polling.is_running is False
+
+
+def test_weather_alert_mode_caps_location_publication_cadence() -> None:
+    from rolling_thunder.gps import GPSState
+    from rolling_thunder.pi_forge_runtime import (
+        build_pi_forge_location_publishing,
+    )
+
+    scheduler = ManualScheduler()
+    config = ForgeConfig.model_validate(
+        {
+            "enabled": True,
+            "api_url": "http://forge.example.invalid",
+            "weather_alerts": {
+                "enabled": True,
+                "refresh_interval_s": 30.0,
+                "location_publish_interval_s": 15.0,
+            },
+        }
+    )
+
+    publishing = build_pi_forge_location_publishing(
+        config,
+        lambda: GPSState(),
+        scheduler=scheduler,
+    )
+
+    assert publishing is not None
+
+    # Normal retained-location defaults are 600/60/30/30 seconds.
+    # Alert mode must cap them to current-location-safe values.
+    assert publishing.publish_interval_s == 15.0
+    assert publishing.retry_interval_s == 15.0
+    assert publishing.unusable_retry_interval_s == 5.0
+    assert publishing.scheduler_interval_s == 5.0
+
+
+def test_normal_forge_location_keeps_existing_ten_minute_cadence() -> None:
+    from rolling_thunder.gps import GPSState
+    from rolling_thunder.pi_forge_runtime import (
+        build_pi_forge_location_publishing,
+    )
+
+    config = ForgeConfig.model_validate(
+        {
+            "enabled": True,
+            "api_url": "http://forge.example.invalid",
+        }
+    )
+
+    publishing = build_pi_forge_location_publishing(
+        config,
+        lambda: GPSState(),
+        scheduler=ManualScheduler(),
+    )
+
+    assert publishing is not None
+    assert publishing.publish_interval_s == 600.0
+    assert publishing.retry_interval_s == 60.0
+    assert publishing.unusable_retry_interval_s == 30.0
+    assert publishing.scheduler_interval_s == 30.0

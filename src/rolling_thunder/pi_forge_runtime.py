@@ -128,6 +128,31 @@ def build_pi_forge_location_publishing(
     if api_url is None:
         raise ValueError("Forge API URL is required when location publishing is enabled.")
 
+    if config.weather_alerts.enabled:
+        alert_location_interval_s = (
+            config.weather_alerts.location_publish_interval_s
+        )
+
+        # Location-aware alerts must never inherit the ordinary ten-minute
+        # retained-location cadence. Caller-supplied values may make these
+        # intervals faster, but never slower than the alert safety bounds.
+        publish_interval_s = min(
+            publish_interval_s,
+            alert_location_interval_s,
+        )
+        retry_interval_s = min(
+            retry_interval_s,
+            alert_location_interval_s,
+        )
+        unusable_retry_interval_s = min(
+            unusable_retry_interval_s,
+            5.0,
+        )
+        scheduler_interval_s = min(
+            scheduler_interval_s,
+            5.0,
+        )
+
     client = HttpForgeLocationClient(
         str(api_url),
         timeout_s=config.request_timeout_s,
