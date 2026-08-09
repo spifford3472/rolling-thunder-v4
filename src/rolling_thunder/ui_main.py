@@ -56,6 +56,8 @@ from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
 from rolling_thunder.status_messages import StatusPresentation
+from rolling_thunder.weather_panel import WeatherPanelController
+from rolling_thunder.weather_ui import WeatherWidgets
 
 _REFRESH_MS = 250
 _BACKGROUND = "#080808"
@@ -176,6 +178,7 @@ def run_dashboard(
         runtime.live_radar,
         preference_service,
     )
+    weather_panel = WeatherPanelController()
 
     try:
         runtime.start()
@@ -435,6 +438,7 @@ def run_dashboard(
     context_body_label.grid(row=1, column=0, sticky="nsew")
 
     settings_widgets = SettingsWidgets(context_content)
+    weather_widgets = WeatherWidgets(context_content)
 
     pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     pota_panel_frame.grid(row=1, column=0, sticky="nsew")
@@ -682,19 +686,29 @@ def run_dashboard(
         """Show the reusable text body and hide specialized context viewports."""
         pota_panel_frame.grid_remove()
         settings_widgets.hide()
+        weather_widgets.hide()
         context_body_label.grid()
 
     def show_pota_context_body() -> None:
         """Show the POTA card viewport and hide other context bodies."""
         context_body_label.grid_remove()
         settings_widgets.hide()
+        weather_widgets.hide()
         pota_panel_frame.grid()
 
     def show_settings_context_body() -> None:
-        """Show Settings controls and hide the generic/POTA context bodies."""
+        """Show Settings controls and hide the generic/POTA/weather bodies."""
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
+        weather_widgets.hide()
         settings_widgets.show()
+
+    def show_weather_context_body() -> None:
+        """Show retained weather and hide other context bodies."""
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        settings_widgets.hide()
+        weather_widgets.show()
 
     def refresh() -> None:
         if control_dispatcher is not None:
@@ -702,6 +716,10 @@ def run_dashboard(
 
         active_panel_commands.synchronize_radio_state()
         shared_spot_tune_status.refresh()
+
+        weather_presentation = weather_panel.update(
+            runtime.latest_forge_weather_state
+        )
 
         gps_state = runtime.latest_gps_state
         live_map_presentation = live_map_controller.update(gps_state)
@@ -724,6 +742,7 @@ def run_dashboard(
             live_map_presentation,
             live_map_snapshot,
             runtime.latest_live_radar_state,
+            weather_presentation,
         )
 
         connectivity = build_runtime_connectivity_status(
@@ -864,6 +883,14 @@ def run_dashboard(
             else:
                 footer_lines.append("SELECT A SPOT — PRESS TO STAGE")
             pota_footer_text.set("\n".join(footer_lines))
+        elif selected_context.selected is ContextId.WEATHER:
+            show_weather_context_body()
+            health_frame.grid_remove()
+            context_title_text.set(selected_context.definition.title)
+            context_title_label.configure(
+                font=("DejaVu Sans", 48, "bold")
+            )
+            weather_widgets.update(weather_presentation)
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
             context_title_text.set(selected_context.definition.title)
@@ -979,18 +1006,12 @@ def run_dashboard(
         lambda _event: execute_panel_action(ControlAction.PANEL_SECONDARY),
     )
 
-    context_shortcut_actions = {
-        "1": ControlAction.SELECT_POTA,
-        "2": ControlAction.SELECT_DX,
-        "3": ControlAction.SELECT_REPEATERS,
-        "4": ControlAction.SELECT_AI,
-        "5": ControlAction.SELECT_SETTINGS,
-    }
-
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
-        action = context_shortcut_actions.get(event.char)
-        if action is not None:
-            operator_commands.execute(action)
+        if not context_navigation.select_shortcut(event.char):
+            return
+        active_panel_commands.activate_context(
+            context_navigation.state.selected
+        )
 
     for definition in CONTEXT_DEFINITIONS:
         root.bind(definition.shortcut, select_context_shortcut)

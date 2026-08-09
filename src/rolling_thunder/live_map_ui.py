@@ -23,6 +23,7 @@ from rolling_thunder.live_map_service import (
 from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
+from rolling_thunder.weather_panel import WeatherPanelPresentation
 
 _BACKGROUND = "#0d1418"
 _MISSING_TILE = "#17242a"
@@ -129,6 +130,7 @@ def live_map_info_lines(info: LiveMapInfoPresentation) -> tuple[str, ...]:
         f"LOCAL  {info.local_time}",
         f"UTC    {info.utc_time}",
         f"GRID   {info.grid}",
+        f"TEMP   {info.temperature_f} / {info.temperature_c}",
     )
 
 
@@ -199,7 +201,7 @@ def radar_matches_map(
 
 
 class LiveMapWidgets:
-    """Render live map snapshots without performing tile, cache, radar, or GPS I/O."""
+    """Render live map snapshots without performing tile, cache, radar, GPS, or weather I/O."""
 
     def __init__(self, parent: Any) -> None:
         import tkinter as tk
@@ -244,6 +246,7 @@ class LiveMapWidgets:
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
         radar_snapshot: LiveRadarSnapshot | None = None,
+        weather: WeatherPanelPresentation | None = None,
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
@@ -272,7 +275,7 @@ class LiveMapWidgets:
                 presentation.is_current,
                 presentation.heading_degrees or 0.0,
             )
-        self._draw_status(presentation, snapshot, radar_snapshot)
+        self._draw_status(presentation, snapshot, radar_snapshot, weather)
 
     def _draw_base(
         self,
@@ -626,8 +629,9 @@ class LiveMapWidgets:
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
         radar: LiveRadarSnapshot | None,
+        weather: WeatherPanelPresentation | None,
     ) -> None:
-        info = self._info_controller.update(presentation, snapshot)
+        info = self._info_controller.update(presentation, snapshot, weather)
         lines = live_map_info_lines(info)
         canvas = self._canvas
         width = max(900, canvas.winfo_width())
@@ -635,8 +639,8 @@ class LiveMapWidgets:
         canvas.create_rectangle(
             12,
             12,
-            430,
-            174,
+            500,
+            202,
             fill=_STATUS_BACKGROUND,
             outline=_MUTED,
             width=3,
@@ -647,7 +651,7 @@ class LiveMapWidgets:
             26,
             text="\n".join(lines),
             fill=_MARKER_OUTLINE,
-            font=("DejaVu Sans Mono", 26, "bold"),
+            font=("DejaVu Sans Mono", 24, "bold"),
             anchor="nw",
             justify="left",
             tags="map-overlay",

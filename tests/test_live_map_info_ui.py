@@ -36,6 +36,7 @@ def test_info_lines_show_compact_map_information() -> None:
         "LOCAL  3:11 PM",
         "UTC    19:11 UTC",
         "GRID   EM79XM",
+        "TEMP   --°F / --°C",
     )
 
 

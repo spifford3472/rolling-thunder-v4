@@ -24,6 +24,7 @@ def test_defaults_to_pota_context() -> None:
         ("3", ContextId.REPEATERS),
         ("4", ContextId.AI),
         ("5", ContextId.SETTINGS),
+        ("6", ContextId.WEATHER),
     ],
 )
 def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId) -> None:
@@ -71,6 +72,7 @@ def test_select_next_advances_through_contexts() -> None:
     assert controller.select_next().selected is ContextId.DX
     assert controller.select_next().selected is ContextId.REPEATERS
     assert controller.select_next().selected is ContextId.AI
+    assert controller.select_next().selected is ContextId.WEATHER
     assert controller.select_next().selected is ContextId.SETTINGS
 
 

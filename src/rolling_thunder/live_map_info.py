@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from rolling_thunder.live_map import LiveMapGpsStatus, LiveMapPresentation
 from rolling_thunder.live_map_service import LiveMapSnapshot, MapDataStatus
+from rolling_thunder.weather_panel import WeatherPanelPresentation
 
 
 class LiveMapHealthLevel(StrEnum):
@@ -48,7 +49,7 @@ def _local_now() -> datetime:
 
 
 class LiveMapInfoController:
-    """Project typed map/GPS snapshots into compact operator information."""
+    """Project typed map/GPS/weather snapshots into compact operator information."""
 
     def __init__(
         self,
@@ -66,19 +67,21 @@ class LiveMapInfoController:
         self,
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
+        weather: WeatherPanelPresentation | None = None,
     ) -> LiveMapInfoPresentation:
         """Build one deterministic presentation without performing I/O."""
         now = self._aware_now()
         map_health = self._map_health(snapshot, now)
         gps_health = self._gps_health(presentation, now)
+        has_weather = weather is not None and weather.has_data
 
         return LiveMapInfoPresentation(
             local_time=self._format_local_time(now),
             utc_time=now.astimezone(UTC).strftime("%H:%M UTC"),
             grid=(presentation.grid.upper() if presentation.grid is not None else "------"),
-            temperature_f="--°F",
-            temperature_c="--°C",
-            temperature_detail="UNAVAILABLE",
+            temperature_f=(weather.temperature_f if has_weather and weather is not None else "--°F"),
+            temperature_c=(weather.temperature_c if has_weather and weather is not None else "--°C"),
+            temperature_detail=(weather.detail if weather is not None else "UNAVAILABLE"),
             map_health=map_health,
             gps_health=gps_health,
         )
