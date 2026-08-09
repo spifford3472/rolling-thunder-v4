@@ -5,6 +5,7 @@ from __future__ import annotations
 from base64 import b64encode
 from collections import OrderedDict
 from dataclasses import dataclass
+from datetime import UTC
 from math import cos, radians, sin
 from typing import Any
 
@@ -19,6 +20,7 @@ from rolling_thunder.live_map_service import (
     MapDataStatus,
     MapTileSnapshot,
 )
+from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
 
@@ -34,6 +36,7 @@ _MARKER = "#ff4040"
 _MARKER_OUTLINE = "#ffffff"
 _STATUS_BACKGROUND = "#10191e"
 _PHOTO_CACHE_LIMIT = 128
+_RADAR_PHOTO_CACHE_LIMIT = 128
 
 
 def rotate_marker_points(
@@ -104,6 +107,29 @@ def live_map_health_color(level: LiveMapHealthLevel) -> str:
     return _MUTED
 
 
+def radar_status_color(status: RadarDataStatus | None) -> str:
+    """Return a compact non-blocking health color for the optional radar layer."""
+    if status is RadarDataStatus.READY:
+        return _HEALTHY
+    if status in {
+        RadarDataStatus.STALE,
+        RadarDataStatus.PARTIAL,
+        RadarDataStatus.LOADING,
+    }:
+        return _WARNING
+    if status is RadarDataStatus.UNAVAILABLE:
+        return _MUTED
+    return _MUTED
+
+
+def radar_status_detail(snapshot: LiveRadarSnapshot | None) -> str:
+    """Return a bounded radar status label without any provider I/O."""
+    if snapshot is None:
+        return "OFF"
+    detail = snapshot.detail.strip()
+    return detail if detail else snapshot.status.value.upper()
+
+
 def live_map_info_lines(info: LiveMapInfoPresentation) -> tuple[str, ...]:
     """Build the compact information-box lines from immutable presentation state."""
     return (
@@ -167,8 +193,20 @@ def _snapshot_tiles_by_key(
     return {tile.placement.key: tile for tile in snapshot.tiles}
 
 
+def radar_matches_map(
+    radar: LiveRadarSnapshot | None,
+    map_snapshot: LiveMapSnapshot | None,
+) -> bool:
+    """Render radar only when its immutable placement snapshot matches the map."""
+    if radar is None or radar.viewport is None:
+        return False
+    if map_snapshot is None or map_snapshot.viewport is None:
+        return False
+    return radar.viewport == map_snapshot.viewport
+
+
 class LiveMapWidgets:
-    """Render live map snapshots without performing tile, cache, or GPS I/O."""
+    """Render live map snapshots without performing tile, cache, radar, or GPS I/O."""
 
     def __init__(self, parent: Any) -> None:
         import tkinter as tk
@@ -188,9 +226,15 @@ class LiveMapWidgets:
             MapTileKey,
             tuple[bytes, Any],
         ] = OrderedDict()
+        self._radar_active_photos: dict[MapTileKey, Any] = {}
+        self._radar_photo_cache: OrderedDict[
+            tuple[str, MapTileKey],
+            tuple[bytes, Any],
+        ] = OrderedDict()
         self._attribution_item: int | None = None
 
         self._last_snapshot: LiveMapSnapshot | None = None
+        self._last_radar_snapshot: LiveRadarSnapshot | None = None
         self._last_size = (0, 0)
         self._info_controller = LiveMapInfoController()
 
@@ -206,11 +250,13 @@ class LiveMapWidgets:
         self,
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
+        radar_snapshot: LiveRadarSnapshot | None = None,
     ) -> None:
-        """Update changed map tiles and redraw lightweight overlays."""
+        """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
         size = (width, height)
         snapshot_changed = snapshot is not self._last_snapshot
+        radar_changed = radar_snapshot is not self._last_radar_snapshot
         size_changed = size != self._last_size
 
         if size_changed:
@@ -218,7 +264,11 @@ class LiveMapWidgets:
         elif snapshot_changed:
             self._update_base(self._last_snapshot, snapshot, width, height)
 
+        if size_changed or snapshot_changed or radar_changed:
+            self._draw_radar(radar_snapshot, snapshot)
+
         self._last_snapshot = snapshot
+        self._last_radar_snapshot = radar_snapshot
         self._last_size = size
 
         self._canvas.delete("map-overlay")
@@ -229,7 +279,7 @@ class LiveMapWidgets:
                 presentation.is_current,
                 presentation.heading_degrees or 0.0,
             )
-        self._draw_status(presentation, snapshot)
+        self._draw_status(presentation, snapshot, radar_snapshot)
 
     def _draw_base(
         self,
@@ -399,6 +449,67 @@ class LiveMapWidgets:
                 return
             self._photo_cache.pop(removable, None)
 
+    def _draw_radar(
+        self,
+        radar: LiveRadarSnapshot | None,
+        map_snapshot: LiveMapSnapshot | None,
+    ) -> None:
+        canvas = self._canvas
+        canvas.delete("map-radar")
+        self._radar_active_photos.clear()
+        if not radar_matches_map(radar, map_snapshot) or radar is None or radar.frame is None:
+            return
+
+        frame_token = radar.frame.frame_token
+        for tile in radar.tiles:
+            if tile.png is None:
+                continue
+            key = tile.placement.key
+            cache_key = (frame_token, key)
+            photo = self._radar_photo_for_tile(cache_key, tile.png)
+            self._radar_active_photos[key] = photo
+            canvas.create_image(
+                tile.placement.x_px,
+                tile.placement.y_px,
+                image=photo,
+                anchor="nw",
+                tags="map-radar",
+            )
+
+        canvas.tag_raise("map-radar", "map-base")
+        if self._attribution_item is not None:
+            canvas.tag_raise(self._attribution_item, "map-radar")
+        self._trim_radar_photo_cache(frame_token)
+
+    def _radar_photo_for_tile(
+        self,
+        cache_key: tuple[str, MapTileKey],
+        png: bytes,
+    ) -> Any:
+        cached = self._radar_photo_cache.get(cache_key)
+        if cached is not None and cached[0] == png:
+            self._radar_photo_cache.move_to_end(cache_key)
+            return cached[1]
+        photo = self._tk.PhotoImage(data=b64encode(png).decode("ascii"))
+        self._radar_photo_cache[cache_key] = (png, photo)
+        self._radar_photo_cache.move_to_end(cache_key)
+        return photo
+
+    def _trim_radar_photo_cache(self, active_frame_token: str) -> None:
+        while len(self._radar_photo_cache) > _RADAR_PHOTO_CACHE_LIMIT:
+            removable = next(
+                (
+                    cache_key
+                    for cache_key in self._radar_photo_cache
+                    if cache_key[0] != active_frame_token
+                    or cache_key[1] not in self._radar_active_photos
+                ),
+                None,
+            )
+            if removable is None:
+                return
+            self._radar_photo_cache.pop(removable, None)
+
     def _draw_reference_grid(self, width: int, height: int) -> None:
         canvas = self._canvas
         spacing = 80
@@ -452,8 +563,6 @@ class LiveMapWidgets:
                 tags="map-overlay",
             )
 
-        # Draw wheels first so the larger top-down car remains readable over
-        # detailed map tiles.
         for wheel in (
             ((-30.0, -24.0), (-22.0, -24.0), (-22.0, -7.0), (-30.0, -7.0)),
             ((22.0, -24.0), (30.0, -24.0), (30.0, -7.0), (22.0, -7.0)),
@@ -523,6 +632,7 @@ class LiveMapWidgets:
         self,
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
+        radar: LiveRadarSnapshot | None,
     ) -> None:
         info = self._info_controller.update(presentation, snapshot)
         lines = live_map_info_lines(info)
@@ -551,12 +661,12 @@ class LiveMapWidgets:
         )
 
         health_right = width - 12
-        health_left = health_right - 420
+        health_left = health_right - 500
         canvas.create_rectangle(
             health_left,
             12,
             health_right,
-            156,
+            216,
             fill=_STATUS_BACKGROUND,
             outline=_MUTED,
             width=3,
@@ -565,28 +675,50 @@ class LiveMapWidgets:
 
         self._draw_health_line(
             "MAP",
-            info.map_health.level,
+            live_map_health_color(info.map_health.level),
             info.map_health.detail,
             health_left + 22,
             34,
         )
         self._draw_health_line(
             "GPS",
-            info.gps_health.level,
+            live_map_health_color(info.gps_health.level),
             info.gps_health.detail,
             health_left + 22,
             94,
         )
+        self._draw_health_line(
+            "RADAR",
+            radar_status_color(radar.status if radar is not None else None),
+            radar_status_detail(radar),
+            health_left + 22,
+            154,
+        )
+
+        if radar is not None and radar.attribution is not None:
+            observed = (
+                radar.frame.observed_at.astimezone(UTC).strftime("%H:%MZ")
+                if radar.frame is not None
+                else "--:--Z"
+            )
+            canvas.create_text(
+                12,
+                max(230, canvas.winfo_height() - 10),
+                text=f"{radar.attribution} • OBS {observed}",
+                fill=_MUTED,
+                font=("DejaVu Sans", 11, "bold"),
+                anchor="sw",
+                tags="map-overlay",
+            )
 
     def _draw_health_line(
         self,
         name: str,
-        level: LiveMapHealthLevel,
+        color: str,
         detail: str,
         x: int,
         y: int,
     ) -> None:
-        color = live_map_health_color(level)
         self._canvas.create_oval(
             x,
             y + 4,
