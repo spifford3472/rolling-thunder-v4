@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 9
+CURRENT_SCHEMA_VERSION: Final = 10
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -244,6 +244,34 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
             payload_json TEXT NOT NULL CHECK (length(payload_json) >= 2),
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
+        """,
+    ),
+    10: (
+        """
+        CREATE TABLE forge_weather_alert_cache (
+            singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+            revision INTEGER NOT NULL CHECK (revision > 0),
+            fetched_at TEXT NOT NULL,
+            received_at TEXT NOT NULL,
+            payload_json TEXT NOT NULL CHECK (length(payload_json) >= 2),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE weather_alert_notification_ledger (
+            alert_id TEXT PRIMARY KEY CHECK (
+                length(alert_id) >= 1 AND length(alert_id) <= 512
+            ),
+            event TEXT NOT NULL CHECK (
+                length(event) >= 1 AND length(event) <= 160
+            ),
+            claimed_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE INDEX weather_alert_notification_claimed_at_index
+        ON weather_alert_notification_ledger (claimed_at)
         """,
     ),
 }

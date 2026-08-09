@@ -309,6 +309,26 @@ class PiForgeLocationPublishingService:
     def latest_state(self) -> PiForgeLocationPublisherState:
         return self._publisher.get_state()
 
+    @property
+    def scheduler_interval_s(self) -> float:
+        """Return the configured background eligibility-check cadence."""
+        return self._scheduler_interval_s
+
+    @property
+    def publish_interval_s(self) -> float:
+        """Return the successful-location publication cadence."""
+        return self._publish_interval_s
+
+    @property
+    def retry_interval_s(self) -> float:
+        """Return the failed-publication retry cadence."""
+        return self._retry_interval_s
+
+    @property
+    def unusable_retry_interval_s(self) -> float:
+        """Return the unusable-GPS retry cadence."""
+        return self._unusable_retry_interval_s
+
     def start(self) -> PiForgeLocationPublisherState:
         """Start scheduling and queue the first publication opportunity in background."""
         startup_state = self._publisher.get_state()

@@ -175,6 +175,59 @@ class ForgeWeatherClientConfig(ConfigurationModel):
     stale_after_s: float = Field(default=1_800.0, gt=0, le=172_800)
 
 
+class ForgeWeatherAlertClientConfig(ConfigurationModel):
+    """Location-aware Pi weather-alert polling and GPS freshness settings."""
+
+    enabled: bool = False
+    refresh_interval_s: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=3_600.0,
+    )
+    refresh_on_start: bool = False
+    location_publish_interval_s: float = Field(
+        default=15.0,
+        ge=5.0,
+        le=30.0,
+    )
+    audio_device: str = "default"
+
+    @field_validator("audio_device")
+    @classmethod
+    def validate_audio_device(
+        cls,
+        value: str,
+    ) -> str:
+        """Require a nonblank ALSA playback-device selector."""
+        normalized = value.strip()
+
+        if not normalized:
+            raise ValueError(
+                "forge.weather_alerts.audio_device must not be blank"
+            )
+
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_location_freshness(
+        self,
+    ) -> Self:
+        """Require safe GPS publication and startup ordering."""
+        if self.location_publish_interval_s > self.refresh_interval_s:
+            raise ValueError(
+                "forge.weather_alerts.location_publish_interval_s "
+                "must not exceed forge.weather_alerts.refresh_interval_s"
+            )
+
+        if self.enabled and self.refresh_on_start:
+            raise ValueError(
+                "forge.weather_alerts.refresh_on_start must remain "
+                "false so current GPS publication can occur first"
+            )
+
+        return self
+
+
 class ForgeConfig(ConfigurationModel):
     """Optional Pi-side Forge client settings."""
 
@@ -189,6 +242,9 @@ class ForgeConfig(ConfigurationModel):
         le=16_777_216,
     )
     weather: ForgeWeatherClientConfig = ForgeWeatherClientConfig()
+    weather_alerts: ForgeWeatherAlertClientConfig = (
+        ForgeWeatherAlertClientConfig()
+    )
 
     @model_validator(mode="after")
     def validate_enabled_forge(self) -> Self:
@@ -198,7 +254,14 @@ class ForgeConfig(ConfigurationModel):
                 "forge.api_url must be configured when forge.enabled is true"
             )
         if self.weather.enabled and not self.enabled:
-            raise ValueError("forge.enabled must be true when forge.weather.enabled is true")
+            raise ValueError(
+                "forge.enabled must be true when forge.weather.enabled is true"
+            )
+        if self.weather_alerts.enabled and not self.enabled:
+            raise ValueError(
+                "forge.enabled must be true when "
+                "forge.weather_alerts.enabled is true"
+            )
         return self
 
 
@@ -466,11 +529,24 @@ class ApplicationConfig(ConfigurationModel):
 
     @model_validator(mode="after")
     def validate_radar_dependencies(self) -> Self:
-        """Require the map and Forge client whenever the radar overlay is enabled."""
+        """Require cross-component dependencies for location-aware features."""
         if self.radar.enabled and not self.map.enabled:
-            raise ValueError("map.enabled must be true when radar.enabled is true")
+            raise ValueError(
+                "map.enabled must be true when radar.enabled is true"
+            )
         if self.radar.enabled and not self.forge.enabled:
-            raise ValueError("forge.enabled must be true when radar.enabled is true")
+            raise ValueError(
+                "forge.enabled must be true when radar.enabled is true"
+            )
+        if (
+            self.forge.weather_alerts.enabled
+            and self.hardware.effective_gps_mode
+            is not HardwareAdapterMode.REAL
+        ):
+            raise ValueError(
+                "hardware.gps_mode must be real when "
+                "forge.weather_alerts.enabled is true"
+            )
         return self
 
 

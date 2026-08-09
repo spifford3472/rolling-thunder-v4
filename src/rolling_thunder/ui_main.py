@@ -56,6 +56,9 @@ from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
 from rolling_thunder.status_messages import StatusPresentation
+from rolling_thunder.weather_alert_panel import (
+    WeatherAlertPanelController,
+)
 from rolling_thunder.weather_panel import WeatherPanelController
 from rolling_thunder.weather_ui import WeatherWidgets
 
@@ -179,6 +182,7 @@ def run_dashboard(
         preference_service,
     )
     weather_panel = WeatherPanelController()
+    weather_alert_panel = WeatherAlertPanelController()
 
     try:
         runtime.start()
@@ -720,6 +724,9 @@ def run_dashboard(
         weather_presentation = weather_panel.update(
             runtime.latest_forge_weather_state
         )
+        weather_alert_presentation = weather_alert_panel.update(
+            runtime.latest_forge_weather_alert_state
+        )
 
         gps_state = runtime.latest_gps_state
         live_map_presentation = live_map_controller.update(gps_state)
@@ -890,7 +897,10 @@ def run_dashboard(
             context_title_label.configure(
                 font=("DejaVu Sans", 48, "bold")
             )
-            weather_widgets.update(weather_presentation)
+            weather_widgets.update(
+                weather_presentation,
+                weather_alert_presentation,
+            )
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
             context_title_text.set(selected_context.definition.title)

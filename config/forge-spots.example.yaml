@@ -52,6 +52,18 @@ weather:
   movement_refresh_km: 10.0
   refresh_on_start: true
 
+weather_alerts:
+  # NWS active alerts are queried by exact retained Rolling Thunder GPS point.
+  # They remain disabled until explicitly deployed. The provider is never
+  # contacted from the Pi or from an HTTP request handler.
+  enabled: false
+  endpoint: https://api.weather.gov/alerts/active
+  user_agent: "RollingThunder-v4/1.0 (https://github.com/spifford3472/rolling-thunder-v4)"
+  request_timeout_s: 5.0
+  check_interval_s: 30.0
+  location_max_age_s: 120.0
+  refresh_on_start: true
+
 radar:
   # NOAA/NWS MRMS base reflectivity remains optional. Provider-specific ArcGIS
   # fields and raster IDs stay Forge-side; the Pi consumes only Rolling Thunder
