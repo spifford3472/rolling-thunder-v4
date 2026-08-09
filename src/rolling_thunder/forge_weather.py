@@ -250,6 +250,7 @@ class ForgeWeatherService:
         self._movement_refresh_km = movement_refresh_km
         self._lock = RLock()
 
+        startup_error: str | None
         try:
             stored = repository.load()
         except ForgeWeatherStorageError as error:
