@@ -231,7 +231,7 @@ class ForgeRadarService:
                 png = validate_map_tile_png(
                     self._provider.fetch_tile(provider_frame_id, key)
                 )
-            except Exception as error:  # noqa: BLE001 - optional provider isolation boundary
+            except Exception as error:
                 self._state = self._state.model_copy(
                     update={
                         "provider_status": RadarProviderStatus.DEGRADED,
