@@ -49,7 +49,6 @@ from rolling_thunder.operator_preferences import (
     OperatorPreferenceService,
 )
 from rolling_thunder.pi_forge_location_publisher import (
-    ExecutorFactory as LocationExecutorFactory,
     PiForgeLocationPublisherState,
     PiForgeLocationPublishingService,
 )
@@ -57,10 +56,7 @@ from rolling_thunder.pi_forge_runtime import (
     build_pi_forge_location_publishing,
     build_pi_forge_spot_polling,
 )
-from rolling_thunder.pi_forge_spot_polling import (
-    ExecutorFactory as SpotExecutorFactory,
-    PiForgeSpotPollingService,
-)
+from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotState
 from rolling_thunder.pota_enrichment import PotaEnrichmentService
 from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
@@ -160,8 +156,8 @@ class ApplicationRuntime:
         image_transport: HttpTransport | None = None,
         state_map_transport: HttpTransport | None = None,
         map_transport: HttpTransport | None = None,
-        forge_executor_factory: SpotExecutorFactory | None = None,
-        forge_location_executor_factory: LocationExecutorFactory | None = None,
+        forge_executor_factory: ExecutorFactory | None = None,
+        forge_location_executor_factory: ExecutorFactory | None = None,
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
