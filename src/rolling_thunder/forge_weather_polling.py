@@ -123,7 +123,7 @@ class ForgeWeatherPollingService:
     def _run_refresh(self) -> None:
         try:
             self._service.refresh_if_needed()
-        except Exception:  # noqa: BLE001 - isolate future scheduled weather attempts
+        except Exception:
             _LOGGER.exception(
                 "Unexpected Forge weather refresh failure; future attempts will continue."
             )
