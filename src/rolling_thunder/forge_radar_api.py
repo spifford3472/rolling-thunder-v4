@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from datetime import datetime
 from json import dumps
 from typing import Literal
 from urllib.parse import unquote, urlsplit
@@ -29,8 +31,8 @@ class ForgeApiRadarHealth(DomainModel):
     stale: bool
     renderable: bool
     revision: int
-    last_attempt_at: object | None = None
-    last_success_at: object | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
     last_error: str | None = None
 
     @classmethod
@@ -72,7 +74,7 @@ class RadarAwareForgeSpotApiApplication(ForgeSpotApiApplication):
         method: str,
         target: str,
         *,
-        headers=None,
+        headers: Mapping[str, str] | None = None,
         body: bytes | None = None,
     ) -> ForgeHttpResponse:
         normalized_method = method.strip().upper()
