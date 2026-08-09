@@ -18,7 +18,6 @@ from rolling_thunder.live_map_ui import (
     live_map_status_lines,
     radar_matches_map,
     radar_status_color,
-    radar_status_detail,
     rotate_marker_points,
 )
 from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
@@ -233,26 +232,21 @@ def test_radar_is_eligible_only_for_exact_published_map_viewport() -> None:
     assert radar_matches_map(None, map_snapshot) is False
 
 
-def test_radar_health_helpers_keep_optional_failure_non_alarmist() -> None:
-    unavailable = LiveRadarSnapshot(
-        status=RadarDataStatus.UNAVAILABLE,
-        viewport=None,
-        frame=None,
-        tiles=(),
-        detail="RADAR UNAVAILABLE",
-        updated_at=NOW,
-    )
-    stale = unavailable.__class__(
-        status=RadarDataStatus.STALE,
-        viewport=None,
-        frame=None,
-        tiles=(),
-        detail="RADAR OFFLINE — RETAINING PRIOR FRAME",
-        updated_at=NOW,
-    )
-
-    assert radar_status_color(RadarDataStatus.UNAVAILABLE) == "#a8b4ba"
-    assert radar_status_color(RadarDataStatus.STALE) == "#ffd24a"
-    assert radar_status_detail(unavailable) == "RADAR UNAVAILABLE"
-    assert radar_status_detail(stale) == "RADAR OFFLINE — RETAINING PRIOR FRAME"
-    assert radar_status_detail(None) == "OFF"
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (None, "#a8b4ba"),
+        (RadarDataStatus.DISABLED, "#a8b4ba"),
+        (RadarDataStatus.IDLE, "#ffd24a"),
+        (RadarDataStatus.LOADING, "#ffd24a"),
+        (RadarDataStatus.STALE, "#ffd24a"),
+        (RadarDataStatus.PARTIAL, "#ffd24a"),
+        (RadarDataStatus.READY, "#66ccff"),
+        (RadarDataStatus.UNAVAILABLE, "#ff7070"),
+    ],
+)
+def test_radar_health_uses_color_only_state(
+    status: RadarDataStatus | None,
+    expected: str,
+) -> None:
+    assert radar_status_color(status) == expected
