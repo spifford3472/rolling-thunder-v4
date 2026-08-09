@@ -276,7 +276,7 @@ class OpenMeteoForgeWeatherProvider:
             )
         normalized = value.strip()
         try:
-            parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(normalized)
         except ValueError as error:
             raise ForgeWeatherProviderError(
                 f"Open-Meteo {field_name} is not a valid ISO-8601 timestamp."
