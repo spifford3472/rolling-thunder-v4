@@ -309,6 +309,23 @@ class MapConfig(ConfigurationModel):
         return normalized
 
 
+class RadarConfig(ConfigurationModel):
+    """Optional Pi-side weather-radar overlay settings."""
+
+    enabled: bool = False
+    manifest_refresh_interval_s: float = Field(default=60.0, gt=0, le=3_600)
+    stale_after_s: float = Field(default=900.0, gt=0, le=86_400)
+    hide_after_s: float = Field(default=1_800.0, gt=0, le=86_400)
+    opacity: float = Field(default=0.55, gt=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_freshness_window(self) -> Self:
+        """Require the render cutoff to remain later than the stale threshold."""
+        if self.hide_after_s <= self.stale_after_s:
+            raise ValueError("radar.hide_after_s must exceed radar.stale_after_s")
+        return self
+
+
 class PhysicalControlTransport(StrEnum):
     """Supported physical-control input transports."""
 
@@ -431,8 +448,18 @@ class ApplicationConfig(ConfigurationModel):
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
     pota_spots: PotaSpotsConfig = PotaSpotsConfig()
     map: MapConfig = MapConfig()
+    radar: RadarConfig = RadarConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     storage: StorageConfig = StorageConfig()
+
+    @model_validator(mode="after")
+    def validate_radar_dependencies(self) -> Self:
+        """Require the map and Forge client whenever the radar overlay is enabled."""
+        if self.radar.enabled and not self.map.enabled:
+            raise ValueError("map.enabled must be true when radar.enabled is true")
+        if self.radar.enabled and not self.forge.enabled:
+            raise ValueError("forge.enabled must be true when radar.enabled is true")
+        return self
 
 
 def resolve_database_path(
