@@ -159,7 +159,7 @@ class ForgeRadarService:
 
         try:
             candidate = self._provider.discover_latest(location)
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - optional provider isolation boundary
             message = str(error)[:500] or error.__class__.__name__
             with self._lock:
                 status = (
@@ -231,7 +231,7 @@ class ForgeRadarService:
                 png = validate_map_tile_png(
                     self._provider.fetch_tile(provider_frame_id, key)
                 )
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - optional provider isolation boundary
                 self._state = self._state.model_copy(
                     update={
                         "provider_status": RadarProviderStatus.DEGRADED,
