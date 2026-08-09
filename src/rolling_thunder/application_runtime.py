@@ -57,9 +57,15 @@ from rolling_thunder.pi_forge_location_publisher import (
 from rolling_thunder.pi_forge_runtime import (
     build_pi_forge_location_publishing,
     build_pi_forge_spot_polling,
+    build_pi_forge_weather_polling,
 )
 from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotState
+from rolling_thunder.pi_forge_weather_polling import (
+    PiForgeWeatherPollingService,
+    WeatherExecutorFactory,
+)
+from rolling_thunder.pi_forge_weather_service import PiForgeWeatherState
 from rolling_thunder.pota_enrichment import PotaEnrichmentService
 from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
 from rolling_thunder.pota_runtime import build_pota_spot_polling
@@ -121,6 +127,7 @@ class ApplicationRuntime:
     contact_sync: ContactSyncService | None = None
     network_keepalive: NetworkKeepaliveService | None = None
     pi_forge_spot_polling: PiForgeSpotPollingService | None = None
+    pi_forge_weather_polling: PiForgeWeatherPollingService | None = None
     pi_forge_location_publishing: PiForgeLocationPublishingService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
@@ -141,6 +148,7 @@ class ApplicationRuntime:
         contact_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
+        forge_weather_scheduler: PollScheduler | None = None,
         forge_location_scheduler: PollScheduler | None = None,
         pota_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
@@ -160,6 +168,7 @@ class ApplicationRuntime:
         state_map_transport: HttpTransport | None = None,
         map_transport: HttpTransport | None = None,
         forge_executor_factory: ExecutorFactory | None = None,
+        forge_weather_executor_factory: WeatherExecutorFactory | None = None,
         forge_location_executor_factory: ExecutorFactory | None = None,
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
@@ -267,6 +276,13 @@ class ApplicationRuntime:
             scheduler=forge_scheduler,
             transport=forge_transport,
             executor_factory=forge_executor_factory,
+        )
+        pi_forge_weather_polling = build_pi_forge_weather_polling(
+            config.forge,
+            database_path=config.storage.database_path,
+            scheduler=forge_weather_scheduler,
+            transport=forge_transport,
+            executor_factory=forge_weather_executor_factory,
         )
 
         pi_forge_location_publishing: PiForgeLocationPublishingService | None = None
@@ -425,6 +441,7 @@ class ApplicationRuntime:
             contact_sync=contact_sync,
             network_keepalive=network_keepalive,
             pi_forge_spot_polling=pi_forge_spot_polling,
+            pi_forge_weather_polling=pi_forge_weather_polling,
             pi_forge_location_publishing=pi_forge_location_publishing,
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
@@ -478,6 +495,13 @@ class ApplicationRuntime:
         return self.pi_forge_spot_polling.latest_state
 
     @property
+    def latest_forge_weather_state(self) -> PiForgeWeatherState:
+        """Return immutable Pi weather state, including explicit disabled state."""
+        if self.pi_forge_weather_polling is None:
+            return PiForgeWeatherState.disabled()
+        return self.pi_forge_weather_polling.latest_state
+
+    @property
     def latest_forge_location_publisher_state(
         self,
     ) -> PiForgeLocationPublisherState | None:
@@ -519,6 +543,8 @@ class ApplicationRuntime:
             self.network_keepalive.start()
         if self.pi_forge_spot_polling is not None:
             self.pi_forge_spot_polling.start()
+        if self.pi_forge_weather_polling is not None:
+            self.pi_forge_weather_polling.start()
         self.pota_enrichment.start()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.start()
@@ -533,6 +559,8 @@ class ApplicationRuntime:
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.stop()
         self.pota_enrichment.stop()
+        if self.pi_forge_weather_polling is not None:
+            self.pi_forge_weather_polling.stop()
         if self.pi_forge_spot_polling is not None:
             self.pi_forge_spot_polling.stop()
         if self.network_keepalive is not None:
