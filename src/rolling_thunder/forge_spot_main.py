@@ -51,8 +51,8 @@ from rolling_thunder.forge_spot_provider import ForgeSpotProvider
 from rolling_thunder.forge_weather import ForgeWeatherService, ForgeWeatherStorageError
 from rolling_thunder.forge_weather_polling import (
     ExecutorFactory as WeatherExecutorFactory,
-    ForgeWeatherPollingService,
 )
+from rolling_thunder.forge_weather_polling import ForgeWeatherPollingService
 from rolling_thunder.forge_weather_repository import SqliteForgeWeatherRepository
 from rolling_thunder.forge_weather_unavailable import UnavailableForgeWeatherStateSource
 from rolling_thunder.http_home_platform import HttpTransport
