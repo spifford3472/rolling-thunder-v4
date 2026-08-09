@@ -139,6 +139,18 @@ class ForgeQrzEnrichmentConfig(ForgeConfigurationModel):
     max_cache_entries: int = Field(default=2_000, ge=1, le=100_000)
 
 
+class ForgeWeatherConfig(ForgeConfigurationModel):
+    """Retained Forge weather provider and deterministic refresh settings."""
+
+    enabled: bool = False
+    endpoint: AnyHttpUrl = AnyHttpUrl("https://api.open-meteo.com/v1/forecast")
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    check_interval_s: float = Field(default=60.0, gt=0, le=3_600)
+    max_forecast_age_s: float = Field(default=1_800.0, gt=0, le=86_400)
+    movement_refresh_km: float = Field(default=10.0, gt=0, le=1_000)
+    refresh_on_start: bool = True
+
+
 class ForgeApplicationConfig(ForgeConfigurationModel):
     """Complete independent Forge spot-service configuration."""
 
@@ -148,6 +160,7 @@ class ForgeApplicationConfig(ForgeConfigurationModel):
     pota: ForgePotaProviderConfig = ForgePotaProviderConfig()
     dxspider: ForgeDxSpiderProviderConfig = ForgeDxSpiderProviderConfig()
     qrz: ForgeQrzEnrichmentConfig = ForgeQrzEnrichmentConfig()
+    weather: ForgeWeatherConfig = ForgeWeatherConfig()
     logging_level: ForgeLogLevel = ForgeLogLevel.INFO
 
     @field_validator("logging_level", mode="before")

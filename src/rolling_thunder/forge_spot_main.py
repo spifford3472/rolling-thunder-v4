@@ -32,6 +32,7 @@ from rolling_thunder.forge_mobile_location import (
 from rolling_thunder.forge_mobile_location_repository import (
     SqliteForgeMobileLocationRepository,
 )
+from rolling_thunder.forge_open_meteo_weather import OpenMeteoForgeWeatherProvider
 from rolling_thunder.forge_pota_provider import ForgePotaSpotProvider
 from rolling_thunder.forge_qrz_enrichment import ForgeQrzEnricher
 from rolling_thunder.forge_qrz_provider import ForgeQrzEnrichedSpotProvider
@@ -43,9 +44,17 @@ from rolling_thunder.forge_spot_aggregation import ForgeSpotAggregationService
 from rolling_thunder.forge_spot_api import (
     ForgeHttpServer,
     ForgeSpotApiApplication,
+    ForgeWeatherStateSource,
 )
 from rolling_thunder.forge_spot_polling import ForgeSpotPollingService
 from rolling_thunder.forge_spot_provider import ForgeSpotProvider
+from rolling_thunder.forge_weather import ForgeWeatherService, ForgeWeatherStorageError
+from rolling_thunder.forge_weather_polling import (
+    ExecutorFactory as WeatherExecutorFactory,
+)
+from rolling_thunder.forge_weather_polling import ForgeWeatherPollingService
+from rolling_thunder.forge_weather_repository import SqliteForgeWeatherRepository
+from rolling_thunder.forge_weather_unavailable import UnavailableForgeWeatherStateSource
 from rolling_thunder.http_home_platform import HttpTransport
 from rolling_thunder.http_pota_spot_source import HttpPotaSpotSource
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
@@ -88,7 +97,7 @@ ForgeServerFactory = Callable[[str, int, ForgeSpotApiApplication], ForgeServer]
 
 
 class ForgeSpotRuntime:
-    """Own the independent Forge polling, retained location, and HTTP lifecycles."""
+    """Own Forge spot, retained location, optional weather, and HTTP lifecycles."""
 
     def __init__(
         self,
@@ -96,15 +105,19 @@ class ForgeSpotRuntime:
         server: ForgeServer,
         mobile_location: ForgeMobileLocationService,
         *,
+        weather: ForgeWeatherStateSource | None = None,
+        weather_polling: ForgeWeatherPollingService | None = None,
         logger: logging.Logger,
     ) -> None:
         self.polling = polling
         self.server = server
         self.mobile_location = mobile_location
+        self.weather = weather
+        self.weather_polling = weather_polling
         self._logger = logger
 
     def run(self) -> None:
-        """Serve retained state immediately, then start provider refreshes."""
+        """Serve retained state immediately, then start background refreshes."""
         host, port = self.server.server_address
         server_thread = Thread(
             target=self.server.serve_forever,
@@ -116,9 +129,13 @@ class ForgeSpotRuntime:
 
         try:
             self.polling.start()
+            if self.weather_polling is not None:
+                self.weather_polling.start()
             server_thread.join()
         finally:
             self.server.shutdown()
+            if self.weather_polling is not None:
+                self.weather_polling.stop()
             self.polling.stop()
             self.server.close()
             server_thread.join(timeout=5.0)
@@ -173,13 +190,15 @@ def build_forge_runtime(
     config: ForgeApplicationConfig,
     *,
     scheduler: PollScheduler | None = None,
+    weather_scheduler: PollScheduler | None = None,
     server_factory: ForgeServerFactory | None = None,
     transport: HttpTransport | None = None,
     dxspider_session_factory: DxSpiderSessionFactory | None = None,
+    weather_executor_factory: WeatherExecutorFactory | None = None,
     secrets: ApplicationSecrets | None = None,
     logger: logging.Logger | None = None,
 ) -> ForgeSpotRuntime:
-    """Compose Forge providers, durability, mobile location, polling, and REST."""
+    """Compose Forge spots, retained location/weather, polling, and REST."""
     process_logger = logger or logging.getLogger(_LOGGER_NAME)
     providers: list[ForgeSpotProvider] = []
 
@@ -235,9 +254,44 @@ def build_forge_runtime(
         interval_s=config.aggregation.refresh_interval_s,
         refresh_on_start=config.aggregation.refresh_on_start,
     )
+
+    weather_state_source: ForgeWeatherStateSource | None = None
+    weather_polling: ForgeWeatherPollingService | None = None
+    if config.weather.enabled:
+        try:
+            weather_repository = SqliteForgeWeatherRepository(config.storage.database_path)
+        except ForgeWeatherStorageError as error:
+            process_logger.error(
+                "Forge weather persistence is unavailable; core Forge service will continue: %s",
+                error,
+            )
+            weather_state_source = UnavailableForgeWeatherStateSource(error)
+        else:
+            weather_provider = OpenMeteoForgeWeatherProvider(
+                timeout_s=config.weather.request_timeout_s,
+                transport=transport,
+                endpoint=str(config.weather.endpoint),
+            )
+            weather_service = ForgeWeatherService(
+                weather_provider,
+                weather_repository,
+                mobile_location,
+                max_forecast_age_s=config.weather.max_forecast_age_s,
+                movement_refresh_km=config.weather.movement_refresh_km,
+            )
+            weather_state_source = weather_service
+            weather_polling = ForgeWeatherPollingService(
+                weather_service,
+                weather_scheduler or ThreadedPollScheduler(),
+                check_interval_s=config.weather.check_interval_s,
+                refresh_on_start=config.weather.refresh_on_start,
+                executor_factory=weather_executor_factory,
+            )
+
     application = ForgeSpotApiApplication(
         aggregation,
         mobile_location=mobile_location,
+        weather=weather_state_source,
     )
     factory = server_factory or _default_server_factory
     server = factory(
@@ -249,6 +303,8 @@ def build_forge_runtime(
         polling,
         server,
         mobile_location,
+        weather=weather_state_source,
+        weather_polling=weather_polling,
         logger=process_logger,
     )
 

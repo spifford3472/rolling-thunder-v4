@@ -39,4 +39,17 @@ qrz:
   negative_ttl_s: 3600.0
   max_cache_entries: 2000
 
+weather:
+  # Open-Meteo is normalized behind a Rolling Thunder-owned provider boundary.
+  # Weather refreshes use the latest retained mobile location and never block
+  # the Forge HTTP request handler or any Pi core function. Enable deliberately
+  # after the installation has adopted the retained-weather API and attribution.
+  enabled: false
+  endpoint: https://api.open-meteo.com/v1/forecast
+  request_timeout_s: 5.0
+  check_interval_s: 60.0
+  max_forecast_age_s: 1800.0
+  movement_refresh_km: 10.0
+  refresh_on_start: true
+
 logging_level: INFO
