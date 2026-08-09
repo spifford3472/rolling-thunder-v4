@@ -58,6 +58,17 @@ weather:
   movement_refresh_km: 10.0
   refresh_on_start: true
 
+weather_alerts:
+  # Enable only after #182 Forge deployment acceptance. The NWS active-alert
+  # request is point-specific to the latest trusted retained mobile location.
+  enabled: false
+  endpoint: https://api.weather.gov/alerts/active
+  user_agent: "RollingThunder-v4/1.0 (https://github.com/spifford3472/rolling-thunder-v4)"
+  request_timeout_s: 5.0
+  check_interval_s: 30.0
+  location_max_age_s: 120.0
+  refresh_on_start: true
+
 radar:
   # Checkpoint #163 production enables NOAA/NWS MRMS radar explicitly.
   # Forge owns provider discovery and exact-frame raster locking; the Pi never

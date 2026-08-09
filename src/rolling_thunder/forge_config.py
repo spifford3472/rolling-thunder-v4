@@ -151,6 +151,36 @@ class ForgeWeatherConfig(ForgeConfigurationModel):
     refresh_on_start: bool = True
 
 
+class ForgeWeatherAlertConfig(ForgeConfigurationModel):
+    """Optional NWS point-alert provider and refresh settings."""
+
+    enabled: bool = False
+    endpoint: AnyHttpUrl = AnyHttpUrl(
+        "https://api.weather.gov/alerts/active"
+    )
+    user_agent: str = Field(
+        default=(
+            "RollingThunder-v4/1.0 "
+            "(https://github.com/spifford3472/rolling-thunder-v4)"
+        ),
+        min_length=1,
+        max_length=256,
+    )
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    check_interval_s: float = Field(default=30.0, ge=30.0, le=3_600)
+    location_max_age_s: float = Field(default=120.0, gt=0, le=3_600)
+    refresh_on_start: bool = True
+
+    @field_validator("user_agent")
+    @classmethod
+    def normalize_user_agent(cls, value: str) -> str:
+        """Trim the required NWS client identification string."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be blank")
+        return normalized
+
+
 class ForgeRadarConfig(ForgeConfigurationModel):
     """Optional NOAA/NWS radar discovery and bounded tile-cache settings."""
 
@@ -189,6 +219,7 @@ class ForgeApplicationConfig(ForgeConfigurationModel):
     dxspider: ForgeDxSpiderProviderConfig = ForgeDxSpiderProviderConfig()
     qrz: ForgeQrzEnrichmentConfig = ForgeQrzEnrichmentConfig()
     weather: ForgeWeatherConfig = ForgeWeatherConfig()
+    weather_alerts: ForgeWeatherAlertConfig = ForgeWeatherAlertConfig()
     radar: ForgeRadarConfig = ForgeRadarConfig()
     logging_level: ForgeLogLevel = ForgeLogLevel.INFO
 
