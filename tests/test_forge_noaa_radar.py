@@ -17,6 +17,20 @@ from rolling_thunder.radar_tiles import apply_radar_opacity, web_mercator_tile_b
 OBSERVED = datetime(2026, 8, 9, 1, 30, tzinfo=UTC)
 
 
+class FakeResponse:
+    def __init__(self, status_code: int, body: bytes) -> None:
+        self._status_code = status_code
+        self._body = body
+
+    @property
+    def status_code(self) -> int:
+        return self._status_code
+
+    @property
+    def body(self) -> bytes:
+        return self._body
+
+
 class QueueTransport:
     def __init__(self, responses: list[HttpResponse]) -> None:
         self.responses = responses
@@ -69,8 +83,8 @@ def test_provider_discovers_latest_covering_raster_and_locks_export_to_it() -> N
     ).encode()
     transport = QueueTransport(
         [
-            HttpResponse(status_code=200, body=metadata, headers={}),
-            HttpResponse(status_code=200, body=png_tile(), headers={}),
+            FakeResponse(status_code=200, body=metadata),
+            FakeResponse(status_code=200, body=png_tile()),
         ]
     )
     provider = NoaaNwsRadarProvider(transport=transport, timeout_s=3.0)
