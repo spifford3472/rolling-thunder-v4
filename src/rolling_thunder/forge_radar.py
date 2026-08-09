@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from enum import StrEnum
 from hashlib import sha256
 from threading import RLock
 from typing import Protocol
@@ -16,6 +15,11 @@ from rolling_thunder.forge_mobile_location import (
     MobileLocationRecord,
 )
 from rolling_thunder.map_tiles import MapTileKey, validate_map_tile_png
+from rolling_thunder.radar_domain import (
+    RadarFrame,
+    RadarProviderStatus,
+    RadarSourceMetadata,
+)
 
 
 class ForgeRadarError(RuntimeError):
@@ -26,46 +30,12 @@ class ForgeRadarProviderError(ForgeRadarError):
     """Raised when a radar provider cannot return a valid frame or tile."""
 
 
-class RadarProviderStatus(StrEnum):
-    """Truthful provider health for optional radar intelligence."""
-
-    STARTING = "starting"
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    UNAVAILABLE = "unavailable"
-
-
-class RadarProductToken(StrEnum):
-    """Rolling Thunder-owned radar product identifiers."""
-
-    BASE_REFLECTIVITY = "base_reflectivity"
-
-
-class RadarSourceMetadata(DomainModel):
-    """Provider attribution carried with every retained frame."""
-
-    provider_id: str
-    provider_name: str
-    product: RadarProductToken
-    attribution_text: str
-    attribution_url: str
-
-
 class RadarProviderFrame(DomainModel):
     """Internal provider result before an opaque public token is assigned."""
 
     provider_frame_id: str
     observed_at: datetime
     valid_until: datetime | None = None
-    source: RadarSourceMetadata
-
-
-class RadarFrame(DomainModel):
-    """Provider-neutral public metadata for one immutable radar frame."""
-
-    frame_token: str
-    observed_at: datetime
-    fetched_at: datetime
     source: RadarSourceMetadata
 
 
