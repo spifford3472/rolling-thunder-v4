@@ -60,12 +60,13 @@ class PiForgeWeatherAlertStateKind(StrEnum):
 
 
 class PiForgeWeatherAlertErrorKind(StrEnum):
-    """Local Pi alert-client failure category."""
+    """Local Pi alert-client failure or applicability category."""
 
     STORAGE_READ = "storage_read"
     STORAGE_WRITE = "storage_write"
     TRANSPORT = "transport"
     VALIDATION = "validation"
+    LOCATION_UNVERIFIED = "location_unverified"
 
 
 class PiForgeWeatherAlertState(DomainModel):

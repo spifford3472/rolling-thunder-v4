@@ -110,3 +110,20 @@ def test_alerts_accept_explicit_real_gps(tmp_path: Path) -> None:
 
     assert config.forge.weather_alerts.enabled is True
     assert config.hardware.effective_gps_mode.value == "real"
+
+
+def test_enabled_alerts_reject_refresh_on_start() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="refresh_on_start",
+    ):
+        ForgeConfig.model_validate(
+            {
+                "enabled": True,
+                "api_url": "http://forge.example.invalid",
+                "weather_alerts": {
+                    "enabled": True,
+                    "refresh_on_start": True,
+                },
+            }
+        )

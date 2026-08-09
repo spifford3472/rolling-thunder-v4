@@ -195,12 +195,19 @@ class ForgeWeatherAlertClientConfig(ConfigurationModel):
     def validate_location_freshness(
         self,
     ) -> Self:
-        """Require GPS publication to be at least as frequent as alert polling."""
+        """Require safe GPS publication and startup ordering."""
         if self.location_publish_interval_s > self.refresh_interval_s:
             raise ValueError(
                 "forge.weather_alerts.location_publish_interval_s "
                 "must not exceed forge.weather_alerts.refresh_interval_s"
             )
+
+        if self.enabled and self.refresh_on_start:
+            raise ValueError(
+                "forge.weather_alerts.refresh_on_start must remain "
+                "false so current GPS publication can occur first"
+            )
+
         return self
 
 

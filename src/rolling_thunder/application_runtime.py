@@ -57,10 +57,19 @@ from rolling_thunder.pi_forge_location_publisher import (
 from rolling_thunder.pi_forge_runtime import (
     build_pi_forge_location_publishing,
     build_pi_forge_spot_polling,
+    build_pi_forge_weather_alert_polling,
     build_pi_forge_weather_polling,
 )
 from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotState
+from rolling_thunder.pi_forge_weather_alert_polling import (
+    PiForgeWeatherAlertNotificationBatch,
+    PiForgeWeatherAlertPollingService,
+    WeatherAlertExecutorFactory,
+)
+from rolling_thunder.pi_forge_weather_alert_service import (
+    PiForgeWeatherAlertState,
+)
 from rolling_thunder.pi_forge_weather_polling import (
     PiForgeWeatherPollingService,
     WeatherExecutorFactory,
@@ -128,6 +137,9 @@ class ApplicationRuntime:
     network_keepalive: NetworkKeepaliveService | None = None
     pi_forge_spot_polling: PiForgeSpotPollingService | None = None
     pi_forge_weather_polling: PiForgeWeatherPollingService | None = None
+    pi_forge_weather_alert_polling: (
+        PiForgeWeatherAlertPollingService | None
+    ) = None
     pi_forge_location_publishing: PiForgeLocationPublishingService | None = None
     pota_spot_polling: PotaSpotPollingService | None = None
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
@@ -149,6 +161,7 @@ class ApplicationRuntime:
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
         forge_weather_scheduler: PollScheduler | None = None,
+        forge_weather_alert_scheduler: PollScheduler | None = None,
         forge_location_scheduler: PollScheduler | None = None,
         pota_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
@@ -169,6 +182,9 @@ class ApplicationRuntime:
         map_transport: HttpTransport | None = None,
         forge_executor_factory: ExecutorFactory | None = None,
         forge_weather_executor_factory: WeatherExecutorFactory | None = None,
+        forge_weather_alert_executor_factory: (
+            WeatherAlertExecutorFactory | None
+        ) = None,
         forge_location_executor_factory: ExecutorFactory | None = None,
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
@@ -283,6 +299,19 @@ class ApplicationRuntime:
             scheduler=forge_weather_scheduler,
             transport=forge_transport,
             executor_factory=forge_weather_executor_factory,
+        )
+
+        pi_forge_weather_alert_polling = (
+            build_pi_forge_weather_alert_polling(
+                config.forge,
+                lambda: gps_polling.latest_state,
+                database_path=config.storage.database_path,
+                scheduler=forge_weather_alert_scheduler,
+                transport=forge_transport,
+                executor_factory=(
+                    forge_weather_alert_executor_factory
+                ),
+            )
         )
 
         pi_forge_location_publishing: PiForgeLocationPublishingService | None = None
@@ -442,6 +471,9 @@ class ApplicationRuntime:
             network_keepalive=network_keepalive,
             pi_forge_spot_polling=pi_forge_spot_polling,
             pi_forge_weather_polling=pi_forge_weather_polling,
+            pi_forge_weather_alert_polling=(
+                pi_forge_weather_alert_polling
+            ),
             pi_forge_location_publishing=pi_forge_location_publishing,
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
@@ -502,6 +534,29 @@ class ApplicationRuntime:
         return self.pi_forge_weather_polling.latest_state
 
     @property
+    def latest_forge_weather_alert_state(
+        self,
+    ) -> PiForgeWeatherAlertState:
+        """Return locally guarded retained alert state without I/O."""
+        if self.pi_forge_weather_alert_polling is None:
+            return PiForgeWeatherAlertState.disabled()
+
+        return self.pi_forge_weather_alert_polling.latest_state
+
+    @property
+    def latest_forge_weather_alert_notifications(
+        self,
+    ) -> PiForgeWeatherAlertNotificationBatch:
+        """Return latest claimed alert event batch without I/O."""
+        if self.pi_forge_weather_alert_polling is None:
+            return PiForgeWeatherAlertNotificationBatch()
+
+        return (
+            self.pi_forge_weather_alert_polling
+            .latest_notification_batch
+        )
+
+    @property
     def latest_forge_location_publisher_state(
         self,
     ) -> PiForgeLocationPublisherState | None:
@@ -545,6 +600,8 @@ class ApplicationRuntime:
             self.pi_forge_spot_polling.start()
         if self.pi_forge_weather_polling is not None:
             self.pi_forge_weather_polling.start()
+        if self.pi_forge_weather_alert_polling is not None:
+            self.pi_forge_weather_alert_polling.start()
         self.pota_enrichment.start()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.start()
@@ -559,6 +616,8 @@ class ApplicationRuntime:
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.stop()
         self.pota_enrichment.stop()
+        if self.pi_forge_weather_alert_polling is not None:
+            self.pi_forge_weather_alert_polling.stop()
         if self.pi_forge_weather_polling is not None:
             self.pi_forge_weather_polling.stop()
         if self.pi_forge_spot_polling is not None:

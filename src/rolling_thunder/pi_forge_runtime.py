@@ -11,6 +11,12 @@ from rolling_thunder.config import ForgeConfig
 from rolling_thunder.forge_client import HttpForgeSpotClient
 from rolling_thunder.forge_location_client import HttpForgeLocationClient
 from rolling_thunder.forge_spot_cache_repository import ForgeSpotCacheRepository
+from rolling_thunder.forge_weather_alert_cache_repository import (
+    ForgeWeatherAlertCacheRepository,
+)
+from rolling_thunder.forge_weather_alert_client import (
+    HttpForgeWeatherAlertClient,
+)
 from rolling_thunder.forge_weather_cache_repository import ForgeWeatherCacheRepository
 from rolling_thunder.forge_weather_client import HttpForgeWeatherClient
 from rolling_thunder.gps import GPSState
@@ -21,13 +27,29 @@ from rolling_thunder.pi_forge_location_publisher import (
 )
 from rolling_thunder.pi_forge_spot_polling import ExecutorFactory, PiForgeSpotPollingService
 from rolling_thunder.pi_forge_spot_service import PiForgeSpotService
+from rolling_thunder.pi_forge_weather_alert_polling import (
+    PiForgeWeatherAlertPollingService,
+    WeatherAlertExecutorFactory,
+)
+from rolling_thunder.pi_forge_weather_alert_service import (
+    PiForgeWeatherAlertService,
+)
 from rolling_thunder.pi_forge_weather_polling import (
     PiForgeWeatherPollingService,
     WeatherExecutorFactory,
 )
 from rolling_thunder.pi_forge_weather_service import PiForgeWeatherService
+from rolling_thunder.pi_weather_alert_location_guard import (
+    PiWeatherAlertLocationGuard,
+)
 from rolling_thunder.radio_polling import PollScheduler
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
+from rolling_thunder.weather_alert_notification_policy import (
+    WeatherAlertNotificationController,
+)
+from rolling_thunder.weather_alert_notification_repository import (
+    WeatherAlertNotificationRepository,
+)
 
 GPSStateSource = Callable[[], GPSState]
 Clock = Callable[[], datetime]
@@ -101,6 +123,75 @@ def build_pi_forge_weather_polling(
         scheduler or ThreadingPollScheduler(),
         interval_s=weather_config.refresh_interval_s,
         refresh_on_start=weather_config.refresh_on_start,
+        executor_factory=executor_factory,
+    )
+
+
+def build_pi_forge_weather_alert_polling(
+    config: ForgeConfig,
+    state_source: GPSStateSource,
+    *,
+    database_path: Path,
+    scheduler: PollScheduler | None = None,
+    transport: HttpTransport | None = None,
+    executor_factory: WeatherAlertExecutorFactory | None = None,
+    clock: Clock | None = None,
+    monotonic_clock: MonotonicClock = monotonic,
+) -> PiForgeWeatherAlertPollingService | None:
+    """Build location-aware retained Forge alert polling for the Pi."""
+    alert_config = config.weather_alerts
+
+    if not alert_config.enabled:
+        return None
+
+    api_url = config.api_url
+
+    if not config.enabled or api_url is None:
+        raise ValueError(
+            "Forge must be enabled with an API URL "
+            "for retained weather alerts."
+        )
+
+    client = HttpForgeWeatherAlertClient(
+        str(api_url),
+        timeout_s=config.request_timeout_s,
+        max_response_bytes=config.max_response_bytes,
+        transport=transport,
+        clock=clock,
+    )
+
+    cache = ForgeWeatherAlertCacheRepository(
+        database_path
+    )
+
+    service = PiForgeWeatherAlertService(
+        client,
+        cache,
+        now=clock,
+    )
+
+    location_guard = PiWeatherAlertLocationGuard(
+        state_source,
+        monotonic_clock=monotonic_clock,
+        location_publish_interval_s=(
+            alert_config.location_publish_interval_s
+        ),
+    )
+
+    notifications = WeatherAlertNotificationController(
+        WeatherAlertNotificationRepository(
+            database_path
+        ),
+        now=clock,
+    )
+
+    return PiForgeWeatherAlertPollingService(
+        service,
+        location_guard,
+        notifications,
+        scheduler or ThreadingPollScheduler(),
+        interval_s=alert_config.refresh_interval_s,
+        refresh_on_start=alert_config.refresh_on_start,
         executor_factory=executor_factory,
     )
 
