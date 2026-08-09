@@ -217,3 +217,39 @@ def test_partial_new_frame_retains_complete_prior_frame_for_same_viewport() -> N
     assert retained.frame.frame_token == token_one
     assert "RETAINING PRIOR FRAME" in retained.detail
     assert all(tile.png is not None for tile in retained.tiles)
+
+
+def test_manifest_failure_keeps_renderable_cached_frame_but_reports_offline() -> None:
+    token = "c" * 32
+    client = FakeRadarClient([manifest(token, revision=1)])
+    monotonic_clock = MutableMonotonic()
+    service = LiveRadarOverlayService(
+        cast(HttpForgeRadarClient, client),
+        clock=MutableClock(BASE_TIME + timedelta(minutes=2)),
+        monotonic_clock=monotonic_clock,
+        executor=cast(Executor, ImmediateExecutor()),
+    )
+    viewport = build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=7,
+        width_px=512,
+        height_px=512,
+    )
+    service.start()
+
+    service.request_viewport(viewport)
+    ready = service.latest_state
+    assert ready.status is RadarDataStatus.READY
+    assert ready.frame is not None
+    assert ready.frame.frame_token == token
+
+    monotonic_clock.value = 61.0
+    service.request_viewport(viewport)
+
+    degraded = service.latest_state
+    assert degraded.status is RadarDataStatus.STALE
+    assert degraded.frame is not None
+    assert degraded.frame.frame_token == token
+    assert degraded.detail == "RADAR OFFLINE — USING CACHED FRAME"
+    assert all(tile.png is not None for tile in degraded.tiles)
+    assert client.manifest_calls == 2
