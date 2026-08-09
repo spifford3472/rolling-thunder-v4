@@ -141,6 +141,75 @@ def manifest(token: str, *, revision: int) -> ForgeRadarManifest:
     )
 
 
+def viewport() -> object:
+    return build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=7,
+        width_px=512,
+        height_px=512,
+    )
+
+
+def test_disabled_service_skips_all_radar_network_work_until_enabled() -> None:
+    client = FakeRadarClient([manifest("a" * 32, revision=1)])
+    executor = DeferredExecutor()
+    service = LiveRadarOverlayService(
+        cast(HttpForgeRadarClient, client),
+        display_enabled=False,
+        clock=MutableClock(BASE_TIME + timedelta(minutes=1)),
+        executor=cast(Executor, executor),
+    )
+    target = build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=7,
+        width_px=512,
+        height_px=512,
+    )
+    service.start()
+
+    assert service.display_enabled is False
+    assert service.latest_state.status is RadarDataStatus.DISABLED
+    service.request_viewport(target)
+    assert executor.tasks == []
+    assert client.manifest_calls == 0
+    assert client.tile_calls == []
+
+    assert service.set_display_enabled(True) is True
+    assert service.latest_state.status is RadarDataStatus.IDLE
+    service.request_viewport(target)
+    assert len(executor.tasks) == 1
+    executor.run_next()
+    assert service.latest_state.status is RadarDataStatus.READY
+    assert client.manifest_calls == 1
+    assert client.tile_calls
+
+
+def test_disabling_during_inflight_load_suppresses_late_publication() -> None:
+    client = FakeRadarClient([manifest("d" * 32, revision=1)])
+    executor = DeferredExecutor()
+    service = LiveRadarOverlayService(
+        cast(HttpForgeRadarClient, client),
+        clock=MutableClock(BASE_TIME + timedelta(minutes=1)),
+        executor=cast(Executor, executor),
+    )
+    target = build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=7,
+        width_px=512,
+        height_px=512,
+    )
+    service.start()
+    service.request_viewport(target)
+    assert service.latest_state.status is RadarDataStatus.LOADING
+
+    assert service.set_display_enabled(False) is True
+    assert service.latest_state.status is RadarDataStatus.DISABLED
+    executor.run_next()
+
+    assert service.latest_state.status is RadarDataStatus.DISABLED
+    assert service.latest_state.tiles == ()
+
+
 def test_new_viewports_coalesce_to_one_queued_generation() -> None:
     client = FakeRadarClient([manifest("a" * 32, revision=1)])
     executor = DeferredExecutor()
@@ -192,7 +261,7 @@ def test_partial_new_frame_retains_complete_prior_frame_for_same_viewport() -> N
         monotonic_clock=monotonic_clock,
         executor=cast(Executor, ImmediateExecutor()),
     )
-    viewport = build_map_viewport(
+    target = build_map_viewport(
         GeoPoint(latitude=39.52, longitude=-84.06),
         zoom=7,
         width_px=512,
@@ -200,7 +269,7 @@ def test_partial_new_frame_retains_complete_prior_frame_for_same_viewport() -> N
     )
     service.start()
 
-    service.request_viewport(viewport)
+    service.request_viewport(target)
     first_state = service.latest_state
     assert first_state.status is RadarDataStatus.READY
     assert first_state.frame is not None
@@ -208,8 +277,8 @@ def test_partial_new_frame_retains_complete_prior_frame_for_same_viewport() -> N
     assert all(tile.png is not None for tile in first_state.tiles)
 
     monotonic_clock.value = 61.0
-    client.failed_tiles.add((token_two, viewport.tile_keys[0]))
-    service.request_viewport(viewport)
+    client.failed_tiles.add((token_two, target.tile_keys[0]))
+    service.request_viewport(target)
 
     retained = service.latest_state
     assert retained.status is RadarDataStatus.STALE
@@ -229,7 +298,7 @@ def test_manifest_failure_keeps_renderable_cached_frame_but_reports_offline() ->
         monotonic_clock=monotonic_clock,
         executor=cast(Executor, ImmediateExecutor()),
     )
-    viewport = build_map_viewport(
+    target = build_map_viewport(
         GeoPoint(latitude=39.52, longitude=-84.06),
         zoom=7,
         width_px=512,
@@ -237,14 +306,14 @@ def test_manifest_failure_keeps_renderable_cached_frame_but_reports_offline() ->
     )
     service.start()
 
-    service.request_viewport(viewport)
+    service.request_viewport(target)
     ready = service.latest_state
     assert ready.status is RadarDataStatus.READY
     assert ready.frame is not None
     assert ready.frame.frame_token == token
 
     monotonic_clock.value = 61.0
-    service.request_viewport(viewport)
+    service.request_viewport(target)
 
     degraded = service.latest_state
     assert degraded.status is RadarDataStatus.STALE
