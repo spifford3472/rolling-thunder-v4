@@ -116,9 +116,12 @@ class PiForgeWeatherState(DomainModel):
 
         if self.kind is PiForgeWeatherStateKind.NO_DATA and has_snapshot:
             raise ValueError("no-data weather state cannot contain a snapshot")
-        if self.kind in {PiForgeWeatherStateKind.LIVE, PiForgeWeatherStateKind.RETAINED}:
-            if not has_snapshot:
-                raise ValueError("live/retained weather state requires a snapshot")
+        if (
+            self.kind
+            in {PiForgeWeatherStateKind.LIVE, PiForgeWeatherStateKind.RETAINED}
+            and not has_snapshot
+        ):
+            raise ValueError("live/retained weather state requires a snapshot")
 
         if self.kind is PiForgeWeatherStateKind.LIVE:
             if self.last_attempt_at is None or self.last_success_at is None:
@@ -130,9 +133,11 @@ class PiForgeWeatherState(DomainModel):
             if self.error_kind is not None or self.last_error is not None:
                 raise ValueError("live weather cannot contain a local error")
 
-        if self.kind is PiForgeWeatherStateKind.RETAINED:
-            if self.last_success_at is None:
-                raise ValueError("retained weather requires a prior success timestamp")
+        if (
+            self.kind is PiForgeWeatherStateKind.RETAINED
+            and self.last_success_at is None
+        ):
+            raise ValueError("retained weather requires a prior success timestamp")
 
         if (self.error_kind is None) != (self.last_error is None):
             raise ValueError("weather error kind and error text must be present together")
