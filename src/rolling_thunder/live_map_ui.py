@@ -108,26 +108,19 @@ def live_map_health_color(level: LiveMapHealthLevel) -> str:
 
 
 def radar_status_color(status: RadarDataStatus | None) -> str:
-    """Return a compact non-blocking health color for the optional radar layer."""
+    """Return the approved blue/yellow/gray/red radar health color."""
     if status is RadarDataStatus.READY:
         return _HEALTHY
     if status in {
+        RadarDataStatus.IDLE,
+        RadarDataStatus.LOADING,
         RadarDataStatus.STALE,
         RadarDataStatus.PARTIAL,
-        RadarDataStatus.LOADING,
     }:
         return _WARNING
     if status is RadarDataStatus.UNAVAILABLE:
-        return _MUTED
+        return _FAILURE
     return _MUTED
-
-
-def radar_status_detail(snapshot: LiveRadarSnapshot | None) -> str:
-    """Return a bounded radar status label without any provider I/O."""
-    if snapshot is None:
-        return "OFF"
-    detail = snapshot.detail.strip()
-    return detail if detail else snapshot.status.value.upper()
 
 
 def live_map_info_lines(info: LiveMapInfoPresentation) -> tuple[str, ...]:
@@ -690,7 +683,7 @@ class LiveMapWidgets:
         self._draw_health_line(
             "RADAR",
             radar_status_color(radar.status if radar is not None else None),
-            radar_status_detail(radar),
+            "",
             health_left + 22,
             154,
         )
@@ -731,7 +724,7 @@ class LiveMapWidgets:
         self._canvas.create_text(
             x + 38,
             y,
-            text=f"{name}  {detail}",
+            text=name if not detail else f"{name}  {detail}",
             fill=color,
             font=("DejaVu Sans", 25, "bold"),
             anchor="nw",
