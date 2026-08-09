@@ -37,12 +37,14 @@ class FakeWeatherService:
     def __init__(self) -> None:
         self.state = ForgeWeatherState(revision=0)
         self.refreshes = 0
+        self.refresh_forces: list[bool] = []
 
     def get_state(self) -> ForgeWeatherState:
         return self.state
 
-    def refresh_if_needed(self) -> ForgeWeatherState:
+    def refresh_if_needed(self, *, force: bool = False) -> ForgeWeatherState:
         self.refreshes += 1
+        self.refresh_forces.append(force)
         return self.state
 
 
@@ -83,7 +85,7 @@ class DeferredExecutor:
         task()
 
 
-def test_start_queues_background_refresh_and_prevents_overlap() -> None:
+def test_start_forces_background_refresh_then_scheduled_checks_are_normal() -> None:
     scheduler = ManualScheduler()
     executor = DeferredExecutor()
     service = FakeWeatherService()
@@ -111,9 +113,15 @@ def test_start_queues_background_refresh_and_prevents_overlap() -> None:
     assert polling.is_refreshing is False
     assert polling.refresh_count == 1
     assert service.refreshes == 1
+    assert service.refresh_forces == [True]
 
     scheduler.poll.callback()
     assert len(executor.tasks) == 1
+
+    executor.run_next()
+    assert polling.refresh_count == 2
+    assert service.refreshes == 2
+    assert service.refresh_forces == [True, False]
 
 
 def test_stop_cancels_scheduler_and_owned_executor() -> None:
