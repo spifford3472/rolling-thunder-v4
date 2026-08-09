@@ -1,4 +1,4 @@
-"""Versioned private Forge JSON API for retained spots and mobile location."""
+"""Versioned private Forge JSON API for retained spots, location, and weather."""
 
 from __future__ import annotations
 
@@ -27,11 +27,17 @@ from rolling_thunder.forge_spot_aggregation import (
     ForgeProviderHealth,
     ForgeProviderHealthStatus,
 )
+from rolling_thunder.forge_weather import (
+    ForgeWeatherState,
+    WeatherProviderStatus,
+    WeatherSnapshot,
+)
 from rolling_thunder.spot_domain import SpotProvider, SpotRecord
 
 _API_SCHEMA_VERSION: Literal["1"] = "1"
 _JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 _MOBILE_LOCATION_PATH = "/api/v1/mobile-location"
+_WEATHER_PATH = "/api/v1/weather"
 MAX_MOBILE_LOCATION_PAYLOAD_BYTES: Final = 4_096
 _LOGGER = logging.getLogger("rolling_thunder.forge_spots")
 
@@ -41,6 +47,18 @@ class ForgeAggregationStateSource(Protocol):
 
     def get_state(self) -> ForgeAggregationState:
         """Return one immutable already-published aggregation state."""
+        ...
+
+
+class ForgeWeatherStateSource(Protocol):
+    """Read-only retained-weather boundary consumed by API presentation."""
+
+    def get_state(self) -> ForgeWeatherState:
+        """Return already-published weather state without provider I/O."""
+        ...
+
+    def is_stale(self) -> bool:
+        """Return whether retained weather is absent, aged, or spatially stale."""
         ...
 
 
@@ -54,7 +72,7 @@ class ForgeServiceStatus(StrEnum):
 
 
 class ForgeApiProviderHealth(DomainModel):
-    """Provider health serialized by both versioned read endpoints."""
+    """Spot-provider health serialized by versioned read endpoints."""
 
     provider: SpotProvider
     status: ForgeProviderHealthStatus
@@ -76,6 +94,38 @@ class ForgeApiProviderHealth(DomainModel):
         )
 
 
+class ForgeApiWeatherHealth(DomainModel):
+    """Read-only health metadata for retained Forge weather."""
+
+    status: WeatherProviderStatus
+    stale: bool
+    revision: int
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = None
+    startup_storage_error: str | None = None
+    persistence_error: str | None = None
+
+    @classmethod
+    def from_state(
+        cls,
+        state: ForgeWeatherState,
+        *,
+        stale: bool,
+    ) -> ForgeApiWeatherHealth:
+        """Copy one immutable weather state into public health metadata."""
+        return cls(
+            status=state.provider_status,
+            stale=stale,
+            revision=state.revision,
+            last_attempt_at=state.last_attempt_at,
+            last_success_at=state.last_success_at,
+            last_error=state.last_error,
+            startup_storage_error=state.startup_storage_error,
+            persistence_error=state.persistence_error,
+        )
+
+
 class ForgeHealthResponse(DomainModel):
     """Version-1 service-health response."""
 
@@ -85,6 +135,7 @@ class ForgeHealthResponse(DomainModel):
     snapshot_generated_at: datetime
     active_spot_count: int
     providers: tuple[ForgeApiProviderHealth, ...]
+    weather: ForgeApiWeatherHealth | None = None
     startup_storage_error: str | None = None
     persistence_error: str | None = None
 
@@ -97,6 +148,16 @@ class ForgeSpotsResponse(DomainModel):
     generated_at: datetime
     spots: tuple[SpotRecord, ...]
     providers: tuple[ForgeApiProviderHealth, ...]
+
+
+class ForgeWeatherResponse(DomainModel):
+    """Version-1 retained provider-neutral weather response."""
+
+    api_schema_version: Literal["1"] = _API_SCHEMA_VERSION
+    revision: int
+    stale: bool
+    snapshot: WeatherSnapshot | None = None
+    health: ForgeApiWeatherHealth
 
 
 class ForgeMobileLocationWriteRequest(DomainModel):
@@ -124,16 +185,18 @@ class ForgeHttpResponse:
 
 
 class ForgeSpotApiApplication:
-    """Pure request router over published spot state and retained mobile location."""
+    """Pure router over already-published Forge spots, location, and weather."""
 
     def __init__(
         self,
         state_source: ForgeAggregationStateSource,
         *,
         mobile_location: ForgeMobileLocationService | None = None,
+        weather: ForgeWeatherStateSource | None = None,
     ) -> None:
         self._state_source = state_source
         self._mobile_location = mobile_location
+        self._weather = weather
 
     def handle(
         self,
@@ -153,6 +216,9 @@ class ForgeSpotApiApplication:
                 headers=headers or {},
                 body=body,
             )
+
+        if path == _WEATHER_PATH:
+            return self._handle_weather(normalized_method)
 
         if normalized_method != "GET":
             return self.error_response(
@@ -183,6 +249,7 @@ class ForgeSpotApiApplication:
                 snapshot_generated_at=state.snapshot.generated_at,
                 active_spot_count=len(state.snapshot.spots),
                 providers=providers,
+                weather=self._weather_health(),
                 startup_storage_error=state.startup_storage_error,
                 persistence_error=state.persistence_error,
             )
@@ -195,6 +262,40 @@ class ForgeSpotApiApplication:
             )
 
         return self._json_response(200, payload.model_dump(mode="json"))
+
+    def _handle_weather(self, method: str) -> ForgeHttpResponse:
+        if method != "GET":
+            return self.error_response(
+                status_code=405,
+                error="method_not_allowed",
+                message="Only GET is supported by the Forge weather endpoint.",
+                extra_headers=(("Allow", "GET"),),
+            )
+        if self._weather is None:
+            return self.error_response(
+                status_code=503,
+                error="weather_unavailable",
+                message="Forge retained weather is disabled or unavailable.",
+            )
+
+        state = self._weather.get_state()
+        stale = self._weather.is_stale()
+        response = ForgeWeatherResponse(
+            revision=state.revision,
+            stale=stale,
+            snapshot=state.snapshot,
+            health=ForgeApiWeatherHealth.from_state(state, stale=stale),
+        )
+        return self._json_response(200, response.model_dump(mode="json"))
+
+    def _weather_health(self) -> ForgeApiWeatherHealth | None:
+        if self._weather is None:
+            return None
+        state = self._weather.get_state()
+        return ForgeApiWeatherHealth.from_state(
+            state,
+            stale=self._weather.is_stale(),
+        )
 
     def _handle_mobile_location(
         self,
@@ -219,7 +320,10 @@ class ForgeSpotApiApplication:
             )
 
         content_type = self._header_value(headers, "Content-Type")
-        if content_type is None or content_type.split(";", 1)[0].strip().lower() != "application/json":
+        if (
+            content_type is None
+            or content_type.split(";", 1)[0].strip().lower() != "application/json"
+        ):
             return self.error_response(
                 status_code=415,
                 error="unsupported_media_type",
