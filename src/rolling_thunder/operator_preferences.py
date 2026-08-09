@@ -141,11 +141,19 @@ class OperatorPreferenceService:
                 "Map zoom preference must be between "
                 f"{OPERATOR_MINIMUM_MAP_ZOOM} and {OPERATOR_MAXIMUM_MAP_ZOOM}."
             )
-        return self._submit(self._write_map_zoom_safely, zoom)
+        executor = self._write_executor()
+        if executor is None:
+            return False
+        executor.submit(self._write_map_zoom_safely, zoom)
+        return True
 
     def persist_radar_image_enabled(self, enabled: bool) -> bool:
         """Queue one radar-image preference write without blocking the caller."""
-        return self._submit(self._write_radar_image_safely, enabled)
+        executor = self._write_executor()
+        if executor is None:
+            return False
+        executor.submit(self._write_radar_image_safely, enabled)
+        return True
 
     def stop(self) -> None:
         """Stop accepting writes without blocking dashboard shutdown."""
@@ -159,24 +167,16 @@ class OperatorPreferenceService:
         if executor is not None and self._owns_executor:
             executor.shutdown(wait=False, cancel_futures=False)
 
-    def _submit(self, function: object, value: object) -> bool:
+    def _write_executor(self) -> Executor | None:
         with self._lock:
             if self._stopped:
-                return False
+                return None
             if self._executor is None:
                 self._executor = ThreadPoolExecutor(
                     max_workers=1,
                     thread_name_prefix="rolling-thunder-preferences",
                 )
-            executor = self._executor
-
-        # The two private write methods have deliberately narrow typed signatures;
-        # dispatch explicitly so strict MyPy never needs a dynamically typed callable.
-        if function is self._write_map_zoom_safely:
-            executor.submit(self._write_map_zoom_safely, int(value))
-        else:
-            executor.submit(self._write_radar_image_safely, bool(value))
-        return True
+            return self._executor
 
     def _write_map_zoom_safely(self, zoom: int) -> None:
         try:
