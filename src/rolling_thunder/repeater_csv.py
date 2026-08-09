@@ -50,8 +50,10 @@ class RepeaterCsvRowError(RepeaterCsvError):
 
 def _required_text(row: dict[str | None, str | list[str] | None], column: str) -> str:
     value = row.get(column)
-    if not isinstance(value, str):
+    if value is None:
         raise ValueError(f"{column} is missing")
+    if not isinstance(value, str):
+        raise TypeError(f"{column} must be text")
     normalized = value.strip()
     if not normalized:
         raise ValueError(f"{column} must not be blank")
@@ -81,7 +83,7 @@ def _parse_optional_tone(raw: object, column: str) -> Decimal | None:
     if raw is None:
         return None
     if not isinstance(raw, str):
-        raise ValueError(f"{column} must be text")
+        raise TypeError(f"{column} must be text")
     normalized = raw.strip()
     if not normalized:
         return None
@@ -176,7 +178,7 @@ def load_repeater_csv(path: Path = DEFAULT_REPEATER_CSV_PATH) -> RepeaterCatalog
     for line_number, row in enumerate(reader, start=2):
         try:
             repeaters.append(_parse_row(row))
-        except (ValueError, ValidationError) as error:
+        except (TypeError, ValueError, ValidationError) as error:
             raise RepeaterCsvRowError(
                 f"Repeater CSV row {line_number} is invalid: {error}"
             ) from error

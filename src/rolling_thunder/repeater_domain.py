@@ -89,7 +89,7 @@ class RepeaterRecord(DomainModel):
         return normalized
 
     @model_validator(mode="after")
-    def validate_identity_and_band(self) -> "RepeaterRecord":
+    def validate_identity_and_band(self) -> RepeaterRecord:
         """Fail closed when identity or action-critical frequencies are inconsistent."""
         if self.identity.name != self.name:
             raise ValueError("repeater identity name must match record name")
@@ -156,7 +156,7 @@ class RepeaterCatalog(DomainModel):
     repeaters: tuple[RepeaterRecord, ...] = ()
 
     @model_validator(mode="after")
-    def validate_canonical_order(self) -> "RepeaterCatalog":
+    def validate_canonical_order(self) -> RepeaterCatalog:
         canonical = canonicalize_repeaters(self.repeaters)
         if canonical != self.repeaters:
             raise ValueError("repeaters must be unique and in canonical order")
@@ -169,7 +169,7 @@ class RepeaterCatalog(DomainModel):
         source_filename: str,
         source_sha256: str,
         repeaters: Iterable[RepeaterRecord],
-    ) -> "RepeaterCatalog":
+    ) -> RepeaterCatalog:
         """Build one canonical catalog from arbitrary CSV row order."""
         return cls(
             source_filename=source_filename,

@@ -31,7 +31,7 @@ def repeater(
         channel_type=RepeaterChannelType.ANALOGUE,
         rx_frequency=rx,
         tx_frequency=Frequency(hz=tx_hz),
-        bandwidth_khz=Decimal("25"),
+        bandwidth_khz=Decimal(25),
         tx_tone_hz=Decimal("100.0"),
         location=RepeaterLocation(latitude=39.8, longitude=-84.0),
         source_active=active,
@@ -99,7 +99,7 @@ def test_record_rejects_frequency_outside_six_meter_band() -> None:
             channel_type=RepeaterChannelType.ANALOGUE,
             rx_frequency=rx,
             tx_frequency=Frequency(hz=144_000_000),
-            bandwidth_khz=Decimal("25"),
+            bandwidth_khz=Decimal(25),
             location=RepeaterLocation(latitude=39.8, longitude=-84.0),
             source_active=True,
         )

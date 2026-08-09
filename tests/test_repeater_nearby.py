@@ -32,7 +32,7 @@ def repeater(name: str, longitude: float, *, active: bool = True) -> RepeaterRec
         channel_type=RepeaterChannelType.ANALOGUE,
         rx_frequency=rx,
         tx_frequency=Frequency(hz=51_000_000),
-        bandwidth_khz=Decimal("25"),
+        bandwidth_khz=Decimal(25),
         location=RepeaterLocation(latitude=0.0, longitude=longitude),
         source_active=active,
     )
