@@ -218,10 +218,9 @@ class RepeaterPanelController:
         self,
         action: StagedRepeaterActiveAction,
     ) -> RepeaterPanelState:
-        """Apply a successfully persisted override to the in-memory nearby service."""
+        """Apply one completed override; invalidate only stages it actually changes."""
         if self._apply_override is not None:
             self._apply_override(action.stable_key, action.target_active)
-        self._staged_action = None
         return self.state
 
     def _synchronize(self) -> tuple[NearbyRepeaterState, tuple[NearbyRepeater, ...]]:
