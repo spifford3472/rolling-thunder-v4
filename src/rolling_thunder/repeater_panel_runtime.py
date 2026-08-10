@@ -80,11 +80,14 @@ class RepeaterPanelRuntime:
         except StorageError as error:
             persistence_error = f"ACTIVE OVERRIDES UNAVAILABLE — {error}"
 
-        nearby = RepeaterNearbyService(
-            catalog,
-            overrides=overrides,
-            **({"clock": clock} if clock is not None else {}),
-        )
+        if clock is None:
+            nearby = RepeaterNearbyService(catalog, overrides=overrides)
+        else:
+            nearby = RepeaterNearbyService(
+                catalog,
+                overrides=overrides,
+                clock=clock,
+            )
         panel = RepeaterPanelController(
             lambda: nearby.nearby(gps_state()),
             apply_override=nearby.set_override,
