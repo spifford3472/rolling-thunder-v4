@@ -45,6 +45,9 @@ from rolling_thunder.pota_tune_execution_controller import (
 )
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.receive_tuning import ReceiveTuningService
+from rolling_thunder.repeater_panel_runtime import RepeaterPanelRuntime
+from rolling_thunder.repeater_ui import build_repeater_viewport
+from rolling_thunder.repeater_widgets import RepeaterWidgets
 from rolling_thunder.runtime_connectivity import build_runtime_connectivity_status
 from rolling_thunder.settings_panel import DashboardSettingsController
 from rolling_thunder.settings_ui import SettingsWidgets
@@ -215,6 +218,11 @@ def run_dashboard(
         shared_spot_tuning,
         runtime.status_messages,
     )
+    repeater_panel_runtime = RepeaterPanelRuntime.build(
+        database_path=config.storage.database_path,
+        gps_state=lambda: runtime.latest_gps_state,
+    )
+    repeater_panel = repeater_panel_runtime.panel
     active_panel_commands = SharedSpotActivePanelCommandController(
         context_navigation,
         shared_spot_panel,
@@ -222,6 +230,8 @@ def run_dashboard(
         radio_state=lambda: runtime.latest_radio_state,
         shared_tuning=shared_spot_tuning,
         settings_panel=settings_panel,
+        repeater_panel=repeater_panel,
+        repeater_active_overrides=repeater_panel_runtime.persistence,
     )
     _ = pota_tune_executor
 
@@ -443,6 +453,7 @@ def run_dashboard(
 
     settings_widgets = SettingsWidgets(context_content)
     weather_widgets = WeatherWidgets(context_content)
+    repeater_widgets = RepeaterWidgets(context_content)
 
     pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     pota_panel_frame.grid(row=1, column=0, sticky="nsew")
@@ -689,21 +700,32 @@ def run_dashboard(
     def show_standard_context_body() -> None:
         """Show the reusable text body and hide specialized context viewports."""
         pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
         settings_widgets.hide()
         weather_widgets.hide()
         context_body_label.grid()
 
     def show_pota_context_body() -> None:
-        """Show the POTA card viewport and hide other context bodies."""
+        """Show the POTA/DX card viewport and hide other context bodies."""
         context_body_label.grid_remove()
+        repeater_widgets.hide()
         settings_widgets.hide()
         weather_widgets.hide()
         pota_panel_frame.grid()
 
-    def show_settings_context_body() -> None:
-        """Show Settings controls and hide the generic/POTA/weather bodies."""
+    def show_repeater_context_body() -> None:
+        """Show local repeaters and hide the generic/POTA/settings/weather bodies."""
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
+        settings_widgets.hide()
+        weather_widgets.hide()
+        repeater_widgets.show()
+
+    def show_settings_context_body() -> None:
+        """Show Settings controls and hide the generic/POTA/repeater/weather bodies."""
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
         weather_widgets.hide()
         settings_widgets.show()
 
@@ -711,6 +733,7 @@ def run_dashboard(
         """Show retained weather and hide other context bodies."""
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
         settings_widgets.hide()
         weather_widgets.show()
 
@@ -720,6 +743,9 @@ def run_dashboard(
 
         active_panel_commands.synchronize_radio_state()
         shared_spot_tune_status.refresh()
+        repeater_persistence_status = (
+            repeater_panel_runtime.synchronize_completed_persistence()
+        )
 
         weather_presentation = weather_panel.update(
             runtime.latest_forge_weather_state
@@ -890,6 +916,18 @@ def run_dashboard(
             else:
                 footer_lines.append("SELECT A SPOT — PRESS TO STAGE")
             pota_footer_text.set("\n".join(footer_lines))
+        elif selected_context.selected is ContextId.REPEATERS:
+            show_repeater_context_body()
+            health_frame.grid_remove()
+            repeater_viewport = build_repeater_viewport(
+                repeater_panel.state,
+                repeater_persistence_status,
+            )
+            context_title_text.set(repeater_viewport.title)
+            context_title_label.configure(
+                font=("DejaVu Sans", 42, "bold")
+            )
+            repeater_widgets.update(repeater_viewport)
         elif selected_context.selected is ContextId.WEATHER:
             show_weather_context_body()
             health_frame.grid_remove()
