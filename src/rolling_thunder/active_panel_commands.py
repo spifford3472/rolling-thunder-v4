@@ -10,6 +10,7 @@ from rolling_thunder.domain import (
     RadioState,
 )
 from rolling_thunder.pota_tune_intent import PotaTuneIntent, PotaTuneIntentStatus
+from rolling_thunder.repeater_panel import StagedRepeaterActiveAction
 from rolling_thunder.spot_domain import SpotIdentity, SpotProvider
 from rolling_thunder.spot_selection import StagedSpotAction
 
@@ -123,6 +124,46 @@ class SharedSpotTuneCommands(Protocol):
         """Submit one exact staged receive action without blocking."""
 
 
+class RepeaterPanelCommands(Protocol):
+    """No-I/O repeater selection, filtering, and local Active staging."""
+
+    @property
+    def selected_stable_key(self) -> str | None:
+        """Return selected repeater stable identity, if any."""
+
+    @property
+    def staged_action(self) -> StagedRepeaterActiveAction | None:
+        """Return the exact still-valid local Active action, if any."""
+
+    def activate(self) -> object:
+        """Synchronize the repeater view."""
+
+    def toggle_filter(self) -> object:
+        """Toggle active-only versus all repeaters."""
+
+    def select_previous(self) -> object:
+        """Move toward the previous visible repeater."""
+
+    def select_next(self) -> object:
+        """Move toward the next visible repeater."""
+
+    def clear_selection(self) -> object:
+        """Clear repeater selection and staging."""
+
+    def stage_selected(self) -> object:
+        """Stage an exact local Active toggle without persistence."""
+
+    def cancel_staging(self) -> object:
+        """Cancel only local Active staging."""
+
+
+class RepeaterActiveOverrideCommands(Protocol):
+    """Background persistence boundary reached only on a valid second press."""
+
+    def start_persist(self, action: StagedRepeaterActiveAction) -> bool:
+        """Submit one exact confirmed Active override without blocking."""
+
+
 class SettingsPanelCommands(Protocol):
     """Nonblocking operator commands owned by the Settings context."""
 
@@ -223,7 +264,7 @@ class ActivePanelCommandController:
 
 
 class SharedSpotActivePanelCommandController:
-    """Route POTA/DX and Settings controls through the active context."""
+    """Route POTA/DX/Repeater/Settings controls through the active context."""
 
     def __init__(
         self,
@@ -234,6 +275,8 @@ class SharedSpotActivePanelCommandController:
         radio_state: Callable[[], RadioState] | None = None,
         shared_tuning: SharedSpotTuneCommands | None = None,
         settings_panel: SettingsPanelCommands | None = None,
+        repeater_panel: RepeaterPanelCommands | None = None,
+        repeater_active_overrides: RepeaterActiveOverrideCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._shared_panel = shared_panel
@@ -241,31 +284,49 @@ class SharedSpotActivePanelCommandController:
         self._radio_state = radio_state
         self._shared_tuning = shared_tuning
         self._settings_panel = settings_panel
+        self._repeater_panel = repeater_panel
+        self._repeater_active_overrides = repeater_active_overrides
         self.activate_context(context_navigation.state.selected)
 
     def activate_context(self, context_id: ContextId) -> None:
-        """Synchronize provider view and invalidate staging on context change."""
+        """Synchronize active view and invalidate unrelated staged actions."""
+        repeater = self._repeater_panel
         if context_id is ContextId.POTA:
+            if repeater is not None:
+                repeater.cancel_staging()
             self._shared_panel.activate(
                 SpotProvider.POTA,
                 current_frequency=self._current_frequency(),
             )
             return
         if context_id is ContextId.DX:
+            if repeater is not None:
+                repeater.cancel_staging()
             self._shared_panel.activate(
                 SpotProvider.DX,
                 current_frequency=self._current_frequency(),
             )
             return
+
         self._shared_panel.cancel_staging()
+        if context_id is ContextId.REPEATERS and repeater is not None:
+            repeater.activate()
+            return
+        if repeater is not None:
+            repeater.cancel_staging()
 
     def primary(self) -> bool:
-        """Run Context Button #1 for the active provider or Settings panel."""
+        """Run Context Button #1 for the active provider, repeater, or Settings panel."""
         if self._pota_is_active():
             self._shared_panel.next_pota_band()
             return True
         if self._dx_is_active():
             self._shared_panel.next_dx_band()
+            return True
+        if self._repeater_is_active():
+            if self._repeater_panel is None:
+                return False
+            self._repeater_panel.toggle_filter()
             return True
         if self._settings_is_active():
             return self._settings_panel is not None and self._settings_panel.toggle_radar()
@@ -282,17 +343,24 @@ class SharedSpotActivePanelCommandController:
         return False
 
     def tertiary(self) -> bool:
-        """Return false while the shared panel has no tertiary command."""
+        """Return false while the shared/repeater panel has no tertiary command."""
         return False
 
     def tertiary_long(self) -> bool:
-        """Return false while the shared panel has no tertiary-long command."""
+        """Return false while the shared/repeater panel has no tertiary-long command."""
         return False
 
     def move_previous(self) -> bool:
-        """Move selection, or zoom out when Settings owns the encoder."""
+        """Move active selection, or zoom out when Settings owns the encoder."""
         if self._settings_is_active():
             return self._settings_panel is not None and self._settings_panel.zoom_out()
+        if self._repeater_is_active():
+            repeater = self._repeater_panel
+            if repeater is None:
+                return False
+            previous = repeater.selected_stable_key
+            repeater.select_previous()
+            return repeater.selected_stable_key != previous
         if not self._shared_spot_is_active():
             return False
         previous_identity = self._shared_panel.selected_identity
@@ -300,9 +368,16 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def move_next(self) -> bool:
-        """Move selection, or zoom in when Settings owns the encoder."""
+        """Move active selection, or zoom in when Settings owns the encoder."""
         if self._settings_is_active():
             return self._settings_panel is not None and self._settings_panel.zoom_in()
+        if self._repeater_is_active():
+            repeater = self._repeater_panel
+            if repeater is None:
+                return False
+            previous = repeater.selected_stable_key
+            repeater.select_next()
+            return repeater.selected_stable_key != previous
         if not self._shared_spot_is_active():
             return False
         previous_identity = self._shared_panel.selected_identity
@@ -310,7 +385,9 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def activate_selection(self) -> bool:
-        """Stage first; submit the exact still-valid target on second press."""
+        """Stage first; submit only an exact still-valid action on second press."""
+        if self._repeater_is_active():
+            return self._activate_repeater_selection()
         if not self._shared_spot_is_active():
             return False
 
@@ -331,8 +408,28 @@ class SharedSpotActivePanelCommandController:
         self._shared_panel.cancel_staging()
         return True
 
+    def _activate_repeater_selection(self) -> bool:
+        """Stage a local Active change first; persist it only on second press."""
+        repeater = self._repeater_panel
+        if repeater is None:
+            return False
+
+        staged = repeater.staged_action
+        if staged is None:
+            repeater.stage_selected()
+            return repeater.staged_action is not None
+
+        persistence = self._repeater_active_overrides
+        if persistence is None or not persistence.start_persist(staged):
+            return False
+
+        repeater.cancel_staging()
+        return True
+
     def synchronize_radio_state(self) -> bool:
-        """Invalidate pending staging when radio state is unsafe for retuning."""
+        """Invalidate spot staging when radio state is unsafe for retuning."""
+        if not self._shared_spot_is_active():
+            return True
         provider = self._radio_state
         if provider is None:
             return True
@@ -353,6 +450,18 @@ class SharedSpotActivePanelCommandController:
 
     def back(self) -> bool:
         """Cancel staging first, then clear selection on a later Back action."""
+        if self._repeater_is_active():
+            repeater = self._repeater_panel
+            if repeater is None:
+                return False
+            if repeater.staged_action is not None:
+                repeater.cancel_staging()
+                return True
+            if repeater.selected_stable_key is None:
+                return False
+            repeater.clear_selection()
+            return True
+
         if not self._shared_spot_is_active():
             return False
         if self._shared_panel.staged_identity is not None:
@@ -371,6 +480,9 @@ class SharedSpotActivePanelCommandController:
 
     def _dx_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.DX
+
+    def _repeater_is_active(self) -> bool:
+        return self._context_navigation.state.selected is ContextId.REPEATERS
 
     def _settings_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.SETTINGS
