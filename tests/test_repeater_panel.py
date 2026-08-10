@@ -199,9 +199,14 @@ def test_successful_persist_applies_only_in_memory_override_callback() -> None:
     record = repeater("K1AAA Alpha", 52_010_000)
     current = [ready(item(record, 5.0, active=True))]
     applied: list[tuple[str, bool]] = []
+
+    def apply_override(key: str, active: bool) -> None:
+        applied.append((key, active))
+        current[0] = ready(item(record, 5.0, active=active))
+
     controller = RepeaterPanelController(
         lambda: current[0],
-        apply_override=lambda key, active: applied.append((key, active)),
+        apply_override=apply_override,
     )
     controller.select_next()
     staged = controller.stage_selected().staged_action
@@ -211,3 +216,31 @@ def test_successful_persist_applies_only_in_memory_override_callback() -> None:
 
     assert applied == [(record.stable_key, False)]
     assert controller.staged_action is None
+
+
+def test_completed_other_override_preserves_newer_unrelated_stage() -> None:
+    alpha = repeater("K1AAA Alpha", 52_010_000)
+    bravo = repeater("K1BBB Bravo", 52_020_000)
+    current = [ready(item(alpha, 5.0), item(bravo, 6.0))]
+
+    def apply_override(key: str, active: bool) -> None:
+        assert key == alpha.stable_key
+        current[0] = ready(item(alpha, 5.0, active=active), item(bravo, 6.0))
+
+    controller = RepeaterPanelController(
+        lambda: current[0],
+        apply_override=apply_override,
+    )
+    controller.toggle_filter()
+    controller.select_stable_key(alpha.stable_key)
+    completed = controller.stage_selected().staged_action
+    assert completed is not None
+    controller.cancel_staging()
+    controller.select_stable_key(bravo.stable_key)
+    newer = controller.stage_selected().staged_action
+    assert newer is not None
+
+    controller.apply_persisted_override(completed)
+
+    assert controller.selected_stable_key == bravo.stable_key
+    assert controller.staged_action == newer
