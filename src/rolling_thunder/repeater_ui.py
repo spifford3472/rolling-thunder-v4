@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 from rolling_thunder.repeater_active_override_controller import (
     RepeaterActiveOverrideStatus,
@@ -124,7 +125,7 @@ def _card(row: RepeaterPanelRow) -> RepeaterCard:
     )
 
 
-def _tone(value: object) -> str:
+def _tone(value: Decimal | None) -> str:
     if value is None:
         return "NONE"
     return str(value)
