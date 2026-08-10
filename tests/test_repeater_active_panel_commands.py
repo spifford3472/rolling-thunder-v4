@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from rolling_thunder.active_panel_commands import SharedSpotActivePanelCommandController
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.domain import Frequency
+from rolling_thunder.domain import Frequency, RadioState
 from rolling_thunder.repeater_domain import (
     RepeaterChannelType,
     RepeaterIdentity,
@@ -155,7 +155,7 @@ def build_controller(
     shared = InertSharedPanel()
     repeater = RecordingRepeaterPanel()
 
-    def radio_state() -> object:
+    def radio_state() -> RadioState:
         if radio_state_called is not None:
             radio_state_called.append(True)
         raise AssertionError("repeater controls must not inspect radio state")
@@ -164,7 +164,7 @@ def build_controller(
         navigation,
         shared,
         current_frequency=lambda: Frequency(hz=7_150_000),
-        radio_state=radio_state,  # type: ignore[arg-type]
+        radio_state=radio_state,
         repeater_panel=repeater,
         repeater_active_overrides=persistence,
     )
