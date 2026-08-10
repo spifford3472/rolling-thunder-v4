@@ -1,5 +1,6 @@
 """Tests for confirmed background repeater Active persistence."""
 
+from collections.abc import Callable
 from decimal import Decimal
 
 from rolling_thunder.domain import Frequency
@@ -85,14 +86,14 @@ def test_persistence_failure_is_explicit_and_does_not_claim_completion() -> None
 
 def test_busy_controller_rejects_ambiguous_second_submission() -> None:
     repository = RecordingRepository()
-    queued: list[object] = []
+    queued: list[Callable[[], None]] = []
 
-    def queue(worker: object) -> None:
+    def queue(worker: Callable[[], None]) -> None:
         queued.append(worker)
 
     controller = RepeaterActiveOverrideController(
         repository,
-        worker_launcher=queue,  # type: ignore[arg-type]
+        worker_launcher=queue,
     )
     first = action(active=True)
     second = action(active=False)
