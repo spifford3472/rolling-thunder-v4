@@ -75,8 +75,13 @@ class RepeaterWidgets:
             card.grid(row=index, column=0, sticky="ew", padx=2, pady=5)
             card.grid_columnconfigure(0, weight=1)
 
-            variables = tuple(tk.StringVar(value="") for _ in range(4))
-            labels = []
+            variables = (
+                tk.StringVar(value=""),
+                tk.StringVar(value=""),
+                tk.StringVar(value=""),
+                tk.StringVar(value=""),
+            )
+            labels: list[Any] = []
             for row, variable in enumerate(variables):
                 label = tk.Label(
                     card,
@@ -93,8 +98,9 @@ class RepeaterWidgets:
                 label.grid(row=row, column=0, sticky="ew")
                 labels.append(label)
 
+            label_tuple = (labels[0], labels[1], labels[2], labels[3])
             self._card_frames.append(card)
-            self._card_labels.append(tuple(labels))
+            self._card_labels.append(label_tuple)
             self._card_texts.append(variables)
             card.grid_remove()
 
