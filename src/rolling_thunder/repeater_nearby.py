@@ -108,6 +108,10 @@ class RepeaterNearbyService:
         """Replace the in-memory effective-Active overlay without mutating source data."""
         self._overrides = dict(overrides)
 
+    def set_override(self, stable_key: str, active: bool) -> None:
+        """Apply one already-persisted Active override to in-memory state only."""
+        self._overrides[stable_key] = active
+
     def effective_active(self, repeater: RepeaterRecord) -> bool:
         """Return stored override when present, otherwise immutable source default."""
         return self._overrides.get(repeater.stable_key, repeater.source_active)
