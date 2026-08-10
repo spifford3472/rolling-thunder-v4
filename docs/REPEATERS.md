@@ -14,8 +14,8 @@ It is intentionally **not committed to Git**. `data/` is already ignored by the 
 
 The approved file inspected for checkpoint #166 has:
 
-- SHA-256: `542ae7da9b3818c5f1ead8401b9c3bf025b0705450903c90d3e2c94ee2c4875f`
-- 66 data rows
+- SHA-256: `4fd61730528c264b0157447b78603aa478e905b3e409fcb861ee6631e91bcba1`
+- 65 data rows
 - exact headers, in order:
   - `Channel Name`
   - `Channel Type`
@@ -34,6 +34,24 @@ The approved file inspected for checkpoint #166 has:
 - RX and TX tones may be blank; a blank tone is represented as typed `None`
 
 The local-source acceptance test verifies the exact SHA and row/schema facts when the file is present. CI skips only that deployment-file acceptance test because the source file is deliberately absent from Git.
+
+### KB3AWQ source correction
+
+The originally inspected 66-row file contained two records with the same stable identity for `KB3AWQ Williamsp` on 53.050 MHz receive / 52.050 MHz transmit. One row used TX tone 131.8 Hz and the other used TX tone 151.4 Hz.
+
+The operator-maintained KB3AWQ/W3AHS repeater site documents the 53.050 MHz repeater as PL 131.8 and states that the PL tone is used on both receive and transmit. Based on that operator source, the 151.4-Hz duplicate was removed from the local deployment CSV. The surviving record is:
+
+```text
+KB3AWQ Williamsp,Analogue,53.05,52.05,25,131.8,131.8,41.217507,-76.9118507,6,Yes
+```
+
+Reference used for that correction:
+
+```text
+https://sites.google.com/site/kb3awq/W3AHS
+```
+
+The parser continues to reject duplicate stable identities rather than silently choosing between conflicting source rows.
 
 ## Parsing contract
 
