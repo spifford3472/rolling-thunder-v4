@@ -143,7 +143,7 @@ class RepeaterWidgets:
         if not viewport.has_cards:
             self._cards.grid_remove()
             self._status_label.grid()
-            self._status.set("\n".join((viewport.detail_line, viewport.status_line)))
+            self._status.set(f"{viewport.detail_line}\n{viewport.status_line}")
             for card in self._card_frames:
                 card.grid_remove()
             return
