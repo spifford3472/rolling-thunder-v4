@@ -1,4 +1,4 @@
-"""Tests for Rolling Thunder schema 10 weather-alert persistence."""
+"""Tests for weather-alert persistence across the current application schema."""
 
 import sqlite3
 
@@ -21,15 +21,15 @@ def table_names(database) -> set[str]:
     return {str(row[0]) for row in rows}
 
 
-def test_schema_10_creates_alert_cache_and_notification_ledger(
+def test_current_schema_retains_alert_cache_and_notification_ledger(
     tmp_path,
 ) -> None:
     database = tmp_path / "rolling-thunder.db"
 
     version = initialize_database(database)
 
-    assert CURRENT_SCHEMA_VERSION == 10
-    assert version == 10
+    assert CURRENT_SCHEMA_VERSION == 11
+    assert version == CURRENT_SCHEMA_VERSION
 
     tables = table_names(database)
 
@@ -99,7 +99,7 @@ def test_version_9_database_upgrades_without_losing_weather_cache(
         )
         connection.commit()
 
-    assert initialize_database(database) == 10
+    assert initialize_database(database) == CURRENT_SCHEMA_VERSION
 
     with sqlite3.connect(database) as connection:
         version = connection.execute(
@@ -118,9 +118,10 @@ def test_version_9_database_upgrades_without_losing_weather_cache(
             """
         ).fetchone()
 
-    assert version == (10,)
+    assert version == (CURRENT_SCHEMA_VERSION,)
     assert weather == (11,)
 
     tables = table_names(database)
     assert "forge_weather_alert_cache" in tables
     assert "weather_alert_notification_ledger" in tables
+    assert "repeater_active_overrides" in tables
