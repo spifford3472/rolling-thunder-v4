@@ -15,7 +15,7 @@ from rolling_thunder.repeater_csv import (
 )
 from rolling_thunder.repeater_domain import RepeaterShiftDirection
 
-APPROVED_SOURCE_SHA256 = "542ae7da9b3818c5f1ead8401b9c3bf025b0705450903c90d3e2c94ee2c4875f"
+APPROVED_SOURCE_SHA256 = "4fd61730528c264b0157447b78603aa478e905b3e409fcb861ee6631e91bcba1"
 
 
 def csv_text(*rows: str) -> str:
@@ -115,10 +115,20 @@ def test_approved_local_source_matches_inspected_schema_when_present() -> None:
     catalog = load_repeater_csv(DEFAULT_REPEATER_CSV_PATH)
 
     assert catalog.source_sha256 == APPROVED_SOURCE_SHA256
-    assert len(catalog.repeaters) == 66
+    assert len(catalog.repeaters) == 65
     assert {record.channel_type.value for record in catalog.repeaters} == {"Analogue"}
     assert {record.bandwidth_khz for record in catalog.repeaters} == {25}
     assert {record.band_m for record in catalog.repeaters} == {6}
     assert all(record.source_active for record in catalog.repeaters)
     assert min(record.rx_frequency.hz for record in catalog.repeaters) == 51_620_000
     assert max(record.rx_frequency.hz for record in catalog.repeaters) == 53_970_000
+
+    kb3awq = [
+        record
+        for record in catalog.repeaters
+        if record.name == "KB3AWQ Williamsp" and record.rx_frequency.hz == 53_050_000
+    ]
+    assert len(kb3awq) == 1
+    assert kb3awq[0].tx_frequency.hz == 52_050_000
+    assert str(kb3awq[0].rx_tone_hz) == "131.8"
+    assert str(kb3awq[0].tx_tone_hz) == "131.8"
