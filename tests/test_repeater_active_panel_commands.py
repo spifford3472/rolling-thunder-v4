@@ -1,4 +1,4 @@
-"""Tests for REPEATERS context command routing and two-press Active control."""
+"""Tests for REPEATERS context command routing and Active controls."""
 
 from decimal import Decimal
 
@@ -27,7 +27,12 @@ class InertSharedPanel:
         self.staged_action: StagedSpotAction | None = None
         self.calls: list[str] = []
 
-    def activate(self, provider: SpotProvider, *, current_frequency: Frequency | None = None) -> object:
+    def activate(
+        self,
+        provider: SpotProvider,
+        *,
+        current_frequency: Frequency | None = None,
+    ) -> object:
         del current_frequency
         self.provider = provider
         self.calls.append(f"activate:{provider.value}")
@@ -158,7 +163,7 @@ def build_controller(
     def radio_state() -> RadioState:
         if radio_state_called is not None:
             radio_state_called.append(True)
-        raise AssertionError("repeater controls must not inspect radio state")
+        raise AssertionError("repeater controls must not inspect radio state in checkpoint 167")
 
     controller = SharedSpotActivePanelCommandController(
         navigation,
@@ -189,7 +194,7 @@ def test_primary_toggles_filter_and_encoder_moves_repeater_selection() -> None:
     assert repeater.calls == ["toggle_filter", "select_next", "select_previous"]
 
 
-def test_first_press_stages_without_persistence_or_radio_access() -> None:
+def test_context_button_two_flips_selected_active_in_one_press_without_radio() -> None:
     persistence = RecordingPersistence()
     radio_calls: list[bool] = []
     controller, _navigation, _shared, repeater = build_controller(
@@ -199,71 +204,73 @@ def test_first_press_stages_without_persistence_or_radio_access() -> None:
     controller.move_next()
     repeater.calls.clear()
 
-    assert controller.activate_selection() is True
+    assert controller.secondary() is True
 
-    assert repeater.calls == ["stage_selected"]
-    assert repeater.staged_action == repeater.action
-    assert persistence.actions == []
-    assert radio_calls == []
-
-
-def test_second_identical_press_submits_exact_active_action_and_clears_stage() -> None:
-    persistence = RecordingPersistence()
-    radio_calls: list[bool] = []
-    controller, _navigation, _shared, repeater = build_controller(
-        persistence=persistence,
-        radio_state_called=radio_calls,
-    )
-    controller.move_next()
-    assert controller.activate_selection() is True
-    staged = repeater.staged_action
-    assert staged is not None
-    repeater.calls.clear()
-
-    assert controller.activate_selection() is True
-
-    assert persistence.actions == [staged]
-    assert repeater.calls == ["cancel_staging"]
+    assert persistence.actions == [repeater.action]
+    assert repeater.action.target_active is False
+    assert repeater.calls == ["stage_selected", "cancel_staging"]
     assert repeater.staged_action is None
     assert radio_calls == []
 
 
-def test_busy_persistence_keeps_staged_action_for_unambiguous_retry() -> None:
+def test_context_button_two_requires_a_selected_repeater() -> None:
+    persistence = RecordingPersistence()
+    controller, _navigation, _shared, repeater = build_controller(persistence=persistence)
+    repeater.calls.clear()
+
+    assert controller.secondary() is False
+
+    assert persistence.actions == []
+    assert repeater.calls == ["stage_selected"]
+    assert repeater.staged_action is None
+
+
+def test_busy_active_persistence_does_not_leave_operator_stage() -> None:
     persistence = RecordingPersistence(accept=False)
     controller, _navigation, _shared, repeater = build_controller(persistence=persistence)
     controller.move_next()
-    controller.activate_selection()
-    staged = repeater.staged_action
-    assert staged is not None
+    repeater.calls.clear()
+
+    assert controller.secondary() is False
+
+    assert persistence.actions == [repeater.action]
+    assert repeater.staged_action is None
+    assert repeater.calls == ["stage_selected", "cancel_staging"]
+
+
+def test_encoder_activation_is_reserved_for_radio_configuration_checkpoint() -> None:
+    persistence = RecordingPersistence()
+    radio_calls: list[bool] = []
+    controller, _navigation, _shared, repeater = build_controller(
+        persistence=persistence,
+        radio_state_called=radio_calls,
+    )
+    controller.move_next()
     repeater.calls.clear()
 
     assert controller.activate_selection() is False
 
-    assert persistence.actions == [staged]
-    assert repeater.staged_action == staged
+    assert persistence.actions == []
     assert repeater.calls == []
-
-
-def test_back_cancels_active_stage_then_clears_selection() -> None:
-    controller, _navigation, _shared, repeater = build_controller()
-    controller.move_next()
-    controller.activate_selection()
-
-    assert controller.back() is True
-    assert repeater.selected_stable_key is not None
     assert repeater.staged_action is None
+    assert radio_calls == []
+
+
+def test_back_clears_repeater_selection_without_active_persistence() -> None:
+    persistence = RecordingPersistence()
+    controller, _navigation, _shared, repeater = build_controller(persistence=persistence)
+    controller.move_next()
 
     assert controller.back() is True
     assert repeater.selected_stable_key is None
     assert controller.back() is False
+    assert persistence.actions == []
 
 
-def test_context_change_invalidates_repeater_staging_without_persistence() -> None:
+def test_context_change_performs_no_active_persistence() -> None:
     persistence = RecordingPersistence()
     controller, navigation, shared, repeater = build_controller(persistence=persistence)
     controller.move_next()
-    controller.activate_selection()
-    assert repeater.staged_action is not None
 
     navigation.select(ContextId.AI)
     controller.activate_context(ContextId.AI)
