@@ -125,7 +125,7 @@ class SharedSpotTuneCommands(Protocol):
 
 
 class RepeaterPanelCommands(Protocol):
-    """No-I/O repeater selection, filtering, and local Active staging."""
+    """No-I/O repeater selection, filtering, and exact Active action capture."""
 
     @property
     def selected_stable_key(self) -> str | None:
@@ -133,7 +133,7 @@ class RepeaterPanelCommands(Protocol):
 
     @property
     def staged_action(self) -> StagedRepeaterActiveAction | None:
-        """Return the exact still-valid local Active action, if any."""
+        """Return the exact transient local Active action, if any."""
 
     def activate(self) -> object:
         """Synchronize the repeater view."""
@@ -148,20 +148,20 @@ class RepeaterPanelCommands(Protocol):
         """Move toward the next visible repeater."""
 
     def clear_selection(self) -> object:
-        """Clear repeater selection and staging."""
+        """Clear repeater selection and transient Active state."""
 
     def stage_selected(self) -> object:
-        """Stage an exact local Active toggle without persistence."""
+        """Capture the exact inverse Active action without persistence."""
 
     def cancel_staging(self) -> object:
-        """Cancel only local Active staging."""
+        """Clear the transient local Active action."""
 
 
 class RepeaterActiveOverrideCommands(Protocol):
-    """Background persistence boundary reached only on a valid second press."""
+    """Background persistence boundary for one Context Button #2 press."""
 
     def start_persist(self, action: StagedRepeaterActiveAction) -> bool:
-        """Submit one exact confirmed Active override without blocking."""
+        """Submit one exact Active override without blocking."""
 
 
 class SettingsPanelCommands(Protocol):
@@ -333,13 +333,15 @@ class SharedSpotActivePanelCommandController:
         return False
 
     def secondary(self) -> bool:
-        """Cycle the active shared provider's mode filter."""
+        """Run Context Button #2 for the active provider or repeater panel."""
         if self._pota_is_active():
             self._shared_panel.next_pota_mode()
             return True
         if self._dx_is_active():
             self._shared_panel.next_dx_mode()
             return True
+        if self._repeater_is_active():
+            return self._toggle_repeater_active()
         return False
 
     def tertiary(self) -> bool:
@@ -385,9 +387,9 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def activate_selection(self) -> bool:
-        """Stage first; submit only an exact still-valid action on second press."""
+        """Advance shared tuning; reserve repeater encoder activation for #169."""
         if self._repeater_is_active():
-            return self._activate_repeater_selection()
+            return False
         if not self._shared_spot_is_active():
             return False
 
@@ -408,23 +410,21 @@ class SharedSpotActivePanelCommandController:
         self._shared_panel.cancel_staging()
         return True
 
-    def _activate_repeater_selection(self) -> bool:
-        """Stage a local Active change first; persist it only on second press."""
+    def _toggle_repeater_active(self) -> bool:
+        """Submit one exact inverse Active override from Context Button #2."""
         repeater = self._repeater_panel
-        if repeater is None:
-            return False
-
-        staged = repeater.staged_action
-        if staged is None:
-            repeater.stage_selected()
-            return repeater.staged_action is not None
-
         persistence = self._repeater_active_overrides
-        if persistence is None or not persistence.start_persist(staged):
+        if repeater is None or persistence is None:
             return False
 
+        repeater.stage_selected()
+        action = repeater.staged_action
+        if action is None:
+            return False
+
+        accepted = persistence.start_persist(action)
         repeater.cancel_staging()
-        return True
+        return accepted
 
     def synchronize_radio_state(self) -> bool:
         """Invalidate spot staging when radio state is unsafe for retuning."""
