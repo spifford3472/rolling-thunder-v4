@@ -80,15 +80,14 @@ def build_repeater_viewport(
     elif persistence is not None and persistence.last_error:
         footer_line = f"ACTIVE SAVE FAILED — {persistence.last_error}"
     elif state.staged_action is not None:
-        verb = "ENABLE" if state.staged_action.target_active else "DISABLE"
-        footer_line = f"STAGED {verb} — PRESS AGAIN TO SAVE — BACK CANCELS"
+        footer_line = "ACTIVE CHANGE PREPARING…"
     else:
         next_filter = (
             "SHOW ALL"
             if state.display_filter is RepeaterDisplayFilter.ACTIVE_ONLY
             else "ACTIVE ONLY"
         )
-        footer_line = f"BTN1 {next_filter} — SELECT THEN PRESS TO STAGE"
+        footer_line = f"BTN1 {next_filter} — BTN2 TOGGLE ACTIVE"
 
     return RepeaterViewport(
         title=f"6 M REPEATERS — {filter_label}",
