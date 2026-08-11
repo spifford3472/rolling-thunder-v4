@@ -1,4 +1,4 @@
-"""Background persistence boundary for confirmed repeater Active overrides."""
+"""Background persistence boundary for repeater Active overrides."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ WorkerLauncher = Callable[[Callable[[], None]], None]
 
 
 class RepeaterActiveOverrideWriter(Protocol):
-    """Persistence capability used only after explicit second activation."""
+    """Persistence capability used after an explicit Context Button #2 action."""
 
     def write(self, identity: RepeaterIdentity, active: bool) -> None:
         """Persist one exact Active override."""
@@ -37,7 +37,7 @@ def _launch_daemon(worker: Callable[[], None]) -> None:
 
 
 class RepeaterActiveOverrideController:
-    """Persist one confirmed Active action at a time away from Tk callbacks."""
+    """Persist one explicit Active action at a time away from Tk callbacks."""
 
     def __init__(
         self,
@@ -57,7 +57,7 @@ class RepeaterActiveOverrideController:
             return self._status
 
     def start_persist(self, action: StagedRepeaterActiveAction) -> bool:
-        """Submit one already-confirmed exact action without blocking the caller."""
+        """Submit one exact Active action without blocking the caller."""
         with self._lock:
             if self._status.saving:
                 return False
