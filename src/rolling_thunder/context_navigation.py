@@ -49,7 +49,7 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "REPEATERS",
         "3",
         "REPEATERS",
-        "Future repeater details here.",
+        "Nearby 6 m repeaters from local deployment data.",
     ),
     ContextDefinition(
         ContextId.AI,

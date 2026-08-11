@@ -1,6 +1,6 @@
 # Six-Meter Repeater Data
 
-Issue #166 establishes the local six-meter repeater data/domain boundary before any repeater panel or FT-891 CAT work.
+Issues #166 and #167 establish the local six-meter repeater data/domain boundary and mobile operator panel before any FT-891 repeater CAT work.
 
 ## Approved local source
 
@@ -135,6 +135,10 @@ otherwise source Active default
 
 Clearing an override restores source-default behavior without rewriting the CSV.
 
+Checkpoint #167 keeps that I/O outside Tk callbacks. `RepeaterPanelRuntime.build()` loads the source and existing overrides during startup. When a selected repeater receives Context Button #2, the application captures the exact current effective Active state and its inverse target, then submits one single-flight background SQLite write. The dashboard later observes immutable completion status and applies the already-persisted override to the in-memory nearby service.
+
+Context Button #2 performs no CAT or radio work. The CSV is never rewritten.
+
 ## Nearby filtering
 
 `RepeaterNearbyService` consumes an already-published immutable `GPSState`; it performs no serial I/O and owns no GPS polling.
@@ -151,7 +155,7 @@ The default stale threshold is 10 seconds, matching the current live-map GPS fre
 
 With current GPS, great-circle distance is calculated using the Haversine formula. Repeaters at or within 50 statute miles are eligible. Repeaters outside 50 miles are excluded.
 
-The returned nearby list includes both effective-active and effective-inactive repeaters. Each result carries `effective_active`; checkpoint #167 can therefore implement active-only versus all display without re-reading the source file.
+The returned nearby list includes both effective-active and effective-inactive repeaters. Each result carries `effective_active` so the panel can switch between Active-only and all records without rereading the CSV.
 
 Ordering is deterministic by:
 
@@ -161,15 +165,59 @@ Ordering is deterministic by:
 
 Missing or invalid GPS produces explicit `gps_unavailable` state. A fix older than the stale threshold produces explicit `gps_stale` state. Neither condition returns guessed distances or a last-known nearby list as current.
 
+## Mobile repeater panel
+
+Checkpoint #167 uses the already-reserved `ContextId.REPEATERS` and existing physical-control/application command path. It does not add a second input protocol.
+
+The default view is **Active only**. Context Button #1 toggles between Active-only and **All**. Context Button #2 flips the selected repeater's effective Active state to the exact opposite and persists that local preference in the background. In All mode, inactive repeaters remain selectable so an operator can re-enable one. Inactive cards use a red outline while shown.
+
+Each card presents:
+
+- channel name/callsign text;
+- receive frequency and derived shift;
+- independent TX/RX tone values;
+- current GPS-derived distance;
+- effective `ACTIVE` or `INACTIVE` state.
+
+The encoder uses stable repeater identity for navigation. Refresh/reordering keeps the same identity selected. If the selected identity disappears, becomes filtered out, or GPS becomes unavailable/stale, selection is cleared; the controller never falls sideways to a neighboring repeater.
+
+## Operator controls
+
+Checkpoint #167 assigns the repeater controls as follows:
+
+- **Context Button #1:** switch Active-only / All;
+- **Context Button #2:** flip the selected repeater Active/Inactive in one operator press;
+- **encoder rotation:** move stable repeater selection;
+- **encoder short press:** reserved for the later two-press radio-configuration workflow in #169 and therefore performs no repeater CAT/radio action in #167;
+- **Back:** clear the current repeater selection.
+
+The Context Button #2 path captures one exact `StagedRepeaterActiveAction` only as a transient application value needed to cross the background-persistence boundary. It is submitted and cleared within the same operator command; there is no operator-visible two-press Active stage.
+
+The background persistence controller remains single-flight. If an Active write is already in progress, another Context Button #2 request is rejected rather than queued ambiguously. Successful persistence is reflected into the in-memory nearby state on a later dashboard refresh.
+
+Local Active state is deliberately distinct from future radio-configuration staging. When #169 is implemented, an Active change through Context Button #2 will invalidate any stale encoder radio stage rather than sharing it.
+
+## Planned repeater radio workflow
+
+Checkpoint #168 owns proving the exact FT-891 CAT capabilities required for the operator-requested sequence: establish the 6 m operating context / memory-band handoff as required by the installed radio, place control on VFO-A, set the selected repeater RX frequency, set FM mode, set repeater shift direction and offset, and configure the required CTCSS behavior. Independent RX/TX tone handling is claimed only if the official CAT reference and real radio prove it.
+
+Checkpoint #169 then assigns the encoder short press to radio configuration:
+
+1. first encoder short press stages the exact selected repeater and all action-critical configuration values with zero CAT work;
+2. second identical still-valid encoder short press starts one background configuration;
+3. only #168-proven capabilities are executed;
+4. unsupported behavior produces a truthful manual operator handoff rather than fabricated success.
+
 ## Safety boundary
 
-Checkpoint #166 adds no:
+Checkpoint #167 adds panel/presentation and local Active persistence only. It adds no:
 
-- Tkinter/UI work;
-- encoder or physical-control routing;
+- repeater CAT configuration;
+- radio mode or frequency changes;
+- PTT, MOX, keying, tuner, power, or transmit authority;
+- direct radio-state prerequisite for repeater Active actions;
+- GPS polling or serial access;
 - network access;
-- CAT commands;
-- radio mode/frequency changes;
-- PTT, MOX, keying, tuner, power, or transmit authority.
+- filesystem or SQLite work inside Tk callbacks.
 
-The output of this checkpoint is local immutable typed data plus explicit persistence/filtering state for later checkpoints to consume.
+Checkpoint #168 separately owns typed FT-891 FM/repeater receive capability discovery. Checkpoint #169 separately owns the two-press encoder radio-configuration integration after those capabilities are proven.
