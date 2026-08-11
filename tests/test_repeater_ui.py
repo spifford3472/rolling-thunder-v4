@@ -21,7 +21,14 @@ from rolling_thunder.repeater_panel import (
 from rolling_thunder.repeater_ui import build_repeater_viewport
 
 
-def row(name: str, rx_hz: int, distance: float, *, active: bool, selected: bool = False) -> RepeaterPanelRow:
+def row(
+    name: str,
+    rx_hz: int,
+    distance: float,
+    *,
+    active: bool,
+    selected: bool = False,
+) -> RepeaterPanelRow:
     rx = Frequency(hz=rx_hz)
     record = RepeaterRecord(
         identity=RepeaterIdentity(name=name, rx_frequency=rx),
@@ -44,7 +51,10 @@ def row(name: str, rx_hz: int, distance: float, *, active: bool, selected: bool 
     )
 
 
-def state(*rows: RepeaterPanelRow, display_filter: RepeaterDisplayFilter = RepeaterDisplayFilter.ALL) -> RepeaterPanelState:
+def state(
+    *rows: RepeaterPanelRow,
+    display_filter: RepeaterDisplayFilter = RepeaterDisplayFilter.ALL,
+) -> RepeaterPanelState:
     selected = next((item.stable_key for item in rows if item.selected), None)
     return RepeaterPanelState(
         nearby_kind=NearbyRepeaterStateKind.READY,
@@ -57,7 +67,15 @@ def state(*rows: RepeaterPanelRow, display_filter: RepeaterDisplayFilter = Repea
 
 def test_viewport_formats_frequency_shift_tones_distance_and_active_state() -> None:
     viewport = build_repeater_viewport(
-        state(row("KB3AWQ Williamsp", 53_050_000, 12.34, active=False, selected=True))
+        state(
+            row(
+                "KB3AWQ Williamsp",
+                53_050_000,
+                12.34,
+                active=False,
+                selected=True,
+            )
+        )
     )
 
     card = viewport.cards[0]
@@ -71,7 +89,13 @@ def test_viewport_formats_frequency_shift_tones_distance_and_active_state() -> N
 
 def test_selected_row_remains_in_bounded_three_card_window() -> None:
     rows = tuple(
-        row(f"K1AA{index} Test", 52_000_000 + index * 10_000, float(index), active=True, selected=index == 4)
+        row(
+            f"K1AA{index} Test",
+            52_000_000 + index * 10_000,
+            float(index),
+            active=True,
+            selected=index == 4,
+        )
         for index in range(5)
     )
 
@@ -96,6 +120,17 @@ def test_truthful_stale_gps_state_is_presented_without_cards() -> None:
     assert viewport.has_cards is False
     assert "GPS STALE" in viewport.status_line
     assert viewport.detail_line == "GPS STALE — NEARBY REPEATERS UNAVAILABLE"
+
+
+def test_normal_footer_assigns_active_toggle_to_context_button_two() -> None:
+    panel_state = state(
+        row("K1AAA Alpha", 52_010_000, 5.0, active=True, selected=True),
+        display_filter=RepeaterDisplayFilter.ACTIVE_ONLY,
+    )
+
+    viewport = build_repeater_viewport(panel_state)
+
+    assert viewport.footer_line == "BTN1 SHOW ALL — BTN2 TOGGLE ACTIVE"
 
 
 def test_persistence_status_is_explicit_in_footer() -> None:
