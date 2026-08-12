@@ -101,21 +101,28 @@ Fake-transport tests cover:
 - concurrency protection so radio polling cannot interleave with the atomic repeater transaction;
 - regression coverage for the existing radio operations.
 
-## Mandatory real-radio bench acceptance
+## Real-radio bench acceptance
 
-Automated tests are not sufficient to close #168. Before claiming physical support, the installed FT-891 must verify each newly claimed step on the Enhanced CAT interface at the project's accepted 38400-baud 8N2 settings.
+**Accepted on the installed FT-891 on 2026-08-11 EDT using branch commit `1b682462a0f051e4e1ad1b0a6708218b938ec93a`.**
 
-Bench acceptance must demonstrate, without using the Standard COM port or any transmit authority:
+The bench test used only the Enhanced CAT interface at the project's accepted 38400-baud 8N2 settings. Rolling Thunder was stopped cleanly before the test so no second process competed for the CAT device. The Standard COM interface remained unopened before, during, and after the test.
 
-1. `MC010` / `MA` followed by `IF;` reports VFO context as expected;
-2. `OS00`, `OS01`, and `OS02` each read back correctly through `OS0;` while in FM;
-3. representative `EX0905` values, including the intended one-megahertz case, read back exactly;
-4. representative `CN00` tone selection reads back exactly;
-5. `CT00`, `CT01`, and `CT02` read back with the documented meanings;
-6. one full supported repeater configuration executes in the exact ordered sequence and leaves the receiver on the requested RX frequency in FM;
-7. no PTT, MOX, keying, tuner, power, transmit, or Standard-COM operation occurs.
+Observed acceptance results:
 
-Until that bench acceptance is recorded, the branch proves the software contract and Yaesu-reference encoding but does **not** claim completed physical-radio acceptance.
+1. Connected successfully through the Enhanced CAT port; initial state read back as 14.237010 MHz USB.
+2. The accepted memory `010` handoff copied the 6 m context to VFO-A and read back 50.100000 MHz USB.
+3. `IF;` reported `vfo` after the memory-to-VFO handoff.
+4. FM mode set and read back successfully.
+5. `OS00`, `OS01`, and `OS02` each read back correctly as simplex, plus, and minus respectively.
+6. `EX0905` set to the representative 1.000 MHz offset and read back exactly as 1,000,000 Hz.
+7. `CN00` selected 131.8 Hz and read it back exactly.
+8. `CT00`, `CT01`, and `CT02` each read back correctly as off, encode/decode, and encode-only.
+9. One full typed supported repeater request configured 53.050000 MHz FM, minus shift, 1.000 MHz offset, and 131.8 Hz TX CTCSS. The typed result was `configured` and the resulting state read back 53.050000 MHz FM.
+10. No PTT, MOX, keying, tuner, RF-power, voice, digital-transmit, or unattended-transmit operation was invoked by the acceptance script.
+11. The Standard COM port remained unopened after the test.
+12. The temporary worktree was removed and the original Rolling Thunder UI process restarted successfully after acceptance.
+
+This completes the mandatory physical-radio acceptance required by checkpoint #168 for the newly claimed FT-891 repeater configuration operations.
 
 ## Handoff to #169
 
