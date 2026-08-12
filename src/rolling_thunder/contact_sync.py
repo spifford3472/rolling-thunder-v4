@@ -168,11 +168,18 @@ class ContactSyncService:
         return self._latest_result
 
     def synchronize_now(self) -> ContactSyncResult:
-        """Synchronize one bounded eligible batch unless another run is active."""
+        """Synchronize one bounded batch while respecting automatic retry backoff."""
+        return self._synchronize(force_failed=False)
+
+    def synchronize_unsynchronized_now(self) -> ContactSyncResult:
+        """Operator-forced sync of pending plus failed contacts, ignoring retry delay."""
+        return self._synchronize(force_failed=True)
+
+    def _synchronize(self, *, force_failed: bool) -> ContactSyncResult:
         if not self._sync_lock.acquire(blocking=False):
             return self._latest_result
         try:
-            return self._run_once()
+            return self._run_once(force_failed=force_failed)
         finally:
             self._sync_lock.release()
 
@@ -181,11 +188,11 @@ class ContactSyncService:
             return
         self.synchronize_now()
 
-    def _run_once(self) -> ContactSyncResult:
+    def _run_once(self, *, force_failed: bool) -> ContactSyncResult:
         attempted = 0
         synchronized = 0
         failed = 0
-        contacts = self._eligible_contacts()
+        contacts = self._eligible_contacts(force_failed=force_failed)
         for contact in contacts:
             attempted += 1
             try:
@@ -221,15 +228,26 @@ class ContactSyncService:
         )
         return self._latest_result
 
-    def _eligible_contacts(self) -> list[Contact]:
+    def _eligible_contacts(self, *, force_failed: bool) -> list[Contact]:
         contacts = self._repository.list_synchronization_eligible(
             SynchronizationState.PENDING,
             limit=self._batch_size,
         )
         remaining = self._batch_size - len(contacts)
-        if remaining <= 0 or self._retry_store is None:
+        if remaining <= 0:
             return contacts
 
+        if force_failed:
+            contacts.extend(
+                self._repository.list_synchronization_eligible(
+                    SynchronizationState.FAILED,
+                    limit=remaining,
+                )
+            )
+            return contacts
+
+        if self._retry_store is None:
+            return contacts
         for contact_id in self._retry_store.list_due_contact_ids(
             self._timestamp(),
             limit=remaining,
