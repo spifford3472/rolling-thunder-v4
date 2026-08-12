@@ -96,3 +96,21 @@ Automated acceptance covers:
 - background execution never requires Tk-thread CAT access.
 
 Real checkpoint acceptance must additionally exercise the installed physical controls on `anvilmobile` with the installed FT-891, using the already bench-accepted #168 radio capability. The acceptance must confirm same-band staging/execution, cancellation/invalidation behavior, Context Button #2 isolation, and truthful unsupported/manual-handoff presentation without adding any transmit authority.
+
+## Installed acceptance — 2026-08-12
+
+Checkpoint #169 was accepted on the installed `anvilmobile` system using the real vehicle control panel and FT-891 against exact PR #189 commit `83cff0cdefa6f43c95f5e0dd48ed0acde012e1ba`.
+
+The operator verified:
+
+- first encoder press staged the selected repeater without changing FT-891 frequency or mode;
+- encoder rotation, Back, and Active/All filter changes invalidated the pending radio stage;
+- Context Button #2 changed only local Active state and cleared the radio stage without configuring the FT-891;
+- the second identical encoder press performed the real #168-proven FT-891 repeater configuration exactly once;
+- radio loss cleared a pending stage, and reconnect did not resurrect or execute it;
+- the FT-891 Standard COM interface remained unopened for the entire installed test;
+- no PTT, MOX, keying, or other transmit operation was exercised.
+
+The optional installed manual-handoff case was skipped because no visible local repeater with an unsupported tone plan was available during acceptance. That path remains covered by automated tests, which require unsupported configurations to return truthful manual handoff rather than fabricated success.
+
+After acceptance, the temporary PR worktree and test UI were removed and the normal Rolling Thunder UI was restored successfully.
