@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 from typing import Protocol
@@ -166,7 +166,9 @@ class ContactLogRepository:
             band = resolve_radio_band(frequency).value.upper()
         except RadioBandResolutionError:
             band = "—"
-        started_at = datetime.fromisoformat(str(row["started_at"]).replace("Z", "+00:00"))
+        started_at = datetime.fromisoformat(
+            str(row["started_at"]).replace("Z", "+00:00")
+        ).astimezone(UTC)
         return LogPanelRow(
             started_at=started_at,
             callsign=str(row["callsign"]),
@@ -271,13 +273,14 @@ class LogPanelController:
 
     def _refresh_local(self, *, preserve_status: bool = False) -> None:
         try:
-            self._repository.prune_synchronized_contacts()
             fresh = self._repository.read_panel_state()
+            if fresh.total_count > _DEFAULT_MAX_CONTACTS:
+                self._repository.prune_synchronized_contacts()
+                fresh = self._repository.read_panel_state()
         except StorageError as error:
             self._set_status(f"LOG DB ERROR: {error}"[:120], syncing=False)
             return
 
-        should_sync = False
         with self._lock:
             current = self._snapshot
             should_sync = (
