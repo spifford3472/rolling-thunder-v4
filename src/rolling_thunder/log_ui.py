@@ -75,8 +75,14 @@ class LogWidgets:
                 highlightbackground=_BORDER,
             )
             row_frame.grid(row=row_index + 3, column=0, sticky="ew", padx=4, pady=1)
-            values = tuple(tk.StringVar(value="") for _ in range(5))
-            self._row_vars.append(values)  # type: ignore[arg-type]
+            values = (
+                tk.StringVar(value=""),
+                tk.StringVar(value=""),
+                tk.StringVar(value=""),
+                tk.StringVar(value=""),
+                tk.StringVar(value=""),
+            )
+            self._row_vars.append(values)
             status_label = None
             for column, (variable, width) in enumerate(zip(values, widths, strict=True)):
                 row_frame.grid_columnconfigure(column, weight=1 if column in {0, 1} else 0)
