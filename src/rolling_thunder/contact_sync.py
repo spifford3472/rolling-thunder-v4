@@ -171,6 +171,10 @@ class ContactSyncService:
         """Operator-requested sync of pending and failed contacts, ignoring retry delay."""
         return self._synchronize(force_failed=True)
 
+    def synchronize_due_now(self) -> ContactSyncResult:
+        """Opportunistic sync of pending plus retry-due failed contacts."""
+        return self._synchronize(force_failed=False)
+
     def _synchronize(self, *, force_failed: bool) -> ContactSyncResult:
         if not self._sync_lock.acquire(blocking=False):
             return self._latest_result
@@ -182,7 +186,7 @@ class ContactSyncService:
     def _synchronize_once(self) -> None:
         if not self.is_running:
             return
-        self._synchronize(force_failed=False)
+        self.synchronize_due_now()
 
     def _run_once(self, *, force_failed: bool) -> ContactSyncResult:
         attempted = 0
