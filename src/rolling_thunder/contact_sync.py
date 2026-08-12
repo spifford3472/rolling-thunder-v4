@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from threading import Lock
 from typing import Protocol
 from uuid import UUID
 
@@ -121,7 +122,7 @@ class ContactSyncService:
         self._retry_max_delay_s = retry_max_delay_s
         self._clock = clock
         self._scheduled_poll: ScheduledPoll | None = None
-        self._synchronizing = False
+        self._sync_lock = Lock()
         self._latest_result = ContactSyncResult(
             attempted=0,
             synchronized=0,
@@ -137,6 +138,15 @@ class ContactSyncService:
     def latest_result(self) -> ContactSyncResult:
         """Return the latest immutable synchronization summary."""
         return self._latest_result
+
+    @property
+    def synchronizing(self) -> bool:
+        """Return whether a periodic or manual synchronization run owns the single-flight lock."""
+        acquired = self._sync_lock.acquire(blocking=False)
+        if not acquired:
+            return True
+        self._sync_lock.release()
+        return False
 
     def start(self) -> ContactSyncResult:
         """Schedule synchronization without performing startup network I/O."""
@@ -158,59 +168,58 @@ class ContactSyncService:
         return self._latest_result
 
     def synchronize_now(self) -> ContactSyncResult:
-        """Synchronize one bounded eligible batch unless a run is already active."""
-        if self._synchronizing:
+        """Synchronize one bounded eligible batch unless another run is active."""
+        if not self._sync_lock.acquire(blocking=False):
             return self._latest_result
-        return self._run_once()
+        try:
+            return self._run_once()
+        finally:
+            self._sync_lock.release()
 
     def _synchronize_once(self) -> None:
-        if not self.is_running or self._synchronizing:
+        if not self.is_running:
             return
-        self._run_once()
+        self.synchronize_now()
 
     def _run_once(self) -> ContactSyncResult:
-        self._synchronizing = True
         attempted = 0
         synchronized = 0
         failed = 0
-        try:
-            contacts = self._eligible_contacts()
-            for contact in contacts:
-                attempted += 1
-                try:
-                    self._client.upload_contact(ContactUploadRequest(contact=contact))
-                except HomePlatformError as error:
-                    self._repository.update_synchronization_state(
-                        contact.contact_id,
-                        SynchronizationState.FAILED,
-                    )
-                    if self._retry_store is not None:
-                        self._retry_store.record_failure(
-                            contact.contact_id,
-                            failed_at=self._timestamp(),
-                            error_message=str(error),
-                            initial_delay_s=self._retry_initial_delay_s,
-                            max_delay_s=self._retry_max_delay_s,
-                        )
-                    failed += 1
-                    continue
-
+        contacts = self._eligible_contacts()
+        for contact in contacts:
+            attempted += 1
+            try:
+                self._client.upload_contact(ContactUploadRequest(contact=contact))
+            except HomePlatformError as error:
                 self._repository.update_synchronization_state(
                     contact.contact_id,
-                    SynchronizationState.SYNCHRONIZED,
+                    SynchronizationState.FAILED,
                 )
                 if self._retry_store is not None:
-                    self._retry_store.clear(contact.contact_id)
-                synchronized += 1
+                    self._retry_store.record_failure(
+                        contact.contact_id,
+                        failed_at=self._timestamp(),
+                        error_message=str(error),
+                        initial_delay_s=self._retry_initial_delay_s,
+                        max_delay_s=self._retry_max_delay_s,
+                    )
+                failed += 1
+                continue
 
-            self._latest_result = ContactSyncResult(
-                attempted=attempted,
-                synchronized=synchronized,
-                failed=failed,
+            self._repository.update_synchronization_state(
+                contact.contact_id,
+                SynchronizationState.SYNCHRONIZED,
             )
-            return self._latest_result
-        finally:
-            self._synchronizing = False
+            if self._retry_store is not None:
+                self._retry_store.clear(contact.contact_id)
+            synchronized += 1
+
+        self._latest_result = ContactSyncResult(
+            attempted=attempted,
+            synchronized=synchronized,
+            failed=failed,
+        )
+        return self._latest_result
 
     def _eligible_contacts(self) -> list[Contact]:
         contacts = self._repository.list_synchronization_eligible(
