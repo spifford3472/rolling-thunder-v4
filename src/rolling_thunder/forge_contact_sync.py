@@ -264,5 +264,5 @@ class ForgeContactSyncService:
 
 def _remote_payload_sha256(contact: Contact, *, station_profile_id: int) -> str:
     """Hash only stable Wavelog-bound data, excluding local synchronization state."""
-    payload = f"{station_profile_id}\n{contact_to_adif(contact)}".encode("utf-8")
+    payload = f"{station_profile_id}\n{contact_to_adif(contact)}".encode()
     return hashlib.sha256(payload).hexdigest()
