@@ -60,18 +60,18 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "Future AI advisor details here.",
     ),
     ContextDefinition(
-        ContextId.SETTINGS,
-        "SETTINGS",
-        "5",
-        "SETTINGS",
-        "Future settings details here.",
-    ),
-    ContextDefinition(
         ContextId.WEATHER,
         "WEATHER",
         "6",
         "WEATHER",
         "Retained weather details here.",
+    ),
+    ContextDefinition(
+        ContextId.SETTINGS,
+        "SETTINGS",
+        "5",
+        "SETTINGS",
+        "Future settings details here.",
     ),
     ContextDefinition(
         ContextId.LOG,
