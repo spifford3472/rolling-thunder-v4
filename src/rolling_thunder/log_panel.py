@@ -26,7 +26,7 @@ _DEFAULT_PRUNE_BATCH = 1_000
 class LogSyncCommands(Protocol):
     """Synchronous contact-sync boundary invoked only from a worker thread."""
 
-    def synchronize_unsynchronized_now(self) -> ContactSyncResult:
+    def synchronize_now(self) -> ContactSyncResult:
         """Synchronize pending and failed contacts immediately."""
         ...
 
@@ -252,7 +252,7 @@ class LogPanelController:
         if sync is None:
             return
         try:
-            result = sync.synchronize_unsynchronized_now()
+            result = sync.synchronize_now()
         except (StorageError, ValueError) as error:
             self._set_status(f"SYNC ERROR: {error}"[:120], syncing=False)
             self._refresh_local(preserve_status=True)
