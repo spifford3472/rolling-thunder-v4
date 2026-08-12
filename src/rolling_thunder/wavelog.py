@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC
 from enum import StrEnum
 from json import JSONDecodeError, dumps, loads
 from typing import Any
@@ -220,14 +221,15 @@ def contact_to_adif(contact: Contact) -> str:
         ) from error
 
     mode, submode = _adif_mode(contact.mode)
+    started_at = contact.started_at.astimezone(UTC)
     frequency_mhz = f"{contact.frequency_hz / 1_000_000:.6f}".rstrip("0").rstrip(".")
     fields: list[tuple[str, str]] = [
         ("CALL", str(contact.callsign)),
         ("BAND", band),
         ("MODE", mode),
         ("FREQ", frequency_mhz),
-        ("QSO_DATE", contact.started_at.strftime("%Y%m%d")),
-        ("TIME_ON", contact.started_at.strftime("%H%M%S")),
+        ("QSO_DATE", started_at.strftime("%Y%m%d")),
+        ("TIME_ON", started_at.strftime("%H%M%S")),
         ("RST_SENT", contact.rst_sent),
         ("RST_RCVD", contact.rst_received),
     ]
