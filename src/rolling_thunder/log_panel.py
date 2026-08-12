@@ -27,7 +27,11 @@ class LogSyncCommands(Protocol):
     """Synchronous contact-sync boundary invoked only from a worker thread."""
 
     def synchronize_now(self) -> ContactSyncResult:
-        """Synchronize pending and failed contacts immediately."""
+        """Operator-forced synchronization of all eligible unsynchronized contacts."""
+        ...
+
+    def synchronize_due_now(self) -> ContactSyncResult:
+        """Opportunistic synchronization that preserves failed-contact retry delay."""
         ...
 
 
@@ -235,7 +239,14 @@ class LogPanelController:
         return self.latest_state
 
     def request_sync(self) -> bool:
-        """Submit exactly one manual/opportunistic sync request and return immediately."""
+        """Submit operator-forced Sync Now work and return immediately."""
+        return self._submit_sync(force_failed=True)
+
+    def request_opportunistic_sync(self) -> bool:
+        """Submit pending/retry-due background work without overriding retry backoff."""
+        return self._submit_sync(force_failed=False)
+
+    def _submit_sync(self, *, force_failed: bool) -> bool:
         if self._sync is None:
             self._set_status("SYNC DISABLED", syncing=False)
             return False
@@ -244,15 +255,15 @@ class LogPanelController:
             if future is not None and not future.done():
                 return False
             self._snapshot = self._with_status(self._snapshot, "SYNCING…", syncing=True)
-            self._sync_future = self._executor.submit(self._run_sync)
+            self._sync_future = self._executor.submit(self._run_sync, force_failed)
         return True
 
-    def _run_sync(self) -> None:
+    def _run_sync(self, force_failed: bool) -> None:
         sync = self._sync
         if sync is None:
             return
         try:
-            result = sync.synchronize_now()
+            result = sync.synchronize_now() if force_failed else sync.synchronize_due_now()
         except (StorageError, ValueError) as error:
             self._set_status(f"SYNC ERROR: {error}"[:120], syncing=False)
             self._refresh_local(preserve_status=True)
@@ -301,7 +312,7 @@ class LogPanelController:
                 status_text=status,
             )
         if should_sync:
-            self.request_sync()
+            self.request_opportunistic_sync()
 
     def _set_status(self, text: str, *, syncing: bool) -> None:
         with self._lock:
