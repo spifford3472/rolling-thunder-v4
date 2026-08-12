@@ -12,9 +12,8 @@ from typing import Protocol
 
 from rolling_thunder.callsign_country import callsign_country_abbreviation
 from rolling_thunder.contact_sync import ContactSyncResult
-from rolling_thunder.domain import SynchronizationState
+from rolling_thunder.domain import Frequency, SynchronizationState
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
-from rolling_thunder.domain import Frequency
 from rolling_thunder.radio_polling import PollScheduler, ScheduledPoll
 from rolling_thunder.storage import StorageError, initialize_database
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
@@ -206,6 +205,7 @@ class LogPanelController:
         )
         self._scheduled_poll: ScheduledPoll | None = None
         self._sync_future: Future[object] | None = None
+        self._seen_initial_state = False
 
     @property
     def latest_state(self) -> LogPanelSnapshot:
@@ -214,7 +214,7 @@ class LogPanelController:
             return self._snapshot
 
     def start(self) -> LogPanelSnapshot:
-        """Start local refresh work; no remote synchronization occurs on startup call."""
+        """Start local refresh and opportunistic synchronization background work."""
         if self._scheduled_poll is not None:
             raise RuntimeError("Log panel controller is already running.")
         self._refresh_local()
@@ -277,8 +277,20 @@ class LogPanelController:
             self._set_status(f"LOG DB ERROR: {error}"[:120], syncing=False)
             return
 
+        should_sync = False
         with self._lock:
             current = self._snapshot
+            should_sync = (
+                self._sync is not None
+                and fresh.unsynchronized_count > 0
+                and not current.syncing
+                and (
+                    not self._seen_initial_state
+                    or fresh.total_count > current.total_count
+                    or fresh.unsynchronized_count > current.unsynchronized_count
+                )
+            )
+            self._seen_initial_state = True
             status = current.status_text if preserve_status else self._routine_status(fresh, current)
             self._snapshot = LogPanelSnapshot(
                 rows=fresh.rows,
@@ -287,6 +299,8 @@ class LogPanelController:
                 syncing=current.syncing,
                 status_text=status,
             )
+        if should_sync:
+            self.request_sync()
 
     def _set_status(self, text: str, *, syncing: bool) -> None:
         with self._lock:
