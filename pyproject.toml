@@ -20,6 +20,7 @@ dependencies = [
 rolling-thunder = "rolling_thunder.cli:cli"
 rolling-thunder-ui = "rolling_thunder.ui_main:main"
 rolling-thunder-forge-spots = "rolling_thunder.forge_spot_main:main"
+rolling-thunder-forge-contact-sync = "rolling_thunder.forge_contact_sync_main:main"
 
 [project.optional-dependencies]
 speech = [
