@@ -166,9 +166,7 @@ class ContactLogRepository:
             band = resolve_radio_band(frequency).value.upper()
         except RadioBandResolutionError:
             band = "—"
-        started_at = datetime.fromisoformat(
-            str(row["started_at"]).replace("Z", "+00:00")
-        ).astimezone(UTC)
+        started_at = datetime.fromisoformat(str(row["started_at"])).astimezone(UTC)
         return LogPanelRow(
             started_at=started_at,
             callsign=str(row["callsign"]),
@@ -255,7 +253,7 @@ class LogPanelController:
             return
         try:
             result = sync.synchronize_now()
-        except Exception as error:  # worker containment; local log remains authoritative
+        except (StorageError, ValueError) as error:
             self._set_status(f"SYNC ERROR: {error}"[:120], syncing=False)
             self._refresh_local(preserve_status=True)
             return
