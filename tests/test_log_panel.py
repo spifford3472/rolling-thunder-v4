@@ -36,6 +36,10 @@ class ManualScheduler:
         self.poll = ManualScheduledPoll(callback)
         return self.poll
 
+    def fire(self) -> None:
+        assert self.poll is not None
+        self.poll.fire()
+
 
 class BlockingSync:
     def __init__(self) -> None:
@@ -47,6 +51,17 @@ class BlockingSync:
         self.calls += 1
         self.started.set()
         self.release.wait(timeout=2)
+        return ContactSyncResult(attempted=1, synchronized=1, failed=0)
+
+
+class RecordingSync:
+    def __init__(self) -> None:
+        self.called = Event()
+        self.calls = 0
+
+    def synchronize_now(self) -> ContactSyncResult:
+        self.calls += 1
+        self.called.set()
         return ContactSyncResult(attempted=1, synchronized=1, failed=0)
 
 
@@ -73,6 +88,42 @@ def insert_contact(
                 started_at.isoformat().replace("+00:00", "Z"),
                 synchronization_state.value,
             ),
+        )
+        connection.commit()
+
+
+def bulk_insert_contacts(
+    database: Path,
+    *,
+    count: int,
+    id_namespace: int,
+    synchronized_count: int,
+) -> None:
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    rows = []
+    for index in range(count):
+        state = "synchronized" if index < synchronized_count else "failed"
+        rows.append(
+            (
+                f"00000000-0000-0000-{id_namespace:04d}-{index:012d}",
+                f"K{index % 9 + 1}ABC",
+                14_250_000,
+                "USB",
+                (base + timedelta(seconds=index)).isoformat().replace("+00:00", "Z"),
+                "59",
+                "59",
+                state,
+            )
+        )
+    with sqlite3.connect(database) as connection:
+        connection.executemany(
+            """
+            INSERT INTO contacts (
+                contact_id, callsign, frequency_hz, mode, started_at,
+                rst_sent, rst_received, synchronization_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
         )
         connection.commit()
 
@@ -158,24 +209,83 @@ def test_retention_prunes_oldest_1000_synchronized_only(tmp_path: Path) -> None:
 def test_retention_deletes_only_available_synchronized_records(tmp_path: Path) -> None:
     database = tmp_path / "rolling.db"
     initialize_database(database)
-    base = datetime(2026, 1, 1, tzinfo=UTC)
-    for index in range(5_001):
-        insert_contact(
-            database,
-            contact_id=f"00000000-0000-0000-0002-{index:012d}",
-            started_at=base + timedelta(seconds=index),
-            synchronization_state=(
-                SynchronizationState.SYNCHRONIZED
-                if index < 10
-                else SynchronizationState.FAILED
-            ),
-        )
+    bulk_insert_contacts(
+        database,
+        count=5_001,
+        id_namespace=2,
+        synchronized_count=10,
+    )
 
     repository = ContactLogRepository(database)
     assert repository.prune_synchronized_contacts() == 10
     snapshot = repository.read_panel_state()
     assert snapshot.total_count == 4_991
     assert snapshot.unsynchronized_count == 4_991
+
+
+def test_retention_does_not_prune_at_exact_limit(tmp_path: Path) -> None:
+    database = tmp_path / "rolling.db"
+    initialize_database(database)
+    bulk_insert_contacts(
+        database,
+        count=5_000,
+        id_namespace=3,
+        synchronized_count=5_000,
+    )
+
+    repository = ContactLogRepository(database)
+
+    assert repository.prune_synchronized_contacts() == 0
+    assert repository.read_panel_state().total_count == 5_000
+
+
+def test_pending_contact_survives_restart_and_triggers_background_sync(tmp_path: Path) -> None:
+    database = tmp_path / "rolling.db"
+    initialize_database(database)
+    insert_contact(
+        database,
+        contact_id="11111111-2222-3333-4444-555555555555",
+        started_at=datetime(2026, 8, 12, 15, 0, tzinfo=UTC),
+        synchronization_state=SynchronizationState.PENDING,
+    )
+    sync = RecordingSync()
+    controller = LogPanelController(
+        ContactLogRepository(database),
+        sync,
+        scheduler=ManualScheduler(),
+    )
+
+    snapshot = controller.start()
+
+    assert snapshot.unsynchronized_count == 1
+    assert sync.called.wait(timeout=1)
+    assert sync.calls == 1
+    controller.stop()
+
+
+def test_new_pending_contact_triggers_opportunistic_background_sync(tmp_path: Path) -> None:
+    database = tmp_path / "rolling.db"
+    initialize_database(database)
+    scheduler = ManualScheduler()
+    sync = RecordingSync()
+    controller = LogPanelController(
+        ContactLogRepository(database),
+        sync,
+        scheduler=scheduler,
+    )
+    controller.start()
+    insert_contact(
+        database,
+        contact_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        started_at=datetime(2026, 8, 12, 15, 5, tzinfo=UTC),
+        synchronization_state=SynchronizationState.PENDING,
+    )
+
+    scheduler.fire()
+
+    assert sync.called.wait(timeout=1)
+    assert sync.calls == 1
+    controller.stop()
 
 
 def test_manual_sync_request_is_nonblocking_and_single_flight(tmp_path: Path) -> None:
