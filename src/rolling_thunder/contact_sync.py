@@ -168,11 +168,7 @@ class ContactSyncService:
         return self._latest_result
 
     def synchronize_now(self) -> ContactSyncResult:
-        """Synchronize one bounded batch while respecting automatic retry backoff."""
-        return self._synchronize(force_failed=False)
-
-    def synchronize_unsynchronized_now(self) -> ContactSyncResult:
-        """Operator-forced sync of pending plus failed contacts, ignoring retry delay."""
+        """Operator-requested sync of pending and failed contacts, ignoring retry delay."""
         return self._synchronize(force_failed=True)
 
     def _synchronize(self, *, force_failed: bool) -> ContactSyncResult:
@@ -186,7 +182,7 @@ class ContactSyncService:
     def _synchronize_once(self) -> None:
         if not self.is_running:
             return
-        self.synchronize_now()
+        self._synchronize(force_failed=False)
 
     def _run_once(self, *, force_failed: bool) -> ContactSyncResult:
         attempted = 0
