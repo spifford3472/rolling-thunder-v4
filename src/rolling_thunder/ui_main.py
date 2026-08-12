@@ -32,6 +32,9 @@ from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
+from rolling_thunder.log_panel import ContactLogRepository, LogPanelController
+from rolling_thunder.log_panel_commands import LogAwareActivePanelCommands
+from rolling_thunder.log_ui import LogWidgets
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.operator_commands import OperatorCommandController
 from rolling_thunder.operator_preferences import OperatorPreferenceRepository
@@ -198,12 +201,19 @@ def run_dashboard(
         print(f"Rolling Thunder startup error: {error}")
         return 3
 
+    log_panel = LogPanelController(
+        ContactLogRepository(config.storage.database_path),
+        runtime.contact_sync,
+    )
+    log_panel.start()
+
     mock_transcripts = MockTranscriptController()
     live_capture: LiveCallsignCaptureController | None = None
     if config.speech.enabled:
         model_path = config.speech.model_path
         if model_path is None:
             print("Rolling Thunder startup error: speech model path is unavailable")
+            log_panel.stop()
             runtime.stop()
             return 3
         recognizer = VoskCallsignRecognizer(
@@ -233,7 +243,7 @@ def run_dashboard(
         if isinstance(runtime.radio, FmRepeaterConfigurableRadio)
         else None
     )
-    active_panel_commands = SharedSpotActivePanelCommandController(
+    base_active_panel_commands = SharedSpotActivePanelCommandController(
         context_navigation,
         shared_spot_panel,
         current_frequency=lambda: runtime.latest_radio_state.frequency,
@@ -243,6 +253,11 @@ def run_dashboard(
         repeater_panel=repeater_panel,
         repeater_active_overrides=repeater_panel_runtime.persistence,
         repeater_configuration=repeater_configuration,
+    )
+    active_panel_commands = LogAwareActivePanelCommands(
+        context_navigation,
+        base_active_panel_commands,
+        log_panel,
     )
     _ = pota_tune_executor
 
@@ -255,6 +270,7 @@ def run_dashboard(
 
     def commit_succeeded(callsign: str) -> None:
         capture.commit_succeeded(callsign)
+        log_panel.request_sync()
 
     def commit_failed(message: str) -> None:
         capture.commit_failed(message)
@@ -465,6 +481,7 @@ def run_dashboard(
     settings_widgets = SettingsWidgets(context_content)
     weather_widgets = WeatherWidgets(context_content)
     repeater_widgets = RepeaterWidgets(context_content)
+    log_widgets = LogWidgets(context_content)
 
     pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     pota_panel_frame.grid(row=1, column=0, sticky="nsew")
@@ -714,6 +731,7 @@ def run_dashboard(
         repeater_widgets.hide()
         settings_widgets.hide()
         weather_widgets.hide()
+        log_widgets.hide()
         context_body_label.grid()
 
     def show_pota_context_body() -> None:
@@ -722,6 +740,7 @@ def run_dashboard(
         repeater_widgets.hide()
         settings_widgets.hide()
         weather_widgets.hide()
+        log_widgets.hide()
         pota_panel_frame.grid()
 
     def show_repeater_context_body() -> None:
@@ -730,6 +749,7 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         settings_widgets.hide()
         weather_widgets.hide()
+        log_widgets.hide()
         repeater_widgets.show()
 
     def show_settings_context_body() -> None:
@@ -738,6 +758,7 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         weather_widgets.hide()
+        log_widgets.hide()
         settings_widgets.show()
 
     def show_weather_context_body() -> None:
@@ -746,7 +767,17 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        log_widgets.hide()
         weather_widgets.show()
+
+    def show_log_context_body() -> None:
+        """Show the local Log snapshot and hide every unrelated context body."""
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
+        settings_widgets.hide()
+        weather_widgets.hide()
+        log_widgets.show()
 
     def refresh() -> None:
         if control_dispatcher is not None:
@@ -951,6 +982,12 @@ def run_dashboard(
                 weather_presentation,
                 weather_alert_presentation,
             )
+        elif selected_context.selected is ContextId.LOG:
+            show_log_context_body()
+            health_frame.grid_remove()
+            context_title_text.set(selected_context.definition.title)
+            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            log_widgets.update(log_panel.latest_state)
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
             context_title_text.set(selected_context.definition.title)
@@ -993,6 +1030,7 @@ def run_dashboard(
         control_close_error = close_control_source(control_source)
         if control_close_error is not None:
             print(f"Rolling Thunder physical controls shutdown error: {control_close_error}")
+        log_panel.stop()
         runtime.stop()
         root.destroy()
 
