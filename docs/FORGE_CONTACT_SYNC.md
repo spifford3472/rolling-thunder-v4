@@ -1,12 +1,10 @@
 # Forge Contact Synchronization and Wavelog Operations
 
-This document is the operational and architectural reference for Rolling Thunder contact synchronization introduced by checkpoint #190.
+This document is the architectural and operational reference for Rolling Thunder contact synchronization introduced by checkpoint #190.
 
-## Purpose and non-negotiable invariants
+## Core invariants
 
-Rolling Thunder remains a local-first mobile logger. A QSO is successful when it has been durably committed to the local Rolling Thunder SQLite database. Forge, WireGuard, DNS, mobile connectivity, Wavelog, QRZ, and every other remote service are outside that local transaction and cannot make local logging unavailable.
-
-The synchronization path is:
+Rolling Thunder remains a local-first mobile logger. A QSO succeeds when it has been durably committed to the local Rolling Thunder SQLite database. Forge, WireGuard, DNS, mobile connectivity, Wavelog, QRZ, and every other remote service are outside that local transaction and cannot make local logging unavailable.
 
 ```text
 Rolling Thunder UI / physical controls
@@ -15,11 +13,11 @@ Rolling Thunder UI / physical controls
         v
 SQLite contacts table on anvilmobile
         |
-        | ContactSyncService (background, retry/backoff, single-flight)
+        | ContactSyncService (background, restart-safe retry, single-flight)
         v
 HttpHomePlatformClient
         |
-        | private HTTP /contacts + stable Idempotency-Key=contact_id
+        | private HTTP /contacts + Idempotency-Key=contact_id
         v
 Forge contact-sync service :8767
         |
@@ -27,73 +25,59 @@ Forge contact-sync service :8767
         v
 Wavelog API v2
         |
-        | explicitly resolved station_profile_id
+        | dynamically resolved station_profile_id
         v
 Station Location: Mobile
 ```
 
-The UI never talks to Wavelog and never performs synchronization HTTP, DNS waits, retry sleeps, or Wavelog authentication on the Tk event thread.
-
-A failed or uncertain remote operation never deletes or rolls back the local QSO.
+The UI never talks to Wavelog and never performs synchronization HTTP, DNS waits, retry sleeps, or Wavelog authentication on the Tk event thread. A failed or uncertain remote operation never deletes or rolls back the local QSO.
 
 ## Why Forge owns Wavelog
 
-The Pi already has a typed Home Platform boundary and a background contact synchronization service. Wavelog-specific concerns therefore remain on Forge:
+The Pi already has a typed Home Platform boundary and background contact synchronization. Wavelog-specific authentication, endpoint behavior, station-location discovery, ADIF conversion, provider errors, duplicate handling, and remote idempotency therefore remain on Forge.
 
-- bearer-token authentication;
-- Wavelog endpoint behavior;
-- station-location discovery;
-- ADIF conversion;
-- provider error interpretation;
-- remote duplicate handling;
-- durable remote idempotency bookkeeping.
+The Wavelog integration runs as a small independent Forge service instead of inside the spot/weather aggregator. That preserves the same trust boundary while preventing a Wavelog outage or bad Wavelog credential from taking down spot/weather ingestion.
 
-The Wavelog integration runs as a small independent Forge service rather than being embedded in the spot/weather aggregator. That preserves the same trust boundary while preventing a bad Wavelog credential or Wavelog outage from taking down spot/weather ingestion.
-
-The private default Rolling Thunder Home Platform URL for this feature is:
+The Pi Home Platform endpoint for this feature is:
 
 ```text
 http://192.168.9.170:8767
 ```
 
-This service must remain reachable only through the existing trusted private/VPN network policy. It is not intended to be Internet-facing.
+The service is private/VPN-only and must not be exposed to the Internet.
 
 ## Wavelog target safety
 
-The required target is:
+Required target:
 
 - Station Logbook: `KI5VNB Main`
 - Station Location: `Mobile`
 
-The Wavelog v2 QSO API writes to a **Station Location** using `station_profile_id`. Rolling Thunder never stores or assumes that numeric ID. Forge calls the Wavelog station-list endpoint and requires exactly one station location whose name is `Mobile`, then uses the returned numeric ID for the QSO import.
+Wavelog API v2 writes a QSO to a Station Location using `station_profile_id`. Rolling Thunder never stores or assumes that numeric ID. Forge calls the station-list endpoint and requires exactly one owned station location named `Mobile`; only that returned numeric ID can be used for QSO import.
 
-If `Mobile` is absent, duplicated, the response is malformed, authentication fails, or Wavelog is unavailable, Forge rejects the synchronization attempt. The local QSO remains unsynchronized and is retried later.
+If `Mobile` is absent or ambiguous, authentication fails, the response is malformed, or Wavelog is unavailable, Forge rejects the synchronization attempt. It never falls back to Home or any other station location. The local QSO remains unsynchronized and is retried later.
 
-Wavelog's v2 station resource does not expose the enclosing Station Logbook name/link as part of the station object. Consequently, Forge can enforce the `Mobile` station-location identity programmatically, but the `Mobile` -> `KI5VNB Main` Station Logbook association is a Wavelog server-side configuration invariant. The deployment configuration records the expected logbook name, and real acceptance must verify in the Wavelog UI that the resolved `Mobile` location belongs to and displays inside `KI5VNB Main` before this feature is merged or treated as production-ready.
-
-This limitation does **not** permit a fallback to Home or any other station location. Forge never chooses another profile when `Mobile` cannot be resolved exactly.
+Wavelog's v2 station resource does not expose the enclosing Station Logbook name/link. Forge can therefore enforce `Mobile` programmatically, while `Mobile` -> `KI5VNB Main` remains a Wavelog server-side configuration invariant. `station_logbook_name` records the expected target in Forge configuration, and real acceptance must verify in Wavelog that `Mobile` belongs to and displays inside `KI5VNB Main` before merge.
 
 ## Wavelog API and token
 
-Forge uses Wavelog API v2 with bearer-token authentication.
+Forge uses Wavelog API v2 bearer-token authentication. Production acceptance uses these token scopes:
 
-Required token scopes for production acceptance are:
-
-- `station:read` — resolve the `Mobile` station profile;
+- `station:read` — resolve `Mobile`;
 - `qso:write` — import the QSO;
 - `qso:read` — verify the controlled acceptance QSO and duplicate behavior.
 
-The token is supplied only through the process environment:
+The token exists only in the Forge process environment:
 
 ```text
 ROLLING_THUNDER_WAVELOG_V2_TOKEN
 ```
 
-Do not put a Wavelog token, password, API key, or other credential in Git, YAML examples, issue comments, PR comments, command history, or acceptance output pasted into GitHub.
+Never put a real Wavelog token, password, or API key in Git, YAML, issue/PR text, or command output committed to the repository.
 
 ## Contact mapping
 
-Forge maps the immutable local `Contact` into one deterministic ADIF record. The ADIF import is submitted with the resolved `Mobile` `station_profile_id`.
+Forge maps each immutable local `Contact` to one deterministic ADIF record and submits it with the resolved `Mobile` `station_profile_id`.
 
 | Rolling Thunder | Wavelog / ADIF |
 | --- | --- |
@@ -101,7 +85,7 @@ Forge maps the immutable local `Contact` into one deterministic ADIF record. The
 | `started_at` | UTC `QSO_DATE` + `TIME_ON` |
 | `frequency_hz` | `FREQ` in ADIF MHz |
 | derived band | `BAND` |
-| `mode` | `MODE`; USB/LSB are represented as `MODE=SSB` plus `SUBMODE` |
+| `mode` | `MODE`; USB/LSB become `MODE=SSB` plus `SUBMODE` |
 | `rst_sent` | `RST_SENT` |
 | `rst_received` | `RST_RCVD` |
 | `grid` | `GRIDSQUARE` when known |
@@ -109,130 +93,107 @@ Forge maps the immutable local `Contact` into one deterministic ADIF record. The
 | `pota_reference` | `POTA_REF` when present |
 | `notes` | `NOTES` when present |
 
-Missing optional metadata never makes local logging fail. QRZ enrichment failure completes as an optional-enrichment miss, so QRZ unavailability does not indefinitely block Wavelog synchronization.
+Missing optional metadata never makes local logging fail. Existing QRZ enrichment marks an optional lookup failure complete without a grid, so QRZ unavailability cannot indefinitely block Wavelog synchronization.
 
-Country shown by the LOG panel is display-only. It is resolved conservatively from an offline callsign-prefix table and falls back to `—`; rendering never performs a network lookup and country is not a prerequisite for Wavelog synchronization.
+Country on the LOG panel is display-only. It is resolved conservatively from an offline callsign-prefix table and falls back to `—`; rendering performs no network lookup and country is not a prerequisite for synchronization.
 
 ## Idempotency and uncertain outcomes
 
-The local Rolling Thunder `contact_id` UUID is the stable idempotency identity from creation through Wavelog synchronization.
-
-The Pi sends:
+The local `contact_id` UUID is stable from QSO creation through Wavelog synchronization. The Pi sends:
 
 ```text
 Idempotency-Key: <contact_id UUID>
 ```
 
-Forge requires that header to match the `contact_id` in the request body. Forge then records, transactionally, a ledger row containing:
+Forge requires the header UUID to match the body `contact_id`. Before calling Wavelog, Forge transactionally records a ledger row containing the UUID, a SHA-256 of the stable Wavelog-bound payload plus target profile ID, the resolved profile ID, certainty state, and timestamps.
 
-- the UUID;
-- a SHA-256 of the stable Wavelog-bound payload plus station profile ID;
-- the resolved Wavelog station profile ID;
-- pending/synchronized certainty state;
-- the final Wavelog import disposition and timestamps.
+A repeated UUID with changed QSO data or a different target station profile is rejected rather than silently replayed or mutated.
 
-A repeated UUID with changed QSO data or a changed target station profile is rejected rather than silently mutating/replaying the remote contact.
-
-Forge writes the pending ledger claim **before** calling Wavelog. After Wavelog reports the record imported or skipped as a duplicate, Forge marks the UUID synchronized.
-
-This makes the important lost-response case safe:
+Lost-response behavior is deliberate:
 
 1. Forge durably claims UUID A.
-2. Wavelog imports UUID A's QSO.
-3. The response is lost or Forge restarts before its ledger can be marked synchronized.
-4. Rolling Thunder retries UUID A.
-5. Forge sees the durable pending claim and reissues the same deterministic QSO.
-6. Wavelog's normal duplicate detection reports it skipped as a duplicate.
-7. Forge marks UUID A synchronized and returns `already_exists` to the Pi.
+2. Wavelog imports A's QSO.
+3. The response is lost or Forge restarts before marking its ledger synchronized.
+4. Rolling Thunder retries A.
+5. Forge reissues the same deterministic QSO because its durable state is still uncertain.
+6. Wavelog duplicate detection reports the QSO skipped as a duplicate.
+7. Forge marks A synchronized and returns `already_exists`.
 
-A duplicate outcome is therefore a successful synchronization result, not an error.
-
-Once Forge's ledger says the UUID is synchronized, subsequent retries/manual Sync presses return `already_exists` without another Wavelog write.
+A Wavelog duplicate is therefore a successful idempotent outcome. Once the Forge ledger says the UUID is synchronized, repeated retries/manual Sync presses return `already_exists` without another Wavelog write.
 
 ## Pi synchronization behavior
 
-`ContactSyncService` retains the existing restart-safe retry metadata and bounded exponential backoff. Checkpoint #190 adds a single-flight lock so a periodic retry and a manual request cannot overlap.
+The existing `ContactRetryRepository` stores restart-safe retry metadata. `ContactSyncService` uses bounded exponential backoff defaults and checkpoint #190 adds a single-flight lock so periodic and manual runs cannot overlap.
 
 Synchronization is opportunistic rather than dependent on a daily timer:
 
-- a successful local contact commit requests background synchronization immediately;
-- existing unsynchronized contacts detected at application startup request synchronization;
-- a newly observed pending contact requests synchronization;
-- periodic synchronization remains a secondary retry mechanism;
-- Context Button #1 on the LOG panel requests synchronization immediately;
-- failed contacts retain restart-safe retry metadata and retry only when due.
-
-If a synchronization run is already in progress, another manual/periodic request does not create another overlapping worker.
+- successful local commit requests background synchronization immediately;
+- unsynchronized contacts found at application startup request synchronization;
+- newly observed pending contacts request synchronization;
+- the configured periodic sync remains a secondary retry mechanism;
+- Context Button #1 on LOG requests synchronization immediately;
+- failed contacts retain restart-safe retry metadata and are retried only when due.
 
 ## LOG panel
 
-LOG is a normal dashboard context and participates in the existing context-navigation cycle. It does not redefine the global meaning of navigation, Back, encoder movement, Context Button #2, or unrelated controls.
+LOG is a normal dashboard context in the existing context-navigation cycle. It does not redefine Back, encoder movement, Context Button #2, tertiary actions, or unrelated global controls.
 
-The panel displays only the newest ten locally stored Rolling Thunder contacts, newest first. Each row includes:
-
-- UTC date/time;
-- callsign;
-- band;
-- conservative offline country abbreviation or `—`;
-- synchronization state using both a symbol/text label and color.
-
-Status labels are:
+Only the newest ten local Rolling Thunder contacts are shown, newest first. Rows contain UTC date/time, callsign, band, offline country abbreviation (or `—`), and synchronization state using text/symbol plus color:
 
 - `✓ SYNC` — synchronized;
-- `○ WAIT` — pending/unsynchronized;
-- `! FAIL` — a failed attempt awaiting retry/operator visibility.
+- `○ WAIT` — pending;
+- `! FAIL` — failed attempt.
 
-The header includes:
+Header:
 
 ```text
 UNSYNCED <count> / TOTAL <count>
 ```
 
-`UNSYNCED` counts every locally stored contact whose synchronization state is not `synchronized`, including failed contacts.
+`UNSYNCED` includes every locally stored contact not yet marked `synchronized`, including failed contacts.
 
-Context Button #1 is `Sync Unsynced / Sync Now`. It submits work to a single-worker executor and returns immediately. Tk refresh reads only the controller's immutable snapshot.
+Context Button #1 is Sync Unsynced / Sync Now. It submits to a one-worker background executor and returns immediately. Tk refresh consumes only an immutable `LogPanelSnapshot`.
 
 ## Local retention
 
-The local Rolling Thunder log is bounded without sacrificing unsynchronized data:
+Retention preserves uncertain data over size targets:
 
 1. Up to 5,000 contacts are retained normally.
-2. Only after total stored contacts exceeds 5,000 does retention run.
-3. The repository opens one immediate transaction and selects the oldest, at most 1,000 rows whose state is exactly `synchronized`.
-4. It deletes only those selected synchronized UUIDs and commits atomically.
-5. Pending, failed, or otherwise uncertain contacts are never deleted for retention.
-6. If fewer than 1,000 synchronized rows are available, only those provably synchronized rows are removed.
+2. Only when total contacts exceeds 5,000 does retention run.
+3. In one immediate transaction, the repository selects the oldest at most 1,000 rows whose state is exactly `synchronized`.
+4. Only those selected synchronized UUIDs are deleted and committed atomically.
+5. Pending, failed, or uncertain contacts are never pruned.
+6. If fewer than 1,000 synchronized rows are available, only those provably synchronized rows are deleted.
 
-It is valid for the local database to remain over 5,000 rows when preservation of unsynchronized/failed contacts requires it.
+The database may therefore remain above 5,000 if preservation requires it. Latest-ten ordering remains newest-first after pruning.
 
-The latest-ten panel query remains newest-first after retention.
+## Backup and recovery
 
-## Backup and recovery semantics
+The Pi SQLite database remains the local operational record. The Forge idempotency ledger is separate durable state and must be included in Forge backup coverage.
 
-The Pi SQLite database remains the local operational record. The Forge ledger is a separate remote-idempotency record and should be included in Forge backup coverage.
+Recovery rules:
 
-Important recovery behavior:
+- restoring an older Pi backup can reintroduce a locally pending QSO already present in Wavelog;
+- a current Forge ledger prevents a second Wavelog write for a known synchronized UUID;
+- if the Forge ledger is also rolled back/lost, deterministic Wavelog duplicate detection is the secondary defense;
+- an older Forge ledger is never proof that Wavelog lacks a QSO;
+- retention never deletes a contact whose remote state is uncertain.
 
-- restoring an older Pi backup can reintroduce a contact whose local state says pending even though Wavelog already has it;
-- Forge's durable UUID ledger prevents another Wavelog write when that UUID was previously recorded synchronized;
-- if the Forge ledger was also rolled back or lost, Wavelog duplicate detection is the secondary defense for the same deterministic QSO;
-- restoring an older Forge ledger must never be interpreted as proof that Wavelog lacks a QSO;
-- retention never deletes contacts whose remote state is uncertain, so pruning cannot turn an unresolved synchronization problem into data loss.
-
-Do not delete or recreate the Forge ledger as a routine troubleshooting step. Preserve and back it up like application state.
+Do not delete/recreate the Forge ledger as routine troubleshooting.
 
 ## Forge deployment
 
-Install the package and configuration using the same protected `/opt/rolling-thunder-forge` deployment model described in `FORGE_DEPLOYMENT.md`.
+Use the protected `/opt/rolling-thunder-forge` deployment model documented in `FORGE_DEPLOYMENT.md`.
 
-Files introduced for this service:
+Checkpoint #190 adds:
 
 ```text
 deploy/systemd/rolling-thunder-forge-contact-sync.service
+deploy/systemd/forge-contact-sync.env.example
 config/forge-contact-sync.example.yaml
 ```
 
-Recommended production paths:
+Production paths:
 
 ```text
 /etc/rolling-thunder/forge-contact-sync.yaml
@@ -240,15 +201,9 @@ Recommended production paths:
 /var/lib/rolling-thunder/forge-contact-sync.db
 ```
 
-The environment file should be readable only by root/service administration and contain:
+The installed environment file should be readable only by service administrators and contain the real `ROLLING_THUNDER_WAVELOG_V2_TOKEN`. The systemd unit uses `StateDirectory=rolling-thunder`, `ProtectSystem=strict`, and permits state writes below `/var/lib/rolling-thunder`.
 
-```text
-ROLLING_THUNDER_WAVELOG_V2_TOKEN=<token>
-```
-
-The example systemd unit uses `StateDirectory=rolling-thunder`, `ProtectSystem=strict`, and permits state writes only below `/var/lib/rolling-thunder`.
-
-After installing or changing the unit/configuration:
+After installation/configuration changes:
 
 ```bash
 sudo systemctl daemon-reload
@@ -256,53 +211,48 @@ sudo systemctl enable --now rolling-thunder-forge-contact-sync.service
 sudo systemctl status --no-pager rolling-thunder-forge-contact-sync.service
 ```
 
-Do not publish port 8767 to the Internet. Firewall it consistently with the existing private RadioLAN/CarLAN policy.
-
 ## Pi configuration
 
-On `anvilmobile`, enable the existing Home Platform client and point it to Forge contact synchronization, not directly to Wavelog:
+On `anvilmobile`, enable the existing Home Platform client and point it to Forge, never Wavelog directly:
 
 ```yaml
 home_platform:
   enabled: true
   base_url: "http://192.168.9.170:8767"
   request_timeout_s: 5.0
-  sync_interval_s: 30.0
-  sync_batch_size: 25
-  retry_initial_delay_s: 5.0
-  retry_max_delay_s: 300.0
+  health_poll_interval_s: 30.0
+  contact_sync_interval_s: 30.0
+  contact_sync_batch_size: 25
 ```
 
-There is intentionally no Wavelog token or Wavelog URL in Pi configuration.
+There is intentionally no Wavelog URL/token in Pi configuration. Retry/backoff remains owned by the existing contact synchronization service/retry repository; the periodic interval above is not required for correctness because post-commit and startup sync requests are opportunistic.
 
-## Health and failure interpretation
+## Failure interpretation
 
-`GET /health` verifies that Forge can authenticate to Wavelog and resolve exactly one `Mobile` station location. Health failure does not make local logging fail.
+`GET /health` verifies that Forge can authenticate to Wavelog and resolve exactly one `Mobile` location. Health failure never makes local logging fail.
 
-Common failure classes:
-
-- **Forge unreachable / WireGuard down:** Pi records failed sync state/retry metadata; local QSO remains.
-- **Wavelog unreachable / timeout:** Forge leaves its ledger pending; Pi retries later.
-- **401/403:** wrong/expired token or missing scope; local QSO remains unsynchronized.
-- **missing or duplicate `Mobile`:** Forge refuses to choose another location.
-- **malformed Wavelog response:** synchronization fails safely; local QSO remains.
-- **timeout after possible Wavelog success:** retry is safe through deterministic payload + Wavelog duplicate checking.
-- **Forge restart:** durable ledger survives and prevents replay of known synchronized UUIDs.
-- **Pi restart:** pending/failed contact and retry metadata survive in SQLite.
-- **repeated manual Sync:** single-flight worker and Forge UUID ledger prevent overlapping/replayed writes.
+- **Forge/WireGuard unreachable:** local QSO remains; Pi records failed sync/retry state.
+- **Wavelog unreachable/timeout:** Forge leaves its ledger pending; Pi retries later.
+- **401/403:** token invalid/expired or required scope unavailable; local QSO remains unsynchronized.
+- **missing/duplicate `Mobile`:** Forge refuses to choose another location.
+- **malformed Wavelog response:** fail safely; local QSO remains.
+- **timeout after possible remote success:** deterministic retry + Wavelog duplicate detection resolves uncertainty.
+- **Forge restart:** durable ledger survives.
+- **Pi restart:** local pending/failed contacts and retry metadata survive.
+- **repeated manual Sync:** Pi single-flight plus Forge UUID ledger prevent overlapping/replayed writes.
 - **database error:** report failure; never pretend synchronization succeeded.
 
 ## Real acceptance gate
 
-Mocks and CI are necessary but not sufficient. Before merge, acceptance must use:
+CI/mocks are necessary but not sufficient. Before merge, acceptance must use:
 
 1. the actual `anvilmobile` installation;
-2. the production Forge host;
-3. the real Wavelog instance at `http://192.168.9.170:8086`;
-4. a controlled test QSO with an unmistakable timestamp/callsign or note;
-5. Wavelog verification that the QSO is under Station Location `Mobile` and appears in Station Logbook `KI5VNB Main`;
-6. LOG panel verification that the local row changes from unsynchronized to synchronized;
-7. one deliberate safe offline/retry case;
-8. a repeated Sync/retry proving there is still exactly one Wavelog QSO.
+2. production Forge;
+3. real Wavelog at `http://192.168.9.170:8086`;
+4. one controlled test QSO/contact;
+5. Wavelog verification that it is under Station Location `Mobile` and visible in Station Logbook `KI5VNB Main`;
+6. LOG panel verification of unsynchronized -> synchronized;
+7. one safe offline/retry case;
+8. repeated manual/retry verification that only one Wavelog QSO exists.
 
 The PR remains draft until this installed acceptance is complete.
