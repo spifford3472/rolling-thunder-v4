@@ -44,12 +44,12 @@ class RecordingLogSync:
     def __init__(self) -> None:
         self.calls = 0
 
-    def request_sync(self) -> bool:
+    def request_forced_sync(self) -> bool:
         self.calls += 1
         return True
 
 
-def test_context_button_one_requests_log_sync_only_in_log_context() -> None:
+def test_context_button_one_requests_forced_log_sync_only_in_log_context() -> None:
     navigation = ContextNavigationController(ContextId.LOG)
     delegate = DelegateCommands()
     log_sync = RecordingLogSync()
