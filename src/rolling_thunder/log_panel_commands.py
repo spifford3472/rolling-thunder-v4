@@ -21,8 +21,8 @@ class DelegatePanelCommands(Protocol):
 
 
 class LogSyncRequestCommands(Protocol):
-    def request_sync(self) -> bool:
-        """Submit synchronization in the background and return immediately."""
+    def request_forced_sync(self) -> bool:
+        """Submit operator-forced synchronization and return immediately."""
         ...
 
 
@@ -44,7 +44,7 @@ class LogAwareActivePanelCommands:
 
     def primary(self) -> bool:
         if self._context_navigation.state.selected is ContextId.LOG:
-            return self._log_sync.request_sync()
+            return self._log_sync.request_forced_sync()
         return self._delegate.primary()
 
     def secondary(self) -> bool:
