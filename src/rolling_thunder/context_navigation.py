@@ -16,6 +16,7 @@ class ContextId(StrEnum):
     AI = "ai"
     WEATHER = "weather"
     SETTINGS = "settings"
+    LOG = "log"
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "Future AI advisor details here.",
     ),
     ContextDefinition(
+        ContextId.SETTINGS,
+        "SETTINGS",
+        "5",
+        "SETTINGS",
+        "Future settings details here.",
+    ),
+    ContextDefinition(
         ContextId.WEATHER,
         "WEATHER",
         "6",
@@ -66,11 +74,11 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "Retained weather details here.",
     ),
     ContextDefinition(
-        ContextId.SETTINGS,
-        "SETTINGS",
-        "5",
-        "SETTINGS",
-        "Future settings details here.",
+        ContextId.LOG,
+        "LOG",
+        "7",
+        "LOG",
+        "Recent local Rolling Thunder contacts.",
     ),
 )
 
