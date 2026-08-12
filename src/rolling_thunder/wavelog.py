@@ -91,9 +91,9 @@ class WavelogClient:
             return self._resolved_location
 
         response = self._request("GET", "/index.php/api/v2/station", body=None)
-        payload = self._decode_json(response.body, operation="station-location lookup")
         if not 200 <= response.status_code < 300:
             self._raise_http_error(response.status_code, "station-location lookup")
+        payload = self._decode_json(response.body, operation="station-location lookup")
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             raise WavelogResponseError(
                 "Wavelog station-location lookup returned an unexpected response schema."
@@ -141,9 +141,9 @@ class WavelogClient:
             separators=(",", ":"),
         ).encode("utf-8")
         response = self._request("POST", "/index.php/api/v2/qso", body=body)
-        payload = self._decode_json(response.body, operation="QSO import")
         if not 200 <= response.status_code < 300:
             self._raise_http_error(response.status_code, "QSO import")
+        payload = self._decode_json(response.body, operation="QSO import")
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
             raise WavelogResponseError("Wavelog QSO import returned an unexpected response schema.")
 
