@@ -3,8 +3,18 @@
 from decimal import Decimal
 
 from rolling_thunder.domain import Frequency
+from rolling_thunder.fm_repeater import (
+    FmRepeaterConfigurationOutcome,
+    FmRepeaterConfigurationStatus,
+    FmRepeaterUnsupportedReason,
+)
 from rolling_thunder.repeater_active_override_controller import (
     RepeaterActiveOverrideStatus,
+)
+from rolling_thunder.repeater_configuration import (
+    RepeaterConfigurationStatus,
+    RepeaterConfigurationStatusKind,
+    StagedRepeaterRadioAction,
 )
 from rolling_thunder.repeater_domain import (
     RepeaterChannelType,
@@ -54,6 +64,7 @@ def row(
 def state(
     *rows: RepeaterPanelRow,
     display_filter: RepeaterDisplayFilter = RepeaterDisplayFilter.ALL,
+    radio_staged_action: StagedRepeaterRadioAction | None = None,
 ) -> RepeaterPanelState:
     selected = next((item.stable_key for item in rows if item.selected), None)
     return RepeaterPanelState(
@@ -62,6 +73,7 @@ def state(
         display_filter=display_filter,
         rows=rows,
         selected_stable_key=selected,
+        radio_staged_action=radio_staged_action,
     )
 
 
@@ -122,7 +134,7 @@ def test_truthful_stale_gps_state_is_presented_without_cards() -> None:
     assert viewport.detail_line == "GPS STALE — NEARBY REPEATERS UNAVAILABLE"
 
 
-def test_normal_footer_assigns_active_toggle_to_context_button_two() -> None:
+def test_normal_footer_assigns_encoder_staging_and_active_toggle_distinctly() -> None:
     panel_state = state(
         row("K1AAA Alpha", 52_010_000, 5.0, active=True, selected=True),
         display_filter=RepeaterDisplayFilter.ACTIVE_ONLY,
@@ -130,7 +142,67 @@ def test_normal_footer_assigns_active_toggle_to_context_button_two() -> None:
 
     viewport = build_repeater_viewport(panel_state)
 
-    assert viewport.footer_line == "BTN1 SHOW ALL — BTN2 TOGGLE ACTIVE"
+    assert viewport.footer_line == (
+        "ENCODER PRESS TO STAGE — BTN1 SHOW ALL — BTN2 TOGGLE ACTIVE"
+    )
+
+
+def test_radio_stage_prompts_second_encoder_press_and_back_cancel() -> None:
+    selected = row("K1AAA Alpha", 52_010_000, 5.0, active=True, selected=True)
+    action = StagedRepeaterRadioAction.from_repeater(selected.repeater)
+
+    viewport = build_repeater_viewport(
+        state(selected, radio_staged_action=action)
+    )
+
+    assert viewport.footer_line == (
+        "STAGED — PRESS ENCODER AGAIN TO CONFIGURE — BACK CANCELS"
+    )
+
+
+def test_configuration_status_reports_success_failure_and_manual_handoff() -> None:
+    panel_state = state(
+        row("K1AAA Alpha", 52_010_000, 5.0, active=True, selected=True)
+    )
+    manual_outcome = FmRepeaterConfigurationOutcome(
+        status=FmRepeaterConfigurationStatus.UNSUPPORTED_MANUAL_HANDOFF,
+        unsupported_reason=FmRepeaterUnsupportedReason.INDEPENDENT_CTCSS_TONES,
+        manual_handoff="CONFIGURE REPEATER MANUALLY",
+    )
+
+    configuring = build_repeater_viewport(
+        panel_state,
+        configuration=RepeaterConfigurationStatus(
+            kind=RepeaterConfigurationStatusKind.CONFIGURING
+        ),
+    )
+    configured = build_repeater_viewport(
+        panel_state,
+        configuration=RepeaterConfigurationStatus(
+            kind=RepeaterConfigurationStatusKind.CONFIGURED
+        ),
+    )
+    failed = build_repeater_viewport(
+        panel_state,
+        configuration=RepeaterConfigurationStatus(
+            kind=RepeaterConfigurationStatusKind.FAILED,
+            last_error="CAT unavailable",
+        ),
+    )
+    manual = build_repeater_viewport(
+        panel_state,
+        configuration=RepeaterConfigurationStatus(
+            kind=RepeaterConfigurationStatusKind.MANUAL_HANDOFF,
+            outcome=manual_outcome,
+        ),
+    )
+
+    assert configuring.footer_line == "CONFIGURING SELECTED REPEATER…"
+    assert configured.footer_line == (
+        "REPEATER CONFIGURED — VERIFY ANTENNA/TUNING BEFORE TRANSMIT"
+    )
+    assert failed.footer_line == "REPEATER CONFIG FAILED — CAT unavailable"
+    assert manual.footer_line == "MANUAL HANDOFF — CONFIGURE REPEATER MANUALLY"
 
 
 def test_persistence_status_is_explicit_in_footer() -> None:

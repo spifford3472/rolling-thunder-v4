@@ -28,6 +28,7 @@ from rolling_thunder.control_source_lifecycle import (
     open_control_source,
 )
 from rolling_thunder.dashboard_state import build_dashboard_state
+from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
@@ -45,6 +46,10 @@ from rolling_thunder.pota_tune_execution_controller import (
 )
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.receive_tuning import ReceiveTuningService
+from rolling_thunder.repeater_configuration import (
+    RepeaterConfigurationController,
+    RepeaterConfigurationService,
+)
 from rolling_thunder.repeater_panel_runtime import RepeaterPanelRuntime
 from rolling_thunder.repeater_ui import build_repeater_viewport
 from rolling_thunder.repeater_widgets import RepeaterWidgets
@@ -223,6 +228,11 @@ def run_dashboard(
         gps_state=lambda: runtime.latest_gps_state,
     )
     repeater_panel = repeater_panel_runtime.panel
+    repeater_configuration = (
+        RepeaterConfigurationController(RepeaterConfigurationService(runtime.radio))
+        if isinstance(runtime.radio, FmRepeaterConfigurableRadio)
+        else None
+    )
     active_panel_commands = SharedSpotActivePanelCommandController(
         context_navigation,
         shared_spot_panel,
@@ -232,6 +242,7 @@ def run_dashboard(
         settings_panel=settings_panel,
         repeater_panel=repeater_panel,
         repeater_active_overrides=repeater_panel_runtime.persistence,
+        repeater_configuration=repeater_configuration,
     )
     _ = pota_tune_executor
 
@@ -922,6 +933,7 @@ def run_dashboard(
             repeater_viewport = build_repeater_viewport(
                 repeater_panel.state,
                 repeater_persistence_status,
+                repeater_configuration.status if repeater_configuration is not None else None,
             )
             context_title_text.set(repeater_viewport.title)
             context_title_label.configure(

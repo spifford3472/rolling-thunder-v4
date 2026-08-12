@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from rolling_thunder.repeater_active_override_controller import (
-    RepeaterActiveOverrideStatus,
+from rolling_thunder.repeater_active_override_controller import RepeaterActiveOverrideStatus
+from rolling_thunder.repeater_configuration import (
+    RepeaterConfigurationStatus,
+    RepeaterConfigurationStatusKind,
 )
 from rolling_thunder.repeater_panel import (
     RepeaterDisplayFilter,
@@ -19,8 +21,6 @@ _DEFAULT_MAX_ROWS = 3
 
 @dataclass(frozen=True, slots=True)
 class RepeaterCard:
-    """Four compact text lines for one nearby repeater."""
-
     line1: str
     line2: str
     line3: str
@@ -31,8 +31,6 @@ class RepeaterCard:
 
 @dataclass(frozen=True, slots=True)
 class RepeaterViewport:
-    """Bounded repeater presentation consumed by Tkinter."""
-
     title: str
     status_line: str
     detail_line: str
@@ -49,10 +47,11 @@ class RepeaterViewport:
 def build_repeater_viewport(
     state: RepeaterPanelState,
     persistence: RepeaterActiveOverrideStatus | None = None,
+    configuration: RepeaterConfigurationStatus | None = None,
     *,
     max_rows: int = _DEFAULT_MAX_ROWS,
 ) -> RepeaterViewport:
-    """Build a truthful three-card repeater viewport."""
+    """Build a truthful three-card repeater viewport with distinct action statuses."""
     if max_rows < 1:
         raise ValueError("repeater panel row limit must be positive")
 
@@ -75,19 +74,7 @@ def build_repeater_viewport(
     status_line = f"{source_status} — {total} SHOWN — FILTER {filter_label}"
     detail_line = state.source_error or state.nearby_detail
 
-    if persistence is not None and persistence.saving:
-        footer_line = "SAVING ACTIVE OVERRIDE…"
-    elif persistence is not None and persistence.last_error:
-        footer_line = f"ACTIVE SAVE FAILED — {persistence.last_error}"
-    elif state.staged_action is not None:
-        footer_line = "ACTIVE CHANGE PREPARING…"
-    else:
-        next_filter = (
-            "SHOW ALL"
-            if state.display_filter is RepeaterDisplayFilter.ACTIVE_ONLY
-            else "ACTIVE ONLY"
-        )
-        footer_line = f"BTN1 {next_filter} — BTN2 TOGGLE ACTIVE"
+    footer_line = _footer(state, persistence, configuration)
 
     return RepeaterViewport(
         title=f"6 M REPEATERS — {filter_label}",
@@ -98,6 +85,41 @@ def build_repeater_viewport(
         hidden_above_count=start,
         hidden_below_count=max(0, total - end),
     )
+
+
+def _footer(
+    state: RepeaterPanelState,
+    persistence: RepeaterActiveOverrideStatus | None,
+    configuration: RepeaterConfigurationStatus | None,
+) -> str:
+    if configuration is not None:
+        if configuration.kind is RepeaterConfigurationStatusKind.CONFIGURING:
+            return "CONFIGURING SELECTED REPEATER…"
+        if configuration.kind is RepeaterConfigurationStatusKind.MANUAL_HANDOFF:
+            outcome = configuration.outcome
+            if outcome is not None and outcome.manual_handoff:
+                return f"MANUAL HANDOFF — {outcome.manual_handoff}"
+            return "REPEATER REQUIRES MANUAL CONFIGURATION"
+        if configuration.kind is RepeaterConfigurationStatusKind.FAILED:
+            return f"REPEATER CONFIG FAILED — {configuration.last_error or 'UNKNOWN ERROR'}"
+        if configuration.kind is RepeaterConfigurationStatusKind.CONFIGURED:
+            return "REPEATER CONFIGURED — VERIFY ANTENNA/TUNING BEFORE TRANSMIT"
+
+    if state.radio_staged_action is not None:
+        return "STAGED — PRESS ENCODER AGAIN TO CONFIGURE — BACK CANCELS"
+    if persistence is not None and persistence.saving:
+        return "SAVING ACTIVE OVERRIDE…"
+    if persistence is not None and persistence.last_error:
+        return f"ACTIVE SAVE FAILED — {persistence.last_error}"
+    if state.staged_action is not None:
+        return "ACTIVE CHANGE PREPARING…"
+
+    next_filter = (
+        "SHOW ALL"
+        if state.display_filter is RepeaterDisplayFilter.ACTIVE_ONLY
+        else "ACTIVE ONLY"
+    )
+    return f"ENCODER PRESS TO STAGE — BTN1 {next_filter} — BTN2 TOGGLE ACTIVE"
 
 
 def _card(row: RepeaterPanelRow) -> RepeaterCard:
