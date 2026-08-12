@@ -239,12 +239,12 @@ class LogPanelController:
         return self.latest_state
 
     def request_sync(self) -> bool:
+        """Submit opportunistic background sync without overriding retry backoff."""
+        return self._submit_sync(force_failed=False)
+
+    def request_forced_sync(self) -> bool:
         """Submit operator-forced Sync Now work and return immediately."""
         return self._submit_sync(force_failed=True)
-
-    def request_opportunistic_sync(self) -> bool:
-        """Submit pending/retry-due background work without overriding retry backoff."""
-        return self._submit_sync(force_failed=False)
 
     def _submit_sync(self, *, force_failed: bool) -> bool:
         if self._sync is None:
@@ -312,7 +312,7 @@ class LogPanelController:
                 status_text=status,
             )
         if should_sync:
-            self.request_opportunistic_sync()
+            self.request_sync()
 
     def _set_status(self, text: str, *, syncing: bool) -> None:
         with self._lock:
