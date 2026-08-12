@@ -2,7 +2,8 @@
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from threading import Lock
+from threading import RLock
+from typing import cast
 
 from rolling_thunder.cat_transport import CatTransport
 from rolling_thunder.domain import (
@@ -11,19 +12,42 @@ from rolling_thunder.domain import (
     RadioMode,
     RadioState,
 )
+from rolling_thunder.fm_repeater import (
+    CtcssPlan,
+    FmRepeaterConfigurationOutcome,
+    FmRepeaterConfigurationRequest,
+    FmRepeaterConfigurationStatus,
+    FmRepeaterUnsupportedReason,
+    resolve_ctcss_plan,
+)
 from rolling_thunder.ft891_cat import (
     Ft891CatError,
+    Ft891OperatingContext,
     encode_memory_to_vfo_a,
+    encode_read_6m_repeater_offset,
+    encode_read_ctcss_behavior,
+    encode_read_ctcss_tone,
     encode_read_frequency,
+    encode_read_information,
     encode_read_memory_channel,
     encode_read_mode,
+    encode_read_repeater_shift,
     encode_select_band_memory,
+    encode_set_6m_repeater_offset,
+    encode_set_ctcss_behavior,
+    encode_set_ctcss_tone,
     encode_set_frequency,
     encode_set_mode,
+    encode_set_repeater_shift,
     memory_channel_for_band,
+    parse_6m_repeater_offset_reply,
+    parse_ctcss_behavior_reply,
+    parse_ctcss_tone_reply,
     parse_frequency_reply,
     parse_memory_channel_reply,
     parse_mode_reply,
+    parse_operating_context_reply,
+    parse_repeater_shift_reply,
 )
 from rolling_thunder.radio import (
     BandChangeRequiredError,
@@ -49,7 +73,7 @@ class Ft891Radio:
     def __init__(self, transport: CatTransport, *, clock: Clock = _utc_now) -> None:
         self._transport = transport
         self._clock = clock
-        self._operation_lock = Lock()
+        self._operation_lock = RLock()
         self._state = RadioState(
             connection_state=RadioConnectionState.DISCONNECTED,
             updated_at=self._timestamp(),
@@ -248,6 +272,166 @@ class Ft891Radio:
                 )
 
             return self._state
+
+    def configure_fm_repeater(
+        self,
+        request: FmRepeaterConfigurationRequest,
+    ) -> FmRepeaterConfigurationOutcome:
+        """Configure one six-meter FM repeater atomically with exact read-back."""
+        if not isinstance(request, FmRepeaterConfigurationRequest):
+            raise TypeError("request must be an FmRepeaterConfigurationRequest")
+
+        unsupported = self._preflight_fm_repeater(request)
+        if unsupported is not None:
+            return unsupported
+
+        tone_plan = cast(CtcssPlan, resolve_ctcss_plan(request))
+
+        with self._operation_lock:
+            self._require_connected()
+            if self._state.transmitting:
+                raise RadioConnectionError(
+                    "FM repeater configuration is unavailable while the radio is transmitting."
+                )
+
+            starting_band: RadioBand | None = None
+            if self._state.frequency is not None:
+                try:
+                    starting_band = resolve_radio_band(self._state.frequency)
+                except RadioBandResolutionError:
+                    starting_band = None
+
+            self.select_band(RadioBand.BAND_6M)
+            context = parse_operating_context_reply(
+                self._transport.query(encode_read_information())
+            )
+            if context is not Ft891OperatingContext.VFO:
+                raise RadioVerificationError(
+                    "FT-891 repeater VFO verification failed after the 6 m "
+                    f"memory-to-VFO handoff: read back {context.value}."
+                )
+
+            self.set_frequency(request.rx_frequency)
+            self.set_mode(RadioMode.FM)
+            self._set_and_verify_repeater_shift(request)
+            self._set_and_verify_6m_offset(request)
+            self._set_and_verify_ctcss(tone_plan)
+
+            return FmRepeaterConfigurationOutcome(
+                status=FmRepeaterConfigurationStatus.CONFIGURED,
+                state=self._state,
+                manual_band_confirmation_required=starting_band is not RadioBand.BAND_6M,
+            )
+
+    def _preflight_fm_repeater(
+        self,
+        request: FmRepeaterConfigurationRequest,
+    ) -> FmRepeaterConfigurationOutcome | None:
+        try:
+            target_band = resolve_radio_band(request.rx_frequency)
+        except RadioBandResolutionError:
+            return self._unsupported_repeater(
+                FmRepeaterUnsupportedReason.UNSUPPORTED_BAND,
+                "REPEATER RX FREQUENCY IS NOT IN A SUPPORTED AMATEUR BAND — CONFIGURE MANUALLY",
+            )
+        if target_band is not RadioBand.BAND_6M:
+            return self._unsupported_repeater(
+                FmRepeaterUnsupportedReason.UNSUPPORTED_BAND,
+                "ONLY 6 METER FM REPEATER CONFIGURATION IS SUPPORTED — CONFIGURE MANUALLY",
+            )
+
+        if request.offset_hz > 4_000_000:
+            return self._unsupported_repeater(
+                FmRepeaterUnsupportedReason.OFFSET_OUT_OF_RANGE,
+                "6 METER REPEATER OFFSET EXCEEDS THE FT-891 CAT RANGE — CONFIGURE MANUALLY",
+            )
+        if request.offset_hz % 10_000 != 0:
+            return self._unsupported_repeater(
+                FmRepeaterUnsupportedReason.OFFSET_STEP_UNSUPPORTED,
+                "6 METER REPEATER OFFSET IS NOT A 10 KHZ CAT STEP — CONFIGURE MANUALLY",
+            )
+
+        tone_plan = resolve_ctcss_plan(request)
+        if isinstance(tone_plan, FmRepeaterUnsupportedReason):
+            if tone_plan is FmRepeaterUnsupportedReason.INDEPENDENT_CTCSS_TONES:
+                message = (
+                    "INDEPENDENT RX/TX CTCSS TONES ARE NOT SUPPORTED — "
+                    "CONFIGURE REPEATER MANUALLY"
+                )
+            else:
+                message = "RX-ONLY CTCSS IS NOT SUPPORTED — CONFIGURE REPEATER MANUALLY"
+            return self._unsupported_repeater(tone_plan, message)
+
+        if tone_plan.tone_hz is not None:
+            try:
+                encode_set_ctcss_tone(tone_plan.tone_hz)
+            except Ft891CatError:
+                return self._unsupported_repeater(
+                    FmRepeaterUnsupportedReason.CTCSS_TONE_UNSUPPORTED,
+                    "CTCSS TONE IS NOT IN THE FT-891 CAT TONE TABLE — CONFIGURE MANUALLY",
+                )
+        return None
+
+    @staticmethod
+    def _unsupported_repeater(
+        reason: FmRepeaterUnsupportedReason,
+        manual_handoff: str,
+    ) -> FmRepeaterConfigurationOutcome:
+        return FmRepeaterConfigurationOutcome(
+            status=FmRepeaterConfigurationStatus.UNSUPPORTED_MANUAL_HANDOFF,
+            unsupported_reason=reason,
+            manual_handoff=manual_handoff,
+        )
+
+    def _set_and_verify_repeater_shift(
+        self,
+        request: FmRepeaterConfigurationRequest,
+    ) -> None:
+        self._transport.command(encode_set_repeater_shift(request.shift_direction))
+        verified = parse_repeater_shift_reply(
+            self._transport.query(encode_read_repeater_shift())
+        )
+        if verified is not request.shift_direction:
+            raise RadioVerificationError(
+                "FT-891 repeater-shift verification failed: requested "
+                f"{request.shift_direction.value} but read back {verified.value}."
+            )
+
+    def _set_and_verify_6m_offset(
+        self,
+        request: FmRepeaterConfigurationRequest,
+    ) -> None:
+        self._transport.command(encode_set_6m_repeater_offset(request.offset_hz))
+        verified = parse_6m_repeater_offset_reply(
+            self._transport.query(encode_read_6m_repeater_offset())
+        )
+        if verified != request.offset_hz:
+            raise RadioVerificationError(
+                "FT-891 6 m repeater-offset verification failed: requested "
+                f"{request.offset_hz} Hz but read back {verified} Hz."
+            )
+
+    def _set_and_verify_ctcss(self, plan: CtcssPlan) -> None:
+        if plan.tone_hz is not None:
+            self._transport.command(encode_set_ctcss_tone(plan.tone_hz))
+            verified_tone = parse_ctcss_tone_reply(
+                self._transport.query(encode_read_ctcss_tone())
+            )
+            if verified_tone != plan.tone_hz:
+                raise RadioVerificationError(
+                    "FT-891 CTCSS-tone verification failed: requested "
+                    f"{plan.tone_hz} Hz but read back {verified_tone} Hz."
+                )
+
+        self._transport.command(encode_set_ctcss_behavior(plan.behavior))
+        verified_behavior = parse_ctcss_behavior_reply(
+            self._transport.query(encode_read_ctcss_behavior())
+        )
+        if verified_behavior is not plan.behavior:
+            raise RadioVerificationError(
+                "FT-891 CTCSS verification failed: requested "
+                f"{plan.behavior.value} but read back {verified_behavior.value}."
+            )
 
     def _read_hardware_state(self) -> tuple[Frequency, RadioMode]:
         frequency = parse_frequency_reply(
