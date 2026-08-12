@@ -45,22 +45,33 @@ class BlockingSync:
     def __init__(self) -> None:
         self.started = Event()
         self.release = Event()
-        self.calls = 0
+        self.forced_calls = 0
+        self.due_calls = 0
 
     def synchronize_now(self) -> ContactSyncResult:
-        self.calls += 1
+        self.forced_calls += 1
         self.started.set()
         self.release.wait(timeout=2)
         return ContactSyncResult(attempted=1, synchronized=1, failed=0)
+
+    def synchronize_due_now(self) -> ContactSyncResult:
+        self.due_calls += 1
+        return ContactSyncResult(attempted=0, synchronized=0, failed=0)
 
 
 class RecordingSync:
     def __init__(self) -> None:
         self.called = Event()
-        self.calls = 0
+        self.forced_calls = 0
+        self.due_calls = 0
 
     def synchronize_now(self) -> ContactSyncResult:
-        self.calls += 1
+        self.forced_calls += 1
+        self.called.set()
+        return ContactSyncResult(attempted=1, synchronized=1, failed=0)
+
+    def synchronize_due_now(self) -> ContactSyncResult:
+        self.due_calls += 1
         self.called.set()
         return ContactSyncResult(attempted=1, synchronized=1, failed=0)
 
@@ -139,7 +150,9 @@ def test_panel_snapshot_is_latest_ten_newest_first_with_counts(tmp_path: Path) -
             started_at=start + timedelta(minutes=index),
             callsign="W1AW" if index % 2 == 0 else "DL1ABC",
             synchronization_state=(
-                SynchronizationState.PENDING if index in {10, 11} else SynchronizationState.SYNCHRONIZED
+                SynchronizationState.PENDING
+                if index in {10, 11}
+                else SynchronizationState.SYNCHRONIZED
             ),
         )
 
@@ -259,7 +272,8 @@ def test_pending_contact_survives_restart_and_triggers_background_sync(tmp_path:
 
     assert snapshot.unsynchronized_count == 1
     assert sync.called.wait(timeout=1)
-    assert sync.calls == 1
+    assert sync.due_calls == 1
+    assert sync.forced_calls == 0
     controller.stop()
 
 
@@ -284,11 +298,12 @@ def test_new_pending_contact_triggers_opportunistic_background_sync(tmp_path: Pa
     scheduler.fire()
 
     assert sync.called.wait(timeout=1)
-    assert sync.calls == 1
+    assert sync.due_calls == 1
+    assert sync.forced_calls == 0
     controller.stop()
 
 
-def test_manual_sync_request_is_nonblocking_and_single_flight(tmp_path: Path) -> None:
+def test_manual_sync_request_is_nonblocking_single_flight_and_forced(tmp_path: Path) -> None:
     database = tmp_path / "rolling.db"
     initialize_database(database)
     sync = BlockingSync()
@@ -299,11 +314,12 @@ def test_manual_sync_request_is_nonblocking_and_single_flight(tmp_path: Path) ->
     )
     controller.start()
 
-    assert controller.request_sync() is True
+    assert controller.request_forced_sync() is True
     assert sync.started.wait(timeout=1)
     assert controller.latest_state.syncing is True
-    assert controller.request_sync() is False
-    assert sync.calls == 1
+    assert controller.request_forced_sync() is False
+    assert sync.forced_calls == 1
+    assert sync.due_calls == 0
 
     sync.release.set()
     controller.stop()
