@@ -1,0 +1,22 @@
+# Forge-local Rolling Thunder to Wavelog synchronization service.
+# Copy to config/forge-contact-sync.yaml on Forge and keep machine-specific
+# configuration plus all credentials out of Git.
+server:
+  # Bind only to a trusted interface reachable by anvilmobile over the private network.
+  bind_host: "192.168.9.170"
+  bind_port: 8767
+
+storage:
+  # Relative paths are resolved from this YAML file.
+  database_path: "../data/forge-contact-sync.db"
+
+wavelog:
+  base_url: "http://192.168.9.170:8086"
+  # These names are explicit safety constraints. The numeric station profile ID
+  # is resolved dynamically from Wavelog and is never configured by assumption.
+  station_logbook_name: "KI5VNB Main"
+  station_location_name: "Mobile"
+  request_timeout_s: 5.0
+
+# Required secret, supplied to the process environment (never this YAML):
+#   ROLLING_THUNDER_WAVELOG_V2_TOKEN=<Wavelog v2 bearer token>
