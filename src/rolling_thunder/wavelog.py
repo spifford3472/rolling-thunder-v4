@@ -12,7 +12,11 @@ from urllib.parse import urlparse
 from pydantic import SecretStr
 
 from rolling_thunder.domain import Contact, Frequency, RadioMode
-from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
+from rolling_thunder.http_home_platform import (
+    HttpResponse,
+    HttpTransport,
+    UrllibHttpTransport,
+)
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 
 _JSON_CONTENT_TYPE = "application/json"
@@ -158,7 +162,7 @@ class WavelogClient:
             "Wavelog QSO import returned an inconsistent imported/skipped result."
         )
 
-    def _request(self, method: str, path: str, *, body: bytes | None):
+    def _request(self, method: str, path: str, *, body: bytes | None) -> HttpResponse:
         headers = {
             "Accept": _JSON_CONTENT_TYPE,
             "Authorization": f"Bearer {self._token.get_secret_value()}",
