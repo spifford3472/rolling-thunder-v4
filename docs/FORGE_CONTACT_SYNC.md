@@ -183,7 +183,7 @@ Do not delete/recreate the Forge ledger as routine troubleshooting.
 
 ## Forge deployment
 
-Use the protected `/opt/rolling-thunder-forge` deployment model documented in `FORGE_DEPLOYMENT.md`.
+The contact-sync daemon is intentionally deployment-isolated from the existing Forge spot/weather service. The services share the `rollingthunder` service account and trusted private-network boundary, but they do **not** share an application checkout or Python virtual environment. This prevents a contact-sync deployment from implicitly upgrading, restarting, or otherwise changing the established `rolling-thunder-forge-spots.service` runtime on port 8766.
 
 Checkpoint #190 adds:
 
@@ -193,13 +193,25 @@ deploy/systemd/forge-contact-sync.env.example
 config/forge-contact-sync.example.yaml
 ```
 
-Production paths:
+Production contact-sync paths:
 
 ```text
+/opt/rolling-thunder-forge-contact-sync
+/opt/rolling-thunder-forge-contact-sync/.venv
 /etc/rolling-thunder/forge-contact-sync.yaml
 /etc/rolling-thunder/forge-contact-sync.env
 /var/lib/rolling-thunder/forge-contact-sync.db
 ```
+
+The existing spot/weather service remains independently deployed at:
+
+```text
+/opt/rolling-thunder-forge
+/opt/rolling-thunder-forge/.venv
+192.168.9.170:8766
+```
+
+Installing or updating checkpoint #190 contact synchronization must not replace the existing Forge checkout/venv or require a restart of `rolling-thunder-forge-spots.service`. The contact-sync application root should be installed from a known commit/artifact and its own venv should contain the tested `rolling-thunder` wheel plus its runtime dependencies.
 
 The installed environment file should be readable only by service administrators and contain the real `ROLLING_THUNDER_WAVELOG_V2_TOKEN`. The systemd unit uses `StateDirectory=rolling-thunder`, `ProtectSystem=strict`, and permits state writes below `/var/lib/rolling-thunder`.
 
