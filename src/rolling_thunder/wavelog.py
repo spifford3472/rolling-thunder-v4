@@ -56,6 +56,7 @@ class WavelogStationLocation:
 
     station_id: int
     name: str
+    gridsquare: str
     uuid: str | None = None
 
 
@@ -111,11 +112,19 @@ class WavelogClient:
                 raise WavelogResponseError(
                     "Wavelog station-location lookup returned a non-numeric station ID."
                 )
+            station_grid = item.get("gridsquare", "")
+            if station_grid is None:
+                station_grid = ""
+            if not isinstance(station_grid, str):
+                raise WavelogResponseError(
+                    "Wavelog station-location lookup returned a non-text gridsquare."
+                )
             station_uuid = item.get("uuid")
             matches.append(
                 WavelogStationLocation(
                     station_id=station_id,
                     name=name,
+                    gridsquare=station_grid.strip().upper(),
                     uuid=station_uuid if isinstance(station_uuid, str) else None,
                 )
             )
@@ -130,7 +139,10 @@ class WavelogClient:
 
     def upload_contact(self, contact: Contact) -> WavelogUploadDisposition:
         """Import one contact into the resolved station location with Wavelog dupe checking."""
-        location = self.resolve_station_location()
+        location = self._align_station_location_grid(
+            self.resolve_station_location(),
+            contact,
+        )
         adif = contact_to_adif(contact)
         body = dumps(
             {
@@ -162,6 +174,63 @@ class WavelogClient:
         raise WavelogResponseError(
             "Wavelog QSO import returned an inconsistent imported/skipped result."
         )
+
+    def _align_station_location_grid(
+        self,
+        location: WavelogStationLocation,
+        contact: Contact,
+    ) -> WavelogStationLocation:
+        """Make Wavelog's Mobile profile grid match this contact before import."""
+        desired_grid = "" if contact.my_grid is None else str(contact.my_grid).strip().upper()
+        if location.gridsquare == desired_grid:
+            return location
+
+        body = dumps(
+            {"gridsquare": desired_grid},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        response = self._request(
+            "PATCH",
+            f"/index.php/api/v2/station/{location.station_id}",
+            body=body,
+        )
+        if not 200 <= response.status_code < 300:
+            self._raise_http_error(response.status_code, "station-location grid update")
+
+        payload = self._decode_json(
+            response.body,
+            operation="station-location grid update",
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+            raise WavelogResponseError(
+                "Wavelog station-location grid update returned an unexpected response schema."
+            )
+
+        data: dict[str, Any] = payload["data"]
+        station_id = data.get("id")
+        name = data.get("name")
+        station_grid = data.get("gridsquare", "")
+        if station_grid is None:
+            station_grid = ""
+        if (
+            station_id != location.station_id
+            or name != location.name
+            or not isinstance(station_grid, str)
+            or station_grid.strip().upper() != desired_grid
+        ):
+            raise WavelogResponseError(
+                "Wavelog station-location grid update did not confirm the requested target."
+            )
+
+        station_uuid = data.get("uuid")
+        updated_location = WavelogStationLocation(
+            station_id=location.station_id,
+            name=location.name,
+            gridsquare=desired_grid,
+            uuid=station_uuid if isinstance(station_uuid, str) else location.uuid,
+        )
+        self._resolved_location = updated_location
+        return updated_location
 
     def _request(self, method: str, path: str, *, body: bytes | None) -> HttpResponse:
         headers = {
