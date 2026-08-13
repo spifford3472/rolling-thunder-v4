@@ -63,6 +63,42 @@ def station_response(*locations: dict[str, object]) -> UrllibHttpResponse:
     return UrllibHttpResponse(200, dumps({"data": list(locations)}).encode())
 
 
+def station_update_response(
+    *,
+    station_id: int = 42,
+    name: str = "Mobile",
+    gridsquare: str,
+) -> UrllibHttpResponse:
+    return UrllibHttpResponse(
+        200,
+        dumps(
+            {
+                "data": {
+                    "id": station_id,
+                    "uuid": "mobile",
+                    "name": name,
+                    "gridsquare": gridsquare,
+                }
+            }
+        ).encode(),
+    )
+
+
+def qso_import_response(*, imported: int, skipped: int) -> UrllibHttpResponse:
+    return UrllibHttpResponse(
+        200,
+        dumps(
+            {
+                "data": {
+                    "parsed": 1,
+                    "imported": imported,
+                    "skipped": skipped,
+                }
+            }
+        ).encode(),
+    )
+
+
 def test_contact_to_adif_preserves_required_qso_fields() -> None:
     adif = contact_to_adif(contact())
 
@@ -89,8 +125,13 @@ def test_mobile_station_location_is_resolved_by_name_not_assumed_id() -> None:
     transport = ScriptedTransport(
         [
             station_response(
-                {"id": 17, "uuid": "home", "name": "Home"},
-                {"id": 42, "uuid": "mobile", "name": "Mobile"},
+                {"id": 17, "uuid": "home", "name": "Home", "gridsquare": "EM79XM"},
+                {
+                    "id": 42,
+                    "uuid": "mobile",
+                    "name": "Mobile",
+                    "gridsquare": "EM89LX",
+                },
             )
         ]
     )
@@ -105,6 +146,7 @@ def test_mobile_station_location_is_resolved_by_name_not_assumed_id() -> None:
 
     assert location.station_id == 42
     assert location.name == "Mobile"
+    assert location.gridsquare == "EM89LX"
     _, url, headers, _, _ = transport.requests[0]
     assert url.endswith("/index.php/api/v2/station")
     assert headers["Authorization"] == "Bearer secret"
@@ -112,8 +154,11 @@ def test_mobile_station_location_is_resolved_by_name_not_assumed_id() -> None:
 
 def test_missing_or_ambiguous_mobile_station_location_is_rejected() -> None:
     for locations in (
-        ({"id": 1, "name": "Home"},),
-        ({"id": 2, "name": "Mobile"}, {"id": 3, "name": "Mobile"}),
+        ({"id": 1, "name": "Home", "gridsquare": "EM79XM"},),
+        (
+            {"id": 2, "name": "Mobile", "gridsquare": "EM79XM"},
+            {"id": 3, "name": "Mobile", "gridsquare": "EM89LX"},
+        ),
     ):
         client = WavelogClient(
             "http://wavelog:8086",
@@ -125,14 +170,14 @@ def test_missing_or_ambiguous_mobile_station_location_is_rejected() -> None:
             client.resolve_station_location()
 
 
-def test_qso_import_targets_resolved_mobile_profile_and_accepts_import() -> None:
+def test_qso_import_aligns_mobile_grid_then_targets_resolved_profile() -> None:
     transport = ScriptedTransport(
         [
-            station_response({"id": 42, "name": "Mobile"}),
-            UrllibHttpResponse(
-                200,
-                dumps({"data": {"parsed": 1, "imported": 1, "skipped": 0}}).encode(),
+            station_response(
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
             ),
+            station_update_response(gridsquare="EM79XM"),
+            qso_import_response(imported=1, skipped=0),
         ]
     )
     client = WavelogClient(
@@ -142,10 +187,20 @@ def test_qso_import_targets_resolved_mobile_profile_and_accepts_import() -> None
         transport=transport,
     )
 
-    result = client.upload_contact(contact())
+    moving_contact = contact().model_copy(update={"my_grid": "EM89lx"})
+    transport.responses[1] = station_update_response(gridsquare="EM89LX")
+
+    result = client.upload_contact(moving_contact)
 
     assert result is WavelogUploadDisposition.IMPORTED
+
     method, url, _, body, _ = transport.requests[1]
+    assert method == "PATCH"
+    assert url.endswith("/index.php/api/v2/station/42")
+    assert body is not None
+    assert loads(body) == {"gridsquare": "EM89LX"}
+
+    method, url, _, body, _ = transport.requests[2]
     assert method == "POST"
     assert url.endswith("/index.php/api/v2/qso")
     assert body is not None
@@ -153,16 +208,59 @@ def test_qso_import_targets_resolved_mobile_profile_and_accepts_import() -> None
     assert payload["station_profile_id"] == 42
     assert payload["import_type"] == "adif"
     assert "W1AW" in payload["adif"]
+    assert "<MY_GRIDSQUARE:6>EM89lx" in payload["adif"]
+
+
+def test_matching_mobile_grid_does_not_patch_station_profile() -> None:
+    transport = ScriptedTransport(
+        [
+            station_response(
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+            ),
+            qso_import_response(imported=1, skipped=0),
+        ]
+    )
+    client = WavelogClient(
+        "http://wavelog:8086",
+        SecretStr("secret"),
+        station_location_name="Mobile",
+        transport=transport,
+    )
+
+    assert client.upload_contact(contact()) is WavelogUploadDisposition.IMPORTED
+    assert [request[0] for request in transport.requests] == ["GET", "POST"]
+
+
+def test_unknown_mobile_grid_clears_stale_profile_grid_before_import() -> None:
+    transport = ScriptedTransport(
+        [
+            station_response(
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+            ),
+            station_update_response(gridsquare=""),
+            qso_import_response(imported=1, skipped=0),
+        ]
+    )
+    client = WavelogClient(
+        "http://wavelog:8086",
+        SecretStr("secret"),
+        station_location_name="Mobile",
+        transport=transport,
+    )
+
+    unknown_grid_contact = contact().model_copy(update={"my_grid": None})
+
+    assert client.upload_contact(unknown_grid_contact) is WavelogUploadDisposition.IMPORTED
+    assert loads(transport.requests[1][3] or b"{}") == {"gridsquare": ""}
 
 
 def test_wavelog_duplicate_is_a_successful_idempotent_outcome() -> None:
     transport = ScriptedTransport(
         [
-            station_response({"id": 42, "name": "Mobile"}),
-            UrllibHttpResponse(
-                200,
-                dumps({"data": {"parsed": 1, "imported": 0, "skipped": 1}}).encode(),
+            station_response(
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
             ),
+            qso_import_response(imported=0, skipped=1),
         ]
     )
     client = WavelogClient(
@@ -173,6 +271,31 @@ def test_wavelog_duplicate_is_a_successful_idempotent_outcome() -> None:
     )
 
     assert client.upload_contact(contact()) is WavelogUploadDisposition.DUPLICATE
+
+
+def test_station_grid_update_requires_wavelog_write_authorization() -> None:
+    transport = ScriptedTransport(
+        [
+            station_response(
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+            ),
+            UrllibHttpResponse(403, b'{"message":"denied"}'),
+        ]
+    )
+    client = WavelogClient(
+        "http://wavelog:8086",
+        SecretStr("do-not-leak"),
+        station_location_name="Mobile",
+        transport=transport,
+    )
+
+    moving_contact = contact().model_copy(update={"my_grid": "EM89lx"})
+
+    with pytest.raises(WavelogAuthenticationError) as raised:
+        client.upload_contact(moving_contact)
+
+    assert "403" in str(raised.value)
+    assert "do-not-leak" not in str(raised.value)
 
 
 def test_bad_authentication_is_distinguished_without_exposing_token() -> None:
