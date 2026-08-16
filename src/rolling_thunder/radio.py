@@ -57,7 +57,7 @@ class Radio(Protocol):
         ...
 
     def get_state(self) -> RadioState:
-        """Return the latest immutable receiver-state snapshot."""
+        """Return the latest immutable radio-state snapshot."""
         ...
 
     def refresh_state(self) -> RadioState:
