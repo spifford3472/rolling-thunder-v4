@@ -100,7 +100,11 @@ def test_primary_stages_current_audio_with_exact_snapshot_values() -> None:
     monitor = MutableMonitor(
         _snapshot(active_calls=(_active_call(),), radio_info=_radio_info())
     )
-    controller = DmrPanelCommandController(monitor, DmrSelectionController())
+    controller = DmrPanelCommandController(
+        monitor,
+        DmrSelectionController(),
+        my_grid_provider=lambda: "EM79xm",
+    )
 
     assert controller.primary()
     staged = controller.state.staged_qso
@@ -109,6 +113,7 @@ def test_primary_stages_current_audio_with_exact_snapshot_values() -> None:
     assert staged.callsign == "KC9KPJ"
     assert staged.radio_rx_hz == 434_537_500
     assert staged.radio_tx_hz == 439_537_500
+    assert staged.my_grid == "EM79xm"
 
 
 def test_primary_without_current_audio_preserves_existing_stage() -> None:
@@ -148,11 +153,16 @@ def test_encoder_navigation_tracks_identity_when_new_history_arrives() -> None:
     assert controller.state.selected_identity == newest.identity
 
 
-def test_encoder_press_stages_selected_history_caller() -> None:
+def test_encoder_press_stages_selected_history_caller_and_grid() -> None:
     record = _history_record("KR4MFP", seconds=0)
     monitor = MutableMonitor(_snapshot(history=(record,), radio_info=_radio_info()))
     selection = DmrSelectionController()
-    controller = DmrPanelCommandController(monitor, selection)
+    grid = "EM79xm"
+    controller = DmrPanelCommandController(
+        monitor,
+        selection,
+        my_grid_provider=lambda: grid,
+    )
 
     assert controller.move_next()
     assert controller.activate_selection()
@@ -160,6 +170,10 @@ def test_encoder_press_stages_selected_history_caller() -> None:
     assert staged is not None
     assert staged.origin is DmrStageOrigin.HISTORY
     assert staged.callsign == "KR4MFP"
+    assert staged.my_grid == "EM79xm"
+
+    grid = "EM89lx"
+    assert controller.state.staged_qso.my_grid == "EM79xm"
 
 
 def test_secondary_submits_exact_stage_only_once_without_restage() -> None:
