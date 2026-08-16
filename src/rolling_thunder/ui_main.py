@@ -27,7 +27,7 @@ from rolling_thunder.control_source_lifecycle import (
     close_control_source,
     open_control_source,
 )
-from rolling_thunder.dashboard_state import build_dashboard_state
+from rolling_thunder.dashboard_state import build_dashboard_state, build_dashboard_ticker
 from rolling_thunder.dmr_active_panel_commands import DmrAwareActivePanelCommands
 from rolling_thunder.dmr_dashboard_runtime import build_dmr_panel_runtime
 from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
@@ -75,6 +75,7 @@ from rolling_thunder.status_messages import StatusPresentation
 from rolling_thunder.weather_alert_panel import (
     WeatherAlertPanelController,
 )
+from rolling_thunder.weather_alert_viewport import WeatherAlertViewportController
 from rolling_thunder.weather_panel import WeatherPanelController
 from rolling_thunder.weather_ui import WeatherWidgets
 
@@ -199,6 +200,7 @@ def run_dashboard(
     )
     weather_panel = WeatherPanelController()
     weather_alert_panel = WeatherAlertPanelController()
+    weather_alert_viewport = WeatherAlertViewportController()
 
     try:
         runtime.start()
@@ -258,6 +260,7 @@ def run_dashboard(
         repeater_panel=repeater_panel,
         repeater_active_overrides=repeater_panel_runtime.persistence,
         repeater_configuration=repeater_configuration,
+        weather_alert_viewport=weather_alert_viewport,
     )
     log_aware_active_panel_commands = LogAwareActivePanelCommands(
         context_navigation,
@@ -861,6 +864,9 @@ def run_dashboard(
         weather_alert_presentation = weather_alert_panel.update(
             runtime.latest_forge_weather_alert_state
         )
+        weather_alert_viewport_presentation = weather_alert_viewport.synchronize(
+            weather_alert_presentation
+        )
 
         gps_state = runtime.latest_gps_state
         live_map_presentation = live_map_controller.update(gps_state)
@@ -920,16 +926,10 @@ def run_dashboard(
         mode_text.set(view.mode)
         last_result = view.last_result if view.last_result != "—" else "—"
         last_result_text.set(f"Last Result: {last_result[:18]}")
-        ticker_message = view.ticker
-        if view.grid != "—":
-            ticker_message = f"{ticker_message} — GRID {view.grid.upper()}"
-        ticker_message = (
-            f"{ticker_message} — NETWORK {view.network_state}"
-            f" — HOME {view.home_platform_state}"
-            f" — SYNC {view.synchronization_state}"
+        ticker_message = build_dashboard_ticker(
+            view,
+            include_network=config.network_keepalive.enabled,
         )
-        if view.connectivity_detail != "CONNECTIVITY READY":
-            ticker_message = f"{ticker_message} — {view.connectivity_detail}"
         runtime.status_messages.publish(
             replacement_key="dashboard.routine",
             text=ticker_message,
@@ -1055,6 +1055,7 @@ def run_dashboard(
             weather_widgets.update(
                 weather_presentation,
                 weather_alert_presentation,
+                weather_alert_viewport_presentation,
             )
         elif selected_context.selected is ContextId.LOG:
             show_log_context_body()

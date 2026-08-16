@@ -77,6 +77,26 @@ def _format_gps(gps_state: GPSState | None) -> tuple[str, str]:
     return "READY", maidenhead_grid(position.latitude, position.longitude)
 
 
+def build_dashboard_ticker(
+    state: DashboardState,
+    *,
+    include_network: bool,
+) -> str:
+    """Build the routine global ticker without duplicating location presentation."""
+    parts = [state.ticker]
+    if include_network:
+        parts.append(f"NETWORK {state.network_state}")
+    parts.extend(
+        (
+            f"HOME {state.home_platform_state}",
+            f"SYNC {state.synchronization_state}",
+        )
+    )
+    if state.connectivity_detail != "CONNECTIVITY READY":
+        parts.append(state.connectivity_detail)
+    return " — ".join(parts)
+
+
 def build_dashboard_state(
     radio_state: RadioState,
     callsign_capture: CallsignCaptureState | None = None,
@@ -89,7 +109,8 @@ def build_dashboard_state(
     mode = radio_state.mode.value if radio_state.mode is not None else "--"
     gps_status, grid = _format_gps(gps_state)
     if connected:
-        ticker = "RADIO CONNECTED — MOCK VOICE READY"
+        voice_status = capture.voice_state.strip().upper() or "UNKNOWN"
+        ticker = f"RADIO CONNECTED — VOICE {voice_status}"
     elif radio_state.last_error:
         ticker = f"RADIO ERROR — {radio_state.last_error}"
     else:

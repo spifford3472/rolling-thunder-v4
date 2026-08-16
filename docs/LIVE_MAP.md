@@ -41,8 +41,9 @@ snapshots. Identical loaded viewport requests are no-ops.
 
 `LiveMapInfoController` is a pure presentation projection. It consumes the
 already-published GPS/map state, retains only the timestamp of the last usable
-map publication, and produces immutable local-time, UTC, grid, MAP-health, and
-GPS-health state. It performs no network, disk, serial, CAT, or SQLite work.
+map publication, and produces immutable local-time, UTC, grid, temperature,
+MAP-health, and GPS-health state. It performs no network, disk, serial, CAT, or
+SQLite work.
 
 `MapTileClient` and `MapTileCache` perform all HTTP and disk work. Tkinter only
 renders immutable state and never contacts the provider or cache directly.
@@ -52,14 +53,18 @@ renders immutable state and never contacts the provider or cache directly.
 The live-map overlay is split into two independent areas rather than using one
 combined GPS/map status color.
 
-The compact information box at the upper left shows:
+The glance-readable information box at the upper left shows:
 
 - local system time
 - UTC
 - current/last-known Maidenhead grid when available
+- retained weather temperature in Fahrenheit and Celsius, or explicit
+  unavailable placeholders
 
-Temperature is intentionally not rendered in this checkpoint. Weather state and
-its final map presentation belong to the later retained Forge weather work.
+The information text is intentionally large for in-vehicle use. Its box is sized
+to keep all four lines visible, while the independent MAP/GPS/RADAR health box
+remains aligned to the upper right with a protected horizontal gap so the two
+overlays do not overlap at the installed dashboard geometry.
 
 The separate MAP/GPS health box is a fixed-width panel aligned to the upper
 right so the status presentation does not consume most of the top of the map.
@@ -182,9 +187,11 @@ contact logging, POTA/DX operation, physical controls, or radio state polling.
 1. Confirm the active configuration uses zoom 15, style `night`, and the
    installed I-71 corridor package path.
 2. Start the full-screen dashboard with GPS and normal network access.
-3. Confirm the compact upper-left information box shows correct local time, UTC,
-   and Maidenhead grid without a temperature row.
-4. Confirm the MAP/GPS health panel is narrow and aligned to the upper right.
+3. Confirm the upper-left information box shows correct local time, UTC,
+   Maidenhead grid, and temperature, with text roughly 1.5–2 times the previous
+   size and with all four lines fully visible.
+4. Confirm the MAP/GPS/RADAR health panel remains aligned to the upper right and
+   does not overlap the information box.
 5. Confirm MAP and GPS health are independent and both light blue with a current
    fix and complete usable map.
 6. Disable public-internet access while remaining inside installed package

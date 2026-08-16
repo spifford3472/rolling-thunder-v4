@@ -38,6 +38,11 @@ _MARKER_OUTLINE = "#ffffff"
 _STATUS_BACKGROUND = "#10191e"
 _PHOTO_CACHE_LIMIT = 128
 _RADAR_PHOTO_CACHE_LIMIT = 128
+_INFO_FONT_SIZE = 40
+_INFO_BOX_RIGHT = 680
+_INFO_BOX_BOTTOM = 306
+_HEALTH_BOX_WIDTH = 460
+_STATUS_BOX_GAP = 24
 
 
 def rotate_marker_points(
@@ -639,8 +644,8 @@ class LiveMapWidgets:
         canvas.create_rectangle(
             12,
             12,
-            500,
-            202,
+            _INFO_BOX_RIGHT,
+            _INFO_BOX_BOTTOM,
             fill=_STATUS_BACKGROUND,
             outline=_MUTED,
             width=3,
@@ -648,17 +653,20 @@ class LiveMapWidgets:
         )
         canvas.create_text(
             30,
-            26,
+            24,
             text="\n".join(lines),
             fill=_MARKER_OUTLINE,
-            font=("DejaVu Sans Mono", 24, "bold"),
+            font=("DejaVu Sans Mono", _INFO_FONT_SIZE, "bold"),
             anchor="nw",
             justify="left",
             tags="map-overlay",
         )
 
         health_right = width - 12
-        health_left = health_right - 500
+        health_left = max(
+            _INFO_BOX_RIGHT + _STATUS_BOX_GAP,
+            health_right - _HEALTH_BOX_WIDTH,
+        )
         canvas.create_rectangle(
             health_left,
             12,

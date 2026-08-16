@@ -7,6 +7,7 @@ import pytest
 from rolling_thunder.live_map import GeoPoint, LiveMapGpsStatus, LiveMapPresentation
 from rolling_thunder.live_map_info import LiveMapHealthLevel, LiveMapInfoController
 from rolling_thunder.live_map_service import LiveMapSnapshot, MapDataStatus
+from rolling_thunder.live_map_ui import live_map_info_lines
 
 NOW = datetime(2026, 8, 8, 19, 11, tzinfo=UTC)
 LOCAL_NOW = NOW.astimezone(timezone(timedelta(hours=-4)))
@@ -59,6 +60,12 @@ def test_information_box_formats_local_utc_grid_and_temperature_placeholder() ->
     assert state.temperature_f == "--°F"
     assert state.temperature_c == "--°C"
     assert state.temperature_detail == "UNAVAILABLE"
+    assert live_map_info_lines(state) == (
+        "LOCAL  3:11 PM",
+        "UTC    19:11 UTC",
+        "GRID   EM79XM",
+        "TEMP   --°F / --°C",
+    )
 
 
 def test_ready_gps_and_ready_map_are_healthy() -> None:

@@ -101,9 +101,11 @@ weather presentation, and radio polling.
 
 ## WEATHER panel
 
-The existing WEATHER context keeps its accepted current-conditions and hourly
-presentation in the upper portion of the panel. Approximately the lower third
-is reserved for `WEATHER ALERTS`.
+The existing WEATHER context keeps current conditions and the three future
+forecast cards in the upper portion of the panel. The forecast card text is
+intentionally larger for in-car readability without doubling its size. The
+`WEATHER ALERTS` region is taller than the original lower-third layout so the
+larger alert summary remains readable at driving distance.
 
 Normal state is compact:
 
@@ -114,8 +116,12 @@ NO ACTIVE WEATHER ALERTS
 
 When one or more alerts apply to the current trusted point, the panel shows only
 driving-safe summary information: event, local expiration/end time, concise
-headline or area text, and severity/status. Full provider descriptions and long
-instruction bodies are not rendered in the driving panel.
+headline or area text, and severity/status. The summary text is substantially
+larger than before. If the already-published area/headline summary exceeds the
+visible alert viewport, generic rotary movement scrolls it one wrapped line at
+a time while WEATHER is active; scrolling is bounded and resets for a different
+alert. The Tk adapter still has no direct hardware access. Full provider
+descriptions and long instruction bodies are not rendered in the driving panel.
 
 ## Threading and failure isolation
 

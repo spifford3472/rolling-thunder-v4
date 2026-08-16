@@ -382,3 +382,47 @@ def test_transmitting_radio_rejects_second_press_before_worker_start() -> None:
     assert panel.calls == ["invalidate_radio"]
     assert panel.staged_action is None
     assert tuning.actions == []
+
+
+class RecordingWeatherAlertViewport:
+    """Record weather-only generic movement without any hardware dependency."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def scroll_previous(self) -> bool:
+        self.calls.append("scroll_previous")
+        return True
+
+    def scroll_next(self) -> bool:
+        self.calls.append("scroll_next")
+        return True
+
+
+def test_weather_context_routes_encoder_movement_only_to_alert_viewport() -> None:
+    navigation = ContextNavigationController(ContextId.WEATHER)
+    panel = RecordingSharedPanel()
+    viewport = RecordingWeatherAlertViewport()
+    commands = SharedSpotActivePanelCommandController(
+        navigation,
+        panel,
+        current_frequency=lambda: Frequency(hz=7_150_000),
+        weather_alert_viewport=viewport,
+    )
+    panel.calls.clear()
+
+    assert commands.move_previous() is True
+    assert commands.move_next() is True
+
+    assert viewport.calls == ["scroll_previous", "scroll_next"]
+    assert panel.calls == []
+
+    navigation.select(ContextId.AI)
+    commands.activate_context(ContextId.AI)
+    viewport.calls.clear()
+    panel.calls.clear()
+
+    assert commands.move_previous() is False
+    assert commands.move_next() is False
+    assert viewport.calls == []
+    assert panel.calls == []
