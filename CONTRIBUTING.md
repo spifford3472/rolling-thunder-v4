@@ -6,8 +6,14 @@ Work from the repository root on `anvilmobile`.
 
 ```bash
 source .venv/bin/activate
-python -m pip install -e ".[development]"
+python -m pip install -e ".[development,speech]"
 ```
+
+The Raspberry Pi UI uses the `speech` extra for voice callsign capture. Do not
+create or deploy an `anvilmobile` runtime with only the base package when
+`speech.enabled` is true; install the `speech` extra so the declared Vosk
+runtime dependency is present. Forge-only runtimes do not require the speech
+extra.
 
 ## Branching
 
