@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
 
@@ -11,6 +12,7 @@ from rolling_thunder.dmr_selection import (
     DmrSelectionState,
     StagedDmrQso,
 )
+from rolling_thunder.value_types import MaidenheadGrid
 
 
 class DmrMonitorStateProvider(Protocol):
@@ -38,10 +40,13 @@ class DmrPanelCommandController:
         monitor: DmrMonitorStateProvider,
         selection: DmrSelectionController,
         commit: DmrCommitCommands | None = None,
+        *,
+        my_grid_provider: Callable[[], MaidenheadGrid | None] | None = None,
     ) -> None:
         self._monitor = monitor
         self._selection = selection
         self._commit = commit
+        self._my_grid_provider = my_grid_provider or (lambda: None)
         self._submitted_stage_ids: set[UUID] = set()
 
     @property
@@ -60,7 +65,11 @@ class DmrPanelCommandController:
         self._selection.replace_history(snapshot.history)
         active = snapshot.active_calls[0] if snapshot.active_calls else None
         before = self._selection.state.staged_qso
-        state = self._selection.stage_current(active, snapshot.radio_info)
+        state = self._selection.stage_current(
+            active,
+            snapshot.radio_info,
+            my_grid=self._my_grid_provider(),
+        )
         return state.staged_qso is not None and state.staged_qso is not before
 
     def secondary(self) -> bool:
@@ -104,7 +113,10 @@ class DmrPanelCommandController:
         snapshot = self._monitor.latest_state
         self._selection.replace_history(snapshot.history)
         before = self._selection.state.staged_qso
-        state = self._selection.stage_selected(snapshot.radio_info)
+        state = self._selection.stage_selected(
+            snapshot.radio_info,
+            my_grid=self._my_grid_provider(),
+        )
         return state.staged_qso is not None and state.staged_qso is not before
 
     def back(self) -> bool:
