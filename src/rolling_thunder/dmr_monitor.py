@@ -429,9 +429,17 @@ class DmrMonitorService:
     ) -> None:
         with self._lock:
             current = self._snapshot
+
+            # WPSD can briefly return no completed history while a new
+            # transmission is being established. Keep the last-known-good
+            # completed list visible until a usable replacement arrives.
+            resolved_history = current.history
+            if history is not None and (history or not current.history):
+                resolved_history = history
+
             self._snapshot = DmrMonitorSnapshot(
                 active_calls=current.active_calls,
-                history=current.history if history is None else history,
+                history=resolved_history,
                 radio_info=current.radio_info,
                 live_available=current.live_available,
                 history_available=available,

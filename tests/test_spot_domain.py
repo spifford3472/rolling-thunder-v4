@@ -196,6 +196,8 @@ def test_unknown_values_are_formatted_only_at_presentation_boundary() -> None:
 def test_explicit_amateur_band_rank_is_not_enum_or_arrival_order() -> None:
     assert amateur_band_rank(Frequency(hz=7_200_000)) < amateur_band_rank(Frequency(hz=14_200_000))
     assert amateur_band_rank(Frequency(hz=14_200_000)) < amateur_band_rank(Frequency(hz=50_100_000))
+    assert amateur_band_rank(Frequency(hz=50_100_000)) < amateur_band_rank(Frequency(hz=146_520_000))
+    assert amateur_band_rank(Frequency(hz=146_520_000)) < amateur_band_rank(Frequency(hz=439_537_500))
 
 
 def test_canonical_order_uses_band_frequency_and_stable_tie_breakers() -> None:

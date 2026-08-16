@@ -98,12 +98,13 @@ class FakeWpsdSource(DmrWpsdSource):
         self.radio_calls = 0
         self.fail_history = False
         self.fail_radio = False
+        self.history = (_history_record(),)
 
     def fetch_history(self) -> tuple[WpsdDmrHistoryRecord, ...]:
         self.history_calls += 1
         if self.fail_history:
             raise DmrSourceError("history offline")
-        return (_history_record(),)
+        return self.history
 
     def fetch_radio_info(self) -> WpsdRadioInfo:
         self.radio_calls += 1
@@ -229,6 +230,67 @@ def test_http_failure_preserves_cached_data_but_marks_source_unavailable() -> No
     assert state.health is DmrMonitorHealth.DEGRADED
     service.stop()
 
+
+
+def test_empty_successful_history_refresh_preserves_last_known_good() -> None:
+    """A transient empty WPSD result must not blank visible recent callers."""
+    live = ControlledLiveSource()
+    wpsd = FakeWpsdSource()
+    service = DmrMonitorService(
+        live,
+        wpsd,
+        history_refresh_interval_s=0.03,
+        reconnect_delay_s=0.05,
+    )
+
+    service.start()
+    assert live.started.wait(timeout=1)
+
+    _wait_until(
+        lambda: service.latest_state.history == (_history_record(),)
+    )
+
+    previous = service.latest_state.history
+    history_calls = wpsd.history_calls
+
+    wpsd.history = ()
+
+    _wait_until(
+        lambda: wpsd.history_calls > history_calls
+    )
+
+    state = service.latest_state
+
+    assert state.history == previous
+    assert state.history_available
+    assert state.history_error is None
+
+    service.stop()
+
+
+def test_initial_empty_history_remains_valid() -> None:
+    """A genuinely empty hotspot must still be representable at startup."""
+    live = ControlledLiveSource()
+    wpsd = FakeWpsdSource()
+    wpsd.history = ()
+
+    service = DmrMonitorService(
+        live,
+        wpsd,
+        history_refresh_interval_s=60.0,
+        reconnect_delay_s=0.05,
+    )
+
+    service.start()
+    assert live.started.wait(timeout=1)
+
+    _wait_until(
+        lambda: service.latest_state.history_available
+    )
+
+    assert service.latest_state.history == ()
+
+    service.stop()
 
 def test_start_rejects_duplicate_workers_and_stop_is_safe() -> None:
     live = ControlledLiveSource()

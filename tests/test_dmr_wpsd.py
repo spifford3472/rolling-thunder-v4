@@ -141,6 +141,60 @@ def test_history_parser_supports_rf_source_and_ts_mode_label() -> None:
     assert record.packet_loss_percent == 0.1
 
 
+
+def test_history_parser_skips_in_progress_wpsd_row() -> None:
+    """The active WPSD row must not invalidate completed DMR history."""
+    payload = """[
+      {
+        "time_utc": "2026-08-16 20:39:40",
+        "mode": "DMR Slot 1",
+        "callsign": "KE8GIM",
+        "name": "Edward",
+        "country": "USA",
+        "callsign_suffix": "",
+        "target": "TG 3100",
+        "src": "Net",
+        "duration": "",
+        "loss": ""
+      },
+      {
+        "time_utc": "2026-08-16 20:39:35",
+        "mode": "DMR Slot 1",
+        "callsign": "KR4HQE",
+        "name": "Gregory",
+        "country": "USA",
+        "callsign_suffix": "",
+        "target": "TG 3100",
+        "src": "Net",
+        "duration": "69.7",
+        "loss": "0%"
+      }
+    ]"""
+
+    records = parse_wpsd_dmr_history(payload)
+
+    assert len(records) == 1
+    assert records[0].callsign == "KR4HQE"
+    assert records[0].duration_s == 69.7
+
+
+def test_history_parser_still_rejects_partially_complete_row() -> None:
+    """Only the observed both-blank active-row shape should be skipped."""
+    payload = """[
+      {
+        "time_utc": "2026-08-16 20:39:40",
+        "mode": "DMR Slot 1",
+        "callsign": "KE8GIM",
+        "target": "TG 3100",
+        "src": "Net",
+        "duration": "",
+        "loss": "0%"
+      }
+    ]"""
+
+    with pytest.raises(WpsdPayloadError, match="missing required field 'duration'"):
+        parse_wpsd_dmr_history(payload)
+
 def test_history_parser_rejects_non_array_payload() -> None:
     """Unexpected API shapes should fail visibly rather than silently corrupt state."""
     with pytest.raises(WpsdPayloadError, match="JSON array"):

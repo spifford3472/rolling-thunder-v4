@@ -217,6 +217,7 @@ class DmrWidgets:
             row=30, column=0, columnspan=2, sticky="ew", padx=6, pady=(1, 0)
         )
         self._last_viewport: DmrViewport | None = None
+        self._last_history_render_key: tuple[object, int, int] | None = None
         self.hide()
 
     def show(self) -> None:
@@ -265,35 +266,45 @@ class DmrWidgets:
                 bg=_CARD_BACKGROUND,
             )
             frame.grid()
-        for index, frame in enumerate(self._history_frames):
-            if index >= len(viewport.history_cards):
-                frame.grid_remove()
-                continue
-            history_card = viewport.history_cards[index]
-            callsign, detail = self._history_vars[index]
-            callsign.set(history_card.callsign_line)
-            detail.set(history_card.detail_line)
-            background = (
-                _SELECTED_BACKGROUND if history_card.selected else _CARD_BACKGROUND
-            )
-            frame.configure(
-                bg=background,
-                highlightbackground=(
-                    _SUCCESS
-                    if history_card.staged
-                    else (_BRIGHT if history_card.selected else _BORDER)
-                ),
-            )
-            for child in frame.winfo_children():
-                child.configure(bg=background)
-            frame.grid()
+        history_render_key = (
+            viewport.history_cards,
+            viewport.hidden_above_count,
+            viewport.hidden_below_count,
+        )
+        if history_render_key != self._last_history_render_key:
+            self._last_history_render_key = history_render_key
 
-        markers: list[str] = []
-        if viewport.hidden_above_count:
-            markers.append(f"▲ {viewport.hidden_above_count} NEWER")
-        if viewport.hidden_below_count:
-            markers.append(f"▼ {viewport.hidden_below_count} OLDER")
-        self._more.set("     ".join(markers))
+            for index, frame in enumerate(self._history_frames):
+                if index >= len(viewport.history_cards):
+                    frame.grid_remove()
+                    continue
+                history_card = viewport.history_cards[index]
+                callsign, detail = self._history_vars[index]
+                callsign.set(history_card.callsign_line)
+                detail.set(history_card.detail_line)
+                background = (
+                    _SELECTED_BACKGROUND
+                    if history_card.selected
+                    else _CARD_BACKGROUND
+                )
+                frame.configure(
+                    bg=background,
+                    highlightbackground=(
+                        _SUCCESS
+                        if history_card.staged
+                        else (_BRIGHT if history_card.selected else _BORDER)
+                    ),
+                )
+                for child in frame.winfo_children():
+                    child.configure(bg=background)
+                frame.grid()
+
+            markers: list[str] = []
+            if viewport.hidden_above_count:
+                markers.append(f"▲ {viewport.hidden_above_count} NEWER")
+            if viewport.hidden_below_count:
+                markers.append(f"▼ {viewport.hidden_below_count} OLDER")
+            self._more.set("     ".join(markers))
         self._stage.set(viewport.stage_line)
         self._commit.set(viewport.commit_line)
         self._commit_label.configure(fg=self._commit_color(viewport.commit_line))

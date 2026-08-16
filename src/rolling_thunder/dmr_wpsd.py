@@ -196,6 +196,20 @@ def parse_wpsd_dmr_history(payload: str | bytes) -> tuple[WpsdDmrHistoryRecord, 
         callsign = _required_text(row, "callsign").upper()
         source = _parse_source(_required_text(row, "src"))
         occurred_at = _parse_history_timestamp(_required_text(row, "time_utc"))
+
+        duration_value = row.get("duration")
+        loss_value = row.get("loss")
+        if (
+            isinstance(duration_value, str)
+            and not duration_value.strip()
+            and isinstance(loss_value, str)
+            and not loss_value.strip()
+        ):
+            # WPSD publishes the active transmission in history before it
+            # has final duration/loss values. CURRENT AUDIO owns that state;
+            # RECENT CALLERS contains only completed transmissions.
+            continue
+
         duration_s = _parse_positive_float(_required_text(row, "duration"), "duration")
         packet_loss = _parse_percentage(_required_text(row, "loss"), "packet loss")
 
