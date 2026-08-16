@@ -25,6 +25,7 @@ def test_defaults_to_pota_context() -> None:
         ("4", ContextId.AI),
         ("5", ContextId.SETTINGS),
         ("6", ContextId.WEATHER),
+        ("7", ContextId.LOG),
     ],
 )
 def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId) -> None:
@@ -74,10 +75,11 @@ def test_select_next_advances_through_contexts() -> None:
     assert controller.select_next().selected is ContextId.AI
     assert controller.select_next().selected is ContextId.WEATHER
     assert controller.select_next().selected is ContextId.SETTINGS
+    assert controller.select_next().selected is ContextId.LOG
 
 
-def test_select_next_wraps_from_settings_to_pota() -> None:
-    controller = ContextNavigationController(ContextId.SETTINGS)
+def test_select_next_wraps_from_log_to_pota() -> None:
+    controller = ContextNavigationController(ContextId.LOG)
 
     state = controller.select_next()
 

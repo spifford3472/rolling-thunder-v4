@@ -61,7 +61,10 @@ forge:
     audio_device: default
 
 home_platform:
+  # Contact synchronization uses the private Forge contact-sync service.
+  # The Pi must never be configured to call Wavelog directly.
   enabled: false
+  # Production example: http://192.168.9.170:8767
   base_url: null
   request_timeout_s: 5.0
   health_poll_interval_s: 30.0
