@@ -1,9 +1,9 @@
 """UI-independent parsing and tracking for MMDVMHost DMR activity."""
 
+import re
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
-import re
 
 _LOG_PREFIX = re.compile(
     r"^M: (?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) "
