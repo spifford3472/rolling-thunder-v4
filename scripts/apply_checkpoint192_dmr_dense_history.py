@@ -3,8 +3,8 @@
 This deterministic patch is intended to run after
 apply_checkpoint192_dmr_readability.py. It keeps the full-height DMR layout and
 steady red/green audio banner, expands the visible recent-call window to ten,
-places history cards in a two-column by five-row grid, and nudges primary DMR
-text sizes upward. It performs no network, database, or logging work.
+places history cards in a two-column by five-row grid, and nudges DMR text sizes
+upward. It performs no network, database, or logging work.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def main() -> None:
         'self._commit_label.grid(\n            row=15, column=0, columnspan=2, sticky="ew", padx=6, pady=(1, 0)\n        )',
     )
 
-    # Slightly enlarge primary readability while retaining ten visible callers.
+    # Slightly enlarge readability while retaining ten visible callers.
     font_replacements = (
         ('font=("DejaVu Sans", 24, "bold"),\n            anchor="w",\n        )\n        self._health_label',
          'font=("DejaVu Sans", 26, "bold"),\n            anchor="w",\n        )\n        self._health_label'),
@@ -103,6 +103,10 @@ def main() -> None:
          'textvariable=alias,\n                bg=_CARD_BACKGROUND,\n                fg=_MUTED,\n                font=("DejaVu Sans", 22),'),
         ('text="RECENT CALLERS",\n            bg=_BACKGROUND,\n            fg=_MUTED,\n            font=("DejaVu Sans", 22, "bold"),',
          'text="RECENT CALLERS",\n            bg=_BACKGROUND,\n            fg=_MUTED,\n            font=("DejaVu Sans", 24, "bold"),'),
+        ('textvariable=callsign,\n                bg=_CARD_BACKGROUND,\n                fg=_BRIGHT,\n                font=("DejaVu Sans", 32, "bold"),',
+         'textvariable=callsign,\n                bg=_CARD_BACKGROUND,\n                fg=_BRIGHT,\n                font=("DejaVu Sans", 34, "bold"),'),
+        ('textvariable=detail,\n                bg=_CARD_BACKGROUND,\n                fg=_MUTED,\n                font=("DejaVu Sans Mono", 18, "bold"),',
+         'textvariable=detail,\n                bg=_CARD_BACKGROUND,\n                fg=_MUTED,\n                font=("DejaVu Sans Mono", 19, "bold"),'),
     )
     for old, new in font_replacements:
         replace_once(widgets, old, new)
