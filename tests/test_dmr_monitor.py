@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
-from threading import Event
+from threading import Event, Lock
 
 from rolling_thunder.dmr_activity import DmrActivitySource
 from rolling_thunder.dmr_monitor import (
@@ -58,7 +58,7 @@ class ControlledLiveSource(DmrLiveLineSource):
         self.closed = Event()
         self._lines: list[str] = []
         self._line_available = Event()
-        self._lock = __import__("threading").Lock()
+        self._lock = Lock()
         self.failure: DmrSourceError | None = None
 
     def push(self, line: str) -> None:
@@ -117,11 +117,10 @@ class FakeWpsdSource(DmrWpsdSource):
         )
 
 
-def _wait_until(predicate: object, *, timeout_s: float = 1.0) -> None:
-    callable_predicate = predicate
+def _wait_until(predicate: Callable[[], bool], *, timeout_s: float = 1.0) -> None:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        if callable_predicate():  # type: ignore[operator]
+        if predicate():
             return
         time.sleep(0.005)
     raise AssertionError("condition was not reached before timeout")
@@ -188,7 +187,7 @@ def test_live_disconnect_never_leaves_stale_current_audio() -> None:
         live,
         FakeWpsdSource(),
         history_refresh_interval_s=60.0,
-        reconnect_delay_s=0.05,
+        reconnect_delay_s=1.0,
     )
     service.start()
     assert live.started.wait(timeout=1)
