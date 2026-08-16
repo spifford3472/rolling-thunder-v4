@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "feature/**"
+      - "fix/**"
   pull_request:
     branches:
       - main
@@ -40,3 +41,12 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Check diff whitespace
+        run: |
+          git diff --check
+          git fetch origin main:refs/remotes/origin/main --depth=1
+          git diff --check origin/main...HEAD
