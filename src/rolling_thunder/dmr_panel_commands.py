@@ -134,3 +134,8 @@ class DmrPanelCommandController:
         """Acknowledge successful persistence without clearing a newer staged QSO."""
         self._submitted_stage_ids.discard(stage_id)
         return self._selection.complete_commit(stage_id)
+
+    def fail_commit(self, stage_id: UUID) -> DmrSelectionState:
+        """Release a failed submission token while preserving the frozen stage for retry."""
+        self._submitted_stage_ids.discard(stage_id)
+        return self._selection.state
