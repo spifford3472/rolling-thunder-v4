@@ -19,6 +19,7 @@ class DelegatePanelCommands(Protocol):
     def move_next(self) -> bool: ...
     def activate_selection(self) -> bool: ...
     def back(self) -> bool: ...
+    def synchronize_radio_state(self) -> bool: ...
 
 
 class DmrPanelCommands(Protocol):
@@ -92,6 +93,10 @@ class DmrAwareActivePanelCommands:
         if self._dmr_is_active():
             return self._dmr_panel.back()
         return self._delegate.back()
+
+    def synchronize_radio_state(self) -> bool:
+        """Preserve existing radio-state invalidation outside DMR command semantics."""
+        return self._delegate.synchronize_radio_state()
 
     def _dmr_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.DMR
