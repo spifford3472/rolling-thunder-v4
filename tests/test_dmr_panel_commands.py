@@ -213,6 +213,29 @@ def test_rejected_commit_can_be_attempted_again() -> None:
     assert len(commit.calls) == 2
 
 
+def test_async_failed_commit_releases_same_stage_for_retry() -> None:
+    record = _history_record("KC9KPJ", seconds=0)
+    monitor = MutableMonitor(_snapshot(history=(record,), radio_info=_radio_info()))
+    commit = RecordingCommit()
+    controller = DmrPanelCommandController(
+        monitor,
+        DmrSelectionController(),
+        commit,
+    )
+
+    assert controller.move_next()
+    assert controller.activate_selection()
+    staged = controller.state.staged_qso
+    assert staged is not None
+    assert controller.secondary()
+    assert not controller.secondary()
+
+    state = controller.fail_commit(staged.stage_id)
+    assert state.staged_qso == staged
+    assert controller.secondary()
+    assert commit.calls == [staged, staged]
+
+
 def test_success_completion_does_not_clear_newer_restage() -> None:
     history = _history_record("W3GSI", seconds=0)
     monitor = MutableMonitor(_snapshot(history=(history,), radio_info=_radio_info()))
