@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import rolling_thunder.storage as storage_module
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.forge_client import (
     ForgeRemoteProviderHealth,
@@ -168,45 +169,72 @@ def test_failed_replace_rolls_back_to_previous_snapshot(tmp_path: Path) -> None:
     assert repository.load() == original
 
 
-def create_version_six_database(database_path: Path) -> None:
-    """Create representative v6 data without applying the new v7 migration."""
+def create_version_six_database(
+    database_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Create real v6 schema/data without applying later migrations."""
+    current_schema_version = storage_module.CURRENT_SCHEMA_VERSION
+    monkeypatch.setattr(storage_module, "CURRENT_SCHEMA_VERSION", 6)
+    assert initialize_database(database_path) == 6
+    monkeypatch.setattr(
+        storage_module,
+        "CURRENT_SCHEMA_VERSION",
+        current_schema_version,
+    )
+
     with sqlite3.connect(database_path) as connection:
         connection.execute(
             """
-            CREATE TABLE schema_metadata (
-                singleton_id INTEGER PRIMARY KEY,
-                schema_version INTEGER NOT NULL,
-                updated_at TEXT NOT NULL
+            INSERT INTO contacts (
+                contact_id,
+                callsign,
+                frequency_hz,
+                mode,
+                started_at,
+                rst_sent,
+                rst_received
+            )
+            VALUES (
+                'contact-1',
+                'W8O',
+                14250000,
+                'USB',
+                '2026-08-07T12:00:00Z',
+                '59',
+                '59'
             )
             """
         )
         connection.execute(
-            "INSERT INTO schema_metadata VALUES (1, 6, '2026-08-07T12:00:00Z')"
-        )
-        connection.execute(
-            "CREATE TABLE contacts (contact_id TEXT PRIMARY KEY, callsign TEXT NOT NULL)"
-        )
-        connection.execute(
-            "INSERT INTO contacts VALUES ('contact-1', 'W8O')"
-        )
-        connection.execute(
             """
-            CREATE TABLE pota_spot_cache (
-                position INTEGER PRIMARY KEY,
-                activator TEXT NOT NULL,
-                park_reference TEXT NOT NULL
+            INSERT INTO pota_spot_cache (
+                position,
+                activator,
+                park_reference,
+                frequency_hz,
+                mode,
+                spotted_at
+            )
+            VALUES (
+                0,
+                'KI5VNB',
+                'US-0001',
+                14250000,
+                'USB',
+                '2026-08-07T12:00:00Z'
             )
             """
-        )
-        connection.execute(
-            "INSERT INTO pota_spot_cache VALUES (0, 'KI5VNB', 'US-0001')"
         )
         connection.commit()
 
 
-def test_schema_v7_migration_preserves_contacts_and_legacy_pota_cache(tmp_path: Path) -> None:
+def test_schema_v7_migration_preserves_contacts_and_legacy_pota_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     database_path = tmp_path / "rolling-thunder.db"
-    create_version_six_database(database_path)
+    create_version_six_database(database_path, monkeypatch)
 
     version = initialize_database(database_path)
 

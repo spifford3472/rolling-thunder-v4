@@ -2,6 +2,7 @@
 
 import sqlite3
 
+import rolling_thunder.storage as storage_module
 from rolling_thunder.storage import (
     CURRENT_SCHEMA_VERSION,
     initialize_database,
@@ -28,7 +29,7 @@ def test_current_schema_retains_alert_cache_and_notification_ledger(
 
     version = initialize_database(database)
 
-    assert CURRENT_SCHEMA_VERSION == 11
+    assert CURRENT_SCHEMA_VERSION == 12
     assert version == CURRENT_SCHEMA_VERSION
 
     tables = table_names(database)
@@ -39,46 +40,20 @@ def test_current_schema_retains_alert_cache_and_notification_ledger(
 
 def test_version_9_database_upgrades_without_losing_weather_cache(
     tmp_path,
+    monkeypatch,
 ) -> None:
     database = tmp_path / "rolling-thunder.db"
+    current_schema_version = storage_module.CURRENT_SCHEMA_VERSION
+
+    monkeypatch.setattr(storage_module, "CURRENT_SCHEMA_VERSION", 9)
+    assert initialize_database(database) == 9
+    monkeypatch.setattr(
+        storage_module,
+        "CURRENT_SCHEMA_VERSION",
+        current_schema_version,
+    )
 
     with sqlite3.connect(database) as connection:
-        connection.execute(
-            """
-            CREATE TABLE schema_metadata (
-                singleton_id INTEGER PRIMARY KEY
-                    CHECK (singleton_id = 1),
-                schema_version INTEGER NOT NULL
-                    CHECK (schema_version >= 0),
-                updated_at TEXT NOT NULL
-                    DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute(
-            """
-            INSERT INTO schema_metadata (
-                singleton_id,
-                schema_version
-            )
-            VALUES (1, 9)
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE forge_weather_cache (
-                singleton_id INTEGER PRIMARY KEY
-                    CHECK (singleton_id = 1),
-                revision INTEGER NOT NULL
-                    CHECK (revision > 0),
-                source_at TEXT NOT NULL,
-                received_at TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-                    DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
         connection.execute(
             """
             INSERT INTO forge_weather_cache (

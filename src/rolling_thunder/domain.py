@@ -30,6 +30,7 @@ class RadioMode(StrEnum):
     AM = "AM"
     CW = "CW"
     DATA = "DATA"
+    DMR = "DMR"
     FM = "FM"
     LSB = "LSB"
     USB = "USB"

@@ -17,6 +17,7 @@ class ContextId(StrEnum):
     WEATHER = "weather"
     SETTINGS = "settings"
     LOG = "log"
+    DMR = "dmr"
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "7",
         "LOG",
         "Recent local Rolling Thunder contacts.",
+    ),
+    ContextDefinition(
+        ContextId.DMR,
+        "DMR",
+        "8",
+        "DMR HOTSPOT",
+        "Live hotspot audio, caller history, and staged DMR logging.",
     ),
 )
 

@@ -28,6 +28,11 @@ from rolling_thunder.control_source_lifecycle import (
     open_control_source,
 )
 from rolling_thunder.dashboard_state import build_dashboard_state
+from rolling_thunder.dmr_active_panel_commands import DmrAwareActivePanelCommands
+from rolling_thunder.dmr_dashboard_runtime import build_dmr_panel_runtime
+from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
+from rolling_thunder.dmr_ui import build_dmr_viewport
+from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
@@ -254,11 +259,36 @@ def run_dashboard(
         repeater_active_overrides=repeater_panel_runtime.persistence,
         repeater_configuration=repeater_configuration,
     )
-    active_panel_commands = LogAwareActivePanelCommands(
+    log_aware_active_panel_commands = LogAwareActivePanelCommands(
         context_navigation,
         base_active_panel_commands,
         log_panel,
     )
+    try:
+        dmr_panel_runtime = build_dmr_panel_runtime(
+            config.dmr,
+            database_path=config.storage.database_path,
+            gps_state_provider=lambda: runtime.latest_gps_state,
+        )
+        if dmr_panel_runtime is not None:
+            dmr_panel_runtime.set_polling_enabled(False)
+            dmr_panel_runtime.start()
+    except (RuntimeError, ValueError) as error:
+        print(f"Rolling Thunder DMR startup error: {error}")
+        log_panel.stop()
+        runtime.stop()
+        return 3
+    active_panel_commands: (
+        LogAwareActivePanelCommands | DmrAwareActivePanelCommands
+    )
+    if dmr_panel_runtime is None:
+        active_panel_commands = log_aware_active_panel_commands
+    else:
+        active_panel_commands = DmrAwareActivePanelCommands(
+            context_navigation,
+            log_aware_active_panel_commands,
+            dmr_panel_runtime.commands,
+        )
     _ = pota_tune_executor
 
     def capture_state() -> CallsignCaptureState:
@@ -482,6 +512,7 @@ def run_dashboard(
     weather_widgets = WeatherWidgets(context_content)
     repeater_widgets = RepeaterWidgets(context_content)
     log_widgets = LogWidgets(context_content)
+    dmr_widgets = DmrWidgets(context_content)
 
     pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     pota_panel_frame.grid(row=1, column=0, sticky="nsew")
@@ -725,6 +756,21 @@ def run_dashboard(
     )
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
+    dmr_expanded_layout = False
+
+    def set_dmr_expanded_layout(enabled: bool) -> None:
+        """Give DMR the full left-column height without disturbing other contexts."""
+        nonlocal dmr_expanded_layout
+        if enabled == dmr_expanded_layout:
+            return
+        dmr_expanded_layout = enabled
+        if enabled:
+            logger.grid_remove()
+            context.grid_configure(row=0, rowspan=2, pady=(8, 12))
+            return
+        context.grid_configure(row=1, rowspan=1, pady=(4, 12))
+        logger.grid()
+
     def show_standard_context_body() -> None:
         """Show the reusable text body and hide specialized context viewports."""
         pota_panel_frame.grid_remove()
@@ -732,6 +778,7 @@ def run_dashboard(
         settings_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
+        dmr_widgets.hide()
         context_body_label.grid()
 
     def show_pota_context_body() -> None:
@@ -741,6 +788,7 @@ def run_dashboard(
         settings_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
+        dmr_widgets.hide()
         pota_panel_frame.grid()
 
     def show_repeater_context_body() -> None:
@@ -750,6 +798,7 @@ def run_dashboard(
         settings_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
+        dmr_widgets.hide()
         repeater_widgets.show()
 
     def show_settings_context_body() -> None:
@@ -759,6 +808,7 @@ def run_dashboard(
         repeater_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
+        dmr_widgets.hide()
         settings_widgets.show()
 
     def show_weather_context_body() -> None:
@@ -768,6 +818,7 @@ def run_dashboard(
         repeater_widgets.hide()
         settings_widgets.hide()
         log_widgets.hide()
+        dmr_widgets.hide()
         weather_widgets.show()
 
     def show_log_context_body() -> None:
@@ -777,7 +828,18 @@ def run_dashboard(
         repeater_widgets.hide()
         settings_widgets.hide()
         weather_widgets.hide()
+        dmr_widgets.hide()
         log_widgets.show()
+
+    def show_dmr_context_body() -> None:
+        """Show DMR activity and hide every unrelated context body."""
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
+        settings_widgets.hide()
+        weather_widgets.hide()
+        log_widgets.hide()
+        dmr_widgets.show()
 
     def refresh() -> None:
         if control_dispatcher is not None:
@@ -788,6 +850,10 @@ def run_dashboard(
         repeater_persistence_status = (
             repeater_panel_runtime.synchronize_completed_persistence()
         )
+        if dmr_panel_runtime is not None:
+            for dmr_event in dmr_panel_runtime.synchronize_commit_events():
+                if dmr_event.kind is DmrCommitEventKind.SUCCEEDED:
+                    log_panel.request_sync()
 
         weather_presentation = weather_panel.update(
             runtime.latest_forge_weather_state
@@ -881,6 +947,14 @@ def run_dashboard(
             )
 
         selected_context = context_navigation.state
+        if dmr_panel_runtime is not None:
+            dmr_panel_runtime.set_polling_enabled(
+                selected_context.selected is ContextId.DMR
+            )
+        set_dmr_expanded_layout(
+            selected_context.selected is ContextId.DMR
+            and dmr_panel_runtime is not None
+        )
 
         if selected_context.selected in {ContextId.POTA, ContextId.DX}:
             health_frame.grid_remove()
@@ -988,6 +1062,25 @@ def run_dashboard(
             context_title_text.set(selected_context.definition.title)
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
             log_widgets.update(log_panel.latest_state)
+        elif selected_context.selected is ContextId.DMR:
+            health_frame.grid_remove()
+            context_title_text.set(selected_context.definition.title)
+            context_title_label.configure(font=("DejaVu Sans", 40, "bold"))
+            if dmr_panel_runtime is None:
+                show_standard_context_body()
+                context_body_text.set(
+                    "DMR hotspot monitoring is disabled in configuration."
+                )
+            else:
+                show_dmr_context_body()
+                dmr_selection = dmr_panel_runtime.commands.refresh()
+                dmr_widgets.update(
+                    build_dmr_viewport(
+                        dmr_panel_runtime.latest_monitor_state,
+                        dmr_selection,
+                        dmr_panel_runtime.commit.status,
+                    )
+                )
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
             context_title_text.set(selected_context.definition.title)
@@ -1030,6 +1123,8 @@ def run_dashboard(
         control_close_error = close_control_source(control_source)
         if control_close_error is not None:
             print(f"Rolling Thunder physical controls shutdown error: {control_close_error}")
+        if dmr_panel_runtime is not None:
+            dmr_panel_runtime.stop()
         log_panel.stop()
         runtime.stop()
         root.destroy()

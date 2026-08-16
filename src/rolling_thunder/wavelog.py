@@ -321,6 +321,8 @@ def _adif_mode(mode: RadioMode) -> tuple[str, str | None]:
         return "SSB", "USB"
     if mode is RadioMode.LSB:
         return "SSB", "LSB"
+    if mode is RadioMode.DMR:
+        return "DIGITALVOICE", "DMR"
     return mode.value, None
 
 

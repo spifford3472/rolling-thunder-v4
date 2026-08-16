@@ -28,6 +28,12 @@ from rolling_thunder.radio_band import (
         (28_400_000, RadioBand.BAND_10M),
         (50_125_000, RadioBand.BAND_6M),
         (54_000_000, RadioBand.BAND_6M),
+        (144_000_000, RadioBand.BAND_2M),
+        (146_520_000, RadioBand.BAND_2M),
+        (148_000_000, RadioBand.BAND_2M),
+        (420_000_000, RadioBand.BAND_70CM),
+        (439_537_500, RadioBand.BAND_70CM),
+        (450_000_000, RadioBand.BAND_70CM),
     ],
 )
 def test_resolve_radio_band_maps_supported_frequencies(
@@ -46,6 +52,8 @@ def test_resolve_radio_band_maps_supported_frequencies(
         12_000_000,
         30_000_000,
         54_100_000,
+        148_100_000,
+        450_100_000,
     ],
 )
 def test_resolve_radio_band_rejects_unsupported_frequencies(

@@ -204,6 +204,8 @@ _BAND_RANK: dict[RadioBand, int] = {
     RadioBand.BAND_12M: 8,
     RadioBand.BAND_10M: 9,
     RadioBand.BAND_6M: 10,
+    RadioBand.BAND_2M: 11,
+    RadioBand.BAND_70CM: 12,
 }
 
 _PROVIDER_RANK: dict[SpotProvider, int] = {

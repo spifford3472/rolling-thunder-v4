@@ -22,6 +22,8 @@ _BAND_RANGES: Final[tuple[tuple[int, int, RadioBand], ...]] = (
     (24_890_000, 24_990_000, RadioBand.BAND_12M),
     (28_000_000, 29_700_000, RadioBand.BAND_10M),
     (50_000_000, 54_000_000, RadioBand.BAND_6M),
+    (144_000_000, 148_000_000, RadioBand.BAND_2M),
+    (420_000_000, 450_000_000, RadioBand.BAND_70CM),
 )
 
 

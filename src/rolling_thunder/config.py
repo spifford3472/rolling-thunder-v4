@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from rolling_thunder.dmr_dashboard_config import DmrHotspotConfig
 from rolling_thunder.map_sources import (
     DEFAULT_MAP_ATTRIBUTION,
     MapPackageStyle,
@@ -521,6 +522,7 @@ class ApplicationConfig(ConfigurationModel):
     forge: ForgeConfig = ForgeConfig()
     home_platform: HomePlatformConfig = HomePlatformConfig()
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
+    dmr: DmrHotspotConfig = DmrHotspotConfig()
     pota_spots: PotaSpotsConfig = PotaSpotsConfig()
     map: MapConfig = MapConfig()
     radar: RadarConfig = RadarConfig()
@@ -574,6 +576,20 @@ def resolve_contact_backup_directory(
         return directory
 
     return (config_path.parent / directory).resolve()
+
+
+def resolve_dmr_private_key(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path | None:
+    """Resolve the optional restricted DMR SSH key path."""
+    private_key = config.dmr.private_key
+    if private_key is None:
+        return None
+    expanded = private_key.expanduser()
+    if expanded.is_absolute():
+        return expanded
+    return (config_path.parent / expanded).resolve()
 
 
 def resolve_speech_model_path(
@@ -672,6 +688,9 @@ def load_config(path: Path) -> ApplicationConfig:
     resolved_speech = config.speech.model_copy(
         update={"model_path": resolve_speech_model_path(config, path)}
     )
+    resolved_dmr = config.dmr.model_copy(
+        update={"private_key": resolve_dmr_private_key(config, path)}
+    )
     resolved_map = config.map.model_copy(
         update={
             "cache_directory": resolve_map_cache_directory(config, path),
@@ -682,6 +701,7 @@ def load_config(path: Path) -> ApplicationConfig:
         update={
             "storage": resolved_storage,
             "speech": resolved_speech,
+            "dmr": resolved_dmr,
             "map": resolved_map,
         }
     )
