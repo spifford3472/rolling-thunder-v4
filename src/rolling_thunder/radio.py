@@ -7,7 +7,7 @@ from rolling_thunder.domain import Frequency, RadioMode, RadioState
 
 
 class RadioBand(StrEnum):
-    """Amateur bands supported by the initial mobile radio workflow."""
+    """Amateur bands supported by shared Rolling Thunder workflows."""
 
     BAND_160M = "160m"
     BAND_80M = "80m"
@@ -20,6 +20,8 @@ class RadioBand(StrEnum):
     BAND_12M = "12m"
     BAND_10M = "10m"
     BAND_6M = "6m"
+    BAND_2M = "2m"
+    BAND_70CM = "70cm"
 
 
 class RadioError(Exception):
@@ -55,7 +57,7 @@ class Radio(Protocol):
         ...
 
     def get_state(self) -> RadioState:
-        """Return the latest immutable radio-state snapshot."""
+        """Return the latest immutable receiver-state snapshot."""
         ...
 
     def refresh_state(self) -> RadioState:
