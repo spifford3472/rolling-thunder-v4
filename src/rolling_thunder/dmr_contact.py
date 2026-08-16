@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from rolling_thunder.dmr_selection import StagedDmrQso
 from rolling_thunder.domain import Contact, RadioMode
@@ -34,7 +34,7 @@ def build_dmr_contact(
     )
 
 
-def _contact_started_at(staged: StagedDmrQso):
+def _contact_started_at(staged: StagedDmrQso) -> datetime:
     if staged.started_at is not None:
         return staged.started_at
     if staged.ended_at is None:
