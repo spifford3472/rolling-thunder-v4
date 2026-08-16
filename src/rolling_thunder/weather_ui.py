@@ -8,6 +8,9 @@ from rolling_thunder.weather_alert_panel import (
     WeatherAlertPanelPresentation,
     WeatherAlertPanelStatus,
 )
+from rolling_thunder.weather_alert_viewport import (
+    WeatherAlertViewportPresentation,
+)
 from rolling_thunder.weather_panel import WeatherPanelPresentation, WeatherPanelStatus
 
 _BACKGROUND = "#151515"
@@ -55,8 +58,8 @@ class WeatherWidgets:
         self._frame = tk.Frame(parent, bg=_BACKGROUND)
         self._frame.grid(row=1, column=0, sticky="nsew")
         self._frame.grid_columnconfigure(0, weight=1)
-        self._frame.grid_rowconfigure(2, weight=2)
-        self._frame.grid_rowconfigure(3, weight=1)
+        self._frame.grid_rowconfigure(2, weight=1)
+        self._frame.grid_rowconfigure(3, weight=2, minsize=320)
 
         self._status_text = tk.StringVar(value="UNAVAILABLE")
         self._status_label = tk.Label(
@@ -145,7 +148,7 @@ class WeatherWidgets:
                 textvariable=time_text,
                 bg=_CARD_BACKGROUND,
                 fg=_MUTED,
-                font=("DejaVu Sans", 21, "bold"),
+                font=("DejaVu Sans", 26, "bold"),
                 anchor="center",
             ).grid(row=0, column=0, sticky="ew", pady=(8, 2))
 
@@ -154,7 +157,7 @@ class WeatherWidgets:
                 textvariable=temp_text,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
-                font=("DejaVu Sans", 29, "bold"),
+                font=("DejaVu Sans", 36, "bold"),
                 anchor="center",
                 justify="center",
             ).grid(row=1, column=0, sticky="nsew", pady=2)
@@ -164,7 +167,7 @@ class WeatherWidgets:
                 textvariable=precip_text,
                 bg=_CARD_BACKGROUND,
                 fg=_MUTED,
-                font=("DejaVu Sans", 20, "bold"),
+                font=("DejaVu Sans", 25, "bold"),
                 anchor="center",
             ).grid(row=2, column=0, sticky="ew", pady=(2, 8))
 
@@ -190,7 +193,7 @@ class WeatherWidgets:
             text="WEATHER ALERTS",
             bg=_CARD_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", 22, "bold"),
             anchor="w",
         ).grid(
             row=0,
@@ -208,7 +211,7 @@ class WeatherWidgets:
             textvariable=self._alert_status_text,
             bg=_CARD_BACKGROUND,
             fg=_DISABLED,
-            font=("DejaVu Sans", 22, "bold"),
+            font=("DejaVu Sans", 28, "bold"),
             anchor="w",
         )
         self._alert_status_label.grid(
@@ -225,7 +228,7 @@ class WeatherWidgets:
             textvariable=self._alert_primary_text,
             bg=_CARD_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 20, "bold"),
+            font=("DejaVu Sans", 34, "bold"),
             justify="left",
             anchor="w",
             wraplength=650,
@@ -243,12 +246,30 @@ class WeatherWidgets:
             textvariable=self._alert_secondary_text,
             bg=_CARD_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 16, "bold"),
+            font=("DejaVu Sans", 28, "bold"),
             justify="left",
             anchor="w",
             wraplength=650,
         ).grid(
             row=3,
+            column=0,
+            sticky="nsew",
+            padx=10,
+            pady=(1, 2),
+        )
+        alerts.grid_rowconfigure(3, weight=1)
+
+        self._alert_scroll_text = tk.StringVar(value="")
+        tk.Label(
+            alerts,
+            textvariable=self._alert_scroll_text,
+            bg=_CARD_BACKGROUND,
+            fg=_WARNING,
+            font=("DejaVu Sans", 20, "bold"),
+            justify="left",
+            anchor="w",
+        ).grid(
+            row=4,
             column=0,
             sticky="ew",
             padx=10,
@@ -279,6 +300,7 @@ class WeatherWidgets:
         self,
         presentation: WeatherPanelPresentation,
         alert_presentation: WeatherAlertPanelPresentation,
+        alert_viewport: WeatherAlertViewportPresentation,
     ) -> None:
         """Refresh weather and alert widgets from immutable presentations."""
         color = weather_status_color(presentation.status)
@@ -325,9 +347,7 @@ class WeatherWidgets:
                 f"{item.event} • {item.severity} "
                 f"• UNTIL {item.expires}{more_text}"
             )
-            self._alert_secondary_text.set(
-                f"{item.area}\n{item.headline}"
-            )
+            self._alert_secondary_text.set(alert_viewport.text)
         elif (
             alert_presentation.status
             is WeatherAlertPanelStatus.NO_ACTIVE
@@ -348,6 +368,17 @@ class WeatherWidgets:
         else:
             self._alert_primary_text.set("")
             self._alert_secondary_text.set("")
+
+        directions = []
+        if alert_viewport.can_scroll_up:
+            directions.append("▲")
+        if alert_viewport.can_scroll_down:
+            directions.append("▼")
+        self._alert_scroll_text.set(
+            f"ROTATE TO SCROLL ALERT  {' '.join(directions)}"
+            if alert_presentation.items and alert_viewport.overflowing
+            else ""
+        )
 
         attributions = tuple(
             value

@@ -184,6 +184,16 @@ class SettingsPanelCommands(Protocol):
         ...
 
 
+class WeatherAlertViewportCommands(Protocol):
+    """No-I/O weather alert scrolling reached through generic movement."""
+
+    def scroll_previous(self) -> bool:
+        ...
+
+    def scroll_next(self) -> bool:
+        ...
+
+
 class ActivePanelCommandController:
     """Route generic selection controls to the legacy active POTA panel."""
 
@@ -270,6 +280,7 @@ class SharedSpotActivePanelCommandController:
         repeater_panel: RepeaterPanelCommands | None = None,
         repeater_active_overrides: RepeaterActiveOverrideCommands | None = None,
         repeater_configuration: RepeaterRadioConfigurationCommands | None = None,
+        weather_alert_viewport: WeatherAlertViewportCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._shared_panel = shared_panel
@@ -280,6 +291,7 @@ class SharedSpotActivePanelCommandController:
         self._repeater_panel = repeater_panel
         self._repeater_active_overrides = repeater_active_overrides
         self._repeater_configuration = repeater_configuration
+        self._weather_alert_viewport = weather_alert_viewport
         self.activate_context(context_navigation.state.selected)
 
     def activate_context(self, context_id: ContextId) -> None:
@@ -346,6 +358,9 @@ class SharedSpotActivePanelCommandController:
         return False
 
     def move_previous(self) -> bool:
+        if self._weather_is_active():
+            viewport = self._weather_alert_viewport
+            return viewport is not None and viewport.scroll_previous()
         if self._settings_is_active():
             return self._settings_panel is not None and self._settings_panel.zoom_out()
         if self._repeater_is_active():
@@ -362,6 +377,9 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def move_next(self) -> bool:
+        if self._weather_is_active():
+            viewport = self._weather_alert_viewport
+            return viewport is not None and viewport.scroll_next()
         if self._settings_is_active():
             return self._settings_panel is not None and self._settings_panel.zoom_in()
         if self._repeater_is_active():
@@ -496,3 +514,6 @@ class SharedSpotActivePanelCommandController:
 
     def _settings_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.SETTINGS
+
+    def _weather_is_active(self) -> bool:
+        return self._context_navigation.state.selected is ContextId.WEATHER
