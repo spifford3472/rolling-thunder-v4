@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from time import monotonic, sleep
-from typing import Iterator
 
 from rolling_thunder.dmr_activity import DmrActivitySource
 from rolling_thunder.dmr_monitor import DmrMonitorHealth
@@ -113,10 +113,10 @@ def _runtime(tmp_path: Path, writer: RecordingWriter) -> DmrPanelRuntime:
     )
 
 
-def _wait_until(predicate: object, *, timeout_s: float = 1.0) -> None:
+def _wait_until(predicate: Callable[[], bool], *, timeout_s: float = 1.0) -> None:
     deadline = monotonic() + timeout_s
     while monotonic() < deadline:
-        if callable(predicate) and predicate():
+        if predicate():
             return
         sleep(0.01)
     raise AssertionError("condition did not become true before timeout")
