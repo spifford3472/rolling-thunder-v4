@@ -13,6 +13,9 @@ _BRIGHT = "#ffffff"
 _MUTED = "#a8a8a8"
 _DISABLED = "#777777"
 _HEALTHY = "#66ccff"
+_SETTINGS_PRIMARY_FONT_SIZE = 52
+_SETTINGS_CARD_FONT_SIZE = 56
+_SETTINGS_SECONDARY_FONT_SIZE = 30
 
 
 class SettingsWidgets:
@@ -38,10 +41,10 @@ class SettingsWidgets:
             textvariable=self._zoom_text,
             bg=_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans Mono", 26, "bold"),
+            font=("DejaVu Sans Mono", _SETTINGS_PRIMARY_FONT_SIZE, "bold"),
             justify="left",
             anchor="w",
-        ).grid(row=0, column=0, sticky="ew", pady=(0, 18))
+        ).grid(row=0, column=0, sticky="ew", pady=(0, 24))
 
         radar_card = tk.Frame(
             content,
@@ -57,27 +60,27 @@ class SettingsWidgets:
             text="RADAR Image",
             bg=_PANEL_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 28, "bold"),
+            font=("DejaVu Sans", _SETTINGS_CARD_FONT_SIZE, "bold"),
             anchor="w",
-        ).grid(row=0, column=0, sticky="w", padx=(18, 8), pady=(13, 0))
+        ).grid(row=0, column=0, sticky="w", padx=(18, 8), pady=(18, 0))
 
         tk.Label(
             radar_card,
             text="Context Button #1",
             bg=_PANEL_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 15),
+            font=("DejaVu Sans", _SETTINGS_SECONDARY_FONT_SIZE),
             anchor="w",
-        ).grid(row=1, column=0, sticky="w", padx=(18, 8), pady=(0, 13))
+        ).grid(row=1, column=0, sticky="w", padx=(18, 8), pady=(0, 18))
 
         self._switch = tk.Canvas(
             radar_card,
-            width=92,
-            height=46,
+            width=112,
+            height=56,
             bg=_PANEL_BACKGROUND,
             highlightthickness=0,
         )
-        self._switch.grid(row=0, column=1, rowspan=2, padx=(8, 18), pady=10)
+        self._switch.grid(row=0, column=1, rowspan=2, padx=(8, 18), pady=14)
         self._draw_switch(enabled=False, available=False)
 
     def show(self) -> None:
@@ -105,17 +108,17 @@ class SettingsWidgets:
         track = _HEALTHY if enabled and available else _DISABLED
         knob = _BRIGHT if available else _MUTED
 
-        # Three overlapping shapes form a small pill switch on old Tk versions.
-        canvas.create_oval(4, 7, 38, 41, fill=track, outline=track)
-        canvas.create_oval(54, 7, 88, 41, fill=track, outline=track)
-        canvas.create_rectangle(21, 7, 71, 41, fill=track, outline=track)
+        # Three overlapping shapes form a pill switch on old Tk versions.
+        canvas.create_oval(4, 9, 44, 49, fill=track, outline=track)
+        canvas.create_oval(68, 9, 108, 49, fill=track, outline=track)
+        canvas.create_rectangle(24, 9, 88, 49, fill=track, outline=track)
 
-        knob_left = 51 if enabled and available else 7
+        knob_left = 65 if enabled and available else 8
         canvas.create_oval(
             knob_left,
-            10,
-            knob_left + 28,
-            38,
+            12,
+            knob_left + 34,
+            46,
             fill=knob,
             outline=knob,
         )
