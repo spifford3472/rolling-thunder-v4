@@ -8,7 +8,11 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from rolling_thunder.dmr_activity import DmrActivitySource, DmrCallIdentity, DmrCallSnapshot
+from rolling_thunder.dmr_activity import (
+    DmrActivitySource,
+    DmrCallIdentity,
+    DmrCallSnapshot,
+)
 from rolling_thunder.dmr_wpsd import (
     WpsdDmrHistoryIdentity,
     WpsdDmrHistoryRecord,
@@ -165,7 +169,9 @@ class DmrSelectionController:
         """Replace history while preserving any still-present selected identity."""
         self._history = history
         selected = self._selected_identity
-        if selected is not None and not any(record.identity == selected for record in history):
+        if selected is not None and not any(
+            record.identity == selected for record in history
+        ):
             self._selected_identity = None
         return self.state
 
@@ -184,7 +190,11 @@ class DmrSelectionController:
             return self.state
 
         current_index = self.state.selected_index
-        target_index = 0 if current_index is None else min(current_index + 1, len(self._history) - 1)
+        target_index = (
+            0
+            if current_index is None
+            else min(current_index + 1, len(self._history) - 1)
+        )
         self._selected_identity = self._history[target_index].identity
         return self.state
 
