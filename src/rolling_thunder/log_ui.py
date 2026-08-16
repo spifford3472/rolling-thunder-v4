@@ -15,6 +15,12 @@ _MUTED = "#a8a8a8"
 _SUCCESS = "#42ff72"
 _WARNING = "#ffd24a"
 _FAILURE = "#ff7070"
+_LOG_VISIBLE_CONTACTS = 3
+_LOG_SUMMARY_FONT_SIZE = 60
+_LOG_STATUS_FONT_SIZE = 48
+_LOG_CALLSIGN_FONT_SIZE = 50
+_LOG_DETAIL_FONT_SIZE = 42
+_LOG_HINT_FONT_SIZE = 42
 
 
 class LogWidgets:
@@ -33,7 +39,7 @@ class LogWidgets:
             textvariable=self._summary,
             bg=_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 25, "bold"),
+            font=("DejaVu Sans", _LOG_SUMMARY_FONT_SIZE, "bold"),
             anchor="w",
         ).grid(row=0, column=0, sticky="ew", padx=8, pady=(0, 2))
 
@@ -43,38 +49,26 @@ class LogWidgets:
             textvariable=self._status,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", _LOG_STATUS_FONT_SIZE, "bold"),
             anchor="w",
         )
-        self._status_label.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 5))
-
-        header = tk.Frame(self._frame, bg=_CARD_BACKGROUND)
-        header.grid(row=2, column=0, sticky="ew", padx=4)
-        widths = (15, 14, 7, 7, 9)
-        for column, (title, width) in enumerate(
-            zip(("UTC", "CALL", "BAND", "CTRY", "SYNC"), widths, strict=True)
-        ):
-            header.grid_columnconfigure(column, weight=1 if column in {0, 1} else 0)
-            tk.Label(
-                header,
-                text=title,
-                width=width,
-                bg=_CARD_BACKGROUND,
-                fg=_MUTED,
-                font=("DejaVu Sans Mono", 15, "bold"),
-                anchor="w",
-            ).grid(row=0, column=column, sticky="ew", padx=2, pady=2)
+        self._status_label.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
 
         self._row_vars: list[tuple[Any, Any, Any, Any, Any]] = []
         self._row_labels: list[Any] = []
-        for row_index in range(10):
+        self._row_frames: list[Any] = []
+        for row_index in range(_LOG_VISIBLE_CONTACTS):
             row_frame = tk.Frame(
                 self._frame,
                 bg=_CARD_BACKGROUND,
-                highlightthickness=1,
+                highlightthickness=2,
                 highlightbackground=_BORDER,
             )
-            row_frame.grid(row=row_index + 3, column=0, sticky="ew", padx=4, pady=1)
+            row_frame.grid(row=row_index + 2, column=0, sticky="ew", padx=4, pady=4)
+            row_frame.grid_columnconfigure(0, weight=0)
+            row_frame.grid_columnconfigure(1, weight=1)
+            row_frame.grid_columnconfigure(2, weight=0)
+
             values = (
                 tk.StringVar(value=""),
                 tk.StringVar(value=""),
@@ -83,33 +77,84 @@ class LogWidgets:
                 tk.StringVar(value=""),
             )
             self._row_vars.append(values)
-            status_label = None
-            for column, (variable, width) in enumerate(zip(values, widths, strict=True)):
-                row_frame.grid_columnconfigure(column, weight=1 if column in {0, 1} else 0)
-                label = tk.Label(
-                    row_frame,
-                    textvariable=variable,
-                    width=width,
-                    bg=_CARD_BACKGROUND,
-                    fg=_BRIGHT,
-                    font=("DejaVu Sans Mono", 15, "bold"),
-                    anchor="w",
-                )
-                label.grid(row=0, column=column, sticky="ew", padx=2, pady=2)
-                if column == 4:
-                    status_label = label
-            assert status_label is not None
-            self._row_labels.append(status_label)
+            timestamp, callsign, band, country, status = values
 
-        self._hint = tk.StringVar(value="BUTTON 1: SYNC UNSYNCED")
+            tk.Label(
+                row_frame,
+                textvariable=timestamp,
+                bg=_CARD_BACKGROUND,
+                fg=_BRIGHT,
+                font=("DejaVu Sans Mono", _LOG_DETAIL_FONT_SIZE, "bold"),
+                anchor="w",
+            ).grid(row=0, column=0, sticky="w", padx=(12, 8), pady=(8, 0))
+
+            tk.Label(
+                row_frame,
+                textvariable=callsign,
+                bg=_CARD_BACKGROUND,
+                fg=_BRIGHT,
+                font=("DejaVu Sans", _LOG_CALLSIGN_FONT_SIZE, "bold"),
+                anchor="center",
+            ).grid(row=0, column=1, sticky="ew", padx=8, pady=(5, 0))
+
+            tk.Label(
+                row_frame,
+                textvariable=band,
+                bg=_CARD_BACKGROUND,
+                fg=_BRIGHT,
+                font=("DejaVu Sans Mono", _LOG_DETAIL_FONT_SIZE, "bold"),
+                anchor="e",
+            ).grid(row=0, column=2, sticky="e", padx=(8, 12), pady=(8, 0))
+
+            tk.Label(
+                row_frame,
+                textvariable=country,
+                bg=_CARD_BACKGROUND,
+                fg=_MUTED,
+                font=("DejaVu Sans", _LOG_DETAIL_FONT_SIZE, "bold"),
+                anchor="w",
+            ).grid(
+                row=1,
+                column=0,
+                columnspan=2,
+                sticky="w",
+                padx=12,
+                pady=(0, 8),
+            )
+
+            status_label = tk.Label(
+                row_frame,
+                textvariable=status,
+                bg=_CARD_BACKGROUND,
+                fg=_BRIGHT,
+                font=("DejaVu Sans", _LOG_DETAIL_FONT_SIZE, "bold"),
+                anchor="e",
+            )
+            status_label.grid(
+                row=1,
+                column=2,
+                sticky="e",
+                padx=(8, 12),
+                pady=(0, 8),
+            )
+            self._row_labels.append(status_label)
+            self._row_frames.append(row_frame)
+
+        self._hint = tk.StringVar(value="BUTTON 1: SYNC NOW")
         tk.Label(
             self._frame,
             textvariable=self._hint,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 16, "bold"),
+            font=("DejaVu Sans", _LOG_HINT_FONT_SIZE, "bold"),
             anchor="w",
-        ).grid(row=13, column=0, sticky="ew", padx=8, pady=(5, 0))
+        ).grid(
+            row=_LOG_VISIBLE_CONTACTS + 2,
+            column=0,
+            sticky="ew",
+            padx=8,
+            pady=(8, 0),
+        )
         self.hide()
 
     def show(self) -> None:
@@ -128,10 +173,12 @@ class LogWidgets:
                 for variable in variables:
                     variable.set("")
                 self._row_labels[index].configure(fg=_BRIGHT)
+                self._row_frames[index].grid_remove()
                 continue
             row = snapshot.rows[index]
+            self._row_frames[index].grid()
             timestamp, callsign, band, country, status = variables
-            timestamp.set(row.started_at.strftime("%m-%d %H:%MZ"))
+            timestamp.set(row.started_at.strftime("%H:%MZ"))
             callsign.set(row.callsign)
             band.set(row.band)
             country.set(row.country)
