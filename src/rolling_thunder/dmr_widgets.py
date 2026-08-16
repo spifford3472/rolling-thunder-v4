@@ -231,13 +231,13 @@ class DmrWidgets:
             if index >= len(viewport.current_audio_cards):
                 frame.grid_remove()
                 continue
-            card = viewport.current_audio_cards[index]
+            audio_card = viewport.current_audio_cards[index]
             callsign, detail, alias = self._audio_vars[index]
-            callsign.set(card.callsign_line)
-            detail.set(card.detail_line)
-            alias.set(card.alias_line)
+            callsign.set(audio_card.callsign_line)
+            detail.set(audio_card.detail_line)
+            alias.set(audio_card.alias_line)
             frame.configure(
-                highlightbackground=_SUCCESS if card.staged else _BORDER,
+                highlightbackground=_SUCCESS if audio_card.staged else _BORDER,
                 bg=_CARD_BACKGROUND,
             )
             frame.grid()
@@ -248,14 +248,20 @@ class DmrWidgets:
             if index >= len(viewport.history_cards):
                 frame.grid_remove()
                 continue
-            card = viewport.history_cards[index]
+            history_card = viewport.history_cards[index]
             callsign, detail = self._history_vars[index]
-            callsign.set(card.callsign_line)
-            detail.set(card.detail_line)
-            background = _SELECTED_BACKGROUND if card.selected else _CARD_BACKGROUND
+            callsign.set(history_card.callsign_line)
+            detail.set(history_card.detail_line)
+            background = (
+                _SELECTED_BACKGROUND if history_card.selected else _CARD_BACKGROUND
+            )
             frame.configure(
                 bg=background,
-                highlightbackground=_SUCCESS if card.staged else (_BRIGHT if card.selected else _BORDER),
+                highlightbackground=(
+                    _SUCCESS
+                    if history_card.staged
+                    else (_BRIGHT if history_card.selected else _BORDER)
+                ),
             )
             for child in frame.winfo_children():
                 child.configure(bg=background)
@@ -276,7 +282,7 @@ class DmrWidgets:
         normalized = health_line.upper()
         if normalized.startswith("HEALTHY"):
             return _SUCCESS
-        if normalized.startswith("DEGRADED") or normalized.startswith("STARTING"):
+        if normalized.startswith(("DEGRADED", "STARTING")):
             return _WARNING
         return _FAILURE
 
