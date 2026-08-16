@@ -2,7 +2,11 @@
 
 from datetime import UTC, datetime, timedelta
 
-from rolling_thunder.dmr_activity import DmrActivitySource, DmrCallIdentity, DmrCallSnapshot
+from rolling_thunder.dmr_activity import (
+    DmrActivitySource,
+    DmrCallIdentity,
+    DmrCallSnapshot,
+)
 from rolling_thunder.dmr_selection import DmrSelectionController, DmrStageOrigin
 from rolling_thunder.dmr_wpsd import (
     WpsdDmrHistoryIdentity,
@@ -26,7 +30,9 @@ def _history_record(
     seconds: int,
     name: str = "Operator",
 ) -> WpsdDmrHistoryRecord:
-    occurred_at = datetime(2026, 8, 16, 0, 7, 22, tzinfo=UTC) + timedelta(seconds=seconds)
+    occurred_at = datetime(2026, 8, 16, 0, 7, 22, tzinfo=UTC) + timedelta(
+        seconds=seconds
+    )
     return WpsdDmrHistoryRecord(
         identity=WpsdDmrHistoryIdentity(
             occurred_at=occurred_at,
