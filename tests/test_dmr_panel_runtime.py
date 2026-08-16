@@ -148,7 +148,16 @@ def test_runtime_start_and_stop_own_monitor_lifecycle(tmp_path: Path) -> None:
         writer=RecordingWriter(),
     )
 
+    runtime.set_polling_enabled(False)
+    assert not runtime.polling_enabled
     runtime.start()
+    sleep(0.05)
+    assert runtime.latest_monitor_state.live_available
+    assert not runtime.latest_monitor_state.history_available
+    assert not runtime.latest_monitor_state.radio_available
+
+    runtime.set_polling_enabled(True)
+    assert runtime.polling_enabled
     _wait_until(
         lambda: runtime.latest_monitor_state.health is DmrMonitorHealth.HEALTHY
     )

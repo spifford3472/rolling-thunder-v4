@@ -64,7 +64,7 @@ class DmrPanelRuntime:
         http_timeout_s: float = 5.0,
         connect_timeout_s: int = 5,
         history_limit: int = 20,
-        history_refresh_interval_s: float = 2.0,
+        history_refresh_interval_s: float = 30.0,
         reconnect_delay_s: float = 2.0,
         live_source: DmrLiveLineSource | None = None,
         wpsd_source: DmrWpsdSource | None = None,
@@ -141,6 +141,15 @@ class DmrPanelRuntime:
     def is_running(self) -> bool:
         """Return whether the DMR monitor workers are currently owned."""
         return self.monitor.is_running
+
+    @property
+    def polling_enabled(self) -> bool:
+        """Return whether WPSD HTTP polling is currently enabled."""
+        return self.monitor.polling_enabled
+
+    def set_polling_enabled(self, enabled: bool) -> None:
+        """Enable WPSD polling only when the DMR panel needs fresh HTTP data."""
+        self.monitor.set_polling_enabled(enabled)
 
     def start(self) -> DmrMonitorSnapshot:
         """Start background SSH/WPSD monitoring without doing network I/O here."""

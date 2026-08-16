@@ -8,7 +8,7 @@ from rolling_thunder.dmr_commit import DmrCommitStatus
 from rolling_thunder.dmr_monitor import DmrMonitorSnapshot
 from rolling_thunder.dmr_selection import DmrSelectionState, DmrStageOrigin
 
-_DEFAULT_MAX_HISTORY_ROWS = 4
+_DEFAULT_MAX_HISTORY_ROWS = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,11 +105,13 @@ def build_dmr_viewport(
 
     history_cards = tuple(
         DmrHistoryCard(
-            callsign_line=_history_callsign_line(record.callsign, record.name),
-            detail_line=(
-                f"{record.occurred_at.strftime('%H:%M:%SZ')}  "
-                f"TS{record.slot} TG{record.talkgroup}  "
-                f"{record.duration_s:.1f}s  {record.source.value.upper()}"
+            callsign_line=record.callsign,
+            detail_line=_history_detail_line(
+                record.name,
+                slot=record.slot,
+                talkgroup=record.talkgroup,
+                duration_s=record.duration_s,
+                source=record.source.value.upper(),
             ),
             selected=record.identity == selection.selected_identity,
             staged=(
@@ -135,10 +137,20 @@ def build_dmr_viewport(
     )
 
 
-def _history_callsign_line(callsign: str, name: str | None) -> str:
+def _history_detail_line(
+    name: str | None,
+    *,
+    slot: int,
+    talkgroup: int,
+    duration_s: float,
+    source: str,
+) -> str:
+    """Build a compact one-line history detail that fits the mobile panel."""
+    source_label = "NET" if source == "NETWORK" else source
+    metadata = f"TG{talkgroup} · TS{slot} · {duration_s:.0f}s · {source_label}"
     if name is None or not name.strip():
-        return callsign
-    return f"{callsign} - {name.strip()}"
+        return metadata
+    return f"{name.strip()} · {metadata}"
 
 
 def _health_line(monitor: DmrMonitorSnapshot) -> str:

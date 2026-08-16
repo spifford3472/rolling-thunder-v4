@@ -113,10 +113,11 @@ def test_healthy_idle_view_shows_rf_pair_and_bounded_history() -> None:
     assert viewport.health_line == "HEALTHY  LIVE OK  HISTORY OK  RF OK"
     assert viewport.rf_line == "RX 434.5375 MHz  TX 439.5375 MHz  DUPLEX"
     assert viewport.current_audio_idle
-    assert len(viewport.history_cards) == 4
+    assert len(viewport.history_cards) == 20
     assert viewport.hidden_above_count == 0
-    assert viewport.hidden_below_count == 16
-    assert viewport.history_cards[0].callsign_line == "K0DMR - Operator 0"
+    assert viewport.hidden_below_count == 0
+    assert viewport.history_cards[0].callsign_line == "K0DMR"
+    assert viewport.history_cards[0].detail_line == "Operator 0 · TG3100 · TS1 · 5s · NET"
 
 
 def test_current_audio_supports_both_slots_and_marks_staged_call() -> None:
@@ -145,7 +146,7 @@ def test_current_audio_supports_both_slots_and_marks_staged_call() -> None:
     assert viewport.current_audio_cards[1].detail_line == "TS2  TG 3100  NETWORK"
 
 
-def test_selected_history_is_kept_inside_four_row_window() -> None:
+def test_selected_history_is_kept_inside_ten_row_window() -> None:
     history = tuple(_history_record(index) for index in range(10))
     selection = DmrSelectionController(history)
     selection.select_identity(history[7].identity)
@@ -156,11 +157,11 @@ def test_selected_history_is_kept_inside_four_row_window() -> None:
         DmrCommitStatus(),
     )
 
-    assert len(viewport.history_cards) == 4
-    assert viewport.hidden_above_count == 4
-    assert viewport.hidden_below_count == 2
-    assert viewport.history_cards[-1].selected
-    assert viewport.history_cards[-1].callsign_line.startswith("K7DMR")
+    assert len(viewport.history_cards) == 10
+    assert viewport.hidden_above_count == 0
+    assert viewport.hidden_below_count == 0
+    assert viewport.history_cards[7].selected
+    assert viewport.history_cards[7].callsign_line.startswith("K7DMR")
 
 
 def test_staged_history_row_and_footer_are_explicit() -> None:

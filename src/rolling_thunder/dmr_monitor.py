@@ -219,7 +219,7 @@ class DmrMonitorService:
         live_source: DmrLiveLineSource,
         wpsd_source: DmrWpsdSource,
         *,
-        history_refresh_interval_s: float = 2.0,
+        history_refresh_interval_s: float = 30.0,
         reconnect_delay_s: float = 2.0,
     ) -> None:
         if history_refresh_interval_s <= 0:
@@ -232,6 +232,9 @@ class DmrMonitorService:
         self._reconnect_delay_s = reconnect_delay_s
         self._lock = Lock()
         self._stop_event = Event()
+        self._polling_enabled = Event()
+        self._polling_enabled.set()
+        self._polling_wake = Event()
         self._snapshot = DmrMonitorSnapshot()
         self._live_thread: Thread | None = None
         self._wpsd_thread: Thread | None = None
@@ -247,6 +250,21 @@ class DmrMonitorService:
         """Return whether monitor workers are currently owned by the service."""
         with self._lock:
             return self._live_thread is not None or self._wpsd_thread is not None
+
+    @property
+    def polling_enabled(self) -> bool:
+        """Return whether periodic WPSD HTTP polling is currently enabled."""
+        return self._polling_enabled.is_set()
+
+    def set_polling_enabled(self, enabled: bool) -> None:
+        """Enable or pause WPSD polling without blocking or touching the live feed."""
+        if self._polling_enabled.is_set() == enabled:
+            return
+        if enabled:
+            self._polling_enabled.set()
+        else:
+            self._polling_enabled.clear()
+        self._polling_wake.set()
 
     def start(self) -> DmrMonitorSnapshot:
         """Start both background workers without performing SSH or HTTP on the caller."""
@@ -275,6 +293,7 @@ class DmrMonitorService:
     def stop(self) -> DmrMonitorSnapshot:
         """Stop both background workers and interrupt a blocking SSH feed."""
         self._stop_event.set()
+        self._polling_wake.set()
         self._live_source.close()
         with self._lock:
             live_thread = self._live_thread
@@ -327,12 +346,23 @@ class DmrMonitorService:
 
     def _run_wpsd(self) -> None:
         while not self._stop_event.is_set():
+            if not self._polling_enabled.is_set():
+                self._polling_wake.wait(timeout=0.5)
+                self._polling_wake.clear()
+                continue
+
             self._refresh_history()
             if self._stop_event.is_set():
                 return
+            if not self._polling_enabled.is_set():
+                continue
+
             self._refresh_radio_info()
-            if self._stop_event.wait(self._history_refresh_interval_s):
+            if self._stop_event.is_set():
                 return
+
+            self._polling_wake.wait(timeout=self._history_refresh_interval_s)
+            self._polling_wake.clear()
 
     def _refresh_history(self) -> None:
         try:

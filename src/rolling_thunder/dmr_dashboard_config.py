@@ -20,7 +20,7 @@ class DmrHotspotConfig(BaseModel):
     http_timeout_s: float = Field(default=5.0, gt=0, le=60)
     connect_timeout_s: int = Field(default=5, ge=1, le=60)
     history_limit: int = Field(default=20, ge=1, le=100)
-    history_refresh_interval_s: float = Field(default=2.0, gt=0, le=60)
+    history_refresh_interval_s: float = Field(default=30.0, gt=0, le=60)
     reconnect_delay_s: float = Field(default=2.0, gt=0, le=60)
 
     @field_validator("host", "ssh_user")

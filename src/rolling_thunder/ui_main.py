@@ -271,6 +271,7 @@ def run_dashboard(
             gps_state_provider=lambda: runtime.latest_gps_state,
         )
         if dmr_panel_runtime is not None:
+            dmr_panel_runtime.set_polling_enabled(False)
             dmr_panel_runtime.start()
     except (RuntimeError, ValueError) as error:
         print(f"Rolling Thunder DMR startup error: {error}")
@@ -755,6 +756,21 @@ def run_dashboard(
     )
     ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
+    dmr_expanded_layout = False
+
+    def set_dmr_expanded_layout(enabled: bool) -> None:
+        """Give DMR the full left-column height without disturbing other contexts."""
+        nonlocal dmr_expanded_layout
+        if enabled == dmr_expanded_layout:
+            return
+        dmr_expanded_layout = enabled
+        if enabled:
+            logger.grid_remove()
+            context.grid_configure(row=0, rowspan=2, pady=(8, 12))
+            return
+        context.grid_configure(row=1, rowspan=1, pady=(4, 12))
+        logger.grid()
+
     def show_standard_context_body() -> None:
         """Show the reusable text body and hide specialized context viewports."""
         pota_panel_frame.grid_remove()
@@ -931,6 +947,14 @@ def run_dashboard(
             )
 
         selected_context = context_navigation.state
+        if dmr_panel_runtime is not None:
+            dmr_panel_runtime.set_polling_enabled(
+                selected_context.selected is ContextId.DMR
+            )
+        set_dmr_expanded_layout(
+            selected_context.selected is ContextId.DMR
+            and dmr_panel_runtime is not None
+        )
 
         if selected_context.selected in {ContextId.POTA, ContextId.DX}:
             health_frame.grid_remove()

@@ -17,7 +17,7 @@ _WARNING = "#ffd24a"
 _FAILURE = "#ff7070"
 
 _MAX_AUDIO_CARDS = 2
-_MAX_HISTORY_CARDS = 4
+_MAX_HISTORY_CARDS = 20
 
 
 class DmrWidgets:
@@ -28,7 +28,8 @@ class DmrWidgets:
 
         self._frame = tk.Frame(parent, bg=_BACKGROUND)
         self._frame.grid(row=1, column=0, sticky="nsew")
-        self._frame.grid_columnconfigure(0, weight=1)
+        self._frame.grid_columnconfigure(0, weight=1, uniform="dmr-history")
+        self._frame.grid_columnconfigure(1, weight=1, uniform="dmr-history")
 
         self._health = tk.StringVar(value="STARTING")
         self._health_label = tk.Label(
@@ -36,10 +37,10 @@ class DmrWidgets:
             textvariable=self._health,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 15, "bold"),
+            font=("DejaVu Sans", 26, "bold"),
             anchor="w",
         )
-        self._health_label.grid(row=0, column=0, sticky="ew", padx=6, pady=(0, 1))
+        self._health_label.grid(row=0, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 1))
 
         self._rf = tk.StringVar(value="RF INFORMATION UNAVAILABLE")
         tk.Label(
@@ -47,9 +48,9 @@ class DmrWidgets:
             textvariable=self._rf,
             bg=_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 15, "bold"),
+            font=("DejaVu Sans", 28, "bold"),
             anchor="w",
-        ).grid(row=1, column=0, sticky="ew", padx=6, pady=(0, 1))
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 1))
 
         self._error = tk.StringVar(value="")
         self._error_label = tk.Label(
@@ -57,33 +58,33 @@ class DmrWidgets:
             textvariable=self._error,
             bg=_BACKGROUND,
             fg=_FAILURE,
-            font=("DejaVu Sans", 12, "bold"),
+            font=("DejaVu Sans", 18, "bold"),
             anchor="w",
             justify="left",
             wraplength=500,
         )
-        self._error_label.grid(row=2, column=0, sticky="ew", padx=6, pady=(0, 2))
+        self._error_label.grid(row=2, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 2))
 
         tk.Label(
             self._frame,
             text="CURRENT AUDIO",
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 13, "bold"),
+            font=("DejaVu Sans", 24, "bold"),
             anchor="w",
-        ).grid(row=3, column=0, sticky="ew", padx=6, pady=(1, 1))
+        ).grid(row=3, column=0, columnspan=2, sticky="ew", padx=6, pady=(1, 1))
 
         self._audio_idle = tk.StringVar(value="IDLE — NO ACTIVE DMR AUDIO")
         self._audio_idle_label = tk.Label(
             self._frame,
             textvariable=self._audio_idle,
-            bg=_CARD_BACKGROUND,
-            fg=_MUTED,
-            font=("DejaVu Sans", 16, "bold"),
+            bg=_FAILURE,
+            fg=_CARD_BACKGROUND,
+            font=("DejaVu Sans", 34, "bold"),
             anchor="center",
-            pady=5,
+            pady=3,
         )
-        self._audio_idle_label.grid(row=4, column=0, sticky="ew", padx=4, pady=1)
+        self._audio_idle_label.grid(row=4, column=0, columnspan=2, sticky="ew", padx=4, pady=1)
 
         self._audio_frames: list[Any] = []
         self._audio_vars: list[tuple[Any, Any, Any]] = []
@@ -94,7 +95,7 @@ class DmrWidgets:
                 highlightthickness=2,
                 highlightbackground=_BORDER,
             )
-            frame.grid(row=4 + card_index, column=0, sticky="ew", padx=4, pady=1)
+            frame.grid(row=5 + card_index, column=0, columnspan=2, sticky="ew", padx=4, pady=1)
             frame.grid_columnconfigure(0, weight=1)
 
             callsign = tk.StringVar(value="")
@@ -105,7 +106,7 @@ class DmrWidgets:
                 textvariable=callsign,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
-                font=("DejaVu Sans", 22, "bold"),
+                font=("DejaVu Sans", 48, "bold"),
                 anchor="w",
             ).grid(row=0, column=0, sticky="ew", padx=8, pady=(2, 0))
             tk.Label(
@@ -113,7 +114,7 @@ class DmrWidgets:
                 textvariable=detail,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
-                font=("DejaVu Sans", 13, "bold"),
+                font=("DejaVu Sans", 24, "bold"),
                 anchor="w",
             ).grid(row=1, column=0, sticky="ew", padx=8, pady=0)
             tk.Label(
@@ -121,7 +122,7 @@ class DmrWidgets:
                 textvariable=alias,
                 bg=_CARD_BACKGROUND,
                 fg=_MUTED,
-                font=("DejaVu Sans", 12),
+                font=("DejaVu Sans", 22),
                 anchor="w",
             ).grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 2))
             self._audio_frames.append(frame)
@@ -133,9 +134,9 @@ class DmrWidgets:
             text="RECENT CALLERS",
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 13, "bold"),
+            font=("DejaVu Sans", 24, "bold"),
             anchor="w",
-        ).grid(row=6, column=0, sticky="ew", padx=6, pady=(3, 1))
+        ).grid(row=7, column=0, columnspan=2, sticky="ew", padx=6, pady=(3, 1))
 
         self._history_frames: list[Any] = []
         self._history_vars: list[tuple[Any, Any]] = []
@@ -146,8 +147,16 @@ class DmrWidgets:
                 highlightthickness=2,
                 highlightbackground=_BORDER,
             )
-            frame.grid(row=7 + card_index, column=0, sticky="ew", padx=4, pady=1)
-            frame.grid_columnconfigure(0, weight=1)
+            frame.grid(
+                row=8 + card_index,
+                column=0,
+                columnspan=2,
+                sticky="ew",
+                padx=4,
+                pady=1,
+            )
+            frame.grid_columnconfigure(0, weight=2)
+            frame.grid_columnconfigure(1, weight=3)
 
             callsign = tk.StringVar(value="")
             detail = tk.StringVar(value="")
@@ -156,17 +165,17 @@ class DmrWidgets:
                 textvariable=callsign,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
-                font=("DejaVu Sans", 16, "bold"),
+                font=("DejaVu Sans", 34, "bold"),
                 anchor="w",
-            ).grid(row=0, column=0, sticky="ew", padx=8, pady=(1, 0))
+            ).grid(row=0, column=0, sticky="w", padx=(8, 4), pady=0)
             tk.Label(
                 frame,
                 textvariable=detail,
                 bg=_CARD_BACKGROUND,
                 fg=_MUTED,
-                font=("DejaVu Sans Mono", 11, "bold"),
-                anchor="w",
-            ).grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 1))
+                font=("DejaVu Sans", 21, "bold"),
+                anchor="e",
+            ).grid(row=0, column=1, sticky="e", padx=(4, 8), pady=0)
             self._history_frames.append(frame)
             self._history_vars.append((callsign, detail))
             frame.grid_remove()
@@ -177,9 +186,9 @@ class DmrWidgets:
             textvariable=self._more,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 11, "bold"),
+            font=("DejaVu Sans", 16, "bold"),
             anchor="center",
-        ).grid(row=11, column=0, sticky="ew", padx=6, pady=(1, 0))
+        ).grid(row=28, column=0, columnspan=2, sticky="ew", padx=6, pady=(1, 0))
 
         self._stage = tk.StringVar(value="")
         tk.Label(
@@ -187,11 +196,11 @@ class DmrWidgets:
             textvariable=self._stage,
             bg=_BACKGROUND,
             fg=_WARNING,
-            font=("DejaVu Sans", 12, "bold"),
+            font=("DejaVu Sans", 18, "bold"),
             anchor="w",
             justify="left",
             wraplength=500,
-        ).grid(row=12, column=0, sticky="ew", padx=6, pady=(2, 0))
+        ).grid(row=29, column=0, columnspan=2, sticky="ew", padx=6, pady=(2, 0))
 
         self._commit = tk.StringVar(value="")
         self._commit_label = tk.Label(
@@ -199,12 +208,15 @@ class DmrWidgets:
             textvariable=self._commit,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 12, "bold"),
+            font=("DejaVu Sans", 18, "bold"),
             anchor="w",
             justify="left",
             wraplength=500,
         )
-        self._commit_label.grid(row=13, column=0, sticky="ew", padx=6, pady=(1, 0))
+        self._commit_label.grid(
+            row=30, column=0, columnspan=2, sticky="ew", padx=6, pady=(1, 0)
+        )
+        self._last_viewport: DmrViewport | None = None
         self.hide()
 
     def show(self) -> None:
@@ -216,7 +228,10 @@ class DmrWidgets:
         self._frame.grid_remove()
 
     def update(self, viewport: DmrViewport) -> None:
-        """Render one immutable viewport snapshot using only local widget operations."""
+        """Render a changed immutable viewport using only local widget operations."""
+        if viewport == self._last_viewport:
+            return
+        self._last_viewport = viewport
         self._health.set(viewport.health_line)
         self._health_label.configure(fg=self._health_color(viewport.health_line))
         self._rf.set(viewport.rf_line)
@@ -226,7 +241,16 @@ class DmrWidgets:
         else:
             self._error_label.grid_remove()
 
-        self._audio_idle_label.grid_remove()
+        receiving = not viewport.current_audio_idle
+        self._audio_idle.set(
+            "RECEIVING DMR AUDIO"
+            if receiving
+            else "IDLE — NO ACTIVE DMR AUDIO"
+        )
+        self._audio_idle_label.configure(
+            bg=_SUCCESS if receiving else _FAILURE,
+            fg=_CARD_BACKGROUND,
+        )
         for index, frame in enumerate(self._audio_frames):
             if index >= len(viewport.current_audio_cards):
                 frame.grid_remove()
@@ -241,9 +265,6 @@ class DmrWidgets:
                 bg=_CARD_BACKGROUND,
             )
             frame.grid()
-        if viewport.current_audio_idle:
-            self._audio_idle_label.grid()
-
         for index, frame in enumerate(self._history_frames):
             if index >= len(viewport.history_cards):
                 frame.grid_remove()

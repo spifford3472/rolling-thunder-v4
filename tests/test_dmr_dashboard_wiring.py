@@ -98,5 +98,9 @@ def test_ui_main_contains_complete_dmr_lifecycle_wiring() -> None:
         "dmr_panel_runtime.synchronize_commit_events()",
         "build_dmr_viewport(",
         "dmr_panel_runtime.stop()",
+        "set_dmr_expanded_layout(",
+        "dmr_panel_runtime.set_polling_enabled(False)",
+        "dmr_panel_runtime.set_polling_enabled(",
+        "rowspan=2",
     ):
         assert required in source

@@ -102,6 +102,13 @@ def test_idle_view_shows_rf_health_and_idle_state(monkeypatch: Any) -> None:
     assert widgets._health.get() == "HEALTHY  LIVE OK  HISTORY OK  RF OK"
     assert widgets._rf.get() == "RX 434.5375 MHz  TX 439.5375 MHz  DUPLEX"
     assert widgets._audio_idle_label.visible
+    assert widgets._audio_idle.get() == "IDLE — NO ACTIVE DMR AUDIO"
+    assert widgets._audio_idle_label.options["bg"] == "#ff7070"
+    assert widgets._audio_idle_label.options["font"] == (
+        "DejaVu Sans",
+        34,
+        "bold",
+    )
     assert not widgets._error_label.visible
     assert all(not frame.visible for frame in widgets._audio_frames)
     assert all(not frame.visible for frame in widgets._history_frames)
@@ -144,7 +151,9 @@ def test_active_audio_and_history_cards_render_selection_and_stage(monkeypatch: 
         )
     )
 
-    assert not widgets._audio_idle_label.visible
+    assert widgets._audio_idle_label.visible
+    assert widgets._audio_idle.get() == "RECEIVING DMR AUDIO"
+    assert widgets._audio_idle_label.options["bg"] == "#42ff72"
     assert widgets._audio_frames[0].visible
     assert widgets._audio_vars[0][0].get() == "KC9KPJ"
     assert widgets._audio_frames[0].options["highlightbackground"] == "#42ff72"
@@ -186,4 +195,18 @@ def test_widget_adapter_limits_preallocated_card_slots(monkeypatch: Any) -> None
     widgets = DmrWidgets(FakeWidget())
 
     assert len(widgets._audio_frames) == 2
-    assert len(widgets._history_frames) == 4
+    assert len(widgets._history_frames) == 20
+    assert widgets._history_frames[0].options["grid_row"] == 8
+    assert widgets._history_frames[0].options["grid_column"] == 0
+    assert widgets._history_frames[0].options["grid_columnspan"] == 2
+    assert widgets._history_frames[9].options["grid_row"] == 17
+    assert widgets._history_frames[9].options["grid_column"] == 0
+    assert widgets._history_frames[9].options["grid_columnspan"] == 2
+    assert widgets._history_frames[19].options["grid_row"] == 27
+    assert widgets._history_frames[19].options["grid_column"] == 0
+    assert widgets._history_frames[19].options["grid_columnspan"] == 2
+    assert widgets._history_frames[0].children[1].options["font"] == (
+        "DejaVu Sans",
+        21,
+        "bold",
+    )

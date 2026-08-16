@@ -250,3 +250,38 @@ def test_start_rejects_duplicate_workers_and_stop_is_safe() -> None:
 
     service.stop()
     assert not service.is_running
+
+def test_wpsd_polling_can_pause_and_resume_without_stopping_live_feed() -> None:
+    live = ControlledLiveSource()
+    wpsd = FakeWpsdSource()
+    service = DmrMonitorService(
+        live,
+        wpsd,
+        history_refresh_interval_s=0.03,
+        reconnect_delay_s=0.05,
+    )
+    service.set_polling_enabled(False)
+    service.start()
+    assert live.started.wait(timeout=1)
+    _wait_until(lambda: service.latest_state.live_available)
+
+    time.sleep(0.08)
+    assert wpsd.history_calls == 0
+    assert wpsd.radio_calls == 0
+
+    service.set_polling_enabled(True)
+    _wait_until(lambda: wpsd.history_calls >= 1 and wpsd.radio_calls >= 1)
+
+    service.set_polling_enabled(False)
+    history_calls = wpsd.history_calls
+    radio_calls = wpsd.radio_calls
+    time.sleep(0.09)
+    assert wpsd.history_calls == history_calls
+    assert wpsd.radio_calls == radio_calls
+    assert service.latest_state.live_available
+
+    service.set_polling_enabled(True)
+    _wait_until(
+        lambda: wpsd.history_calls > history_calls and wpsd.radio_calls > radio_calls
+    )
+    service.stop()

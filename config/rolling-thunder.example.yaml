@@ -87,7 +87,7 @@ dmr:
   http_timeout_s: 5.0
   connect_timeout_s: 5
   history_limit: 20
-  history_refresh_interval_s: 2.0
+  history_refresh_interval_s: 30.0
   reconnect_delay_s: 2.0
 
 # QRZ credentials are never stored in YAML. See docs/POTA_ENRICHMENT.md.
