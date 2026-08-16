@@ -124,7 +124,7 @@ class SshDmrLiveLineSource:
             f"{self._user}@{self._host}",
         ]
         try:
-            process = subprocess.Popen(  # noqa: S603
+            process = subprocess.Popen(
                 command,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
@@ -205,8 +205,8 @@ class WpsdDmrHttpSource:
             headers={"User-Agent": "RollingThunder-v4"},
         )
         try:
-            with urlopen(request, timeout=self._timeout_s) as response:  # noqa: S310
-                return response.read()
+            with urlopen(request, timeout=self._timeout_s) as response:
+                return bytes(response.read())
         except (OSError, TimeoutError, URLError) as error:
             raise DmrSourceError(f"WPSD request failed for {path}: {error}") from error
 
