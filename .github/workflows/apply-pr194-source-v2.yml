@@ -1,0 +1,233 @@
+name: Apply PR194 Source Feedback v2
+
+on:
+  push:
+    branches:
+      - fix/dashboard-readability-truthfulness
+    paths:
+      - .github/workflows/apply-pr194-source-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: fix/dashboard-readability-truthfulness
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Apply physical-test feedback
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(
+                      f"Expected exactly one match in {path}, found {count}: {old[:80]!r}"
+                  )
+              file_path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "src/rolling_thunder/log_ui.py",
+              """_LOG_SUMMARY_FONT_SIZE = 60\n_LOG_STATUS_FONT_SIZE = 48\n_LOG_CALLSIGN_FONT_SIZE = 50\n_LOG_DETAIL_FONT_SIZE = 42\n_LOG_HINT_FONT_SIZE = 42""",
+              """_LOG_SUMMARY_FONT_SIZE = 30\n_LOG_STATUS_FONT_SIZE = 24\n_LOG_CALLSIGN_FONT_SIZE = 25\n_LOG_DETAIL_FONT_SIZE = 21\n_LOG_HINT_FONT_SIZE = 21""",
+          )
+
+          replace_once(
+              "src/rolling_thunder/live_map_ui.py",
+              """_INFO_BOX_RIGHT = 548\n_INFO_BOX_BOTTOM = 246""",
+              """_INFO_BOX_RIGHT = 680\n_INFO_BOX_BOTTOM = 306""",
+          )
+
+          weather_path = "src/rolling_thunder/weather_ui.py"
+          replace_once(
+              weather_path,
+              "from rolling_thunder.weather_panel import WeatherPanelPresentation, WeatherPanelStatus",
+              """from rolling_thunder.weather_alert_viewport import (\n    WeatherAlertViewportPresentation,\n)\nfrom rolling_thunder.weather_panel import WeatherPanelPresentation, WeatherPanelStatus""",
+          )
+          replace_once(
+              weather_path,
+              """        self._frame.grid_rowconfigure(2, weight=2)\n        self._frame.grid_rowconfigure(3, weight=1)""",
+              """        self._frame.grid_rowconfigure(2, weight=1)\n        self._frame.grid_rowconfigure(3, weight=2, minsize=320)""",
+          )
+          replace_once(
+              weather_path,
+              'font=("DejaVu Sans", 21, "bold"),',
+              'font=("DejaVu Sans", 26, "bold"),',
+          )
+          replace_once(
+              weather_path,
+              'font=("DejaVu Sans", 29, "bold"),',
+              'font=("DejaVu Sans", 36, "bold"),',
+          )
+          replace_once(
+              weather_path,
+              'font=("DejaVu Sans", 20, "bold"),\n                anchor="center",',
+              'font=("DejaVu Sans", 25, "bold"),\n                anchor="center",',
+          )
+          replace_once(
+              weather_path,
+              'font=("DejaVu Sans", 18, "bold"),',
+              'font=("DejaVu Sans", 22, "bold"),',
+          )
+          replace_once(
+              weather_path,
+              'textvariable=self._alert_status_text,\n            bg=_CARD_BACKGROUND,\n            fg=_DISABLED,\n            font=("DejaVu Sans", 22, "bold"),',
+              'textvariable=self._alert_status_text,\n            bg=_CARD_BACKGROUND,\n            fg=_DISABLED,\n            font=("DejaVu Sans", 28, "bold"),',
+          )
+          replace_once(
+              weather_path,
+              'font=("DejaVu Sans", 20, "bold"),\n            justify="left",',
+              'font=("DejaVu Sans", 34, "bold"),\n            justify="left",',
+          )
+          replace_once(
+              weather_path,
+              'font=("DejaVu Sans", 16, "bold"),',
+              'font=("DejaVu Sans", 28, "bold"),',
+          )
+          replace_once(
+              weather_path,
+              """        ).grid(\n            row=3,\n            column=0,\n            sticky=\"ew\",\n            padx=10,\n            pady=(1, 6),\n        )\n\n        self._attribution_text = tk.StringVar(value=\"\")""",
+              """        ).grid(\n            row=3,\n            column=0,\n            sticky=\"nsew\",\n            padx=10,\n            pady=(1, 2),\n        )\n        alerts.grid_rowconfigure(3, weight=1)\n\n        self._alert_scroll_text = tk.StringVar(value=\"\")\n        tk.Label(\n            alerts,\n            textvariable=self._alert_scroll_text,\n            bg=_CARD_BACKGROUND,\n            fg=_WARNING,\n            font=(\"DejaVu Sans\", 20, \"bold\"),\n            justify=\"left\",\n            anchor=\"w\",\n        ).grid(\n            row=4,\n            column=0,\n            sticky=\"ew\",\n            padx=10,\n            pady=(1, 6),\n        )\n\n        self._attribution_text = tk.StringVar(value=\"\")""",
+          )
+          replace_once(
+              weather_path,
+              """        alert_presentation: WeatherAlertPanelPresentation,\n    ) -> None:""",
+              """        alert_presentation: WeatherAlertPanelPresentation,\n        alert_viewport: WeatherAlertViewportPresentation,\n    ) -> None:""",
+          )
+          replace_once(
+              weather_path,
+              """            self._alert_secondary_text.set(\n                f\"{item.area}\\n{item.headline}\"\n            )""",
+              """            self._alert_secondary_text.set(alert_viewport.text)""",
+          )
+          replace_once(
+              weather_path,
+              """        attributions = tuple(""",
+              """        directions = []\n        if alert_viewport.can_scroll_up:\n            directions.append(\"▲\")\n        if alert_viewport.can_scroll_down:\n            directions.append(\"▼\")\n        self._alert_scroll_text.set(\n            f\"ROTATE TO SCROLL ALERT  {' '.join(directions)}\"\n            if alert_presentation.items and alert_viewport.overflowing\n            else \"\"\n        )\n\n        attributions = tuple(""",
+          )
+
+          Path("src/rolling_thunder/weather_alert_viewport.py").write_text(
+              '''"""Deterministic scroll viewport for the driving weather-alert summary."""\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom textwrap import wrap\n\nfrom rolling_thunder.weather_alert_panel import WeatherAlertPanelPresentation\n\n_DEFAULT_WRAP_WIDTH = 42\n_DEFAULT_VISIBLE_LINES = 5\n\n\n@dataclass(frozen=True)\nclass WeatherAlertViewportPresentation:\n    """Immutable visible slice of the first operator-facing weather alert."""\n\n    text: str\n    offset: int\n    line_count: int\n    visible_line_count: int\n    can_scroll_up: bool\n    can_scroll_down: bool\n    overflowing: bool\n\n\nclass WeatherAlertViewportController:\n    """Scroll already-published alert text without provider or hardware work."""\n\n    def __init__(\n        self,\n        *,\n        wrap_width: int = _DEFAULT_WRAP_WIDTH,\n        visible_lines: int = _DEFAULT_VISIBLE_LINES,\n    ) -> None:\n        if wrap_width <= 0:\n            raise ValueError("Weather alert wrap width must be positive.")\n        if visible_lines <= 0:\n            raise ValueError("Weather alert visible line count must be positive.")\n\n        self._wrap_width = wrap_width\n        self._visible_lines = visible_lines\n        self._signature: tuple[str, str, str] | None = None\n        self._lines: tuple[str, ...] = ()\n        self._offset = 0\n        self._state = self._build_state()\n\n    @property\n    def state(self) -> WeatherAlertViewportPresentation:\n        """Return the latest immutable alert viewport."""\n        return self._state\n\n    def synchronize(\n        self,\n        presentation: WeatherAlertPanelPresentation,\n    ) -> WeatherAlertViewportPresentation:\n        """Synchronize with the first displayed alert while preserving position."""\n        if not presentation.items:\n            self._signature = None\n            self._lines = ()\n            self._offset = 0\n            self._state = self._build_state()\n            return self._state\n\n        item = presentation.items[0]\n        signature = (item.alert_id, item.area, item.headline)\n        lines = self._wrapped_lines(item.area, item.headline)\n        if signature != self._signature:\n            self._offset = 0\n        self._signature = signature\n        self._lines = lines\n        self._offset = min(self._offset, self._maximum_offset())\n        self._state = self._build_state()\n        return self._state\n\n    def scroll_previous(self) -> bool:\n        """Move one wrapped line toward the beginning when possible."""\n        if self._offset <= 0:\n            return False\n        self._offset -= 1\n        self._state = self._build_state()\n        return True\n\n    def scroll_next(self) -> bool:\n        """Move one wrapped line toward the end when possible."""\n        maximum = self._maximum_offset()\n        if self._offset >= maximum:\n            return False\n        self._offset += 1\n        self._state = self._build_state()\n        return True\n\n    def _wrapped_lines(self, area: str, headline: str) -> tuple[str, ...]:\n        lines: list[str] = []\n        for paragraph in (area, headline):\n            lines.extend(\n                wrap(\n                    paragraph,\n                    width=self._wrap_width,\n                    break_long_words=False,\n                    break_on_hyphens=False,\n                )\n                or ("",)\n            )\n        return tuple(lines)\n\n    def _maximum_offset(self) -> int:\n        return max(0, len(self._lines) - self._visible_lines)\n\n    def _build_state(self) -> WeatherAlertViewportPresentation:\n        line_count = len(self._lines)\n        visible = self._lines[\n            self._offset : self._offset + self._visible_lines\n        ]\n        maximum = self._maximum_offset()\n        return WeatherAlertViewportPresentation(\n            text="\\n".join(visible),\n            offset=self._offset,\n            line_count=line_count,\n            visible_line_count=min(line_count, self._visible_lines),\n            can_scroll_up=self._offset > 0,\n            can_scroll_down=self._offset < maximum,\n            overflowing=line_count > self._visible_lines,\n        )\n''',
+              encoding="utf-8",
+          )
+
+          active_path = "src/rolling_thunder/active_panel_commands.py"
+          replace_once(
+              active_path,
+              "class ActivePanelCommandController:",
+              """class WeatherAlertViewportCommands(Protocol):\n    \"\"\"No-I/O weather alert scrolling reached through generic movement.\"\"\"\n\n    def scroll_previous(self) -> bool:\n        ...\n\n    def scroll_next(self) -> bool:\n        ...\n\n\nclass ActivePanelCommandController:""",
+          )
+          replace_once(
+              active_path,
+              """        repeater_active_overrides: RepeaterActiveOverrideCommands | None = None,\n        repeater_configuration: RepeaterRadioConfigurationCommands | None = None,\n    ) -> None:""",
+              """        repeater_active_overrides: RepeaterActiveOverrideCommands | None = None,\n        repeater_configuration: RepeaterRadioConfigurationCommands | None = None,\n        weather_alert_viewport: WeatherAlertViewportCommands | None = None,\n    ) -> None:""",
+          )
+          replace_once(
+              active_path,
+              """        self._repeater_configuration = repeater_configuration\n        self.activate_context(context_navigation.state.selected)""",
+              """        self._repeater_configuration = repeater_configuration\n        self._weather_alert_viewport = weather_alert_viewport\n        self.activate_context(context_navigation.state.selected)""",
+          )
+          replace_once(
+              active_path,
+              """    def move_previous(self) -> bool:\n        if self._settings_is_active():""",
+              """    def move_previous(self) -> bool:\n        if self._weather_is_active():\n            viewport = self._weather_alert_viewport\n            return viewport is not None and viewport.scroll_previous()\n        if self._settings_is_active():""",
+          )
+          replace_once(
+              active_path,
+              """    def move_next(self) -> bool:\n        if self._settings_is_active():""",
+              """    def move_next(self) -> bool:\n        if self._weather_is_active():\n            viewport = self._weather_alert_viewport\n            return viewport is not None and viewport.scroll_next()\n        if self._settings_is_active():""",
+          )
+          replace_once(
+              active_path,
+              """    def _settings_is_active(self) -> bool:\n        return self._context_navigation.state.selected is ContextId.SETTINGS""",
+              """    def _settings_is_active(self) -> bool:\n        return self._context_navigation.state.selected is ContextId.SETTINGS\n\n    def _weather_is_active(self) -> bool:\n        return self._context_navigation.state.selected is ContextId.WEATHER""",
+          )
+
+          ui_path = "src/rolling_thunder/ui_main.py"
+          replace_once(
+              ui_path,
+              """from rolling_thunder.weather_alert_panel import (\n    WeatherAlertPanelController,\n)\nfrom rolling_thunder.weather_panel import WeatherPanelController""",
+              """from rolling_thunder.weather_alert_panel import (\n    WeatherAlertPanelController,\n)\nfrom rolling_thunder.weather_alert_viewport import WeatherAlertViewportController\nfrom rolling_thunder.weather_panel import WeatherPanelController""",
+          )
+          replace_once(
+              ui_path,
+              """    weather_panel = WeatherPanelController()\n    weather_alert_panel = WeatherAlertPanelController()""",
+              """    weather_panel = WeatherPanelController()\n    weather_alert_panel = WeatherAlertPanelController()\n    weather_alert_viewport = WeatherAlertViewportController()""",
+          )
+          replace_once(
+              ui_path,
+              """        repeater_active_overrides=repeater_panel_runtime.persistence,\n        repeater_configuration=repeater_configuration,\n    )""",
+              """        repeater_active_overrides=repeater_panel_runtime.persistence,\n        repeater_configuration=repeater_configuration,\n        weather_alert_viewport=weather_alert_viewport,\n    )""",
+          )
+          replace_once(
+              ui_path,
+              """        weather_alert_presentation = weather_alert_panel.update(\n            runtime.latest_forge_weather_alert_state\n        )\n\n        gps_state = runtime.latest_gps_state""",
+              """        weather_alert_presentation = weather_alert_panel.update(\n            runtime.latest_forge_weather_alert_state\n        )\n        weather_alert_viewport_presentation = weather_alert_viewport.synchronize(\n            weather_alert_presentation\n        )\n\n        gps_state = runtime.latest_gps_state""",
+          )
+          replace_once(
+              ui_path,
+              """            weather_widgets.update(\n                weather_presentation,\n                weather_alert_presentation,\n            )""",
+              """            weather_widgets.update(\n                weather_presentation,\n                weather_alert_presentation,\n                weather_alert_viewport_presentation,\n            )""",
+          )
+
+          Path("tests/test_weather_alert_viewport.py").write_text(
+              '''"""Tests for deterministic weather-alert text scrolling."""\n\nfrom rolling_thunder.weather_alert_panel import (\n    WeatherAlertItemPresentation,\n    WeatherAlertPanelPresentation,\n    WeatherAlertPanelStatus,\n)\nfrom rolling_thunder.weather_alert_viewport import WeatherAlertViewportController\n\n\ndef presentation(\n    *,\n    alert_id: str = "warning-1",\n    area: str = "Warren County and nearby communities",\n    headline: str = (\n        "Severe Thunderstorm Warning issued for a long test area with "\n        "additional driving-safe summary words that require scrolling"\n    ),\n) -> WeatherAlertPanelPresentation:\n    return WeatherAlertPanelPresentation(\n        status=WeatherAlertPanelStatus.ACTIVE,\n        status_line="1 ACTIVE WEATHER ALERT • VERIFIED CURRENT",\n        verified_current=True,\n        active_count=1,\n        items=(\n            WeatherAlertItemPresentation(\n                alert_id=alert_id,\n                event="Severe Thunderstorm Warning",\n                severity="SEVERE",\n                expires="8:30 PM",\n                area=area,\n                headline=headline,\n            ),\n        ),\n        attribution="National Weather Service alerts",\n    )\n\n\ndef test_long_alert_scrolls_by_one_line_and_preserves_offset_on_refresh() -> None:\n    controller = WeatherAlertViewportController(wrap_width=24, visible_lines=3)\n    alert = presentation()\n\n    initial = controller.synchronize(alert)\n\n    assert initial.overflowing is True\n    assert initial.offset == 0\n    assert initial.can_scroll_up is False\n    assert initial.can_scroll_down is True\n\n    assert controller.scroll_next() is True\n    moved = controller.state\n    assert moved.offset == 1\n    assert moved.can_scroll_up is True\n    assert moved.text != initial.text\n\n    refreshed = controller.synchronize(alert)\n    assert refreshed.offset == 1\n    assert refreshed.text == moved.text\n\n    assert controller.scroll_previous() is True\n    assert controller.state.offset == 0\n    assert controller.scroll_previous() is False\n\n\ndef test_scroll_is_bounded_and_resets_for_new_or_missing_alert() -> None:\n    controller = WeatherAlertViewportController(wrap_width=18, visible_lines=2)\n    controller.synchronize(presentation())\n\n    moves = 0\n    while controller.scroll_next():\n        moves += 1\n\n    assert moves > 0\n    assert controller.state.can_scroll_down is False\n    assert controller.scroll_next() is False\n\n    changed = controller.synchronize(\n        presentation(alert_id="warning-2", headline="A different alert headline")\n    )\n    assert changed.offset == 0\n\n    empty = controller.synchronize(\n        WeatherAlertPanelPresentation(\n            status=WeatherAlertPanelStatus.NO_ACTIVE,\n            status_line="NO ACTIVE WEATHER ALERTS",\n            verified_current=True,\n            active_count=0,\n            items=(),\n            attribution="National Weather Service alerts",\n        )\n    )\n    assert empty.text == ""\n    assert empty.offset == 0\n    assert empty.overflowing is False\n''',
+              encoding="utf-8",
+          )
+
+          shared_test_path = "tests/test_shared_spot_active_panel_commands.py"
+          with Path(shared_test_path).open("a", encoding="utf-8") as handle:
+              handle.write(
+                  '''\n\nclass RecordingWeatherAlertViewport:\n    """Record weather-only generic movement without any hardware dependency."""\n\n    def __init__(self) -> None:\n        self.calls: list[str] = []\n\n    def scroll_previous(self) -> bool:\n        self.calls.append("scroll_previous")\n        return True\n\n    def scroll_next(self) -> bool:\n        self.calls.append("scroll_next")\n        return True\n\n\ndef test_weather_context_routes_encoder_movement_only_to_alert_viewport() -> None:\n    navigation = ContextNavigationController(ContextId.WEATHER)\n    panel = RecordingSharedPanel()\n    viewport = RecordingWeatherAlertViewport()\n    commands = SharedSpotActivePanelCommandController(\n        navigation,\n        panel,\n        current_frequency=lambda: Frequency(hz=7_150_000),\n        weather_alert_viewport=viewport,\n    )\n    panel.calls.clear()\n\n    assert commands.move_previous() is True\n    assert commands.move_next() is True\n\n    assert viewport.calls == ["scroll_previous", "scroll_next"]\n    assert panel.calls == []\n\n    navigation.select(ContextId.MAP)\n    commands.activate_context(ContextId.MAP)\n    viewport.calls.clear()\n    panel.calls.clear()\n\n    assert commands.move_previous() is False\n    assert commands.move_next() is False\n    assert viewport.calls == []\n    assert panel.calls == []\n'''
+              )
+
+          docs_path = "docs/WEATHER_ALERTS.md"
+          replace_once(
+              docs_path,
+              """The existing WEATHER context keeps its accepted current-conditions and hourly\npresentation in the upper portion of the panel. Approximately the lower third\nis reserved for `WEATHER ALERTS`.""",
+              """The existing WEATHER context keeps current conditions and the three future\nforecast cards in the upper portion of the panel. The forecast card text is\nintentionally larger for in-car readability without doubling its size. The\n`WEATHER ALERTS` region is taller than the original lower-third layout so the\nlarger alert summary remains readable at driving distance.""",
+          )
+          replace_once(
+              docs_path,
+              """When one or more alerts apply to the current trusted point, the panel shows only\ndriving-safe summary information: event, local expiration/end time, concise\nheadline or area text, and severity/status. Full provider descriptions and long\ninstruction bodies are not rendered in the driving panel.""",
+              """When one or more alerts apply to the current trusted point, the panel shows only\ndriving-safe summary information: event, local expiration/end time, concise\nheadline or area text, and severity/status. The summary text is substantially\nlarger than before. If the already-published area/headline summary exceeds the\nvisible alert viewport, generic rotary movement scrolls it one wrapped line at\na time while WEATHER is active; scrolling is bounded and resets for a different\nalert. The Tk adapter still has no direct hardware access. Full provider\ndescriptions and long instruction bodies are not rendered in the driving panel.""",
+          )
+          PY
+
+      - name: Install project and development tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[development]"
+
+      - name: Run full required validation
+        run: |
+          ruff check src tests
+          mypy src
+          pytest
+          pre-commit run --all-files
+          git diff --check
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git add src tests docs
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refine dashboard readability from physical test"
+          git push origin HEAD:fix/dashboard-readability-truthfulness
