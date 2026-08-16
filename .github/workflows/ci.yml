@@ -48,5 +48,5 @@ jobs:
       - name: Check diff whitespace
         run: |
           git diff --check
-          git fetch origin main:refs/remotes/origin/main --depth=1
-          git diff --check origin/main...HEAD
+          git fetch origin main --depth=1
+          git diff --check FETCH_HEAD HEAD
