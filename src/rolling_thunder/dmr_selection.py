@@ -60,7 +60,7 @@ class StagedDmrQso:
         cls,
         call: DmrCallSnapshot,
         radio_info: WpsdRadioInfo,
-    ) -> "StagedDmrQso":
+    ) -> StagedDmrQso:
         """Freeze the exact currently active DMR caller and RF pair."""
         identity = call.identity
         return cls(
@@ -88,7 +88,7 @@ class StagedDmrQso:
         cls,
         record: WpsdDmrHistoryRecord,
         radio_info: WpsdRadioInfo,
-    ) -> "StagedDmrQso":
+    ) -> StagedDmrQso:
         """Freeze one completed WPSD history row and the current RF pair."""
         return cls(
             origin=DmrStageOrigin.HISTORY,
