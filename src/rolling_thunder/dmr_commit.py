@@ -35,6 +35,18 @@ class DmrCommitStatus:
     committed_contact: Contact | None = None
 
 
+def _ignore_started(_stage_id: UUID, _callsign: str) -> None:
+    return None
+
+
+def _ignore_succeeded(_stage_id: UUID, _contact: Contact) -> None:
+    return None
+
+
+def _ignore_failed(_stage_id: UUID, _message: str) -> None:
+    return None
+
+
 class DmrContactCommitController:
     """Build and persist one frozen DMR stage without blocking the caller thread."""
 
@@ -47,9 +59,9 @@ class DmrContactCommitController:
         on_failed: Callable[[UUID, str], None] | None = None,
     ) -> None:
         self._writer = writer
-        self._on_started = on_started or (lambda stage_id, callsign: None)
-        self._on_succeeded = on_succeeded or (lambda stage_id, contact: None)
-        self._on_failed = on_failed or (lambda stage_id, message: None)
+        self._on_started = on_started or _ignore_started
+        self._on_succeeded = on_succeeded or _ignore_succeeded
+        self._on_failed = on_failed or _ignore_failed
         self._lock = Lock()
         self._status = DmrCommitStatus()
         self._completed_stage_ids: set[UUID] = set()
