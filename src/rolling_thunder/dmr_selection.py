@@ -18,6 +18,7 @@ from rolling_thunder.dmr_wpsd import (
     WpsdDmrHistoryRecord,
     WpsdRadioInfo,
 )
+from rolling_thunder.value_types import MaidenheadGrid
 
 _TALKGROUP = re.compile(r"\bTG\s+(?P<talkgroup>\d+)\b", re.IGNORECASE)
 
@@ -53,6 +54,7 @@ class StagedDmrQso:
     ber_percent: float | None
     radio_rx_hz: int
     radio_tx_hz: int
+    my_grid: MaidenheadGrid | None = None
     stage_id: UUID = field(default_factory=uuid4)
 
     @classmethod
@@ -60,8 +62,10 @@ class StagedDmrQso:
         cls,
         call: DmrCallSnapshot,
         radio_info: WpsdRadioInfo,
+        *,
+        my_grid: MaidenheadGrid | None = None,
     ) -> StagedDmrQso:
-        """Freeze the exact currently active DMR caller and RF pair."""
+        """Freeze the exact currently active DMR caller, RF pair, and operator grid."""
         identity = call.identity
         return cls(
             origin=DmrStageOrigin.CURRENT_AUDIO,
@@ -81,6 +85,7 @@ class StagedDmrQso:
             ber_percent=call.ber_percent,
             radio_rx_hz=radio_info.radio_rx_hz,
             radio_tx_hz=radio_info.radio_tx_hz,
+            my_grid=my_grid,
         )
 
     @classmethod
@@ -88,8 +93,10 @@ class StagedDmrQso:
         cls,
         record: WpsdDmrHistoryRecord,
         radio_info: WpsdRadioInfo,
+        *,
+        my_grid: MaidenheadGrid | None = None,
     ) -> StagedDmrQso:
-        """Freeze one completed WPSD history row and the current RF pair."""
+        """Freeze one completed WPSD history row, RF pair, and operator grid."""
         return cls(
             origin=DmrStageOrigin.HISTORY,
             identity=record.identity,
@@ -108,6 +115,7 @@ class StagedDmrQso:
             ber_percent=None,
             radio_rx_hz=radio_info.radio_rx_hz,
             radio_tx_hz=radio_info.radio_tx_hz,
+            my_grid=my_grid,
         )
 
 
@@ -214,21 +222,36 @@ class DmrSelectionController:
         self._selected_identity = None
         return self.state
 
-    def stage_selected(self, radio_info: WpsdRadioInfo | None) -> DmrSelectionState:
+    def stage_selected(
+        self,
+        radio_info: WpsdRadioInfo | None,
+        *,
+        my_grid: MaidenheadGrid | None = None,
+    ) -> DmrSelectionState:
         """Stage the selected completed caller when RF information is available."""
         record = self.state.selected_record
         if record is not None and radio_info is not None:
-            self._staged_qso = StagedDmrQso.from_history(record, radio_info)
+            self._staged_qso = StagedDmrQso.from_history(
+                record,
+                radio_info,
+                my_grid=my_grid,
+            )
         return self.state
 
     def stage_current(
         self,
         call: DmrCallSnapshot | None,
         radio_info: WpsdRadioInfo | None,
+        *,
+        my_grid: MaidenheadGrid | None = None,
     ) -> DmrSelectionState:
         """Stage the exact active caller when both caller and RF pair are known."""
         if call is not None and radio_info is not None:
-            self._staged_qso = StagedDmrQso.from_current_audio(call, radio_info)
+            self._staged_qso = StagedDmrQso.from_current_audio(
+                call,
+                radio_info,
+                my_grid=my_grid,
+            )
         return self.state
 
     def cancel_staging(self) -> DmrSelectionState:
