@@ -9,7 +9,11 @@ from rolling_thunder.dmr_activity import (
 )
 from rolling_thunder.dmr_monitor import DmrMonitorSnapshot
 from rolling_thunder.dmr_panel_commands import DmrPanelCommandController
-from rolling_thunder.dmr_selection import DmrSelectionController, DmrStageOrigin, StagedDmrQso
+from rolling_thunder.dmr_selection import (
+    DmrSelectionController,
+    DmrStageOrigin,
+    StagedDmrQso,
+)
 from rolling_thunder.dmr_wpsd import (
     WpsdDmrHistoryIdentity,
     WpsdDmrHistoryRecord,
@@ -27,7 +31,9 @@ def _radio_info() -> WpsdRadioInfo:
 
 
 def _history_record(callsign: str, *, seconds: int) -> WpsdDmrHistoryRecord:
-    occurred_at = datetime(2026, 8, 16, 0, 7, 22, tzinfo=UTC) + timedelta(seconds=seconds)
+    occurred_at = datetime(2026, 8, 16, 0, 7, 22, tzinfo=UTC) + timedelta(
+        seconds=seconds
+    )
     return WpsdDmrHistoryRecord(
         identity=WpsdDmrHistoryIdentity(
             occurred_at=occurred_at,
@@ -121,7 +127,9 @@ def test_primary_without_current_audio_preserves_existing_stage() -> None:
 def test_encoder_navigation_tracks_identity_when_new_history_arrives() -> None:
     newest = _history_record("KC9KPJ", seconds=0)
     older = _history_record("W3GSI", seconds=-20)
-    monitor = MutableMonitor(_snapshot(history=(newest, older), radio_info=_radio_info()))
+    monitor = MutableMonitor(
+        _snapshot(history=(newest, older), radio_info=_radio_info())
+    )
     controller = DmrPanelCommandController(monitor, DmrSelectionController())
 
     assert controller.move_next()
@@ -176,7 +184,11 @@ def test_rejected_commit_can_be_attempted_again() -> None:
     record = _history_record("KC9KPJ", seconds=0)
     monitor = MutableMonitor(_snapshot(history=(record,), radio_info=_radio_info()))
     commit = RecordingCommit()
-    controller = DmrPanelCommandController(monitor, DmrSelectionController(), commit)
+    controller = DmrPanelCommandController(
+        monitor,
+        DmrSelectionController(),
+        commit,
+    )
 
     assert controller.move_next()
     assert controller.activate_selection()
