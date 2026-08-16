@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 from rolling_thunder.dmr_selection import StagedDmrQso
 from rolling_thunder.domain import Contact, RadioMode
-from rolling_thunder.value_types import MaidenheadGrid
 
 
 class DmrContactBuildError(ValueError):
@@ -16,11 +15,10 @@ class DmrContactBuildError(ValueError):
 def build_dmr_contact(
     staged: StagedDmrQso,
     *,
-    my_grid: MaidenheadGrid | str | None = None,
     rst_sent: str = "59",
     rst_received: str = "59",
 ) -> Contact:
-    """Build one immutable local Contact without performing persistence or network I/O."""
+    """Build one immutable local Contact without persistence or live-state reads."""
     started_at = _contact_started_at(staged)
     return Contact(
         callsign=staged.callsign,
@@ -29,7 +27,7 @@ def build_dmr_contact(
         started_at=started_at,
         rst_sent=rst_sent,
         rst_received=rst_received,
-        my_grid=my_grid,
+        my_grid=staged.my_grid,
         notes=_dmr_notes(staged),
     )
 
