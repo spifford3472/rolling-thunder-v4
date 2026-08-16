@@ -1,0 +1,69 @@
+name: Apply PR194 Source Feedback v3
+
+on:
+  push:
+    branches:
+      - fix/dashboard-readability-truthfulness
+    paths:
+      - .github/workflows/apply-pr194-source-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: fix/dashboard-readability-truthfulness
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Apply corrected physical-test feedback
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          workflow = Path('.github/workflows/apply-pr194-source-v2.yml').read_text(encoding='utf-8')
+          start_marker = "        run: |\n          python - <<'PY'\n"
+          end_marker = "\n          PY\n\n      - name: Install project and development tools"
+          start = workflow.index(start_marker) + len(start_marker)
+          end = workflow.index(end_marker, start)
+          script = dedent(workflow[start:end])
+          script = script.replace('ContextId.MAP', 'ContextId.AI')
+          if 'ContextId.MAP' in script:
+              raise RuntimeError('Failed to correct non-weather routing test context.')
+          exec(compile(script, '<pr194-followup>', 'exec'), {'__name__': '__main__'})
+          PY
+
+      - name: Install project and development tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[development]"
+
+      - name: Run full required validation
+        run: |
+          ruff check src tests
+          mypy src
+          pytest
+          pre-commit run --all-files
+          git diff --check
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git add src tests docs
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Refine dashboard readability from physical test"
+          git push origin HEAD:fix/dashboard-readability-truthfulness
