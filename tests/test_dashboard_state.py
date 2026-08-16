@@ -3,7 +3,8 @@
 from datetime import UTC, datetime
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
-from rolling_thunder.dashboard_state import build_dashboard_state
+from rolling_thunder.connectivity_status import ConnectivityStatus
+from rolling_thunder.dashboard_state import build_dashboard_state, build_dashboard_ticker
 from rolling_thunder.domain import (
     Frequency,
     GPSFixState,
@@ -43,6 +44,20 @@ def gps_state(
     )
 
 
+def valid_gps_state() -> GPSState:
+    return gps_state(
+        GPSConnectionState.CONNECTED,
+        position=GPSPosition(
+            fix_state=GPSFixState.THREE_DIMENSIONAL,
+            latitude=39.5309,
+            longitude=-84.0866,
+            altitude_m=262.0,
+            satellites=10,
+            updated_at=timestamp(),
+        ),
+    )
+
+
 def test_connected_radio_formats_logger_fields() -> None:
     view = build_dashboard_state(connected_radio())
 
@@ -54,7 +69,16 @@ def test_connected_radio_formats_logger_fields() -> None:
     assert view.gps_state == "DISABLED"
     assert view.grid == "—"
     assert view.commit_state == "DISABLED"
-    assert view.ticker == "RADIO CONNECTED — MOCK VOICE READY"
+    assert view.ticker == "RADIO CONNECTED — VOICE READY"
+    assert "MOCK VOICE" not in view.ticker
+
+
+def test_connected_radio_uses_immutable_voice_state_in_ticker() -> None:
+    capture = CallsignCaptureState(voice_state="LISTENING")
+
+    view = build_dashboard_state(connected_radio(), capture)
+
+    assert view.ticker == "RADIO CONNECTED — VOICE LISTENING"
 
 
 def test_callsign_capture_populates_logger_state() -> None:
@@ -126,22 +150,56 @@ def test_no_fix_gps_uses_clear_status_without_grid() -> None:
 
 
 def test_valid_gps_fix_exposes_maidenhead_grid() -> None:
-    position = GPSPosition(
-        fix_state=GPSFixState.THREE_DIMENSIONAL,
-        latitude=39.5309,
-        longitude=-84.0866,
-        altitude_m=262.0,
-        satellites=10,
-        updated_at=timestamp(),
-    )
-
     view = build_dashboard_state(
         connected_radio(),
-        gps_state=gps_state(GPSConnectionState.CONNECTED, position=position),
+        gps_state=valid_gps_state(),
     )
 
     assert view.gps_state == "READY"
     assert view.grid == "EM79wm"
+
+
+def test_routine_ticker_omits_grid_and_disabled_keepalive_field() -> None:
+    view = build_dashboard_state(
+        connected_radio(),
+        gps_state=valid_gps_state(),
+        connectivity=ConnectivityStatus(
+            network="DISABLED",
+            home_platform="ONLINE",
+            synchronization="1 SYNCED / 0 RETRYING",
+            detail="CONNECTIVITY READY",
+        ),
+    )
+
+    ticker = build_dashboard_ticker(view, include_network=False)
+
+    assert view.grid == "EM79wm"
+    assert ticker == (
+        "RADIO CONNECTED — VOICE READY — HOME ONLINE — "
+        "SYNC 1 SYNCED / 0 RETRYING"
+    )
+    assert "GRID" not in ticker
+    assert "NETWORK" not in ticker
+    assert "NETWORK DISABLED" not in ticker
+
+
+def test_routine_ticker_retains_enabled_keepalive_state_and_detail() -> None:
+    view = build_dashboard_state(
+        connected_radio(),
+        connectivity=ConnectivityStatus(
+            network="OFFLINE",
+            home_platform="ONLINE",
+            synchronization="0 SYNCED / 1 RETRYING",
+            detail="NETWORK: request timed out",
+        ),
+    )
+
+    ticker = build_dashboard_ticker(view, include_network=True)
+
+    assert "NETWORK OFFLINE" in ticker
+    assert "HOME ONLINE" in ticker
+    assert "SYNC 0 SYNCED / 1 RETRYING" in ticker
+    assert ticker.endswith("NETWORK: request timed out")
 
 
 def test_gps_error_uses_clear_status_without_grid() -> None:
