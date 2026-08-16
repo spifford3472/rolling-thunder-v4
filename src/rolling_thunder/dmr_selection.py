@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -31,24 +32,24 @@ DmrStageIdentity = DmrCallIdentity | WpsdDmrHistoryIdentity
 class StagedDmrQso:
     """Immutable DMR QSO values captured before an explicit commit."""
 
+    origin: DmrStageOrigin
+    identity: DmrStageIdentity
+    callsign: str
+    slot: int
+    target: str
+    talkgroup: int | None
+    source: DmrActivitySource
+    started_at: datetime | None
+    ended_at: datetime | None
+    name: str | None
+    country: str | None
+    talker_alias: str | None
+    duration_s: float | None
+    packet_loss_percent: float | None
+    ber_percent: float | None
+    radio_rx_hz: int
+    radio_tx_hz: int
     stage_id: UUID = field(default_factory=uuid4)
-    origin: DmrStageOrigin = DmrStageOrigin.HISTORY
-    identity: DmrStageIdentity | None = None
-    callsign: str = ""
-    slot: int = 0
-    target: str = ""
-    talkgroup: int | None = None
-    source: DmrActivitySource = DmrActivitySource.NETWORK
-    started_at: object | None = None
-    ended_at: object | None = None
-    name: str | None = None
-    country: str | None = None
-    talker_alias: str | None = None
-    duration_s: float | None = None
-    packet_loss_percent: float | None = None
-    ber_percent: float | None = None
-    radio_rx_hz: int = 0
-    radio_tx_hz: int = 0
 
     @classmethod
     def from_current_audio(
@@ -68,6 +69,8 @@ class StagedDmrQso:
             source=identity.source,
             started_at=identity.started_at,
             ended_at=call.ended_at,
+            name=None,
+            country=None,
             talker_alias=call.talker_alias,
             duration_s=call.duration_s,
             packet_loss_percent=call.packet_loss_percent,
@@ -95,8 +98,10 @@ class StagedDmrQso:
             ended_at=record.occurred_at,
             name=record.name,
             country=record.country,
+            talker_alias=None,
             duration_s=record.duration_s,
             packet_loss_percent=record.packet_loss_percent,
+            ber_percent=None,
             radio_rx_hz=radio_info.radio_rx_hz,
             radio_tx_hz=radio_info.radio_tx_hz,
         )
@@ -190,7 +195,7 @@ class DmrSelectionController:
             return self.state
 
         current_index = self.state.selected_index
-        target_index = len(self._history) - 1 if current_index is None else max(0, current_index - 1)
+        target_index = 0 if current_index is None else max(0, current_index - 1)
         self._selected_identity = self._history[target_index].identity
         return self.state
 
@@ -202,11 +207,8 @@ class DmrSelectionController:
     def stage_selected(self, radio_info: WpsdRadioInfo | None) -> DmrSelectionState:
         """Stage the selected completed caller when RF information is available."""
         record = self.state.selected_record
-        self._staged_qso = (
-            StagedDmrQso.from_history(record, radio_info)
-            if record is not None and radio_info is not None
-            else None
-        )
+        if record is not None and radio_info is not None:
+            self._staged_qso = StagedDmrQso.from_history(record, radio_info)
         return self.state
 
     def stage_current(
@@ -215,11 +217,8 @@ class DmrSelectionController:
         radio_info: WpsdRadioInfo | None,
     ) -> DmrSelectionState:
         """Stage the exact active caller when both caller and RF pair are known."""
-        self._staged_qso = (
-            StagedDmrQso.from_current_audio(call, radio_info)
-            if call is not None and radio_info is not None
-            else None
-        )
+        if call is not None and radio_info is not None:
+            self._staged_qso = StagedDmrQso.from_current_audio(call, radio_info)
         return self.state
 
     def cancel_staging(self) -> DmrSelectionState:
