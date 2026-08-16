@@ -36,6 +36,7 @@ def _stage(**overrides: object) -> StagedDmrQso:
         "ber_percent": None,
         "radio_rx_hz": 434_537_500,
         "radio_tx_hz": 439_537_500,
+        "my_grid": "EM79xm",
     }
     values.update(overrides)
     return StagedDmrQso(**values)  # type: ignore[arg-type]
@@ -44,7 +45,7 @@ def _stage(**overrides: object) -> StagedDmrQso:
 def test_current_audio_builds_dmr_contact_from_frozen_stage() -> None:
     staged = _stage()
 
-    contact = build_dmr_contact(staged, my_grid="EM79xm")
+    contact = build_dmr_contact(staged)
 
     assert contact.callsign == "KC9KPJ"
     assert contact.frequency_hz == 439_537_500
@@ -123,3 +124,12 @@ def test_stage_without_any_timestamp_is_rejected() -> None:
 
     with pytest.raises(DmrContactBuildError, match="no usable contact timestamp"):
         build_dmr_contact(staged)
+
+
+def test_contact_uses_only_grid_frozen_in_stage() -> None:
+    staged = _stage(my_grid="EM79xm")
+
+    contact = build_dmr_contact(staged)
+
+    assert staged.my_grid == "EM79xm"
+    assert contact.my_grid == "EM79xm"
