@@ -21,6 +21,7 @@ SOURCE = RadarSourceMetadata(
     provider_name="Test",
     product=RadarProductToken.BASE_REFLECTIVITY,
     attribution_text="Radar: Test",
+    attribution_url="https://example.invalid/radar",
 )
 
 
