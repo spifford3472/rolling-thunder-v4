@@ -417,6 +417,43 @@ canvas tile objects are retained, and tiles whose image content is unchanged but
 whose screen position moved are repositioned rather than decoded and recreated.
 A bounded Tk `PhotoImage` cache reuses unchanged decoded tile images.
 
+### Radar coverage buffering
+
+The optional radar layer follows a stricter complete-publication contract than
+the progressively publishable base map. The visible map viewport is separated
+from a larger immutable radar coverage viewport. Current policy builds radar
+coverage with six whole Web Mercator tiles of reserve on every side and begins a
+spatial replacement when the minimum reserve reaches three tiles.
+
+`LiveRadarOverlayService` owns one complete published FRONT coverage buffer, one
+active BACK generation, and at most one coalesced newest desired target. Ordinary
+movement inside FRONT coverage publishes a new immutable visible crop from
+already-prepared FRONT PNG bytes and requires no radar HTTP or disk work. When
+spatial or meteorological refresh is required, BACK is built outside Tkinter
+while FRONT remains published. Partial or obsolete BACK data cannot replace
+FRONT; only a complete exact-frame candidate that is still relevant swaps into
+FRONT.
+
+Spatial and meteorological refresh are independent. Movement can trigger a
+coverage recenter without forcing a manifest request while the cached manifest
+is still within its check interval, while expiration of that interval can adopt
+a newer radar frame without vehicle movement. Same-frame spatial recentering
+reuses overlapping FRONT PNG bytes and requests only newly exposed edge tiles.
+Every published coverage buffer remains locked to one radar frame token and
+provider observation time.
+
+Radar buffers are zoom-specific. Incompatible old-zoom radar is removed during a
+zoom transition rather than stretched or misregistered. If BACK fails, a still
+fresh FRONT may remain visible only while it truthfully covers the visible map.
+Moving beyond its geographic coverage or crossing the radar hide-age cutoff
+removes the overlay rather than displaying false coverage.
+
+Tkinter receives only already-prepared immutable visible radar state. It retains
+and repositions same-frame radar canvas objects where image bytes are unchanged;
+it does not perform radar HTTP, filesystem, SQLite, opacity processing, or
+provider work. See `docs/WEATHER_RADAR.md` for resource bounds, exact-frame
+semantics, diagnostics, and physical acceptance.
+
 ### Tile source resolution
 
 Installed raster MBTiles packages are represented through typed package and
@@ -460,11 +497,12 @@ that was successfully written.
 
 ### Failure isolation
 
-Map HTTP, installed-package, cache, or rendering-data failure must not disable
-GPS polling, callsign capture, Commit or Discard, local SQLite logging, shared
-POTA/DX state, physical controls, radio polling, or receive-only tuning.
+Map HTTP, installed-package, cache, radar, or rendering-data failure must not
+disable GPS polling, callsign capture, Commit or Discard, local SQLite logging,
+shared POTA/DX state, DMR, repeaters, physical controls, radio polling, or
+receive-only tuning.
 
-Tkinter does not open map network connections, query MBTiles databases, or
+Tkinter does not open map/radar network connections, query MBTiles databases, or
 perform runtime-cache filesystem maintenance directly.
 
 Automatic day/night selection, broader regional package coverage, and the
@@ -604,6 +642,7 @@ Potentially blocking work must not execute in the UI thread, including:
 - shared receive tuning
 - speech capture/recognition
 - HTTP requests
+- radar manifest/tile retrieval and PNG opacity processing
 - synchronization/retry work
 - SQLite maintenance
 - filesystem/cache work
