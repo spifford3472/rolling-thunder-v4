@@ -20,7 +20,11 @@ from rolling_thunder.live_map_service import (
     MapDataStatus,
     MapTileSnapshot,
 )
-from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
+from rolling_thunder.live_radar_service import (
+    LiveRadarSnapshot,
+    RadarDataStatus,
+    RadarTileSnapshot,
+)
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
 from rolling_thunder.weather_panel import WeatherPanelPresentation
@@ -100,7 +104,10 @@ def live_map_status_lines(
     if presentation.grid is not None:
         lines.append(f"GRID {presentation.grid.upper()}")
     if presentation.position is not None:
-        lines.append(f"{presentation.position.latitude:.5f}, {presentation.position.longitude:.5f}")
+        lines.append(
+            f"{presentation.position.latitude:.5f}, "
+            f"{presentation.position.longitude:.5f}"
+        )
     return tuple(lines)
 
 
@@ -155,16 +162,50 @@ def plan_tile_updates(
     """Return tile removals, content redraws, and placement-only moves."""
     previous_tiles = _snapshot_tiles_by_key(previous)
     current_tiles = _snapshot_tiles_by_key(current)
+    return _plan_snapshot_tile_updates(previous_tiles, current_tiles)
 
+
+def plan_radar_tile_updates(
+    previous: LiveRadarSnapshot | None,
+    current: LiveRadarSnapshot | None,
+) -> TileUpdatePlan:
+    """Return minimum radar canvas work, redrawing all visible tiles on frame swap."""
+    previous_tiles = _radar_snapshot_tiles_by_key(previous)
+    current_tiles = _radar_snapshot_tiles_by_key(current)
+    previous_token = (
+        previous.frame.frame_token
+        if previous is not None and previous.frame is not None
+        else None
+    )
+    current_token = (
+        current.frame.frame_token
+        if current is not None and current.frame is not None
+        else None
+    )
+    if previous_token != current_token:
+        return TileUpdatePlan(
+            remove=tuple(sorted(previous_tiles)),
+            redraw=tuple(sorted(current_tiles)),
+            move=(),
+        )
+    return _plan_snapshot_tile_updates(previous_tiles, current_tiles)
+
+
+def _plan_snapshot_tile_updates(
+    previous_tiles: dict[MapTileKey, MapTileSnapshot | RadarTileSnapshot],
+    current_tiles: dict[MapTileKey, MapTileSnapshot | RadarTileSnapshot],
+) -> TileUpdatePlan:
     previous_keys = set(previous_tiles)
     current_keys = set(current_tiles)
-
     remove = tuple(sorted(previous_keys - current_keys))
     redraw = tuple(
         sorted(
             key
             for key in current_keys
-            if (key not in previous_tiles or previous_tiles[key].png != current_tiles[key].png)
+            if (
+                key not in previous_tiles
+                or previous_tiles[key].png != current_tiles[key].png
+            )
         )
     )
     move = tuple(
@@ -177,12 +218,7 @@ def plan_tile_updates(
             )
         )
     )
-
-    return TileUpdatePlan(
-        remove=remove,
-        redraw=redraw,
-        move=move,
-    )
+    return TileUpdatePlan(remove=remove, redraw=redraw, move=move)
 
 
 def _snapshot_tiles_by_key(
@@ -193,11 +229,19 @@ def _snapshot_tiles_by_key(
     return {tile.placement.key: tile for tile in snapshot.tiles}
 
 
+def _radar_snapshot_tiles_by_key(
+    snapshot: LiveRadarSnapshot | None,
+) -> dict[MapTileKey, RadarTileSnapshot]:
+    if snapshot is None:
+        return {}
+    return {tile.placement.key: tile for tile in snapshot.tiles}
+
+
 def radar_matches_map(
     radar: LiveRadarSnapshot | None,
     map_snapshot: LiveMapSnapshot | None,
 ) -> bool:
-    """Render radar only when its immutable placement snapshot matches the map."""
+    """Render radar only when its visible placement snapshot matches the map."""
     if radar is None or radar.viewport is None:
         return False
     if map_snapshot is None or map_snapshot.viewport is None:
@@ -226,6 +270,7 @@ class LiveMapWidgets:
             MapTileKey,
             tuple[bytes, Any],
         ] = OrderedDict()
+        self._radar_items: dict[MapTileKey, int] = {}
         self._radar_active_photos: dict[MapTileKey, Any] = {}
         self._radar_photo_cache: OrderedDict[
             tuple[str, MapTileKey],
@@ -265,8 +310,14 @@ class LiveMapWidgets:
         elif snapshot_changed:
             self._update_base(self._last_snapshot, snapshot, width, height)
 
-        if size_changed or snapshot_changed or radar_changed:
+        if size_changed:
             self._draw_radar(radar_snapshot, snapshot)
+        elif snapshot_changed or radar_changed:
+            self._update_radar(
+                self._last_radar_snapshot,
+                radar_snapshot,
+                snapshot,
+            )
 
         self._last_snapshot = snapshot
         self._last_radar_snapshot = radar_snapshot
@@ -313,7 +364,11 @@ class LiveMapWidgets:
         self._attribution_item = canvas.create_text(
             width - 12,
             height - 10,
-            text=(snapshot.attribution if snapshot is not None else DEFAULT_MAP_ATTRIBUTION),
+            text=(
+                snapshot.attribution
+                if snapshot is not None
+                else DEFAULT_MAP_ATTRIBUTION
+            ),
             fill=_MUTED,
             font=("DejaVu Sans", 11, "bold"),
             anchor="se",
@@ -455,32 +510,111 @@ class LiveMapWidgets:
         radar: LiveRadarSnapshot | None,
         map_snapshot: LiveMapSnapshot | None,
     ) -> None:
-        canvas = self._canvas
-        canvas.delete("map-radar")
-        self._radar_active_photos.clear()
-        if not radar_matches_map(radar, map_snapshot) or radar is None or radar.frame is None:
+        self._clear_radar()
+        if (
+            not radar_matches_map(radar, map_snapshot)
+            or radar is None
+            or radar.frame is None
+        ):
             return
 
         frame_token = radar.frame.frame_token
         for tile in radar.tiles:
-            if tile.png is None:
-                continue
-            key = tile.placement.key
-            cache_key = (frame_token, key)
-            photo = self._radar_photo_for_tile(cache_key, tile.png)
-            self._radar_active_photos[key] = photo
-            canvas.create_image(
-                tile.placement.x_px,
-                tile.placement.y_px,
-                image=photo,
-                anchor="nw",
-                tags="map-radar",
-            )
-
-        canvas.tag_raise("map-radar", "map-base")
-        if self._attribution_item is not None:
-            canvas.tag_raise(self._attribution_item, "map-radar")
+            self._upsert_radar_tile(frame_token, tile)
+        self._raise_radar_layer()
         self._trim_radar_photo_cache(frame_token)
+
+    def _update_radar(
+        self,
+        previous: LiveRadarSnapshot | None,
+        current: LiveRadarSnapshot | None,
+        map_snapshot: LiveMapSnapshot | None,
+    ) -> None:
+        if (
+            not radar_matches_map(current, map_snapshot)
+            or current is None
+            or current.frame is None
+        ):
+            self._clear_radar()
+            return
+
+        current_viewport = current.viewport
+        previous_viewport = previous.viewport if previous is not None else None
+        if (
+            previous is None
+            or previous.frame is None
+            or previous_viewport is None
+            or current_viewport is None
+            or previous_viewport.zoom != current_viewport.zoom
+        ):
+            self._draw_radar(current, map_snapshot)
+            return
+
+        plan = plan_radar_tile_updates(previous, current)
+        current_tiles = _radar_snapshot_tiles_by_key(current)
+        frame_token = current.frame.frame_token
+
+        for key in plan.remove:
+            self._remove_radar_tile(key)
+        for key in plan.redraw:
+            self._upsert_radar_tile(frame_token, current_tiles[key])
+        for key in plan.move:
+            self._move_radar_tile(frame_token, current_tiles[key])
+
+        self._raise_radar_layer()
+        self._trim_radar_photo_cache(frame_token)
+
+    def _clear_radar(self) -> None:
+        self._canvas.delete("map-radar")
+        self._radar_items.clear()
+        self._radar_active_photos.clear()
+
+    def _upsert_radar_tile(
+        self,
+        frame_token: str,
+        tile: RadarTileSnapshot,
+    ) -> None:
+        key = tile.placement.key
+        self._remove_radar_tile(key)
+        if tile.png is None:
+            return
+        cache_key = (frame_token, key)
+        photo = self._radar_photo_for_tile(cache_key, tile.png)
+        self._radar_active_photos[key] = photo
+        self._radar_items[key] = self._canvas.create_image(
+            tile.placement.x_px,
+            tile.placement.y_px,
+            image=photo,
+            anchor="nw",
+            tags="map-radar",
+        )
+
+    def _move_radar_tile(
+        self,
+        frame_token: str,
+        tile: RadarTileSnapshot,
+    ) -> None:
+        key = tile.placement.key
+        item = self._radar_items.get(key)
+        if item is None:
+            self._upsert_radar_tile(frame_token, tile)
+            return
+        self._canvas.coords(
+            item,
+            tile.placement.x_px,
+            tile.placement.y_px,
+        )
+
+    def _remove_radar_tile(self, key: MapTileKey) -> None:
+        item = self._radar_items.pop(key, None)
+        if item is not None:
+            self._canvas.delete(item)
+        self._radar_active_photos.pop(key, None)
+
+    def _raise_radar_layer(self) -> None:
+        self._canvas.tag_raise("map-radar", "map-base")
+        if self._attribution_item is not None:
+            self._canvas.tag_raise(self._attribution_item, "map-radar")
 
     def _radar_photo_for_tile(
         self,
@@ -502,8 +636,10 @@ class LiveMapWidgets:
                 (
                     cache_key
                     for cache_key in self._radar_photo_cache
-                    if cache_key[0] != active_frame_token
-                    or cache_key[1] not in self._radar_active_photos
+                    if (
+                        cache_key[0] != active_frame_token
+                        or cache_key[1] not in self._radar_active_photos
+                    )
                 ),
                 None,
             )
