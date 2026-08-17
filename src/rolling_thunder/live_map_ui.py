@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from base64 import b64encode
 from collections import OrderedDict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC
 from math import cos, radians, sin
@@ -192,8 +193,8 @@ def plan_radar_tile_updates(
 
 
 def _plan_snapshot_tile_updates(
-    previous_tiles: dict[MapTileKey, MapTileSnapshot | RadarTileSnapshot],
-    current_tiles: dict[MapTileKey, MapTileSnapshot | RadarTileSnapshot],
+    previous_tiles: Mapping[MapTileKey, MapTileSnapshot | RadarTileSnapshot],
+    current_tiles: Mapping[MapTileKey, MapTileSnapshot | RadarTileSnapshot],
 ) -> TileUpdatePlan:
     previous_keys = set(previous_tiles)
     current_keys = set(current_tiles)
