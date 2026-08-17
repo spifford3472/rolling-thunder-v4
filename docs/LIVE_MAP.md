@@ -48,6 +48,11 @@ SQLite work.
 `MapTileClient` and `MapTileCache` perform all HTTP and disk work. Tkinter only
 renders immutable state and never contacts the provider or cache directly.
 
+The optional radar service is separately lifecycle-owned. The current visible
+map viewport is a moving window into a larger immutable radar coverage buffer;
+radar network and PNG processing remain outside Tkinter. See
+`docs/WEATHER_RADAR.md` for the complete buffering and freshness contract.
+
 ## Operator Presentation
 
 The live-map overlay is split into two independent areas rather than using one
@@ -116,6 +121,41 @@ Map degradation remains independent from GPS:
 The marker remains visible over the neutral reference grid when base-map data is
 unavailable.
 
+## Radar Layer Motion
+
+When radar is enabled, the visual stacking order is:
+
+```text
+BASE MAP
+    -> RADAR
+    -> VEHICLE / STATUS OVERLAYS
+```
+
+The base map and radar have separate spatial lifecycles. Base-map viewport
+movement continues to use the existing local-first tile resolver and generation
+logic. Radar normally keeps six tiles of extra coverage on every side of the
+visible map and begins background recentering when the minimum reserve reaches
+three tiles.
+
+While the map moves inside the current radar coverage, the radar service
+publishes a new immutable visible crop using already-prepared FRONT-buffer PNG
+bytes. Crossing an ordinary map tile boundary therefore does not itself cause a
+radar manifest or radar-tile request.
+
+Tkinter retains same-frame radar canvas image objects when their image bytes are
+unchanged. If only placement changed, the canvas item is moved rather than
+removed, decoded, and recreated. A complete new weather frame is redrawn only
+when the BACK coverage buffer becomes the new FRONT buffer.
+
+A radar buffer belongs to exactly one zoom. On a zoom change, incompatible
+old-zoom radar is removed instead of being stretched or shifted while the
+correct new-zoom coverage loads in the background.
+
+Radar failure never changes base-map source priority or blocks the base map. A
+still-eligible FRONT radar buffer may remain visible while a replacement fails,
+but only while it truthfully contains the current visible viewport. No old radar
+is stretched beyond its geographic coverage.
+
 ## Provider and Cache Rules
 
 The default OpenStreetMap provider is used only for ordinary on-screen,
@@ -179,8 +219,9 @@ The live map does not:
 - alter physical-control authority
 - replace or suppress the global ATAS-120 warning
 
-Tile, cache, provider, or health-presentation failure must not stop GPS polling,
-contact logging, POTA/DX operation, physical controls, or radio state polling.
+Tile, cache, provider, radar, or health-presentation failure must not stop GPS
+polling, contact logging, POTA/DX operation, DMR, repeaters, physical controls,
+or radio state polling.
 
 ## Manual Acceptance on anvilmobile
 
@@ -188,30 +229,43 @@ contact logging, POTA/DX operation, physical controls, or radio state polling.
    installed I-71 corridor package path.
 2. Start the full-screen dashboard with GPS and normal network access.
 3. Confirm the upper-left information box shows correct local time, UTC,
-   Maidenhead grid, and temperature, with text roughly 1.5–2 times the previous
-   size and with all four lines fully visible.
+   Maidenhead grid, and temperature, with all four lines fully visible.
 4. Confirm the MAP/GPS/RADAR health panel remains aligned to the upper right and
    does not overlap the information box.
 5. Confirm MAP and GPS health are independent and both light blue with a current
    fix and complete usable map.
-6. Disable public-internet access while remaining inside installed package
-   coverage and confirm MAP remains light blue while local tiles continue
-   working.
-7. Move to a previously unseen viewport inside installed coverage and confirm the
-   map remains available without online tile requests.
-8. Confirm the marker follows course while moving and retains its heading when
-   stopped.
-9. Confirm GPS updates do not cause visible flicker or UI stalls.
-10. Confirm POTA/DX cards, the global ticker, and ATAS-120 warnings still work.
-11. Restore connectivity and confirm online fallback works outside package
-    coverage.
-12. Disconnect GPS after a current fix and confirm GPS health becomes yellow
+6. With radar enabled, confirm ordinary GPS movement and base-map tile-boundary
+   crossings do not create a blank/flashing radar interval.
+7. Confirm roughly one to two map tiles of travel keep radar continuously
+   aligned without a visible reload.
+8. Confirm travel to the radar spatial threshold begins a background replacement
+   while the old complete radar remains visible, followed by a seamless buffer
+   swap.
+9. Confirm GPS/vehicle-marker motion and the base map remain responsive while
+   radar BACK work is active.
+10. Change map zoom at least once and confirm radar never appears shifted or at
+    the wrong scale.
+11. Temporarily make Forge/radar unavailable and confirm eligible existing radar
+    is retained only while geographically valid, while base map/GPS/unrelated
+    contexts continue working.
+12. Restore Forge/radar and confirm recovery occurs without restarting the
+    dashboard.
+13. Disable public-internet access while remaining inside installed package
+    coverage and confirm MAP remains light blue while local tiles continue
+    working.
+14. Move to a previously unseen viewport inside installed coverage and confirm the
+    map remains available without online base-map tile requests.
+15. Confirm the marker follows course while moving and retains its heading when
+    stopped.
+16. Confirm POTA/DX cards, DMR/repeater contexts, the global ticker, and ATAS-120
+    warnings still work.
+17. Disconnect GPS after a current fix and confirm GPS health becomes yellow
     during the recent-loss window and gray after 30 seconds while the marker
     remains last-known rather than current.
-13. Force or observe a map-unavailable condition after a usable map and confirm
+18. Force or observe a map-unavailable condition after a usable map and confirm
     MAP health becomes yellow for less than 30 seconds and gray at 30 seconds,
     even though unavailable snapshots continue updating.
-14. Confirm logging, POTA/DX selection, physical controls, and radio polling
-    remain usable throughout map/GPS/network degradation.
+19. Confirm logging, POTA/DX selection, physical controls, and radio polling
+    remain usable throughout map/GPS/radar/network degradation.
 
 Record the visible results in the draft pull request before approval.
