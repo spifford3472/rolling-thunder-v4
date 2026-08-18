@@ -424,7 +424,7 @@ class MeshCoreConfig(ConfigurationModel):
         path = Path(value) if isinstance(value, (str, Path)) else value
         if isinstance(path, Path) and not path.is_absolute():
             raise ValueError(
-                "must be an absolute serial-device path, preferably /dev/serial/by-id/..."
+                "must be an absolute serial-device path under /dev/serial/..."
             )
         return path
 

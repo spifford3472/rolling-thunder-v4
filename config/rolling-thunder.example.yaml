@@ -122,8 +122,9 @@ radar:
   opacity: 0.55
 
 meshcore:
-  # Receive-only MeshCore companion access over USB serial. Prefer the stable
-  # /dev/serial/by-id path reported for the installed device.
+  # Receive-only MeshCore companion access over USB serial. Prefer a unique
+  # /dev/serial/by-id path. If USB serial IDs collide, use the device's distinct
+  # /dev/serial/by-path path and keep that device on the assigned physical port.
   enabled: false
   device: null
   baud_rate: 115200

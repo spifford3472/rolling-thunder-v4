@@ -16,7 +16,11 @@ from rolling_thunder.clock_sync import (
     ClockSyncState,
     SystemClockSetter,
 )
-from rolling_thunder.config import ApplicationConfig, HardwareAdapterMode
+from rolling_thunder.config import (
+    ApplicationConfig,
+    HardwareAdapterMode,
+    PhysicalControlTransport,
+)
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_qrz_enrichment import ContactQrzEnrichmentService
 from rolling_thunder.contact_repository import ContactRepository
@@ -44,6 +48,7 @@ from rolling_thunder.meshcore_messages import (
     MeshCoreMessageOverlayService,
 )
 from rolling_thunder.meshcore_usb import (
+    ExclusiveMeshCoreMessageSource,
     MeshCoreMessageSource,
     MeshCorePythonUsbSource,
     MeshCoreReceiveService,
@@ -484,11 +489,36 @@ class ApplicationRuntime:
             meshcore_device = config.meshcore.device
             if meshcore_device is None:
                 raise ValueError("A MeshCore USB device is required when enabled.")
+            reserved_serial_devices: dict[str, Path] = {}
+            if (
+                config.hardware.effective_radio_mode is HardwareAdapterMode.REAL
+                and config.hardware.radio_device is not None
+            ):
+                reserved_serial_devices["radio"] = config.hardware.radio_device
+            if (
+                config.hardware.effective_gps_mode is HardwareAdapterMode.REAL
+                and config.hardware.gps_device is not None
+            ):
+                reserved_serial_devices["GPS"] = config.hardware.gps_device
+            if (
+                config.physical_controls.enabled
+                and config.physical_controls.transport
+                is PhysicalControlTransport.SERIAL
+                and config.physical_controls.device is not None
+            ):
+                reserved_serial_devices["physical controls"] = (
+                    config.physical_controls.device
+                )
+            raw_meshcore_source = meshcore_source_factory(
+                meshcore_device,
+                baud_rate=config.meshcore.baud_rate,
+                command_timeout_s=config.meshcore.command_timeout_s,
+            )
             meshcore_receive = MeshCoreReceiveService(
-                meshcore_source_factory(
+                ExclusiveMeshCoreMessageSource(
+                    raw_meshcore_source,
                     meshcore_device,
-                    baud_rate=config.meshcore.baud_rate,
-                    command_timeout_s=config.meshcore.command_timeout_s,
+                    reserved_serial_devices,
                 ),
                 meshcore_overlay,
                 reconnect_delay_s=config.meshcore.reconnect_delay_s,

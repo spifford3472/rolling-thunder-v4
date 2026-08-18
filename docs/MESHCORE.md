@@ -23,9 +23,18 @@ meshcore:
   reconnect_delay_s: 2.0
 ```
 
-`device` must be an absolute path. Prefer `/dev/serial/by-id/...` so USB device
-numbering changes do not redirect the adapter. Channel matching is
-case-insensitive and configuration-driven.
+`device` must be an absolute path. Prefer `/dev/serial/by-id/...` only when its
+USB serial identity is unique. Some CP2102 bridges ship with the same generic
+serial number. Linux then exposes one colliding `by-id` link whose target can
+move to whichever bridge enumerated most recently. Never use that ambiguous
+link for MeshCore, the radio, GPS, or physical controls.
+
+When identities collide, use the distinct `/dev/serial/by-path/...` link and
+keep the device on that assigned physical USB port. Moving it to another port
+changes the path; Rolling Thunder then leaves MeshCore offline until the local
+configuration is deliberately updated. The only port-independent solution is
+to give the bridge a genuinely unique USB serial identity using a supported
+manufacturer or device-vendor procedure.
 
 The adapter uses the official `meshcore` Python library's serial companion
 transport. The connected device must run companion firmware that exposes the
@@ -59,6 +68,12 @@ MeshCore device loss therefore cannot block Tk, local logging, map/radar updates
 GPS, POTA/DX, DMR, physical controls, or radio polling. The optional worker
 retries after the configured delay and establishes a new live-only baseline on
 every successful reconnect.
+
+Before every initial connection and reconnect, the worker resolves the
+configured MeshCore path and compares it with every active radio, GPS, and
+physical-control serial path. An unavailable path, identical configured path,
+or shared resolved device fails closed inside the optional worker. No MeshCore
+bytes are written and the rest of the dashboard continues running.
 
 ## Physical acceptance
 

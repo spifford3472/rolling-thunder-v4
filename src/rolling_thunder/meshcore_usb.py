@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event as ThreadEvent
@@ -27,6 +27,60 @@ class MeshCoreMessageSource(Protocol):
         on_connected: MeshCoreConnectedCallback,
     ) -> None:
         """Run until stopped or disconnected, invoking only for live messages."""
+
+
+class ExclusiveMeshCoreMessageSource:
+    """Fail closed before a MeshCore source can claim another serial device."""
+
+    def __init__(
+        self,
+        source: MeshCoreMessageSource,
+        device: Path,
+        reserved_devices: Mapping[str, Path],
+    ) -> None:
+        self._source = source
+        self._device = device
+        self._reserved_devices = dict(reserved_devices)
+
+    def run(
+        self,
+        on_message: MeshCoreMessageCallback,
+        stop_event: ThreadEvent,
+        on_connected: MeshCoreConnectedCallback,
+    ) -> None:
+        """Validate ownership on every reconnect before performing USB I/O."""
+        ensure_exclusive_meshcore_device(self._device, self._reserved_devices)
+        self._source.run(on_message, stop_event, on_connected)
+
+
+def ensure_exclusive_meshcore_device(
+    device: Path,
+    reserved_devices: Mapping[str, Path],
+) -> None:
+    """Require an available MeshCore target distinct from protected adapters."""
+    for owner, reserved_device in reserved_devices.items():
+        if device == reserved_device:
+            raise RuntimeError(
+                f"MeshCore USB device conflicts with {owner}; MeshCore remains offline."
+            )
+
+    try:
+        resolved_device = device.resolve(strict=True)
+    except OSError as error:
+        raise RuntimeError(
+            f"MeshCore USB device is unavailable at {device}; MeshCore remains offline."
+        ) from error
+
+    for owner, reserved_device in reserved_devices.items():
+        try:
+            resolved_reserved = reserved_device.resolve(strict=True)
+        except OSError:
+            continue
+        if resolved_device == resolved_reserved:
+            raise RuntimeError(
+                f"MeshCore USB device resolves to the active {owner} device; "
+                "MeshCore remains offline."
+            )
 
 
 @dataclass(frozen=True)
