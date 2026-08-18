@@ -402,6 +402,60 @@ class RadarConfig(ConfigurationModel):
         return self
 
 
+class MeshCoreConfig(ConfigurationModel):
+    """Optional receive-only MeshCore USB companion settings."""
+
+    enabled: bool = False
+    device: Path | None = None
+    baud_rate: int = Field(default=115_200, ge=1, le=4_000_000)
+    command_timeout_s: float = Field(default=2.0, gt=0, le=60)
+    channels: tuple[str, ...] = ("#hamradio", "#skywarn", "#traffic")
+    message_overlay_seconds: float = Field(default=20.0, gt=0, le=300)
+    reconnect_delay_s: float = Field(default=2.0, gt=0, le=60)
+
+    @field_validator("device", mode="before")
+    @classmethod
+    def validate_device(cls, value: object) -> object:
+        """Require a stable absolute serial path when a device is supplied."""
+        if value is None:
+            return value
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        path = Path(value) if isinstance(value, (str, Path)) else value
+        if isinstance(path, Path) and not path.is_absolute():
+            raise ValueError(
+                "must be an absolute serial-device path, preferably /dev/serial/by-id/..."
+            )
+        return path
+
+    @field_validator("channels")
+    @classmethod
+    def validate_channels(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        """Normalize configured hashtag channels and reject ambiguity."""
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for channel in value:
+            name = channel.strip().casefold()
+            if not name.startswith("#") or len(name) < 2:
+                raise ValueError("channel names must be nonblank hashtags such as #skywarn")
+            if name in seen:
+                raise ValueError(f"duplicate MeshCore channel: {name}")
+            seen.add(name)
+            normalized.append(name)
+        if not normalized:
+            raise ValueError("at least one MeshCore channel must be configured")
+        return tuple(normalized)
+
+    @model_validator(mode="after")
+    def validate_enabled_device(self) -> Self:
+        """Require one USB companion path when MeshCore receive is enabled."""
+        if self.enabled and self.device is None:
+            raise ValueError(
+                "meshcore.device must be configured when meshcore.enabled is true"
+            )
+        return self
+
+
 class PhysicalControlTransport(StrEnum):
     """Supported physical-control input transports."""
 
@@ -526,6 +580,7 @@ class ApplicationConfig(ConfigurationModel):
     pota_spots: PotaSpotsConfig = PotaSpotsConfig()
     map: MapConfig = MapConfig()
     radar: RadarConfig = RadarConfig()
+    meshcore: MeshCoreConfig = MeshCoreConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     storage: StorageConfig = StorageConfig()
 

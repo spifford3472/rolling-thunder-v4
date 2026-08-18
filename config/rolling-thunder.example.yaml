@@ -121,6 +121,20 @@ radar:
   hide_after_s: 1800.0
   opacity: 0.55
 
+meshcore:
+  # Receive-only MeshCore companion access over USB serial. Prefer the stable
+  # /dev/serial/by-id path reported for the installed device.
+  enabled: false
+  device: null
+  baud_rate: 115200
+  command_timeout_s: 2.0
+  channels:
+    - "#hamradio"
+    - "#skywarn"
+    - "#traffic"
+  message_overlay_seconds: 20
+  reconnect_delay_s: 2.0
+
 physical_controls:
   enabled: false
   transport: mock

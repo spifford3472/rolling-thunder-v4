@@ -39,6 +39,15 @@ from rolling_thunder.map_zoom import (
     effective_map_zoom_bounds,
     resolve_initial_map_zoom,
 )
+from rolling_thunder.meshcore_messages import (
+    MeshCoreMessageOverlay,
+    MeshCoreMessageOverlayService,
+)
+from rolling_thunder.meshcore_usb import (
+    MeshCoreMessageSource,
+    MeshCorePythonUsbSource,
+    MeshCoreReceiveService,
+)
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.network_keepalive import (
@@ -92,6 +101,7 @@ from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
 GPSFactory = Callable[..., GPSReceiver]
 RadioFactory = Callable[..., Radio]
+MeshCoreSourceFactory = Callable[..., MeshCoreMessageSource]
 _CLOCK_SYNC_ENV = "ROLLING_THUNDER_GPS_CLOCK_SYNC"
 
 
@@ -113,6 +123,20 @@ def _build_serial_radio(
             baud_rate=baud_rate,
             timeout_s=timeout_s,
         )
+    )
+
+
+def _build_meshcore_source(
+    device: Path,
+    *,
+    baud_rate: int,
+    command_timeout_s: float,
+) -> MeshCoreMessageSource:
+    """Build the official USB companion adapter behind its typed boundary."""
+    return MeshCorePythonUsbSource(
+        device,
+        baud_rate=baud_rate,
+        command_timeout_s=command_timeout_s,
     )
 
 
@@ -144,6 +168,10 @@ class ApplicationRuntime:
     pota_spot_polling: PotaSpotPollingService | None = None
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
+    meshcore_overlay: MeshCoreMessageOverlayService = field(
+        default_factory=lambda: MeshCoreMessageOverlayService(())
+    )
+    meshcore_receive: MeshCoreReceiveService | None = None
     _started: bool = False
 
     @classmethod
@@ -189,6 +217,7 @@ class ApplicationRuntime:
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
         radar_executor: Executor | None = None,
+        meshcore_source_factory: MeshCoreSourceFactory = _build_meshcore_source,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -446,6 +475,25 @@ class ApplicationRuntime:
                 executor=radar_executor,
             )
 
+        meshcore_overlay = MeshCoreMessageOverlayService(
+            config.meshcore.channels,
+            display_seconds=config.meshcore.message_overlay_seconds,
+        )
+        meshcore_receive: MeshCoreReceiveService | None = None
+        if config.meshcore.enabled:
+            meshcore_device = config.meshcore.device
+            if meshcore_device is None:
+                raise ValueError("A MeshCore USB device is required when enabled.")
+            meshcore_receive = MeshCoreReceiveService(
+                meshcore_source_factory(
+                    meshcore_device,
+                    baud_rate=config.meshcore.baud_rate,
+                    command_timeout_s=config.meshcore.command_timeout_s,
+                ),
+                meshcore_overlay,
+                reconnect_delay_s=config.meshcore.reconnect_delay_s,
+            )
+
         return cls(
             radio=radio,
             polling=RadioPollingService(
@@ -477,6 +525,8 @@ class ApplicationRuntime:
             pi_forge_location_publishing=pi_forge_location_publishing,
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
+            meshcore_overlay=meshcore_overlay,
+            meshcore_receive=meshcore_receive,
         )
 
     @property
@@ -518,6 +568,11 @@ class ApplicationRuntime:
         if self.live_radar is None:
             return None
         return self.live_radar.latest_state
+
+    @property
+    def latest_meshcore_overlay_state(self) -> MeshCoreMessageOverlay | None:
+        """Return the active live-message overlay without USB or other I/O."""
+        return self.meshcore_overlay.latest_state
 
     @property
     def latest_forge_spot_state(self) -> PiForgeSpotState | None:
@@ -605,6 +660,8 @@ class ApplicationRuntime:
         self.pota_enrichment.start()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.start()
+        if self.meshcore_receive is not None:
+            self.meshcore_receive.start()
         self._started = True
         return state
 
@@ -613,6 +670,8 @@ class ApplicationRuntime:
         if not self._started:
             return self.radio.get_state()
 
+        if self.meshcore_receive is not None:
+            self.meshcore_receive.stop()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.stop()
         self.pota_enrichment.stop()

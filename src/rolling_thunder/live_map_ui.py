@@ -23,6 +23,10 @@ from rolling_thunder.live_map_service import (
 from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
+from rolling_thunder.meshcore_messages import (
+    MeshCoreMessageOverlay,
+    bounded_message_lines,
+)
 from rolling_thunder.weather_panel import WeatherPanelPresentation
 
 _BACKGROUND = "#0d1418"
@@ -43,6 +47,10 @@ _INFO_BOX_RIGHT = 680
 _INFO_BOX_BOTTOM = 306
 _HEALTH_BOX_WIDTH = 460
 _STATUS_BOX_GAP = 24
+_MESHCORE_BACKGROUND = "#000000"
+_MESHCORE_CHANNEL = "#42ff72"
+_MESHCORE_MESSAGE = "#ffffff"
+_MESHCORE_BOX_HEIGHT = 250
 
 
 def rotate_marker_points(
@@ -252,6 +260,7 @@ class LiveMapWidgets:
         snapshot: LiveMapSnapshot | None,
         radar_snapshot: LiveRadarSnapshot | None = None,
         weather: WeatherPanelPresentation | None = None,
+        meshcore_overlay: MeshCoreMessageOverlay | None = None,
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
@@ -273,6 +282,7 @@ class LiveMapWidgets:
         self._last_size = size
 
         self._canvas.delete("map-overlay")
+        self._canvas.delete("meshcore-overlay")
         if presentation.position is not None:
             self._draw_vehicle_marker(
                 width / 2,
@@ -281,6 +291,56 @@ class LiveMapWidgets:
                 presentation.heading_degrees or 0.0,
             )
         self._draw_status(presentation, snapshot, radar_snapshot, weather)
+        if meshcore_overlay is not None:
+            self._draw_meshcore_overlay(meshcore_overlay, width, height)
+
+    def _draw_meshcore_overlay(
+        self,
+        overlay: MeshCoreMessageOverlay,
+        width: int,
+        height: int,
+    ) -> None:
+        """Draw one bounded notification without changing the retained map."""
+        left = 12 if width >= 48 else 0
+        right = max(left + 1, width - (100 if width >= 432 else 12))
+        bottom = max(1, height - (24 if height >= 48 else 0))
+        top = max(0, bottom - min(_MESHCORE_BOX_HEIGHT, bottom))
+        text_width = max(12, (right - left - 40) // 15)
+        message_lines = bounded_message_lines(
+            overlay.message,
+            width=text_width,
+            maximum_lines=5,
+        )
+
+        self._canvas.create_rectangle(
+            left,
+            top,
+            right,
+            bottom,
+            fill=_MESHCORE_BACKGROUND,
+            outline=_MESHCORE_BACKGROUND,
+            tags="meshcore-overlay",
+        )
+        self._canvas.create_text(
+            left + 20,
+            top + 14,
+            text=overlay.channel,
+            fill=_MESHCORE_CHANNEL,
+            font=("DejaVu Sans", 27, "bold"),
+            anchor="nw",
+            tags="meshcore-overlay",
+        )
+        self._canvas.create_text(
+            left + 20,
+            top + 60,
+            text="\n".join(message_lines),
+            fill=_MESHCORE_MESSAGE,
+            font=("DejaVu Sans", 24, "bold"),
+            anchor="nw",
+            justify="left",
+            tags="meshcore-overlay",
+        )
+        self._canvas.tag_raise("meshcore-overlay")
 
     def _draw_base(
         self,

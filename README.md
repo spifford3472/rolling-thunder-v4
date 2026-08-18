@@ -86,6 +86,11 @@ config = load_config(Path("config/rolling-thunder.yaml"))
 Configuration validation failures identify the affected setting and provide
 corrective information.
 
+Optional receive-only MeshCore channel notifications use a USB companion device
+and a dedicated typed `meshcore` configuration section. See
+`docs/MESHCORE.md` for the stable device-path, channel, timing, and live-only
+startup behavior.
+
 ## Security Boundary
 
 Rolling Thunder does not control PTT and does not initiate transmission.

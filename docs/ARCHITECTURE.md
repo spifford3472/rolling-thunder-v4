@@ -51,7 +51,7 @@ implemented architecture through checkpoint 8 of issue #129.
 |  +------------------------------+--------------------------------+  |
 |                                 |                                   |
 |  +------------------- Runtime / Application Services ------------+  |
-|  | radio/GPS polling | speech | contact sync | Forge spots      |  |
+|  | radio/GPS polling | speech | contact sync | Forge | MeshCore |  |
 |  | shared tune worker | enrichment | physical controls          |  |
 |  +------------------------------+--------------------------------+  |
 |                                 |                                   |
@@ -61,7 +61,7 @@ implemented architecture through checkpoint 8 of issue #129.
 |  +------------------------------+--------------------------------+ |
 |                                 |                                   |
 |  +-------------------------- Adapters ----------------------------+ |
-|  | FT-891 CAT | serial GPS | ESP32 serial | SQLite | HTTP        | |
+|  | FT-891 CAT | serial GPS | ESP32/MeshCore USB | SQLite | HTTP  | |
 |  +----------------------------------------------------------------+ |
 +----------------------------------+---------------------------------+
                                    |
@@ -114,6 +114,7 @@ include:
 - `Ft891Radio` over a typed CAT transport
 - `SerialGPSReceiver`
 - `SerialControlSource` for ESP32 events
+- `MeshCorePythonUsbSource` for receive-only companion messages over USB serial
 - deterministic mock radio, GPS, and control sources
 - SQLite repositories
 - HTTP Forge/Home Platform/POTA/QRZ/weather/boundary adapters
@@ -135,6 +136,7 @@ Current examples include:
 - physical-control event mapping, gating, and dispatch
 - navigation and context-sensitive panel commands
 - thread-safe status-message arbitration
+- background MeshCore receive and live-message overlay publication
 
 The shared operator-command boundary is fundamental: installed controls and
 keyboard/UI actions invoke the same application behavior. There is no
@@ -471,6 +473,20 @@ Automatic day/night selection, broader regional package coverage, and the
 separate future operating-overlay/PAD-US path remain follow-up work in issue
 #124.
 
+### MeshCore channel-message overlay
+
+The optional MeshCore path is separate from map tile and radar publication.
+`MeshCorePythonUsbSource` uses the official serial companion library only in a
+worker owned by `MeshCoreReceiveService`. Startup and reconnect backlogs are
+drained before the live callback is enabled. New configured-channel messages
+publish through `MeshCoreMessageOverlayService`, a small thread-safe newest-wins
+state boundary with monotonic expiration.
+
+Tkinter consumes that immutable state during the existing 250 ms refresh and
+draws separate canvas items above the retained map. Removing or replacing the
+notification never reconstructs the base map or radar layers. See
+`docs/MESHCORE.md`.
+
 ## Local Logging and Offline Operation
 
 The Pi remains local-first:
@@ -601,6 +617,7 @@ output boundary.
 Potentially blocking work must not execute in the UI thread, including:
 
 - serial GPS and CAT operations
+- MeshCore USB connection, synchronization, and message fetching
 - shared receive tuning
 - speech capture/recognition
 - HTTP requests

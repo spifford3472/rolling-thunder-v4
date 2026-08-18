@@ -317,6 +317,13 @@ through replacement keys, priority arbitration, and bounded expiration.
 An in-process event bus remains an architectural direction rather than a reason
 to retrofit completed services prematurely.
 
+The first MeshCore integration adds receive-only USB companion monitoring for
+configuration-selected channels. It publishes only messages received after the
+startup/reconnect backlog baseline, coalesces to the newest notification, and
+renders a timed lower-left map overlay without rebuilding map or radar content.
+USB work remains outside Tkinter and device loss is isolated from unrelated
+vehicle functionality. Physical acceptance on `anvilmobile` remains required.
+
 ## Forge Production Deployment
 
 Status: complete and live for the current shared-spot service.

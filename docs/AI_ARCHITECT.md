@@ -325,6 +325,7 @@ Adapters implement ports using real or simulated resources, including:
 - FT-891 CAT
 - serial GPS
 - ESP32 serial controls
+- MeshCore companion messages over USB serial
 - mock radio, GPS, and controls
 - SQLite repositories
 - Home Station Platform HTTP
@@ -454,6 +455,7 @@ Potentially blocking work must not run in the Tkinter thread, including:
 - database maintenance and preference persistence
 - Forge publication/polling
 - weather retrieval
+- MeshCore USB connection, backlog synchronization, and message fetching
 - system-clock operations
 - long calculations
 

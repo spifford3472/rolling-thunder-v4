@@ -890,6 +890,7 @@ def run_dashboard(
             live_map_snapshot,
             runtime.latest_live_radar_state,
             weather_presentation,
+            runtime.latest_meshcore_overlay_state,
         )
 
         connectivity = build_runtime_connectivity_status(
