@@ -38,7 +38,7 @@ class ForgeApiRadarHealth(DomainModel):
     last_error: str | None = None
 
     @classmethod
-    def from_service(cls, service: ForgeRadarService) -> "ForgeApiRadarHealth":
+    def from_service(cls, service: ForgeRadarService) -> ForgeApiRadarHealth:
         state = service.get_state()
         return cls(
             status=state.provider_status,
