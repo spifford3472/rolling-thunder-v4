@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from io import BytesIO
 from json import dumps
+from zipfile import ZIP_STORED, ZipFile
 
 import pytest
 from PIL import Image
@@ -89,11 +90,26 @@ def png_tile() -> bytes:
     return output.getvalue()
 
 
-def test_client_validates_manifest_and_uses_opaque_token_for_tiles() -> None:
+def coverage_archive(keys: tuple[MapTileKey, ...], *, body: bytes | None = None) -> bytes:
+    output = BytesIO()
+    tile_body = png_tile() if body is None else body
+    with ZipFile(output, mode="w", compression=ZIP_STORED) as archive:
+        for key in keys:
+            archive.writestr(f"{key.zoom}/{key.x}/{key.y}.png", tile_body)
+    return output.getvalue()
+
+
+def test_client_validates_manifest_and_prefetches_coverage_for_tiles() -> None:
+    # At zoom 2, x=1/y=1 clips the standard 20x16 prefetch block to 3x3.
+    expected = tuple(
+        MapTileKey(zoom=2, x=x, y=y)
+        for x in range(1, 4)
+        for y in range(1, 4)
+    )
     transport = QueueTransport(
         [
             FakeResponse(200, manifest_payload()),
-            FakeResponse(200, png_tile()),
+            FakeResponse(200, coverage_archive(expected)),
         ]
     )
     client = HttpForgeRadarClient(
@@ -103,15 +119,21 @@ def test_client_validates_manifest_and_uses_opaque_token_for_tiles() -> None:
     )
 
     manifest = client.fetch_manifest()
-    tile = client.fetch_tile(TOKEN, MapTileKey(zoom=7, x=34, y=49))
+    tile = client.fetch_tile(TOKEN, MapTileKey(zoom=2, x=1, y=1))
+    cached_neighbor = client.fetch_tile(TOKEN, MapTileKey(zoom=2, x=2, y=2))
 
     assert manifest.revision == 4
     assert manifest.frame is not None
     assert manifest.frame.frame_token == TOKEN
     assert manifest.received_at == NOW
     assert tile.startswith(b"\x89PNG\r\n\x1a\n")
+    assert cached_neighbor.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(transport.requests) == 2
     assert transport.requests[0][1].endswith("/api/v1/radar")
-    assert transport.requests[1][1].endswith(f"/api/v1/radar/tiles/{TOKEN}/7/34/49.png")
+    assert transport.requests[1][1].endswith(
+        f"/api/v1/radar/coverage/{TOKEN}/2/1/1/3/3.zip"
+    )
+    assert transport.requests[1][3] == 30.0
 
 
 def test_client_rejects_inconsistent_health_revision() -> None:
@@ -127,12 +149,42 @@ def test_client_rejects_inconsistent_health_revision() -> None:
         client.fetch_manifest()
 
 
-def test_client_rejects_non_png_tile() -> None:
+def test_client_rejects_non_png_inside_coverage_archive() -> None:
+    key = MapTileKey(zoom=2, x=1, y=1)
     client = HttpForgeRadarClient(
         "http://192.168.9.170:8766",
-        transport=QueueTransport([FakeResponse(200, b"not-a-png")]),
+        transport=QueueTransport(
+            [FakeResponse(200, coverage_archive((key,), body=b"not-a-png"))]
+        ),
         clock=lambda: NOW,
     )
 
-    with pytest.raises(ForgeRadarResponseError, match="valid PNG"):
-        client.fetch_tile(TOKEN, MapTileKey(zoom=7, x=34, y=49))
+    with pytest.raises(ForgeRadarResponseError, match="invalid PNG"):
+        client.fetch_coverage(
+            TOKEN,
+            zoom=2,
+            x_start=1,
+            y_start=1,
+            columns=1,
+            rows=1,
+        )
+
+
+def test_client_rejects_archive_with_missing_or_unexpected_tiles() -> None:
+    requested = MapTileKey(zoom=2, x=1, y=1)
+    wrong = MapTileKey(zoom=2, x=2, y=1)
+    client = HttpForgeRadarClient(
+        "http://192.168.9.170:8766",
+        transport=QueueTransport([FakeResponse(200, coverage_archive((wrong,)))]),
+        clock=lambda: NOW,
+    )
+
+    with pytest.raises(ForgeRadarResponseError, match="did not match"):
+        client.fetch_coverage(
+            TOKEN,
+            zoom=requested.zoom,
+            x_start=requested.x,
+            y_start=requested.y,
+            columns=1,
+            rows=1,
+        )

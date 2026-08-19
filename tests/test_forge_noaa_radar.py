@@ -1,4 +1,4 @@
-"""Tests for NOAA/NWS exact-frame radar discovery and tile export."""
+"""Tests for NOAA/NWS exact-frame radar discovery and coverage export."""
 
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -59,19 +59,22 @@ def location() -> MobileLocationRecord:
     )
 
 
-def png_tile(alpha: int = 200) -> bytes:
+def png_image(width: int = 256, height: int = 256, alpha: int = 200) -> bytes:
     output = BytesIO()
-    Image.new("RGBA", (256, 256), (100, 120, 140, alpha)).save(output, format="PNG")
+    Image.new("RGBA", (width, height), (100, 120, 140, alpha)).save(
+        output,
+        format="PNG",
+    )
     return output.getvalue()
 
 
-def test_provider_discovers_latest_covering_raster_and_locks_export_to_it() -> None:
-    metadata = dumps(
+def metadata_payload(object_id: int = 123) -> bytes:
+    return dumps(
         {
             "features": [
                 {
                     "attributes": {
-                        "objectid": 123,
+                        "objectid": object_id,
                         "idp_validtime": int(OBSERVED.timestamp() * 1000),
                         "idp_validendtime": int(
                             OBSERVED.replace(minute=35).timestamp() * 1000
@@ -81,10 +84,13 @@ def test_provider_discovers_latest_covering_raster_and_locks_export_to_it() -> N
             ]
         }
     ).encode()
+
+
+def test_provider_discovers_latest_covering_raster_and_locks_export_to_it() -> None:
     transport = QueueTransport(
         [
-            FakeResponse(status_code=200, body=metadata),
-            FakeResponse(status_code=200, body=png_tile()),
+            FakeResponse(status_code=200, body=metadata_payload()),
+            FakeResponse(status_code=200, body=png_image()),
         ]
     )
     provider = NoaaNwsRadarProvider(transport=transport, timeout_s=3.0)
@@ -114,6 +120,40 @@ def test_provider_discovers_latest_covering_raster_and_locks_export_to_it() -> N
     assert mosaic_rule["lockRasterIds"] == [123]
 
 
+def test_provider_exports_one_large_image_and_slices_it_into_tiles() -> None:
+    transport = QueueTransport(
+        [FakeResponse(status_code=200, body=png_image(512, 512))]
+    )
+    provider = NoaaNwsRadarProvider(
+        transport=transport,
+        timeout_s=3.0,
+        coverage_timeout_s=17.0,
+    )
+
+    tiles = provider.fetch_coverage(
+        "123",
+        zoom=7,
+        x_start=34,
+        y_start=49,
+        columns=2,
+        rows=2,
+    )
+
+    assert set(tiles) == {
+        MapTileKey(zoom=7, x=34, y=49),
+        MapTileKey(zoom=7, x=34, y=50),
+        MapTileKey(zoom=7, x=35, y=49),
+        MapTileKey(zoom=7, x=35, y=50),
+    }
+    assert all(tile.startswith(b"\x89PNG\r\n\x1a\n") for tile in tiles.values())
+    assert len(transport.requests) == 1
+    assert transport.requests[0][3] == 17.0
+    export_query = parse_qs(urlsplit(transport.requests[0][1]).query)
+    assert export_query["size"] == ["512,512"]
+    mosaic_rule = loads(export_query["mosaicRule"][0])
+    assert mosaic_rule["lockRasterIds"] == [123]
+
+
 def test_web_mercator_bounds_cover_world_at_zoom_zero() -> None:
     xmin, ymin, xmax, ymax = web_mercator_tile_bounds(MapTileKey(zoom=0, x=0, y=0))
 
@@ -124,7 +164,7 @@ def test_web_mercator_bounds_cover_world_at_zoom_zero() -> None:
 
 
 def test_fixed_radar_opacity_scales_existing_alpha() -> None:
-    processed = apply_radar_opacity(png_tile(alpha=200), 0.55)
+    processed = apply_radar_opacity(png_image(alpha=200), 0.55)
 
     with Image.open(BytesIO(processed)) as image:
         assert image.mode == "RGBA"

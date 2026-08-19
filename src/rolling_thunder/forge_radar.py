@@ -1,12 +1,14 @@
-"""Provider-neutral retained radar frame state and bounded tile cache."""
+"""Provider-neutral retained radar frame state and bounded coverage cache."""
 
 from __future__ import annotations
 
+import logging
 from collections import OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from threading import RLock
+from time import monotonic
 from typing import Protocol
 
 from rolling_thunder.domain import DomainModel
@@ -20,6 +22,11 @@ from rolling_thunder.radar_domain import (
     RadarProviderStatus,
     RadarSourceMetadata,
 )
+
+_LOGGER = logging.getLogger("rolling_thunder.forge_spots")
+_MAX_COVERAGE_COLUMNS = 32
+_MAX_COVERAGE_ROWS = 16
+_RETAINED_FRAME_COUNT = 2
 
 
 class ForgeRadarError(RuntimeError):
@@ -61,13 +68,26 @@ class RadarProvider(Protocol):
         """Return one transparent 256x256 PNG locked to the provider frame."""
         ...
 
+    def fetch_coverage(
+        self,
+        provider_frame_id: str,
+        *,
+        zoom: int,
+        x_start: int,
+        y_start: int,
+        columns: int,
+        rows: int,
+    ) -> dict[MapTileKey, bytes]:
+        """Return one exact-frame rectangular batch of transparent radar tiles."""
+        ...
+
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
 class ForgeRadarService:
-    """Retain latest radar metadata and bound provider-backed tile retrieval."""
+    """Retain current/prior frames and provide bounded bulk radar retrieval."""
 
     def __init__(
         self,
@@ -93,7 +113,7 @@ class ForgeRadarService:
         self._now = now
         self._lock = RLock()
         self._state = ForgeRadarState()
-        self._provider_frame_id: str | None = None
+        self._retained_frames: OrderedDict[str, tuple[RadarFrame, str]] = OrderedDict()
         self._tile_cache: OrderedDict[tuple[str, MapTileKey], bytes] = OrderedDict()
 
     def get_state(self) -> ForgeRadarState:
@@ -112,7 +132,7 @@ class ForgeRadarService:
         return state.frame is not None and self._age(state.frame) <= self._hide_after
 
     def refresh(self) -> ForgeRadarState:
-        """Discover and publish the latest frame while retaining prior good state."""
+        """Discover latest metadata while retaining the previous frame for handoff."""
         now = self._aware_now()
         location_state = self._mobile_location.get_state()
         location = location_state.location
@@ -155,7 +175,7 @@ class ForgeRadarService:
                 return self._reject_candidate(now, "Radar provider returned an invalid time range.")
 
         token = self._frame_token(candidate.provider_frame_id, observed_at)
-        frame = RadarFrame(
+        discovered_frame = RadarFrame(
             frame_token=token,
             observed_at=observed_at,
             fetched_at=now,
@@ -166,55 +186,182 @@ class ForgeRadarService:
             previous = self._state.frame
             changed = previous is None or previous.frame_token != token
             revision = self._state.revision + 1 if changed else self._state.revision
-            if changed:
-                self._tile_cache.clear()
-            self._provider_frame_id = candidate.provider_frame_id
+            frame = discovered_frame if changed or previous is None else previous
+            self._retain_frame_locked(frame, candidate.provider_frame_id)
             self._state = ForgeRadarState(
                 revision=revision,
-                frame=frame if changed or previous is None else previous,
+                frame=frame,
                 provider_status=RadarProviderStatus.HEALTHY,
                 last_attempt_at=now,
                 last_success_at=now,
                 last_error=None,
             )
+            if changed and previous is not None:
+                _LOGGER.info(
+                    "RADAR FRAME HANDOFF current=%s prior=%s retained=%d",
+                    token[:12],
+                    previous.frame_token[:12],
+                    len(self._retained_frames),
+                )
             return self._state
 
     def get_tile(self, frame_token: str, key: MapTileKey) -> bytes:
-        """Return one validated current-frame tile with bounded single-flight caching."""
+        """Return one tile, allowing a retained prior frame during handoff."""
+        _frame, provider_frame_id = self._resolve_retained_frame(frame_token)
+        cache_key = (frame_token, key)
         with self._lock:
-            state = self._state
-            frame = state.frame
-            provider_frame_id = self._provider_frame_id
-            if frame is None or provider_frame_id is None:
-                raise ForgeRadarProviderError("Radar frame is unavailable.")
-            if frame.frame_token != frame_token:
-                raise ForgeRadarProviderError("Requested radar frame is no longer current.")
-            if self._age(frame) > self._hide_after:
-                raise ForgeRadarProviderError("Requested radar frame is too old to render.")
-            cache_key = (frame_token, key)
             cached = self._tile_cache.get(cache_key)
             if cached is not None:
                 self._tile_cache.move_to_end(cache_key)
                 return cached
 
-            try:
-                png = validate_map_tile_png(
-                    self._provider.fetch_tile(provider_frame_id, key)
-                )
-            except Exception as error:
-                self._state = self._state.model_copy(
-                    update={
-                        "provider_status": RadarProviderStatus.DEGRADED,
-                        "last_error": (str(error)[:500] or error.__class__.__name__),
-                    }
-                )
-                raise ForgeRadarProviderError("Radar tile retrieval failed.") from error
+        try:
+            png = validate_map_tile_png(self._provider.fetch_tile(provider_frame_id, key))
+        except Exception as error:
+            self._record_tile_failure(error)
+            raise ForgeRadarProviderError("Radar tile retrieval failed.") from error
 
-            self._tile_cache[cache_key] = png
-            self._tile_cache.move_to_end(cache_key)
-            while len(self._tile_cache) > self._maximum_cached_tiles:
-                self._tile_cache.popitem(last=False)
-            return png
+        with self._lock:
+            self._cache_tile_locked(frame_token, key, png)
+        return png
+
+    def get_coverage(
+        self,
+        frame_token: str,
+        *,
+        zoom: int,
+        x_start: int,
+        y_start: int,
+        columns: int,
+        rows: int,
+    ) -> dict[MapTileKey, bytes]:
+        """Return one bounded exact-frame rectangle using provider bulk export."""
+        _frame, provider_frame_id = self._resolve_retained_frame(frame_token)
+        keys = self._coverage_keys(
+            zoom=zoom,
+            x_start=x_start,
+            y_start=y_start,
+            columns=columns,
+            rows=rows,
+        )
+        with self._lock:
+            cached = {
+                key: self._tile_cache[(frame_token, key)]
+                for key in keys
+                if (frame_token, key) in self._tile_cache
+            }
+            if len(cached) == len(keys):
+                for key in keys:
+                    self._tile_cache.move_to_end((frame_token, key))
+                _LOGGER.info(
+                    "RADAR FORGE COVERAGE CACHE frame=%s tiles=%d",
+                    frame_token[:12],
+                    len(keys),
+                )
+                return cached
+
+        started = monotonic()
+        try:
+            fetched = self._provider.fetch_coverage(
+                provider_frame_id,
+                zoom=zoom,
+                x_start=x_start,
+                y_start=y_start,
+                columns=columns,
+                rows=rows,
+            )
+            if set(fetched) != set(keys):
+                raise ForgeRadarProviderError(
+                    "Radar provider coverage did not contain exactly the requested tiles."
+                )
+            validated = {key: validate_map_tile_png(png) for key, png in fetched.items()}
+        except Exception as error:
+            self._record_tile_failure(error)
+            raise ForgeRadarProviderError("Radar coverage retrieval failed.") from error
+
+        with self._lock:
+            # A request remains valid if a newer frame became current during provider I/O.
+            # Cache only while this token is still one of the two retained generations.
+            if frame_token in self._retained_frames:
+                for key in keys:
+                    self._cache_tile_locked(frame_token, key, validated[key])
+        _LOGGER.info(
+            "RADAR FORGE COVERAGE READY frame=%s zoom=%d x=%d y=%d cols=%d rows=%d "
+            "tiles=%d duration_ms=%d",
+            frame_token[:12],
+            zoom,
+            x_start,
+            y_start,
+            columns,
+            rows,
+            len(validated),
+            round((monotonic() - started) * 1000),
+        )
+        return {key: validated[key] for key in keys}
+
+    def _resolve_retained_frame(self, frame_token: str) -> tuple[RadarFrame, str]:
+        with self._lock:
+            retained = self._retained_frames.get(frame_token)
+            if retained is None:
+                raise ForgeRadarProviderError("Requested radar frame is no longer retained.")
+            frame, provider_frame_id = retained
+            if self._age(frame) > self._hide_after:
+                raise ForgeRadarProviderError("Requested radar frame is too old to render.")
+            self._retained_frames.move_to_end(frame_token)
+            return frame, provider_frame_id
+
+    def _retain_frame_locked(self, frame: RadarFrame, provider_frame_id: str) -> None:
+        self._retained_frames[frame.frame_token] = (frame, provider_frame_id)
+        self._retained_frames.move_to_end(frame.frame_token)
+        while len(self._retained_frames) > _RETAINED_FRAME_COUNT:
+            expired_token, _ = self._retained_frames.popitem(last=False)
+            stale_keys = [
+                cache_key for cache_key in self._tile_cache if cache_key[0] == expired_token
+            ]
+            for cache_key in stale_keys:
+                self._tile_cache.pop(cache_key, None)
+
+    def _cache_tile_locked(self, frame_token: str, key: MapTileKey, png: bytes) -> None:
+        cache_key = (frame_token, key)
+        self._tile_cache[cache_key] = png
+        self._tile_cache.move_to_end(cache_key)
+        while len(self._tile_cache) > self._maximum_cached_tiles:
+            self._tile_cache.popitem(last=False)
+
+    def _record_tile_failure(self, error: Exception) -> None:
+        with self._lock:
+            self._state = self._state.model_copy(
+                update={
+                    "provider_status": RadarProviderStatus.DEGRADED,
+                    "last_error": (str(error)[:500] or error.__class__.__name__),
+                }
+            )
+
+    @staticmethod
+    def _coverage_keys(
+        *,
+        zoom: int,
+        x_start: int,
+        y_start: int,
+        columns: int,
+        rows: int,
+    ) -> tuple[MapTileKey, ...]:
+        if not 0 <= zoom <= 22:
+            raise ForgeRadarProviderError("Radar coverage zoom was invalid.")
+        if not 1 <= columns <= _MAX_COVERAGE_COLUMNS:
+            raise ForgeRadarProviderError("Radar coverage width was outside the safe bound.")
+        if not 1 <= rows <= _MAX_COVERAGE_ROWS:
+            raise ForgeRadarProviderError("Radar coverage height was outside the safe bound.")
+        limit = 1 << zoom
+        if x_start < 0 or y_start < 0:
+            raise ForgeRadarProviderError("Radar coverage origin was invalid.")
+        if x_start + columns > limit or y_start + rows > limit:
+            raise ForgeRadarProviderError("Radar coverage rectangle exceeded the map world.")
+        return tuple(
+            MapTileKey(zoom=zoom, x=x, y=y)
+            for x in range(x_start, x_start + columns)
+            for y in range(y_start, y_start + rows)
+        )
 
     def _reject_candidate(self, now: datetime, message: str) -> ForgeRadarState:
         with self._lock:
