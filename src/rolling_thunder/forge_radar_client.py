@@ -99,7 +99,7 @@ class ForgeRadarManifest(DomainModel):
         return value.astimezone(UTC)
 
     @model_validator(mode="after")
-    def validate_contract(self) -> "ForgeRadarManifest":
+    def validate_contract(self) -> ForgeRadarManifest:
         if self.health.revision != self.revision:
             raise ValueError("radar health revision must match manifest revision")
         if self.frame is None and self.health.renderable:
