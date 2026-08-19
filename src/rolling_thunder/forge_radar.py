@@ -217,7 +217,7 @@ class ForgeRadarService:
 
         try:
             png = validate_map_tile_png(self._provider.fetch_tile(provider_frame_id, key))
-        except Exception as error:  # noqa: BLE001 - optional provider isolation boundary
+        except Exception as error:
             self._record_tile_failure(error)
             raise ForgeRadarProviderError("Radar tile retrieval failed.") from error
 
@@ -275,7 +275,7 @@ class ForgeRadarService:
                     "Radar provider coverage did not contain exactly the requested tiles."
                 )
             validated = {key: validate_map_tile_png(png) for key, png in fetched.items()}
-        except Exception as error:  # noqa: BLE001 - optional provider isolation boundary
+        except Exception as error:
             self._record_tile_failure(error)
             raise ForgeRadarProviderError("Radar coverage retrieval failed.") from error
 
