@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+from collections import OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime
+from io import BytesIO
 from json import JSONDecodeError, loads
+from threading import RLock
+from time import monotonic
 from typing import Literal
 from urllib.error import URLError
 from urllib.parse import quote, urlparse
+from zipfile import BadZipFile, ZipFile
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
@@ -23,6 +29,12 @@ from rolling_thunder.radar_domain import RadarFrame, RadarProviderStatus
 _JSON_ACCEPT = "application/json"
 _USER_AGENT = "RollingThunder-v4.1"
 _MAX_ERROR_LENGTH = 500
+_RADAR_PREFETCH_COLUMNS = 20
+_RADAR_PREFETCH_ROWS = 16
+_RADAR_PREFETCH_CACHE_TILES = 640
+_RADAR_PREFETCH_CACHE_BYTES = 64_000_000
+_MAX_COVERAGE_RESPONSE_BYTES = 96_000_000
+_LOGGER = logging.getLogger("rolling_thunder.live_radar")
 
 
 class ForgeRadarClientError(Exception):
@@ -87,7 +99,7 @@ class ForgeRadarManifest(DomainModel):
         return value.astimezone(UTC)
 
     @model_validator(mode="after")
-    def validate_contract(self) -> ForgeRadarManifest:
+    def validate_contract(self) -> "ForgeRadarManifest":
         if self.health.revision != self.revision:
             raise ValueError("radar health revision must match manifest revision")
         if self.frame is None and self.health.renderable:
@@ -124,28 +136,38 @@ class HttpForgeRadarClient:
         api_url: str,
         *,
         timeout_s: float = 5.0,
+        coverage_timeout_s: float | None = None,
         max_manifest_bytes: int = 65_536,
         max_tile_bytes: int = 2_000_000,
+        max_coverage_bytes: int = _MAX_COVERAGE_RESPONSE_BYTES,
         transport: HttpTransport | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._api_url = self._validate_api_url(api_url)
         if timeout_s <= 0:
             raise ValueError("Forge radar timeout must be positive.")
-        if max_manifest_bytes < 1 or max_tile_bytes < 1:
+        resolved_coverage_timeout = (
+            max(30.0, timeout_s) if coverage_timeout_s is None else coverage_timeout_s
+        )
+        if resolved_coverage_timeout <= 0:
+            raise ValueError("Forge radar coverage timeout must be positive.")
+        if max_manifest_bytes < 1 or max_tile_bytes < 1 or max_coverage_bytes < 1:
             raise ValueError("Forge radar response limits must be positive.")
         self._timeout_s = timeout_s
+        self._coverage_timeout_s = resolved_coverage_timeout
         self._max_manifest_bytes = max_manifest_bytes
         self._max_tile_bytes = max_tile_bytes
+        self._max_coverage_bytes = max_coverage_bytes
         self._transport = transport or UrllibHttpTransport()
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._cache_lock = RLock()
+        self._cached_frame_token: str | None = None
+        self._prefetched_tiles: OrderedDict[MapTileKey, bytes] = OrderedDict()
+        self._prefetched_bytes = 0
 
     def fetch_manifest(self) -> ForgeRadarManifest:
         """Fetch and strictly validate the latest version-1 radar manifest."""
-        response = self._request(
-            f"{self._api_url}/api/v1/radar",
-            accept=_JSON_ACCEPT,
-        )
+        response = self._request(f"{self._api_url}/api/v1/radar", accept=_JSON_ACCEPT)
         if len(response.body) > self._max_manifest_bytes:
             raise ForgeRadarResponseError("Forge radar manifest exceeded the byte limit.")
         try:
@@ -169,31 +191,182 @@ class HttpForgeRadarClient:
             raise ForgeRadarValidationError(self._validation_message(error)) from error
 
     def fetch_tile(self, frame_token: str, key: MapTileKey) -> bytes:
-        """Fetch one validated transparent PNG for the requested immutable frame."""
+        """Return one tile while prefetching a large Forge coverage block on cache miss."""
+        with self._cache_lock:
+            self._select_frame_locked(frame_token)
+            cached = self._prefetched_tiles.get(key)
+            if cached is not None:
+                self._prefetched_tiles.move_to_end(key)
+                return cached
+
+        limit = 1 << key.zoom
+        columns = min(_RADAR_PREFETCH_COLUMNS, limit - key.x)
+        rows = min(_RADAR_PREFETCH_ROWS, limit - key.y)
+        tiles = self.fetch_coverage(
+            frame_token,
+            zoom=key.zoom,
+            x_start=key.x,
+            y_start=key.y,
+            columns=columns,
+            rows=rows,
+        )
+        try:
+            return tiles[key]
+        except KeyError as error:
+            raise ForgeRadarResponseError(
+                "Forge radar coverage omitted the requested tile."
+            ) from error
+
+    def fetch_coverage(
+        self,
+        frame_token: str,
+        *,
+        zoom: int,
+        x_start: int,
+        y_start: int,
+        columns: int,
+        rows: int,
+    ) -> dict[MapTileKey, bytes]:
+        """Fetch and validate one bounded ZIP archive of exact-frame radar tiles."""
         encoded_token = quote(frame_token, safe="")
         url = (
-            f"{self._api_url}/api/v1/radar/tiles/{encoded_token}/"
-            f"{key.zoom}/{key.x}/{key.y}.png"
+            f"{self._api_url}/api/v1/radar/coverage/{encoded_token}/"
+            f"{zoom}/{x_start}/{y_start}/{columns}/{rows}.zip"
         )
-        response = self._request(url, accept="image/png")
-        if len(response.body) > self._max_tile_bytes:
-            raise ForgeRadarResponseError("Forge radar tile exceeded the byte limit.")
-        try:
-            return validate_map_tile_png(
-                response.body,
-                maximum_bytes=self._max_tile_bytes,
-            )
-        except MapTileError as error:
-            raise ForgeRadarResponseError("Forge radar tile was not a valid PNG.") from error
+        started = monotonic()
+        response = self._request(
+            url,
+            accept="application/zip",
+            timeout_s=self._coverage_timeout_s,
+        )
+        if len(response.body) > self._max_coverage_bytes:
+            raise ForgeRadarResponseError("Forge radar coverage exceeded the byte limit.")
+        expected = self._coverage_keys(
+            zoom=zoom,
+            x_start=x_start,
+            y_start=y_start,
+            columns=columns,
+            rows=rows,
+        )
+        tiles = self._decode_coverage_archive(response.body, expected)
+        with self._cache_lock:
+            self._select_frame_locked(frame_token)
+            for key in expected:
+                self._cache_tile_locked(key, tiles[key])
+        _LOGGER.info(
+            "RADAR PI COVERAGE READY frame=%s zoom=%d x=%d y=%d cols=%d rows=%d "
+            "tiles=%d bytes=%d duration_ms=%d",
+            frame_token[:12],
+            zoom,
+            x_start,
+            y_start,
+            columns,
+            rows,
+            len(tiles),
+            len(response.body),
+            round((monotonic() - started) * 1000),
+        )
+        return tiles
 
-    def _request(self, url: str, *, accept: str) -> HttpResponse:
+    def _decode_coverage_archive(
+        self,
+        body: bytes,
+        expected: tuple[MapTileKey, ...],
+    ) -> dict[MapTileKey, bytes]:
+        expected_names = {f"{key.zoom}/{key.x}/{key.y}.png": key for key in expected}
+        tiles: dict[MapTileKey, bytes] = {}
+        try:
+            with ZipFile(BytesIO(body), mode="r") as archive:
+                infos = archive.infolist()
+                names = [info.filename for info in infos if not info.is_dir()]
+                if len(names) != len(set(names)):
+                    raise ForgeRadarResponseError(
+                        "Forge radar coverage contained duplicate entries."
+                    )
+                if set(names) != set(expected_names):
+                    raise ForgeRadarResponseError(
+                        "Forge radar coverage entries did not match the requested rectangle."
+                    )
+                for info in infos:
+                    if info.is_dir():
+                        continue
+                    if info.file_size > self._max_tile_bytes:
+                        raise ForgeRadarResponseError(
+                            "Forge radar coverage contained an oversized tile."
+                        )
+                    key = expected_names[info.filename]
+                    try:
+                        tiles[key] = validate_map_tile_png(
+                            archive.read(info),
+                            maximum_bytes=self._max_tile_bytes,
+                        )
+                    except MapTileError as error:
+                        raise ForgeRadarResponseError(
+                            "Forge radar coverage contained an invalid PNG tile."
+                        ) from error
+        except ForgeRadarResponseError:
+            raise
+        except (BadZipFile, OSError, RuntimeError, ValueError) as error:
+            raise ForgeRadarResponseError(
+                "Forge radar coverage was not a valid ZIP archive."
+            ) from error
+        return tiles
+
+    @staticmethod
+    def _coverage_keys(
+        *,
+        zoom: int,
+        x_start: int,
+        y_start: int,
+        columns: int,
+        rows: int,
+    ) -> tuple[MapTileKey, ...]:
+        if columns < 1 or rows < 1:
+            raise ForgeRadarResponseError("Radar coverage dimensions must be positive.")
+        try:
+            return tuple(
+                MapTileKey(zoom=zoom, x=x, y=y)
+                for x in range(x_start, x_start + columns)
+                for y in range(y_start, y_start + rows)
+            )
+        except ValueError as error:
+            raise ForgeRadarResponseError("Radar coverage rectangle was invalid.") from error
+
+    def _select_frame_locked(self, frame_token: str) -> None:
+        if self._cached_frame_token == frame_token:
+            return
+        self._cached_frame_token = frame_token
+        self._prefetched_tiles.clear()
+        self._prefetched_bytes = 0
+
+    def _cache_tile_locked(self, key: MapTileKey, png: bytes) -> None:
+        previous = self._prefetched_tiles.pop(key, None)
+        if previous is not None:
+            self._prefetched_bytes -= len(previous)
+        self._prefetched_tiles[key] = png
+        self._prefetched_tiles.move_to_end(key)
+        self._prefetched_bytes += len(png)
+        while (
+            len(self._prefetched_tiles) > _RADAR_PREFETCH_CACHE_TILES
+            or self._prefetched_bytes > _RADAR_PREFETCH_CACHE_BYTES
+        ):
+            _old_key, old_png = self._prefetched_tiles.popitem(last=False)
+            self._prefetched_bytes -= len(old_png)
+
+    def _request(
+        self,
+        url: str,
+        *,
+        accept: str,
+        timeout_s: float | None = None,
+    ) -> HttpResponse:
         try:
             response = self._transport.request(
                 "GET",
                 url,
                 headers={"Accept": accept, "User-Agent": _USER_AGENT},
                 body=None,
-                timeout_s=self._timeout_s,
+                timeout_s=self._timeout_s if timeout_s is None else timeout_s,
             )
         except (TimeoutError, URLError, OSError) as error:
             raise ForgeRadarConnectionError(
