@@ -63,14 +63,7 @@ def build_shared_spot_viewport(
     end_index = min(total_rows, start_index + max_rows)
     cards = tuple(_card_from_row(row) for row in state.rows[start_index:end_index])
 
-    provider_label = state.provider.value.upper()
-    health = state.provider_health
-    health_label = health.status.value.upper() if health is not None else "UNKNOWN"
-    status_line = (
-        f"{state.status_label} — {provider_label} {total_rows} SPOTS"
-        f" — PROVIDER {health_label}"
-    )
-
+    status_line = f"{total_rows} SPOTS"
     detail_line = _detail_line(state)
     error_parts = [text for text in (state.source_error, _provider_error(state)) if text]
     error_line = " — ".join(error_parts)
@@ -93,8 +86,7 @@ def _detail_line(state: SharedSpotPanelState) -> str:
         return "Waiting for the first valid shared Forge snapshot."
     generated = state.generated_at
     generated_text = generated.strftime("%H:%M:%SZ") if generated is not None else "UNKNOWN"
-    revision = state.snapshot_revision if state.snapshot_revision is not None else "UNKNOWN"
-    return f"SNAPSHOT {revision} — GENERATED {generated_text}"
+    return f"GENERATED {generated_text}"
 
 
 def _provider_error(state: SharedSpotPanelState) -> str | None:
