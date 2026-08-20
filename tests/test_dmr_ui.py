@@ -99,7 +99,7 @@ def _monitor(
     )
 
 
-def test_healthy_idle_view_shows_rf_pair_and_bounded_history() -> None:
+def test_healthy_idle_view_shows_rf_pair_and_twelve_history_rows() -> None:
     history = tuple(_history_record(index) for index in range(20))
     selection = DmrSelectionController(history)
 
@@ -113,9 +113,9 @@ def test_healthy_idle_view_shows_rf_pair_and_bounded_history() -> None:
     assert viewport.health_line == "HEALTHY  LIVE OK  HISTORY OK  RF OK"
     assert viewport.rf_line == "RX 434.5375 MHz  TX 439.5375 MHz  DUPLEX"
     assert viewport.current_audio_idle
-    assert len(viewport.history_cards) == 20
+    assert len(viewport.history_cards) == 12
     assert viewport.hidden_above_count == 0
-    assert viewport.hidden_below_count == 0
+    assert viewport.hidden_below_count == 8
     assert viewport.history_cards[0].callsign_line == "K0DMR"
     assert viewport.history_cards[0].detail_line == (
         "08/16/26 00:07Z · Operator 0 · TG3100 · TS1 · 5s · NET"
@@ -150,10 +150,10 @@ def test_current_audio_supports_both_slots_and_marks_staged_call() -> None:
     )
 
 
-def test_selected_history_is_kept_inside_ten_row_window() -> None:
-    history = tuple(_history_record(index) for index in range(10))
+def test_selected_history_is_kept_inside_twelve_row_window() -> None:
+    history = tuple(_history_record(index) for index in range(16))
     selection = DmrSelectionController(history)
-    selection.select_identity(history[7].identity)
+    selection.select_identity(history[14].identity)
 
     viewport = build_dmr_viewport(
         _monitor(history=history, radio_info=_radio_info()),
@@ -161,11 +161,11 @@ def test_selected_history_is_kept_inside_ten_row_window() -> None:
         DmrCommitStatus(),
     )
 
-    assert len(viewport.history_cards) == 10
-    assert viewport.hidden_above_count == 0
+    assert len(viewport.history_cards) == 12
+    assert viewport.hidden_above_count == 4
     assert viewport.hidden_below_count == 0
-    assert viewport.history_cards[7].selected
-    assert viewport.history_cards[7].callsign_line.startswith("K7DMR")
+    assert viewport.history_cards[10].selected
+    assert viewport.history_cards[10].callsign_line.startswith("K14DMR")
 
 
 def test_staged_history_row_and_footer_are_explicit() -> None:
