@@ -27,7 +27,7 @@ from rolling_thunder.control_source_lifecycle import (
     close_control_source,
     open_control_source,
 )
-from rolling_thunder.dashboard_state import build_dashboard_state, build_dashboard_ticker
+from rolling_thunder.dashboard_state import build_dashboard_state
 from rolling_thunder.dmr_active_panel_commands import DmrAwareActivePanelCommands
 from rolling_thunder.dmr_dashboard_runtime import build_dmr_panel_runtime
 from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
@@ -71,7 +71,13 @@ from rolling_thunder.shared_spot_tuning import SharedSpotTuneController
 from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
+from rolling_thunder.status_bar_ui import StatusBarWidgets
 from rolling_thunder.status_messages import StatusPresentation
+from rolling_thunder.status_monitor import build_status_monitor
+from rolling_thunder.status_strip import (
+    build_status_bar_routine_message,
+    build_status_strip_snapshot,
+)
 from rolling_thunder.weather_alert_panel import (
     WeatherAlertPanelController,
 )
@@ -292,6 +298,9 @@ def run_dashboard(
             log_aware_active_panel_commands,
             dmr_panel_runtime.commands,
         )
+
+    status_monitor = build_status_monitor(config)
+    status_monitor.start()
     _ = pota_tune_executor
 
     def capture_state() -> CallsignCaptureState:
@@ -746,18 +755,13 @@ def run_dashboard(
     )
     live_map_widgets = LiveMapWidgets(situational)
 
-    ticker_text = tk.StringVar(value="STARTING ROLLING THUNDER")
-    ticker = tk.Label(
-        root,
-        textvariable=ticker_text,
-        bg="#202020",
-        fg=_BRIGHT,
-        font=("DejaVu Sans", 16, "bold"),
-        anchor="w",
-        padx=18,
-        pady=10,
+    status_bar = StatusBarWidgets(root)
+    status_bar.frame.grid(
+        row=1,
+        column=0,
+        columnspan=2,
+        sticky="nsew",
     )
-    ticker.grid(row=1, column=0, columnspan=2, sticky="ew")
 
     dmr_expanded_layout = False
 
@@ -897,8 +901,9 @@ def run_dashboard(
             network_enabled=config.network_keepalive.enabled,
             platform_enabled=config.home_platform.enabled,
         )
+        radio_state = runtime.latest_radio_state
         view = build_dashboard_state(
-            runtime.latest_radio_state,
+            radio_state,
             capture_state(),
             gps_state,
             connectivity,
@@ -926,10 +931,14 @@ def run_dashboard(
         mode_text.set(view.mode)
         last_result = view.last_result if view.last_result != "—" else "—"
         last_result_text.set(f"Last Result: {last_result[:18]}")
-        ticker_message = build_dashboard_ticker(
-            view,
-            include_network=config.network_keepalive.enabled,
+
+        status_bar.update_statuses(
+            build_status_strip_snapshot(
+                radio_state,
+                status_monitor.latest_state,
+            )
         )
+        ticker_message = build_status_bar_routine_message(view)
         runtime.status_messages.publish(
             replacement_key="dashboard.routine",
             text=ticker_message,
@@ -938,12 +947,11 @@ def run_dashboard(
         )
         current_status = runtime.status_messages.snapshot().current
         if current_status is None:
-            ticker_text.set(ticker_message)
-            ticker.configure(fg=_BRIGHT)
+            status_bar.set_message(ticker_message, foreground=_BRIGHT)
         else:
-            ticker_text.set(current_status.text)
-            ticker.configure(
-                fg=_status_foreground(current_status.presentation),
+            status_bar.set_message(
+                current_status.text,
+                foreground=_status_foreground(current_status.presentation),
             )
 
         selected_context = context_navigation.state
@@ -1127,6 +1135,7 @@ def run_dashboard(
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.stop()
         log_panel.stop()
+        status_monitor.stop()
         runtime.stop()
         root.destroy()
 
