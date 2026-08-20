@@ -162,10 +162,10 @@ def test_selected_history_is_kept_inside_twelve_row_window() -> None:
     )
 
     assert len(viewport.history_cards) == 12
-    assert viewport.hidden_above_count == 4
-    assert viewport.hidden_below_count == 0
-    assert viewport.history_cards[10].selected
-    assert viewport.history_cards[10].callsign_line.startswith("K14DMR")
+    assert viewport.hidden_above_count == 3
+    assert viewport.hidden_below_count == 1
+    assert viewport.history_cards[11].selected
+    assert viewport.history_cards[11].callsign_line.startswith("K14DMR")
 
 
 def test_staged_history_row_and_footer_are_explicit() -> None:
