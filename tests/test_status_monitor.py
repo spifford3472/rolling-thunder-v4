@@ -1,6 +1,6 @@
 """Tests for bounded background vehicle status monitoring."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 
 from rolling_thunder.http_home_platform import UrllibHttpResponse
 from rolling_thunder.radio_polling import PollCallback
