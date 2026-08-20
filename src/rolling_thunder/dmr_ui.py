@@ -9,7 +9,7 @@ from rolling_thunder.dmr_commit import DmrCommitStatus
 from rolling_thunder.dmr_monitor import DmrMonitorSnapshot
 from rolling_thunder.dmr_selection import DmrSelectionState, DmrStageOrigin
 
-_DEFAULT_MAX_HISTORY_ROWS = 20
+_DEFAULT_MAX_HISTORY_ROWS = 12
 
 
 @dataclass(frozen=True, slots=True)
