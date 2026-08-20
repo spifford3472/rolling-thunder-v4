@@ -106,7 +106,7 @@ def test_idle_view_shows_rf_health_and_idle_state(monkeypatch: Any) -> None:
     assert widgets._audio_idle_label.options["bg"] == "#ff7070"
     assert widgets._audio_idle_label.options["font"] == (
         "DejaVu Sans",
-        34,
+        36,
         "bold",
     )
     assert not widgets._error_label.visible
@@ -207,6 +207,6 @@ def test_widget_adapter_limits_preallocated_card_slots(monkeypatch: Any) -> None
     assert widgets._history_frames[19].options["grid_columnspan"] == 2
     assert widgets._history_frames[0].children[1].options["font"] == (
         "DejaVu Sans",
-        21,
+        23,
         "bold",
     )
