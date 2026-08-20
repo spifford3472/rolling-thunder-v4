@@ -55,14 +55,18 @@ def monitored() -> StatusMonitorSnapshot:
     )
 
 
-def test_status_strip_has_four_equal_ordered_icon_cells() -> None:
-    assert STATUS_ICON_ORDER == STATUS_ITEM_ORDER == (
+def test_status_bar_has_six_equal_ordered_icon_cells() -> None:
+    assert STATUS_ITEM_ORDER == (
         StatusItemId.HF_RADIO,
         StatusItemId.INTERNET,
         StatusItemId.FORGE,
         StatusItemId.MICROPHONE,
     )
-    assert len(set(STATUS_ICON_ORDER)) == 4
+    assert STATUS_ICON_ORDER == STATUS_ITEM_ORDER + (
+        StatusItemId.VOICE,
+        StatusItemId.GPS,
+    )
+    assert len(set(STATUS_ICON_ORDER)) == 6
     assert STATUS_ICON_CELL_WIDTH_PX == STATUS_BAR_HEIGHT_PX
     assert STATUS_ICON_CANVAS_PX >= int(STATUS_BAR_HEIGHT_PX * 0.85)
 
@@ -109,15 +113,22 @@ def test_healthy_unavailable_and_starting_have_distinct_visual_states() -> None:
     assert status_color(StatusState.UNAVAILABLE) == "#ff3b3b"
 
 
-def test_routine_message_does_not_duplicate_icon_owned_health_text() -> None:
+def test_routine_message_encodes_aux_icons_and_only_displays_dates() -> None:
     dashboard = build_dashboard_state(
         radio(RadioConnectionState.CONNECTED),
         CallsignCaptureState(voice_state="READY"),
     )
 
-    message = build_status_bar_routine_message(dashboard)
+    message = build_status_bar_routine_message(
+        dashboard,
+        now=datetime(2026, 8, 19, 21, 30, tzinfo=UTC),
+    )
 
-    assert message == "VOICE READY — GPS DISABLED"
+    assert message == (
+        "[[VOICE=READY]][[GPS=DISABLED]]"
+        "Local Date: 2026-Aug-19 | UTC Date: 2026-Aug-19"
+    )
+    assert "SYNC" not in message
     assert "RADIO" not in message
     assert "INTERNET" not in message
     assert "FORGE" not in message
