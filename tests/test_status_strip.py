@@ -4,7 +4,12 @@ from datetime import UTC, datetime
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
 from rolling_thunder.dashboard_state import build_dashboard_state
-from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
+from rolling_thunder.domain import (
+    Frequency,
+    RadioConnectionState,
+    RadioMode,
+    RadioState,
+)
 from rolling_thunder.status_bar_ui import (
     STATUS_BAR_HEIGHT_PX,
     STATUS_ICON_CANVAS_PX,
@@ -27,6 +32,7 @@ def radio(connection_state: RadioConnectionState) -> RadioState:
         return RadioState(
             connection_state=connection_state,
             frequency=Frequency(hz=14_250_000),
+            mode=RadioMode.USB,
             updated_at=updated_at,
         )
     if connection_state is RadioConnectionState.ERROR:
