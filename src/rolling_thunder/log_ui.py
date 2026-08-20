@@ -16,11 +16,20 @@ _SUCCESS = "#42ff72"
 _WARNING = "#ffd24a"
 _FAILURE = "#ff7070"
 _LOG_VISIBLE_CONTACTS = 3
-_LOG_SUMMARY_FONT_SIZE = 30
-_LOG_STATUS_FONT_SIZE = 24
-_LOG_CALLSIGN_FONT_SIZE = 25
-_LOG_DETAIL_FONT_SIZE = 21
-_LOG_HINT_FONT_SIZE = 21
+_LOG_SUMMARY_FONT_SIZE = 32
+_LOG_STATUS_FONT_SIZE = 26
+_LOG_CALLSIGN_FONT_SIZE = 27
+_LOG_DETAIL_FONT_SIZE = 23
+_LOG_HINT_FONT_SIZE = 23
+
+
+def format_log_timestamp(snapshot_time: object) -> str:
+    """Format one authoritative contact timestamp with visible date and UTC time."""
+    from datetime import datetime
+
+    if not isinstance(snapshot_time, datetime):
+        raise TypeError("Log timestamp must be a datetime.")
+    return snapshot_time.strftime("%m/%d/%y %H:%MZ")
 
 
 class LogWidgets:
@@ -178,7 +187,7 @@ class LogWidgets:
             row = snapshot.rows[index]
             self._row_frames[index].grid()
             timestamp, callsign, band, country, status = variables
-            timestamp.set(row.started_at.strftime("%H:%MZ"))
+            timestamp.set(format_log_timestamp(row.started_at))
             callsign.set(row.callsign)
             band.set(row.band)
             country.set(row.country)
