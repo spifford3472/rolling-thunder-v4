@@ -117,6 +117,8 @@ def test_pota_card_uses_shared_name_park_frequency_and_age() -> None:
     viewport = build_shared_spot_viewport(state)
 
     assert viewport.title == "POTA    BAND: 20    MODE: SSB"
+    assert viewport.status_line == "1 SPOTS"
+    assert viewport.detail_line == "GENERATED 01:00:00Z"
     assert viewport.cards[0].line1 == "K1POTA - Park Operator"
     assert viewport.cards[0].line2 == "14.250 MHz  SSB  4m"
     assert viewport.cards[0].line3 == "US-1234 - Example Park"
@@ -137,8 +139,11 @@ def test_dx_card_uses_same_four_line_card_with_grid_and_source_metadata() -> Non
         provider=SpotProvider.DX,
     )
 
-    card = build_shared_spot_viewport(state).cards[0]
+    viewport = build_shared_spot_viewport(state)
+    card = viewport.cards[0]
 
+    assert viewport.status_line == "1 SPOTS"
+    assert viewport.detail_line == "GENERATED 01:00:00Z"
     assert card.line1 == "K1DX - DX Operator"
     assert card.line2 == "14.020 MHz  CW  4m"
     assert card.line3 == "GRID FN31pr"
@@ -169,12 +174,12 @@ def test_disabled_source_has_truthful_empty_detail() -> None:
 
     viewport = build_shared_spot_viewport(state)
 
-    assert viewport.status_line.startswith("FORGE DISABLED")
+    assert viewport.status_line == "0 SPOTS"
     assert viewport.detail_line == "Shared Forge spots are disabled in this configuration."
     assert viewport.cards == ()
 
 
-def test_provider_degradation_and_pi_error_are_both_visible() -> None:
+def test_provider_degradation_and_pi_error_are_both_visible_without_footer_clutter() -> None:
     state = panel_state(
         (),
         provider=SpotProvider.DX,
@@ -185,7 +190,8 @@ def test_provider_degradation_and_pi_error_are_both_visible() -> None:
 
     viewport = build_shared_spot_viewport(state)
 
-    assert "PROVIDER DEGRADED" in viewport.status_line
+    assert viewport.status_line == "0 SPOTS"
+    assert viewport.detail_line == "GENERATED 01:00:00Z"
     assert viewport.error_line == "Forge unavailable — cluster timeout"
 
 
