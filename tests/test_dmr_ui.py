@@ -117,7 +117,9 @@ def test_healthy_idle_view_shows_rf_pair_and_bounded_history() -> None:
     assert viewport.hidden_above_count == 0
     assert viewport.hidden_below_count == 0
     assert viewport.history_cards[0].callsign_line == "K0DMR"
-    assert viewport.history_cards[0].detail_line == "Operator 0 · TG3100 · TS1 · 5s · NET"
+    assert viewport.history_cards[0].detail_line == (
+        "08/16/26 00:07Z · Operator 0 · TG3100 · TS1 · 5s · NET"
+    )
 
 
 def test_current_audio_supports_both_slots_and_marks_staged_call() -> None:
@@ -143,7 +145,9 @@ def test_current_audio_supports_both_slots_and_marks_staged_call() -> None:
     assert viewport.current_audio_cards[0].staged is False
     assert viewport.current_audio_cards[1].staged is True
     assert viewport.current_audio_cards[1].alias_line == "W3GSI Raymond"
-    assert viewport.current_audio_cards[1].detail_line == "TS2  TG 3100  NETWORK"
+    assert viewport.current_audio_cards[1].detail_line == (
+        "08/16/26 00:07Z · TS2 · TG 3100 · NETWORK"
+    )
 
 
 def test_selected_history_is_kept_inside_ten_row_window() -> None:
