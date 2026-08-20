@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from rolling_thunder.status_monitor import StatusState
@@ -14,13 +15,16 @@ from rolling_thunder.status_strip import (
 STATUS_BAR_HEIGHT_PX = 76
 STATUS_ICON_CELL_WIDTH_PX = 76
 STATUS_ICON_CANVAS_PX = 68
-STATUS_ICON_ORDER = STATUS_ITEM_ORDER
+STATUS_ICON_ORDER = STATUS_ITEM_ORDER + (StatusItemId.VOICE, StatusItemId.GPS)
 
 _BACKGROUND = "#202020"
 _BORDER = "#3a3a3a"
 _HEALTHY = "#42ff72"
 _UNAVAILABLE = "#ff3b3b"
 _STARTING = "#8a8a8a"
+_STATUS_METADATA = re.compile(
+    r"^\[\[VOICE=([^\]]+)\]\]\[\[GPS=([^\]]+)\]\](.*)$"
+)
 
 
 def status_color(state: StatusState) -> str:
@@ -93,28 +97,70 @@ class StatusBarWidgets:
             bg=_BACKGROUND,
             fg="#ffffff",
             font=("DejaVu Sans", 18, "bold"),
-            anchor="w",
+            anchor="e",
             padx=16,
         )
         self._ticker.grid(row=0, column=1, sticky="nsew")
         self._last_snapshot: StatusStripSnapshot | None = None
+        self._voice_state = StatusState.STARTING
+        self._gps_state = StatusState.STARTING
+        self._draw_icon(
+            self._canvases[StatusItemId.VOICE],
+            StatusItemId.VOICE,
+            status_color(self._voice_state),
+        )
+        self._draw_icon(
+            self._canvases[StatusItemId.GPS],
+            StatusItemId.GPS,
+            status_color(self._gps_state),
+        )
 
     def set_message(self, text: str, *, foreground: str) -> None:
-        """Update the existing transient/routine ticker region."""
+        """Update auxiliary icon state and the transient/routine ticker region."""
+        match = _STATUS_METADATA.match(text)
+        if match is not None:
+            voice_text, gps_text, visible_text = match.groups()
+            self._update_auxiliary_statuses(voice_text, gps_text)
+            text = visible_text
         self._ticker_text.set(text)
         self._ticker.configure(fg=foreground)
 
     def update_statuses(self, snapshot: StatusStripSnapshot) -> None:
-        """Redraw only when one of the four immutable status cells changes."""
+        """Redraw monitored status cells only when their immutable state changes."""
         if snapshot == self._last_snapshot:
             return
         self._last_snapshot = snapshot
-        states = {item.item_id: item.state for item in snapshot.items}
-        for item_id in STATUS_ICON_ORDER:
+        for item in snapshot.items:
             self._draw_icon(
-                self._canvases[item_id],
-                item_id,
-                status_color(states[item_id]),
+                self._canvases[item.item_id],
+                item.item_id,
+                status_color(item.state),
+            )
+
+    def _update_auxiliary_statuses(self, voice_text: str, gps_text: str) -> None:
+        voice_state = (
+            StatusState.HEALTHY
+            if voice_text.strip().upper() in {"READY", "LISTENING"}
+            else StatusState.UNAVAILABLE
+        )
+        gps_state = (
+            StatusState.HEALTHY
+            if gps_text.strip().upper() == "READY"
+            else StatusState.UNAVAILABLE
+        )
+        if voice_state is not self._voice_state:
+            self._voice_state = voice_state
+            self._draw_icon(
+                self._canvases[StatusItemId.VOICE],
+                StatusItemId.VOICE,
+                status_color(voice_state),
+            )
+        if gps_state is not self._gps_state:
+            self._gps_state = gps_state
+            self._draw_icon(
+                self._canvases[StatusItemId.GPS],
+                StatusItemId.GPS,
+                status_color(gps_state),
             )
 
     @staticmethod
@@ -126,8 +172,12 @@ class StatusBarWidgets:
             StatusBarWidgets._draw_internet(canvas, color)
         elif item_id is StatusItemId.FORGE:
             StatusBarWidgets._draw_forge(canvas, color)
-        else:
+        elif item_id is StatusItemId.MICROPHONE:
             StatusBarWidgets._draw_microphone(canvas, color)
+        elif item_id is StatusItemId.VOICE:
+            StatusBarWidgets._draw_voice(canvas, color)
+        else:
+            StatusBarWidgets._draw_gps(canvas, color)
 
     @staticmethod
     def _draw_radio(canvas: Any, color: str) -> None:
@@ -160,3 +210,17 @@ class StatusBarWidgets:
         canvas.create_arc(17, 24, 51, 51, start=180, extent=180, style="arc", width=4, outline=color)
         canvas.create_line(34, 51, 34, 59, width=4, fill=color)
         canvas.create_line(23, 59, 45, 59, width=4, fill=color)
+
+    @staticmethod
+    def _draw_voice(canvas: Any, color: str) -> None:
+        canvas.create_polygon(11, 29, 23, 29, 35, 18, 35, 50, 23, 39, 11, 39, outline=color, fill="", width=4)
+        canvas.create_arc(31, 22, 49, 46, start=300, extent=120, style="arc", width=4, outline=color)
+        canvas.create_arc(29, 14, 59, 54, start=300, extent=120, style="arc", width=4, outline=color)
+
+    @staticmethod
+    def _draw_gps(canvas: Any, color: str) -> None:
+        canvas.create_oval(18, 9, 50, 41, width=4, outline=color)
+        canvas.create_oval(29, 20, 39, 30, width=3, outline=color)
+        canvas.create_line(34, 41, 34, 59, width=4, fill=color)
+        canvas.create_line(34, 59, 22, 45, width=4, fill=color)
+        canvas.create_line(34, 59, 46, 45, width=4, fill=color)
