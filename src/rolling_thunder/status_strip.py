@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from rolling_thunder.dashboard_state import DashboardState
@@ -75,7 +75,7 @@ def build_status_bar_routine_message(
     if instant.tzinfo is None:
         instant = instant.astimezone()
     local_date = instant.astimezone().strftime("%Y-%b-%d")
-    utc_date = instant.astimezone(timezone.utc).strftime("%Y-%b-%d")
+    utc_date = instant.astimezone(UTC).strftime("%Y-%b-%d")
     voice_state = state.voice_state.strip().upper() or "UNKNOWN"
     gps_state = state.gps_state.strip().upper() or "UNKNOWN"
     return (
