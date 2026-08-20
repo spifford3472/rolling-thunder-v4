@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import StrEnum
 
 from rolling_thunder.dashboard_state import DashboardState
@@ -17,6 +18,8 @@ class StatusItemId(StrEnum):
     INTERNET = "internet"
     FORGE = "forge"
     MICROPHONE = "microphone"
+    VOICE = "voice"
+    GPS = "gps"
 
 
 STATUS_ITEM_ORDER = (
@@ -62,12 +65,20 @@ def build_status_strip_snapshot(
     )
 
 
-def build_status_bar_routine_message(state: DashboardState) -> str:
-    """Build routine ticker text without duplicating icon-owned health states."""
-    parts = [
-        f"VOICE {state.voice_state.strip().upper() or 'UNKNOWN'}",
-        f"GPS {state.gps_state}",
-    ]
-    if state.synchronization_state != "DISABLED":
-        parts.append(f"SYNC {state.synchronization_state}")
-    return " — ".join(parts)
+def build_status_bar_routine_message(
+    state: DashboardState,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Build hidden auxiliary icon metadata plus the visible local/UTC date text."""
+    instant = now or datetime.now().astimezone()
+    if instant.tzinfo is None:
+        instant = instant.astimezone()
+    local_date = instant.astimezone().strftime("%Y-%b-%d")
+    utc_date = instant.astimezone(timezone.utc).strftime("%Y-%b-%d")
+    voice_state = state.voice_state.strip().upper() or "UNKNOWN"
+    gps_state = state.gps_state.strip().upper() or "UNKNOWN"
+    return (
+        f"[[VOICE={voice_state}]][[GPS={gps_state}]]"
+        f"Local Date: {local_date} | UTC Date: {utc_date}"
+    )
