@@ -14,7 +14,11 @@ from rolling_thunder.status_bar_ui import (
     StatusBarWidgets,
 )
 from rolling_thunder.status_monitor import StatusState
-from rolling_thunder.status_strip import StatusStripItem, StatusStripSnapshot
+from rolling_thunder.status_strip import (
+    STATUS_ITEM_ORDER,
+    StatusStripItem,
+    StatusStripSnapshot,
+)
 
 
 class FakeStringVar:
@@ -83,6 +87,9 @@ class FakeCanvas(FakeWidget):
     def create_arc(self, *args: Any, **kwargs: Any) -> None:
         self._record("arc", *args, **kwargs)
 
+    def create_polygon(self, *args: Any, **kwargs: Any) -> None:
+        self._record("polygon", *args, **kwargs)
+
 
 def _install_fake_tk(monkeypatch: Any) -> None:
     fake_tk = SimpleNamespace(
@@ -99,7 +106,7 @@ def _snapshot() -> StatusStripSnapshot:
         items=tuple(
             StatusStripItem(item_id, state)
             for item_id, state in zip(
-                STATUS_ICON_ORDER,
+                STATUS_ITEM_ORDER,
                 (
                     StatusState.HEALTHY,
                     StatusState.UNAVAILABLE,
@@ -112,7 +119,7 @@ def _snapshot() -> StatusStripSnapshot:
     )
 
 
-def test_status_bar_builds_four_equal_square_icon_cells(monkeypatch: Any) -> None:
+def test_status_bar_builds_six_equal_square_icon_cells(monkeypatch: Any) -> None:
     _install_fake_tk(monkeypatch)
 
     widgets = StatusBarWidgets(FakeWidget())
@@ -122,9 +129,9 @@ def test_status_bar_builds_four_equal_square_icon_cells(monkeypatch: Any) -> Non
     assert tuple(widgets._canvases) == STATUS_ICON_ORDER
 
     icon_frame = widgets.frame.children[0]
-    assert icon_frame.options["width"] == STATUS_ICON_CELL_WIDTH_PX * 4
+    assert icon_frame.options["width"] == STATUS_ICON_CELL_WIDTH_PX * 6
     assert icon_frame.options["height"] == STATUS_BAR_HEIGHT_PX
-    for column in range(4):
+    for column in range(6):
         assert icon_frame.column_configs[column] == {
             "weight": 1,
             "uniform": "vehicle-status-icon",
@@ -138,17 +145,28 @@ def test_status_bar_builds_four_equal_square_icon_cells(monkeypatch: Any) -> Non
         assert canvas.parent.options["height"] == STATUS_BAR_HEIGHT_PX
 
 
-def test_status_bar_renders_health_colors_and_retains_ticker(monkeypatch: Any) -> None:
+def test_status_bar_renders_health_aux_icons_and_only_visible_date_text(
+    monkeypatch: Any,
+) -> None:
     _install_fake_tk(monkeypatch)
     widgets = StatusBarWidgets(FakeWidget())
 
     widgets.update_statuses(_snapshot())
-    widgets.set_message("GPS READY", foreground="#ffffff")
+    widgets.set_message(
+        "[[VOICE=READY]][[GPS=NO FIX]]"
+        "Local Date: 2026-Aug-19 | UTC Date: 2026-Aug-20",
+        foreground="#ffffff",
+    )
 
-    rendered = [repr(canvas.draw_calls) for canvas in widgets._canvases.values()]
+    rendered = [repr(widgets._canvases[item_id].draw_calls) for item_id in STATUS_ICON_ORDER]
     assert "#42ff72" in rendered[0]
     assert "#ff3b3b" in rendered[1]
     assert "#8a8a8a" in rendered[2]
     assert "#42ff72" in rendered[3]
-    assert widgets._ticker_text.get() == "GPS READY"
+    assert "#42ff72" in rendered[4]
+    assert "#ff3b3b" in rendered[5]
+    assert widgets._ticker_text.get() == (
+        "Local Date: 2026-Aug-19 | UTC Date: 2026-Aug-20"
+    )
+    assert widgets._ticker.options["anchor"] == "e"
     assert widgets._ticker.options["fg"] == "#ffffff"
