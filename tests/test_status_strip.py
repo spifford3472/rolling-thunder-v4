@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
 from rolling_thunder.dashboard_state import build_dashboard_state
-from rolling_thunder.domain import RadioConnectionState, RadioState
+from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
 from rolling_thunder.status_bar_ui import (
     STATUS_BAR_HEIGHT_PX,
     STATUS_ICON_CANVAS_PX,
@@ -22,9 +22,22 @@ from rolling_thunder.status_strip import (
 
 
 def radio(connection_state: RadioConnectionState) -> RadioState:
+    updated_at = datetime(2026, 8, 19, 20, 23, tzinfo=UTC)
+    if connection_state is RadioConnectionState.CONNECTED:
+        return RadioState(
+            connection_state=connection_state,
+            frequency=Frequency(hz=14_250_000),
+            updated_at=updated_at,
+        )
+    if connection_state is RadioConnectionState.ERROR:
+        return RadioState(
+            connection_state=connection_state,
+            updated_at=updated_at,
+            last_error="radio unavailable",
+        )
     return RadioState(
         connection_state=connection_state,
-        updated_at=datetime(2026, 8, 19, 20, 23, tzinfo=UTC),
+        updated_at=updated_at,
     )
 
 
