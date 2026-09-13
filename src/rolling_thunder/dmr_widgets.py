@@ -37,7 +37,7 @@ class DmrWidgets:
             textvariable=self._health,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 26, "bold"),
+            font=("DejaVu Sans", 28, "bold"),
             anchor="w",
         )
         self._health_label.grid(row=0, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 1))
@@ -48,7 +48,7 @@ class DmrWidgets:
             textvariable=self._rf,
             bg=_BACKGROUND,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 28, "bold"),
+            font=("DejaVu Sans", 30, "bold"),
             anchor="w",
         ).grid(row=1, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 1))
 
@@ -58,7 +58,7 @@ class DmrWidgets:
             textvariable=self._error,
             bg=_BACKGROUND,
             fg=_FAILURE,
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", 20, "bold"),
             anchor="w",
             justify="left",
             wraplength=500,
@@ -70,7 +70,7 @@ class DmrWidgets:
             text="CURRENT AUDIO",
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 24, "bold"),
+            font=("DejaVu Sans", 26, "bold"),
             anchor="w",
         ).grid(row=3, column=0, columnspan=2, sticky="ew", padx=6, pady=(1, 1))
 
@@ -80,7 +80,7 @@ class DmrWidgets:
             textvariable=self._audio_idle,
             bg=_FAILURE,
             fg=_CARD_BACKGROUND,
-            font=("DejaVu Sans", 34, "bold"),
+            font=("DejaVu Sans", 36, "bold"),
             anchor="center",
             pady=3,
         )
@@ -106,7 +106,7 @@ class DmrWidgets:
                 textvariable=callsign,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
-                font=("DejaVu Sans", 48, "bold"),
+                font=("DejaVu Sans", 50, "bold"),
                 anchor="w",
             ).grid(row=0, column=0, sticky="ew", padx=8, pady=(2, 0))
             tk.Label(
@@ -114,7 +114,7 @@ class DmrWidgets:
                 textvariable=detail,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
-                font=("DejaVu Sans", 24, "bold"),
+                font=("DejaVu Sans", 26, "bold"),
                 anchor="w",
             ).grid(row=1, column=0, sticky="ew", padx=8, pady=0)
             tk.Label(
@@ -122,7 +122,7 @@ class DmrWidgets:
                 textvariable=alias,
                 bg=_CARD_BACKGROUND,
                 fg=_MUTED,
-                font=("DejaVu Sans", 22),
+                font=("DejaVu Sans", 24),
                 anchor="w",
             ).grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 2))
             self._audio_frames.append(frame)
@@ -134,7 +134,7 @@ class DmrWidgets:
             text="RECENT CALLERS",
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 24, "bold"),
+            font=("DejaVu Sans", 26, "bold"),
             anchor="w",
         ).grid(row=7, column=0, columnspan=2, sticky="ew", padx=6, pady=(3, 1))
 
@@ -165,7 +165,7 @@ class DmrWidgets:
                 textvariable=callsign,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
-                font=("DejaVu Sans", 34, "bold"),
+                font=("DejaVu Sans", 36, "bold"),
                 anchor="w",
             ).grid(row=0, column=0, sticky="w", padx=(8, 4), pady=0)
             tk.Label(
@@ -173,8 +173,10 @@ class DmrWidgets:
                 textvariable=detail,
                 bg=_CARD_BACKGROUND,
                 fg=_MUTED,
-                font=("DejaVu Sans", 21, "bold"),
+                font=("DejaVu Sans", 23, "bold"),
                 anchor="e",
+                justify="right",
+                wraplength=300,
             ).grid(row=0, column=1, sticky="e", padx=(4, 8), pady=0)
             self._history_frames.append(frame)
             self._history_vars.append((callsign, detail))
@@ -186,7 +188,7 @@ class DmrWidgets:
             textvariable=self._more,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 16, "bold"),
+            font=("DejaVu Sans", 18, "bold"),
             anchor="center",
         ).grid(row=28, column=0, columnspan=2, sticky="ew", padx=6, pady=(1, 0))
 
@@ -196,7 +198,7 @@ class DmrWidgets:
             textvariable=self._stage,
             bg=_BACKGROUND,
             fg=_WARNING,
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", 20, "bold"),
             anchor="w",
             justify="left",
             wraplength=500,
@@ -208,7 +210,7 @@ class DmrWidgets:
             textvariable=self._commit,
             bg=_BACKGROUND,
             fg=_MUTED,
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", 20, "bold"),
             anchor="w",
             justify="left",
             wraplength=500,

@@ -27,6 +27,24 @@ audio frame to mono before passing the samples to Vosk.
 The ALSA card name `Array` is preferred over a numeric card index because
 USB card numbers can change when devices are added or removed.
 
+## Dashboard Microphone Status
+
+The bottom vehicle status strip uses the same configured `speech.audio_device`
+as speech capture. Its background health check reads `/proc/asound/cards` and
+`/proc/asound/pcm`, resolves the configured card/device, and verifies that the
+requested PCM endpoint is currently enumerated with an ALSA capture capability.
+
+The status check deliberately does **not** open the microphone, reserve the
+device, start a recording, or repeatedly spawn `arecord`. This keeps USB/audio
+health monitoring lightweight and prevents it from competing with push-to-listen
+capture.
+
+For the dashboard icon, green therefore means **the configured ALSA capture
+endpoint is present and exposes capture**. Red means that card/device cannot be
+resolved or no capture PCM is currently exposed. Enumeration alone cannot prove
+that every long-running audio stream will succeed, so the hardware recording
+test below remains the installation acceptance test.
+
 ## Hardware Validation
 
 List available capture devices:
@@ -67,4 +85,5 @@ audio recording before installation.
 
 Missing audio devices, ALSA failures, capture timeouts, empty recordings,
 and incomplete multichannel frames produce explicit speech-recognition
-errors. Speech recognition does not create radio transmit authority.
+errors. Speech recognition and microphone health monitoring do not create radio
+transmit authority.

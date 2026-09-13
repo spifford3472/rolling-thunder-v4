@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from rolling_thunder.dmr_commit import DmrCommitStatus
 from rolling_thunder.dmr_monitor import DmrMonitorSnapshot
 from rolling_thunder.dmr_selection import DmrSelectionState, DmrStageOrigin
 
-_DEFAULT_MAX_HISTORY_ROWS = 20
+_DEFAULT_MAX_HISTORY_ROWS = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +58,11 @@ class DmrViewport:
         return bool(self.history_cards)
 
 
+def format_dmr_timestamp(occurred_at: datetime) -> str:
+    """Format an authoritative UTC DMR timestamp with both date and time."""
+    return occurred_at.strftime("%m/%d/%y %H:%MZ")
+
+
 def build_dmr_viewport(
     monitor: DmrMonitorSnapshot,
     selection: DmrSelectionState,
@@ -90,7 +96,8 @@ def build_dmr_viewport(
         DmrAudioCard(
             callsign_line=call.identity.callsign,
             detail_line=(
-                f"TS{call.identity.slot}  {call.identity.target}  "
+                f"{format_dmr_timestamp(call.identity.started_at)} · "
+                f"TS{call.identity.slot} · {call.identity.target} · "
                 f"{call.identity.source.value.upper()}"
             ),
             alias_line=call.talker_alias or "LIVE VOICE",
@@ -108,6 +115,7 @@ def build_dmr_viewport(
             callsign_line=record.callsign,
             detail_line=_history_detail_line(
                 record.name,
+                occurred_at=record.occurred_at,
                 slot=record.slot,
                 talkgroup=record.talkgroup,
                 duration_s=record.duration_s,
@@ -140,17 +148,19 @@ def build_dmr_viewport(
 def _history_detail_line(
     name: str | None,
     *,
+    occurred_at: datetime,
     slot: int,
     talkgroup: int,
     duration_s: float,
     source: str,
 ) -> str:
-    """Build a compact one-line history detail that fits the mobile panel."""
+    """Build a compact history detail with authoritative date and time."""
     source_label = "NET" if source == "NETWORK" else source
     metadata = f"TG{talkgroup} · TS{slot} · {duration_s:.0f}s · {source_label}"
+    timestamp = format_dmr_timestamp(occurred_at)
     if name is None or not name.strip():
-        return metadata
-    return f"{name.strip()} · {metadata}"
+        return f"{timestamp} · {metadata}"
+    return f"{timestamp} · {name.strip()} · {metadata}"
 
 
 def _health_line(monitor: DmrMonitorSnapshot) -> str:
