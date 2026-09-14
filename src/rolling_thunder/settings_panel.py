@@ -1,4 +1,4 @@
-"""Typed Settings-panel controls for map zoom and the optional radar image."""
+"""Typed Settings-panel controls for map zoom/style and optional radar image."""
 
 from __future__ import annotations
 
@@ -68,6 +68,10 @@ class DashboardSettingsController:
     def zoom_in(self) -> bool:
         """Increase map zoom when the live map is available."""
         return self._map_zoom is not None and self._map_zoom.zoom_in()
+
+    def toggle_map_style(self) -> bool:
+        """Switch between installed day/night packages without network I/O."""
+        return self._map_zoom is not None and self._map_zoom.toggle_style()
 
     def toggle_radar(self) -> bool:
         """Toggle only Pi-side radar image work and persist the operator choice."""
