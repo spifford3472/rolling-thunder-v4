@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Final, Protocol, runtime_checkable
 
 from rolling_thunder.map_sources import InstalledMapMetadata, MapPackageStyle
 
@@ -81,6 +81,22 @@ class LiveMapZoomTarget(Protocol):
         """Change the in-memory zoom, returning whether it changed."""
 
 
+@runtime_checkable
+class LiveMapStyleTarget(Protocol):
+    """Optional in-memory day/night capability exposed by the live map."""
+
+    @property
+    def style(self) -> MapPackageStyle:
+        ...
+
+    @property
+    def available_styles(self) -> tuple[MapPackageStyle, ...]:
+        ...
+
+    def set_style(self, style: MapPackageStyle) -> bool:
+        ...
+
+
 class MapZoomPersistence(Protocol):
     """Nonblocking persistence capability used by Settings."""
 
@@ -94,20 +110,31 @@ class MapZoomSettingsState:
 
     zoom: int
     bounds: MapZoomBounds
+    style: MapPackageStyle | None = None
+    available_styles: tuple[MapPackageStyle, ...] = ()
 
     @property
     def lines(self) -> tuple[str, ...]:
         """Return compact operator-facing Settings text."""
-        return (
+        lines = [
             "MAP ZOOM",
             str(self.zoom),
             f"RANGE {self.bounds.minimum}-{self.bounds.maximum}",
             "TURN ENCODER: OUT / IN",
-        )
+        ]
+        if self.style is not None:
+            switchable = len(self.available_styles) > 1
+            lines.extend(
+                (
+                    f"MAP STYLE: {self.style.value.upper()}",
+                    "BUTTON #2: DAY / NIGHT" if switchable else "STYLE SWITCH UNAVAILABLE",
+                )
+            )
+        return tuple(lines)
 
 
 class MapZoomSettingsController:
-    """Apply encoder zoom commands immediately and persist them asynchronously."""
+    """Apply map Settings commands immediately; persist zoom asynchronously."""
 
     def __init__(
         self,
@@ -124,6 +151,13 @@ class MapZoomSettingsController:
     @property
     def state(self) -> MapZoomSettingsState:
         """Return current immutable Settings state without I/O."""
+        if isinstance(self._live_map, LiveMapStyleTarget):
+            return MapZoomSettingsState(
+                self._live_map.zoom,
+                self._bounds,
+                style=self._live_map.style,
+                available_styles=self._live_map.available_styles,
+            )
         return MapZoomSettingsState(self._live_map.zoom, self._bounds)
 
     def zoom_out(self) -> bool:
@@ -133,6 +167,22 @@ class MapZoomSettingsController:
     def zoom_in(self) -> bool:
         """Increase zoom one step without wrapping."""
         return self._set_zoom(self._live_map.zoom + 1)
+
+    def toggle_style(self) -> bool:
+        """Toggle day/night only when both styles are installed."""
+        if not isinstance(self._live_map, LiveMapStyleTarget):
+            return False
+        available = self._live_map.available_styles
+        if len(available) < 2:
+            return False
+        target = (
+            MapPackageStyle.NIGHT
+            if self._live_map.style is MapPackageStyle.DAY
+            else MapPackageStyle.DAY
+        )
+        if target not in available:
+            return False
+        return self._live_map.set_style(target)
 
     def _set_zoom(self, requested: int) -> bool:
         target = self._bounds.clamp(requested)
