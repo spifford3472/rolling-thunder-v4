@@ -134,8 +134,7 @@ def command_extract(args: argparse.Namespace) -> int:
         "extract",
         args.source_url,
         f"/output/{output.name}",
-        "--bbox",
-        bbox,
+        f"--bbox={bbox}",
         "--maxzoom",
         str(args.source_max_zoom),
     ]
