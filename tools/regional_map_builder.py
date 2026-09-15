@@ -15,6 +15,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +30,8 @@ PMTILES_IMAGE = (
 )
 DEFAULT_MIN_ZOOM = 6
 DEFAULT_MAX_ZOOM = 17
+DEFAULT_RENDER_WORKERS = 8
+DEFAULT_RENDER_BATCH_SIZE = 64
 CALIBRATED_BYTES_PER_RASTER_TILE = 10_870
 PLANNING_HEADROOM = 1.25
 
@@ -185,59 +188,87 @@ def command_render(args: argparse.Namespace) -> int:
         existing = int(connection.execute("SELECT COUNT(*) FROM tiles").fetchone()[0])
         print(
             f"Building {region.name} {style}: expected={expected:,} "
-            f"already_present={existing:,} output={partial}"
+            f"already_present={existing:,} workers={args.workers} "
+            f"batch_size={args.batch_size} output={partial}"
         )
         started = time.monotonic()
         completed = existing
         since_commit = 0
-        for zoom in range(args.min_zoom, args.max_zoom + 1):
-            x0, x1, y0, y1 = tile_rectangle(region, zoom)
-            for x in range(x0, x1 + 1):
-                for y in range(y0, y1 + 1):
-                    tms_y = (1 << zoom) - 1 - y
-                    if connection.execute(
-                        "SELECT 1 FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?",
-                        (zoom, x, tms_y),
-                    ).fetchone() is not None:
-                        continue
-                    key = MapTileKey(zoom=zoom, x=x, y=y)
-                    try:
-                        png = _fetch_tile(
-                            args.renderer_url_template,
-                            style,
-                            key,
-                            timeout_s=args.timeout_s,
+        batch: list[MapTileKey] = []
+
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            for zoom in range(args.min_zoom, args.max_zoom + 1):
+                x0, x1, y0, y1 = tile_rectangle(region, zoom)
+                for x in range(x0, x1 + 1):
+                    for y in range(y0, y1 + 1):
+                        tms_y = (1 << zoom) - 1 - y
+                        if connection.execute(
+                            "SELECT 1 FROM tiles "
+                            "WHERE zoom_level=? AND tile_column=? AND tile_row=?",
+                            (zoom, x, tms_y),
+                        ).fetchone() is not None:
+                            continue
+                        batch.append(MapTileKey(zoom=zoom, x=x, y=y))
+                        if len(batch) < args.batch_size:
+                            continue
+                        try:
+                            rendered = _fetch_batch(
+                                executor,
+                                args.renderer_url_template,
+                                style,
+                                batch,
+                                timeout_s=args.timeout_s,
+                            )
+                        except OSError as error:
+                            connection.commit()
+                            print(
+                                f"ERROR: render failed at {error}; "
+                                "partial output is safe to resume.",
+                                file=sys.stderr,
+                            )
+                            return 3
+                        completed, since_commit = _store_rendered_batch(
+                            connection,
+                            rendered,
+                            completed=completed,
+                            since_commit=since_commit,
+                            commit_every=args.commit_every,
+                            progress_every=args.progress_every,
+                            started=started,
+                            existing=existing,
+                            expected=expected,
                         )
-                    except (OSError, RuntimeError) as error:
-                        connection.commit()
-                        print(
-                            f"ERROR: render failed at {zoom}/{x}/{y}: {error}; "
-                            "partial output is safe to resume.",
-                            file=sys.stderr,
-                        )
-                        return 3
-                    connection.execute(
-                        """
-                        INSERT INTO tiles(zoom_level, tile_column, tile_row, tile_data)
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (zoom, x, tms_y, png),
+                        batch.clear()
+
+            if batch:
+                try:
+                    rendered = _fetch_batch(
+                        executor,
+                        args.renderer_url_template,
+                        style,
+                        batch,
+                        timeout_s=args.timeout_s,
                     )
-                    completed += 1
-                    since_commit += 1
-                    if since_commit >= args.commit_every:
-                        connection.commit()
-                        since_commit = 0
-                    if completed % args.progress_every == 0 or completed == expected:
-                        elapsed = max(0.001, time.monotonic() - started)
-                        newly_completed = max(1, completed - existing)
-                        rate = newly_completed / elapsed
-                        remaining = max(0, expected - completed)
-                        eta_hours = remaining / max(rate, 0.001) / 3600
-                        print(
-                            f"progress={completed:,}/{expected:,} "
-                            f"rate={rate:,.1f} tiles/s eta={eta_hours:,.1f}h"
-                        )
+                except OSError as error:
+                    connection.commit()
+                    print(
+                        f"ERROR: render failed at {error}; "
+                        "partial output is safe to resume.",
+                        file=sys.stderr,
+                    )
+                    return 3
+                completed, since_commit = _store_rendered_batch(
+                    connection,
+                    rendered,
+                    completed=completed,
+                    since_commit=since_commit,
+                    commit_every=args.commit_every,
+                    progress_every=args.progress_every,
+                    started=started,
+                    existing=existing,
+                    expected=expected,
+                )
+
         connection.commit()
         actual = int(connection.execute("SELECT COUNT(*) FROM tiles").fetchone()[0])
         if actual != expected:
@@ -251,6 +282,8 @@ def command_render(args: argparse.Namespace) -> int:
             ("rolling_thunder_refreshed_at", datetime.now(UTC).isoformat()),
         )
         connection.commit()
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        connection.execute("PRAGMA journal_mode=DELETE")
     finally:
         connection.close()
 
@@ -260,6 +293,75 @@ def command_render(args: argparse.Namespace) -> int:
     partial.replace(output)
     print(f"PASS: validated package complete: {output}")
     return 0
+
+
+def _fetch_batch(
+    executor: ThreadPoolExecutor,
+    template: str,
+    style: str,
+    keys: list[MapTileKey],
+    *,
+    timeout_s: float,
+) -> list[tuple[MapTileKey, bytes]]:
+    futures: dict[Future[bytes], MapTileKey] = {
+        executor.submit(
+            _fetch_tile,
+            template,
+            style,
+            key,
+            timeout_s=timeout_s,
+        ): key
+        for key in keys
+    }
+    rendered: list[tuple[MapTileKey, bytes]] = []
+    for future in as_completed(futures):
+        key = futures[future]
+        try:
+            rendered.append((key, future.result()))
+        except (OSError, RuntimeError) as error:
+            for pending in futures:
+                pending.cancel()
+            raise OSError(f"{key.zoom}/{key.x}/{key.y}: {error}") from error
+    return rendered
+
+
+def _store_rendered_batch(
+    connection: sqlite3.Connection,
+    rendered: list[tuple[MapTileKey, bytes]],
+    *,
+    completed: int,
+    since_commit: int,
+    commit_every: int,
+    progress_every: int,
+    started: float,
+    existing: int,
+    expected: int,
+) -> tuple[int, int]:
+    for key, png in rendered:
+        tms_y = (1 << key.zoom) - 1 - key.y
+        connection.execute(
+            """
+            INSERT INTO tiles(zoom_level, tile_column, tile_row, tile_data)
+            VALUES (?, ?, ?, ?)
+            """,
+            (key.zoom, key.x, tms_y, png),
+        )
+        completed += 1
+        since_commit += 1
+        if since_commit >= commit_every:
+            connection.commit()
+            since_commit = 0
+        if completed % progress_every == 0 or completed == expected:
+            elapsed = max(0.001, time.monotonic() - started)
+            newly_completed = max(1, completed - existing)
+            rate = newly_completed / elapsed
+            remaining = max(0, expected - completed)
+            eta_hours = remaining / max(rate, 0.001) / 3600
+            print(
+                f"progress={completed:,}/{expected:,} "
+                f"rate={rate:,.1f} tiles/s eta={eta_hours:,.1f}h"
+            )
+    return completed, since_commit
 
 
 def _initialize_mbtiles(
@@ -272,6 +374,7 @@ def _initialize_mbtiles(
     connection.executescript(
         """
         PRAGMA journal_mode=WAL;
+        PRAGMA synchronous=NORMAL;
         CREATE TABLE IF NOT EXISTS metadata (
             name TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -369,6 +472,8 @@ def parser() -> argparse.ArgumentParser:
     render.add_argument("--min-zoom", type=int, default=DEFAULT_MIN_ZOOM)
     render.add_argument("--max-zoom", type=int, default=DEFAULT_MAX_ZOOM)
     render.add_argument("--timeout-s", type=float, default=15.0)
+    render.add_argument("--workers", type=int, default=DEFAULT_RENDER_WORKERS)
+    render.add_argument("--batch-size", type=int, default=DEFAULT_RENDER_BATCH_SIZE)
     render.add_argument("--commit-every", type=int, default=1_000)
     render.add_argument("--progress-every", type=int, default=10_000)
     render.set_defaults(func=command_render)
@@ -381,6 +486,10 @@ def main() -> int:
         raise SystemExit("minimum zoom must be non-negative")
     if hasattr(args, "max_zoom") and args.max_zoom < args.min_zoom:
         raise SystemExit("maximum zoom must be at least minimum zoom")
+    if hasattr(args, "workers") and args.workers < 1:
+        raise SystemExit("workers must be at least 1")
+    if hasattr(args, "batch_size") and args.batch_size < args.workers:
+        raise SystemExit("batch-size must be at least workers")
     return int(args.func(args))
 
 
