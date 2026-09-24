@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from rolling_thunder.dmr_commit import DmrCommitStatus
-from rolling_thunder.dmr_monitor import DmrMonitorSnapshot
+from rolling_thunder.dmr_monitor import DmrMonitorSnapshot, monitored_dmr_active_calls
 from rolling_thunder.dmr_selection import DmrSelectionState, DmrStageOrigin
 
 _DEFAULT_MAX_HISTORY_ROWS = 12
@@ -74,7 +74,7 @@ def build_dmr_viewport(
     if max_history_rows < 1:
         raise ValueError("DMR history row limit must be positive")
 
-    history = monitor.history
+    history = selection.history
     selected_index = next(
         (
             index
@@ -107,7 +107,10 @@ def build_dmr_viewport(
                 and staged.identity == call.identity
             ),
         )
-        for call in sorted(monitor.active_calls, key=lambda item: item.identity.slot)
+        for call in sorted(
+            monitored_dmr_active_calls(monitor),
+            key=lambda item: item.identity.slot,
+        )
     )
 
     history_cards = tuple(
@@ -132,7 +135,11 @@ def build_dmr_viewport(
     )
 
     return DmrViewport(
-        title="DMR HOTSPOT",
+        title=(
+            f"DMR HOTSPOT — TG{monitor.monitored_talkgroup}"
+            if monitor.monitored_talkgroup is not None
+            else "DMR HOTSPOT — TG ?"
+        ),
         health_line=_health_line(monitor),
         error_line=_error_line(monitor),
         rf_line=_rf_line(monitor),
@@ -140,7 +147,7 @@ def build_dmr_viewport(
         history_cards=history_cards,
         hidden_above_count=start_index,
         hidden_below_count=max(0, total_rows - end_index),
-        stage_line=_stage_line(selection),
+        stage_line=_stage_line(selection, monitor.monitored_talkgroup),
         commit_line=_commit_line(commit),
     )
 
@@ -197,10 +204,18 @@ def _rf_line(monitor: DmrMonitorSnapshot) -> str:
     )
 
 
-def _stage_line(selection: DmrSelectionState) -> str:
+def _stage_line(
+    selection: DmrSelectionState,
+    monitored_talkgroup: int | None,
+) -> str:
     staged = selection.staged_qso
     if staged is None:
-        return "BTN1 STAGE CURRENT  •  ENCODER SELECT  •  PRESS STAGE HISTORY"
+        if monitored_talkgroup is None:
+            return "MONITORED TG UNKNOWN — KEY DESIRED TG TO ARM LOGGING"
+        return (
+            f"TG{monitored_talkgroup}  •  BTN1 STAGE CURRENT  •  "
+            "ENCODER SELECT  •  PRESS STAGE HISTORY"
+        )
 
     target = f"TG{staged.talkgroup}" if staged.talkgroup is not None else staged.target
     return (

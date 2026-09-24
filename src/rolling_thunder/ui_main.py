@@ -280,6 +280,7 @@ def run_dashboard(
             config.dmr,
             database_path=config.storage.database_path,
             gps_state_provider=lambda: runtime.latest_gps_state,
+            operator_callsign=config.operator.callsign,
         )
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.set_polling_enabled(False)

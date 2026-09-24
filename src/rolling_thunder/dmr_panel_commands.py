@@ -6,7 +6,11 @@ from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
 
-from rolling_thunder.dmr_monitor import DmrMonitorSnapshot
+from rolling_thunder.dmr_monitor import (
+    DmrMonitorSnapshot,
+    monitored_dmr_active_calls,
+    monitored_dmr_history,
+)
 from rolling_thunder.dmr_selection import (
     DmrSelectionController,
     DmrSelectionState,
@@ -57,13 +61,14 @@ class DmrPanelCommandController:
     def refresh(self) -> DmrSelectionState:
         """Apply the latest background history snapshot while preserving stable identity."""
         snapshot = self._monitor.latest_state
-        return self._selection.replace_history(snapshot.history)
+        return self._selection.replace_history(monitored_dmr_history(snapshot))
 
     def primary(self) -> bool:
         """Context Button #1 stages the currently active DMR caller."""
         snapshot = self._monitor.latest_state
-        self._selection.replace_history(snapshot.history)
-        active = snapshot.active_calls[0] if snapshot.active_calls else None
+        self._selection.replace_history(monitored_dmr_history(snapshot))
+        active_calls = monitored_dmr_active_calls(snapshot)
+        active = active_calls[0] if active_calls else None
         before = self._selection.state.staged_qso
         state = self._selection.stage_current(
             active,
@@ -111,7 +116,7 @@ class DmrPanelCommandController:
     def activate_selection(self) -> bool:
         """Encoder press stages the selected completed history caller."""
         snapshot = self._monitor.latest_state
-        self._selection.replace_history(snapshot.history)
+        self._selection.replace_history(monitored_dmr_history(snapshot))
         before = self._selection.state.staged_qso
         state = self._selection.stage_selected(
             snapshot.radio_info,
