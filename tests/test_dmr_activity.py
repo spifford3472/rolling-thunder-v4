@@ -6,6 +6,7 @@ from rolling_thunder.dmr_activity import (
     DmrActivitySource,
     DmrEventKind,
     DmrLiveCallTracker,
+    dmr_talkgroup_from_target,
     parse_mmdvm_dmr_line,
 )
 
@@ -157,3 +158,9 @@ def test_parser_accepts_rf_source_without_assuming_network() -> None:
     assert event.source is DmrActivitySource.RF
     assert event.slot == 2
     assert event.callsign == "KI5VNB"
+
+
+def test_talkgroup_target_parser_is_not_tied_to_tg3100() -> None:
+    assert dmr_talkgroup_from_target("TG 91") == 91
+    assert dmr_talkgroup_from_target("received on TG 3139") == 3139
+    assert dmr_talkgroup_from_target("Private Call 91") is None

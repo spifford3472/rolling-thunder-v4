@@ -32,14 +32,19 @@ def _radio_info() -> WpsdRadioInfo:
     )
 
 
-def _history_record(index: int, *, callsign: str | None = None) -> WpsdDmrHistoryRecord:
+def _history_record(
+    index: int,
+    *,
+    callsign: str | None = None,
+    talkgroup: int = 3100,
+) -> WpsdDmrHistoryRecord:
     occurred_at = NOW - timedelta(seconds=index * 20)
     normalized_callsign = callsign or f"K{index}DMR"
     identity = WpsdDmrHistoryIdentity(
         occurred_at=occurred_at,
         callsign=normalized_callsign,
         slot=1 if index % 2 == 0 else 2,
-        talkgroup=3100,
+        talkgroup=talkgroup,
         source=DmrActivitySource.NETWORK,
     )
     return WpsdDmrHistoryRecord(
@@ -47,7 +52,7 @@ def _history_record(index: int, *, callsign: str | None = None) -> WpsdDmrHistor
         name=f"Operator {index}",
         country="USA",
         callsign_suffix=None,
-        target="TG 3100",
+        target=f"TG {talkgroup}",
         duration_s=5.0 + index,
         packet_loss_percent=0.0,
     )
@@ -58,6 +63,7 @@ def _active_call(
     *,
     slot: int = 1,
     alias: str | None = "KC9KPJ Michael",
+    talkgroup: int = 3100,
 ) -> DmrCallSnapshot:
     return DmrCallSnapshot(
         identity=DmrCallIdentity(
@@ -65,7 +71,7 @@ def _active_call(
             slot=slot,
             source=DmrActivitySource.NETWORK,
             callsign=callsign,
-            target="TG 3100",
+            target=f"TG {talkgroup}",
         ),
         talker_alias=alias,
     )
@@ -83,11 +89,13 @@ def _monitor(
     live_error: str | None = None,
     history_error: str | None = None,
     radio_error: str | None = None,
+    monitored_talkgroup: int | None = 3100,
 ) -> DmrMonitorSnapshot:
     return DmrMonitorSnapshot(
         active_calls=active_calls,
         history=history,
         radio_info=radio_info,
+        monitored_talkgroup=monitored_talkgroup,
         live_available=live_available,
         history_available=history_available,
         radio_available=radio_available,
@@ -109,7 +117,7 @@ def test_healthy_idle_view_shows_rf_pair_and_twelve_history_rows() -> None:
         DmrCommitStatus(),
     )
 
-    assert viewport.title == "DMR HOTSPOT"
+    assert viewport.title == "DMR HOTSPOT — TG3100"
     assert viewport.health_line == "HEALTHY  LIVE OK  HISTORY OK  RF OK"
     assert viewport.rf_line == "RX 434.5375 MHz  TX 439.5375 MHz  DUPLEX"
     assert viewport.current_audio_idle
@@ -196,7 +204,8 @@ def test_unstaged_footer_explains_physical_controls() -> None:
     )
 
     assert viewport.stage_line == (
-        "BTN1 STAGE CURRENT  •  ENCODER SELECT  •  PRESS STAGE HISTORY"
+        "TG3100  •  BTN1 STAGE CURRENT  •  "
+        "ENCODER SELECT  •  PRESS STAGE HISTORY"
     )
 
 
@@ -277,3 +286,42 @@ def test_history_row_limit_must_be_positive() -> None:
             DmrCommitStatus(),
             max_history_rows=0,
         )
+
+
+def test_viewport_hides_unrelated_talkgroup_activity() -> None:
+    desired_history = _history_record(0, callsign="K9DESIRED", talkgroup=91)
+    unrelated_history = _history_record(1, callsign="N0LOUD", talkgroup=3100)
+    selection = DmrSelectionController((desired_history,))
+    viewport = build_dmr_viewport(
+        _monitor(
+            history=(unrelated_history, desired_history),
+            active_calls=(
+                _active_call("N0LOUD", talkgroup=3100),
+                _active_call("K9DESIRED", slot=2, talkgroup=91),
+            ),
+            radio_info=_radio_info(),
+            monitored_talkgroup=91,
+        ),
+        selection.state,
+        DmrCommitStatus(),
+    )
+
+    assert viewport.title == "DMR HOTSPOT — TG91"
+    assert [card.callsign_line for card in viewport.history_cards] == ["K9DESIRED"]
+    assert [card.callsign_line for card in viewport.current_audio_cards] == ["K9DESIRED"]
+
+
+def test_unknown_monitored_talkgroup_disables_log_selection_prompt() -> None:
+    viewport = build_dmr_viewport(
+        _monitor(
+            history=(_history_record(0),),
+            radio_info=_radio_info(),
+            monitored_talkgroup=None,
+        ),
+        DmrSelectionController().state,
+        DmrCommitStatus(),
+    )
+
+    assert viewport.title == "DMR HOTSPOT — TG ?"
+    assert viewport.history_cards == ()
+    assert viewport.stage_line == "MONITORED TG UNKNOWN — KEY DESIRED TG TO ARM LOGGING"
