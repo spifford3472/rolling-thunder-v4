@@ -598,7 +598,11 @@ class ApplicationRuntime:
         if self.live_map is not None:
             self.live_map.start()
         if self.map_solar is not None:
-            initial_gps = self.gps_polling.latest_state if self.gps_polling is not None else None
+            initial_gps = (
+                self.gps_polling.latest_state
+                if self.gps_polling is not None
+                else None
+            )
             self.map_solar.start(initial_gps)
         if self.live_radar is not None:
             self.live_radar.start()
