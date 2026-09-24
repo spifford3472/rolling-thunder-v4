@@ -35,6 +35,12 @@ class LocalResolver:
     def start_background_refresh(self) -> None:
         pass
 
+    def observe_installed_tile(self, *args: object, **kwargs: object) -> None:
+        pass
+
+    def observe_gps_position(self, *args: object, **kwargs: object) -> None:
+        pass
+
     def read_local(self, key: MapTileKey) -> ResolvedMapTile:
         self.reads.append(key)
         return ResolvedMapTile(
