@@ -13,9 +13,25 @@ _BRIGHT = "#ffffff"
 _MUTED = "#a8a8a8"
 _DISABLED = "#777777"
 _HEALTHY = "#66ccff"
-_SETTINGS_PRIMARY_FONT_SIZE = 52
-_SETTINGS_CARD_FONT_SIZE = 56
-_SETTINGS_SECONDARY_FONT_SIZE = 30
+_SETTINGS_PRIMARY_FONT_SIZE = 28
+_SETTINGS_ZOOM_FONT_SIZE = 36
+_SETTINGS_CARD_FONT_SIZE = 30
+_SETTINGS_SECONDARY_FONT_SIZE = 18
+_SETTINGS_INSTRUCTION_FONT_SIZE = 20
+
+
+
+def _zoom_presentation(
+    state: DashboardSettingsState,
+) -> tuple[str, str, str, str]:
+    """Return compact Settings zoom text split by visual importance."""
+    map_zoom = state.map_zoom
+    if map_zoom is None:
+        return "MAP ZOOM", "DISABLED", "", _DISABLED
+
+    lines = map_zoom.lines
+    instructions = "\n".join(lines[2:])
+    return lines[0], lines[1], instructions, _HEALTHY
 
 
 class SettingsWidgets:
@@ -35,16 +51,39 @@ class SettingsWidgets:
         content.grid(row=0, column=0, sticky="new", padx=18, pady=(12, 4))
         content.grid_columnconfigure(0, weight=1)
 
-        self._zoom_text = tk.StringVar(value="MAP ZOOM\nDISABLED")
+        self._zoom_title_text = tk.StringVar(value="MAP ZOOM")
         tk.Label(
             content,
-            textvariable=self._zoom_text,
+            textvariable=self._zoom_title_text,
             bg=_BACKGROUND,
             fg=_BRIGHT,
             font=("DejaVu Sans Mono", _SETTINGS_PRIMARY_FONT_SIZE, "bold"),
             justify="left",
             anchor="w",
-        ).grid(row=0, column=0, sticky="ew", pady=(0, 24))
+        ).grid(row=0, column=0, sticky="ew")
+
+        self._zoom_value_text = tk.StringVar(value="DISABLED")
+        self._zoom_value_label = tk.Label(
+            content,
+            textvariable=self._zoom_value_text,
+            bg=_BACKGROUND,
+            fg=_DISABLED,
+            font=("DejaVu Sans Mono", _SETTINGS_ZOOM_FONT_SIZE, "bold"),
+            justify="left",
+            anchor="w",
+        )
+        self._zoom_value_label.grid(row=1, column=0, sticky="ew", pady=(0, 4))
+
+        self._zoom_instruction_text = tk.StringVar(value="")
+        tk.Label(
+            content,
+            textvariable=self._zoom_instruction_text,
+            bg=_BACKGROUND,
+            fg=_MUTED,
+            font=("DejaVu Sans Mono", _SETTINGS_INSTRUCTION_FONT_SIZE),
+            justify="left",
+            anchor="w",
+        ).grid(row=2, column=0, sticky="ew", pady=(0, 18))
 
         radar_card = tk.Frame(
             content,
@@ -52,7 +91,7 @@ class SettingsWidgets:
             highlightthickness=2,
             highlightbackground=_BORDER,
         )
-        radar_card.grid(row=1, column=0, sticky="ew", pady=(2, 0))
+        radar_card.grid(row=3, column=0, sticky="ew", pady=(2, 0))
         radar_card.grid_columnconfigure(0, weight=1)
 
         tk.Label(
@@ -93,10 +132,11 @@ class SettingsWidgets:
 
     def update(self, state: DashboardSettingsState) -> None:
         """Update immutable Settings state without application I/O."""
-        if state.map_zoom is None:
-            self._zoom_text.set("MAP ZOOM\nDISABLED")
-        else:
-            self._zoom_text.set("\n".join(state.map_zoom.lines))
+        title, value, instructions, value_color = _zoom_presentation(state)
+        self._zoom_title_text.set(title)
+        self._zoom_value_text.set(value)
+        self._zoom_instruction_text.set(instructions)
+        self._zoom_value_label.configure(fg=value_color)
         self._draw_switch(
             enabled=state.radar_image_enabled,
             available=state.radar_available,
