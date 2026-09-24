@@ -144,3 +144,51 @@ def test_controller_reports_storage_failure() -> None:
     assert controller.status.committing is False
     assert controller.status.committed_contact is None
     assert controller.status.last_error == "database is unwritable"
+
+
+class RecordingPotaWorkedTracker:
+    def __init__(self) -> None:
+        self.records: list[tuple[Contact, tuple[PotaSpot, ...]]] = []
+
+    def record_contact(
+        self,
+        contact: Contact,
+        pota_spots: tuple[PotaSpot, ...],
+    ) -> None:
+        self.records.append((contact, pota_spots))
+
+
+def test_controller_records_worked_pota_only_after_durable_commit() -> None:
+    repository = BlockingRepository()
+    succeeded = Event()
+    tracker = RecordingPotaWorkedTracker()
+    now = datetime(2026, 7, 25, 14, 0, tzinfo=UTC)
+    pota_spot = PotaSpot(
+        activator="KI5VNB",
+        park=ParkReference(reference="US-1234"),
+        frequency=Frequency(hz=14_250_000),
+        mode=RadioMode.USB,
+        spot_mode="SSB",
+        spotted_at=now,
+    )
+    controller = ContactCommitController(
+        ContactLoggingService(repository, FixedClock()),
+        on_started=lambda callsign: None,
+        on_succeeded=lambda callsign: succeeded.set(),
+        on_failed=lambda message: None,
+        pota_context_provider=lambda: True,
+        pota_spots_provider=lambda: (pota_spot,),
+        pota_worked_tracker=tracker,  # type: ignore[arg-type]
+    )
+
+    assert controller.start_commit("KI5VNB", connected_radio()) is True
+    assert repository.started.wait(timeout=2)
+    assert tracker.records == []
+
+    repository.release.set()
+    assert succeeded.wait(timeout=2)
+
+    assert len(tracker.records) == 1
+    committed, spots = tracker.records[0]
+    assert committed.pota_reference == "US-1234"
+    assert spots == (pota_spot,)
