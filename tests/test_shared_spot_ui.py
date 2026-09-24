@@ -33,6 +33,7 @@ def row(
     park_reference: str | None = None,
     park_name: str | None = None,
     location_code: str | None = None,
+    worked: bool = False,
 ) -> SharedSpotPanelRow:
     frequency = Frequency(hz=frequency_hz)
     identity = (
@@ -56,6 +57,7 @@ def row(
         park_name=park_name,
         location_code=location_code,
         selected=selected,
+        worked=worked,
     )
 
 
@@ -204,3 +206,25 @@ def test_row_limit_must_be_positive() -> None:
         assert "positive" in str(error)
     else:
         raise AssertionError("expected positive row-limit validation")
+
+
+def test_worked_pota_card_adds_label_and_presentation_flag() -> None:
+    state = panel_state(
+        (
+            row(
+                provider=SpotProvider.POTA,
+                callsign="K1POTA",
+                frequency_hz=14_250_000,
+                park_reference="US-1234",
+                park_name="Example Park",
+                location_code="US-OH",
+                worked=True,
+            ),
+        ),
+        provider=SpotProvider.POTA,
+    )
+
+    card = build_shared_spot_viewport(state).cards[0]
+
+    assert card.worked is True
+    assert card.line1 == "K1POTA — WORKED"
