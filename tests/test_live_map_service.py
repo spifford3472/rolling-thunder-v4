@@ -87,6 +87,9 @@ class OfflineCoverageResolver(MapTileResolver):
         self.refreshes: list[MapTileKey] = []
         self.closed = False
 
+    def start_background_refresh(self) -> None:
+        pass
+
     def read_local(self, key: MapTileKey) -> ResolvedMapTile:
         return ResolvedMapTile(
             png=None,
