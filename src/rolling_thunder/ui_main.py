@@ -203,6 +203,7 @@ def run_dashboard(
         runtime.map_zoom_settings,
         runtime.live_radar,
         preference_service,
+        runtime.map_solar,
     )
     weather_panel = WeatherPanelController()
     weather_alert_panel = WeatherAlertPanelController()

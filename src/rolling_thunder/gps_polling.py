@@ -39,6 +39,7 @@ class GPSPollingService:
         self._scheduled_poll: ScheduledPoll | None = None
         self._refreshing = False
         self._latest_state = gps.get_state()
+        self._listeners: tuple[GPSStateListener, ...] = ()
 
     @property
     def is_running(self) -> bool:
@@ -50,14 +51,21 @@ class GPSPollingService:
         """Return the latest immutable GPS state observed by the service."""
         return self._latest_state
 
+    def add_listener(self, listener: GPSStateListener) -> None:
+        """Register a nonblocking state observer before polling starts."""
+        if self.is_running:
+            raise RuntimeError("GPS listeners must be registered before polling starts.")
+        self._listeners = (*self._listeners, listener)
+
     def start(self) -> GPSState:
         """Start GPS polling even when the receiver is initially unavailable."""
         if self.is_running:
             raise RuntimeError("GPS polling service is already running.")
 
-        self._latest_state = self._gps.get_state()
-        if self._latest_state.connection_state is not GPSConnectionState.CONNECTED:
-            self._latest_state = self._connect_or_error()
+        state = self._gps.get_state()
+        if state.connection_state is not GPSConnectionState.CONNECTED:
+            state = self._connect_or_error()
+        self._publish(state)
 
         self._scheduled_poll = self._scheduler.schedule_repeating(
             self._interval_s,
@@ -80,13 +88,23 @@ class GPSPollingService:
         self._refreshing = True
         try:
             if self._latest_state.connection_state is GPSConnectionState.CONNECTED:
-                self._latest_state = self._gps.refresh_state()
+                state = self._gps.refresh_state()
             else:
-                self._latest_state = self._connect_or_error()
+                state = self._connect_or_error()
+            self._publish(state)
         except GPSError as error:
-            self._latest_state = self._error_state(error)
+            self._publish(self._error_state(error))
         finally:
             self._refreshing = False
+
+    def _publish(self, state: GPSState) -> None:
+        """Publish one immutable state and isolate optional observer failures."""
+        self._latest_state = state
+        for listener in self._listeners:
+            try:
+                listener(state)
+            except Exception as error:  # noqa: BLE001 - observers must not stop GPS polling
+                _LOGGER.warning("GPS state listener failed; polling continues: %s", error)
 
     def _connect_or_error(self) -> GPSState:
         try:
