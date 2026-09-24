@@ -570,3 +570,35 @@ def test_frequency_identity_change_while_staged_clears_without_fallback() -> Non
     assert controller.staged_action is None
     assert [row.frequency.hz for row in state.rows] == [14_260_000]
     assert all(row.selected is False for row in state.rows)
+
+
+def test_pota_rows_expose_worked_status_without_affecting_dx() -> None:
+    class WorkedStatus:
+        def is_worked(
+            self,
+            *,
+            callsign: str,
+            frequency: Frequency,
+            display_mode: str,
+            reference_time: datetime | None = None,
+        ) -> bool:
+            del frequency, display_mode, reference_time
+            return callsign == "K1POTA"
+
+    pota = pota_spot("US-9301", 14_250_000, callsign="K1POTA")
+    dx = dx_spot("K1POTA", 14_020_000)
+    source = FakeSharedSource(published_state((pota, dx)))
+    controller = SharedSpotPanelController(
+        source,
+        clock=lambda: NOW,
+        pota_worked_status=WorkedStatus(),
+    )
+
+    pota_state = controller.state
+    assert pota_state.rows[0].worked is True
+
+    dx_state = controller.activate(
+        SpotProvider.DX,
+        current_frequency=Frequency(hz=14_200_000),
+    )
+    assert dx_state.rows[0].worked is False
