@@ -20,6 +20,7 @@ class SharedSpotCard:
     line3: str
     line4: str
     selected: bool
+    worked: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,12 +105,16 @@ def _card_from_row(row: SharedSpotPanelRow) -> SharedSpotCard:
         park_reference = row.park_reference or "<UNKNOWN>"
         park_name = row.park_name or "<UNKNOWN>"
         location = row.location_code or "<UNKNOWN>"
+        name_line = _name_line(row)
+        if row.worked:
+            name_line = f"{name_line} — WORKED"
         return SharedSpotCard(
-            line1=_name_line(row),
+            line1=name_line,
             line2=_frequency_line(row),
             line3=f"{park_reference} - {park_name}",
             line4=location,
             selected=row.selected,
+            worked=row.worked,
         )
 
     metadata = "  ".join(
@@ -121,6 +126,7 @@ def _card_from_row(row: SharedSpotPanelRow) -> SharedSpotCard:
         line3=f"GRID {row.grid_text}",
         line4=metadata or "SOURCE <UNKNOWN>",
         selected=row.selected,
+        worked=False,
     )
 
 
