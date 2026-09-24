@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
@@ -14,7 +14,7 @@ from urllib.error import URLError
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
 from rolling_thunder.map_tiles import MapTileError, MapTileKey, validate_map_tile_png
@@ -195,10 +195,10 @@ class ForgeMapApplication:
 class _Handler(BaseHTTPRequestHandler):
     application: ForgeMapApplication
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         self._respond("GET")
 
-    def do_HEAD(self) -> None:  # noqa: N802
+    def do_HEAD(self) -> None:
         self._respond("HEAD")
 
     def _respond(self, method: str) -> None:

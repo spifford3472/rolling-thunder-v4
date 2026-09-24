@@ -358,7 +358,7 @@ class RasterMbtilesPackage:
     def _parse_refreshed_at(self, raw: str | None) -> datetime:
         if raw:
             try:
-                value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                value = datetime.fromisoformat(raw)
             except ValueError as error:
                 raise MapPackageError(
                     "Installed map package rolling_thunder_refreshed_at must be "
