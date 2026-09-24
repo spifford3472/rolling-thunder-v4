@@ -12,6 +12,7 @@ from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingSe
 from rolling_thunder.domain import Contact, RadioState
 from rolling_thunder.gps import GPSState
 from rolling_thunder.pota_spots import PotaSpot
+from rolling_thunder.pota_worked import PotaWorkedTracker
 from rolling_thunder.storage import StorageError
 
 
@@ -37,6 +38,7 @@ class ContactCommitController:
         gps_state_provider: Callable[[], GPSState | None] | None = None,
         pota_context_provider: Callable[[], bool] | None = None,
         pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
+        pota_worked_tracker: PotaWorkedTracker | None = None,
     ) -> None:
         self._service = service
         self._on_started = on_started
@@ -45,6 +47,7 @@ class ContactCommitController:
         self._gps_state_provider = gps_state_provider or (lambda: None)
         self._pota_context_provider = pota_context_provider or (lambda: False)
         self._pota_spots_provider = pota_spots_provider or (lambda: ())
+        self._pota_worked_tracker = pota_worked_tracker
         self._lock = Lock()
         self._status = ContactCommitStatus()
 
@@ -107,6 +110,9 @@ class ContactCommitController:
             with self._lock:
                 self._status = ContactCommitStatus(last_error=message)
             return
+
+        if pota_context_active and self._pota_worked_tracker is not None:
+            self._pota_worked_tracker.record_contact(contact, pota_spots)
 
         self._on_succeeded(contact.callsign)
         with self._lock:
