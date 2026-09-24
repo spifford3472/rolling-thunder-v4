@@ -30,6 +30,7 @@ def build_dmr_panel_runtime(
     *,
     database_path: Path,
     gps_state_provider: Callable[[], GPSState | None],
+    operator_callsign: str | None = None,
 ) -> DmrPanelRuntime | None:
     """Build the DMR runtime when enabled without starting any network activity."""
     if not config.enabled:
@@ -49,4 +50,5 @@ def build_dmr_panel_runtime(
         history_limit=config.history_limit,
         history_refresh_interval_s=config.history_refresh_interval_s,
         reconnect_delay_s=config.reconnect_delay_s,
+        operator_callsign=operator_callsign,
     )

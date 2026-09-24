@@ -254,3 +254,33 @@ def test_polling_interval_must_be_positive(interval_s: float) -> None:
             ManualScheduler(),
             interval_s=interval_s,
         )
+
+
+def test_state_listeners_receive_start_and_refresh_without_own_polling() -> None:
+    gps = ScriptedGPSReceiver()
+    scheduler = ManualScheduler()
+    service = GPSPollingService(gps, scheduler)
+    observed: list[GPSState] = []
+    service.add_listener(observed.append)
+
+    service.start()
+    scheduler.fire()
+
+    assert observed == [service.latest_state, service.latest_state]
+    assert gps.refresh_count == 1
+
+
+def test_listener_failure_is_isolated_from_gps_polling() -> None:
+    gps = ScriptedGPSReceiver()
+    scheduler = ManualScheduler()
+    service = GPSPollingService(gps, scheduler)
+
+    def broken_listener(_state: GPSState) -> None:
+        raise RuntimeError("observer failed")
+
+    service.add_listener(broken_listener)
+    service.start()
+    scheduler.fire()
+
+    assert service.is_running is True
+    assert gps.refresh_count == 1

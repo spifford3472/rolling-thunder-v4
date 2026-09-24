@@ -41,10 +41,11 @@ class QuietLiveSource:
 class FixedWpsdSource:
     def __init__(self) -> None:
         self.record = _history_record()
+        self.operator_record = _operator_history_record()
         self.radio = _radio_info()
 
     def fetch_history(self) -> tuple[WpsdDmrHistoryRecord, ...]:
-        return (self.record,)
+        return (self.record, self.operator_record)
 
     def fetch_radio_info(self) -> WpsdRadioInfo:
         return self.radio
@@ -98,8 +99,27 @@ def _history_record() -> WpsdDmrHistoryRecord:
     )
 
 
+def _operator_history_record() -> WpsdDmrHistoryRecord:
+    occurred_at = datetime(2026, 8, 16, 0, 7, 20, tzinfo=UTC)
+    return WpsdDmrHistoryRecord(
+        identity=WpsdDmrHistoryIdentity(
+            occurred_at=occurred_at,
+            callsign="KI5VNB",
+            slot=1,
+            talkgroup=3100,
+            source=DmrActivitySource.RF,
+        ),
+        name="Geoff",
+        country="USA",
+        callsign_suffix=None,
+        target="TG 3100",
+        duration_s=1.0,
+        packet_loss_percent=0.0,
+    )
+
+
 def _runtime(tmp_path: Path, writer: RecordingWriter) -> DmrPanelRuntime:
-    return DmrPanelRuntime.build(
+    runtime = DmrPanelRuntime.build(
         database_path=tmp_path / "contacts.db",
         hotspot_host="192.168.8.235",
         ssh_user="pi-star",
@@ -110,7 +130,11 @@ def _runtime(tmp_path: Path, writer: RecordingWriter) -> DmrPanelRuntime:
         live_source=QuietLiveSource(),
         wpsd_source=FixedWpsdSource(),
         writer=writer,
+        operator_callsign="KI5VNB",
     )
+    runtime.start()
+    _wait_until(lambda: runtime.latest_monitor_state.monitored_talkgroup == 3100)
+    return runtime
 
 
 def _wait_until(predicate: Callable[[], bool], *, timeout_s: float = 1.0) -> None:
@@ -197,6 +221,7 @@ def test_success_event_clears_stage_only_when_caller_synchronizes(tmp_path: Path
     assert runtime.selection.state.staged_qso is None
     assert writer.contacts == [events[0].contact]
     assert runtime.synchronize_commit_events() == ()
+    runtime.stop()
 
 
 def test_failure_event_preserves_stage_and_releases_retry_guard(tmp_path: Path) -> None:
@@ -226,6 +251,7 @@ def test_failure_event_preserves_stage_and_releases_retry_guard(tmp_path: Path) 
     assert success_events[0].kind is DmrCommitEventKind.SUCCEEDED
     assert writer.attempts == 2
     assert runtime.selection.state.staged_qso is None
+    runtime.stop()
 
 
 def test_build_with_production_adapters_performs_no_network_io(tmp_path: Path) -> None:

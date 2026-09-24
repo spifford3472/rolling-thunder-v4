@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from threading import Event, Lock, Thread
-from time import monotonic, sleep
+from time import sleep
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
@@ -371,12 +371,12 @@ class MapRefreshCoordinator:
         self,
         store: MapRefreshStore,
         *,
-        policy: MapRefreshPolicy = MapRefreshPolicy(),
+        policy: MapRefreshPolicy | None = None,
         clock: Clock = _utc_now,
         random_source: RandomSource = random.random,
     ) -> None:
         self._store = store
-        self._policy = policy
+        self._policy = policy or MapRefreshPolicy()
         self._clock = clock
         self._random = random_source
         self._lock = Lock()

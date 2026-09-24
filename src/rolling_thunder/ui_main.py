@@ -203,6 +203,7 @@ def run_dashboard(
         runtime.map_zoom_settings,
         runtime.live_radar,
         preference_service,
+        runtime.map_solar,
     )
     weather_panel = WeatherPanelController()
     weather_alert_panel = WeatherAlertPanelController()
@@ -249,6 +250,7 @@ def run_dashboard(
     repeater_panel_runtime = RepeaterPanelRuntime.build(
         database_path=config.storage.database_path,
         gps_state=lambda: runtime.latest_gps_state,
+        source_path=config.repeaters.source_path,
     )
     repeater_panel = repeater_panel_runtime.panel
     repeater_configuration = (
@@ -278,6 +280,7 @@ def run_dashboard(
             config.dmr,
             database_path=config.storage.database_path,
             gps_state_provider=lambda: runtime.latest_gps_state,
+            operator_callsign=config.operator.callsign,
         )
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.set_polling_enabled(False)

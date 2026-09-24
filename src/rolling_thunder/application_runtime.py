@@ -32,6 +32,7 @@ from rolling_thunder.home_platform_health import HomePlatformHealthService
 from rolling_thunder.http_home_platform import HttpHomePlatformClient, HttpTransport
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
+from rolling_thunder.map_solar import MapSolarStyleService
 from rolling_thunder.map_sources import InstalledMapRegistry, MapTileResolver
 from rolling_thunder.map_tiles import MapTileCache, MapTileClient
 from rolling_thunder.map_zoom import (
@@ -129,6 +130,7 @@ class ApplicationRuntime:
     live_map: LiveMapService | None = None
     live_radar: LiveRadarOverlayService | None = None
     map_zoom_settings: MapZoomSettingsController | None = None
+    map_solar: MapSolarStyleService | None = None
     operator_preferences: OperatorPreferenceService | None = None
     home_platform_client: HomePlatformClient | None = None
     home_platform_health: HomePlatformHealthService | None = None
@@ -164,6 +166,7 @@ class ApplicationRuntime:
         forge_weather_alert_scheduler: PollScheduler | None = None,
         forge_location_scheduler: PollScheduler | None = None,
         pota_scheduler: PollScheduler | None = None,
+        map_solar_scheduler: PollScheduler | None = None,
         interval_s: float = 1.0,
         gps_interval_s: float = 1.0,
         radio_factory: RadioFactory = _build_serial_radio,
@@ -388,6 +391,7 @@ class ApplicationRuntime:
         live_map: LiveMapService | None = None
         live_radar: LiveRadarOverlayService | None = None
         map_zoom_settings: MapZoomSettingsController | None = None
+        map_solar: MapSolarStyleService | None = None
         map_config = config.map
         if map_config.enabled:
             map_cache = MapTileCache(
@@ -427,6 +431,12 @@ class ApplicationRuntime:
                 zoom_bounds,
                 operator_preferences,
             )
+            map_solar = MapSolarStyleService(
+                live_map,
+                map_solar_scheduler or ThreadingPollScheduler(),
+                stale_after=timedelta(seconds=map_config.gps_stale_after_s),
+            )
+            gps_polling.add_listener(map_solar.observe_gps_state)
 
         if config.radar.enabled:
             forge_api_url = config.forge.api_url
@@ -463,6 +473,7 @@ class ApplicationRuntime:
             live_map=live_map,
             live_radar=live_radar,
             map_zoom_settings=map_zoom_settings,
+            map_solar=map_solar,
             operator_preferences=operator_preferences,
             home_platform_client=home_platform_client,
             home_platform_health=home_platform_health,
@@ -586,6 +597,13 @@ class ApplicationRuntime:
             self.pi_forge_location_publishing.start()
         if self.live_map is not None:
             self.live_map.start()
+        if self.map_solar is not None:
+            initial_gps = (
+                self.gps_polling.latest_state
+                if self.gps_polling is not None
+                else None
+            )
+            self.map_solar.start(initial_gps)
         if self.live_radar is not None:
             self.live_radar.start()
         if self.home_platform_health is not None:
@@ -632,6 +650,8 @@ class ApplicationRuntime:
             self.home_platform_health.stop()
         if self.live_radar is not None:
             self.live_radar.stop()
+        if self.map_solar is not None:
+            self.map_solar.stop()
         if self.live_map is not None:
             self.live_map.stop()
         if self.operator_preferences is not None:

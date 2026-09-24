@@ -6,7 +6,11 @@ from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
 
-from rolling_thunder.dmr_monitor import DmrMonitorSnapshot
+from rolling_thunder.dmr_monitor import (
+    DmrMonitorSnapshot,
+    monitored_dmr_active_calls,
+    monitored_dmr_history,
+)
 from rolling_thunder.dmr_selection import (
     DmrSelectionController,
     DmrSelectionState,
@@ -55,15 +59,23 @@ class DmrPanelCommandController:
         return self._selection.state
 
     def refresh(self) -> DmrSelectionState:
-        """Apply the latest background history snapshot while preserving stable identity."""
-        snapshot = self._monitor.latest_state
-        return self._selection.replace_history(snapshot.history)
+        """Apply monitored-TG history and invalidate a stage from a previous TG."""
+        return self._synchronize(self._monitor.latest_state)
+
+    def _synchronize(self, snapshot: DmrMonitorSnapshot) -> DmrSelectionState:
+        state = self._selection.replace_history(monitored_dmr_history(snapshot))
+        staged = state.staged_qso
+        if staged is not None and staged.talkgroup != snapshot.monitored_talkgroup:
+            self._submitted_stage_ids.discard(staged.stage_id)
+            state = self._selection.cancel_staging()
+        return state
 
     def primary(self) -> bool:
         """Context Button #1 stages the currently active DMR caller."""
         snapshot = self._monitor.latest_state
-        self._selection.replace_history(snapshot.history)
-        active = snapshot.active_calls[0] if snapshot.active_calls else None
+        self._synchronize(snapshot)
+        active_calls = monitored_dmr_active_calls(snapshot)
+        active = active_calls[0] if active_calls else None
         before = self._selection.state.staged_qso
         state = self._selection.stage_current(
             active,
@@ -111,7 +123,7 @@ class DmrPanelCommandController:
     def activate_selection(self) -> bool:
         """Encoder press stages the selected completed history caller."""
         snapshot = self._monitor.latest_state
-        self._selection.replace_history(snapshot.history)
+        self._synchronize(snapshot)
         before = self._selection.state.staged_qso
         state = self._selection.stage_selected(
             snapshot.radio_info,

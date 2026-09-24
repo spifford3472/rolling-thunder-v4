@@ -34,6 +34,22 @@ class ManualScheduler:
         return poll
 
 
+class SolarManualScheduler:
+    def __init__(self) -> None:
+        self.intervals: list[float] = []
+        self.polls: list[ManualScheduledPoll] = []
+
+    def schedule_repeating(
+        self,
+        interval_s: float,
+        callback: PollCallback,
+    ) -> ManualScheduledPoll:
+        self.intervals.append(interval_s)
+        poll = ManualScheduledPoll(callback)
+        self.polls.append(poll)
+        return poll
+
+
 class NoopExecutor(Executor):
     def submit(
         self,
@@ -77,10 +93,12 @@ def test_runtime_composes_disabled_map_as_none(tmp_path: Path) -> None:
 
 
 def test_runtime_starts_and_stops_enabled_map(tmp_path: Path) -> None:
+    solar_scheduler = SolarManualScheduler()
     runtime = ApplicationRuntime.from_config(
         config(tmp_path, map_enabled=True),
         scheduler=ManualScheduler(),
         gps_scheduler=ManualScheduler(),
+        map_solar_scheduler=solar_scheduler,
         map_executor=NoopExecutor(),
     )
 
@@ -94,7 +112,12 @@ def test_runtime_starts_and_stops_enabled_map(tmp_path: Path) -> None:
     runtime.start()
 
     assert runtime.live_map.is_running is True
+    assert runtime.map_solar is not None
+    assert runtime.map_solar.is_running is True
+    assert solar_scheduler.polls
 
     runtime.stop()
 
     assert runtime.live_map.is_running is False
+    assert runtime.map_solar.is_running is False
+    assert solar_scheduler.polls[-1].cancelled is True

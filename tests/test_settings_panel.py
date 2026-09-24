@@ -24,6 +24,10 @@ class FakeMapZoom:
         self.in_count += 1
         return True
 
+    def toggle_style(self) -> bool:
+        self.style_toggle_count = getattr(self, "style_toggle_count", 0) + 1
+        return True
+
 
 class FakeRadar:
     def __init__(self, enabled: bool = True) -> None:
@@ -84,3 +88,27 @@ def test_unavailable_radar_does_not_toggle_or_persist() -> None:
     assert controller.state.radar_image_enabled is False
     assert controller.toggle_radar() is False
     assert persistence.values == []
+
+
+class FakeMapStyleAutomation:
+    def __init__(self) -> None:
+        self.override_count = 0
+
+    def note_manual_override(self) -> None:
+        self.override_count += 1
+
+
+def test_manual_map_style_toggle_notifies_automatic_policy() -> None:
+    map_zoom = FakeMapZoom()
+    persistence = FakePersistence()
+    automation = FakeMapStyleAutomation()
+    controller = DashboardSettingsController(
+        map_zoom,  # type: ignore[arg-type]
+        None,
+        persistence,
+        automation,
+    )
+
+    assert controller.toggle_map_style() is True
+    assert map_zoom.style_toggle_count == 1
+    assert automation.override_count == 1
