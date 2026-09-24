@@ -1,7 +1,5 @@
 """Tests for pure Settings presentation helpers."""
 
-from datetime import timedelta
-
 from rolling_thunder.map_sources import MapPackageStyle
 from rolling_thunder.map_zoom import MapZoomBounds, MapZoomSettingsState
 from rolling_thunder.settings_panel import DashboardSettingsState
