@@ -123,7 +123,7 @@ class PotaWorkedRepository:
                             band=AmateurBand(str(band)),
                             display_mode=str(display_mode),
                         ),
-                        worked_at=datetime.fromisoformat(str(worked_at).replace("Z", "+00:00")),
+                        worked_at=datetime.fromisoformat(str(worked_at)),
                     )
                 )
         except (TypeError, ValueError) as error:
@@ -210,9 +210,6 @@ def pota_worked_key_from_contact(
     pota_spots: tuple[PotaSpot, ...],
 ) -> PotaWorkedKey | None:
     """Resolve one exact display-mode key without guessing ambiguous POTA matches."""
-    if contact.pota_reference is None:
-        return None
-
     contact_frequency = Frequency(hz=contact.frequency_hz)
     band = frequency_band(contact_frequency)
     if band is None:
@@ -222,7 +219,10 @@ def pota_worked_key_from_contact(
     for spot in pota_spots:
         if str(spot.activator) != str(contact.callsign):
             continue
-        if str(spot.park.reference) != str(contact.pota_reference):
+        if (
+            contact.pota_reference is not None
+            and str(spot.park.reference) != str(contact.pota_reference)
+        ):
             continue
         if frequency_band(spot.frequency) is not band:
             continue
