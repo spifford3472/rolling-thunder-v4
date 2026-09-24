@@ -178,7 +178,7 @@ def test_controller_records_worked_pota_only_after_durable_commit() -> None:
         on_failed=lambda message: None,
         pota_context_provider=lambda: True,
         pota_spots_provider=lambda: (pota_spot,),
-        pota_worked_tracker=tracker,  # type: ignore[arg-type]
+        pota_worked_tracker=tracker,
     )
 
     assert controller.start_commit("KI5VNB", connected_radio()) is True
