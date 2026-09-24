@@ -1,5 +1,6 @@
 """Deterministic polling service for refreshing and reconnecting GPS state."""
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -12,6 +13,8 @@ from rolling_thunder.gps import (
 from rolling_thunder.radio_polling import PollScheduler, ScheduledPoll
 
 Clock = Callable[[], datetime]
+GPSStateListener = Callable[[GPSState], None]
+_LOGGER = logging.getLogger(__name__)
 
 
 def _utc_now() -> datetime:
