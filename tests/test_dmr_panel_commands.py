@@ -314,3 +314,38 @@ def test_only_monitored_talkgroup_is_eligible_for_staging() -> None:
     assert staged is not None
     assert staged.callsign == "K9DESIRED"
     assert staged.talkgroup == 91
+
+
+def test_talkgroup_change_invalidates_staged_qso_before_commit() -> None:
+    old_record = _history_record("K8OLD", seconds=0, talkgroup=3100)
+    monitor = MutableMonitor(
+        _snapshot(
+            history=(old_record,),
+            radio_info=_radio_info(),
+            monitored_talkgroup=3100,
+        )
+    )
+    commit = RecordingCommit()
+    controller = DmrPanelCommandController(
+        monitor,
+        DmrSelectionController(),
+        commit,
+    )
+
+    assert controller.move_next()
+    assert controller.activate_selection()
+    staged = controller.state.staged_qso
+    assert staged is not None
+    assert staged.talkgroup == 3100
+
+    new_record = _history_record("K9NEW", seconds=10, talkgroup=91)
+    monitor.snapshot = _snapshot(
+        history=(old_record, new_record),
+        radio_info=_radio_info(),
+        monitored_talkgroup=91,
+    )
+
+    assert controller.secondary() is False
+    assert controller.state.staged_qso is None
+    assert commit.calls == []
+    assert [record.talkgroup for record in controller.state.history] == [91]

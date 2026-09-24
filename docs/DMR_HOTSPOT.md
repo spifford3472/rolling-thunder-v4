@@ -42,8 +42,8 @@ This means:
 - encoder staging can only select history rows from the monitored talkgroup;
 - the immutable staged QSO freezes the actual talkgroup number;
 - Context Button #2 persists that exact staged talkgroup in the contact notes;
-- changing the monitored talkgroup changes future eligibility rather than
-  rewriting an already-staged QSO.
+- changing the monitored talkgroup invalidates an already-staged QSO from the
+  previous talkgroup; the operator must explicitly stage again before Commit.
 
 The DMR parser itself remains talkgroup-neutral. TG3100, TG91, TG9, and other
 numeric group-call targets use the same typed parsing path.
