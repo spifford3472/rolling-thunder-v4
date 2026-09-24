@@ -27,6 +27,31 @@ map:
 The cache directory is resolved relative to the active YAML file unless an
 absolute path is supplied.
 
+### Automatic DAY/NIGHT selection
+
+When the live map is enabled, Rolling Thunder uses the existing GPS snapshots to
+choose the map style from the apparent local sunrise/sunset at the current
+latitude/longitude. The configured `map.style` remains only the safe startup
+fallback until a current GPS fix is available.
+
+The policy:
+
+- performs no network lookup for sunrise/sunset;
+- schedules only the next solar transition rather than polling the clock;
+- re-evaluates when normal GPS updates show approximately 25 miles of movement;
+- leaves the configured style unchanged when GPS is unavailable at startup;
+- uses the existing `LiveMapService.set_style()` boundary, so tile/package
+  source priority is unchanged.
+
+For fully offline automatic switching, configure installed DAY and NIGHT
+packages that cover the operating area. If the requested style is not available
+from the installed package set, the existing map-style boundary rejects the
+switch rather than weakening installed-package authority.
+
+Settings Context Button #2 remains an immediate manual DAY/NIGHT override. A
+manual choice is retained through intermediate GPS movement and automatic mode
+resumes at the next real sunrise or sunset.
+
 `cache_retention_days` cannot be less than seven days. The URL template must be
 an absolute HTTP or HTTPS URL containing `{z}`, `{x}`, and `{y}`.
 
