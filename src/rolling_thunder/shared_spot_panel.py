@@ -88,6 +88,21 @@ class SharedSpotStateProvider(Protocol):
         ...
 
 
+class PotaWorkedStatusProvider(Protocol):
+    """Provide a no-I/O worked lookup for one displayed POTA combination."""
+
+    def is_worked(
+        self,
+        *,
+        callsign: str,
+        frequency: Frequency,
+        display_mode: str,
+        reference_time: datetime | None = None,
+    ) -> bool:
+        """Return whether the exact callsign/mode/band combination is worked."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class SharedSpotPanelRow:
     """Provider-neutral row prepared for mobile presentation."""
@@ -107,6 +122,7 @@ class SharedSpotPanelRow:
     park_name: str | None = None
     location_code: str | None = None
     selected: bool = False
+    worked: bool = False
 
     @property
     def operator_name_text(self) -> str:
@@ -196,6 +212,7 @@ class SharedSpotPanelController:
         *,
         clock: Clock | None = None,
         maximum_pota_age: timedelta = _DEFAULT_MAXIMUM_AGE,
+        pota_worked_status: PotaWorkedStatusProvider | None = None,
     ) -> None:
         if maximum_pota_age < timedelta(0):
             raise ValueError("shared POTA maximum spot age must not be negative")
@@ -205,6 +222,7 @@ class SharedSpotPanelController:
         self._pota_band = _DEFAULT_POTA_BAND
         self._pota_mode_filter = SharedSpotModeFilter.SSB
         self._pota_maximum_age = maximum_pota_age
+        self._pota_worked_status = pota_worked_status
         self._dx_band = _DEFAULT_POTA_BAND
         self._dx_mode_filter = SharedSpotModeFilter.ALL
         now = self._aware_now()
@@ -252,6 +270,7 @@ class SharedSpotPanelController:
                 spot,
                 now=now,
                 selected=spot.identity == selection.selected_identity,
+                worked=self._spot_is_worked(spot, now=now),
             )
             for spot in selection.snapshot.spots
         )
@@ -488,12 +507,23 @@ class SharedSpotPanelController:
             None,
         )
 
+    def _spot_is_worked(self, spot: SpotRecord, *, now: datetime) -> bool:
+        if spot.provider is not SpotProvider.POTA or self._pota_worked_status is None:
+            return False
+        return self._pota_worked_status.is_worked(
+            callsign=str(spot.callsign),
+            frequency=spot.frequency,
+            display_mode=spot.display_mode,
+            reference_time=now,
+        )
+
     @staticmethod
     def _row_from_spot(
         spot: SpotRecord,
         *,
         now: datetime,
         selected: bool,
+        worked: bool,
     ) -> SharedSpotPanelRow:
         age_seconds = max(0, int((now - spot.spotted_at).total_seconds()))
         pota = spot.pota
@@ -513,6 +543,7 @@ class SharedSpotPanelController:
             park_name=pota.park_name if pota is not None else None,
             location_code=pota.location_code if pota is not None else None,
             selected=selected,
+            worked=worked,
         )
 
     def _aware_now(self) -> datetime:
