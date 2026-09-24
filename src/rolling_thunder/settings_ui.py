@@ -47,7 +47,7 @@ def _map_style_presentation(
         if switchable
         else "Style switch unavailable"
     )
-    return "MAP STYLE", instruction, map_zoom.style.value.upper(), switchable
+    return "MAP STYLE", instruction, map_zoom.style.value.upper(), True
 
 
 class SettingsWidgets:
