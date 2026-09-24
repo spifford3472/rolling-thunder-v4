@@ -315,6 +315,26 @@ class PotaSpotsConfig(ConfigurationModel):
     refresh_on_start: bool = True
 
 
+class RepeaterConfig(ConfigurationModel):
+    """Worktree-independent local repeater deployment data."""
+
+    source_path: Path = Path(
+        "~/.local/share/rolling-thunder/repeaters/6m_repeaters.csv"
+    )
+
+    @field_validator("source_path", mode="before")
+    @classmethod
+    def validate_source_path(cls, value: object) -> object:
+        """Require a concrete CSV file path."""
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("repeater source path must not be empty")
+        if isinstance(value, (str, Path)) and str(Path(value)) == ".":
+            raise ValueError("repeater source path must name a CSV file")
+        if isinstance(value, (str, Path)) and Path(value).suffix.lower() != ".csv":
+            raise ValueError("repeater source path must end in .csv")
+        return value
+
+
 class MapConfig(ConfigurationModel):
     """Optional live raster-map retrieval and local cache settings."""
 
@@ -524,6 +544,7 @@ class ApplicationConfig(ConfigurationModel):
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
     dmr: DmrHotspotConfig = DmrHotspotConfig()
     pota_spots: PotaSpotsConfig = PotaSpotsConfig()
+    repeaters: RepeaterConfig = RepeaterConfig()
     map: MapConfig = MapConfig()
     radar: RadarConfig = RadarConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
@@ -590,6 +611,17 @@ def resolve_dmr_private_key(
     if expanded.is_absolute():
         return expanded
     return (config_path.parent / expanded).resolve()
+
+
+def resolve_repeater_source_path(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path:
+    """Resolve repeater deployment data without depending on process CWD."""
+    source_path = config.repeaters.source_path.expanduser()
+    if source_path.is_absolute():
+        return source_path
+    return (config_path.parent / source_path).resolve()
 
 
 def resolve_speech_model_path(
@@ -691,6 +723,9 @@ def load_config(path: Path) -> ApplicationConfig:
     resolved_dmr = config.dmr.model_copy(
         update={"private_key": resolve_dmr_private_key(config, path)}
     )
+    resolved_repeaters = config.repeaters.model_copy(
+        update={"source_path": resolve_repeater_source_path(config, path)}
+    )
     resolved_map = config.map.model_copy(
         update={
             "cache_directory": resolve_map_cache_directory(config, path),
@@ -702,6 +737,7 @@ def load_config(path: Path) -> ApplicationConfig:
             "storage": resolved_storage,
             "speech": resolved_speech,
             "dmr": resolved_dmr,
+            "repeaters": resolved_repeaters,
             "map": resolved_map,
         }
     )

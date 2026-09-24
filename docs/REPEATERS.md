@@ -7,12 +7,12 @@ Issues #166 and #167 establish the local six-meter repeater data/domain boundary
 The currently inspected deployment file is:
 
 ```text
-data/repeaters/6m_repeaters.csv
+~/.local/share/rolling-thunder/repeaters/6m_repeaters.csv
 ```
 
-It is intentionally **not committed to Git**. `data/` is already ignored by the repository, and the source provenance/redistribution license has not been established well enough to justify publishing the rows with Rolling Thunder.
+It is intentionally **not committed to Git**. The source provenance/redistribution license has not been established well enough to justify publishing the rows with Rolling Thunder. Production configuration resolves this path independently of the active Git worktree so changing branches or worktrees cannot make the repeater panel lose its deployment data.
 
-The approved file inspected for checkpoint #166 has:
+The default path is configurable through `repeaters.source_path`. Relative paths are resolved against the active YAML file; `~` is expanded before startup. The approved file inspected for checkpoint #166 has:
 
 - SHA-256: `4fd61730528c264b0157447b78603aa478e905b3e409fcb861ee6631e91bcba1`
 - 65 data rows

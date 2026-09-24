@@ -250,6 +250,7 @@ def run_dashboard(
     repeater_panel_runtime = RepeaterPanelRuntime.build(
         database_path=config.storage.database_path,
         gps_state=lambda: runtime.latest_gps_state,
+        source_path=config.repeaters.source_path,
     )
     repeater_panel = repeater_panel_runtime.panel
     repeater_configuration = (
