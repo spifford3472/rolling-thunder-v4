@@ -163,13 +163,24 @@ def test_key_resolution_does_not_guess_ambiguous_display_mode() -> None:
     assert resolved is None
 
 
-def test_non_pota_contact_is_not_marked_worked() -> None:
+def test_unmatched_contact_is_not_marked_worked() -> None:
+    resolved = pota_worked_key_from_contact(
+        contact(callsign="K9XYZ", park_reference=None),
+        (spot(),),
+    )
+
+    assert resolved is None
+
+
+def test_matching_active_pota_contact_can_mark_without_resolved_park() -> None:
     resolved = pota_worked_key_from_contact(
         contact(park_reference=None),
         (spot(),),
     )
 
-    assert resolved is None
+    assert resolved is not None
+    assert resolved.callsign == "K1POTA"
+    assert resolved.display_mode == "FT8"
 
 
 def test_phone_sidebands_resolve_to_spot_display_mode() -> None:
