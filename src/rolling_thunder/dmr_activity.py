@@ -24,6 +24,7 @@ _VOICE_END = re.compile(
 )
 _TALKER_ALIAS = re.compile(r'^Talker Alias "(?P<alias>.*)"
 
+
 class DmrActivitySource(StrEnum):
     """Where MMDVMHost received a DMR transmission."""
 
