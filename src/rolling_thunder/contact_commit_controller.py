@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from threading import Lock, Thread
+from typing import Protocol
 
 from pydantic import ValidationError
 
@@ -12,7 +13,6 @@ from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingSe
 from rolling_thunder.domain import Contact, RadioState
 from rolling_thunder.gps import GPSState
 from rolling_thunder.pota_spots import PotaSpot
-from rolling_thunder.pota_worked import PotaWorkedTracker
 from rolling_thunder.storage import StorageError
 
 
@@ -23,6 +23,18 @@ class ContactCommitStatus:
     committing: bool = False
     last_error: str | None = None
     committed_contact: Contact | None = None
+
+
+class PotaWorkedRecorder(Protocol):
+    """Record an already-durable POTA contact without UI-thread I/O."""
+
+    def record_contact(
+        self,
+        contact: Contact,
+        pota_spots: tuple[PotaSpot, ...],
+    ) -> object:
+        """Record the worked combination represented by the contact."""
+        ...
 
 
 class ContactCommitController:
@@ -38,7 +50,7 @@ class ContactCommitController:
         gps_state_provider: Callable[[], GPSState | None] | None = None,
         pota_context_provider: Callable[[], bool] | None = None,
         pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
-        pota_worked_tracker: PotaWorkedTracker | None = None,
+        pota_worked_tracker: PotaWorkedRecorder | None = None,
     ) -> None:
         self._service = service
         self._on_started = on_started
