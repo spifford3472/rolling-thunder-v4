@@ -17,6 +17,7 @@ from rolling_thunder.dmr_activity import (
     DmrActivitySource,
     DmrCallSnapshot,
     DmrLiveCallTracker,
+    DmrLogEvent,
     dmr_talkgroup_from_target,
     parse_mmdvm_dmr_line,
 )
@@ -402,19 +403,16 @@ class DmrMonitorService:
             self._polling_wake.wait(timeout=self._history_refresh_interval_s)
             self._polling_wake.clear()
 
-    def _observe_operator_rf_event(self, event: object) -> None:
+    def _observe_operator_rf_event(self, event: DmrLogEvent) -> None:
         operator_callsign = self._operator_callsign
-        source = getattr(event, "source", None)
-        callsign = getattr(event, "callsign", None)
-        target = getattr(event, "target", None)
         if (
             operator_callsign is None
-            or source is not DmrActivitySource.RF
-            or callsign != operator_callsign
-            or not isinstance(target, str)
+            or event.source is not DmrActivitySource.RF
+            or event.callsign != operator_callsign
+            or event.target is None
         ):
             return
-        talkgroup = dmr_talkgroup_from_target(target)
+        talkgroup = dmr_talkgroup_from_target(event.target)
         if talkgroup is not None:
             self._set_monitored_talkgroup(talkgroup)
 
@@ -464,7 +462,11 @@ class DmrMonitorService:
         try:
             radio_info = self._wpsd_source.fetch_radio_info()
         except (DmrSourceError, WpsdPayloadError, OSError) as error:
-            self._publish_radio(available=False, radio_info=None, error=str(error) or error.__class__.__name__)
+            self._publish_radio(
+                available=False,
+                radio_info=None,
+                error=str(error) or error.__class__.__name__,
+            )
             return
         self._publish_radio(available=True, radio_info=radio_info, error=None)
 
