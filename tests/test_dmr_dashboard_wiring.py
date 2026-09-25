@@ -92,6 +92,7 @@ def test_ui_main_contains_complete_dmr_lifecycle_wiring() -> None:
 
     for required in (
         "build_dmr_panel_runtime(",
+        "operator_callsign=config.operator.callsign",
         "dmr_panel_runtime.start()",
         "DmrAwareActivePanelCommands(",
         "DmrWidgets(context_content)",

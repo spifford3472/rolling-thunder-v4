@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -13,7 +13,14 @@ from typing import Protocol
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from rolling_thunder.dmr_activity import DmrCallSnapshot, DmrLiveCallTracker, parse_mmdvm_dmr_line
+from rolling_thunder.dmr_activity import (
+    DmrActivitySource,
+    DmrCallSnapshot,
+    DmrLiveCallTracker,
+    DmrLogEvent,
+    dmr_talkgroup_from_target,
+    parse_mmdvm_dmr_line,
+)
 from rolling_thunder.dmr_wpsd import (
     WpsdDmrHistoryRecord,
     WpsdPayloadError,
@@ -43,6 +50,7 @@ class DmrMonitorSnapshot:
     active_calls: tuple[DmrCallSnapshot, ...] = ()
     history: tuple[WpsdDmrHistoryRecord, ...] = ()
     radio_info: WpsdRadioInfo | None = None
+    monitored_talkgroup: int | None = None
     live_available: bool = False
     history_available: bool = False
     radio_available: bool = False
@@ -51,6 +59,30 @@ class DmrMonitorSnapshot:
     live_error: str | None = None
     history_error: str | None = None
     radio_error: str | None = None
+
+
+def monitored_dmr_history(
+    snapshot: DmrMonitorSnapshot,
+) -> tuple[WpsdDmrHistoryRecord, ...]:
+    """Return only history belonging to the operator-selected monitored talkgroup."""
+    talkgroup = snapshot.monitored_talkgroup
+    if talkgroup is None:
+        return ()
+    return tuple(record for record in snapshot.history if record.talkgroup == talkgroup)
+
+
+def monitored_dmr_active_calls(
+    snapshot: DmrMonitorSnapshot,
+) -> tuple[DmrCallSnapshot, ...]:
+    """Return only current audio belonging to the monitored talkgroup."""
+    talkgroup = snapshot.monitored_talkgroup
+    if talkgroup is None:
+        return ()
+    return tuple(
+        call
+        for call in snapshot.active_calls
+        if dmr_talkgroup_from_target(call.identity.target) == talkgroup
+    )
 
 
 class DmrLiveLineSource(Protocol):
@@ -221,6 +253,7 @@ class DmrMonitorService:
         *,
         history_refresh_interval_s: float = 30.0,
         reconnect_delay_s: float = 2.0,
+        operator_callsign: str | None = None,
     ) -> None:
         if history_refresh_interval_s <= 0:
             raise ValueError("DMR history refresh interval must be positive.")
@@ -230,6 +263,11 @@ class DmrMonitorService:
         self._wpsd_source = wpsd_source
         self._history_refresh_interval_s = history_refresh_interval_s
         self._reconnect_delay_s = reconnect_delay_s
+        self._operator_callsign = (
+            operator_callsign.strip().upper()
+            if operator_callsign is not None and operator_callsign.strip()
+            else None
+        )
         self._lock = Lock()
         self._stop_event = Event()
         self._polling_enabled = Event()
@@ -319,6 +357,7 @@ class DmrMonitorService:
                     event = parse_mmdvm_dmr_line(line)
                     if event is None:
                         continue
+                    self._observe_operator_rf_event(event)
                     tracker.apply(event)
                     self._publish_live(
                         available=True,
@@ -364,6 +403,48 @@ class DmrMonitorService:
             self._polling_wake.wait(timeout=self._history_refresh_interval_s)
             self._polling_wake.clear()
 
+    def _observe_operator_rf_event(self, event: DmrLogEvent) -> None:
+        operator_callsign = self._operator_callsign
+        if (
+            operator_callsign is None
+            or event.source is not DmrActivitySource.RF
+            or event.callsign != operator_callsign
+            or event.target is None
+        ):
+            return
+        talkgroup = dmr_talkgroup_from_target(event.target)
+        if talkgroup is not None:
+            self._set_monitored_talkgroup(talkgroup)
+
+    def _set_monitored_talkgroup(self, talkgroup: int) -> None:
+        with self._lock:
+            current = self._snapshot
+            if current.monitored_talkgroup == talkgroup:
+                return
+            self._snapshot = replace(
+                current,
+                monitored_talkgroup=talkgroup,
+                updated_at=datetime.now(UTC),
+            )
+
+    def _recover_monitored_talkgroup(
+        self,
+        history: tuple[WpsdDmrHistoryRecord, ...],
+    ) -> None:
+        operator_callsign = self._operator_callsign
+        if operator_callsign is None or self.latest_state.monitored_talkgroup is not None:
+            return
+        candidates = tuple(
+            record
+            for record in history
+            if record.source is DmrActivitySource.RF
+            and record.callsign == operator_callsign
+        )
+        if not candidates:
+            return
+        newest = max(candidates, key=lambda record: record.occurred_at)
+        self._set_monitored_talkgroup(newest.talkgroup)
+
     def _refresh_history(self) -> None:
         try:
             history = self._wpsd_source.fetch_history()
@@ -374,13 +455,18 @@ class DmrMonitorService:
                 error=str(error) or error.__class__.__name__,
             )
             return
+        self._recover_monitored_talkgroup(history)
         self._publish_history(available=True, history=history, error=None)
 
     def _refresh_radio_info(self) -> None:
         try:
             radio_info = self._wpsd_source.fetch_radio_info()
         except (DmrSourceError, WpsdPayloadError, OSError) as error:
-            self._publish_radio(available=False, radio_info=None, error=str(error) or error.__class__.__name__)
+            self._publish_radio(
+                available=False,
+                radio_info=None,
+                error=str(error) or error.__class__.__name__,
+            )
             return
         self._publish_radio(available=True, radio_info=radio_info, error=None)
 
@@ -406,6 +492,7 @@ class DmrMonitorService:
                 active_calls=active_calls,
                 history=current.history,
                 radio_info=current.radio_info,
+                monitored_talkgroup=current.monitored_talkgroup,
                 live_available=available,
                 history_available=current.history_available,
                 radio_available=current.radio_available,
@@ -441,6 +528,7 @@ class DmrMonitorService:
                 active_calls=current.active_calls,
                 history=resolved_history,
                 radio_info=current.radio_info,
+                monitored_talkgroup=current.monitored_talkgroup,
                 live_available=current.live_available,
                 history_available=available,
                 radio_available=current.radio_available,
@@ -468,6 +556,7 @@ class DmrMonitorService:
                 active_calls=current.active_calls,
                 history=current.history,
                 radio_info=current.radio_info if radio_info is None else radio_info,
+                monitored_talkgroup=current.monitored_talkgroup,
                 live_available=current.live_available,
                 history_available=current.history_available,
                 radio_available=available,

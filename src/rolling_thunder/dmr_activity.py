@@ -23,6 +23,7 @@ _VOICE_END = re.compile(
     re.IGNORECASE,
 )
 _TALKER_ALIAS = re.compile(r'^Talker Alias "(?P<alias>.*)"$')
+_TALKGROUP_TARGET = re.compile(r"\bTG\s+(?P<talkgroup>\d+)\b", re.IGNORECASE)
 
 
 class DmrActivitySource(StrEnum):
@@ -95,6 +96,14 @@ def _parse_source(value: str) -> DmrActivitySource:
     if normalized == "network":
         return DmrActivitySource.NETWORK
     return DmrActivitySource.RF
+
+
+def dmr_talkgroup_from_target(target: str) -> int | None:
+    """Return a numeric group-call talkgroup from one MMDVM target label."""
+    match = _TALKGROUP_TARGET.search(target.strip())
+    if match is None:
+        return None
+    return int(match.group("talkgroup"))
 
 
 def parse_mmdvm_dmr_line(line: str) -> DmrLogEvent | None:

@@ -11,6 +11,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.error import URLError
+from urllib.parse import urlparse
 
 from PIL import Image, UnidentifiedImageError
 
@@ -25,6 +26,7 @@ DEFAULT_MAP_USER_AGENT = (
     "https://github.com/spifford3472/rolling-thunder-v4)"
 )
 DEFAULT_MAP_CACHE_PRUNE_INTERVAL_WRITES = 64
+DEFAULT_MAP_INTERNET_HEALTH_URL = "https://build.protomaps.com/"
 _MAX_TILE_BYTES = 2_000_000
 
 
@@ -105,6 +107,15 @@ def web_mercator_world_pixel(
     return x, y
 
 
+def tile_key_for_point(point: GeoPoint, zoom: int) -> MapTileKey:
+    """Return the XYZ tile containing one geographic point at one zoom."""
+    world_x, world_y = web_mercator_world_pixel(point, zoom)
+    limit = 1 << zoom
+    x = min(max(math.floor(world_x / TILE_SIZE_PX), 0), limit - 1)
+    y = min(max(math.floor(world_y / TILE_SIZE_PX), 0), limit - 1)
+    return MapTileKey(zoom=zoom, x=x, y=y)
+
+
 def build_map_viewport(
     center: GeoPoint,
     *,
@@ -173,7 +184,11 @@ def validate_map_tile_png(
 
 
 class MapTileClient:
-    """Retrieve one visible map tile through the injectable HTTP boundary."""
+    """Retrieve map tiles through the injectable HTTP boundary.
+
+    The optional ``{style}`` token is intended for the private Forge map endpoint.
+    Normal online templates without it remain fully backward compatible.
+    """
 
     def __init__(
         self,
@@ -182,6 +197,8 @@ class MapTileClient:
         timeout_s: float = 4.0,
         transport: HttpTransport | None = None,
         user_agent: str = DEFAULT_MAP_USER_AGENT,
+        style: str = "day",
+        internet_health_url: str = DEFAULT_MAP_INTERNET_HEALTH_URL,
     ) -> None:
         if timeout_s <= 0:
             raise ValueError("Map tile HTTP timeout must be positive.")
@@ -190,14 +207,45 @@ class MapTileClient:
         for token in ("{z}", "{x}", "{y}"):
             if token not in url_template:
                 raise ValueError(f"Map tile URL template must contain {token}.")
+        if not style.strip():
+            raise ValueError("Map tile style must not be blank.")
+        parsed = urlparse(url_template)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Map tile URL template must be an absolute HTTP or HTTPS URL.")
         self._url_template = url_template
         self._timeout_s = timeout_s
         self._transport = transport or UrllibHttpTransport()
         self._user_agent = user_agent.strip()
+        self._style = style.strip()
+        self._internet_health_url = internet_health_url
+        self._forge_health_url = f"{parsed.scheme}://{parsed.netloc}/api/v1/health"
+        self._supports_forge_refresh = (
+            "{style}" in url_template and "/api/v1/map/tiles/" in parsed.path
+        )
+
+    @property
+    def supports_forge_refresh(self) -> bool:
+        """Return whether this template identifies the private Forge map route."""
+        return self._supports_forge_refresh
+
+    def set_style(self, style: str) -> None:
+        normalized = style.strip()
+        if not normalized:
+            raise ValueError("Map tile style must not be blank.")
+        self._style = normalized
 
     def fetch(self, key: MapTileKey) -> bytes:
-        """Fetch and validate one tile or raise a stable map-data error."""
-        url = self._url_template.format(z=key.zoom, x=key.x, y=key.y)
+        """Fetch the currently selected style tile."""
+        return self.fetch_for_style(key, self._style)
+
+    def fetch_for_style(self, key: MapTileKey, style: str) -> bytes:
+        """Fetch and validate one explicit style tile or raise a stable error."""
+        url = self._url_template.format(
+            z=key.zoom,
+            x=key.x,
+            y=key.y,
+            style=style,
+        )
         try:
             response = self._transport.request(
                 "GET",
@@ -217,6 +265,27 @@ class MapTileClient:
                 f"Map tile request returned HTTP {response.status_code}."
             )
         return validate_map_tile_png(response.body)
+
+    def refresh_health(self) -> tuple[bool, bool]:
+        """Check Internet then Forge health without downloading tile data."""
+        if not self._supports_forge_refresh:
+            return False, False
+        internet_available = self._health_request("HEAD", self._internet_health_url)
+        forge_available = self._health_request("GET", self._forge_health_url)
+        return internet_available, forge_available
+
+    def _health_request(self, method: str, url: str) -> bool:
+        try:
+            response = self._transport.request(
+                method,
+                url,
+                headers={"User-Agent": self._user_agent},
+                body=None,
+                timeout_s=self._timeout_s,
+            )
+        except (TimeoutError, URLError, OSError):
+            return False
+        return 200 <= response.status_code < 300
 
 
 def _utc_now() -> datetime:
@@ -247,6 +316,16 @@ class MapTileCache:
         self._prune_interval_writes = prune_interval_writes
         self._writes_since_prune = prune_interval_writes - 1
         self._clock = clock
+
+    @property
+    def root(self) -> Path:
+        """Return the configured cache root without touching storage."""
+        return self._root
+
+    @property
+    def refresh_database_path(self) -> Path:
+        """Keep the small durable refresh overlay beside the runtime cache."""
+        return self._root / "map-refresh.sqlite3"
 
     def read(self, key: MapTileKey) -> CachedMapTile | None:
         """Read and validate one cached tile without contacting the network."""

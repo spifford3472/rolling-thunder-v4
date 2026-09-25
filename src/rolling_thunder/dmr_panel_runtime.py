@@ -66,6 +66,7 @@ class DmrPanelRuntime:
         history_limit: int = 20,
         history_refresh_interval_s: float = 30.0,
         reconnect_delay_s: float = 2.0,
+        operator_callsign: str | None = None,
         live_source: DmrLiveLineSource | None = None,
         wpsd_source: DmrWpsdSource | None = None,
         writer: DmrContactWriter | None = None,
@@ -91,6 +92,7 @@ class DmrPanelRuntime:
             resolved_wpsd_source,
             history_refresh_interval_s=history_refresh_interval_s,
             reconnect_delay_s=reconnect_delay_s,
+            operator_callsign=operator_callsign,
         )
         selection = DmrSelectionController()
         commit_events: SimpleQueue[DmrCommitEvent] = SimpleQueue()

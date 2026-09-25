@@ -52,6 +52,7 @@ from rolling_thunder.physical_controls import (
 from rolling_thunder.pota_tune_execution_controller import (
     PotaTuneIntentExecutor,
 )
+from rolling_thunder.pota_worked import PotaWorkedRepository, PotaWorkedTracker
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.repeater_configuration import (
@@ -110,6 +111,8 @@ _POTA_CARD_OUTER_PAD_PX = 6
 _POTA_CARD_NORMAL_BORDER_PX = 2
 _POTA_CARD_SELECTED_BORDER_PX = 6
 _POTA_VISIBLE_CARD_COUNT = 3
+_POTA_WORKED_BACKGROUND = "#b9ddf5"
+_POTA_WORKED_FOREGROUND = "#0b1f33"
 
 
 def _indicator_color(value: str) -> str:
@@ -164,6 +167,15 @@ def _status_foreground(presentation: StatusPresentation) -> str:
     }[presentation]
 
 
+def _pota_card_colors(*, selected: bool, worked: bool) -> tuple[str, str]:
+    """Return readable POTA card colors while preserving worked state."""
+    if worked:
+        return _POTA_WORKED_BACKGROUND, _POTA_WORKED_FOREGROUND
+    if selected:
+        return _CONTEXT_SELECTED, _BRIGHT
+    return _PANEL_BACKGROUND, _BRIGHT
+
+
 def run_dashboard(
     config_path: Path = DEFAULT_CONFIG_PATH,
     *,
@@ -203,6 +215,7 @@ def run_dashboard(
         runtime.map_zoom_settings,
         runtime.live_radar,
         preference_service,
+        runtime.map_solar,
     )
     weather_panel = WeatherPanelController()
     weather_alert_panel = WeatherAlertPanelController()
@@ -240,7 +253,13 @@ def run_dashboard(
 
     capture = live_capture if live_capture is not None else mock_transcripts
     context_navigation = ContextNavigationController()
-    shared_spot_panel = SharedSpotPanelController(runtime)
+    pota_worked = PotaWorkedTracker(
+        PotaWorkedRepository(config.storage.database_path)
+    )
+    shared_spot_panel = SharedSpotPanelController(
+        runtime,
+        pota_worked_status=pota_worked,
+    )
     shared_spot_tuning = SharedSpotTuneController(ReceiveTuningService(runtime.radio))
     shared_spot_tune_status = SharedSpotTuneStatusController(
         shared_spot_tuning,
@@ -249,6 +268,7 @@ def run_dashboard(
     repeater_panel_runtime = RepeaterPanelRuntime.build(
         database_path=config.storage.database_path,
         gps_state=lambda: runtime.latest_gps_state,
+        source_path=config.repeaters.source_path,
     )
     repeater_panel = repeater_panel_runtime.panel
     repeater_configuration = (
@@ -278,6 +298,7 @@ def run_dashboard(
             config.dmr,
             database_path=config.storage.database_path,
             gps_state_provider=lambda: runtime.latest_gps_state,
+            operator_callsign=config.operator.callsign,
         )
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.set_polling_enabled(False)
@@ -327,6 +348,7 @@ def run_dashboard(
         pota_spots_provider=lambda: shared_pota_spots_for_contact(
             shared_spot_panel.visible_spots
         ),
+        pota_worked_tracker=pota_worked,
     )
     operator_commands = OperatorCommandController(
         capture,
@@ -1011,8 +1033,9 @@ def run_dashboard(
                     line3_var.set(card.line3)
                     line4_var.set(card.line4)
 
-                    selected_background = (
-                        _CONTEXT_SELECTED if card.selected else _PANEL_BACKGROUND
+                    card_background, card_foreground = _pota_card_colors(
+                        selected=card.selected,
+                        worked=card.worked,
                     )
                     visible_border_width = (
                         _POTA_CARD_SELECTED_BORDER_PX
@@ -1022,7 +1045,7 @@ def run_dashboard(
                     invisible_border_width = _POTA_CARD_OUTER_PAD_PX - visible_border_width
                     border_color = _BRIGHT if card.selected else _BORDER
                     card_frame.configure(
-                        bg=selected_background,
+                        bg=card_background,
                         highlightbackground=border_color,
                         highlightcolor=border_color,
                         highlightthickness=visible_border_width,
@@ -1030,7 +1053,10 @@ def run_dashboard(
                         pady=invisible_border_width,
                     )
                     for card_label in pota_card_labels[card_index]:
-                        card_label.configure(bg=selected_background)
+                        card_label.configure(
+                            bg=card_background,
+                            fg=card_foreground,
+                        )
 
             footer_lines = [panel.status_line]
             if panel.error_line:

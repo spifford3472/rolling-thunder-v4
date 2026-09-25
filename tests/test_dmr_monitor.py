@@ -34,19 +34,25 @@ _END_LINE = (
 )
 
 
-def _history_record() -> WpsdDmrHistoryRecord:
+def _history_record(
+    callsign: str = "KC9KPJ",
+    *,
+    talkgroup: int = 3100,
+    source: DmrActivitySource = DmrActivitySource.NETWORK,
+    second: int = 22,
+) -> WpsdDmrHistoryRecord:
     return WpsdDmrHistoryRecord(
         identity=WpsdDmrHistoryIdentity(
-            occurred_at=datetime(2026, 8, 16, 0, 7, 22, tzinfo=UTC),
-            callsign="KC9KPJ",
+            occurred_at=datetime(2026, 8, 16, 0, 7, second, tzinfo=UTC),
+            callsign=callsign,
             slot=1,
-            talkgroup=3100,
-            source=DmrActivitySource.NETWORK,
+            talkgroup=talkgroup,
+            source=source,
         ),
         name="Michael",
         country="USA",
         callsign_suffix=None,
-        target="TG 3100",
+        target=f"TG {talkgroup}",
         duration_s=14.2,
         packet_loss_percent=0.0,
     )
@@ -346,4 +352,76 @@ def test_wpsd_polling_can_pause_and_resume_without_stopping_live_feed() -> None:
     _wait_until(
         lambda: wpsd.history_calls > history_calls and wpsd.radio_calls > radio_calls
     )
+    service.stop()
+
+
+def test_operator_rf_activity_changes_monitored_talkgroup() -> None:
+    live = ControlledLiveSource()
+    service = DmrMonitorService(
+        live,
+        FakeWpsdSource(),
+        history_refresh_interval_s=60.0,
+        reconnect_delay_s=0.05,
+        operator_callsign="KI5VNB",
+    )
+    service.start()
+    assert live.started.wait(timeout=1)
+
+    live.push(
+        "M: 2026-08-16 00:10:00.000 DMR Slot 2, "
+        "received RF voice header from KI5VNB to TG 91"
+    )
+    _wait_until(lambda: service.latest_state.monitored_talkgroup == 91)
+
+    assert service.latest_state.monitored_talkgroup == 91
+    service.stop()
+
+
+def test_other_rf_callsign_does_not_change_monitored_talkgroup() -> None:
+    live = ControlledLiveSource()
+    service = DmrMonitorService(
+        live,
+        FakeWpsdSource(),
+        history_refresh_interval_s=60.0,
+        reconnect_delay_s=0.05,
+        operator_callsign="KI5VNB",
+    )
+    service.start()
+    assert live.started.wait(timeout=1)
+
+    live.push(
+        "M: 2026-08-16 00:10:00.000 DMR Slot 2, "
+        "received RF voice header from W8OTHER to TG 91"
+    )
+    _wait_until(lambda: len(service.latest_state.active_calls) == 1)
+
+    assert service.latest_state.monitored_talkgroup is None
+    service.stop()
+
+
+def test_recent_operator_rf_history_recovers_monitored_talkgroup_after_restart() -> None:
+    live = ControlledLiveSource()
+    wpsd = FakeWpsdSource()
+    wpsd.history = (
+        _history_record("N0LOUD", talkgroup=3100, second=25),
+        _history_record(
+            "KI5VNB",
+            talkgroup=91,
+            source=DmrActivitySource.RF,
+            second=20,
+        ),
+    )
+    service = DmrMonitorService(
+        live,
+        wpsd,
+        history_refresh_interval_s=60.0,
+        reconnect_delay_s=0.05,
+        operator_callsign="KI5VNB",
+    )
+
+    service.start()
+    assert live.started.wait(timeout=1)
+    _wait_until(lambda: service.latest_state.history_available)
+
+    assert service.latest_state.monitored_talkgroup == 91
     service.stop()

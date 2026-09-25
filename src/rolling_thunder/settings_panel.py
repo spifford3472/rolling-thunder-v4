@@ -1,4 +1,4 @@
-"""Typed Settings-panel controls for map zoom and the optional radar image."""
+"""Typed Settings-panel controls for map zoom/style and optional radar image."""
 
 from __future__ import annotations
 
@@ -18,6 +18,14 @@ class RadarImageTarget(Protocol):
 
     def set_display_enabled(self, enabled: bool) -> bool:
         """Change Pi-side radar image work and return whether it changed."""
+        ...
+
+
+class MapStyleAutomation(Protocol):
+    """Automatic map-style policy notified by explicit operator overrides."""
+
+    def note_manual_override(self) -> None:
+        """Keep the manual style until the next real solar transition."""
         ...
 
 
@@ -46,10 +54,12 @@ class DashboardSettingsController:
         map_zoom: MapZoomSettingsController | None,
         radar: RadarImageTarget | None,
         persistence: RadarImagePersistence,
+        map_style_automation: MapStyleAutomation | None = None,
     ) -> None:
         self._map_zoom = map_zoom
         self._radar = radar
         self._persistence = persistence
+        self._map_style_automation = map_style_automation
 
     @property
     def state(self) -> DashboardSettingsState:
@@ -68,6 +78,15 @@ class DashboardSettingsController:
     def zoom_in(self) -> bool:
         """Increase map zoom when the live map is available."""
         return self._map_zoom is not None and self._map_zoom.zoom_in()
+
+    def toggle_map_style(self) -> bool:
+        """Apply an immediate manual style override until the next solar transition."""
+        if self._map_zoom is None or not self._map_zoom.toggle_style():
+            return False
+        automation = self._map_style_automation
+        if automation is not None:
+            automation.note_manual_override()
+        return True
 
     def toggle_radar(self) -> bool:
         """Toggle only Pi-side radar image work and persist the operator choice."""

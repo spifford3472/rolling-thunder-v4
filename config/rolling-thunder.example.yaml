@@ -98,6 +98,11 @@ pota_spots:
   refresh_interval_s: 60.0
   refresh_on_start: true
 
+repeaters:
+  # Deployment data lives outside Git worktrees so branch/worktree changes
+  # cannot make the repeater panel lose its local CSV.
+  source_path: ~/.local/share/rolling-thunder/repeaters/6m_repeaters.csv
+
 map:
   enabled: true
   tile_url_template: https://tile.openstreetmap.org/{z}/{x}/{y}.png

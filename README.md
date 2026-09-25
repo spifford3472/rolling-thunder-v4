@@ -1,7 +1,10 @@
-# Rolling Thunder v4
+# Rolling Thunder v4.1.0
 
 Rolling Thunder is a Raspberry Pi-based mobile amateur-radio operating and
 logging console.
+
+**v4.1.0 is the first official Rolling Thunder v4 release.** It represents the
+accepted integrated mobile build now promoted to the `main` release line.
 
 Its first milestone is an end-to-end mobile logging workflow using:
 

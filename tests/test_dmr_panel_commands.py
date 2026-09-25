@@ -30,7 +30,12 @@ def _radio_info() -> WpsdRadioInfo:
     )
 
 
-def _history_record(callsign: str, *, seconds: int) -> WpsdDmrHistoryRecord:
+def _history_record(
+    callsign: str,
+    *,
+    seconds: int,
+    talkgroup: int = 3100,
+) -> WpsdDmrHistoryRecord:
     occurred_at = datetime(2026, 8, 16, 0, 7, 22, tzinfo=UTC) + timedelta(
         seconds=seconds
     )
@@ -39,26 +44,31 @@ def _history_record(callsign: str, *, seconds: int) -> WpsdDmrHistoryRecord:
             occurred_at=occurred_at,
             callsign=callsign,
             slot=1,
-            talkgroup=3100,
+            talkgroup=talkgroup,
             source=DmrActivitySource.NETWORK,
         ),
         name="Operator",
         country="USA",
         callsign_suffix=None,
-        target="TG 3100",
+        target=f"TG {talkgroup}",
         duration_s=5.0,
         packet_loss_percent=0.0,
     )
 
 
-def _active_call(callsign: str = "KC9KPJ", *, slot: int = 1) -> DmrCallSnapshot:
+def _active_call(
+    callsign: str = "KC9KPJ",
+    *,
+    slot: int = 1,
+    talkgroup: int = 3100,
+) -> DmrCallSnapshot:
     return DmrCallSnapshot(
         identity=DmrCallIdentity(
             started_at=datetime(2026, 8, 16, 0, 7, 8, tzinfo=UTC),
             slot=slot,
             source=DmrActivitySource.NETWORK,
             callsign=callsign,
-            target="TG 3100",
+            target=f"TG {talkgroup}",
         ),
         talker_alias=f"{callsign} Operator",
     )
@@ -88,11 +98,13 @@ def _snapshot(
     history: tuple[WpsdDmrHistoryRecord, ...] = (),
     active_calls: tuple[DmrCallSnapshot, ...] = (),
     radio_info: WpsdRadioInfo | None = None,
+    monitored_talkgroup: int | None = 3100,
 ) -> DmrMonitorSnapshot:
     return DmrMonitorSnapshot(
         history=history,
         active_calls=active_calls,
         radio_info=radio_info,
+        monitored_talkgroup=monitored_talkgroup,
     )
 
 
@@ -276,3 +288,64 @@ def test_back_cancels_stage_before_clearing_selection() -> None:
     assert controller.back()
     assert controller.state.selected_identity is None
     assert not controller.back()
+
+
+def test_only_monitored_talkgroup_is_eligible_for_staging() -> None:
+    loud = _history_record("N0LOUD", seconds=5, talkgroup=3100)
+    desired = _history_record("K9DESIRED", seconds=0, talkgroup=91)
+    monitor = MutableMonitor(
+        _snapshot(
+            history=(loud, desired),
+            active_calls=(
+                _active_call("N0LOUD", talkgroup=3100),
+                _active_call("K9DESIRED", slot=2, talkgroup=91),
+            ),
+            radio_info=_radio_info(),
+            monitored_talkgroup=91,
+        )
+    )
+    controller = DmrPanelCommandController(monitor, DmrSelectionController())
+
+    state = controller.refresh()
+
+    assert [record.talkgroup for record in state.history] == [91]
+    assert controller.primary()
+    staged = controller.state.staged_qso
+    assert staged is not None
+    assert staged.callsign == "K9DESIRED"
+    assert staged.talkgroup == 91
+
+
+def test_talkgroup_change_invalidates_staged_qso_before_commit() -> None:
+    old_record = _history_record("K8OLD", seconds=0, talkgroup=3100)
+    monitor = MutableMonitor(
+        _snapshot(
+            history=(old_record,),
+            radio_info=_radio_info(),
+            monitored_talkgroup=3100,
+        )
+    )
+    commit = RecordingCommit()
+    controller = DmrPanelCommandController(
+        monitor,
+        DmrSelectionController(),
+        commit,
+    )
+
+    assert controller.move_next()
+    assert controller.activate_selection()
+    staged = controller.state.staged_qso
+    assert staged is not None
+    assert staged.talkgroup == 3100
+
+    new_record = _history_record("K9NEW", seconds=10, talkgroup=91)
+    monitor.snapshot = _snapshot(
+        history=(old_record, new_record),
+        radio_info=_radio_info(),
+        monitored_talkgroup=91,
+    )
+
+    assert controller.secondary() is False
+    assert controller.state.staged_qso is None
+    assert commit.calls == []
+    assert [record.talkgroup for record in controller.state.history] == [91]

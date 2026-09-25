@@ -10,9 +10,11 @@ from enum import StrEnum
 from threading import Lock
 
 from rolling_thunder.live_map import GeoPoint
+from rolling_thunder.map_refresh import MapRefreshReason
 from rolling_thunder.map_sources import (
     DEFAULT_MAP_ATTRIBUTION,
     InstalledMapMetadata,
+    MapPackageStyle,
     MapTileResolver,
     MapTileSource,
     ResolvedMapTile,
@@ -117,6 +119,16 @@ class LiveMapService:
             return self._zoom
 
     @property
+    def style(self) -> MapPackageStyle:
+        """Return the active local/Forge map style."""
+        return self._resolver.style
+
+    @property
+    def available_styles(self) -> tuple[MapPackageStyle, ...]:
+        """Return styles provided by installed offline packages."""
+        return self._resolver.available_styles
+
+    @property
     def installed_packages(self) -> tuple[InstalledMapMetadata, ...]:
         """Return validated installed packages in lookup order."""
         return self._resolver.installed_packages
@@ -136,37 +148,52 @@ class LiveMapService:
             self._zoom = zoom
         return True
 
-    def start(self) -> None:
-        """Start the single bounded background map worker."""
-        if self._started:
-            raise RuntimeError("Live map service is already running.")
-
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(
-                max_workers=1,
-                thread_name_prefix="rolling-thunder-live-map",
-            )
-
-        self._started = True
-
-    def stop(self) -> None:
-        """Stop accepting work and cancel queued work without blocking the UI."""
-        if not self._started:
-            return
-
-        self._started = False
-        executor = self._executor
-        if executor is not None and self._owns_executor:
-            executor.shutdown(wait=False, cancel_futures=True)
-            self._executor = None
-
+    def set_style(self, style: MapPackageStyle) -> bool:
+        """Switch day/night source and invalidate only base-map presentation data."""
+        if not self._resolver.set_style(style):
+            return False
         with self._lock:
             self._pending_generation = None
             self._pending_keyset = None
             self._pending_viewport = None
             self._queued_generation = None
             self._queued_viewport = None
+            self._latest = LiveMapSnapshot(
+                status=MapDataStatus.IDLE,
+                viewport=None,
+                tiles=(),
+                detail=f"LOADING {style.value.upper()} MAP",
+                updated_at=self._aware_now(),
+            )
+        return True
 
+    def start(self) -> None:
+        """Start the single bounded background map worker and deferred refresh worker."""
+        if self._started:
+            raise RuntimeError("Live map service is already running.")
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="rolling-thunder-live-map",
+            )
+        self._started = True
+        self._resolver.start_background_refresh()
+
+    def stop(self) -> None:
+        """Stop accepting work and cancel queued work without blocking the UI."""
+        if not self._started:
+            return
+        self._started = False
+        executor = self._executor
+        if executor is not None and self._owns_executor:
+            executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
+        with self._lock:
+            self._pending_generation = None
+            self._pending_keyset = None
+            self._pending_viewport = None
+            self._queued_generation = None
+            self._queued_viewport = None
         self._resolver.close()
 
     def request_viewport(
@@ -179,10 +206,8 @@ class LiveMapService:
         """Request the centered visible viewport without blocking the caller."""
         if not self._started:
             return
-
         with self._lock:
             zoom = self._zoom
-
         viewport = build_map_viewport(
             center,
             zoom=zoom,
@@ -195,29 +220,27 @@ class LiveMapService:
 
         with self._lock:
             existing = self._tiles_by_key(self._latest)
-
             if self._pending_keyset is not None:
                 if keyset == self._pending_keyset:
                     self._pending_viewport = viewport
                     self._reframe_latest_if_matching(viewport, existing)
                     return
-
                 queued = self._queued_viewport
                 if queued is not None and keyset == queued.tile_keys:
                     self._queued_viewport = viewport
                     self._reframe_latest_if_matching(viewport, existing)
                     return
-
                 generation = self._new_generation_locked()
                 self._queued_generation = generation
                 self._queued_viewport = viewport
                 self._latest = self._loading_snapshot(viewport, existing)
                 return
 
-            if keyset and all(key in existing and existing[key].png is not None for key in keyset):
+            if keyset and all(
+                key in existing and existing[key].png is not None for key in keyset
+            ):
                 if self._latest.viewport == viewport:
                     return
-
                 self._latest = self._reframe_snapshot(
                     self._latest,
                     viewport,
@@ -242,11 +265,9 @@ class LiveMapService:
     ) -> None:
         if viewport is None or generation is None or not self._started:
             return
-
         executor = self._executor
         if executor is None:
             return
-
         executor.submit(self._load_viewport, viewport, generation)
 
     def _load_viewport(
@@ -260,35 +281,27 @@ class LiveMapService:
         for key in requested_viewport.tile_keys:
             local = self._resolver.read_local(key)
             loaded[key] = local
-
+            self._resolver.observe_installed_tile(
+                local,
+                reason=MapRefreshReason.DISPLAYED,
+            )
             if local.online_refresh_allowed and local.source in {
                 MapTileSource.STALE_CACHE,
                 MapTileSource.MISSING,
             }:
                 refresh_keys.append(key)
 
-        self._publish_progress(
-            requested_viewport,
-            generation,
-            loaded,
-        )
+        # This runs on the map worker, never the Tkinter rendering thread.
+        self._resolver.observe_gps_position(requested_viewport.center)
 
+        self._publish_progress(requested_viewport, generation, loaded)
         for key in refresh_keys:
             if self._is_superseded(generation):
                 break
-
             loaded[key] = self._refresh_tile(key, loaded[key])
-            self._publish_progress(
-                requested_viewport,
-                generation,
-                loaded,
-            )
+            self._publish_progress(requested_viewport, generation, loaded)
 
-        self._finish_request(
-            requested_viewport,
-            generation,
-            loaded,
-        )
+        self._finish_request(requested_viewport, generation, loaded)
 
     def _refresh_tile(
         self,
@@ -310,11 +323,9 @@ class LiveMapService:
                 or self._queued_viewport is not None
             ):
                 return
-
             publish_viewport = self._pending_viewport or requested_viewport
             if publish_viewport.tile_keys != requested_viewport.tile_keys:
                 return
-
             self._latest = self._build_snapshot(
                 publish_viewport,
                 loaded,
@@ -329,14 +340,11 @@ class LiveMapService:
     ) -> None:
         next_viewport: MapViewport | None = None
         next_generation: int | None = None
-
         with self._lock:
             if not self._started or self._pending_generation != generation:
                 return
-
             queued_viewport = self._queued_viewport
             queued_generation = self._queued_generation
-
             if queued_viewport is not None and queued_generation is not None:
                 self._pending_generation = queued_generation
                 self._pending_keyset = queued_viewport.tile_keys
@@ -349,7 +357,6 @@ class LiveMapService:
                 publish_viewport = self._pending_viewport or requested_viewport
                 if publish_viewport.tile_keys != requested_viewport.tile_keys:
                     publish_viewport = requested_viewport
-
                 self._latest = self._build_snapshot(
                     publish_viewport,
                     loaded,
@@ -358,7 +365,6 @@ class LiveMapService:
                 self._pending_generation = None
                 self._pending_keyset = None
                 self._pending_viewport = None
-
         self._submit(next_viewport, next_generation)
 
     def _is_superseded(self, generation: int) -> bool:
@@ -385,9 +391,7 @@ class LiveMapService:
             )
             for placement in viewport.placements
         )
-
         attribution = self._attribution_for_tiles(tiles)
-
         if loading:
             return LiveMapSnapshot(
                 status=MapDataStatus.LOADING,
@@ -400,7 +404,6 @@ class LiveMapService:
 
         sources = {tile.source for tile in tiles}
         available_count = sum(tile.png is not None for tile in tiles)
-
         if tiles and available_count == len(tiles):
             if MapTileSource.STALE_CACHE in sources:
                 status = MapDataStatus.CACHE_ONLY
@@ -447,10 +450,8 @@ class LiveMapService:
         current = self._latest.viewport
         if current is None or current.tile_keys != viewport.tile_keys:
             return
-
         if current == viewport:
             return
-
         self._latest = self._reframe_snapshot(
             self._latest,
             viewport,
@@ -488,14 +489,20 @@ class LiveMapService:
         return tuple(
             MapTileSnapshot(
                 placement=placement,
-                png=(existing[placement.key].png if placement.key in existing else None),
+                png=(
+                    existing[placement.key].png
+                    if placement.key in existing
+                    else None
+                ),
                 source=(
                     existing[placement.key].source
                     if placement.key in existing
                     else MapTileSource.MISSING
                 ),
                 attribution=(
-                    existing[placement.key].attribution if placement.key in existing else None
+                    existing[placement.key].attribution
+                    if placement.key in existing
+                    else None
                 ),
             )
             for placement in viewport.placements
@@ -506,7 +513,11 @@ class LiveMapService:
         tiles: tuple[MapTileSnapshot, ...],
     ) -> str:
         attributions = tuple(
-            dict.fromkeys(tile.attribution for tile in tiles if tile.attribution is not None)
+            dict.fromkeys(
+                tile.attribution
+                for tile in tiles
+                if tile.attribution is not None
+            )
         )
         return " | ".join(attributions) or DEFAULT_MAP_ATTRIBUTION
 

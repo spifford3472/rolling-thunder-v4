@@ -177,6 +177,9 @@ class SettingsPanelCommands(Protocol):
     def toggle_radar(self) -> bool:
         ...
 
+    def toggle_map_style(self) -> bool:
+        ...
+
     def zoom_out(self) -> bool:
         ...
 
@@ -349,6 +352,8 @@ class SharedSpotActivePanelCommandController:
             return True
         if self._repeater_is_active():
             return self._toggle_repeater_active()
+        if self._settings_is_active():
+            return self._settings_panel is not None and self._settings_panel.toggle_map_style()
         return False
 
     def tertiary(self) -> bool:

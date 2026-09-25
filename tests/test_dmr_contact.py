@@ -133,3 +133,13 @@ def test_contact_uses_only_grid_frozen_in_stage() -> None:
 
     assert staged.my_grid == "EM79xm"
     assert contact.my_grid == "EM79xm"
+
+
+def test_non_3100_talkgroup_is_preserved_in_logged_contact() -> None:
+    staged = _stage(talkgroup=91, target="TG 91")
+
+    notes = build_dmr_contact(staged).notes
+
+    assert notes is not None
+    assert "TG 91" in notes
+    assert "TG 3100" not in notes

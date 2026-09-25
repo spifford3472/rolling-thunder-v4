@@ -14,10 +14,12 @@ from rolling_thunder.config import (
     HardwareAdapterMode,
     HardwareConfig,
     OperatorConfig,
+    RepeaterConfig,
     StorageConfig,
     load_config,
     resolve_contact_backup_directory,
     resolve_database_path,
+    resolve_repeater_source_path,
 )
 
 
@@ -621,3 +623,64 @@ storage:
         config,
         config_path,
     ) == absolute_directory
+
+
+def test_repeater_source_defaults_to_worktree_independent_user_data_path(
+    tmp_path: Path,
+) -> None:
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+""",
+    )
+
+    config = load_config(path)
+
+    assert isinstance(config.repeaters, RepeaterConfig)
+    assert config.repeaters.source_path == Path(
+        "~/.local/share/rolling-thunder/repeaters/6m_repeaters.csv"
+    ).expanduser()
+
+
+def test_relative_repeater_source_is_resolved_against_active_yaml(
+    tmp_path: Path,
+) -> None:
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+repeaters:
+  source_path: ../shared/repeaters/6m_repeaters.csv
+""",
+    )
+
+    config = load_config(path)
+
+    assert config.repeaters.source_path == (
+        tmp_path / "../shared/repeaters/6m_repeaters.csv"
+    ).resolve()
+    assert resolve_repeater_source_path(config, path) == config.repeaters.source_path
+
+
+def test_repeater_source_rejects_non_csv_path(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+repeaters:
+  source_path: data/repeaters.txt
+""",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match=r"repeaters\.source_path",
+    ):
+        load_config(path)

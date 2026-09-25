@@ -1,5 +1,7 @@
 """Tests for persistent Map Zoom domain behavior."""
 
+from datetime import UTC, datetime
+
 from rolling_thunder.map_sources import InstalledMapMetadata, MapPackageStyle
 from rolling_thunder.map_zoom import (
     MapZoomBounds,
@@ -26,6 +28,7 @@ def metadata(
         version="1",
         style=style,
         priority=0,
+        refreshed_at=datetime(2026, 8, 8, 19, 0, tzinfo=UTC),
     )
 
 

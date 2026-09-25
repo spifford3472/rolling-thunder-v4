@@ -162,6 +162,42 @@ POTA starts from SSB mode filtering. DX starts from ALL mode filtering.
 Every band or mode filter change cancels staging. If filtering removes the
 selected identity, selection clears; no neighboring-row fallback is permitted.
 
+## Daily POTA Worked Markers
+
+The mobile POTA panel maintains a local worked marker for a successfully logged
+active POTA station. A marker is created only after the contact has been durably
+written to the local contact database.
+
+Worked identity is intentionally independent of the POTA spot identity. It is
+the operator-facing tuple:
+
+```text
+normalized callsign + displayed POTA mode + amateur band
+```
+
+Frequency and park reference are not part of the worked key. Therefore a later
+spot for the same callsign on the same displayed mode and band remains marked
+worked even if its exact spot frequency or park changes. A different callsign,
+displayed mode, or band is a fresh combination and is not marked worked.
+
+The displayed POTA mode is preserved from the provider value (for example
+`SSB`, `FT8`, `FT4`, or `RTTY`) rather than collapsing all digital modes
+to the radio-domain `DATA` value.
+
+Worked markers are persisted in the Pi SQLite database so a dashboard restart
+during the same UTC day retains them. The panel uses an in-memory set for
+refresh-time lookup, so Tkinter performs no SQLite reads. At the first
+presentation lookup after the UTC date changes, the in-memory set is cleared;
+prior-day markers are not displayed as worked.
+
+Presentation behavior is POTA-only:
+
+- a worked card uses the light-blue worked background
+- the card includes the text `WORKED`
+- if a worked card is selected, the worked background remains and the existing
+  selected border continues to indicate selection
+- DX rows never inherit POTA worked state
+
 ## Stable Selection
 
 Selection is stored by `SpotIdentity`, never by row number.
