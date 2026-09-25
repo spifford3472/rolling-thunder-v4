@@ -366,3 +366,29 @@ def test_contacts_table_rejects_duplicate_contact_id(tmp_path: Path) -> None:
                 """,
                 values,
             )
+
+
+def test_initialize_database_creates_pota_worked_markers_table(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+
+    initialize_database(database_path)
+
+    columns = read_table_columns(database_path, "pota_worked_markers")
+    assert set(columns) == {
+        "utc_date",
+        "callsign",
+        "band",
+        "display_mode",
+        "worked_at",
+        "created_at",
+    }
+    assert columns["utc_date"][5] == 1
+    assert columns["callsign"][5] == 2
+    assert columns["band"][5] == 3
+    assert columns["display_mode"][5] == 4
+    assert "pota_worked_markers_day_index" in read_index_names(
+        database_path,
+        "pota_worked_markers",
+    )

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from threading import Lock, Thread
+from typing import Protocol
 
 from pydantic import ValidationError
 
@@ -24,6 +25,18 @@ class ContactCommitStatus:
     committed_contact: Contact | None = None
 
 
+class PotaWorkedRecorder(Protocol):
+    """Record an already-durable POTA contact without UI-thread I/O."""
+
+    def record_contact(
+        self,
+        contact: Contact,
+        pota_spots: tuple[PotaSpot, ...],
+    ) -> object:
+        """Record the worked combination represented by the contact."""
+        ...
+
+
 class ContactCommitController:
     """Persist one contact at a time without blocking the UI thread."""
 
@@ -37,6 +50,7 @@ class ContactCommitController:
         gps_state_provider: Callable[[], GPSState | None] | None = None,
         pota_context_provider: Callable[[], bool] | None = None,
         pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
+        pota_worked_tracker: PotaWorkedRecorder | None = None,
     ) -> None:
         self._service = service
         self._on_started = on_started
@@ -45,6 +59,7 @@ class ContactCommitController:
         self._gps_state_provider = gps_state_provider or (lambda: None)
         self._pota_context_provider = pota_context_provider or (lambda: False)
         self._pota_spots_provider = pota_spots_provider or (lambda: ())
+        self._pota_worked_tracker = pota_worked_tracker
         self._lock = Lock()
         self._status = ContactCommitStatus()
 
@@ -107,6 +122,9 @@ class ContactCommitController:
             with self._lock:
                 self._status = ContactCommitStatus(last_error=message)
             return
+
+        if pota_context_active and self._pota_worked_tracker is not None:
+            self._pota_worked_tracker.record_contact(contact, pota_spots)
 
         self._on_succeeded(contact.callsign)
         with self._lock:

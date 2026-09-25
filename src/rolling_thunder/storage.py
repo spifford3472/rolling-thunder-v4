@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 12
+CURRENT_SCHEMA_VERSION: Final = 13
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -424,6 +424,32 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         """
         CREATE INDEX contact_sync_retries_due_index
         ON contact_sync_retries (next_attempt_at, contact_id)
+        """,
+    ),
+    13: (
+        """
+        CREATE TABLE pota_worked_markers (
+            utc_date TEXT NOT NULL CHECK (length(utc_date) = 10),
+            callsign TEXT NOT NULL CHECK (
+                length(callsign) >= 3 AND length(callsign) <= 32
+            ),
+            band TEXT NOT NULL CHECK (
+                band IN (
+                    '160m', '80m', '60m', '40m', '30m', '20m',
+                    '17m', '15m', '12m', '10m', '6m'
+                )
+            ),
+            display_mode TEXT NOT NULL CHECK (
+                length(display_mode) >= 1 AND length(display_mode) <= 20
+            ),
+            worked_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (utc_date, callsign, band, display_mode)
+        )
+        """,
+        """
+        CREATE INDEX pota_worked_markers_day_index
+        ON pota_worked_markers (utc_date, worked_at)
         """,
     ),
 }
