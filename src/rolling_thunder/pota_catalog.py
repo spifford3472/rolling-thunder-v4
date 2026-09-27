@@ -124,6 +124,7 @@ def import_pota_catalog_csv(
     database_path: Path,
     *,
     source_version: str | None = None,
+    program: str = "US",
     imported_at: datetime | None = None,
 ) -> PotaCatalogImportResult:
     """Validate a CSV into staging and atomically replace the live catalog."""
@@ -135,6 +136,9 @@ def import_pota_catalog_csv(
 
     source_bytes = source_path.read_bytes()
     digest = hashlib.sha256(source_bytes).hexdigest()
+    requested_program = program.strip().upper()
+    if not requested_program:
+        raise PotaCatalogImportError("program must not be empty")
     when = imported_at or datetime.now(UTC)
     if when.tzinfo is None:
         raise PotaCatalogImportError("imported_at must be timezone-aware")
@@ -170,7 +174,9 @@ def import_pota_catalog_csv(
                             raise ValueError("latitude is outside -90..90")
                         if not -180 <= longitude <= 180:
                             raise ValueError("longitude is outside -180..180")
-                        program = reference.split("-", 1)[0]
+                        record_program = reference.split("-", 1)[0]
+                        if record_program != requested_program:
+                            continue
                         status = _status(
                             row.get(headers.get("status", ""), "") or "unknown"
                         )
@@ -180,7 +186,7 @@ def import_pota_catalog_csv(
                         connection.execute(
                             """
                             INSERT INTO parks (
-                                reference, name, program, status, park_type,
+                                reference, name, record_program, status, park_type,
                                 latitude, longitude
                             ) VALUES (?, ?, ?, ?, ?, ?, ?)
                             """,
@@ -204,7 +210,7 @@ def import_pota_catalog_csv(
 
             if park_count == 0:
                 raise PotaCatalogImportError(
-                    f"POTA catalog contains no {program.upper()} park records."
+                    f"POTA catalog contains no {requested_program} park records."
                 )
 
             connection.execute(
