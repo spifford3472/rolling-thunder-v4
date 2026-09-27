@@ -1,4 +1,4 @@
-"""UI-independent six-meter repeater panel state and operator staging."""
+"""UI-independent six-meter repeater panel state and operator actions."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class StagedRepeaterActiveAction:
     target_active: bool
 
     @classmethod
-    def from_nearby(cls, item: NearbyRepeater) -> StagedRepeaterActiveAction:
+    def from_nearby(cls, item: NearbyRepeater) -> "StagedRepeaterActiveAction":
         return cls(
             repeater=item.repeater,
             effective_active=item.effective_active,
@@ -81,8 +81,9 @@ class RepeaterPanelState:
             return None
         return self.staged_action.stable_key
 
+
 class RepeaterPanelController:
-    """Preserve stable selection while preserving stable selection and Active-toggle state."""
+    """Preserve stable selection and transient Active-toggle state."""
 
     def __init__(
         self,
@@ -113,7 +114,7 @@ class RepeaterPanelController:
         return self._staged_action
 
     def selected_radio_action(self) -> StagedRepeaterRadioAction | None:
-        """Snapshot the selected repeater's exact radio configuration without staging."""
+        """Snapshot the selected repeater's exact typed radio configuration."""
         selected = self._selected_visible_item()
         return (
             StagedRepeaterRadioAction.from_repeater(selected.repeater)
@@ -147,7 +148,7 @@ class RepeaterPanelController:
         return self.state
 
     def toggle_filter(self) -> RepeaterPanelState:
-        """Switch active-only/all and invalidate the transient Active-toggle action."""
+        """Switch active-only/all and cancel any transient Active toggle."""
         self._staged_action = None
         self._display_filter = (
             RepeaterDisplayFilter.ALL
@@ -182,7 +183,7 @@ class RepeaterPanelController:
         if stable_key != self._selected_stable_key:
             self._selected_stable_key = stable_key
             self._staged_action = None
-            return self.state
+        return self.state
 
     def clear_selection(self) -> RepeaterPanelState:
         self._clear_all()
@@ -207,7 +208,7 @@ class RepeaterPanelController:
         self,
         action: StagedRepeaterActiveAction,
     ) -> RepeaterPanelState:
-        """Apply completed local Active state and apply the completed local Active state."""
+        """Apply the completed local Active state."""
         if self._apply_override is not None:
             self._apply_override(action.stable_key, action.target_active)
         return self.state
@@ -250,22 +251,6 @@ class RepeaterPanelController:
             if selected != staged.stable_key or current is None or not staged.matches(current):
                 self._staged_action = None
 
-        radio_staged = self._radio_staged_action
-        if radio_staged is not None:
-            current = next(
-                (
-                    item
-                    for item in visible
-                    if item.repeater.stable_key == radio_staged.stable_key
-                ),
-                None,
-            )
-            if (
-                selected != radio_staged.stable_key
-                or current is None
-                or not radio_staged.matches(current.repeater)
-            ):
-        
         return nearby, visible
 
     def _visible_selected_index(self, visible: tuple[NearbyRepeater, ...]) -> int | None:
