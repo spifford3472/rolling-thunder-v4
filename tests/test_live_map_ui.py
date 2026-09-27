@@ -294,3 +294,28 @@ def test_empty_pota_viewport_does_not_raise_missing_canvas_tag() -> None:
     widgets._pota_dot_diameter_px = 12
 
     widgets._draw_pota_markers(pota_snapshot, map_snapshot)
+
+
+def test_layer_ordering_handles_disabled_radar_without_missing_tag_error() -> None:
+    calls: list[tuple[str | int, str]] = []
+
+    class NoRadarCanvas:
+        def find_withtag(self, tag: str) -> tuple[int, ...]:
+            if tag == "map-pota":
+                return (101,)
+            if tag == "map-radar":
+                return ()
+            return ()
+
+        def tag_raise(self, tag: str | int, above: str) -> None:
+            if above == "map-radar":
+                raise AssertionError("disabled radar tag must not be used as a reference")
+            calls.append((tag, above))
+
+    widgets = LiveMapWidgets.__new__(LiveMapWidgets)
+    widgets._canvas = NoRadarCanvas()
+    widgets._attribution_item = 999
+
+    widgets._raise_radar_layer()
+
+    assert calls == [(999, "map-pota")]
