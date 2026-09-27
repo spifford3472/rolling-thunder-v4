@@ -366,7 +366,7 @@ Sequence:
 10. #166 — 6 m repeater data, Active overrides, and geospatial filtering
 11. #167 — 6 m repeater panel and operator Active controls
 12. #168 — typed FT-891 FM repeater receive capabilities
-13. #169 — two-press 6 m repeater radio configuration integration
+13. #169 — typed 6 m repeater radio configuration integration (single-press activation now supersedes its original confirmation workflow)
 
 Issue #163 is a parking-lot item for a future weather-radar map overlay and is not
 part of the initial #154 completion sequence.
@@ -377,7 +377,7 @@ The workstream preserves these permanent rules:
 - Forge/weather/public internet failure never prevents basic logging
 - Tkinter performs no blocking serial/network/filesystem/SQLite/CAT work
 - provider-specific data is normalized behind typed provider-neutral boundaries
-- first operator activation stages only where a two-press action is required
+- receive-selection activation uses the current single-press typed application path
 - radio work routes only through typed application/radio boundaries
 - no PTT, MOX, keying, tuner, power, automatic transmit, voice-originated tuning,
   or unattended transmit authority
