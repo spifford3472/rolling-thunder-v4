@@ -315,6 +315,25 @@ class PotaSpotsConfig(ConfigurationModel):
     refresh_on_start: bool = True
 
 
+class PotaMapConfig(ConfigurationModel):
+    """Offline POTA catalog marker settings."""
+
+    enabled: bool = True
+    catalog_path: Path = Path("../data/pota/pota-catalog.db")
+    label_min_zoom: int = Field(default=14, ge=0, le=22)
+    dot_diameter_px: int = Field(default=12, ge=6, le=32)
+
+    @field_validator("catalog_path", mode="before")
+    @classmethod
+    def validate_catalog_path(cls, value: object) -> object:
+        """Require a concrete SQLite catalog path."""
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        if isinstance(value, (str, Path)) and str(Path(value)) == ".":
+            raise ValueError("must name a database file")
+        return value
+
+
 class RepeaterConfig(ConfigurationModel):
     """Worktree-independent local repeater deployment data."""
 
@@ -544,6 +563,7 @@ class ApplicationConfig(ConfigurationModel):
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
     dmr: DmrHotspotConfig = DmrHotspotConfig()
     pota_spots: PotaSpotsConfig = PotaSpotsConfig()
+    pota_map: PotaMapConfig = PotaMapConfig()
     repeaters: RepeaterConfig = RepeaterConfig()
     map: MapConfig = MapConfig()
     radar: RadarConfig = RadarConfig()
@@ -611,6 +631,17 @@ def resolve_dmr_private_key(
     if expanded.is_absolute():
         return expanded
     return (config_path.parent / expanded).resolve()
+
+
+def resolve_pota_map_catalog_path(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path:
+    """Resolve the POTA map catalog path relative to the YAML file."""
+    catalog_path = config.pota_map.catalog_path.expanduser()
+    if catalog_path.is_absolute():
+        return catalog_path
+    return (config_path.parent / catalog_path).resolve()
 
 
 def resolve_repeater_source_path(
@@ -723,6 +754,9 @@ def load_config(path: Path) -> ApplicationConfig:
     resolved_dmr = config.dmr.model_copy(
         update={"private_key": resolve_dmr_private_key(config, path)}
     )
+    resolved_pota_map = config.pota_map.model_copy(
+        update={"catalog_path": resolve_pota_map_catalog_path(config, path)}
+    )
     resolved_repeaters = config.repeaters.model_copy(
         update={"source_path": resolve_repeater_source_path(config, path)}
     )
@@ -737,6 +771,7 @@ def load_config(path: Path) -> ApplicationConfig:
             "storage": resolved_storage,
             "speech": resolved_speech,
             "dmr": resolved_dmr,
+            "pota_map": resolved_pota_map,
             "repeaters": resolved_repeaters,
             "map": resolved_map,
         }
