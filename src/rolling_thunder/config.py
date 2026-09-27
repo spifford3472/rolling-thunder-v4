@@ -321,7 +321,7 @@ class PotaMapConfig(ConfigurationModel):
     enabled: bool = True
     catalog_path: Path = Path("../data/pota/pota-catalog.db")
     label_min_zoom: int = Field(default=14, ge=0, le=22)
-    dot_diameter_px: int = Field(default=12, ge=6, le=32)
+    dot_diameter_px: int = Field(default=24, ge=6, le=32)
     gps_grace_period_s: float = Field(default=60.0, gt=0.0, le=300.0)
 
     @field_validator("catalog_path", mode="before")
