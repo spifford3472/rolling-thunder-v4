@@ -294,3 +294,27 @@ or radio state polling.
     remain usable throughout map/GPS/radar/network degradation.
 
 Record the visible results in the draft pull request before approval.
+
+
+## POTA catalog markers
+
+When `pota_map.enabled` is true, the dashboard reads the separate offline POTA
+catalog through a dedicated single-worker service. SQLite viewport queries never run
+on the Tkinter thread. Marker snapshots are accepted for rendering only when their
+viewport exactly matches the currently published base-map viewport, preventing stale
+markers from being painted after movement or zoom changes.
+
+Layer order is:
+
+1. base raster map
+2. POTA catalog markers
+3. weather radar
+4. vehicle and status overlays
+
+At zoom 14 and higher, a park is a yellow rectangle with a black outline and centered
+black text: POTA reference on line one and full park name on line two. The rectangle
+uses Tk's rendered text bounds so the name is not truncated. Overlapping labels are
+suppressed. Below zoom 14, parks are yellow dots with black outlines and no text.
+
+The POTA coordinate is an approximate catalog pin only. It is not a park boundary,
+navigation destination, or activation-area determination.
