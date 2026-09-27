@@ -87,3 +87,5 @@ These coordinates remain approximate POTA catalog pins. A marker is **not** a
 navigation destination, property boundary, or guarantee that the coordinate itself is
 inside a valid activation area. Operators must use appropriate authoritative mapping
 to determine activation boundaries.
+
+POTA map markers retain the last valid GPS-based viewport through brief GPS dropouts. The default grace period is 60 seconds (`pota_map.gps_grace_period_s`); after that, markers are cleared until a valid fix returns. A stationary vehicle does not clear markers while valid GPS fixes continue.
