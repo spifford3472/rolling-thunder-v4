@@ -14,7 +14,6 @@ from rolling_thunder.repeater_active_override_controller import (
 from rolling_thunder.repeater_configuration import (
     RepeaterConfigurationStatus,
     RepeaterConfigurationStatusKind,
-    StagedRepeaterRadioAction,
 )
 from rolling_thunder.repeater_domain import (
     RepeaterChannelType,
@@ -64,7 +63,6 @@ def row(
 def state(
     *rows: RepeaterPanelRow,
     display_filter: RepeaterDisplayFilter = RepeaterDisplayFilter.ALL,
-    radio_staged_action: StagedRepeaterRadioAction | None = None,
 ) -> RepeaterPanelState:
     selected = next((item.stable_key for item in rows if item.selected), None)
     return RepeaterPanelState(
@@ -73,7 +71,6 @@ def state(
         display_filter=display_filter,
         rows=rows,
         selected_stable_key=selected,
-        radio_staged_action=radio_staged_action,
     )
 
 
