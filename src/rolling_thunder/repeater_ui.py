@@ -105,8 +105,6 @@ def _footer(
         if configuration.kind is RepeaterConfigurationStatusKind.CONFIGURED:
             return "REPEATER CONFIGURED — VERIFY ANTENNA/TUNING BEFORE TRANSMIT"
 
-    if state.radio_staged_action is not None:
-        return "STAGED — PRESS ENCODER AGAIN TO CONFIGURE — BACK CANCELS"
     if persistence is not None and persistence.saving:
         return "SAVING ACTIVE OVERRIDE…"
     if persistence is not None and persistence.last_error:
@@ -119,7 +117,7 @@ def _footer(
         if state.display_filter is RepeaterDisplayFilter.ACTIVE_ONLY
         else "ACTIVE ONLY"
     )
-    return f"ENCODER PRESS TO STAGE — BTN1 {next_filter} — BTN2 TOGGLE ACTIVE"
+    return f"ENCODER PRESS TO TUNE — BTN1 {next_filter} — BTN2 TOGGLE ACTIVE"
 
 
 def _card(row: RepeaterPanelRow) -> RepeaterCard:
