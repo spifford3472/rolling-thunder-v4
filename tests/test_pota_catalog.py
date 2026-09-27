@@ -37,23 +37,19 @@ def test_import_creates_normalized_catalog_and_metadata(tmp_path: Path) -> None:
     assert result.park_count == 2
     with sqlite3.connect(database) as connection:
         parks = connection.execute(
-            "SELECT reference, name, program, status FROM parks ORDER BY reference"
-        ).fetchall()
-        locations = connection.execute(
-            "SELECT park_reference, location_code FROM park_locations ORDER BY 1, 2"
+            """
+            SELECT reference, location_code, name, program, status
+            FROM parks ORDER BY reference, location_code
+            """
         ).fetchall()
         metadata = connection.execute(
             "SELECT source_version, park_count FROM catalog_metadata"
         ).fetchone()
 
     assert parks == [
-        ("US-0001", "Acadia", "US", "active"),
-        ("US-9999", "Example Trail", "US", "inactive"),
-    ]
-    assert locations == [
-        ("US-0001", "US-ME"),
-        ("US-9999", "US-IN"),
-        ("US-9999", "US-OH"),
+        ("US-0001", "US-ME", "Acadia", "US", "active"),
+        ("US-9999", "US-IN", "Example Trail", "US", "inactive"),
+        ("US-9999", "US-OH", "Example Trail", "US", "inactive"),
     ]
     assert metadata == ("2026-09-27", 2)
 
@@ -102,14 +98,14 @@ def test_invalid_refresh_preserves_last_known_good_catalog(tmp_path: Path) -> No
     assert database.read_bytes() == original
 
 
-def test_duplicate_reference_rejects_entire_refresh(tmp_path: Path) -> None:
+def test_duplicate_reference_and_location_rejects_entire_refresh(tmp_path: Path) -> None:
     source = tmp_path / "parks.csv"
     database = tmp_path / "pota-catalog.db"
     write_csv(
         source,
         "reference,name,latitude,longitude,locationDesc\n"
         "US-0001,One,44,-68,US-ME\n"
-        "US-0001,Duplicate,40,-82,US-OH\n",
+        "US-0001,Duplicate,40,-82,US-ME\n",
     )
 
     with pytest.raises(PotaCatalogImportError, match="row 3"):
@@ -194,10 +190,10 @@ def test_multi_state_import_preserves_real_export_fields(tmp_path: Path) -> None
         "https://www.nps.gov/daav/index.htm",
         "Park is spread out over multiple locations.",
     )
-    assert metadata == (2, 2, "2026-09-27", 2)
+    assert metadata == (3, 2, "2026-09-27", 2)
 
 
-def test_duplicate_reference_across_state_files_rejects_refresh(tmp_path: Path) -> None:
+def test_same_reference_in_different_states_is_preserved(tmp_path: Path) -> None:
     ohio = tmp_path / "ohio.csv"
     indiana = tmp_path / "indiana.csv"
     database = tmp_path / "pota-catalog.db"
@@ -205,10 +201,21 @@ def test_duplicate_reference_across_state_files_rejects_refresh(tmp_path: Path) 
     write_csv(ohio, header + "US-0732,Dayton Park,39.8,-84.1,EM79xt,US-OH\n")
     write_csv(indiana, header + "US-0732,Duplicate,40,-86,EN60aa,US-IN\n")
 
-    with pytest.raises(PotaCatalogImportError, match="invalid row 2"):
-        import_pota_catalog_csvs((ohio, indiana), database)
+    result = import_pota_catalog_csvs((ohio, indiana), database)
 
-    assert not database.exists()
+    assert result.park_count == 2
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute(
+            """
+            SELECT reference, location_code, name
+            FROM parks WHERE reference = 'US-0732'
+            ORDER BY location_code
+            """
+        ).fetchall()
+    assert rows == [
+        ("US-0732", "US-IN", "Duplicate"),
+        ("US-0732", "US-OH", "Dayton Park"),
+    ]
 
 
 def test_bad_later_state_file_preserves_last_known_good_catalog(tmp_path: Path) -> None:
