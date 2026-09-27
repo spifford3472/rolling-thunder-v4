@@ -703,7 +703,11 @@ class LiveMapWidgets:
         self._radar_active_photos.pop(key, None)
 
     def _raise_radar_layer(self) -> None:
-        self._canvas.tag_raise("map-radar", "map-pota")
+        """Keep radar above POTA when markers exist; otherwise above the base map."""
+        if self._canvas.find_withtag("map-pota"):
+            self._canvas.tag_raise("map-radar", "map-pota")
+        else:
+            self._canvas.tag_raise("map-radar", "map-base")
         if self._attribution_item is not None:
             self._canvas.tag_raise(self._attribution_item, "map-radar")
 
