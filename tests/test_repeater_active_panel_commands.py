@@ -5,7 +5,6 @@ from decimal import Decimal
 from rolling_thunder.active_panel_commands import SharedSpotActivePanelCommandController
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
 from rolling_thunder.domain import Frequency, RadioState
-from rolling_thunder.repeater_configuration import StagedRepeaterRadioAction
 from rolling_thunder.repeater_domain import (
     RepeaterChannelType,
     RepeaterIdentity,
@@ -24,8 +23,6 @@ class InertSharedPanel:
     def __init__(self) -> None:
         self.provider = SpotProvider.POTA
         self.selected_identity: SpotIdentity | None = None
-        self.staged_identity: SpotIdentity | None = None
-        self.staged_action: StagedSpotAction | None = None
         self.calls: list[str] = []
 
     def activate(
@@ -51,20 +48,6 @@ class InertSharedPanel:
         self.calls.append("clear_selection")
         return object()
 
-    def stage_selected(self) -> object:
-        self.calls.append("stage_selected")
-        return object()
-
-    def cancel_staging(self) -> object:
-        self.calls.append("cancel_staging")
-        self.staged_action = None
-        self.staged_identity = None
-        return object()
-
-    def invalidate_radio(self) -> object:
-        self.calls.append("invalidate_radio")
-        return object()
-
     def next_pota_band(self) -> object:
         return object()
 
@@ -82,7 +65,6 @@ class RecordingRepeaterPanel:
     def __init__(self) -> None:
         self.selected_stable_key: str | None = None
         self.staged_action: StagedRepeaterActiveAction | None = None
-        self.radio_staged_action: StagedRepeaterRadioAction | None = None
         self.calls: list[str] = []
         rx = Frequency(hz=52_010_000)
         record = RepeaterRecord(
@@ -110,25 +92,21 @@ class RecordingRepeaterPanel:
     def toggle_filter(self) -> object:
         self.calls.append("toggle_filter")
         self.staged_action = None
-        self.radio_staged_action = None
         return object()
 
     def select_previous(self) -> object:
         self.calls.append("select_previous")
-        self.radio_staged_action = None
         return object()
 
     def select_next(self) -> object:
         self.calls.append("select_next")
         self.selected_stable_key = self.action.stable_key
-        self.radio_staged_action = None
         return object()
 
     def clear_selection(self) -> object:
         self.calls.append("clear_selection")
         self.selected_stable_key = None
         self.staged_action = None
-        self.radio_staged_action = None
         return object()
 
     def stage_selected(self) -> object:
@@ -140,22 +118,6 @@ class RecordingRepeaterPanel:
     def cancel_staging(self) -> object:
         self.calls.append("cancel_staging")
         self.staged_action = None
-        return object()
-
-    def stage_selected_radio(self) -> object:
-        self.calls.append("stage_radio")
-        if self.selected_stable_key is not None:
-            self.radio_staged_action = StagedRepeaterRadioAction.from_repeater(self.record)
-        return object()
-
-    def cancel_radio_staging(self) -> object:
-        self.calls.append("cancel_radio")
-        self.radio_staged_action = None
-        return object()
-
-    def invalidate_radio(self) -> object:
-        self.calls.append("invalidate_radio")
-        self.radio_staged_action = None
         return object()
 
 
@@ -199,10 +161,10 @@ def build_controller(
     return controller, navigation, shared, repeater
 
 
-def test_repeater_context_activates_panel_and_cancels_shared_staging() -> None:
+def test_repeater_context_activates_panel_without_shared_confirmation_work() -> None:
     _controller, _navigation, shared, repeater = build_controller()
 
-    assert shared.calls == ["cancel_staging"]
+    assert shared.calls == []
     assert repeater.calls == ["activate"]
 
 
@@ -231,9 +193,8 @@ def test_context_button_two_flips_selected_active_in_one_press_without_radio() -
 
     assert persistence.actions == [repeater.action]
     assert repeater.action.target_active is False
-    assert repeater.calls == ["cancel_radio", "stage_selected", "cancel_staging"]
+    assert repeater.calls == ["stage_selected", "cancel_staging"]
     assert repeater.staged_action is None
-    assert repeater.radio_staged_action is None
     assert radio_calls == []
 
 
@@ -245,7 +206,7 @@ def test_context_button_two_requires_a_selected_repeater() -> None:
     assert controller.secondary() is False
 
     assert persistence.actions == []
-    assert repeater.calls == ["cancel_radio", "stage_selected"]
+    assert repeater.calls == ["stage_selected"]
     assert repeater.staged_action is None
 
 
@@ -259,7 +220,7 @@ def test_busy_active_persistence_does_not_leave_operator_stage() -> None:
 
     assert persistence.actions == [repeater.action]
     assert repeater.staged_action is None
-    assert repeater.calls == ["cancel_radio", "stage_selected", "cancel_staging"]
+    assert repeater.calls == ["stage_selected", "cancel_staging"]
 
 
 def test_encoder_without_repeater_capability_does_not_mutate_active_state() -> None:
@@ -276,7 +237,6 @@ def test_encoder_without_repeater_capability_does_not_mutate_active_state() -> N
 
     assert persistence.actions == []
     assert repeater.staged_action is None
-    assert repeater.radio_staged_action is None
     assert radio_calls == []
 
 
@@ -302,5 +262,5 @@ def test_context_change_performs_no_active_persistence() -> None:
     assert repeater.staged_action is None
     assert repeater.radio_staged_action is None
     assert persistence.actions == []
-    assert shared.calls[-1] == "cancel_staging"
-    assert repeater.calls[-2:] == ["cancel_staging", "cancel_radio"]
+    assert shared.calls == []
+    assert repeater.calls[-1:] == ["cancel_staging"]
