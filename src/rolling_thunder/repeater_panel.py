@@ -73,7 +73,6 @@ class RepeaterPanelState:
     rows: tuple[RepeaterPanelRow, ...]
     selected_stable_key: str | None = None
     staged_action: StagedRepeaterActiveAction | None = None
-    radio_staged_action: StagedRepeaterRadioAction | None = None
     source_error: str | None = None
 
     @property
@@ -82,15 +81,8 @@ class RepeaterPanelState:
             return None
         return self.staged_action.stable_key
 
-    @property
-    def radio_staged_stable_key(self) -> str | None:
-        if self.radio_staged_action is None:
-            return None
-        return self.radio_staged_action.stable_key
-
-
 class RepeaterPanelController:
-    """Preserve stable selection while keeping Active and radio staging distinct."""
+    """Preserve stable selection while preserving stable selection and Active-toggle state."""
 
     def __init__(
         self,
@@ -105,7 +97,6 @@ class RepeaterPanelController:
         self._display_filter = RepeaterDisplayFilter.ACTIVE_ONLY
         self._selected_stable_key: str | None = None
         self._staged_action: StagedRepeaterActiveAction | None = None
-        self._radio_staged_action: StagedRepeaterRadioAction | None = None
 
     @property
     def display_filter(self) -> RepeaterDisplayFilter:
@@ -120,11 +111,6 @@ class RepeaterPanelController:
     def staged_action(self) -> StagedRepeaterActiveAction | None:
         self._synchronize()
         return self._staged_action
-
-    @property
-    def radio_staged_action(self) -> StagedRepeaterRadioAction | None:
-        self._synchronize()
-        return self._radio_staged_action
 
     def selected_radio_action(self) -> StagedRepeaterRadioAction | None:
         """Snapshot the selected repeater's exact radio configuration without staging."""
@@ -154,7 +140,6 @@ class RepeaterPanelController:
             rows=rows,
             selected_stable_key=self._selected_stable_key,
             staged_action=self._staged_action,
-            radio_staged_action=self._radio_staged_action,
             source_error=self._source_error,
         )
 
@@ -162,9 +147,8 @@ class RepeaterPanelController:
         return self.state
 
     def toggle_filter(self) -> RepeaterPanelState:
-        """Switch active-only/all and invalidate both transient action stages."""
+        """Switch active-only/all and invalidate the transient Active-toggle action."""
         self._staged_action = None
-        self._radio_staged_action = None
         self._display_filter = (
             RepeaterDisplayFilter.ALL
             if self._display_filter is RepeaterDisplayFilter.ACTIVE_ONLY
@@ -198,8 +182,7 @@ class RepeaterPanelController:
         if stable_key != self._selected_stable_key:
             self._selected_stable_key = stable_key
             self._staged_action = None
-            self._radio_staged_action = None
-        return self.state
+            return self.state
 
     def clear_selection(self) -> RepeaterPanelState:
         self._clear_all()
@@ -220,32 +203,11 @@ class RepeaterPanelController:
         self._staged_action = None
         return self.state
 
-    def stage_selected_radio(self) -> RepeaterPanelState:
-        """First encoder press: snapshot exact radio-critical values with zero I/O."""
-        selected = self._selected_visible_item()
-        self._radio_staged_action = (
-            StagedRepeaterRadioAction.from_repeater(selected.repeater)
-            if selected is not None
-            else None
-        )
-        return self.state
-
-    def cancel_radio_staging(self) -> RepeaterPanelState:
-        """Invalidate only the pending radio action."""
-        self._radio_staged_action = None
-        return self.state
-
-    def invalidate_radio(self) -> RepeaterPanelState:
-        """Discard stale radio confirmation after disconnect or unusable state."""
-        self._radio_staged_action = None
-        return self.state
-
     def apply_persisted_override(
         self,
         action: StagedRepeaterActiveAction,
     ) -> RepeaterPanelState:
-        """Apply completed local Active state and invalidate any radio confirmation."""
-        self._radio_staged_action = None
+        """Apply completed local Active state and apply the completed local Active state."""
         if self._apply_override is not None:
             self._apply_override(action.stable_key, action.target_active)
         return self.state
@@ -303,8 +265,7 @@ class RepeaterPanelController:
                 or current is None
                 or not radio_staged.matches(current.repeater)
             ):
-                self._radio_staged_action = None
-
+        
         return nearby, visible
 
     def _visible_selected_index(self, visible: tuple[NearbyRepeater, ...]) -> int | None:
@@ -323,4 +284,3 @@ class RepeaterPanelController:
     def _clear_all(self) -> None:
         self._selected_stable_key = None
         self._staged_action = None
-        self._radio_staged_action = None
