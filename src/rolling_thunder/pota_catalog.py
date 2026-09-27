@@ -202,7 +202,9 @@ def import_pota_catalog_csv(
                         ) from error
 
             if park_count == 0:
-                raise PotaCatalogImportError(\n                    f"POTA catalog contains no {program.upper()} park records."\n                )
+                raise PotaCatalogImportError(
+                    f"POTA catalog contains no {program.upper()} park records."
+                )
 
             connection.execute(
                 """
