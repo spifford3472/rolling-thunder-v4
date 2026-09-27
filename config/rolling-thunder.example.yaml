@@ -98,6 +98,14 @@ pota_spots:
   refresh_interval_s: 60.0
   refresh_on_start: true
 
+pota_map:
+  # Uses the offline Checkpoint 2 catalog. Coordinates are approximate POTA
+  # catalog pins, not navigation destinations or activation boundaries.
+  enabled: true
+  catalog_path: ../data/pota/pota-catalog.db
+  label_min_zoom: 14
+  dot_diameter_px: 12
+
 repeaters:
   # Deployment data lives outside Git worktrees so branch/worktree changes
   # cannot make the repeater panel lose its local CSV.
