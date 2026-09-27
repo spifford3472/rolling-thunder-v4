@@ -141,6 +141,20 @@ class PotaMapMarkerService:
             executor.shutdown(wait=False, cancel_futures=True)
             self._executor = None
 
+    def clear(self) -> None:
+        """Invalidate pending work and publish an empty snapshot without disk I/O."""
+        with self._lock:
+            if self._pending_viewport is None and self._latest.viewport is None:
+                return
+            self._generation += 1
+            self._pending_viewport = None
+            self._latest = PotaMapMarkerSnapshot(
+                viewport=None,
+                markers=(),
+                detail="POTA MARKERS WAITING FOR CURRENT GPS",
+                updated_at=self._aware_now(),
+            )
+
     def request_viewport(self, viewport: MapViewport) -> None:
         """Schedule a visible-park query, coalescing identical viewport requests."""
         if not self._started:
