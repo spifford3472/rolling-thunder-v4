@@ -6,14 +6,14 @@ The shared spot domain provides the provider-neutral foundation for unified POTA
 and DX operating intelligence.
 
 It defines immutable domain records, canonical snapshots, stable selection,
-provider-specific filters, exact staged receive actions, and the two-press
-operator-confirmation contract. Forge uses the same domain for public POTA and
-bounded DXSpider snapshots, while the Raspberry Pi reconstructs and durably
-retains those snapshots for offline-first presentation.
+provider-specific filters, and exact per-activation receive actions. Forge uses
+the same domain for public POTA and bounded DXSpider snapshots, while the
+Raspberry Pi reconstructs and durably retains those snapshots for offline-first
+presentation.
 
-Checkpoint 8 completes the shared operator path for both POTA and DX. The first
-activation stages only; the second activation of the same still-valid target may
-submit receive tuning through the existing typed `ReceiveTuningService`.
+The current shared operator path for both POTA and DX uses one activation on the
+current stable selection. That activation snapshots the exact receive target and
+submits it through the existing typed `ReceiveTuningService` path.
 
 ## Domain Records
 
@@ -345,11 +345,10 @@ ATAS-120, and does not claim the antenna is safe to transmit.
 
 Within a shared POTA/DX context, Back operates on panel state only:
 
-1. if an action is staged, cancel staging
-2. otherwise, if a row is selected, clear selection
-3. otherwise, return control to the normal surrounding navigation behavior
+1. if a row is selected, clear selection
+2. otherwise, return control to the normal surrounding navigation behavior
 
-Back does not create a radio action and does not bypass the two-press contract.
+Back does not create a radio action.
 
 ## Pi Retained and Live State
 
