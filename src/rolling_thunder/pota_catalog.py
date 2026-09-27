@@ -186,12 +186,12 @@ def import_pota_catalog_csv(
                         connection.execute(
                             """
                             INSERT INTO parks (
-                                reference, name, record_program, status, park_type,
+                                reference, name, program, status, park_type,
                                 latitude, longitude
                             ) VALUES (?, ?, ?, ?, ?, ?, ?)
                             """,
                             (
-                                reference, name, program, status, park_type,
+                                reference, name, record_program, status, park_type,
                                 latitude, longitude,
                             ),
                         )
