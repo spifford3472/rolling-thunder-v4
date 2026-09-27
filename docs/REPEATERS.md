@@ -202,10 +202,10 @@ Checkpoint #167 assigns the repeater controls as follows:
 - **Context Button #1:** switch Active-only / All;
 - **Context Button #2:** flip the selected repeater Active/Inactive in one operator press;
 - **encoder rotation:** move stable repeater selection;
-- **encoder short press:** reserved for the later two-press radio-configuration workflow in #169 and therefore performs no repeater CAT/radio action in #167;
+- **encoder short press:** configures/tunes the currently selected repeater through the typed background radio-configuration path;
 - **Back:** clear the current repeater selection.
 
-The Context Button #2 path captures one exact `StagedRepeaterActiveAction` only as a transient application value needed to cross the background-persistence boundary. It is submitted and cleared within the same operator command; there is no operator-visible two-press Active stage.
+The Context Button #2 path captures one exact `StagedRepeaterActiveAction` only as a transient application value needed to cross the background-persistence boundary. It is submitted and cleared within the same operator command; there is no operator-visible Active confirmation stage.
 
 The background persistence controller remains single-flight. If an Active write is already in progress, another Context Button #2 request is rejected rather than queued ambiguously. Successful persistence is reflected into the in-memory nearby state on a later dashboard refresh.
 
@@ -234,4 +234,4 @@ Checkpoint #167 adds panel/presentation and local Active persistence only. It ad
 - network access;
 - filesystem or SQLite work inside Tk callbacks.
 
-Checkpoint #168 separately owns typed FT-891 FM/repeater receive capability discovery. Checkpoint #169 separately owns the two-press encoder radio-configuration integration after those capabilities are proven.
+Checkpoint #168 owns typed FT-891 FM/repeater receive capability discovery. Checkpoint #169 established the typed encoder radio-configuration integration; the current operator contract uses single-press activation.
