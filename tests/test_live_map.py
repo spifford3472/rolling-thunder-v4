@@ -201,3 +201,44 @@ def test_controller_rejects_naive_clock() -> None:
 
     with pytest.raises(ValueError, match="timezone-aware"):
         controller.update(None)
+
+
+@pytest.mark.parametrize(
+    ("age_seconds", "expected"),
+    [
+        (0, True),
+        (59, True),
+        (60, True),
+        (61, False),
+    ],
+)
+def test_pota_position_grace_uses_age_of_last_valid_fix(
+    age_seconds: int,
+    expected: bool,
+) -> None:
+    controller = LiveMapController(clock=lambda: NOW)
+    presentation = controller.update(
+        gps_state(fix_time=NOW - timedelta(seconds=age_seconds))
+    )
+
+    assert controller.pota_position_is_recent(
+        presentation,
+        grace_after=timedelta(seconds=60),
+    ) is expected
+
+
+def test_pota_position_grace_retains_last_fix_during_brief_disconnect() -> None:
+    controller = LiveMapController(clock=lambda: NOW)
+    controller.update(gps_state(fix_time=NOW - timedelta(seconds=30)))
+    presentation = controller.update(
+        gps_state(
+            connection=GPSConnectionState.DISCONNECTED,
+            latitude=None,
+            longitude=None,
+        )
+    )
+
+    assert controller.pota_position_is_recent(
+        presentation,
+        grace_after=timedelta(seconds=60),
+    ) is True
