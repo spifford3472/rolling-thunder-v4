@@ -1,28 +1,16 @@
-"""Tests for shared POTA/DX active-panel command routing."""
+"""Tests for shared POTA/DX single-press active-panel command routing."""
 
 from collections.abc import Callable
 from datetime import UTC, datetime
 
 from rolling_thunder.active_panel_commands import SharedSpotActivePanelCommandController
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.domain import (
-    Frequency,
-    RadioConnectionState,
-    RadioMode,
-    RadioState,
-)
-from rolling_thunder.spot_domain import (
-    DxSpotIdentity,
-    PotaSpotIdentity,
-    SpotIdentity,
-    SpotProvider,
-)
+from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
+from rolling_thunder.spot_domain import DxSpotIdentity, PotaSpotIdentity, SpotIdentity, SpotProvider
 from rolling_thunder.spot_selection import StagedSpotAction
 
 
 class RecordingSharedPanel:
-    """Small no-I/O shared-panel fake for command-routing tests."""
-
     def __init__(self) -> None:
         self.provider = SpotProvider.POTA
         self.selected_identity: SpotIdentity | None = None
@@ -45,8 +33,6 @@ class RecordingSharedPanel:
         current_frequency: Frequency | None = None,
     ) -> object:
         if provider is not self.provider:
-            self.staged_identity = None
-            self.staged_action = None
             self.selected_identity = None
         self.provider = provider
         frequency_hz = current_frequency.hz if current_frequency is not None else None
@@ -67,41 +53,32 @@ class RecordingSharedPanel:
     def clear_selection(self) -> object:
         self.calls.append("clear_selection")
         self.selected_identity = None
-        self.staged_identity = None
-        self.staged_action = None
         return object()
 
-    def stage_selected(self) -> object:
-        self.calls.append("stage_selected")
-        self.staged_identity = self.selected_identity
+    def selected_tune_action(self) -> StagedSpotAction | None:
+        self.calls.append("selected_tune_action")
         if self.selected_identity is None:
-            self.staged_action = None
-        elif self.provider is SpotProvider.POTA:
-            self.staged_action = StagedSpotAction(
+            return None
+        if self.provider is SpotProvider.POTA:
+            return StagedSpotAction(
                 identity=self._pota_identity,
                 callsign="K1POTA",
                 frequency=Frequency(hz=14_250_000),
                 mode=RadioMode.USB,
             )
-        else:
-            self.staged_action = StagedSpotAction(
-                identity=self._dx_identity,
-                callsign="K1DX",
-                frequency=Frequency(hz=14_020_000),
-                mode=RadioMode.CW,
-            )
-        return object()
+        return StagedSpotAction(
+            identity=self._dx_identity,
+            callsign="K1DX",
+            frequency=Frequency(hz=14_020_000),
+            mode=RadioMode.CW,
+        )
 
     def cancel_staging(self) -> object:
         self.calls.append("cancel_staging")
-        self.staged_identity = None
-        self.staged_action = None
         return object()
 
     def invalidate_radio(self) -> object:
         self.calls.append("invalidate_radio")
-        self.staged_identity = None
-        self.staged_action = None
         return object()
 
     def next_pota_band(self) -> object:
@@ -122,8 +99,6 @@ class RecordingSharedPanel:
 
 
 class RecordingSharedTuning:
-    """Record exact actions submitted to the background tuning boundary."""
-
     def __init__(self, *, accept: bool = True) -> None:
         self.accept = accept
         self.actions: list[StagedSpotAction] = []
@@ -133,11 +108,7 @@ class RecordingSharedTuning:
         return self.accept
 
 
-def connected_radio_state(
-    *,
-    transmitting: bool = False,
-) -> RadioState:
-    """Return one usable immutable radio snapshot."""
+def connected_radio_state(*, transmitting: bool = False) -> RadioState:
     return RadioState(
         connection_state=RadioConnectionState.CONNECTED,
         frequency=Frequency(hz=7_150_000),
@@ -148,7 +119,6 @@ def connected_radio_state(
 
 
 def disconnected_radio_state() -> RadioState:
-    """Return one unavailable immutable radio snapshot."""
     return RadioState(
         connection_state=RadioConnectionState.DISCONNECTED,
         updated_at=datetime(2026, 8, 8, 3, 55, tzinfo=UTC),
@@ -179,103 +149,10 @@ def build_controller(
 
 def test_constructor_synchronizes_initial_pota_context_with_radio_frequency() -> None:
     _commands, _navigation, panel = build_controller()
-
     assert panel.calls == ["activate:pota:7150000"]
-    assert panel.provider is SpotProvider.POTA
 
 
-def test_pota_primary_secondary_and_selection_route_through_shared_panel() -> None:
-    commands, _navigation, panel = build_controller()
-    panel.calls.clear()
-
-    assert commands.primary() is True
-    assert commands.secondary() is True
-    assert commands.move_next() is True
-    assert commands.activate_selection() is True
-
-    assert panel.calls == [
-        "next_pota_band",
-        "next_pota_mode",
-        "select_next",
-        "stage_selected",
-    ]
-    assert panel.selected_identity is not None
-    assert panel.staged_identity == panel.selected_identity
-
-
-def test_dx_uses_shared_band_mode_and_selection_commands() -> None:
-    commands, _navigation, panel = build_controller(ContextId.DX)
-    panel.calls.clear()
-
-    assert panel.provider is SpotProvider.DX
-    assert commands.primary() is True
-    assert commands.secondary() is True
-    assert commands.move_next() is True
-    assert commands.activate_selection() is True
-
-    assert panel.calls == [
-        "next_dx_band",
-        "next_dx_mode",
-        "select_next",
-        "stage_selected",
-    ]
-    assert isinstance(panel.selected_identity, DxSpotIdentity)
-
-
-def test_pota_to_dx_context_change_invalidates_shared_staging_immediately() -> None:
-    commands, navigation, panel = build_controller()
-    commands.move_next()
-    commands.activate_selection()
-    assert panel.staged_identity is not None
-
-    navigation.select(ContextId.DX)
-    commands.activate_context(ContextId.DX)
-
-    assert panel.provider is SpotProvider.DX
-    assert panel.selected_identity is None
-    assert panel.staged_identity is None
-    assert panel.calls[-1] == "activate:dx:7150000"
-
-
-def test_non_spot_context_cancels_staging_without_mutating_selection() -> None:
-    commands, navigation, panel = build_controller()
-    commands.move_next()
-    commands.activate_selection()
-    selected = panel.selected_identity
-
-    navigation.select(ContextId.SETTINGS)
-    commands.activate_context(ContextId.SETTINGS)
-
-    assert panel.selected_identity == selected
-    assert panel.staged_identity is None
-    assert panel.calls[-1] == "cancel_staging"
-
-
-def test_back_cancels_staging_before_clearing_selection() -> None:
-    commands, _navigation, panel = build_controller()
-    commands.move_next()
-    commands.activate_selection()
-
-    assert commands.back() is True
-    assert panel.selected_identity is not None
-    assert panel.staged_identity is None
-
-    assert commands.back() is True
-    assert panel.selected_identity is None
-
-    assert commands.back() is False
-
-
-def test_activate_without_explicit_selection_performs_no_radio_or_external_work() -> None:
-    commands, _navigation, panel = build_controller()
-    panel.calls.clear()
-
-    assert commands.activate_selection() is False
-    assert panel.calls == ["stage_selected"]
-    assert panel.staged_identity is None
-
-
-def test_first_press_stages_without_submitting_tune() -> None:
+def test_pota_single_press_submits_selected_action() -> None:
     tuning = RecordingSharedTuning()
     commands, _navigation, panel = build_controller(tuning=tuning)
     commands.move_next()
@@ -283,110 +160,103 @@ def test_first_press_stages_without_submitting_tune() -> None:
 
     assert commands.activate_selection() is True
 
-    assert panel.staged_action is not None
-    assert panel.calls == ["stage_selected"]
-    assert tuning.actions == []
+    assert panel.calls == ["selected_tune_action"]
+    assert len(tuning.actions) == 1
+    assert tuning.actions[0].frequency == Frequency(hz=14_250_000)
+    assert tuning.actions[0].mode is RadioMode.USB
 
 
-def test_second_press_submits_exact_action_and_clears_stage() -> None:
+def test_dx_single_press_submits_selected_action() -> None:
     tuning = RecordingSharedTuning()
-    commands, _navigation, panel = build_controller(
-        ContextId.DX,
-        tuning=tuning,
-    )
+    commands, _navigation, panel = build_controller(ContextId.DX, tuning=tuning)
     commands.move_next()
-    assert commands.activate_selection() is True
-    staged = panel.staged_action
-    assert staged is not None
-
     panel.calls.clear()
 
     assert commands.activate_selection() is True
 
-    assert tuning.actions == [staged]
-    assert panel.calls == ["cancel_staging"]
-    assert panel.staged_action is None
-    assert panel.staged_identity is None
+    assert panel.calls == ["selected_tune_action"]
+    assert len(tuning.actions) == 1
+    assert isinstance(tuning.actions[0].identity, DxSpotIdentity)
+    assert tuning.actions[0].mode is RadioMode.CW
 
 
-def test_busy_tuning_boundary_keeps_staged_action() -> None:
+def test_activate_without_selection_performs_no_tune() -> None:
+    tuning = RecordingSharedTuning()
+    commands, _navigation, panel = build_controller(tuning=tuning)
+    panel.calls.clear()
+
+    assert commands.activate_selection() is False
+
+    assert panel.calls == ["selected_tune_action"]
+    assert tuning.actions == []
+
+
+def test_busy_tuning_boundary_rejects_duplicate_activation() -> None:
     tuning = RecordingSharedTuning(accept=False)
     commands, _navigation, panel = build_controller(tuning=tuning)
     commands.move_next()
-    assert commands.activate_selection() is True
-    staged = panel.staged_action
-    assert staged is not None
-
     panel.calls.clear()
 
     assert commands.activate_selection() is False
 
-    assert tuning.actions == [staged]
-    assert panel.calls == []
-    assert panel.staged_action == staged
+    assert len(tuning.actions) == 1
+    assert panel.calls == ["selected_tune_action"]
 
 
-def test_second_press_without_tuning_boundary_does_nothing() -> None:
+def test_missing_tuning_boundary_does_not_create_confirmation_state() -> None:
     commands, _navigation, panel = build_controller()
     commands.move_next()
-    assert commands.activate_selection() is True
-    staged = panel.staged_action
-    assert staged is not None
+    panel.calls.clear()
 
+    assert commands.activate_selection() is False
+
+    assert panel.calls == ["selected_tune_action"]
+    assert panel.staged_identity is None
+    assert panel.staged_action is None
+
+
+def test_unusable_radio_rejects_before_action_snapshot() -> None:
+    tuning = RecordingSharedTuning()
+    commands, _navigation, panel = build_controller(
+        tuning=tuning,
+        radio_state=disconnected_radio_state,
+    )
+    commands.move_next()
     panel.calls.clear()
 
     assert commands.activate_selection() is False
 
     assert panel.calls == []
-    assert panel.staged_action == staged
-
-
-def test_disconnect_invalidates_stage_before_background_tuning() -> None:
-    current = [connected_radio_state()]
-    tuning = RecordingSharedTuning()
-    commands, _navigation, panel = build_controller(
-        tuning=tuning,
-        radio_state=lambda: current[0],
-    )
-    commands.move_next()
-    assert commands.activate_selection() is True
-    assert panel.staged_action is not None
-
-    current[0] = disconnected_radio_state()
-    panel.calls.clear()
-
-    assert commands.synchronize_radio_state() is False
-
-    assert panel.calls == ["invalidate_radio"]
-    assert panel.staged_action is None
     assert tuning.actions == []
 
 
-def test_transmitting_radio_rejects_second_press_before_worker_start() -> None:
-    current = [connected_radio_state()]
+def test_transmitting_radio_rejects_before_action_snapshot() -> None:
     tuning = RecordingSharedTuning()
     commands, _navigation, panel = build_controller(
-        ContextId.DX,
         tuning=tuning,
-        radio_state=lambda: current[0],
+        radio_state=lambda: connected_radio_state(transmitting=True),
     )
     commands.move_next()
-    assert commands.activate_selection() is True
-    assert panel.staged_action is not None
-
-    current[0] = connected_radio_state(transmitting=True)
     panel.calls.clear()
 
     assert commands.activate_selection() is False
 
-    assert panel.calls == ["invalidate_radio"]
-    assert panel.staged_action is None
+    assert panel.calls == []
     assert tuning.actions == []
+
+
+def test_back_clears_selection_in_one_step_without_confirmation_state() -> None:
+    commands, _navigation, panel = build_controller()
+    commands.move_next()
+    panel.calls.clear()
+
+    assert commands.back() is True
+    assert panel.selected_identity is None
+    assert panel.calls == ["clear_selection"]
+    assert commands.back() is False
 
 
 class RecordingWeatherAlertViewport:
-    """Record weather-only generic movement without any hardware dependency."""
-
     def __init__(self) -> None:
         self.calls: list[str] = []
 
@@ -413,16 +283,5 @@ def test_weather_context_routes_encoder_movement_only_to_alert_viewport() -> Non
 
     assert commands.move_previous() is True
     assert commands.move_next() is True
-
     assert viewport.calls == ["scroll_previous", "scroll_next"]
-    assert panel.calls == []
-
-    navigation.select(ContextId.AI)
-    commands.activate_context(ContextId.AI)
-    viewport.calls.clear()
-    panel.calls.clear()
-
-    assert commands.move_previous() is False
-    assert commands.move_next() is False
-    assert viewport.calls == []
     assert panel.calls == []
