@@ -240,7 +240,34 @@ def import_pota_catalog_csvs(
                             grid = _optional(row, headers, "grid")
                             website = _optional(row, headers, "website")
                             notes = _optional(row, headers, "notes")
+                            park_values = (
+                                name,
+                                record_program,
+                                status,
+                                park_type,
+                                latitude,
+                                longitude,
+                                grid,
+                                website,
+                                notes,
+                            )
                             for location in locations:
+                                existing = connection.execute(
+                                    """
+                                    SELECT name, program, status, park_type,
+                                           latitude, longitude, grid, website, notes
+                                    FROM parks
+                                    WHERE reference = ? AND location_code = ?
+                                    """,
+                                    (reference, location),
+                                ).fetchone()
+                                if existing is not None:
+                                    if existing != park_values:
+                                        raise ValueError(
+                                            "conflicting duplicate for "
+                                            f"{reference} {location}"
+                                        )
+                                    continue
                                 connection.execute(
                                     """
                                     INSERT INTO parks (
@@ -249,19 +276,7 @@ def import_pota_catalog_csvs(
                                         grid, website, notes
                                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     """,
-                                    (
-                                        reference,
-                                        location,
-                                        name,
-                                        record_program,
-                                        status,
-                                        park_type,
-                                        latitude,
-                                        longitude,
-                                        grid,
-                                        website,
-                                        notes,
-                                    ),
+                                    (reference, location, *park_values),
                                 )
                                 park_count += 1
                         except (
