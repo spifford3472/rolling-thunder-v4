@@ -10,6 +10,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Final
 
 CATALOG_SCHEMA_VERSION: Final = 1
@@ -41,7 +42,7 @@ class PotaCatalogImportResult:
     park_count: int
 
 
-def _normalized_headers(fieldnames: list[str] | None) -> dict[str, str]:
+def _normalized_headers(fieldnames: Sequence[str] | None) -> dict[str, str]:
     if not fieldnames:
         raise PotaCatalogImportError("POTA catalog CSV has no header row.")
     available = {name.strip().lower(): name for name in fieldnames}
