@@ -245,8 +245,13 @@ class SharedSpotPanelController:
 
     @property
     def staged_action(self) -> StagedSpotAction | None:
-        """Return the exact still-valid staged receive action."""
+        """Return legacy staged state retained for compatibility tests."""
         return self._selection_state().staged_action
+
+    def selected_tune_action(self) -> StagedSpotAction | None:
+        """Snapshot the currently selected receive target without persistent staging."""
+        selected = self.selected_spot
+        return StagedSpotAction.from_spot(selected) if selected is not None else None
 
     @property
     def selected_spot(self) -> SpotRecord | None:
