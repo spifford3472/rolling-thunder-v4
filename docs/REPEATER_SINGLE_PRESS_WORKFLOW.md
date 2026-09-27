@@ -90,8 +90,8 @@ Checkpoint #169 was accepted on the installed `anvilmobile` system using the rea
 The operator verified:
 
 - first encoder press staged the selected repeater without changing FT-891 frequency or mode;
-- encoder rotation, Back, and Active/All filter changes invalidated the pending radio stage;
-- Context Button #2 changed only local Active state and cleared the radio stage without configuring the FT-891;
+- encoder rotation, Back, and Active/All filter changes preserved stable selection behavior without sideways fallback;
+- Context Button #2 changed only local Active state without configuring the FT-891;
 - the second identical encoder press performed the real #168-proven FT-891 repeater configuration exactly once;
 - radio loss cleared a pending stage, and reconnect did not resurrect or execute it;
 - the FT-891 Standard COM interface remained unopened for the entire installed test;
