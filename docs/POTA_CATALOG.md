@@ -64,9 +64,7 @@ The database records:
 - UTC import timestamp
 - park count
 
-Park locations are normalized into a child table because a park can span more than
-one POTA location. Indexes support program, location, latitude, and longitude
-candidate selection.
+POTA state exports can contain the same park reference in multiple state files. The catalog therefore keys park occurrences by `(reference, location_code)`, preserving each POTA state/location occurrence instead of assuming the reference alone is unique. A park whose `locationDesc` contains multiple locations is likewise represented once for each location code. Indexes support reference, program, location, grid, latitude, and longitude candidate selection.
 
 ## Separation from polygons
 
