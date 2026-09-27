@@ -84,7 +84,7 @@ class SharedSpotPanelCommands(Protocol):
     def clear_selection(self) -> object:
         ...
 
-    def stage_selected(self) -> object:
+    def selected_tune_action(self) -> StagedSpotAction | None:
         ...
 
     def cancel_staging(self) -> object:
@@ -147,7 +147,7 @@ class RepeaterPanelCommands(Protocol):
     def cancel_staging(self) -> object:
         ...
 
-    def stage_selected_radio(self) -> object:
+    def selected_radio_action(self) -> StagedRepeaterRadioAction | None:
         ...
 
     def cancel_radio_staging(self) -> object:
@@ -163,7 +163,7 @@ class RepeaterActiveOverrideCommands(Protocol):
 
 
 class RepeaterRadioConfigurationCommands(Protocol):
-    """Background radio execution boundary reached only by second encoder press."""
+    """Background typed repeater-radio execution boundary."""
 
     @property
     def configuring(self) -> bool:
@@ -401,7 +401,7 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def activate_selection(self) -> bool:
-        """First press stages; second identical press starts exactly one execution."""
+        """Submit the currently selected receive target with one operator activation."""
         if self._repeater_is_active():
             return self._activate_repeater_selection()
         if not self._shared_spot_is_active():
@@ -409,37 +409,24 @@ class SharedSpotActivePanelCommandController:
         if not self.synchronize_radio_state():
             return False
 
-        staged = self._shared_panel.staged_action
-        if staged is None:
-            self._shared_panel.stage_selected()
-            return self._shared_panel.staged_action is not None
-
+        action = self._shared_panel.selected_tune_action()
         tuning = self._shared_tuning
-        if tuning is None or not tuning.start_tune(staged):
+        if action is None or tuning is None:
             return False
-        self._shared_panel.cancel_staging()
-        return True
+        return tuning.start_tune(action)
 
     def _activate_repeater_selection(self) -> bool:
         repeater = self._repeater_panel
         executor = self._repeater_configuration
         if repeater is None or executor is None:
             return False
-        if not self.synchronize_radio_state():
-            return False
-        if executor.configuring:
-            repeater.cancel_radio_staging()
+        if not self.synchronize_radio_state() or executor.configuring:
             return False
 
-        staged = repeater.radio_staged_action
-        if staged is None:
-            repeater.stage_selected_radio()
-            return repeater.radio_staged_action is not None
-
-        if not executor.start_configure(staged):
+        action = repeater.selected_radio_action()
+        if action is None:
             return False
-        repeater.cancel_radio_staging()
-        return True
+        return executor.start_configure(action)
 
     def _toggle_repeater_active(self) -> bool:
         """Context Button #2 is Active-only and can never reach radio execution."""
@@ -479,14 +466,11 @@ class SharedSpotActivePanelCommandController:
         return False
 
     def back(self) -> bool:
-        """Back cancels radio stage before clearing repeater selection."""
+        """Back cancels Active-only work first, otherwise clears selection."""
         if self._repeater_is_active():
             repeater = self._repeater_panel
             if repeater is None:
                 return False
-            if repeater.radio_staged_action is not None:
-                repeater.cancel_radio_staging()
-                return True
             if repeater.staged_action is not None:
                 repeater.cancel_staging()
                 return True
@@ -497,9 +481,6 @@ class SharedSpotActivePanelCommandController:
 
         if not self._shared_spot_is_active():
             return False
-        if self._shared_panel.staged_identity is not None:
-            self._shared_panel.cancel_staging()
-            return True
         if self._shared_panel.selected_identity is None:
             return False
         self._shared_panel.clear_selection()
