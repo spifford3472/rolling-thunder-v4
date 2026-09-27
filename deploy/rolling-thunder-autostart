@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly APP_DIR="${ROLLING_THUNDER_APP_DIR:-/home/geoff/projects/rolling-thunder-v4-regional}"
+readonly VENV_DIR="${ROLLING_THUNDER_VENV_DIR:-/home/geoff/projects/rolling-thunder-v4/.venv}"
+readonly CONFIG_PATH="${ROLLING_THUNDER_CONFIG:-${APP_DIR}/config/rolling-thunder.yaml}"
+readonly STARTUP_DELAY_SECONDS="${ROLLING_THUNDER_STARTUP_DELAY_SECONDS:-180}"
+readonly DISPLAY_VALUE="${DISPLAY:-:0}"
+readonly XAUTHORITY_VALUE="${XAUTHORITY:-/home/geoff/.Xauthority}"
+
+log() {
+    printf '%s rolling-thunder-autostart: %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+dashboard_is_running() {
+    pgrep -u "$(id -u)" -f         '[p]ython.*rolling_thunder\.ui_main|[r]olling-thunder-ui'         >/dev/null 2>&1
+}
+
+require_file() {
+    local path="$1"
+    local description="$2"
+    if [[ ! -f "$path" ]]; then
+        log "ERROR: ${description} not found: ${path}"
+        exit 1
+    fi
+}
+
+require_executable() {
+    local path="$1"
+    local description="$2"
+    if [[ ! -x "$path" ]]; then
+        log "ERROR: ${description} is not executable: ${path}"
+        exit 1
+    fi
+}
+
+if [[ ! "$STARTUP_DELAY_SECONDS" =~ ^[0-9]+$ ]]; then
+    log "ERROR: ROLLING_THUNDER_STARTUP_DELAY_SECONDS must be a non-negative integer."
+    exit 1
+fi
+
+if dashboard_is_running; then
+    log "dashboard already running for user $(id -un); not starting a duplicate"
+    exit 0
+fi
+
+log "waiting ${STARTUP_DELAY_SECONDS}s after service start before dashboard launch"
+sleep "$STARTUP_DELAY_SECONDS"
+
+if dashboard_is_running; then
+    log "dashboard was started during the delay; not starting a duplicate"
+    exit 0
+fi
+
+require_file "${APP_DIR}/pyproject.toml" "Rolling Thunder production checkout"
+require_executable "${VENV_DIR}/bin/rolling-thunder-ui" "Rolling Thunder UI entry point"
+require_file "$CONFIG_PATH" "Rolling Thunder configuration"
+
+export DISPLAY="$DISPLAY_VALUE"
+if [[ -f "$XAUTHORITY_VALUE" ]]; then
+    export XAUTHORITY="$XAUTHORITY_VALUE"
+else
+    log "WARNING: XAUTHORITY file not found at ${XAUTHORITY_VALUE}; continuing"
+fi
+
+cd "$APP_DIR"
+log "starting dashboard from ${APP_DIR} with venv ${VENV_DIR} on DISPLAY=${DISPLAY}"
+exec "${VENV_DIR}/bin/rolling-thunder-ui"
