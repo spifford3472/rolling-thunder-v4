@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly APP_DIR="${ROLLING_THUNDER_APP_DIR:-/home/geoff/projects/rolling-thunder-v4-regional}"
+readonly VENV_DIR="${ROLLING_THUNDER_VENV_DIR:-${APP_DIR}/.venv}"
+readonly CONFIG_PATH="${ROLLING_THUNDER_CONFIG:-${APP_DIR}/config/rolling-thunder.yaml}"
+readonly STARTUP_DELAY_SECONDS="${ROLLING_THUNDER_STARTUP_DELAY_SECONDS:-180}"
+readonly DISPLAY_VALUE="${DISPLAY:-:0}"
+readonly XAUTHORITY_VALUE="${XAUTHORITY:-/home/geoff/.Xauthority}"
+
+log() {
+    printf '%s rolling-thunder-autostart: %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+require_file() {
+    local path="$1"
+    local description="$2"
+    if [[ ! -f "$path" ]]; then
+        log "ERROR: ${description} not found: ${path}"
+        exit 1
+    fi
+}
+
+require_executable() {
+    local path="$1"
+    local description="$2"
+    if [[ ! -x "$path" ]]; then
+        log "ERROR: ${description} is not executable: ${path}"
+        exit 1
+    fi
+}
+
+if [[ ! "$STARTUP_DELAY_SECONDS" =~ ^[0-9]+$ ]]; then
+    log "ERROR: ROLLING_THUNDER_STARTUP_DELAY_SECONDS must be a non-negative integer."
+    exit 1
+fi
+
+log "waiting ${STARTUP_DELAY_SECONDS}s after service start before dashboard launch"
+sleep "$STARTUP_DELAY_SECONDS"
+
+require_file "${APP_DIR}/pyproject.toml" "Rolling Thunder checkout"
+require_executable "${VENV_DIR}/bin/rolling-thunder-ui" "Rolling Thunder UI entry point"
+require_file "$CONFIG_PATH" "Rolling Thunder configuration"
+
+export DISPLAY="$DISPLAY_VALUE"
+if [[ -f "$XAUTHORITY_VALUE" ]]; then
+    export XAUTHORITY="$XAUTHORITY_VALUE"
+else
+    log "WARNING: XAUTHORITY file not found at ${XAUTHORITY_VALUE}; continuing for display environments that do not require it"
+fi
+
+cd "$APP_DIR"
+log "starting dashboard from ${APP_DIR} on DISPLAY=${DISPLAY}"
+exec "${VENV_DIR}/bin/rolling-thunder-ui" --config "$CONFIG_PATH"
