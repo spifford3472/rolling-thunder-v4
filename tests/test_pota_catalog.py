@@ -130,9 +130,9 @@ def test_import_filters_non_us_programs(tmp_path: Path) -> None:
     database = tmp_path / "pota-catalog.db"
     write_csv(
         source,
-        "reference,name,latitude,longitude,locationDesc\\n"
-        "US-0001,US Park,44,-68,US-ME\\n"
-        "CA-0001,Canadian Park,51,-115,CA-AB\\n",
+        "reference,name,latitude,longitude,locationDesc\n"
+        "US-0001,US Park,44,-68,US-ME\n"
+        "CA-0001,Canadian Park,51,-115,CA-AB\n",
     )
 
     result = import_pota_catalog_csv(source, database)
