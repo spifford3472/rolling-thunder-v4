@@ -14,7 +14,6 @@ from rolling_thunder.repeater_domain import (
 from rolling_thunder.repeater_nearby import NearbyRepeater
 from rolling_thunder.repeater_panel import StagedRepeaterActiveAction
 from rolling_thunder.spot_domain import SpotIdentity, SpotProvider
-from rolling_thunder.spot_selection import StagedSpotAction
 
 
 class InertSharedPanel:
@@ -260,7 +259,6 @@ def test_context_change_performs_no_active_persistence() -> None:
     controller.activate_context(ContextId.AI)
 
     assert repeater.staged_action is None
-    assert repeater.radio_staged_action is None
     assert persistence.actions == []
     assert shared.calls == []
     assert repeater.calls[-1:] == ["cancel_staging"]
