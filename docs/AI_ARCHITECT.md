@@ -241,7 +241,7 @@ post-PR-152 baseline, implemented and audited behavior includes:
 - typed Pi Forge background client, durable retained shared snapshots, and
   truthful cached/live/retained diagnostics
 - one shared POTA/DX panel with independent band/mode filters
-- exact two-press POTA/DX receive tuning through background execution and
+- single-press POTA/DX receive tuning through background execution and
   `ReceiveTuningService`
 - explicit cross-band manual `SET BAND ... — TUNE ATAS-120` handoff where the
   FT-891 CAT behavior cannot authoritatively establish front-panel band context
@@ -290,7 +290,7 @@ Application code coordinates use cases, including:
 - recording or discarding a pending callsign
 - displaying radio and GPS state
 - requesting map viewports and presenting immutable cached map state
-- selecting/staging/confirming shared receive tuning
+- selecting and single-press shared receive tuning
 - synchronizing pending contacts
 - dispatching physical input through approved operator commands
 - consuming already-published Forge/shared state
@@ -411,7 +411,7 @@ These are permanent constraints:
   as the UI
 - operator-confirmed receive/repeater configuration must use typed application
   services and the typed `Radio` boundary
-- the first press of a two-press radio action stages only and performs no CAT
+- a receive-selection press routes through the typed application service and never issues raw CAT from UI/control code
 - radio state in the current scope remains `transmitting=False`
 
 A proposal that violates these rules must be rejected or redesigned.
@@ -576,7 +576,7 @@ Follow-up GPS time work is intentionally separate:
 Status: complete for the approved receive-only and shared POTA/DX scope.
 
 The installed path includes read-only polling, exact receive frequency/mode
-changes, shared two-press tuning, disconnect/recovery safety, and the manual
+changes, shared single-press tuning, disconnect/recovery safety, and the manual
 cross-band band/ATAS handoff. Issue #149 retains the unresolved automatic
 front-panel band-context question.
 
@@ -617,7 +617,7 @@ Umbrella issue #154 defines the next approved sequence:
 10. #166 — 6 m repeater data, Active overrides, and geospatial filtering
 11. #167 — 6 m repeater panel and operator Active controls
 12. #168 — typed FT-891 FM repeater receive capabilities
-13. #169 — two-press 6 m repeater radio configuration integration
+13. #169 — typed 6 m repeater radio configuration integration; later single-press operator activation supersedes its confirmation workflow
 
 Issue #163 is a parking-lot item for future weather-radar map overlays and is not
 part of the initial #154 completion sequence.
