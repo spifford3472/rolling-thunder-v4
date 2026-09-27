@@ -14,6 +14,7 @@ from rolling_thunder.live_map_service import (
     MapDataStatus,
 )
 from rolling_thunder.live_map_ui import (
+    LiveMapWidgets,
     live_map_status_color,
     live_map_status_lines,
     radar_matches_map,
@@ -22,6 +23,7 @@ from rolling_thunder.live_map_ui import (
 )
 from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
 from rolling_thunder.map_tiles import build_map_viewport
+from rolling_thunder.pota_map_markers import PotaMapMarkerSnapshot
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
 
@@ -250,3 +252,45 @@ def test_radar_health_uses_color_only_state(
     expected: str,
 ) -> None:
     assert radar_status_color(status) == expected
+
+
+def test_empty_pota_viewport_does_not_raise_missing_canvas_tag() -> None:
+    class EmptyPotaCanvas:
+        def delete(self, _tag: str) -> None:
+            return None
+
+        def find_withtag(self, _tag: str) -> tuple[int, ...]:
+            return ()
+
+        def tag_raise(self, tag: str | int, above: str) -> None:
+            if tag == "map-pota":
+                raise AssertionError("empty POTA tag must not be raised")
+            if above == "map-pota":
+                raise AssertionError("nothing may be raised relative to empty POTA tag")
+
+    viewport = build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=17,
+        width_px=512,
+        height_px=512,
+    )
+    map_snapshot = LiveMapSnapshot(
+        status=MapDataStatus.READY,
+        viewport=viewport,
+        tiles=(),
+        detail="MAP READY",
+        updated_at=NOW,
+    )
+    pota_snapshot = PotaMapMarkerSnapshot(
+        viewport=viewport,
+        markers=(),
+        detail="POTA MARKERS READY",
+        updated_at=NOW,
+    )
+    widgets = LiveMapWidgets.__new__(LiveMapWidgets)
+    widgets._canvas = EmptyPotaCanvas()
+    widgets._attribution_item = None
+    widgets._pota_label_min_zoom = 14
+    widgets._pota_dot_diameter_px = 12
+
+    widgets._draw_pota_markers(pota_snapshot, map_snapshot)
