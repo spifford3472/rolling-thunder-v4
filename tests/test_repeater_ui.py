@@ -143,20 +143,7 @@ def test_normal_footer_assigns_encoder_staging_and_active_toggle_distinctly() ->
     viewport = build_repeater_viewport(panel_state)
 
     assert viewport.footer_line == (
-        "ENCODER PRESS TO STAGE — BTN1 SHOW ALL — BTN2 TOGGLE ACTIVE"
-    )
-
-
-def test_radio_stage_prompts_second_encoder_press_and_back_cancel() -> None:
-    selected = row("K1AAA Alpha", 52_010_000, 5.0, active=True, selected=True)
-    action = StagedRepeaterRadioAction.from_repeater(selected.repeater)
-
-    viewport = build_repeater_viewport(
-        state(selected, radio_staged_action=action)
-    )
-
-    assert viewport.footer_line == (
-        "STAGED — PRESS ENCODER AGAIN TO CONFIGURE — BACK CANCELS"
+        "ENCODER PRESS TO TUNE — BTN1 SHOW ALL — BTN2 TOGGLE ACTIVE"
     )
 
 
