@@ -15,7 +15,7 @@ Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/geoff/.Xauthority
 Environment=ROLLING_THUNDER_VENV_DIR=/home/geoff/projects/rolling-thunder-v4/.venv
 Environment=ROLLING_THUNDER_STARTUP_DELAY_SECONDS=180
-ExecStart=/home/geoff/projects/rolling-thunder-v4-regional/deploy/rolling-thunder-autostart
+ExecStart=/usr/bin/bash /home/geoff/projects/rolling-thunder-v4-regional/deploy/rolling-thunder-autostart
 Restart=on-failure
 RestartSec=10
 TimeoutStopSec=20
