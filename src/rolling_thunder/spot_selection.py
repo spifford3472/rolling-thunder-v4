@@ -1,19 +1,15 @@
-"""UI-independent stable selection and staged-action primitives."""
+"""UI-independent stable selection and exact receive-action primitives."""
 
 from dataclasses import dataclass
 
 from rolling_thunder.domain import Frequency, RadioMode
-from rolling_thunder.spot_domain import (
-    SpotIdentity,
-    SpotRecord,
-    SpotSnapshot,
-)
+from rolling_thunder.spot_domain import SpotIdentity, SpotRecord, SpotSnapshot
 from rolling_thunder.value_types import Callsign
 
 
 @dataclass(frozen=True, slots=True)
 class StagedSpotAction:
-    """Immutable action-critical spot values captured on the first press."""
+    """Immutable action-critical values captured from the current selection."""
 
     identity: SpotIdentity
     callsign: Callsign
@@ -31,7 +27,7 @@ class StagedSpotAction:
         )
 
     def matches(self, spot: SpotRecord) -> bool:
-        """Return whether a refreshed record still represents the staged action."""
+        """Return whether a record still represents this exact receive action."""
         return (
             self.identity == spot.identity
             and self.callsign == spot.callsign
@@ -42,11 +38,10 @@ class StagedSpotAction:
 
 @dataclass(frozen=True, slots=True)
 class SpotSelectionState:
-    """Immutable shared selection and staging state."""
+    """Immutable shared stable-selection state."""
 
     snapshot: SpotSnapshot
     selected_identity: SpotIdentity | None = None
-    staged_action: StagedSpotAction | None = None
 
     @property
     def selected_index(self) -> int | None:
@@ -62,25 +57,6 @@ class SpotSelectionState:
             return None
         return self.snapshot.get(self.selected_identity)
 
-    @property
-    def staged_identity(self) -> SpotIdentity | None:
-        """Return the stable identity captured for the staged action."""
-        if self.staged_action is None:
-            return None
-        return self.staged_action.identity
-
-    @property
-    def staged_spot(self) -> SpotRecord | None:
-        """Return the staged spot only while its actionable values still match."""
-        action = self.staged_action
-        if action is None:
-            return None
-
-        spot = self.snapshot.get(action.identity)
-        if spot is None or not action.matches(spot):
-            return None
-        return spot
-
 
 class SpotSelectionController:
     """Preserve selection by stable identity without performing external work."""
@@ -88,7 +64,6 @@ class SpotSelectionController:
     def __init__(self, snapshot: SpotSnapshot) -> None:
         self._snapshot = snapshot
         self._selected_identity: SpotIdentity | None = None
-        self._staged_action: StagedSpotAction | None = None
 
     @property
     def state(self) -> SpotSelectionState:
@@ -96,62 +71,35 @@ class SpotSelectionController:
         return SpotSelectionState(
             snapshot=self._snapshot,
             selected_identity=self._selected_identity,
-            staged_action=self._staged_action,
         )
 
     def replace_snapshot(self, snapshot: SpotSnapshot) -> SpotSelectionState:
-        """Atomically replace spots while preserving valid stable identity."""
+        """Atomically replace spots while preserving a still-present identity."""
         self._snapshot = snapshot
-
         selected = self._selected_identity
         if selected is not None and snapshot.index_of(selected) is None:
             self._selected_identity = None
-            self._staged_action = None
-            return self.state
-
-        action = self._staged_action
-        if action is not None:
-            refreshed_spot = snapshot.get(action.identity)
-            if (
-                action.identity != self._selected_identity
-                or refreshed_spot is None
-                or not action.matches(refreshed_spot)
-            ):
-                self._staged_action = None
-
         return self.state
 
-    def select_identity(
-        self,
-        identity: SpotIdentity,
-    ) -> SpotSelectionState:
+    def select_identity(self, identity: SpotIdentity) -> SpotSelectionState:
         """Select one present stable identity or clear stale selection."""
         if self._snapshot.index_of(identity) is None:
             self._selected_identity = None
-            self._staged_action = None
             return self.state
-
-        if identity != self._selected_identity:
-            self._selected_identity = identity
-            self._staged_action = None
-
+        self._selected_identity = identity
         return self.state
 
     def select_next(self) -> SpotSelectionState:
         """Move toward the end without wrapping or neighboring fallback."""
         if not self._snapshot.spots:
             self._selected_identity = None
-            self._staged_action = None
             return self.state
 
         current_index = self.state.selected_index
         target_index = (
             0
             if current_index is None
-            else min(
-                current_index + 1,
-                len(self._snapshot.spots) - 1,
-            )
+            else min(current_index + 1, len(self._snapshot.spots) - 1)
         )
         return self.select_identity(self._snapshot.spots[target_index].identity)
 
@@ -159,7 +107,6 @@ class SpotSelectionController:
         """Move toward the start without wrapping or neighboring fallback."""
         if not self._snapshot.spots:
             self._selected_identity = None
-            self._staged_action = None
             return self.state
 
         current_index = self.state.selected_index
@@ -169,32 +116,6 @@ class SpotSelectionController:
         return self.select_identity(self._snapshot.spots[target_index].identity)
 
     def clear_selection(self) -> SpotSelectionState:
-        """Clear selection and any staged action."""
+        """Clear the current stable selection."""
         self._selected_identity = None
-        self._staged_action = None
         return self.state
-
-    def stage_selected(self) -> SpotSelectionState:
-        """Stage the exact selected receive target without external effects."""
-        selected = self._selected_identity
-        spot = self._snapshot.get(selected) if selected is not None else None
-
-        self._staged_action = StagedSpotAction.from_spot(spot) if spot is not None else None
-        return self.state
-
-    def cancel_staging(self) -> SpotSelectionState:
-        """Clear staged action after explicit operator cancellation."""
-        self._staged_action = None
-        return self.state
-
-    def invalidate_context(self) -> SpotSelectionState:
-        """Clear staging when the active operating context changes."""
-        return self.cancel_staging()
-
-    def invalidate_radio(self) -> SpotSelectionState:
-        """Clear staging when radio state invalidates the pending action."""
-        return self.cancel_staging()
-
-    def record_failure(self) -> SpotSelectionState:
-        """Clear staging after a failed later-stage operation."""
-        return self.cancel_staging()
