@@ -209,7 +209,7 @@ The Context Button #2 path captures one exact `StagedRepeaterActiveAction` only 
 
 The background persistence controller remains single-flight. If an Active write is already in progress, another Context Button #2 request is rejected rather than queued ambiguously. Successful persistence is reflected into the in-memory nearby state on a later dashboard refresh.
 
-Local Active state is deliberately distinct from future radio-configuration staging. When #169 is implemented, an Active change through Context Button #2 will invalidate any stale encoder radio stage rather than sharing it.
+Local Active state is deliberately distinct from radio configuration. Context Button #2 affects only the local Active override and never invokes the repeater radio executor.
 
 ## Planned repeater radio workflow
 
