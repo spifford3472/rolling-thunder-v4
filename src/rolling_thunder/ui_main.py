@@ -775,7 +775,11 @@ def run_dashboard(
     live_map_controller = LiveMapController(
         stale_after=timedelta(seconds=config.map.gps_stale_after_s)
     )
-    live_map_widgets = LiveMapWidgets(situational)
+    live_map_widgets = LiveMapWidgets(
+        situational,
+        pota_label_min_zoom=config.pota_map.label_min_zoom,
+        pota_dot_diameter_px=config.pota_map.dot_diameter_px,
+    )
 
     status_bar = StatusBarWidgets(root)
     status_bar.frame.grid(
@@ -905,6 +909,18 @@ def run_dashboard(
                     height_px=map_height,
                 )
         live_map_snapshot = runtime.latest_live_map_state
+        if runtime.pota_map_markers is not None:
+            if (
+                live_map_controller.pota_position_is_recent(
+                    live_map_presentation,
+                    grace_after=timedelta(seconds=config.pota_map.gps_grace_period_s),
+                )
+                and live_map_snapshot is not None
+                and live_map_snapshot.viewport is not None
+            ):
+                runtime.pota_map_markers.request_viewport(live_map_snapshot.viewport)
+            else:
+                runtime.pota_map_markers.clear()
         if (
             runtime.live_radar is not None
             and live_map_snapshot is not None
@@ -915,6 +931,7 @@ def run_dashboard(
             live_map_presentation,
             live_map_snapshot,
             runtime.latest_live_radar_state,
+            runtime.latest_pota_map_marker_state,
             weather_presentation,
         )
 

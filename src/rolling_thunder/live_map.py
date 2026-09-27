@@ -129,6 +129,15 @@ class LiveMapController:
             is_current=False,
         )
 
+    def pota_position_is_recent(self, presentation: LiveMapPresentation, *, grace_after: timedelta) -> bool:
+        """Return whether the last valid fix is recent enough for POTA overlays."""
+        if grace_after <= timedelta(0):
+            raise ValueError("POTA GPS grace threshold must be positive.")
+        if presentation.position is None or presentation.fix_time is None:
+            return False
+        age = max(timedelta(0), self._aware_now() - presentation.fix_time)
+        return age <= grace_after
+
     def _presentation(
         self,
         status: LiveMapGpsStatus,

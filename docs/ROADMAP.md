@@ -264,11 +264,9 @@ selection. That behavior remains parked in issue #149.
 
 ### Phase C: Mapping and Operating Intelligence
 
-Status: local-first live-map foundation implemented; additional situational
-awareness is now split between issue #124 and approved umbrella issue #154.
+Status: complete for the current v4.2 map/POTA-marker scope.
 
-The implemented map path includes work from PRs #121, #125, #126, #127, and
-#152:
+The implemented map path now includes:
 
 - north-up live map in the situational area
 - latest valid GPS position centered in the viewport
@@ -286,21 +284,28 @@ The implemented map path includes work from PRs #121, #125, #126, #127, and
 - typed installed raster-MBTiles package discovery and priority
 - local-first resolution: installed package -> runtime cache -> online provider
 - authoritative installed coverage that does not silently require public internet
-- installed offline I-71 corridor package proven on `anvilmobile`
-- amortized full cache pruning from PR #152 / issue #151
-- map failure isolated from GPS, logging, shared spots, controls, and radio state
+- offline DAY and NIGHT regional packages for Ohio, Indiana, Kentucky, Michigan,
+  Pennsylvania, and West Virginia on the external RT_DATA SSD
+- automatic solar DAY/NIGHT selection with manual override support
+- persistent operator zoom through the supported installed-package range
+- lightweight POTA catalog markers queried by visible viewport on a background
+  worker
+- yellow park labels with full reference/name at zoom 14 and above
+- 24-pixel yellow/black park dots below zoom 14
+- 60-second last-valid-GPS grace period for POTA marker stability
+- safe empty-marker and disabled-radar canvas-layer handling
+- map/POTA/radar failure isolation from GPS, logging, shared spots, controls,
+  and radio state
 
-Issue #124 now tracks the remaining broad map-specific work:
+The earlier PAD-US / park-boundary polygon plan is intentionally dropped from the
+current roadmap. Approximate POTA catalog coordinates provide the desired operator
+awareness without introducing GIS geometry, spatial-index, boundary-correlation, or
+polygon-rendering complexity on the mobile platform. Future polygon work should not
+be treated as an implied next phase; it would require a new explicitly approved use
+case.
 
-- broader Ohio offline coverage
-- surrounding-state packages through the same mechanism
-- automatic location/time-based day/night selection
-- typed manual day/night override
-- separate operating-overlay provider/snapshot architecture
-- future PAD-US park-boundary rendering and spatial indexing
-
-Persistent operator zoom is tracked in #157. Future weather radar is parked in
-#163 so it does not distort the first retained-weather implementation.
+The old I-71 corridor package may remain as a small fallback artifact, but it is no
+longer the primary offline map deployment.
 
 ## Cross-Cutting Architecture Work
 

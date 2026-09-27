@@ -28,6 +28,10 @@ from rolling_thunder.live_radar_service import (
 )
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
+from rolling_thunder.pota_map_markers import (
+    PotaMapMarkerSnapshot,
+    project_pota_marker,
+)
 from rolling_thunder.weather_panel import WeatherPanelPresentation
 
 _BACKGROUND = "#0d1418"
@@ -43,6 +47,9 @@ _MARKER_OUTLINE = "#ffffff"
 _STATUS_BACKGROUND = "#10191e"
 _PHOTO_CACHE_LIMIT = 128
 _RADAR_PHOTO_CACHE_LIMIT = 128
+_POTA_MARKER_FILL = "#ffd400"
+_POTA_MARKER_OUTLINE = "#000000"
+_POTA_MARKER_TEXT = "#000000"
 _INFO_FONT_SIZE = 40
 _INFO_BOX_RIGHT = 680
 _INFO_BOX_BOTTOM = 306
@@ -253,7 +260,7 @@ def radar_matches_map(
 class LiveMapWidgets:
     """Render live map snapshots without performing tile, cache, radar, GPS, or weather I/O."""
 
-    def __init__(self, parent: Any) -> None:
+    def __init__(self, parent: Any, *, pota_label_min_zoom: int = 14, pota_dot_diameter_px: int = 12) -> None:
         import tkinter as tk
 
         self._tk = tk
@@ -281,6 +288,9 @@ class LiveMapWidgets:
 
         self._last_snapshot: LiveMapSnapshot | None = None
         self._last_radar_snapshot: LiveRadarSnapshot | None = None
+        self._last_pota_snapshot: PotaMapMarkerSnapshot | None = None
+        self._pota_label_min_zoom = pota_label_min_zoom
+        self._pota_dot_diameter_px = pota_dot_diameter_px
         self._last_size = (0, 0)
         self._info_controller = LiveMapInfoController()
 
@@ -297,6 +307,7 @@ class LiveMapWidgets:
         presentation: LiveMapPresentation,
         snapshot: LiveMapSnapshot | None,
         radar_snapshot: LiveRadarSnapshot | None = None,
+        pota_snapshot: PotaMapMarkerSnapshot | None = None,
         weather: WeatherPanelPresentation | None = None,
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
@@ -304,6 +315,7 @@ class LiveMapWidgets:
         size = (width, height)
         snapshot_changed = snapshot is not self._last_snapshot
         radar_changed = radar_snapshot is not self._last_radar_snapshot
+        pota_changed = pota_snapshot is not self._last_pota_snapshot
         size_changed = size != self._last_size
 
         if size_changed:
@@ -311,9 +323,12 @@ class LiveMapWidgets:
         elif snapshot_changed:
             self._update_base(self._last_snapshot, snapshot, width, height)
 
+        if size_changed or snapshot_changed or pota_changed:
+            self._draw_pota_markers(pota_snapshot, snapshot)
+
         if size_changed:
             self._draw_radar(radar_snapshot, snapshot)
-        elif snapshot_changed or radar_changed:
+        elif snapshot_changed or radar_changed or pota_changed:
             self._update_radar(
                 self._last_radar_snapshot,
                 radar_snapshot,
@@ -322,6 +337,7 @@ class LiveMapWidgets:
 
         self._last_snapshot = snapshot
         self._last_radar_snapshot = radar_snapshot
+        self._last_pota_snapshot = pota_snapshot
         self._last_size = size
 
         self._canvas.delete("map-overlay")
@@ -506,6 +522,81 @@ class LiveMapWidgets:
                 return
             self._photo_cache.pop(removable, None)
 
+    def _draw_pota_markers(
+        self,
+        pota: PotaMapMarkerSnapshot | None,
+        map_snapshot: LiveMapSnapshot | None,
+    ) -> None:
+        """Draw catalog pins above the base map and below weather radar."""
+        self._canvas.delete("map-pota")
+        if (
+            pota is None
+            or pota.viewport is None
+            or map_snapshot is None
+            or map_snapshot.viewport is None
+            or pota.viewport != map_snapshot.viewport
+        ):
+            return
+
+        viewport = pota.viewport
+        if viewport.zoom < self._pota_label_min_zoom:
+            radius = self._pota_dot_diameter_px / 2.0
+            for marker in pota.markers:
+                placement = project_pota_marker(marker, viewport)
+                self._canvas.create_oval(
+                    placement.x_px - radius,
+                    placement.y_px - radius,
+                    placement.x_px + radius,
+                    placement.y_px + radius,
+                    fill=_POTA_MARKER_FILL,
+                    outline=_POTA_MARKER_OUTLINE,
+                    width=2,
+                    tags="map-pota",
+                )
+        else:
+            occupied: list[tuple[int, int, int, int]] = []
+            for marker in pota.markers:
+                placement = project_pota_marker(marker, viewport)
+                text_item = self._canvas.create_text(
+                    placement.x_px,
+                    placement.y_px,
+                    text=f"{marker.reference}\n{marker.name}",
+                    fill=_POTA_MARKER_TEXT,
+                    font=("DejaVu Sans", 14, "bold"),
+                    justify="center",
+                    anchor="center",
+                    tags="map-pota",
+                )
+                bbox = self._canvas.bbox(text_item)
+                if bbox is None:
+                    self._canvas.delete(text_item)
+                    continue
+                padded = (bbox[0] - 7, bbox[1] - 5, bbox[2] + 7, bbox[3] + 5)
+                if any(
+                    not (
+                        padded[2] < other[0]
+                        or padded[0] > other[2]
+                        or padded[3] < other[1]
+                        or padded[1] > other[3]
+                    )
+                    for other in occupied
+                ):
+                    self._canvas.delete(text_item)
+                    continue
+                rectangle = self._canvas.create_rectangle(
+                    *padded,
+                    fill=_POTA_MARKER_FILL,
+                    outline=_POTA_MARKER_OUTLINE,
+                    width=2,
+                    tags="map-pota",
+                )
+                self._canvas.tag_lower(rectangle, text_item)
+                occupied.append(padded)
+
+        if self._canvas.find_withtag("map-pota"):
+            self._canvas.tag_raise("map-pota", "map-base")
+        self._raise_radar_layer()
+
     def _draw_radar(
         self,
         radar: LiveRadarSnapshot | None,
@@ -613,9 +704,24 @@ class LiveMapWidgets:
         self._radar_active_photos.pop(key, None)
 
     def _raise_radar_layer(self) -> None:
-        self._canvas.tag_raise("map-radar", "map-base")
+        """Keep optional POTA/radar layers ordered without referencing empty tags."""
+        pota_items = self._canvas.find_withtag("map-pota")
+        radar_items = self._canvas.find_withtag("map-radar")
+
+        if radar_items:
+            if pota_items:
+                self._canvas.tag_raise("map-radar", "map-pota")
+            else:
+                self._canvas.tag_raise("map-radar", "map-base")
+            if self._attribution_item is not None:
+                self._canvas.tag_raise(self._attribution_item, "map-radar")
+            return
+
         if self._attribution_item is not None:
-            self._canvas.tag_raise(self._attribution_item, "map-radar")
+            if pota_items:
+                self._canvas.tag_raise(self._attribution_item, "map-pota")
+            else:
+                self._canvas.tag_raise(self._attribution_item, "map-base")
 
     def _radar_photo_for_tile(
         self,

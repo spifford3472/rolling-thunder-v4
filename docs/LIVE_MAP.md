@@ -19,7 +19,10 @@ map:
   cache_retention_days: 7
   maximum_cached_tiles: 2048
   installed_packages:
-    - ../data/maps/rolling-thunder-i71-corridor-night-z0-z15-v1.mbtiles
+    # Production uses regional DAY and NIGHT packages on the RT_DATA SSD.
+    - /mnt/rolling-thunder-data/maps/packages/day/oh-day-z6-z17.mbtiles
+    - /mnt/rolling-thunder-data/maps/packages/night/oh-night-z6-z17.mbtiles
+    # Additional installed packages cover IN, KY, MI, PA, and WV.
   style: night
   online_attribution: © OpenStreetMap contributors
 ```
@@ -146,6 +149,38 @@ Map degradation remains independent from GPS:
 The marker remains visible over the neutral reference grid when base-map data is
 unavailable.
 
+## POTA Park Marker Layer
+
+Rolling Thunder uses the offline POTA catalog's approximate coordinates as a
+lightweight situational-awareness overlay. It does not load or render park
+boundary polygons.
+
+POTA catalog SQLite queries run on a dedicated background worker and are limited
+to the current visible map viewport. Tkinter receives only immutable marker
+snapshots.
+
+Presentation rules:
+
+- zoom 14 and above: yellow, black-outlined rectangles with the POTA reference on
+  line one and the full park name on line two
+- below zoom 14: 24-pixel yellow dots with black outlines and no text
+- overlapping high-zoom labels are suppressed rather than truncated
+- a 60-second last-valid-GPS grace period keeps markers stable through brief GPS
+  dropouts
+- stationary operation does not clear parks while valid GPS fixes continue
+- after the grace period expires, park markers clear until a valid fix returns
+- an empty marker viewport is a normal state and must not interrupt the Tk refresh
+  loop
+- radar may be disabled or empty without creating an invalid canvas-layer
+  dependency
+
+The layer order is base map -> POTA markers -> radar -> vehicle/status overlays
+when all layers exist. Missing optional layers are skipped safely.
+
+POTA catalog coordinates are approximate pins only. They are not navigation
+destinations, property boundaries, or activation-boundary evidence. The former
+PAD-US/polygon plan is intentionally not part of the current roadmap.
+
 ## Radar Layer Motion
 
 When radar is enabled, the visual stacking order is:
@@ -201,25 +236,21 @@ Offline regional coverage is supplied through separately generated, licensed
 MBTiles packages. Missing tiles inside installed coverage are never filled from
 the ordinary online provider.
 
-## Installed Offline Package
+## Installed Offline Packages
 
-The first supported offline package is the dark I-71 corridor map used for the
-normal Waynesville-to-Delaware drive.
-
-- package ID: `i71-corridor-night`
-- version: `1.0.0`
-- style: `night`
-- bounds: `-84.18,39.43,-82.82,40.42`
-- zoom range: `0–15`
-- tile count: `19,880`
-- installed size: approximately `206 MB`
-- SHA-256: `13ae1cf9c171b005f827710a2cc10034f71d4695ab33b6194e05b0a7c2ddfd41`
-
-Expected installation path:
+The production mobile deployment uses regional DAY and NIGHT MBTiles stored on
+the external `RT_DATA` SSD mounted at:
 
 ```text
-/home/geoff/projects/rolling-thunder-v4/data/maps/rolling-thunder-i71-corridor-night-z0-z15-v1.mbtiles
+/mnt/rolling-thunder-data/maps/packages
 ```
+
+Current regional coverage includes Ohio, Indiana, Kentucky, Michigan,
+Pennsylvania, and West Virginia. Each state has both DAY and NIGHT packages with
+zoom range 6–17. These packages are runtime data and are not committed to Git.
+
+The earlier approximately 206 MB I-71 corridor NIGHT package remains a useful
+small fallback artifact, but it is no longer the primary production map source.
 
 Installed packages must contain PNG raster tiles stored with TMS tile rows and
 must provide valid bounds, minimum and maximum zoom, attribution, and version
@@ -230,7 +261,8 @@ range. A missing or invalid tile inside that coverage does not authorize an
 online request. Outside installed coverage, cache and online fallback remain
 available.
 
-Generated MBTiles files are runtime data and must not be committed to Git.
+Rolling Thunder startup/deployment should treat the external SSD mount as a
+dependency before relying on the regional package paths.
 
 ## Safety and Failure Isolation
 
@@ -294,3 +326,27 @@ or radio state polling.
     remain usable throughout map/GPS/radar/network degradation.
 
 Record the visible results in the draft pull request before approval.
+
+
+## POTA catalog markers
+
+When `pota_map.enabled` is true, the dashboard reads the separate offline POTA
+catalog through a dedicated single-worker service. SQLite viewport queries never run
+on the Tkinter thread. Marker snapshots are accepted for rendering only when their
+viewport exactly matches the currently published base-map viewport, preventing stale
+markers from being painted after movement or zoom changes.
+
+Layer order is:
+
+1. base raster map
+2. POTA catalog markers
+3. weather radar
+4. vehicle and status overlays
+
+At zoom 14 and higher, a park is a yellow rectangle with a black outline and centered
+black text: POTA reference on line one and full park name on line two. The rectangle
+uses Tk's rendered text bounds so the name is not truncated. Overlapping labels are
+suppressed. Below zoom 14, parks are yellow dots with black outlines and no text.
+
+The POTA coordinate is an approximate catalog pin only. It is not a park boundary,
+navigation destination, or activation-area determination.

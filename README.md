@@ -24,36 +24,33 @@ The authoritative design is:
 
 ## Current Milestone
 
-**Milestone 10 — Hardware-Backed Mapping and Operating Intelligence**
+**v4.2 mapping and operating-intelligence work**
 
-The current checkpoint implements the shared POTA/DX operating-intelligence
-panel tracked by GitHub issues #129 and #146.
+The current Raspberry Pi dashboard combines the existing shared POTA/DX operating
+workflow with the completed local-first map stack. The installed mobile build now
+provides:
 
-The running Raspberry Pi dashboard now provides:
+- regional offline DAY and NIGHT MBTiles for Ohio, Indiana, Kentucky, Michigan,
+  Pennsylvania, and West Virginia from the external RT_DATA SSD
+- automatic solar DAY/NIGHT map selection with manual override support
+- persistent operator zoom across the installed zoom range
+- retained weather-radar overlay support without blocking the base map
+- an offline POTA park catalog stored separately from the contact database
+- visible-viewport POTA marker queries on a background worker
+- yellow reference/name labels at zoom 14 and above
+- 24-pixel yellow/black park dots below zoom 14
+- a 60-second last-valid-GPS grace period so brief GPS loss does not flash park
+  markers on and off
+- safe behavior when a viewport contains no parks or radar is disabled
+- local contact logging and radio/physical-control operation independent of map,
+  POTA-marker, radar, Forge, or public-network availability
 
-- one provider-neutral shared panel for POTA and DX
-- durable Forge-derived last-known spot snapshots
-- POTA band, mode-group, and age filtering
-- DX callsign, frequency, mode, age, optional name/grid, and bounded metadata
-- stable identity-based selection across snapshot refreshes
-- physical-controller and keyboard navigation through the same command path
-- first-action staging with explicit cancellation and invalidation
-- truthful live, cached, retained, disabled, and provider-health presentation
-- local-first contact logging independent of Forge availability
+POTA coordinates are approximate catalog pins. They are useful for operator
+awareness but are not navigation destinations or activation-boundary evidence.
 
-When Forge is enabled, live POTA and DX ingestion is owned by Forge. The Pi does
-not also poll the public POTA API directly. The legacy direct-POTA
-implementation and cache remain only as a rollback/compatibility path when
-Forge is disabled.
-
-Checkpoint 7 intentionally does not tune the radio from the new shared panel.
-Activation stages the selected spot only. Checkpoint 8 will connect the second
-explicit operator confirmation to the existing typed `ReceiveTuningService`.
-
-The temporary checkpoint-7 Forge-to-Pi bench has been validated with real POTA
-and DXSpider data and the installed physical controls. Permanent Forge systemd,
-service-account, firewall, authentication/TLS, and deployment hardening remain
-checkpoint-8 work.
+The earlier park-boundary polygon/PAD-US plan is not part of the current roadmap.
+The lightweight coordinate-marker approach met the operational goal without adding
+GIS geometry processing to the mobile platform.
 
 ## Configuration
 
