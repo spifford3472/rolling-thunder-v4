@@ -293,17 +293,13 @@ class SharedSpotPanelController:
         current_frequency: Frequency | None = None,
     ) -> SharedSpotPanelState:
         """Activate one provider view and apply its current-band default."""
-        if provider is not self._provider:
-            self._selection.invalidate_context()
         self._provider = provider
 
         band = self._supported_shared_band(current_frequency)
         if provider is SpotProvider.POTA:
-            if band is not self._pota_band:
-                    self._pota_band = band
+            self._pota_band = band
         else:
-            if band is not self._dx_band:
-                    self._dx_band = band
+            self._dx_band = band
 
         return self.state
 
@@ -320,54 +316,54 @@ class SharedSpotPanelController:
         return self.state
 
     def clear_selection(self) -> SharedSpotPanelState:
-        """Clear selected and staged spot state."""
+        """Clear the current stable spot selection."""
         self._selection.clear_selection()
         return self.state
 
     def previous_pota_band(self) -> SharedSpotPanelState:
-        """Cycle to the previous supported POTA band and invalidate staging."""
+        """Cycle to the previous supported POTA band."""
         current = _POTA_BANDS.index(self._pota_band)
         self._pota_band = _POTA_BANDS[(current - 1) % len(_POTA_BANDS)]
         return self.state
 
     def next_pota_band(self) -> SharedSpotPanelState:
-        """Cycle to the next supported POTA band and invalidate staging."""
+        """Cycle to the next supported POTA band."""
         current = _POTA_BANDS.index(self._pota_band)
         self._pota_band = _POTA_BANDS[(current + 1) % len(_POTA_BANDS)]
         return self.state
 
     def previous_pota_mode(self) -> SharedSpotPanelState:
-        """Cycle to the previous POTA mode group and invalidate staging."""
+        """Cycle to the previous POTA mode group."""
         current = _POTA_MODES.index(self._pota_mode_filter)
         self._pota_mode_filter = _POTA_MODES[(current - 1) % len(_POTA_MODES)]
         return self.state
 
     def next_pota_mode(self) -> SharedSpotPanelState:
-        """Cycle to the next POTA mode group and invalidate staging."""
+        """Cycle to the next POTA mode group."""
         current = _POTA_MODES.index(self._pota_mode_filter)
         self._pota_mode_filter = _POTA_MODES[(current + 1) % len(_POTA_MODES)]
         return self.state
 
     def previous_dx_band(self) -> SharedSpotPanelState:
-        """Cycle to the previous supported DX band and invalidate staging."""
+        """Cycle to the previous supported DX band."""
         current = _POTA_BANDS.index(self._dx_band)
         self._dx_band = _POTA_BANDS[(current - 1) % len(_POTA_BANDS)]
         return self.state
 
     def next_dx_band(self) -> SharedSpotPanelState:
-        """Cycle to the next supported DX band and invalidate staging."""
+        """Cycle to the next supported DX band."""
         current = _POTA_BANDS.index(self._dx_band)
         self._dx_band = _POTA_BANDS[(current + 1) % len(_POTA_BANDS)]
         return self.state
 
     def previous_dx_mode(self) -> SharedSpotPanelState:
-        """Cycle to the previous DX mode group and invalidate staging."""
+        """Cycle to the previous DX mode group."""
         current = _POTA_MODES.index(self._dx_mode_filter)
         self._dx_mode_filter = _POTA_MODES[(current - 1) % len(_POTA_MODES)]
         return self.state
 
     def next_dx_mode(self) -> SharedSpotPanelState:
-        """Cycle to the next DX mode group and invalidate staging."""
+        """Cycle to the next DX mode group."""
         current = _POTA_MODES.index(self._dx_mode_filter)
         self._dx_mode_filter = _POTA_MODES[(current + 1) % len(_POTA_MODES)]
         return self.state
