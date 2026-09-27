@@ -1084,7 +1084,7 @@ Checkpoint 8 implements the first shared POTA/DX Ring-2 slice:
 - stable identity-based selection
 - single-press receive-tuning from the current stable selection
 - `ReceiveTuningService` as the sole radio authority
-- first press stages only and performs no CAT
+- single press snapshots the current stable selection and routes through the typed receive-tuning path
 - single press snapshots and tunes only the exact current selected target
 - selection/filter/context changes never create persistent receive-confirmation state
 - cross-band success presents `SET BAND TO <BAND> METERS — TUNE ATAS-120`
@@ -1896,8 +1896,8 @@ The installed checkpoint-8 shared POTA/DX path has been accepted on `anvilmobile
 
 Accepted evidence includes:
 
-- POTA first press stages only and causes no radio change
-- DX first press stages only and causes no radio change
+- POTA single press tunes only the current selected receive target
+- DX single press tunes only the current selected receive target
 - same-band POTA single press tunes as expected without a false band/ATAS warning
 - same-band DX single press tunes the exact selected DX frequency without a false band/ATAS warning
 - cross-band POTA receive frequency/mode tuning succeeds with the manual band/ATAS handoff
