@@ -32,14 +32,11 @@ The checked-in unit assumes the established production worktree:
 and:
 
 ```text
-/home/geoff/projects/rolling-thunder-v4-regional/.venv/bin/rolling-thunder-ui
+/home/geoff/projects/rolling-thunder-v4/.venv/bin/rolling-thunder-ui
 /home/geoff/projects/rolling-thunder-v4-regional/config/rolling-thunder.yaml
 ```
 
-The service runs as `geoff` and defaults to display `:0` with
-`/home/geoff/.Xauthority`. The launcher permits those values and the startup
-delay to be overridden through environment variables if the installed desktop
-session requires different values.
+The service runs as `geoff` and uses the production arrangement verified on `anvilmobile`: the regional worktree is the working directory, while the Python environment is `/home/geoff/projects/rolling-thunder-v4/.venv`. LightDM/Xorg provides display `:0`, `/home/geoff/.Xauthority`, and `/run/user/1000`. The launcher also refuses to start when an existing Rolling Thunder dashboard process is already running.
 
 ## Installation
 
