@@ -207,7 +207,7 @@ When a snapshot or filtered view is replaced:
 - selection remains only if the selected identity remains visible
 - the current row position is resolved from the replacement view
 - selection clears if the identity disappears
-- staging clears if the selected identity disappears
+- selection clears if the selected identity disappears
 - no neighboring identity becomes selected automatically
 
 Rotating the encoder or otherwise changing the row selection also clears any
