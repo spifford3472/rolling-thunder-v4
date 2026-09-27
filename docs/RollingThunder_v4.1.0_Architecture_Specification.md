@@ -53,7 +53,7 @@ This revision replaces the earlier fragmented specification and addendum documen
 - Data ownership and service boundaries
 - Failure and graceful-degradation behavior
 - Event and state-flow guidance
-- Checkpoint-8 shared POTA/DX two-press receive-tuning contract
+- Shared POTA/DX single-press receive-tuning contract
 - Final FT-891 best-effort band-context and manual band/ATAS handoff decision
 - Forge private-network trust-boundary decision
 - Installed hardware and offline-continuity acceptance evidence
@@ -1082,11 +1082,11 @@ Checkpoint 8 implements the first shared POTA/DX Ring-2 slice:
 - durable Pi retained-cache behavior
 - provider-specific band/mode filters
 - stable identity-based selection
-- exact two-press receive-tuning staging
+- single-press receive-tuning from the current stable selection
 - `ReceiveTuningService` as the sole radio authority
 - first press stages only and performs no CAT
-- second press tunes only the exact same still-valid target
-- selection/filter/context/Back/radio invalidation clears staging
+- single press snapshots and tunes only the exact current selected target
+- selection/filter/context changes never create persistent receive-confirmation state
 - cross-band success presents `SET BAND TO <BAND> METERS — TUNE ATAS-120`
 - no PTT, MOX, keying, tuner, power, or transmit authority
 
@@ -1369,7 +1369,7 @@ See `docs/FORGE_DEPLOYMENT.md` for the production trust boundary and rollback re
 | Internet unavailable | Local logging continues |
 | GPS position unavailable | Log without position; use system time if necessary |
 | GPS time unavailable | Use system clock |
-| Radio disconnected | Commit disabled; pending callsign may remain; staged shared-spot action is invalidated |
+| Radio disconnected | Commit disabled; pending callsign may remain; shared-spot receive action is rejected |
 | Voice unavailable | Ordinary manual voice-based logging unavailable |
 | Local database unwritable | Commit disabled |
 | ESP32 disconnected | UI remains visible; physical controls unavailable |
@@ -1567,18 +1567,18 @@ The system must:
 2. Disconnect, power off, or otherwise make CAT unavailable in a controlled parked test.
 3. Confirm the UI displays radio unavailability.
 4. Confirm Commit is disabled when required radio state is unavailable.
-5. Confirm any staged shared-spot action is cleared.
+5. Confirm no shared-spot receive action is submitted.
 6. Reconnect or power the radio back on.
 7. Confirm valid state returns.
-8. Confirm the old staged target is not resurrected or automatically executed.
+8. Confirm no prior target is resurrected or automatically executed.
 
-**Pass condition:** No incomplete QSO or stale staged action is silently executed.
+**Pass condition:** No incomplete QSO or stale target is silently executed.
 
 ## Acceptance Test 4 — Cross-Band Receive Tune and Operator Handoff
 
 1. Begin on one supported band.
 2. Select a shared POTA or DX target on a different supported band.
-3. Confirm the first activation stages only and changes nothing on the radio.
+3. Confirm a single activation submits only the currently selected receive target.
 4. Activate the same still-valid target a second time.
 5. Confirm best-effort band-context recall occurs before the exact target frequency.
 6. Confirm final receive frequency and mode are correct.
@@ -1898,16 +1898,15 @@ Accepted evidence includes:
 
 - POTA first press stages only and causes no radio change
 - DX first press stages only and causes no radio change
-- same-band POTA second press tunes as expected without a false band/ATAS warning
-- same-band DX second press tunes the exact selected DX frequency without a false band/ATAS warning
+- same-band POTA single press tunes as expected without a false band/ATAS warning
+- same-band DX single press tunes the exact selected DX frequency without a false band/ATAS warning
 - cross-band POTA receive frequency/mode tuning succeeds with the manual band/ATAS handoff
 - cross-band DX receive frequency/mode tuning succeeds with the manual band/ATAS handoff
-- selection change invalidates staging
-- band-filter change invalidates staging
-- mode-filter change invalidates staging
-- Back cancels staging without tuning
-- radio power loss invalidates staging
-- reconnection does not resurrect or execute an old staged target
+- selection changes preserve stable identity without creating confirmation state
+- band-filter and mode-filter changes cannot retarget an activation sideways
+- Back clears selection without tuning
+- radio power loss blocks activation
+- reconnection does not resurrect or execute an old target
 - Enhanced CAT remains the approved receive-control interface
 - the Standard TX-capable FT-891 USB interface remains closed
 - no PTT, MOX, keying, tuner, power, or transmit action occurs
