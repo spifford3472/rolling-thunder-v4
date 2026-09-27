@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-CATALOG_SCHEMA_VERSION: Final = 2
+CATALOG_SCHEMA_VERSION: Final = 3
 
 _HEADER_ALIASES: Final[dict[str, tuple[str, ...]]] = {
     "reference": ("reference", "parkreference", "park_reference"),
@@ -126,7 +126,8 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             park_count INTEGER NOT NULL CHECK (park_count >= 0)
         );
         CREATE TABLE parks (
-            reference TEXT PRIMARY KEY,
+            reference TEXT NOT NULL,
+            location_code TEXT NOT NULL,
             name TEXT NOT NULL,
             program TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -135,20 +136,16 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             longitude REAL NOT NULL CHECK (longitude BETWEEN -180 AND 180),
             grid TEXT,
             website TEXT,
-            notes TEXT
+            notes TEXT,
+            PRIMARY KEY (reference, location_code)
         );
-        CREATE TABLE park_locations (
-            park_reference TEXT NOT NULL,
-            location_code TEXT NOT NULL,
-            PRIMARY KEY (park_reference, location_code),
-            FOREIGN KEY (park_reference) REFERENCES parks(reference) ON DELETE CASCADE
-        );
+        CREATE INDEX parks_reference_index ON parks(reference);
         CREATE INDEX parks_program_index ON parks(program, reference);
         CREATE INDEX parks_latitude_index ON parks(latitude);
         CREATE INDEX parks_longitude_index ON parks(longitude);
         CREATE INDEX parks_grid_index ON parks(grid);
-        CREATE INDEX park_locations_code_index
-            ON park_locations(location_code, park_reference);
+        CREATE INDEX parks_location_code_index
+            ON parks(location_code, reference);
         """
     )
 
@@ -243,35 +240,30 @@ def import_pota_catalog_csvs(
                             grid = _optional(row, headers, "grid")
                             website = _optional(row, headers, "website")
                             notes = _optional(row, headers, "notes")
-                            connection.execute(
-                                """
-                                INSERT INTO parks (
-                                    reference, name, program, status, park_type,
-                                    latitude, longitude, grid, website, notes
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                """,
-                                (
-                                    reference,
-                                    name,
-                                    record_program,
-                                    status,
-                                    park_type,
-                                    latitude,
-                                    longitude,
-                                    grid,
-                                    website,
-                                    notes,
-                                ),
-                            )
-                            connection.executemany(
-                                """
-                                INSERT INTO park_locations (
-                                    park_reference, location_code
-                                ) VALUES (?, ?)
-                                """,
-                                ((reference, location) for location in locations),
-                            )
-                            park_count += 1
+                            for location in locations:
+                                connection.execute(
+                                    """
+                                    INSERT INTO parks (
+                                        reference, location_code, name, program,
+                                        status, park_type, latitude, longitude,
+                                        grid, website, notes
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    """,
+                                    (
+                                        reference,
+                                        location,
+                                        name,
+                                        record_program,
+                                        status,
+                                        park_type,
+                                        latitude,
+                                        longitude,
+                                        grid,
+                                        website,
+                                        notes,
+                                    ),
+                                )
+                                park_count += 1
                         except (
                             KeyError,
                             TypeError,
