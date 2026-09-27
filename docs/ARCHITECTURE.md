@@ -85,7 +85,7 @@ Domain code represents stable project concepts and validation rules, including:
 - contact and synchronization state
 - provider-neutral POTA/DX spot records
 - stable spot identities
-- exact staged receive actions
+- exact per-activation receive actions
 - immutable presentation and service snapshots
 
 Domain code does not depend on Tkinter, pyserial, HTTP clients, SQLite details,
@@ -185,7 +185,7 @@ FT-891 band state, not a tuner command, and not antenna verification.
 
 The shared spot architecture defines immutable provider-neutral POTA/DX records,
 canonical complete snapshots, stable identities, provider-specific filters,
-stable selection, exact staged receive actions, and the two-press operator
+stable selection, exact per-activation receive actions, and the single-press operator
 contract.
 
 Forge owns live public POTA and DXSpider provider access. The Pi receives only
@@ -653,8 +653,8 @@ Accepted on `anvilmobile` with the real FT-891 and installed controls:
 - DX band/mode filtering
 - independent POTA/DX filter state
 - current-band activation default with 20-meter fallback
-- exact two-press POTA/DX staging
-- no radio change on first press
+- exact single-press POTA/DX receive submission
+- no persistent receive-confirmation stage
 - same-band POTA exact receive tuning
 - same-band DX exact receive tuning
 - cross-band POTA exact receive frequency/mode tuning
