@@ -76,7 +76,7 @@ The dashboard queries only rows inside the current map viewport on a background
 worker. At map zoom 14 and higher, each visible park is shown as a yellow,
 black-outlined rectangle containing the POTA reference on the first line and the full
 park name on the second line. Below zoom 14, the same location is represented by a
-yellow dot with a black outline and no text. Overlapping high-zoom labels are
+24-pixel yellow dot with a black outline and no text. Overlapping high-zoom labels are
 suppressed rather than stacked into unreadable text.
 
 The marker layer is drawn above the base map and below weather radar, vehicle, and
@@ -89,3 +89,6 @@ inside a valid activation area. Operators must use appropriate authoritative map
 to determine activation boundaries.
 
 POTA map markers retain the last valid GPS-based viewport through brief GPS dropouts. The default grace period is 60 seconds (`pota_map.gps_grace_period_s`); after that, markers are cleared until a valid fix returns. A stationary vehicle does not clear markers while valid GPS fixes continue.
+
+
+Checkpoint 3 completes the current POTA map-awareness scope. The former polygon/PAD-US follow-on is intentionally not part of the current roadmap; any future boundary work requires a new explicitly approved operator use case.
