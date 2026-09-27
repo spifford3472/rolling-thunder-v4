@@ -77,6 +77,7 @@ from rolling_thunder.pi_forge_weather_polling import (
 )
 from rolling_thunder.pi_forge_weather_service import PiForgeWeatherState
 from rolling_thunder.pota_enrichment import PotaEnrichmentService
+from rolling_thunder.pota_map_markers import PotaMapMarkerService, PotaMapMarkerSnapshot
 from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
 from rolling_thunder.pota_runtime import build_pota_spot_polling
 from rolling_thunder.pota_spot_polling import PotaSpotPollingService
@@ -128,6 +129,7 @@ class ApplicationRuntime:
     gps_polling: GPSPollingService | None = None
     clock_sync: ClockSynchronizationService | None = None
     live_map: LiveMapService | None = None
+    pota_map_markers: PotaMapMarkerService | None = None
     live_radar: LiveRadarOverlayService | None = None
     map_zoom_settings: MapZoomSettingsController | None = None
     map_solar: MapSolarStyleService | None = None
@@ -192,6 +194,7 @@ class ApplicationRuntime:
         enrichment_executor: Executor | None = None,
         map_executor: Executor | None = None,
         radar_executor: Executor | None = None,
+        pota_map_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -438,6 +441,13 @@ class ApplicationRuntime:
             )
             gps_polling.add_listener(map_solar.observe_gps_state)
 
+        pota_map_markers: PotaMapMarkerService | None = None
+        if map_config.enabled and config.pota_map.enabled:
+            pota_map_markers = PotaMapMarkerService(
+                config.pota_map.catalog_path,
+                executor=pota_map_executor,
+            )
+
         if config.radar.enabled:
             forge_api_url = config.forge.api_url
             if forge_api_url is None:
@@ -471,6 +481,7 @@ class ApplicationRuntime:
             gps_polling=gps_polling,
             clock_sync=clock_sync,
             live_map=live_map,
+            pota_map_markers=pota_map_markers,
             live_radar=live_radar,
             map_zoom_settings=map_zoom_settings,
             map_solar=map_solar,
@@ -522,6 +533,13 @@ class ApplicationRuntime:
         if self.live_map is None:
             return None
         return self.live_map.latest_state
+
+    @property
+    def latest_pota_map_marker_state(self) -> PotaMapMarkerSnapshot | None:
+        """Return immutable visible POTA marker state without performing I/O."""
+        if self.pota_map_markers is None:
+            return None
+        return self.pota_map_markers.latest_state
 
     @property
     def latest_live_radar_state(self) -> LiveRadarSnapshot | None:
@@ -597,6 +615,8 @@ class ApplicationRuntime:
             self.pi_forge_location_publishing.start()
         if self.live_map is not None:
             self.live_map.start()
+        if self.pota_map_markers is not None:
+            self.pota_map_markers.start()
         if self.map_solar is not None:
             initial_gps = (
                 self.gps_polling.latest_state
@@ -652,6 +672,8 @@ class ApplicationRuntime:
             self.live_radar.stop()
         if self.map_solar is not None:
             self.map_solar.stop()
+        if self.pota_map_markers is not None:
+            self.pota_map_markers.stop()
         if self.live_map is not None:
             self.live_map.stop()
         if self.operator_preferences is not None:
