@@ -159,7 +159,6 @@ class SharedSpotPanelState:
     provider_health: ForgeRemoteProviderHealth | None
     rows: tuple[SharedSpotPanelRow, ...]
     selected_identity: SpotIdentity | None
-    staged_identity: SpotIdentity | None
     pota_band: RadioBand
     pota_mode_filter: SharedSpotModeFilter
     pota_maximum_age: timedelta
@@ -238,16 +237,6 @@ class SharedSpotPanelController:
         """Return the selected stable identity after synchronizing source state."""
         return self._selection_state().selected_identity
 
-    @property
-    def staged_identity(self) -> SpotIdentity | None:
-        """Return the currently valid staged identity after source synchronization."""
-        return self._selection_state().staged_identity
-
-    @property
-    def staged_action(self) -> StagedSpotAction | None:
-        """Return legacy staged state retained for compatibility tests."""
-        return self._selection_state().staged_action
-
     def selected_tune_action(self) -> StagedSpotAction | None:
         """Snapshot the currently selected receive target without persistent staging."""
         selected = self.selected_spot
@@ -290,7 +279,6 @@ class SharedSpotPanelController:
             provider_health=provider_health,
             rows=rows,
             selected_identity=selection.selected_identity,
-            staged_identity=selection.staged_identity,
             pota_band=self._pota_band,
             pota_mode_filter=self._pota_mode_filter,
             pota_maximum_age=self._pota_maximum_age,
@@ -312,12 +300,10 @@ class SharedSpotPanelController:
         band = self._supported_shared_band(current_frequency)
         if provider is SpotProvider.POTA:
             if band is not self._pota_band:
-                self._selection.cancel_staging()
-            self._pota_band = band
+                    self._pota_band = band
         else:
             if band is not self._dx_band:
-                self._selection.cancel_staging()
-            self._dx_band = band
+                    self._dx_band = band
 
         return self.state
 
@@ -338,88 +324,62 @@ class SharedSpotPanelController:
         self._selection.clear_selection()
         return self.state
 
-    def stage_selected(self) -> SharedSpotPanelState:
-        """Stage action-critical values without performing radio work."""
-        self._sync_selection()
-        self._selection.stage_selected()
-        return self.state
-
-    def cancel_staging(self) -> SharedSpotPanelState:
-        """Cancel shared staged state without performing external work."""
-        self._selection.cancel_staging()
-        return self.state
-
-    def invalidate_radio(self) -> SharedSpotPanelState:
-        """Invalidate staging when the latest radio state is unsafe for tuning."""
-        self._selection.invalidate_radio()
-        return self.state
-
     def previous_pota_band(self) -> SharedSpotPanelState:
         """Cycle to the previous supported POTA band and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_BANDS.index(self._pota_band)
         self._pota_band = _POTA_BANDS[(current - 1) % len(_POTA_BANDS)]
         return self.state
 
     def next_pota_band(self) -> SharedSpotPanelState:
         """Cycle to the next supported POTA band and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_BANDS.index(self._pota_band)
         self._pota_band = _POTA_BANDS[(current + 1) % len(_POTA_BANDS)]
         return self.state
 
     def previous_pota_mode(self) -> SharedSpotPanelState:
         """Cycle to the previous POTA mode group and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_MODES.index(self._pota_mode_filter)
         self._pota_mode_filter = _POTA_MODES[(current - 1) % len(_POTA_MODES)]
         return self.state
 
     def next_pota_mode(self) -> SharedSpotPanelState:
         """Cycle to the next POTA mode group and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_MODES.index(self._pota_mode_filter)
         self._pota_mode_filter = _POTA_MODES[(current + 1) % len(_POTA_MODES)]
         return self.state
 
     def previous_dx_band(self) -> SharedSpotPanelState:
         """Cycle to the previous supported DX band and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_BANDS.index(self._dx_band)
         self._dx_band = _POTA_BANDS[(current - 1) % len(_POTA_BANDS)]
         return self.state
 
     def next_dx_band(self) -> SharedSpotPanelState:
         """Cycle to the next supported DX band and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_BANDS.index(self._dx_band)
         self._dx_band = _POTA_BANDS[(current + 1) % len(_POTA_BANDS)]
         return self.state
 
     def previous_dx_mode(self) -> SharedSpotPanelState:
         """Cycle to the previous DX mode group and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_MODES.index(self._dx_mode_filter)
         self._dx_mode_filter = _POTA_MODES[(current - 1) % len(_POTA_MODES)]
         return self.state
 
     def next_dx_mode(self) -> SharedSpotPanelState:
         """Cycle to the next DX mode group and invalidate staging."""
-        self._selection.cancel_staging()
         current = _POTA_MODES.index(self._dx_mode_filter)
         self._dx_mode_filter = _POTA_MODES[(current + 1) % len(_POTA_MODES)]
         return self.state
 
     def reset_pota_filters(self) -> SharedSpotPanelState:
         """Restore the current mobile 20-meter SSB POTA defaults."""
-        self._selection.cancel_staging()
         self._pota_band = _DEFAULT_POTA_BAND
         self._pota_mode_filter = SharedSpotModeFilter.SSB
         return self.state
 
     def reset_dx_filters(self) -> SharedSpotPanelState:
         """Restore the mobile 20-meter all-mode DX defaults."""
-        self._selection.cancel_staging()
         self._dx_band = _DEFAULT_POTA_BAND
         self._dx_mode_filter = SharedSpotModeFilter.ALL
         return self.state
