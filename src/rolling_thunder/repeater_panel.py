@@ -34,7 +34,7 @@ class StagedRepeaterActiveAction:
     target_active: bool
 
     @classmethod
-    def from_nearby(cls, item: NearbyRepeater) -> "StagedRepeaterActiveAction":
+    def from_nearby(cls, item: NearbyRepeater) -> StagedRepeaterActiveAction:
         return cls(
             repeater=item.repeater,
             effective_active=item.effective_active,
