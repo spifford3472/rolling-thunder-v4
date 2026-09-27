@@ -66,9 +66,24 @@ The database records:
 
 POTA state exports can contain the same park reference in multiple state files. The catalog therefore keys park occurrences by `(reference, location_code)`, preserving each POTA state/location occurrence instead of assuming the reference alone is unique. A park whose `locationDesc` contains multiple locations is likewise represented once for each location code. Indexes support reference, program, location, grid, latitude, and longitude candidate selection.
 
-## Separation from polygons
+## Map markers
 
-This database stores POTA reference points and descriptive catalog data only.
-Checkpoint 3 will add boundary geometry through a separate source/representation.
-A polygon must never be invented from a POTA coordinate, and missing polygon
-coverage must not make a valid POTA catalog record disappear.
+Checkpoint 3 intentionally uses these catalog coordinates as lightweight map markers
+instead of loading park boundary polygons on the Raspberry Pi. This keeps the map
+offline-friendly and avoids GIS geometry processing.
+
+The dashboard queries only rows inside the current map viewport on a background
+worker. At map zoom 14 and higher, each visible park is shown as a yellow,
+black-outlined rectangle containing the POTA reference on the first line and the full
+park name on the second line. Below zoom 14, the same location is represented by a
+yellow dot with a black outline and no text. Overlapping high-zoom labels are
+suppressed rather than stacked into unreadable text.
+
+The marker layer is drawn above the base map and below weather radar, vehicle, and
+status overlays. Multi-location catalog occurrences sharing the same reference, name,
+and coordinate render as one marker.
+
+These coordinates remain approximate POTA catalog pins. A marker is **not** a
+navigation destination, property boundary, or guarantee that the coordinate itself is
+inside a valid activation area. Operators must use appropriate authoritative mapping
+to determine activation boundaries.
