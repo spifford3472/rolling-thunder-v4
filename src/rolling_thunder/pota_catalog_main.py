@@ -1,4 +1,4 @@
-"""Import a validated POTA park CSV into Rolling Thunder's offline catalog."""
+"""Import validated POTA park CSVs into Rolling Thunder's offline catalog."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from rolling_thunder.pota_catalog import PotaCatalogImportError, import_pota_catalog_csv
+from rolling_thunder.pota_catalog import PotaCatalogImportError, import_pota_catalog_csvs
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -14,7 +14,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="rolling-thunder-pota-catalog",
         description="Validate and atomically replace the offline POTA park catalog.",
     )
-    parser.add_argument("source", type=Path, help="POTA park CSV file")
+    parser.add_argument(
+        "sources",
+        type=Path,
+        nargs="+",
+        help="one or more POTA park CSV files (shell globs are supported)",
+    )
     parser.add_argument(
         "--database",
         type=Path,
@@ -31,8 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     try:
-        result = import_pota_catalog_csv(
-            args.source,
+        result = import_pota_catalog_csvs(
+            args.sources,
             args.database,
             source_version=args.source_version,
         )
@@ -43,6 +48,7 @@ def main() -> int:
     print(
         "POTA catalog imported: "
         f"parks={result.park_count} "
+        f"sources={len(result.source_paths)} "
         f"database={result.database_path} "
         f"sha256={result.source_sha256}"
     )
