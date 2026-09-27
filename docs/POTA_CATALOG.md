@@ -27,21 +27,22 @@ Required logical CSV fields:
 - longitude
 - location(s)
 
+The current state export also provides `grid`, `website`, and `notes`; Rolling Thunder retains those fields when present. Changing activity counters (`attempts`, `activations`, `qsos`) and operator-specific counters (`my_activations`, `my_hunted_qsos`) are intentionally ignored.
+
 Recognized common aliases include `parkReference`, `parkName`, `lat`, `lon`,
-`lng`, and `locationDesc`. Optional status/active and park-type fields are retained
-when present.
+`lng`, and `locationDesc`. Optional status/active and park-type fields are retained when present.
 
 ## Import
 
 From the repository virtual environment:
 
 ```bash
-rolling-thunder-pota-catalog /path/to/parks.csv \
+rolling-thunder-pota-catalog /path/to/pota-states/*.csv \
   --database data/pota/pota-catalog.db \
   --source-version YYYY-MM-DD
 ```
 
-The command reports the imported park count, destination, and SHA-256 checksum.
+The shell expands the glob to one or more state CSV files. All files are validated into one staging database. The command reports the imported park count, source-file count, destination, and a deterministic SHA-256 checksum representing the complete ordered source set.
 
 ## Safety and atomic promotion
 
@@ -56,8 +57,9 @@ database atomically.
 The database records:
 
 - catalog schema version
-- source filename
-- SHA-256 checksum
+- source filename for a single file, or source-file count summary for a multi-file import
+- source-file count
+- deterministic SHA-256 checksum for the complete source set
 - optional source version/date
 - UTC import timestamp
 - park count
