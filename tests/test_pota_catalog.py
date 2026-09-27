@@ -34,7 +34,7 @@ def test_import_creates_normalized_catalog_and_metadata(tmp_path: Path) -> None:
         imported_at=datetime(2026, 9, 27, 20, 0, tzinfo=UTC),
     )
 
-    assert result.park_count == 2
+    assert result.park_count == 3
     with sqlite3.connect(database) as connection:
         parks = connection.execute(
             """
@@ -51,7 +51,7 @@ def test_import_creates_normalized_catalog_and_metadata(tmp_path: Path) -> None:
         ("US-9999", "US-IN", "Example Trail", "US", "inactive"),
         ("US-9999", "US-OH", "Example Trail", "US", "inactive"),
     ]
-    assert metadata == ("2026-09-27", 2)
+    assert metadata == ("2026-09-27", 3)
 
 
 def test_reimport_atomically_replaces_prior_catalog(tmp_path: Path) -> None:
@@ -235,3 +235,40 @@ def test_bad_later_state_file_preserves_last_known_good_catalog(tmp_path: Path) 
         import_pota_catalog_csvs((ohio, broken), database)
 
     assert database.read_bytes() == original_database
+
+
+def test_matching_duplicate_occurrence_across_files_is_deduplicated(
+    tmp_path: Path,
+) -> None:
+    arkansas = tmp_path / "arkansas.csv"
+    neighbor = tmp_path / "neighbor.csv"
+    database = tmp_path / "pota-catalog.db"
+    header = "reference,name,latitude,longitude,grid,locationDesc\n"
+    row = "US-5000,Shared Park,35.0,-92.0,EM35aa,US-AR\n"
+    write_csv(arkansas, header + row)
+    write_csv(neighbor, header + row)
+
+    result = import_pota_catalog_csvs((arkansas, neighbor), database)
+
+    assert result.park_count == 1
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute(
+            "SELECT reference, location_code, name FROM parks"
+        ).fetchall()
+    assert rows == [("US-5000", "US-AR", "Shared Park")]
+
+
+def test_conflicting_duplicate_occurrence_across_files_is_rejected(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "a.csv"
+    second = tmp_path / "b.csv"
+    database = tmp_path / "pota-catalog.db"
+    header = "reference,name,latitude,longitude,grid,locationDesc\n"
+    write_csv(first, header + "US-5000,Shared Park,35,-92,EM35aa,US-AR\n")
+    write_csv(second, header + "US-5000,Different Name,35,-92,EM35aa,US-AR\n")
+
+    with pytest.raises(PotaCatalogImportError, match="conflicting duplicate"):
+        import_pota_catalog_csvs((first, second), database)
+
+    assert not database.exists()
