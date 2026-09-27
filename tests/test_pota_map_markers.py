@@ -127,3 +127,21 @@ def test_request_before_start_performs_no_database_io(tmp_path: Path) -> None:
     service.request_viewport(viewport)
 
     assert service.latest_state.viewport is None
+
+
+def test_clear_invalidates_visible_markers_without_database_work(tmp_path: Path) -> None:
+    database = tmp_path / "pota-catalog.db"
+    make_database(database)
+    service = PotaMapMarkerService(database, executor=ImmediateExecutor())
+    viewport = build_map_viewport(
+        GeoPoint(39.53, -84.08), zoom=14, width_px=1200, height_px=800
+    )
+    service.start()
+    service.request_viewport(viewport)
+    assert service.latest_state.markers
+
+    service.clear()
+
+    assert service.latest_state.viewport is None
+    assert service.latest_state.markers == ()
+    assert service.latest_state.detail == "POTA MARKERS WAITING FOR CURRENT GPS"
