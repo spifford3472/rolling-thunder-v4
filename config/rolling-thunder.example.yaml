@@ -104,7 +104,7 @@ pota_map:
   enabled: true
   catalog_path: ../data/pota/pota-catalog.db
   label_min_zoom: 14
-  dot_diameter_px: 12
+  dot_diameter_px: 24
   # Keep last-known POTA markers through brief GPS dropouts.
   gps_grace_period_s: 60.0
 
