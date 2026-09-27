@@ -59,14 +59,6 @@ class SharedSpotPanelCommands(Protocol):
     def selected_identity(self) -> SpotIdentity | None:
         ...
 
-    @property
-    def staged_identity(self) -> SpotIdentity | None:
-        ...
-
-    @property
-    def staged_action(self) -> StagedSpotAction | None:
-        ...
-
     def activate(
         self,
         provider: SpotProvider,
@@ -85,12 +77,6 @@ class SharedSpotPanelCommands(Protocol):
         ...
 
     def selected_tune_action(self) -> StagedSpotAction | None:
-        ...
-
-    def cancel_staging(self) -> object:
-        ...
-
-    def invalidate_radio(self) -> object:
         ...
 
     def next_pota_band(self) -> object:
@@ -112,7 +98,7 @@ class SharedSpotTuneCommands(Protocol):
 
 
 class RepeaterPanelCommands(Protocol):
-    """No-I/O repeater selection plus distinct Active and radio staging."""
+    """No-I/O repeater selection plus transient Active-toggle state."""
 
     @property
     def selected_stable_key(self) -> str | None:
@@ -120,10 +106,6 @@ class RepeaterPanelCommands(Protocol):
 
     @property
     def staged_action(self) -> StagedRepeaterActiveAction | None:
-        ...
-
-    @property
-    def radio_staged_action(self) -> StagedRepeaterRadioAction | None:
         ...
 
     def activate(self) -> object:
@@ -148,12 +130,6 @@ class RepeaterPanelCommands(Protocol):
         ...
 
     def selected_radio_action(self) -> StagedRepeaterRadioAction | None:
-        ...
-
-    def cancel_radio_staging(self) -> object:
-        ...
-
-    def invalidate_radio(self) -> object:
         ...
 
 
@@ -298,12 +274,11 @@ class SharedSpotActivePanelCommandController:
         self.activate_context(context_navigation.state.selected)
 
     def activate_context(self, context_id: ContextId) -> None:
-        """Synchronize active view and invalidate unrelated confirmations."""
+        """Synchronize the application controller with the active panel."""
         repeater = self._repeater_panel
         if context_id is ContextId.POTA:
             if repeater is not None:
                 repeater.cancel_staging()
-                repeater.cancel_radio_staging()
             self._shared_panel.activate(
                 SpotProvider.POTA,
                 current_frequency=self._current_frequency(),
@@ -312,20 +287,17 @@ class SharedSpotActivePanelCommandController:
         if context_id is ContextId.DX:
             if repeater is not None:
                 repeater.cancel_staging()
-                repeater.cancel_radio_staging()
             self._shared_panel.activate(
                 SpotProvider.DX,
                 current_frequency=self._current_frequency(),
             )
             return
 
-        self._shared_panel.cancel_staging()
         if context_id is ContextId.REPEATERS and repeater is not None:
             repeater.activate()
             return
         if repeater is not None:
             repeater.cancel_staging()
-            repeater.cancel_radio_staging()
 
     def primary(self) -> bool:
         if self._pota_is_active():
@@ -435,7 +407,6 @@ class SharedSpotActivePanelCommandController:
         if repeater is None or persistence is None:
             return False
 
-        repeater.cancel_radio_staging()
         repeater.stage_selected()
         action = repeater.staged_action
         if action is None:
