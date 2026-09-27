@@ -126,6 +126,15 @@ class RepeaterPanelController:
         self._synchronize()
         return self._radio_staged_action
 
+    def selected_radio_action(self) -> StagedRepeaterRadioAction | None:
+        """Snapshot the selected repeater's exact radio configuration without staging."""
+        selected = self._selected_visible_item()
+        return (
+            StagedRepeaterRadioAction.from_repeater(selected.repeater)
+            if selected is not None
+            else None
+        )
+
     @property
     def state(self) -> RepeaterPanelState:
         nearby, visible = self._synchronize()
