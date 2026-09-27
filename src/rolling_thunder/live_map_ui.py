@@ -593,8 +593,9 @@ class LiveMapWidgets:
                 self._canvas.tag_lower(rectangle, text_item)
                 occupied.append(padded)
 
-        self._canvas.tag_raise("map-pota", "map-base")
-        self._canvas.tag_raise("map-radar", "map-pota")
+        if self._canvas.find_withtag("map-pota"):
+            self._canvas.tag_raise("map-pota", "map-base")
+        self._raise_radar_layer()
 
     def _draw_radar(
         self,
