@@ -445,25 +445,17 @@ class SharedSpotActivePanelCommandController:
         return accepted
 
     def synchronize_radio_state(self) -> bool:
-        """Invalidate all pending radio confirmations when radio state is unusable."""
+        """Return whether the latest radio state is usable for a receive action."""
         provider = self._radio_state
         if provider is None:
             return True
         state = provider()
-        usable = (
+        return (
             state.connection_state is RadioConnectionState.CONNECTED
             and state.frequency is not None
             and state.mode is not None
             and not state.transmitting
         )
-        if usable:
-            return True
-
-        if self._shared_spot_is_active() and self._shared_panel.staged_action is not None:
-            self._shared_panel.invalidate_radio()
-        if self._repeater_is_active() and self._repeater_panel is not None:
-            self._repeater_panel.invalidate_radio()
-        return False
 
     def back(self) -> bool:
         """Back cancels Active-only work first, otherwise clears selection."""
