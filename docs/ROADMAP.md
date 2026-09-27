@@ -146,7 +146,6 @@ The completed shared path provides:
 
 - provider-neutral immutable POTA/DX records and canonical snapshots
 - stable identity-based selection
-- exact action-critical `StagedSpotAction` values
 - Forge POTA and configurable DXSpider aggregation
 - optional bounded Forge-side QRZ enrichment
 - transactional Forge persistence and versioned REST
@@ -157,11 +156,11 @@ The completed shared path provides:
 - shared mode groups SSB/CW/FT4/FT8/DATA/ALL
 - POTA age filtering without leaking that rule into DX
 - current-radio-band activation default with 20-meter fallback
-- exact two-press shared receive tuning
-- first activation stages only and performs no CAT
-- second activation submits only the same still-valid staged target
-- staging invalidation on selection, context, filter, disappearance,
-  action-critical mutation, Back/Cancel, or invalid radio state
+- single-press shared receive tuning from the current stable selection
+- activation snapshots exact identity/callsign/frequency/mode and submits it through
+  the background typed tuning path
+- stale/disappeared selections and unusable radio state fail closed
+- duplicate rapid activations are rejected while tuning is already active
 - background shared receive tuning outside Tkinter
 - `ReceiveTuningService` as the sole receive-tuning authority
 - timed success/failure status and 10-second cross-band manual band/ATAS reminder
