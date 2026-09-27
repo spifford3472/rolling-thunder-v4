@@ -123,3 +123,21 @@ def test_missing_required_header_is_actionable(tmp_path: Path) -> None:
 
     with pytest.raises(PotaCatalogImportError, match="locations"):
         import_pota_catalog_csv(source, database)
+
+
+def test_import_filters_non_us_programs(tmp_path: Path) -> None:
+    source = tmp_path / "parks.csv"
+    database = tmp_path / "pota-catalog.db"
+    write_csv(
+        source,
+        "reference,name,latitude,longitude,locationDesc\\n"
+        "US-0001,US Park,44,-68,US-ME\\n"
+        "CA-0001,Canadian Park,51,-115,CA-AB\\n",
+    )
+
+    result = import_pota_catalog_csv(source, database)
+
+    assert result.park_count == 1
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute("SELECT reference FROM parks").fetchall()
+    assert rows == [("US-0001",)]
