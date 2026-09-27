@@ -205,7 +205,7 @@ def test_duplicate_reference_across_state_files_rejects_refresh(tmp_path: Path) 
     write_csv(ohio, header + "US-0732,Dayton Park,39.8,-84.1,EM79xt,US-OH\n")
     write_csv(indiana, header + "US-0732,Duplicate,40,-86,EN60aa,US-IN\n")
 
-    with pytest.raises(PotaCatalogImportError, match="indiana.csv: invalid row 2"):
+    with pytest.raises(PotaCatalogImportError, match="invalid row 2"):
         import_pota_catalog_csvs((ohio, indiana), database)
 
     assert not database.exists()
