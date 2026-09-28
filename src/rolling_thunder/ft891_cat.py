@@ -19,6 +19,8 @@ _REPEATER_SHIFT_REPLY_PATTERN: Final = re.compile(rb"OS0([0-2]);")
 _6M_REPEATER_OFFSET_REPLY_PATTERN: Final = re.compile(rb"EX0905([0-9]{4});")
 _CTCSS_TONE_REPLY_PATTERN: Final = re.compile(rb"CN00([0-9]{3});")
 _CTCSS_BEHAVIOR_REPLY_PATTERN: Final = re.compile(rb"CT0([0-3]);")
+_TX_STATE_REPLY_PATTERN: Final = re.compile(rb"TX([0-2]);")
+_METER_REPLY_PATTERN: Final = re.compile(rb"RM([0-7])([0-9]{3});")
 
 _MODE_TO_CAT: Final[dict[RadioMode, bytes]] = {
     RadioMode.LSB: b"1",
@@ -420,3 +422,77 @@ def parse_ctcss_behavior_reply(reply: bytes) -> CtcssBehavior:
         raise Ft891CatError(
             "FT-891 reported DCS where the CTCSS-only capability was expected."
         ) from error
+
+
+def encode_read_tx_state() -> bytes:
+    """Return the documented CAT command that reads TX state."""
+    return b"TX;"
+
+
+def encode_cat_ptt_on() -> bytes:
+    """Return the documented CAT command that requests CAT PTT on."""
+    return b"TX1;"
+
+
+def encode_cat_ptt_off() -> bytes:
+    """Return the documented CAT command that requests CAT PTT off."""
+    return b"TX0;"
+
+
+def encode_force_receive() -> bytes:
+    """Return the bench-verified receive command used as the emergency unkey."""
+    return b"RX;"
+
+
+def parse_tx_state_reply(reply: bytes) -> int:
+    """Parse TX0/TX1/TX2 without interpreting it as normal Radio authority."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _TX_STATE_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 TX-state reply: {reply!r}; expected TX0;, TX1;, or TX2;."
+        )
+    return int(match.group(1))
+
+
+def encode_mic_up() -> bytes:
+    """Return the documented microphone UP CAT command."""
+    return b"UP;"
+
+
+def encode_mic_down() -> bytes:
+    """Return the documented microphone DOWN CAT command."""
+    return b"DN;"
+
+
+def encode_read_swr_meter() -> bytes:
+    """Return the documented SWR meter query (raw 0-255 scale)."""
+    return b"RM6;"
+
+
+def encode_read_power_meter() -> bytes:
+    """Return the documented power-output meter query (raw 0-255 scale)."""
+    return b"RM5;"
+
+
+def parse_meter_reply(reply: bytes, *, expected_meter: int) -> int:
+    """Parse an RM meter reply and require the requested meter selector."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    if not 0 <= expected_meter <= 7:
+        raise ValueError("expected_meter must be between 0 and 7")
+    match = _METER_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 meter reply: {reply!r}; expected RMx###;."
+        )
+    meter = int(match.group(1))
+    value = int(match.group(2))
+    if meter != expected_meter:
+        raise Ft891CatError(
+            f"Unexpected FT-891 meter reply selector {meter}; expected {expected_meter}."
+        )
+    if not 0 <= value <= 255:
+        raise Ft891CatError(f"FT-891 meter value is outside 0-255: {value}.")
+    return value
