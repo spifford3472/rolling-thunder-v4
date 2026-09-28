@@ -787,3 +787,31 @@ fix, the contact note is:
 
 If GPS is unavailable, the contact still commits and records
 `Mobile Contact (GPS unavailable)` rather than inventing coordinates.
+
+
+### Browse US Amateur Extra advisory
+
+Browse includes a presentation-only US Amateur Extra frequency/mode advisory.
+The rules live in `us_extra_band_advisory.py` rather than the Tk layer so the
+regulatory boundaries are deterministic and unit tested.
+
+Presentation is intentionally advisory and does not create transmit authority or
+a CAT/PTT interlock:
+
+- red with white text: the tuned carrier is outside a configured US Amateur
+  Extra allocation/channel;
+- yellow with dark text: the carrier is inside an allocation but the selected
+  emission family is not authorized in that segment;
+- no warning box: the frequency/mode combination passes the advisory.
+
+CW is treated according to Part 97's rule permitting CW anywhere the control
+operator is otherwise authorized. SSB/AM/FM are evaluated as phone-family
+Browse modes for the requested sub-band warning. DATA is also evaluated for
+radios entering Browse while already in DATA mode.
+
+The rule set includes 160, 80/75, current 60 m privileges, 40, 30, 20, 17, 15,
+12, 10, and 6 meters. Current 60 m channel/segment handling is special-cased,
+and Browse SSB selects USB on 60 m.
+
+The advisory does not calculate occupied emission bandwidth at a band edge and
+must not be treated as a substitute for operator compliance with Part 97.
