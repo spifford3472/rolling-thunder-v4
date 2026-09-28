@@ -10,8 +10,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingService
-from rolling_thunder.domain import Contact, RadioState
-from rolling_thunder.domain import GPSFixState
+from rolling_thunder.domain import Contact, GPSFixState, RadioState
 from rolling_thunder.gps import GPSState
 from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.pota_spots import PotaSpot
