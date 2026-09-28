@@ -97,6 +97,14 @@ class SharedSpotTuneCommands(Protocol):
         ...
 
 
+class PendingCallsignCommands(Protocol):
+    """Mutable pending-callsign boundary shared with voice capture."""
+
+    def preload_callsign(self, callsign: str) -> bool:
+        """Preload a selected spot callsign when capture/Commit state permits."""
+        ...
+
+
 class RepeaterPanelCommands(Protocol):
     """No-I/O repeater selection plus transient Active-toggle state."""
 
@@ -255,6 +263,7 @@ class SharedSpotActivePanelCommandController:
         current_frequency: Callable[[], Frequency | None],
         radio_state: Callable[[], RadioState] | None = None,
         shared_tuning: SharedSpotTuneCommands | None = None,
+        pending_callsign: PendingCallsignCommands | None = None,
         settings_panel: SettingsPanelCommands | None = None,
         repeater_panel: RepeaterPanelCommands | None = None,
         repeater_active_overrides: RepeaterActiveOverrideCommands | None = None,
@@ -266,6 +275,7 @@ class SharedSpotActivePanelCommandController:
         self._current_frequency = current_frequency
         self._radio_state = radio_state
         self._shared_tuning = shared_tuning
+        self._pending_callsign = pending_callsign
         self._settings_panel = settings_panel
         self._repeater_panel = repeater_panel
         self._repeater_active_overrides = repeater_active_overrides
@@ -385,7 +395,15 @@ class SharedSpotActivePanelCommandController:
         tuning = self._shared_tuning
         if action is None or tuning is None:
             return False
-        return tuning.start_tune(action)
+
+        accepted = tuning.start_tune(action)
+        if not accepted:
+            return False
+
+        pending_callsign = self._pending_callsign
+        if pending_callsign is not None:
+            pending_callsign.preload_callsign(action.callsign)
+        return True
 
     def _activate_repeater_selection(self) -> bool:
         repeater = self._repeater_panel
