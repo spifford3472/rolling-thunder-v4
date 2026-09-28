@@ -1,0 +1,43 @@
+[Unit]
+Description=Rolling Thunder Forge Wavelog Contact Synchronization Service
+Documentation=file:/opt/rolling-thunder-forge-contact-sync/docs/FORGE_CONTACT_SYNC.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=rollingthunder
+Group=rollingthunder
+WorkingDirectory=/opt/rolling-thunder-forge-contact-sync
+
+EnvironmentFile=/etc/rolling-thunder/forge-contact-sync.env
+
+ExecStart=/opt/rolling-thunder-forge-contact-sync/.venv/bin/rolling-thunder-forge-contact-sync --config /etc/rolling-thunder/forge-contact-sync.yaml
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+StateDirectory=rolling-thunder
+StateDirectoryMode=0750
+ReadWritePaths=/var/lib/rolling-thunder
+
+[Install]
+WantedBy=multi-user.target

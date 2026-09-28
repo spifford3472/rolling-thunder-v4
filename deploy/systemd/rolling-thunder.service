@@ -1,0 +1,26 @@
+[Unit]
+Description=Rolling Thunder mobile dashboard
+Documentation=https://github.com/spifford3472/rolling-thunder-v4
+After=graphical.target display-manager.service
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=geoff
+Group=geoff
+WorkingDirectory=/home/geoff/projects/rolling-thunder-v4-regional
+Environment=HOME=/home/geoff
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/geoff/.Xauthority
+Environment=ROLLING_THUNDER_VENV_DIR=/home/geoff/projects/rolling-thunder-v4/.venv
+Environment=ROLLING_THUNDER_STARTUP_DELAY_SECONDS=180
+ExecStart=/usr/bin/bash /home/geoff/projects/rolling-thunder-v4-regional/deploy/rolling-thunder-autostart
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+KillSignal=SIGTERM
+SyslogIdentifier=rolling-thunder
+
+[Install]
+WantedBy=graphical.target

@@ -1,0 +1,5 @@
+# Rolling Thunder GPS-assisted clock fallback for anvilmobile.
+# Install as /etc/sudoers.d/rolling-thunder-clock-sync with mode 0440.
+# The helper itself must be root-owned and non-writable by geoff.
+
+geoff ALL=(root) NOPASSWD: /usr/local/sbin/rolling-thunder-chrony-settime *
