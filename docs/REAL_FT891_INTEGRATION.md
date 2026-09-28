@@ -449,7 +449,9 @@ Safety requirements are fail-closed:
 - the radio must read `TX0` before the probe starts
 - the operator must explicitly acknowledge that RF will be transmitted
 - the operator must confirm an ATAS RF path and a radio power setting of 1-10 W
-- inter-command and meter-settle delays are bounded to 0-500 ms
+- inter-command delay is bounded to 0-500 ms
+- pre-key countdown is bounded to 0-60 seconds
+- keyed RF duration is bounded to 0.5-3.0 seconds
 - any unexpected TX state or malformed response aborts the experiment
 - both `RX;` and `TX0;` are attempted in a `finally` path before close
 
@@ -460,7 +462,7 @@ ptt-first:
     TX1;
     bounded delay
     UP; or DN;
-    bounded settle
+    hold CAT PTT for a bounded 0.5-3.0 seconds
     TX; / RM6; / RM5;
     RX; / TX0;
 
