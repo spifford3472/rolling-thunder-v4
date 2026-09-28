@@ -105,6 +105,8 @@ class BrowseRadioController:
         radio_state = self._radio_state()
         if not self._usable(radio_state):
             return False
+        current_frequency = radio_state.frequency
+        assert current_frequency is not None
 
         with self._lock:
             pending = self._pending_mode
