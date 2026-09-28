@@ -742,3 +742,18 @@ marker objects because their canvas representation changes.
 
 This keeps POTA rendering consistent with the incremental base-map/radar
 architecture and avoids visible park-marker flicker during continuous driving.
+
+
+### Asynchronous POTA viewport handoff
+
+The map and POTA database workers publish independently. A new GPS/map viewport
+may therefore become visible before the POTA worker has published the matching
+park query. This is normal and must not blank the overlay.
+
+While the POTA snapshot is briefly for the previous viewport, its latest known
+park set is projected against the current map viewport and retained on screen.
+The next POTA snapshot then incrementally adds/removes any parks exposed by the
+new bounds. Exact viewport equality is not required for temporary presentation.
+
+This also prevents stationary GPS position jitter from causing the park layer to
+blink off and back on.
