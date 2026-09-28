@@ -172,7 +172,6 @@ def _inside_any(frequency_hz: int, ranges: tuple[tuple[int, int], ...]) -> bool:
     return any(lower <= frequency_hz <= upper for lower, upper in ranges)
 
 
-
 def _sixty_meter_advisory(
     frequency_hz: int,
     mode: RadioMode,
@@ -216,7 +215,6 @@ def _sixty_meter_advisory(
         BandAdvisoryLevel.OUT_OF_BAND,
         "OUTSIDE US EXTRA BAND",
     )
-
 
 
 def _mode_label(mode: RadioMode) -> str:
