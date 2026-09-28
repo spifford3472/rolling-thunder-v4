@@ -720,3 +720,34 @@ may replace the preloaded callsign, which supports the operator case where a new
 station takes over a frequency before the external spot feed refreshes.
 
 A rejected or unusable radio/tune activation does not preload the callsign.
+
+
+## Browse Operating Context
+
+Browse is a free-form receive and logging context placed immediately after DX in
+the dashboard context cycle. It is intentionally independent of POTA/DX spot
+selection and provider state.
+
+The existing shared callsign-capture state remains authoritative. Browse does not
+preload a callsign from any spot source; callsigns are entered through the same
+Voice workflow used elsewhere and Commit/Discard retain their existing behavior.
+
+Browse receive controls route through the context-aware active-panel boundary:
+
+- encoder left: decrease receive frequency by the selected step
+- encoder right: increase receive frequency by the selected step
+- Button #2 / secondary: cycle 100 Hz, 500 Hz, and 1 kHz tuning steps
+- Button #3 / tertiary: cycle CW, FM, SSB, and AM
+
+The UI presents SSB as one operator-facing mode. Radio execution maps SSB to LSB
+below 10 MHz and USB at or above 10 MHz. Browse tuning is receive-only, runs on a
+background worker, does not expose raw CAT, and retains the existing no-PTT/no-MOX
+safety boundary.
+
+Browse Commit uses the existing durable local contact pipeline. With a valid GPS
+fix, the contact note is:
+
+`Mobile Contact from <latitude>, <longitude> (<six-character-grid>)`
+
+If GPS is unavailable, the contact still commits and records
+`Mobile Contact (GPS unavailable)` rather than inventing coordinates.
