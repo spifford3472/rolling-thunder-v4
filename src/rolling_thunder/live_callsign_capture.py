@@ -87,6 +87,22 @@ class LiveCallsignCaptureController:
             self._state = new_state
             self._capturing = False
 
+    def preload_callsign(self, callsign: str) -> bool:
+        """Preload one selected spot callsign unless capture or Commit owns the state."""
+        normalized = callsign.strip().upper()
+        if not normalized:
+            return False
+        with self._lock:
+            if self._capturing or self._state.commit_state == "COMMITTING":
+                return False
+            self._state = CallsignCaptureState(
+                pending_callsign=normalized,
+                voice_state="READY",
+                commit_state="READY",
+                last_result=f"SELECTED {normalized}",
+            )
+            return True
+
     def discard(self) -> CallsignCaptureState:
         """Discard a completed pending callsign; active work continues safely."""
         with self._lock:
