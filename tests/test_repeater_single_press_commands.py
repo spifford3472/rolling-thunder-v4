@@ -1,4 +1,4 @@
-"""Checkpoint #169 two-press repeater operator-command acceptance tests."""
+"""Single-press repeater operator-command acceptance tests."""
 
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -47,8 +47,8 @@ class InertSharedPanel:
     def clear_selection(self) -> object:
         return object()
 
-    def stage_selected(self) -> object:
-        return object()
+    def selected_tune_action(self) -> StagedSpotAction | None:
+        return None
 
     def cancel_staging(self) -> object:
         return object()
@@ -98,25 +98,21 @@ class RecordingRepeaterPanel:
 
     def toggle_filter(self) -> object:
         self.calls.append("toggle_filter")
-        self.radio_staged_action = None
         return object()
 
     def select_previous(self) -> object:
         self.calls.append("select_previous")
-        self.radio_staged_action = None
         return object()
 
     def select_next(self) -> object:
         self.calls.append("select_next")
         self.selected_stable_key = self.record.stable_key
-        self.radio_staged_action = None
         return object()
 
     def clear_selection(self) -> object:
         self.calls.append("clear_selection")
         self.selected_stable_key = None
         self.staged_action = None
-        self.radio_staged_action = None
         return object()
 
     def stage_selected(self) -> object:
@@ -130,11 +126,11 @@ class RecordingRepeaterPanel:
         self.staged_action = None
         return object()
 
-    def stage_selected_radio(self) -> object:
-        self.calls.append("stage_radio")
-        if self.selected_stable_key is not None:
-            self.radio_staged_action = StagedRepeaterRadioAction.from_repeater(self.record)
-        return object()
+    def selected_radio_action(self) -> StagedRepeaterRadioAction | None:
+        self.calls.append("selected_radio_action")
+        if self.selected_stable_key is None:
+            return None
+        return StagedRepeaterRadioAction.from_repeater(self.record)
 
     def cancel_radio_staging(self) -> object:
         self.calls.append("cancel_radio")
@@ -210,107 +206,73 @@ def build(
     return controller, navigation, panel, executor, persistence
 
 
-def test_first_encoder_press_only_stages_and_performs_zero_radio_execution() -> None:
+def test_single_encoder_press_executes_exact_selected_repeater_once() -> None:
     controller, _navigation, panel, executor, _persistence = build()
     controller.move_next()
     panel.calls.clear()
 
     assert controller.activate_selection() is True
 
-    assert panel.radio_staged_action is not None
-    assert panel.radio_staged_action.repeater == panel.record
-    assert executor.actions == []
-    assert panel.calls == ["stage_radio"]
+    assert len(executor.actions) == 1
+    assert executor.actions[0].repeater == panel.record
+    assert panel.calls == ["selected_radio_action"]
 
 
-def test_second_identical_encoder_press_executes_exact_staged_repeater_once() -> None:
+def test_rapid_second_press_is_rejected_while_configuration_is_running() -> None:
     controller, _navigation, panel, executor, _persistence = build()
     controller.move_next()
     assert controller.activate_selection() is True
-    staged = panel.radio_staged_action
-    assert staged is not None
-
-    assert controller.activate_selection() is True
-
-    assert executor.actions == [staged]
-    assert panel.radio_staged_action is None
-
-
-def test_third_press_cannot_restage_while_confirmed_execution_is_running() -> None:
-    controller, _navigation, panel, executor, _persistence = build()
-    controller.move_next()
-    assert controller.activate_selection() is True
-    assert controller.activate_selection() is True
-    assert executor.configuring is True
+    panel.calls.clear()
 
     assert controller.activate_selection() is False
 
-    assert panel.radio_staged_action is None
     assert len(executor.actions) == 1
+    assert panel.calls == []
 
 
-def test_rotation_filter_and_back_invalidate_radio_confirmation() -> None:
-    controller, _navigation, panel, _executor, _persistence = build()
+def test_no_selection_performs_zero_radio_execution() -> None:
+    controller, _navigation, panel, executor, _persistence = build()
+    panel.calls.clear()
+
+    assert controller.activate_selection() is False
+
+    assert executor.actions == []
+    assert panel.calls == ["selected_radio_action"]
+
+
+def test_radio_disconnect_blocks_single_press_before_action_snapshot() -> None:
+    controller, _navigation, panel, executor, _persistence = build(
+        radio_state=lambda: RadioState(
+            connection_state=RadioConnectionState.DISCONNECTED,
+            updated_at=_TEST_TIME,
+        )
+    )
     controller.move_next()
-    controller.activate_selection()
-    assert panel.radio_staged_action is not None
+    panel.calls.clear()
 
-    controller.move_previous()
-    assert panel.radio_staged_action is None
+    assert controller.activate_selection() is False
 
-    controller.activate_selection()
-    controller.primary()
-    assert panel.radio_staged_action is None
-
-    controller.activate_selection()
-    assert controller.back() is True
-    assert panel.radio_staged_action is None
-    assert panel.selected_stable_key == panel.record.stable_key
+    assert executor.actions == []
+    assert panel.calls == []
 
 
-def test_context_button_two_is_active_only_and_never_calls_radio_executor() -> None:
+def test_context_button_two_remains_active_only() -> None:
     controller, _navigation, panel, executor, persistence = build()
     controller.move_next()
-    controller.activate_selection()
-    assert panel.radio_staged_action is not None
 
     assert controller.secondary() is True
 
     assert executor.actions == []
     assert persistence.actions == [panel.active_action]
-    assert panel.radio_staged_action is None
 
 
-def test_disconnect_invalidates_stage_and_reconnect_does_not_recreate_it() -> None:
-    current = [connected_state()]
-    controller, _navigation, panel, executor, _persistence = build(
-        radio_state=lambda: current[0]
-    )
+def test_back_clears_repeater_selection_without_radio_confirmation_state() -> None:
+    controller, _navigation, panel, executor, _persistence = build()
     controller.move_next()
-    controller.activate_selection()
-    assert panel.radio_staged_action is not None
+    panel.calls.clear()
 
-    current[0] = RadioState(
-        connection_state=RadioConnectionState.DISCONNECTED,
-        updated_at=_TEST_TIME,
-    )
-    assert controller.synchronize_radio_state() is False
-    assert panel.radio_staged_action is None
+    assert controller.back() is True
 
-    current[0] = connected_state()
-    assert controller.synchronize_radio_state() is True
-    assert panel.radio_staged_action is None
+    assert panel.selected_stable_key is None
     assert executor.actions == []
-
-
-def test_context_change_invalidates_staged_repeater_radio_action() -> None:
-    controller, navigation, panel, executor, _persistence = build()
-    controller.move_next()
-    controller.activate_selection()
-    assert panel.radio_staged_action is not None
-
-    navigation.select(ContextId.AI)
-    controller.activate_context(ContextId.AI)
-
-    assert panel.radio_staged_action is None
-    assert executor.actions == []
+    assert panel.calls == ["clear_selection"]

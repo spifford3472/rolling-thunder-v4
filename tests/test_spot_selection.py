@@ -1,4 +1,4 @@
-"""Tests for stable selection and staged-action primitives."""
+"""Tests for stable selection and exact receive-action primitives."""
 
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
@@ -13,7 +13,7 @@ from rolling_thunder.spot_domain import (
     SpotRecord,
     SpotSnapshot,
 )
-from rolling_thunder.spot_selection import SpotSelectionController
+from rolling_thunder.spot_selection import SpotSelectionController, StagedSpotAction
 
 
 def pota_spot(
@@ -25,10 +25,7 @@ def pota_spot(
 ) -> SpotRecord:
     frequency = Frequency(hz=frequency_hz)
     return SpotRecord(
-        identity=PotaSpotIdentity(
-            park_reference=reference,
-            frequency=frequency,
-        ),
+        identity=PotaSpotIdentity(park_reference=reference, frequency=frequency),
         callsign=callsign,
         frequency=frequency,
         mode=mode,
@@ -58,11 +55,12 @@ def snapshot(*spots: SpotRecord) -> SpotSnapshot:
 
 
 def test_selection_state_is_immutable() -> None:
-    controller = SpotSelectionController(snapshot())
-    state = controller.state
-
+    state = SpotSelectionController(snapshot()).state
     with pytest.raises(FrozenInstanceError):
-        state.selected_identity = DxSpotIdentity(callsign="K1ABC", frequency=Frequency(hz=14025000))
+        state.selected_identity = DxSpotIdentity(
+            callsign="K1ABC",
+            frequency=Frequency(hz=14_025_000),
+        )
 
 
 def test_next_and_previous_use_canonical_snapshot_order_without_wrapping() -> None:
@@ -70,70 +68,24 @@ def test_next_and_previous_use_canonical_snapshot_order_without_wrapping() -> No
     twenty = dx_spot("W8XYZ", 14_025_000)
     controller = SpotSelectionController(snapshot(twenty, forty))
 
-    first = controller.select_next()
-    second = controller.select_next()
-    final = controller.select_next()
-
-    assert first.selected_identity == forty.identity
-    assert second.selected_identity == twenty.identity
-    assert final.selected_identity == twenty.identity
-
-    previous = controller.select_previous()
-    assert previous.selected_identity == forty.identity
+    assert controller.select_next().selected_identity == forty.identity
+    assert controller.select_next().selected_identity == twenty.identity
+    assert controller.select_next().selected_identity == twenty.identity
+    assert controller.select_previous().selected_identity == forty.identity
 
 
-def test_snapshot_replacement_preserves_selected_and_staged_identity() -> None:
+def test_snapshot_replacement_preserves_still_present_selected_identity() -> None:
     selected = pota_spot("KI5VNB", "US-1234", 14_250_000)
     controller = SpotSelectionController(snapshot(selected))
     controller.select_identity(selected.identity)
-    controller.stage_selected()
 
     inserted_before = dx_spot("K1ABC", 7_025_000)
-    refreshed_selected = pota_spot("KI5VNB", "US-1234", 14_250_000)
+    refreshed_selected = pota_spot("W8NEW", "US-1234", 14_250_000)
     state = controller.replace_snapshot(snapshot(refreshed_selected, inserted_before))
 
     assert state.selected_identity == selected.identity
-    assert state.staged_identity == selected.identity
     assert state.selected_index == 1
     assert state.selected_spot == refreshed_selected
-    assert state.staged_spot == refreshed_selected
-
-
-def test_changed_callsign_clears_staging_but_preserves_selection() -> None:
-    original = pota_spot("KI5VNB", "US-1234", 14_250_000)
-    refreshed = pota_spot("W8NEW", "US-1234", 14_250_000)
-    controller = SpotSelectionController(snapshot(original))
-    controller.select_identity(original.identity)
-    controller.stage_selected()
-
-    state = controller.replace_snapshot(snapshot(refreshed))
-
-    assert state.selected_identity == original.identity
-    assert state.selected_spot == refreshed
-    assert state.staged_identity is None
-    assert state.staged_action is None
-    assert state.staged_spot is None
-
-
-def test_changed_mode_clears_staging_but_preserves_selection() -> None:
-    original = pota_spot("KI5VNB", "US-1234", 14_250_000)
-    refreshed = pota_spot(
-        "KI5VNB",
-        "US-1234",
-        14_250_000,
-        mode=RadioMode.CW,
-    )
-    controller = SpotSelectionController(snapshot(original))
-    controller.select_identity(original.identity)
-    controller.stage_selected()
-
-    state = controller.replace_snapshot(snapshot(refreshed))
-
-    assert state.selected_identity == original.identity
-    assert state.selected_spot == refreshed
-    assert state.staged_identity is None
-    assert state.staged_action is None
-    assert state.staged_spot is None
 
 
 def test_disappearing_selected_identity_clears_without_neighbor_fallback() -> None:
@@ -142,14 +94,12 @@ def test_disappearing_selected_identity_clears_without_neighbor_fallback() -> No
     neighbor = dx_spot("W8XYZ", 18_080_000)
     controller = SpotSelectionController(snapshot(first, selected, neighbor))
     controller.select_identity(selected.identity)
-    controller.stage_selected()
 
     state = controller.replace_snapshot(snapshot(first, neighbor))
 
     assert state.selected_identity is None
     assert state.selected_index is None
     assert state.selected_spot is None
-    assert state.staged_identity is None
 
 
 def test_selecting_missing_identity_clears_stale_selection() -> None:
@@ -157,78 +107,36 @@ def test_selecting_missing_identity_clears_stale_selection() -> None:
     missing = dx_spot("W8XYZ", 14_025_000)
     controller = SpotSelectionController(snapshot(present))
     controller.select_identity(present.identity)
-    controller.stage_selected()
 
     state = controller.select_identity(missing.identity)
 
     assert state.selected_identity is None
-    assert state.staged_identity is None
 
 
-def test_selection_change_clears_staging() -> None:
-    first = dx_spot("K1ABC", 7_025_000)
-    second = dx_spot("W8XYZ", 14_025_000)
-    controller = SpotSelectionController(snapshot(first, second))
-    controller.select_identity(first.identity)
-    controller.stage_selected()
-
-    state = controller.select_next()
-
-    assert state.selected_identity == second.identity
-    assert state.staged_identity is None
-
-
-def test_unchanged_edge_selection_retains_staging() -> None:
-    only = dx_spot("K1ABC", 7_025_000)
-    controller = SpotSelectionController(snapshot(only))
-    controller.select_next()
-    controller.stage_selected()
-
-    state = controller.select_next()
-
-    assert state.selected_identity == only.identity
-    assert state.staged_identity == only.identity
-
-
-def test_stage_requires_current_selection() -> None:
-    controller = SpotSelectionController(snapshot())
-
-    state = controller.stage_selected()
-
-    assert state.staged_identity is None
-    assert state.staged_spot is None
-
-
-@pytest.mark.parametrize(
-    "clear_method",
-    [
-        "cancel_staging",
-        "invalidate_context",
-        "invalidate_radio",
-        "record_failure",
-    ],
-)
-def test_required_invalidation_paths_clear_staging(
-    clear_method: str,
-) -> None:
+def test_clear_selection_clears_current_identity() -> None:
     selected = dx_spot("K1ABC", 7_025_000)
     controller = SpotSelectionController(snapshot(selected))
     controller.select_identity(selected.identity)
-    controller.stage_selected()
 
-    state = getattr(controller, clear_method)()
-
-    assert state.selected_identity == selected.identity
-    assert state.staged_identity is None
+    assert controller.clear_selection().selected_identity is None
 
 
-def test_clear_selection_clears_selection_and_staging() -> None:
-    selected = dx_spot("K1ABC", 7_025_000)
-    controller = SpotSelectionController(snapshot(selected))
-    controller.select_identity(selected.identity)
-    controller.stage_selected()
+def test_receive_action_snapshots_exact_action_critical_values() -> None:
+    selected = pota_spot("KI5VNB", "US-1234", 14_250_000, mode=RadioMode.USB)
 
-    state = controller.clear_selection()
+    action = StagedSpotAction.from_spot(selected)
 
-    assert state.selected_identity is None
-    assert state.staged_identity is None
+    assert action.identity == selected.identity
+    assert action.callsign == selected.callsign
+    assert action.frequency == selected.frequency
+    assert action.mode is RadioMode.USB
+    assert action.matches(selected) is True
+
+
+def test_receive_action_detects_action_critical_record_change() -> None:
+    selected = pota_spot("KI5VNB", "US-1234", 14_250_000, mode=RadioMode.USB)
+    changed = pota_spot("W8NEW", "US-1234", 14_250_000, mode=RadioMode.USB)
+
+    action = StagedSpotAction.from_spot(selected)
+
+    assert action.matches(changed) is False

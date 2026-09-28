@@ -322,33 +322,32 @@ def test_selected_disappearance_clears_without_neighbor_fallback() -> None:
     assert all(row.selected is False for row in state.rows)
 
 
-def test_provider_change_invalidates_staging_and_selection() -> None:
+def test_provider_change_clears_selection_without_neighbor_fallback() -> None:
     pota = pota_spot("US-7001", 14_250_000)
     dx = dx_spot("K7DX", 14_020_000)
     _, controller = controller_for(published_state((pota, dx)))
     controller.select_next()
-    staged = controller.stage_selected()
-    assert staged.staged_identity == pota.identity
 
     dx_state = controller.activate(SpotProvider.DX)
 
-    assert dx_state.staged_identity is None
     assert dx_state.selected_identity is None
     assert [row.callsign for row in dx_state.rows] == ["K7DX"]
 
 
-def test_action_critical_change_under_same_identity_invalidates_staging() -> None:
+def test_same_identity_refresh_is_used_by_next_single_press_action() -> None:
     original = pota_spot("US-8001", 14_250_000, callsign="K1AAA")
     source, controller = controller_for(published_state((original,)))
     controller.select_next()
-    controller.stage_selected()
 
     changed = pota_spot("US-8001", 14_250_000, callsign="K1BBB")
     source.latest_forge_spot_state = published_state((changed,))
-    state = controller.state
 
-    assert state.selected_identity == original.identity
-    assert state.staged_identity is None
+    action = controller.selected_tune_action()
+
+    assert controller.selected_identity == original.identity
+    assert action is not None
+    assert str(action.callsign) == "K1BBB"
+
 
 
 def test_cached_and_retained_source_diagnostics_preserve_real_timestamps() -> None:
@@ -496,7 +495,7 @@ def test_pota_and_dx_mode_filter_state_are_independent() -> None:
     assert pota_state.pota_mode_filter is SharedSpotModeFilter.CW
 
 
-def test_dx_filter_change_cancels_staging_even_when_selection_remains_visible() -> None:
+def test_dx_filter_change_preserves_still_visible_stable_selection() -> None:
     spot = dx_spot(
         "K4SSB",
         14_250_000,
@@ -510,17 +509,13 @@ def test_dx_filter_change_cancels_staging_even_when_selection_remains_visible() 
     )
     controller.select_next()
 
-    staged = controller.stage_selected()
-    assert staged.staged_identity == spot.identity
-
     filtered = controller.next_dx_mode()
 
     assert filtered.dx_mode_filter is SharedSpotModeFilter.SSB
     assert filtered.selected_identity == spot.identity
-    assert filtered.staged_identity is None
 
 
-def test_mode_change_under_same_identity_invalidates_staged_action() -> None:
+def test_mode_change_under_same_identity_is_captured_at_activation_time() -> None:
     original = pota_spot(
         "US-8201",
         14_250_000,
@@ -531,10 +526,6 @@ def test_mode_change_under_same_identity_invalidates_staged_action() -> None:
     source, controller = controller_for(published_state((original,)))
     controller.select_next()
 
-    staged = controller.stage_selected()
-    assert staged.staged_identity is not None
-    assert controller.staged_action is not None
-
     changed = pota_spot(
         "US-8201",
         14_250_000,
@@ -544,21 +535,17 @@ def test_mode_change_under_same_identity_invalidates_staged_action() -> None:
     )
     source.latest_forge_spot_state = published_state((changed,))
 
-    state = controller.state
+    action = controller.selected_tune_action()
 
-    assert state.selected_identity == original.identity
-    assert state.staged_identity is None
-    assert controller.staged_action is None
+    assert action is not None
+    assert action.identity == original.identity
+    assert action.mode is RadioMode.LSB
 
 
-def test_frequency_identity_change_while_staged_clears_without_fallback() -> None:
+def test_frequency_identity_change_clears_selection_without_fallback() -> None:
     original = pota_spot("US-8202", 14_250_000, callsign="K1AAA")
     source, controller = controller_for(published_state((original,)))
     controller.select_next()
-
-    staged = controller.stage_selected()
-    assert staged.staged_identity is not None
-    assert controller.staged_action is not None
 
     replacement = pota_spot("US-8202", 14_260_000, callsign="K1AAA")
     source.latest_forge_spot_state = published_state((replacement,))
@@ -566,10 +553,9 @@ def test_frequency_identity_change_while_staged_clears_without_fallback() -> Non
     state = controller.state
 
     assert state.selected_identity is None
-    assert state.staged_identity is None
-    assert controller.staged_action is None
     assert [row.frequency.hz for row in state.rows] == [14_260_000]
     assert all(row.selected is False for row in state.rows)
+
 
 
 def test_pota_rows_expose_worked_status_without_affecting_dx() -> None:

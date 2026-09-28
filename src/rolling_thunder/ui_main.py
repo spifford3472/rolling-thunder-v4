@@ -1078,10 +1078,7 @@ def run_dashboard(
             footer_lines = [panel.status_line]
             if panel.error_line:
                 footer_lines.append(panel.error_line)
-            if panel_state.staged_identity is not None:
-                footer_lines.append("STAGED — PRESS AGAIN TO TUNE — BACK CANCELS")
-            else:
-                footer_lines.append("SELECT A SPOT — PRESS TO STAGE")
+            footer_lines.append("SELECT A SPOT — PRESS TO TUNE")
             pota_footer_text.set("\n".join(footer_lines))
         elif selected_context.selected is ContextId.REPEATERS:
             show_repeater_context_body()

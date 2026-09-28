@@ -146,7 +146,6 @@ The completed shared path provides:
 
 - provider-neutral immutable POTA/DX records and canonical snapshots
 - stable identity-based selection
-- exact action-critical `StagedSpotAction` values
 - Forge POTA and configurable DXSpider aggregation
 - optional bounded Forge-side QRZ enrichment
 - transactional Forge persistence and versioned REST
@@ -157,11 +156,11 @@ The completed shared path provides:
 - shared mode groups SSB/CW/FT4/FT8/DATA/ALL
 - POTA age filtering without leaking that rule into DX
 - current-radio-band activation default with 20-meter fallback
-- exact two-press shared receive tuning
-- first activation stages only and performs no CAT
-- second activation submits only the same still-valid staged target
-- staging invalidation on selection, context, filter, disappearance,
-  action-critical mutation, Back/Cancel, or invalid radio state
+- single-press shared receive tuning from the current stable selection
+- activation snapshots exact identity/callsign/frequency/mode and submits it through
+  the background typed tuning path
+- stale/disappeared selections and unusable radio state fail closed
+- duplicate rapid activations are rejected while tuning is already active
 - background shared receive tuning outside Tkinter
 - `ReceiveTuningService` as the sole receive-tuning authority
 - timed success/failure status and 10-second cross-band manual band/ATAS reminder
@@ -367,7 +366,7 @@ Sequence:
 10. #166 — 6 m repeater data, Active overrides, and geospatial filtering
 11. #167 — 6 m repeater panel and operator Active controls
 12. #168 — typed FT-891 FM repeater receive capabilities
-13. #169 — two-press 6 m repeater radio configuration integration
+13. #169 — typed 6 m repeater radio configuration integration (single-press activation now supersedes its original confirmation workflow)
 
 Issue #163 is a parking-lot item for a future weather-radar map overlay and is not
 part of the initial #154 completion sequence.
@@ -378,7 +377,7 @@ The workstream preserves these permanent rules:
 - Forge/weather/public internet failure never prevents basic logging
 - Tkinter performs no blocking serial/network/filesystem/SQLite/CAT work
 - provider-specific data is normalized behind typed provider-neutral boundaries
-- first operator activation stages only where a two-press action is required
+- receive-selection activation uses the current single-press typed application path
 - radio work routes only through typed application/radio boundaries
 - no PTT, MOX, keying, tuner, power, automatic transmit, voice-originated tuning,
   or unattended transmit authority

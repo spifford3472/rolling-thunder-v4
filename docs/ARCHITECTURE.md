@@ -46,7 +46,7 @@ implemented architecture through checkpoint 8 of issue #129.
 |  +------------------------------+--------------------------------+  |
 |                                 |                                   |
 |  +---------------- Application Controllers ---------------------+  |
-|  | operator commands | logging | shared spot selection/staging  |  |
+|  | operator commands | logging | shared spot stable selection  |  |
 |  | panel commands | navigation | tune-status presentation       |  |
 |  +------------------------------+--------------------------------+  |
 |                                 |                                   |
@@ -85,7 +85,7 @@ Domain code represents stable project concepts and validation rules, including:
 - contact and synchronization state
 - provider-neutral POTA/DX spot records
 - stable spot identities
-- exact staged receive actions
+- exact per-activation receive actions
 - immutable presentation and service snapshots
 
 Domain code does not depend on Tkinter, pyserial, HTTP clients, SQLite details,
@@ -185,7 +185,7 @@ FT-891 band state, not a tuner command, and not antenna verification.
 
 The shared spot architecture defines immutable provider-neutral POTA/DX records,
 canonical complete snapshots, stable identities, provider-specific filters,
-stable selection, exact staged receive actions, and the two-press operator
+stable selection, exact per-activation receive actions, and the single-press operator
 contract.
 
 Forge owns live public POTA and DXSpider provider access. The Pi receives only
@@ -244,32 +244,27 @@ starts with ALL.
 
 Any band or mode filter change cancels staging.
 
-### Two-press contract
+### Single-press contract
 
 The shared POTA/DX operator sequence is:
 
 ```text
 navigate / rotate
-    -> selection changes
-    -> staging clears
+    -> stable selection changes
 
-first activation
-    -> stage exact identity/callsign/frequency/mode
-    -> no CAT
-    -> no radio change
-
-second activation of same still-valid target
-    -> submit exact staged action
+single activation
+    -> validate current radio state
+    -> snapshot exact identity/callsign/frequency/mode
     -> SharedSpotTuneController background worker
     -> ReceiveTuningService
     -> typed Radio
 ```
 
-There is no third execution press in checkpoint 8.
+No persistent receive-confirmation stage is created.
 
-### Radio-state invalidation
+### Radio-state validation
 
-Before staging or second-press submission, the active-panel controller requires
+Before single-press submission, the active-panel controller requires
 an immutable radio state that is:
 
 - `CONNECTED`
@@ -277,8 +272,7 @@ an immutable radio state that is:
 - mode known
 - not transmitting
 
-If the state is unusable, existing staging is invalidated and no shared-spot
-receive tune is submitted.
+If the state is unusable, no shared-spot receive tune is submitted.
 
 `ReceiveTuningService` independently refuses ordered receive tuning when the
 radio reports transmitting.
@@ -287,8 +281,7 @@ radio reports transmitting.
 
 Within shared POTA/DX state, Back:
 
-1. cancels staging if staged
-2. otherwise clears the selected row if selected
+1. clears the selected row if selected
 
 Back does not acknowledge the timed band/ATAS status and does not create a radio
 action.
@@ -660,8 +653,8 @@ Accepted on `anvilmobile` with the real FT-891 and installed controls:
 - DX band/mode filtering
 - independent POTA/DX filter state
 - current-band activation default with 20-meter fallback
-- exact two-press POTA/DX staging
-- no radio change on first press
+- exact single-press POTA/DX receive submission
+- no persistent receive-confirmation stage
 - same-band POTA exact receive tuning
 - same-band DX exact receive tuning
 - cross-band POTA exact receive frequency/mode tuning

@@ -91,7 +91,6 @@ def panel_state(
         provider_health=health,
         rows=rows,
         selected_identity=next((item.identity for item in rows if item.selected), None),
-        staged_identity=None,
         pota_band=RadioBand.BAND_20M,
         pota_mode_filter=SharedSpotModeFilter.SSB,
         pota_maximum_age=timedelta(minutes=15),

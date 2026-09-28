@@ -6,14 +6,14 @@ The shared spot domain provides the provider-neutral foundation for unified POTA
 and DX operating intelligence.
 
 It defines immutable domain records, canonical snapshots, stable selection,
-provider-specific filters, exact staged receive actions, and the two-press
-operator-confirmation contract. Forge uses the same domain for public POTA and
-bounded DXSpider snapshots, while the Raspberry Pi reconstructs and durably
-retains those snapshots for offline-first presentation.
+provider-specific filters, and exact per-activation receive actions. Forge uses
+the same domain for public POTA and bounded DXSpider snapshots, while the
+Raspberry Pi reconstructs and durably retains those snapshots for offline-first
+presentation.
 
-Checkpoint 8 completes the shared operator path for both POTA and DX. The first
-activation stages only; the second activation of the same still-valid target may
-submit receive tuning through the existing typed `ReceiveTuningService`.
+The current shared operator path for both POTA and DX uses one activation on the
+current stable selection. That activation snapshots the exact receive target and
+submits it through the existing typed `ReceiveTuningService` path.
 
 ## Domain Records
 
@@ -207,70 +207,45 @@ When a snapshot or filtered view is replaced:
 - selection remains only if the selected identity remains visible
 - the current row position is resolved from the replacement view
 - selection clears if the identity disappears
-- staging clears if the selected identity disappears
+- selection clears if the selected identity disappears
 - no neighboring identity becomes selected automatically
 
 Rotating the encoder or otherwise changing the row selection also clears any
 staged action.
 
-## Exact Staged Actions
+## Exact Receive Actions
 
-A `StagedSpotAction` captures the exact action-critical values present on the
-first activation:
+A `StagedSpotAction` remains the immutable compatibility value used by the
+background tuning boundary, but it is no longer stored as operator confirmation
+state. On a single activation, the controller snapshots the currently selected
+record's stable identity, callsign, frequency, and normalized radio mode and
+immediately offers that exact value to the background tuner.
 
-- stable identity
-- callsign
-- frequency
-- normalized radio mode
+The selected identity is still stable across refreshes. If a spot disappears or
+changes identity before activation, there is no selected action to submit; the
+controller never falls sideways to a neighboring row.
 
-This prevents a refresh under the same identity from silently changing a later
-confirmed action.
+## Single-Press Operator Contract
 
-Staging clears when the staged target's callsign, frequency, or normalized mode
-changes. Non-action-critical metadata may refresh without changing staging,
-including operator name, grid, park name, location code, coordinates, provider
-comment, spotter callsign, and mode-provenance metadata.
-
-Staging also clears on:
-
-- row selection change
-- provider/context change
-- POTA or DX band-filter change
-- POTA or DX mode-filter change
-- identity disappearance
-- explicit Back/Cancel
-- radio invalidation
-- accepted second-press tune submission
-
-## Two-Press Operator Contract
-
-Both POTA and DX use one two-press contract:
+Both POTA and DX use one single-press receive-tuning contract:
 
 ```text
 navigate / rotate
     -> selection changes
-    -> staging clears
 
-first activation
-    -> stage exact identity/callsign/frequency/mode
-    -> no CAT
-    -> no radio change
-
-second activation of the same still-valid target
-    -> submit exact staged action to background tuning
-    -> clear staging after submission is accepted
+single activation
+    -> validate current radio state
+    -> snapshot exact selected identity/callsign/frequency/mode
+    -> submit to background tuning
     -> ReceiveTuningService performs ordered receive-only tuning
 ```
 
-There is no third confirmation step in the checkpoint-8 shared POTA/DX path.
-
-If no still-valid staged action exists, an activation stages rather than tunes.
-If the background tuning boundary is unavailable or already busy, the staged
-action is not silently redirected to another record.
+If there is no current selection, the tuning boundary is unavailable, or a tune
+is already active, activation is rejected without creating confirmation state.
 
 ## Radio-State Gate
 
-Before either staging or second-press submission, the active-panel command
+Before single-press submission, the active-panel command
 controller synchronizes the current immutable radio state.
 
 The radio is usable for shared-spot action only when:
@@ -322,7 +297,7 @@ authoritative operator-visible band state. The final cross-band operator
 contract is therefore:
 
 ```text
-second press succeeds
+single press succeeds
     -> exact selected receive frequency/mode is reached
     -> SET BAND TO <BAND> METERS — TUNE ATAS-120
     -> operator manually sets/confirms band and tunes ATAS-120 before transmit
@@ -336,7 +311,7 @@ parked in issue #149 and does not block checkpoint 8.
 
 ## Background Tuning and Presentation
 
-`SharedSpotTuneController` submits the exact staged frequency/mode on a background
+`SharedSpotTuneController` submits the exact selected frequency/mode on a background
 thread so blocking CAT work does not run in Tkinter.
 
 Published tune states are:
@@ -370,11 +345,10 @@ ATAS-120, and does not claim the antenna is safe to transmit.
 
 Within a shared POTA/DX context, Back operates on panel state only:
 
-1. if an action is staged, cancel staging
-2. otherwise, if a row is selected, clear selection
-3. otherwise, return control to the normal surrounding navigation behavior
+1. if a row is selected, clear selection
+2. otherwise, return control to the normal surrounding navigation behavior
 
-Back does not create a radio action and does not bypass the two-press contract.
+Back does not create a radio action.
 
 ## Pi Retained and Live State
 
@@ -431,9 +405,9 @@ Checkpoint 8 includes:
 - DX band and mode filtering through the shared controller
 - independent POTA/DX filter state
 - current-radio-band activation default with 20-meter fallback
-- exact two-press POTA/DX staging and receive-tune submission
-- action-critical staging invalidation
-- radio-state invalidation before staging/tuning
+- single-press POTA/DX receive-tune submission
+- stable-selection and action-snapshot validation
+- radio-state validation before tuning
 - background shared receive tuning
 - shared tuning/success/failure presentation
 - timed cross-band manual band/ATAS warning
@@ -443,7 +417,7 @@ Checkpoint 8 includes:
 
 Physical checkpoint-8 acceptance is complete on `anvilmobile`:
 
-- POTA and DX first press: stage only, no radio change
+- POTA and DX single press receive tuning: accepted
 - same-band POTA receive tuning: pass
 - same-band DX receive tuning: pass
 - cross-band POTA receive frequency/mode tuning plus manual band/ATAS handoff:
