@@ -481,3 +481,17 @@ ATAS tuning service is designed.
 
 This checkpoint is research only. It does not authorize a production tuning
 algorithm or unattended transmit.
+
+
+### First installed-hardware observation
+
+The first `ptt-first` test on the installed FT-891 at 5 W successfully keyed the
+radio and returned `TX1` while keyed. `RM6;` and `RM5;` were also readable
+during transmit, returning raw values of 142/255 and 34/255 respectively at
+51.666 MHz FM. A single `UP;` command did not produce visible ATAS movement.
+
+The next diagnostic step repeats the same typed UP or DOWN command at a bounded
+interval of 100-500 ms during the keyed window, defaulting to 150 ms, to test
+whether repeated CAT button events can approximate the manual held-button
+behavior. This remains a research probe only; repeated CAT acknowledgements do
+not prove motor motion.
