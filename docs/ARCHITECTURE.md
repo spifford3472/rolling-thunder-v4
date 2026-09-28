@@ -720,3 +720,25 @@ may replace the preloaded callsign, which supports the operator case where a new
 station takes over a frequency before the external spot feed refreshes.
 
 A rejected or unusable radio/tune activation does not preload the callsign.
+
+
+## Incremental POTA Map Marker Rendering
+
+The moving-map POTA overlay must retain stable canvas objects across ordinary
+vehicle movement. A viewport refresh does not delete and recreate the complete
+POTA layer.
+
+POTA marker canvas identity is based on the park reference plus its catalog
+latitude/longitude. When the viewport changes at the same presentation mode:
+
+- markers still visible are repositioned with canvas coordinate updates
+- newly visible markers are created
+- markers that leave the viewport are removed
+- the complete POTA layer is cleared only when the overlay becomes invalid
+  (for example, no matching published map/POTA viewport)
+
+Crossing between dot and label presentation modes may recreate the affected
+marker objects because their canvas representation changes.
+
+This keeps POTA rendering consistent with the incremental base-map/radar
+architecture and avoids visible park-marker flicker during continuous driving.
