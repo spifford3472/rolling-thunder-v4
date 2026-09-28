@@ -71,3 +71,26 @@ def test_mock_transcripts_cycle() -> None:
 def test_empty_mock_transcript_sequence_is_rejected() -> None:
     with pytest.raises(ValueError, match="At least one mock transcript"):
         MockTranscriptController(transcripts=())
+
+
+def test_selected_spot_callsign_preloads_commit_state() -> None:
+    controller = MockTranscriptController(
+        transcripts=(("KILO", "ONE", "ALPHA"),)
+    )
+
+    assert controller.preload_callsign("k1pota") is True
+    assert controller.state.pending_callsign == "K1POTA"
+    assert controller.state.commit_state == "READY"
+    assert controller.state.last_result == "SELECTED K1POTA"
+
+
+def test_voice_capture_overwrites_selected_spot_callsign() -> None:
+    controller = MockTranscriptController(
+        transcripts=(("KILO", "INDIA", "FIVE", "VICTOR", "NOVEMBER", "BRAVO"),)
+    )
+    assert controller.preload_callsign("K1POTA") is True
+
+    controller.start_capture()
+
+    assert controller.state.pending_callsign == "KI5VNB"
+    assert controller.state.last_result == "HEARD KI5VNB"

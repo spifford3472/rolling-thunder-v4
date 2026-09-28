@@ -108,6 +108,15 @@ class RecordingSharedTuning:
         return self.accept
 
 
+class RecordingPendingCallsign:
+    def __init__(self) -> None:
+        self.callsigns: list[str] = []
+
+    def preload_callsign(self, callsign: str) -> bool:
+        self.callsigns.append(callsign)
+        return True
+
+
 def connected_radio_state(*, transmitting: bool = False) -> RadioState:
     return RadioState(
         connection_state=RadioConnectionState.CONNECTED,
@@ -130,6 +139,7 @@ def build_controller(
     *,
     tuning: RecordingSharedTuning | None = None,
     radio_state: Callable[[], RadioState] | None = None,
+    pending_callsign: RecordingPendingCallsign | None = None,
 ) -> tuple[
     SharedSpotActivePanelCommandController,
     ContextNavigationController,
@@ -143,6 +153,7 @@ def build_controller(
         current_frequency=lambda: Frequency(hz=7_150_000),
         radio_state=radio_state or connected_radio_state,
         shared_tuning=tuning,
+        pending_callsign=pending_callsign,
     )
     return commands, navigation, panel
 
@@ -154,7 +165,11 @@ def test_constructor_synchronizes_initial_pota_context_with_radio_frequency() ->
 
 def test_pota_single_press_submits_selected_action() -> None:
     tuning = RecordingSharedTuning()
-    commands, _navigation, panel = build_controller(tuning=tuning)
+    pending = RecordingPendingCallsign()
+    commands, _navigation, panel = build_controller(
+        tuning=tuning,
+        pending_callsign=pending,
+    )
     commands.move_next()
     panel.calls.clear()
 
@@ -164,11 +179,17 @@ def test_pota_single_press_submits_selected_action() -> None:
     assert len(tuning.actions) == 1
     assert tuning.actions[0].frequency == Frequency(hz=14_250_000)
     assert tuning.actions[0].mode is RadioMode.USB
+    assert pending.callsigns == ["K1POTA"]
 
 
 def test_dx_single_press_submits_selected_action() -> None:
     tuning = RecordingSharedTuning()
-    commands, _navigation, panel = build_controller(ContextId.DX, tuning=tuning)
+    pending = RecordingPendingCallsign()
+    commands, _navigation, panel = build_controller(
+        ContextId.DX,
+        tuning=tuning,
+        pending_callsign=pending,
+    )
     commands.move_next()
     panel.calls.clear()
 
@@ -178,6 +199,7 @@ def test_dx_single_press_submits_selected_action() -> None:
     assert len(tuning.actions) == 1
     assert isinstance(tuning.actions[0].identity, DxSpotIdentity)
     assert tuning.actions[0].mode is RadioMode.CW
+    assert pending.callsigns == ["K1DX"]
 
 
 def test_activate_without_selection_performs_no_tune() -> None:
@@ -285,3 +307,28 @@ def test_weather_context_routes_encoder_movement_only_to_alert_viewport() -> Non
     assert commands.move_next() is True
     assert viewport.calls == ["scroll_previous", "scroll_next"]
     assert panel.calls == []
+
+
+def test_scrolling_does_not_preload_callsign() -> None:
+    tuning = RecordingSharedTuning()
+    pending = RecordingPendingCallsign()
+    commands, _navigation, _panel = build_controller(
+        tuning=tuning,
+        pending_callsign=pending,
+    )
+
+    assert commands.move_next() is True
+    assert pending.callsigns == []
+
+
+def test_rejected_tune_does_not_preload_callsign() -> None:
+    tuning = RecordingSharedTuning(accept=False)
+    pending = RecordingPendingCallsign()
+    commands, _navigation, _panel = build_controller(
+        tuning=tuning,
+        pending_callsign=pending,
+    )
+    commands.move_next()
+
+    assert commands.activate_selection() is False
+    assert pending.callsigns == []

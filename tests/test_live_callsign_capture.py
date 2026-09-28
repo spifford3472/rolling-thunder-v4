@@ -103,3 +103,27 @@ def test_discard_clears_completed_capture() -> None:
     assert discarded.pending_callsign == ""
     assert discarded.commit_state == "DISABLED"
     assert discarded.last_result == "DISCARDED"
+
+
+def test_selected_spot_callsign_preloads_live_capture_state() -> None:
+    controller = LiveCallsignCaptureController(FakeRecognizer(()))
+
+    assert controller.preload_callsign("k1dx") is True
+    assert controller.state.pending_callsign == "K1DX"
+    assert controller.state.commit_state == "READY"
+    assert controller.state.last_result == "SELECTED K1DX"
+
+
+def test_completed_voice_capture_overwrites_selected_spot_callsign() -> None:
+    recognizer = FakeRecognizer(
+        ("KILO", "INDIA", "FIVE", "VICTOR", "NOVEMBER", "BRAVO")
+    )
+    controller = LiveCallsignCaptureController(recognizer)
+    assert controller.preload_callsign("K1DX") is True
+
+    assert controller.start_capture() is True
+    recognizer.release.set()
+    wait_until_complete(controller)
+
+    assert controller.state.pending_callsign == "KI5VNB"
+    assert controller.state.last_result == "HEARD KI5VNB"

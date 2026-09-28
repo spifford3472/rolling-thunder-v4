@@ -83,6 +83,22 @@ class MockTranscriptController:
                 )
             return self._state
 
+    def preload_callsign(self, callsign: str) -> bool:
+        """Preload one selected spot callsign without preventing later voice replacement."""
+        normalized = callsign.strip().upper()
+        if not normalized:
+            return False
+        with self._lock:
+            if self._state.commit_state == "COMMITTING":
+                return False
+            self._state = CallsignCaptureState(
+                pending_callsign=normalized,
+                voice_state="READY",
+                commit_state="READY",
+                last_result=f"SELECTED {normalized}",
+            )
+            return True
+
     def discard(self) -> CallsignCaptureState:
         """Clear the pending result without logging anything."""
         with self._lock:
