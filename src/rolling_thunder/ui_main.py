@@ -95,6 +95,7 @@ _BACKGROUND = "#080808"
 _PANEL_BACKGROUND = "#101010"
 _SECONDARY_BACKGROUND = "#151515"
 _CONTEXT_SELECTED = "#2a3f4b"
+_BROWSE_HEADER_BACKGROUND = "#315f73"
 _BORDER = "#303030"
 _BRIGHT = "#ffffff"
 _DISABLED = "#777777"
@@ -575,7 +576,7 @@ def run_dashboard(
         browse_frame,
         bg=_PANEL_BACKGROUND,
         highlightthickness=2,
-        highlightbackground=_BORDER,
+        highlightbackground=_BROWSE_HEADER_BACKGROUND,
     )
     browse_frequency_card.grid(
         row=0,
@@ -591,11 +592,11 @@ def run_dashboard(
     tk.Label(
         browse_frequency_card,
         text="FREQUENCY",
-        bg=_PANEL_BACKGROUND,
-        fg=_MUTED,
-        font=("DejaVu Sans", 36, "bold"),
+        bg=_BROWSE_HEADER_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 44, "bold"),
         anchor="center",
-    ).grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 2))
+    ).grid(row=0, column=0, sticky="ew", ipady=7)
 
     browse_frequency_text = tk.StringVar(value="---.--- MHz")
     tk.Label(
@@ -603,15 +604,15 @@ def run_dashboard(
         textvariable=browse_frequency_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 31, "bold"),
+        font=("DejaVu Sans", 40, "bold"),
         anchor="center",
-    ).grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 14))
+    ).grid(row=1, column=0, sticky="nsew", padx=12, pady=12)
 
     browse_mode_card = tk.Frame(
         browse_frame,
         bg=_PANEL_BACKGROUND,
         highlightthickness=2,
-        highlightbackground=_BORDER,
+        highlightbackground=_BROWSE_HEADER_BACKGROUND,
     )
     browse_mode_card.grid(
         row=1,
@@ -626,11 +627,11 @@ def run_dashboard(
     tk.Label(
         browse_mode_card,
         text="MODE",
-        bg=_PANEL_BACKGROUND,
-        fg=_MUTED,
-        font=("DejaVu Sans", 32, "bold"),
+        bg=_BROWSE_HEADER_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 40, "bold"),
         anchor="center",
-    ).grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 2))
+    ).grid(row=0, column=0, sticky="ew", ipady=6)
 
     browse_mode_text = tk.StringVar(value="--")
     tk.Label(
@@ -638,15 +639,15 @@ def run_dashboard(
         textvariable=browse_mode_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 27, "bold"),
+        font=("DejaVu Sans", 36, "bold"),
         anchor="center",
-    ).grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+    ).grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
 
     browse_step_card = tk.Frame(
         browse_frame,
         bg=_PANEL_BACKGROUND,
         highlightthickness=2,
-        highlightbackground=_BORDER,
+        highlightbackground=_BROWSE_HEADER_BACKGROUND,
     )
     browse_step_card.grid(
         row=1,
@@ -661,11 +662,11 @@ def run_dashboard(
     tk.Label(
         browse_step_card,
         text="STEP",
-        bg=_PANEL_BACKGROUND,
-        fg=_MUTED,
-        font=("DejaVu Sans", 32, "bold"),
+        bg=_BROWSE_HEADER_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 40, "bold"),
         anchor="center",
-    ).grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 2))
+    ).grid(row=0, column=0, sticky="ew", ipady=6)
 
     browse_step_text = tk.StringVar(value="100 Hz")
     tk.Label(
@@ -673,9 +674,9 @@ def run_dashboard(
         textvariable=browse_step_text,
         bg=_PANEL_BACKGROUND,
         fg=_WARNING,
-        font=("DejaVu Sans", 27, "bold"),
+        font=("DejaVu Sans", 36, "bold"),
         anchor="center",
-    ).grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+    ).grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
 
     pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     pota_panel_frame.grid(row=1, column=0, sticky="nsew")
