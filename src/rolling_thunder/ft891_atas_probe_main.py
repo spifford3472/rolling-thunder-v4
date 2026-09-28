@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import time
 from pathlib import Path
 
 from rolling_thunder.config import HardwareAdapterMode, load_config
@@ -175,7 +176,6 @@ def main() -> int:
     for remaining in range(args.countdown_seconds, 0, -1):
         if remaining <= 5 or remaining % 5 == 0:
             print(f"Keying in {remaining}...")
-        import time
         time.sleep(1)
 
     print("KEYING NOW")
