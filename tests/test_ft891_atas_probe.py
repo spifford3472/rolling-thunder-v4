@@ -62,14 +62,14 @@ def test_ptt_first_probe_orders_commands_and_forces_receive() -> None:
             direction=AtasProbeDirection.UP,
             order=AtasProbeOrder.PTT_FIRST,
             inter_command_delay_ms=50,
-            meter_settle_ms=100,
+            keyed_duration_s=3.0,
         ),
         sleeper=sleeps.append,
     )
 
     assert result.swr_meter_raw == 7
     assert result.power_meter_raw == 21
-    assert sleeps == [0.05, 0.1]
+    assert sleeps == [0.05, 3.0]
     assert transport.events == [
         ("open",),
         ("query", b"TX;"),
@@ -104,7 +104,7 @@ def test_control_first_probe_places_direction_before_ptt() -> None:
             direction=AtasProbeDirection.DOWN,
             order=AtasProbeOrder.CONTROL_FIRST,
             inter_command_delay_ms=0,
-            meter_settle_ms=0,
+            keyed_duration_s=0.5,
         ),
         sleeper=lambda _seconds: None,
     )
@@ -160,7 +160,7 @@ def test_probe_forces_receive_when_meter_query_fails() -> None:
                 direction=AtasProbeDirection.UP,
                 order=AtasProbeOrder.PTT_FIRST,
                 inter_command_delay_ms=0,
-                meter_settle_ms=0,
+                keyed_duration_s=0.5,
             ),
             sleeper=lambda _seconds: None,
         )
@@ -173,14 +173,14 @@ def test_probe_forces_receive_when_meter_query_fails() -> None:
 
 
 @pytest.mark.parametrize(
-    ("delay", "settle"),
-    [(-1, 0), (501, 0), (0, -1), (0, 501)],
+    ("delay", "duration"),
+    [(-1, 0.5), (501, 0.5), (0, 0.49), (0, 3.01)],
 )
-def test_probe_request_bounds_delays(delay: int, settle: int) -> None:
+def test_probe_request_bounds_delays(delay: int, duration: float) -> None:
     with pytest.raises(ValueError):
         AtasProbeRequest(
             direction=AtasProbeDirection.UP,
             order=AtasProbeOrder.PTT_FIRST,
             inter_command_delay_ms=delay,
-            meter_settle_ms=settle,
+            keyed_duration_s=duration,
         )
