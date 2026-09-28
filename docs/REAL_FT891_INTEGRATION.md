@@ -201,7 +201,7 @@ Same-band tuning bypasses memory recall and still verifies frequency and mode.
 `ReceiveTuningService` also refuses ordered receive tuning while the current
 radio state reports `transmitting=True`.
 
-## Shared POTA/DX Two-Press Path
+## Shared POTA/DX Single-Press Path
 
 Checkpoint 8 routes POTA and DX through the same operator-command and tuning
 path:
@@ -214,35 +214,29 @@ encoder / keyboard activation
     -> Ft891Radio
 ```
 
-The operator contract is exactly two presses:
+The current operator contract is one press:
 
 ```text
-first press
-    -> stage exact selected identity/callsign/frequency/mode
-    -> no CAT
-    -> no radio change
-
-second press on the same still-valid target
-    -> submit exact staged action
-    -> background receive tuning
+encoder / keyboard activation
+    -> snapshot the exact currently selected identity/callsign/frequency/mode
+    -> submit the action immediately to the background tune controller
     -> ReceiveTuningService
 ```
 
-There is no third confirmation/execution press in the shared checkpoint-8 path.
+There is no persistent receive-confirmation/staging step.
 
-Before staging or tuning, the active-panel command controller requires the latest
-radio state to be connected, to have known frequency and mode, and not to report
-transmitting. Otherwise staging is invalidated and the action fails closed.
+Before submission, the active-panel command controller requires the latest radio
+state to be connected, to have known frequency and mode, and not to report
+transmitting. Otherwise the action fails closed. A busy tune worker rejects a
+rapid duplicate activation rather than starting overlapping CAT work.
 
-Rotation, selection change, POTA/DX context change, band/mode filter change,
-identity disappearance, action-critical callsign/frequency/mode mutation,
-Back/Cancel, or radio invalidation clears staging.
-
-No neighboring row can inherit a staged action.
+Selection remains identity-stable across refreshes. If the selected identity
+disappears it is cleared rather than allowing a neighboring row to inherit the
+operator action.
 
 ## Background Tuning Boundary
 
-The second press does not perform blocking CAT work in Tkinter.
+The single activation does not perform blocking CAT work in Tkinter.
 
 `SharedSpotTuneController` owns background submission of the exact
 `StagedSpotAction`. It publishes immutable tuning state for UI presentation:
@@ -295,9 +289,9 @@ After a CAT failure or physical radio power-off:
 - an old staged target is not resurrected or automatically executed after
   recovery
 
-Shared receive-tuning operations use the ordered application service only after
-explicit operator confirmation. Blocking CAT work must not run directly from a
-Tkinter widget callback.
+Shared receive-tuning operations use the ordered application service after explicit
+operator activation. Blocking CAT work must not run directly from a Tkinter widget
+callback.
 
 ## ATAS-120 Manual Band / Tune Warning
 
@@ -324,9 +318,9 @@ Current checkpoint-8 behavior is:
   state
 - the warning does not claim that the ATAS-120 is tuned
 
-Back is not the ATAS acknowledgement mechanism in checkpoint 8. Within the
-shared POTA/DX panel, Back cancels staging first and clears selection on a later
-Back action. The band/ATAS reminder is a timed `StatusMessageService` message.
+Back is not the ATAS acknowledgement mechanism. Within the shared POTA/DX panel,
+Back clears selection. The band/ATAS reminder is a timed `StatusMessageService`
+message.
 
 The operator must manually set/confirm the FT-891 band and tune the ATAS-120
 before transmitting.
@@ -369,8 +363,8 @@ boundaries, and deterministic schedulers. Coverage includes:
 - ordered receive-tuning call sequence
 - receive-tuning rejection while transmitting
 - serialized FT-891 CAT operations
-- first shared activation staging only
-- second shared activation submitting the exact staged action
+- single shared activation submitting the exact selected action
+- rapid duplicate activation rejected while the background worker is busy
 - POTA and DX sharing the same execution boundary
 - stale/action-mutated staging rejection
 - selection, filter, context, Back, and radio-state invalidation
@@ -389,21 +383,18 @@ parked.
 
 Accepted results include:
 
-- POTA first press stages only and does not change the radio
-- DX first press stages only and does not change the radio
-- same-band POTA second press tunes the selected receive frequency as expected
-- same-band DX second press tunes the exact selected DX frequency
+- POTA first press tunes the selected receive frequency as expected
+- DX first press tunes the exact selected DX frequency
 - same-band operation produces no false `SET BAND ... TUNE ATAS-120` warning
 - cross-band POTA exact receive frequency/mode tuning succeeds with the manual
   band/ATAS handoff
 - cross-band DX exact receive frequency/mode tuning succeeds with the manual
   band/ATAS handoff
-- selection change invalidates staging
-- band-filter change invalidates staging
-- mode-filter change invalidates staging
-- Back cancels staging without tuning
-- radio power loss invalidates staging
-- reconnection does not resurrect or execute an old staged target
+- selection identity remains stable across refreshes and clears if the target disappears
+- band/mode filter changes cannot make a neighboring row inherit an activation
+- Back clears selection without tuning
+- radio power loss blocks activation
+- reconnection does not auto-execute any prior selection
 - Enhanced CAT remains the only FT-891 interface owned by Rolling Thunder
 - the Standard TX-capable USB interface remains closed
 - no PTT, MOX, keying, tuner, power, or transmit operation occurs
@@ -416,3 +407,75 @@ Accepted results include:
 
 Automatic FT-891 band-state behavior is deliberately not claimed as accepted.
 That future investigation remains tracked in issue #149.
+
+
+## Checkpoint 2: Isolated ATAS CAT Bench Probe
+
+Checkpoint 2 adds a diagnostic-only executable:
+
+```text
+rolling-thunder-ft891-atas-probe
+```
+
+It is intentionally not wired into the normal `Radio` protocol,
+`ReceiveTuningService`, application runtime, Tkinter UI, physical controls, or
+voice controls. Normal Rolling Thunder therefore retains its no-PTT/no-unattended-
+transmit safety boundary.
+
+The probe exists only to answer the narrow hardware question of whether FT-891
+CAT can reproduce the manual ATAS procedure documented by Yaesu: transmit while
+operating microphone UP or DOWN, then inspect the SWR meter.
+
+The probe exposes only typed, fixed CAT operations:
+
+```text
+TX;       read TX state
+TX1;      CAT PTT on
+RX;       bench-verified force receive
+TX0;      documented CAT PTT off
+UP;       microphone UP
+DN;       microphone DOWN
+RM6;      SWR meter, raw 0-255
+RM5;      power meter, raw 0-255
+```
+
+It does not accept arbitrary raw CAT strings.
+
+Safety requirements are fail-closed:
+
+- the normal dashboard and every other CAT client must be stopped first
+- only the configured Enhanced CAT interface ending in `-if00-port0` is allowed
+- the Standard Com Port remains unopened
+- the radio must read `TX0` before the probe starts
+- the operator must explicitly acknowledge that RF will be transmitted
+- the operator must confirm an ATAS RF path and a radio power setting of 1-10 W
+- inter-command and meter-settle delays are bounded to 0-500 ms
+- any unexpected TX state or malformed response aborts the experiment
+- both `RX;` and `TX0;` are attempted in a `finally` path before close
+
+Two ordering experiments are supported:
+
+```text
+ptt-first:
+    TX1;
+    bounded delay
+    UP; or DN;
+    bounded settle
+    TX; / RM6; / RM5;
+    RX; / TX0;
+
+control-first:
+    UP; or DN;
+    bounded delay
+    TX1;
+    bounded settle
+    TX; / RM6; / RM5;
+    RX; / TX0;
+```
+
+A CAT acknowledgement is not evidence that the ATAS moved. Physical motion and
+the raw SWR trend must be observed on the installed hardware before any automated
+ATAS tuning service is designed.
+
+This checkpoint is research only. It does not authorize a production tuning
+algorithm or unattended transmit.
