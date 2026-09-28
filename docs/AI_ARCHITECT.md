@@ -673,3 +673,14 @@ At the start of a new session:
 11. Treat the repository as more authoritative than previous chat summaries.
 12. Start from the currently approved issue/checkpoint sequence; do not restart
     historical Milestone 10 phases that are already complete.
+
+
+## FT-891 ATAS Research Exception
+
+The normal runtime safety boundary still forbids PTT and unattended transmit.
+Checkpoint 2 may use the dedicated `rolling-thunder-ft891-atas-probe` diagnostic
+only for controlled bench research. Do not route that probe through `Radio`,
+`ReceiveTuningService`, Tkinter, ESP32 controls, voice, or any automatic
+workflow. Do not generalize it into a raw CAT shell. A CAT acknowledgement never
+proves physical ATAS movement; installed-hardware observation is required before
+any production tuning design.
