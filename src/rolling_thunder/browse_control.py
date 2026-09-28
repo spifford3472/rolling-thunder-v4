@@ -41,7 +41,9 @@ def browse_mode_label(mode: RadioMode | None) -> str:
 
 
 def browse_ssb_mode(frequency_hz: int) -> RadioMode:
-    """Choose conventional HF sideband while presenting one SSB choice."""
+    """Choose the operator-facing SSB sideband for the current frequency."""
+    if 5_330_500 <= frequency_hz <= 5_406_400:
+        return RadioMode.USB
     return RadioMode.LSB if frequency_hz < 10_000_000 else RadioMode.USB
 
 
