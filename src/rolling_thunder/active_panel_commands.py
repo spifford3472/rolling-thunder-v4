@@ -225,8 +225,6 @@ class ActivePanelCommandController:
         return True
 
     def tertiary(self) -> bool:
-        if self._browse_is_active():
-            return self._browse_panel is not None and self._browse_panel.cycle_mode()
         return False
 
     def tertiary_long(self) -> bool:
@@ -360,6 +358,8 @@ class SharedSpotActivePanelCommandController:
         return False
 
     def tertiary(self) -> bool:
+        if self._browse_is_active():
+            return self._browse_panel is not None and self._browse_panel.cycle_mode()
         return False
 
     def tertiary_long(self) -> bool:
