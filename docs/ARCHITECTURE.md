@@ -706,3 +706,17 @@ clean main
 ```
 
 Checkpoint 8 must remain unmerged until that explicit authorization is given.
+
+
+## Selected Spot Callsign Preload
+
+POTA and DX encoder activation may preload the exact selected spot callsign into
+the existing pending-callsign capture state after the receive-tune submission is
+accepted. Merely rotating/highlighting a row never changes the pending callsign.
+
+This reuses the same state consumed by Commit. It does not create a separate
+spot-only logging field. A later explicit voice capture remains authoritative and
+may replace the preloaded callsign, which supports the operator case where a new
+station takes over a frequency before the external spot feed refreshes.
+
+A rejected or unusable radio/tune activation does not preload the callsign.
