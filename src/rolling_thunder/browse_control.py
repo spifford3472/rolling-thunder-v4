@@ -84,6 +84,8 @@ class BrowseRadioController:
         radio_state = self._radio_state()
         if not self._usable(radio_state):
             return False
+        current_frequency = radio_state.frequency
+        assert current_frequency is not None
 
         with self._lock:
             base_hz = self._pending_frequency_hz
@@ -115,7 +117,7 @@ class BrowseRadioController:
             frequency_hz = (
                 self._pending_frequency_hz
                 if self._pending_frequency_hz is not None
-                else radio_state.frequency.hz
+                else current_frequency.hz
             )
             target_mode = {
                 "CW": RadioMode.CW,
