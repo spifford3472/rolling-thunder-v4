@@ -157,6 +157,19 @@ class RepeaterRadioConfigurationCommands(Protocol):
         ...
 
 
+class BrowsePanelCommands(Protocol):
+    """Receive-only Browse controls implemented outside the UI thread."""
+
+    def cycle_step(self) -> bool:
+        ...
+
+    def cycle_mode(self) -> bool:
+        ...
+
+    def adjust_frequency(self, direction: int) -> bool:
+        ...
+
+
 class SettingsPanelCommands(Protocol):
     def toggle_radar(self) -> bool:
         ...
@@ -212,6 +225,8 @@ class ActivePanelCommandController:
         return True
 
     def tertiary(self) -> bool:
+        if self._browse_is_active():
+            return self._browse_panel is not None and self._browse_panel.cycle_mode()
         return False
 
     def tertiary_long(self) -> bool:
@@ -264,6 +279,7 @@ class SharedSpotActivePanelCommandController:
         radio_state: Callable[[], RadioState] | None = None,
         shared_tuning: SharedSpotTuneCommands | None = None,
         pending_callsign: PendingCallsignCommands | None = None,
+        browse_panel: BrowsePanelCommands | None = None,
         settings_panel: SettingsPanelCommands | None = None,
         repeater_panel: RepeaterPanelCommands | None = None,
         repeater_active_overrides: RepeaterActiveOverrideCommands | None = None,
@@ -276,6 +292,7 @@ class SharedSpotActivePanelCommandController:
         self._radio_state = radio_state
         self._shared_tuning = shared_tuning
         self._pending_callsign = pending_callsign
+        self._browse_panel = browse_panel
         self._settings_panel = settings_panel
         self._repeater_panel = repeater_panel
         self._repeater_active_overrides = repeater_active_overrides
@@ -316,6 +333,8 @@ class SharedSpotActivePanelCommandController:
         if self._dx_is_active():
             self._shared_panel.next_dx_band()
             return True
+        if self._browse_is_active():
+            return False
         if self._repeater_is_active():
             if self._repeater_panel is None:
                 return False
@@ -332,6 +351,8 @@ class SharedSpotActivePanelCommandController:
         if self._dx_is_active():
             self._shared_panel.next_dx_mode()
             return True
+        if self._browse_is_active():
+            return self._browse_panel is not None and self._browse_panel.cycle_step()
         if self._repeater_is_active():
             return self._toggle_repeater_active()
         if self._settings_is_active():
@@ -345,6 +366,8 @@ class SharedSpotActivePanelCommandController:
         return False
 
     def move_previous(self) -> bool:
+        if self._browse_is_active():
+            return self._browse_panel is not None and self._browse_panel.adjust_frequency(-1)
         if self._weather_is_active():
             viewport = self._weather_alert_viewport
             return viewport is not None and viewport.scroll_previous()
@@ -364,6 +387,8 @@ class SharedSpotActivePanelCommandController:
         return self._shared_panel.selected_identity != previous_identity
 
     def move_next(self) -> bool:
+        if self._browse_is_active():
+            return self._browse_panel is not None and self._browse_panel.adjust_frequency(1)
         if self._weather_is_active():
             viewport = self._weather_alert_viewport
             return viewport is not None and viewport.scroll_next()
@@ -475,6 +500,9 @@ class SharedSpotActivePanelCommandController:
 
     def _dx_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.DX
+
+    def _browse_is_active(self) -> bool:
+        return self._context_navigation.state.selected is ContextId.BROWSE
 
     def _repeater_is_active(self) -> bool:
         return self._context_navigation.state.selected is ContextId.REPEATERS
