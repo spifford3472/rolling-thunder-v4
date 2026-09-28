@@ -54,12 +54,15 @@ class AtasProbeRequest:
     order: AtasProbeOrder
     inter_command_delay_ms: int = 50
     keyed_duration_s: float = 3.0
+    direction_repeat_interval_ms: int = 150
 
     def __post_init__(self) -> None:
         if not 0 <= self.inter_command_delay_ms <= 500:
             raise ValueError("inter_command_delay_ms must be between 0 and 500")
         if not 0.5 <= self.keyed_duration_s <= 3.0:
             raise ValueError("keyed_duration_s must be between 0.5 and 3.0")
+        if not 100 <= self.direction_repeat_interval_ms <= 500:
+            raise ValueError("direction_repeat_interval_ms must be between 100 and 500")
 
 
 @dataclass(frozen=True)
@@ -112,9 +115,14 @@ def run_atas_probe(
 
             if request.order is AtasProbeOrder.PTT_FIRST:
                 sleeper(request.inter_command_delay_ms / 1000)
-                transport.command(direction_command)
 
-            sleeper(request.keyed_duration_s)
+            repeat_interval_s = request.direction_repeat_interval_ms / 1000
+            remaining_s = request.keyed_duration_s
+            while remaining_s > 0:
+                transport.command(direction_command)
+                sleep_s = min(repeat_interval_s, remaining_s)
+                sleeper(sleep_s)
+                remaining_s -= sleep_s
 
             tx_state = parse_tx_state_reply(transport.query(encode_read_tx_state()))
             if tx_state != 1:
