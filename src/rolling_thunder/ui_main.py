@@ -76,6 +76,10 @@ from rolling_thunder.shared_spot_tuning import SharedSpotTuneController
 from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
+from rolling_thunder.us_extra_band_advisory import (
+    BandAdvisoryLevel,
+    us_extra_band_advisory,
+)
 from rolling_thunder.status_bar_ui import StatusBarWidgets
 from rolling_thunder.status_messages import StatusPresentation
 from rolling_thunder.status_monitor import build_status_monitor
@@ -588,6 +592,7 @@ def run_dashboard(
     )
     browse_frequency_card.grid_columnconfigure(0, weight=1)
     browse_frequency_card.grid_rowconfigure(1, weight=1)
+    browse_frequency_card.grid_rowconfigure(2, weight=0)
 
     tk.Label(
         browse_frequency_card,
@@ -607,6 +612,26 @@ def run_dashboard(
         font=("DejaVu Sans", 40, "bold"),
         anchor="center",
     ).grid(row=1, column=0, sticky="nsew", padx=12, pady=12)
+
+    browse_warning_text = tk.StringVar(value="")
+    browse_warning_label = tk.Label(
+        browse_frequency_card,
+        textvariable=browse_warning_text,
+        bg=_FAILURE,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 26, "bold"),
+        anchor="center",
+        justify="center",
+    )
+    browse_warning_label.grid(
+        row=2,
+        column=0,
+        sticky="ew",
+        padx=12,
+        pady=(0, 12),
+        ipady=7,
+    )
+    browse_warning_label.grid_remove()
 
     browse_mode_card = tk.Frame(
         browse_frame,
@@ -1242,6 +1267,25 @@ def run_dashboard(
                 else "---.------ MHz"
             )
             browse_step_text.set(browse_state.step_label.upper())
+            browse_advisory = us_extra_band_advisory(
+                radio_state.frequency,
+                radio_state.mode,
+            )
+            if browse_advisory.level is BandAdvisoryLevel.OK:
+                browse_warning_label.grid_remove()
+            else:
+                browse_warning_text.set(browse_advisory.message or "")
+                if browse_advisory.level is BandAdvisoryLevel.OUT_OF_BAND:
+                    browse_warning_label.configure(
+                        bg=_FAILURE,
+                        fg=_BRIGHT,
+                    )
+                else:
+                    browse_warning_label.configure(
+                        bg=_WARNING,
+                        fg=_HEALTH_DARK_TEXT,
+                    )
+                browse_warning_label.grid()
         elif selected_context.selected is ContextId.REPEATERS:
             show_repeater_context_body()
             health_frame.grid_remove()
