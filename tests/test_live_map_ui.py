@@ -409,3 +409,73 @@ def test_pota_marker_update_plan_does_not_treat_viewport_motion_as_marker_replac
     assert plan.remove == ()
     assert plan.add == ()
     assert plan.retain == (("US-1234", 39.6, -84.1),)
+
+
+
+def test_pota_markers_stay_visible_while_async_viewport_query_catches_up() -> None:
+    class RecordingCanvas:
+        def __init__(self) -> None:
+            self.deleted: list[int | str] = []
+            self.coords_calls: list[tuple[int, tuple[float, ...]]] = []
+
+        def delete(self, item: int | str) -> None:
+            self.deleted.append(item)
+
+        def coords(self, item: int, *coords: float) -> None:
+            self.coords_calls.append((item, coords))
+
+        def find_withtag(self, tag: str) -> tuple[int, ...]:
+            if tag == "map-pota":
+                return (101,)
+            return ()
+
+        def tag_raise(self, _tag: int | str, _above: str) -> None:
+            return None
+
+    old_viewport = build_map_viewport(
+        GeoPoint(latitude=39.5200, longitude=-84.0600),
+        zoom=10,
+        width_px=512,
+        height_px=512,
+    )
+    current_viewport = build_map_viewport(
+        GeoPoint(latitude=39.5205, longitude=-84.0595),
+        zoom=10,
+        width_px=512,
+        height_px=512,
+    )
+    marker = PotaMapMarker(
+        reference="US-1234",
+        name="Stable Park",
+        latitude=39.60,
+        longitude=-84.10,
+    )
+    pota_snapshot = PotaMapMarkerSnapshot(
+        viewport=old_viewport,
+        markers=(marker,),
+        detail="POTA MARKERS READY",
+        updated_at=NOW,
+    )
+    map_snapshot = LiveMapSnapshot(
+        status=MapDataStatus.READY,
+        viewport=current_viewport,
+        tiles=(),
+        detail="MAP READY",
+        updated_at=NOW,
+    )
+
+    canvas = RecordingCanvas()
+    widgets = LiveMapWidgets.__new__(LiveMapWidgets)
+    widgets._canvas = canvas
+    widgets._attribution_item = None
+    widgets._pota_label_min_zoom = 14
+    widgets._pota_dot_diameter_px = 12
+    widgets._pota_items = {
+        ("US-1234", 39.6, -84.1): ("dot", (101,))
+    }
+
+    widgets._draw_pota_markers(pota_snapshot, map_snapshot)
+
+    assert canvas.deleted == []
+    assert canvas.coords_calls
+    assert canvas.coords_calls[0][0] == 101
