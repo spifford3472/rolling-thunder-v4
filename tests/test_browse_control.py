@@ -77,3 +77,8 @@ def test_mode_cycle_uses_operator_facing_ssb_choice() -> None:
 def test_ssb_uses_lsb_below_10_mhz_and_usb_at_or_above() -> None:
     assert browse_ssb_mode(7_200_000) is RadioMode.LSB
     assert browse_ssb_mode(14_250_000) is RadioMode.USB
+
+
+
+def test_ssb_uses_usb_on_60_meters() -> None:
+    assert browse_ssb_mode(5_357_000) is RadioMode.USB
