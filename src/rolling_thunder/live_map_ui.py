@@ -583,7 +583,6 @@ class LiveMapWidgets:
             and pota.viewport is not None
             and map_snapshot is not None
             and map_snapshot.viewport is not None
-            and pota.viewport == map_snapshot.viewport
         )
         if not valid:
             for _kind, canvas_items in items.values():
@@ -595,7 +594,13 @@ class LiveMapWidgets:
 
         assert pota is not None
         assert pota.viewport is not None
-        viewport = pota.viewport
+        assert map_snapshot is not None
+        assert map_snapshot.viewport is not None
+        # Render the latest known park set against the current map viewport.
+        # The POTA DB worker publishes asynchronously, so an exact viewport
+        # mismatch is expected briefly after GPS/map movement. Clearing here
+        # causes visible blinking even from normal stationary GPS jitter.
+        viewport = map_snapshot.viewport
         desired_kind = "dot" if viewport.zoom < self._pota_label_min_zoom else "label"
         markers = {
             _pota_marker_key(marker.reference, marker.latitude, marker.longitude): marker
