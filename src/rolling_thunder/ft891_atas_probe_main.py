@@ -47,9 +47,16 @@ def _parser() -> argparse.ArgumentParser:
         default=50,
     )
     parser.add_argument(
-        "--meter-settle-ms",
+        "--countdown-seconds",
         type=int,
-        default=100,
+        default=30,
+        help="Seconds to wait before the CAT port is opened and RF is keyed (0-60).",
+    )
+    parser.add_argument(
+        "--keyed-duration-seconds",
+        type=float,
+        default=3.0,
+        help="How long CAT PTT remains active before meter readback; maximum 3.0 s.",
     )
     parser.add_argument(
         "--confirmed-power-watts",
@@ -140,11 +147,14 @@ def main() -> int:
             f"{joined}. Stop the Rolling Thunder dashboard and any other CAT client first."
         )
 
+    if not 0 <= args.countdown_seconds <= 60:
+        raise SystemExit("REFUSED: --countdown-seconds must be between 0 and 60.")
+
     request = AtasProbeRequest(
         direction=AtasProbeDirection(args.direction),
         order=AtasProbeOrder(args.order),
         inter_command_delay_ms=args.inter_command_delay_ms,
-        meter_settle_ms=args.meter_settle_ms,
+        keyed_duration_s=args.keyed_duration_seconds,
     )
     transport = PySerialCatTransport(
         device,
@@ -158,7 +168,17 @@ def main() -> int:
     print(f"Order: {request.order.value}")
     print(f"Confirmed RF power: {args.confirmed_power_watts} W")
     print("RF path: ATAS")
+    print(f"Pre-key countdown: {args.countdown_seconds} seconds")
+    print(f"Maximum keyed interval: {request.keyed_duration_s:.1f} seconds")
     print("The probe will force RX/TX0 in a finally block.")
+
+    for remaining in range(args.countdown_seconds, 0, -1):
+        if remaining <= 5 or remaining % 5 == 0:
+            print(f"Keying in {remaining}...")
+        import time
+        time.sleep(1)
+
+    print("KEYING NOW")
 
     try:
         result = run_atas_probe(transport, request)
