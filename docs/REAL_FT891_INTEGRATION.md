@@ -416,3 +416,23 @@ Accepted results include:
 
 Automatic FT-891 band-state behavior is deliberately not claimed as accepted.
 That future investigation remains tracked in issue #149.
+
+
+## POTA/DX Callsign Preload
+
+The current single-press POTA/DX activation also preloads the exact selected
+spot callsign into the existing pending callsign field after the background tune
+request is accepted.
+
+Operator behavior:
+
+- encoder rotation/highlighting alone does not change the pending callsign
+- pressing the encoder on a valid selected POTA/DX spot starts the existing
+  receive-tune path and preloads that spot callsign
+- the preloaded value is immediately Commit-ready
+- a later Voice command can replace it through the normal speech-capture path
+- rejected tuning does not alter the pending callsign
+
+This intentionally handles stale spot data: if another operator takes over the
+frequency before the provider refreshes, the operator can use Voice to replace
+the automatically preloaded callsign before Commit.
