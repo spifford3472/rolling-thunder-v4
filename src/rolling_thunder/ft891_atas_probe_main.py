@@ -60,6 +60,12 @@ def _parser() -> argparse.ArgumentParser:
         help="How long CAT PTT remains active before meter readback; maximum 3.0 s.",
     )
     parser.add_argument(
+        "--direction-repeat-interval-ms",
+        type=int,
+        default=150,
+        help="Repeat UP/DOWN while keyed every 100-500 ms to mimic a held mic button.",
+    )
+    parser.add_argument(
         "--confirmed-power-watts",
         type=int,
         required=True,
@@ -156,6 +162,7 @@ def main() -> int:
         order=AtasProbeOrder(args.order),
         inter_command_delay_ms=args.inter_command_delay_ms,
         keyed_duration_s=args.keyed_duration_seconds,
+        direction_repeat_interval_ms=args.direction_repeat_interval_ms,
     )
     transport = PySerialCatTransport(
         device,
@@ -171,6 +178,7 @@ def main() -> int:
     print("RF path: ATAS")
     print(f"Pre-key countdown: {args.countdown_seconds} seconds")
     print(f"Maximum keyed interval: {request.keyed_duration_s:.1f} seconds")
+    print(f"UP/DOWN repeat interval: {request.direction_repeat_interval_ms} ms")
     print("The probe will force RX/TX0 in a finally block.")
 
     for remaining in range(args.countdown_seconds, 0, -1):
