@@ -21,6 +21,7 @@ def test_defaults_to_pota_context() -> None:
     [
         ("1", ContextId.POTA),
         ("2", ContextId.DX),
+        ("b", ContextId.BROWSE),
         ("3", ContextId.REPEATERS),
         ("4", ContextId.AI),
         ("5", ContextId.SETTINGS),
@@ -72,6 +73,7 @@ def test_select_next_advances_through_contexts() -> None:
     controller = ContextNavigationController(ContextId.POTA)
 
     assert controller.select_next().selected is ContextId.DX
+    assert controller.select_next().selected is ContextId.BROWSE
     assert controller.select_next().selected is ContextId.REPEATERS
     assert controller.select_next().selected is ContextId.AI
     assert controller.select_next().selected is ContextId.WEATHER
