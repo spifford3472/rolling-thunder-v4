@@ -282,6 +282,7 @@ def run_dashboard(
         current_frequency=lambda: runtime.latest_radio_state.frequency,
         radio_state=lambda: runtime.latest_radio_state,
         shared_tuning=shared_spot_tuning,
+        pending_callsign=capture,
         settings_panel=settings_panel,
         repeater_panel=repeater_panel,
         repeater_active_overrides=repeater_panel_runtime.persistence,
