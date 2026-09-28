@@ -108,7 +108,6 @@ def test_30_meters_accepts_data_but_not_phone() -> None:
     )
 
 
-
 def test_160_meters_is_part_of_extra_allocation() -> None:
     frequency = Frequency(hz=1_900_000)
 
