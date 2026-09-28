@@ -53,13 +53,13 @@ class AtasProbeRequest:
     direction: AtasProbeDirection
     order: AtasProbeOrder
     inter_command_delay_ms: int = 50
-    meter_settle_ms: int = 100
+    keyed_duration_s: float = 3.0
 
     def __post_init__(self) -> None:
         if not 0 <= self.inter_command_delay_ms <= 500:
             raise ValueError("inter_command_delay_ms must be between 0 and 500")
-        if not 0 <= self.meter_settle_ms <= 500:
-            raise ValueError("meter_settle_ms must be between 0 and 500")
+        if not 0.5 <= self.keyed_duration_s <= 3.0:
+            raise ValueError("keyed_duration_s must be between 0.5 and 3.0")
 
 
 @dataclass(frozen=True)
@@ -114,7 +114,7 @@ def run_atas_probe(
                 sleeper(request.inter_command_delay_ms / 1000)
                 transport.command(direction_command)
 
-            sleeper(request.meter_settle_ms / 1000)
+            sleeper(request.keyed_duration_s)
 
             tx_state = parse_tx_state_reply(transport.query(encode_read_tx_state()))
             if tx_state != 1:
