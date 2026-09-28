@@ -106,3 +106,36 @@ def test_30_meters_accepts_data_but_not_phone() -> None:
         us_extra_band_advisory(frequency, RadioMode.USB).level
         is BandAdvisoryLevel.MODE_RESTRICTED
     )
+
+
+
+def test_160_meters_is_part_of_extra_allocation() -> None:
+    frequency = Frequency(hz=1_900_000)
+
+    assert (
+        us_extra_band_advisory(frequency, RadioMode.LSB).level
+        is BandAdvisoryLevel.OK
+    )
+
+
+def test_current_60_meter_continuous_segment_accepts_usb_and_cw() -> None:
+    frequency = Frequency(hz=5_357_000)
+
+    assert (
+        us_extra_band_advisory(frequency, RadioMode.USB).level
+        is BandAdvisoryLevel.OK
+    )
+    assert (
+        us_extra_band_advisory(frequency, RadioMode.CW).level
+        is BandAdvisoryLevel.OK
+    )
+
+
+def test_current_60_meter_channel_distinguishes_carrier_and_cw_center() -> None:
+    usb = us_extra_band_advisory(Frequency(hz=5_330_500), RadioMode.USB)
+    cw = us_extra_band_advisory(Frequency(hz=5_332_000), RadioMode.CW)
+    wrong_mode = us_extra_band_advisory(Frequency(hz=5_332_000), RadioMode.LSB)
+
+    assert usb.level is BandAdvisoryLevel.OK
+    assert cw.level is BandAdvisoryLevel.OK
+    assert wrong_mode.level is BandAdvisoryLevel.MODE_RESTRICTED
