@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from threading import Lock, Thread
-from typing import Callable
 
-from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
+from rolling_thunder.domain import (
+    Frequency,
+    RadioConnectionState,
+    RadioMode,
+    RadioState,
+)
 from rolling_thunder.radio import Radio, RadioError
 
 _BROWSE_STEPS_HZ = (100, 500, 1_000)
@@ -125,7 +130,11 @@ class BrowseRadioController:
         if self._worker_running:
             return
         self._worker_running = True
-        Thread(target=self._worker, daemon=True, name="rolling-thunder-browse-radio").start()
+        Thread(
+            target=self._worker,
+            daemon=True,
+            name="rolling-thunder-browse-radio",
+        ).start()
 
     def _worker(self) -> None:
         while True:
