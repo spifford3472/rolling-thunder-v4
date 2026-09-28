@@ -722,6 +722,42 @@ station takes over a frequency before the external spot feed refreshes.
 A rejected or unusable radio/tune activation does not preload the callsign.
 
 
+## Incremental POTA Map Marker Rendering
+
+The moving-map POTA overlay must retain stable canvas objects across ordinary
+vehicle movement. A viewport refresh does not delete and recreate the complete
+POTA layer.
+
+POTA marker canvas identity is based on the park reference plus its catalog
+latitude/longitude. When the viewport changes at the same presentation mode:
+
+- markers still visible are repositioned with canvas coordinate updates
+- newly visible markers are created
+- markers that leave the viewport are removed
+- the complete POTA layer is cleared only when the overlay becomes invalid
+  (for example, no matching published map/POTA viewport)
+
+Crossing between dot and label presentation modes may recreate the affected
+marker objects because their canvas representation changes.
+
+This keeps POTA rendering consistent with the incremental base-map/radar
+architecture and avoids visible park-marker flicker during continuous driving.
+
+
+### Asynchronous POTA viewport handoff
+
+The map and POTA database workers publish independently. A new GPS/map viewport
+may therefore become visible before the POTA worker has published the matching
+park query. This is normal and must not blank the overlay.
+
+While the POTA snapshot is briefly for the previous viewport, its latest known
+park set is projected against the current map viewport and retained on screen.
+The next POTA snapshot then incrementally adds/removes any parks exposed by the
+new bounds. Exact viewport equality is not required for temporary presentation.
+
+This also prevents stationary GPS position jitter from causing the park layer to
+blink off and back on.
+
 ## Browse Operating Context
 
 Browse is a free-form receive and logging context placed immediately after DX in

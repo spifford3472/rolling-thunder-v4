@@ -154,6 +154,18 @@ def live_map_info_lines(info: LiveMapInfoPresentation) -> tuple[str, ...]:
     )
 
 
+PotaMarkerKey = tuple[str, float, float]
+
+
+@dataclass(frozen=True)
+class PotaMarkerUpdatePlan:
+    """Describe incremental canvas work for stable POTA marker identities."""
+
+    remove: tuple[PotaMarkerKey, ...]
+    retain: tuple[PotaMarkerKey, ...]
+    add: tuple[PotaMarkerKey, ...]
+
+
 @dataclass(frozen=True)
 class TileUpdatePlan:
     """Describe the minimum canvas work between two map snapshots."""
@@ -161,6 +173,38 @@ class TileUpdatePlan:
     remove: tuple[MapTileKey, ...]
     redraw: tuple[MapTileKey, ...]
     move: tuple[MapTileKey, ...]
+
+
+def _pota_marker_key(reference: str, latitude: float, longitude: float) -> PotaMarkerKey:
+    return (reference, latitude, longitude)
+
+
+def plan_pota_marker_updates(
+    previous: PotaMapMarkerSnapshot | None,
+    current: PotaMapMarkerSnapshot | None,
+) -> PotaMarkerUpdatePlan:
+    """Return stable marker identities to remove, retain/reposition, or add."""
+    previous_keys = (
+        {
+            _pota_marker_key(marker.reference, marker.latitude, marker.longitude)
+            for marker in previous.markers
+        }
+        if previous is not None
+        else set()
+    )
+    current_keys = (
+        {
+            _pota_marker_key(marker.reference, marker.latitude, marker.longitude)
+            for marker in current.markers
+        }
+        if current is not None
+        else set()
+    )
+    return PotaMarkerUpdatePlan(
+        remove=tuple(sorted(previous_keys - current_keys)),
+        retain=tuple(sorted(previous_keys & current_keys)),
+        add=tuple(sorted(current_keys - previous_keys)),
+    )
 
 
 def plan_tile_updates(
@@ -285,6 +329,7 @@ class LiveMapWidgets:
             tuple[bytes, Any],
         ] = OrderedDict()
         self._attribution_item: int | None = None
+        self._pota_items: dict[PotaMarkerKey, tuple[str, tuple[int, ...]]] = {}
 
         self._last_snapshot: LiveMapSnapshot | None = None
         self._last_radar_snapshot: LiveRadarSnapshot | None = None
@@ -527,52 +572,116 @@ class LiveMapWidgets:
         pota: PotaMapMarkerSnapshot | None,
         map_snapshot: LiveMapSnapshot | None,
     ) -> None:
-        """Draw catalog pins above the base map and below weather radar."""
-        self._canvas.delete("map-pota")
-        if (
-            pota is None
-            or pota.viewport is None
-            or map_snapshot is None
-            or map_snapshot.viewport is None
-            or pota.viewport != map_snapshot.viewport
-        ):
+        """Incrementally retain/move POTA markers instead of rebuilding the layer."""
+        items = getattr(self, "_pota_items", None)
+        if items is None:
+            items = {}
+            self._pota_items = items
+
+        valid = (
+            pota is not None
+            and pota.viewport is not None
+            and map_snapshot is not None
+            and map_snapshot.viewport is not None
+        )
+        if not valid:
+            for _kind, canvas_items in items.values():
+                for item in canvas_items:
+                    self._canvas.delete(item)
+            items.clear()
+            self._raise_radar_layer()
             return
 
-        viewport = pota.viewport
-        if viewport.zoom < self._pota_label_min_zoom:
+        assert pota is not None
+        assert pota.viewport is not None
+        assert map_snapshot is not None
+        assert map_snapshot.viewport is not None
+        # Render the latest known park set against the current map viewport.
+        # The POTA DB worker publishes asynchronously, so an exact viewport
+        # mismatch is expected briefly after GPS/map movement. Clearing here
+        # causes visible blinking even from normal stationary GPS jitter.
+        viewport = map_snapshot.viewport
+        desired_kind = "dot" if viewport.zoom < self._pota_label_min_zoom else "label"
+        markers = {
+            _pota_marker_key(marker.reference, marker.latitude, marker.longitude): marker
+            for marker in pota.markers
+        }
+
+        for key in tuple(items):
+            if key not in markers or items[key][0] != desired_kind:
+                _kind, canvas_items = items.pop(key)
+                for item in canvas_items:
+                    self._canvas.delete(item)
+
+        if desired_kind == "dot":
             radius = self._pota_dot_diameter_px / 2.0
-            for marker in pota.markers:
+            for key, marker in markers.items():
                 placement = project_pota_marker(marker, viewport)
-                self._canvas.create_oval(
-                    placement.x_px - radius,
-                    placement.y_px - radius,
-                    placement.x_px + radius,
-                    placement.y_px + radius,
-                    fill=_POTA_MARKER_FILL,
-                    outline=_POTA_MARKER_OUTLINE,
-                    width=2,
-                    tags="map-pota",
-                )
+                existing = items.get(key)
+                if existing is None:
+                    item = self._canvas.create_oval(
+                        placement.x_px - radius,
+                        placement.y_px - radius,
+                        placement.x_px + radius,
+                        placement.y_px + radius,
+                        fill=_POTA_MARKER_FILL,
+                        outline=_POTA_MARKER_OUTLINE,
+                        width=2,
+                        tags="map-pota",
+                    )
+                    items[key] = ("dot", (item,))
+                else:
+                    self._canvas.coords(
+                        existing[1][0],
+                        placement.x_px - radius,
+                        placement.y_px - radius,
+                        placement.x_px + radius,
+                        placement.y_px + radius,
+                    )
         else:
             occupied: list[tuple[int, int, int, int]] = []
-            for marker in pota.markers:
+            for key, marker in markers.items():
                 placement = project_pota_marker(marker, viewport)
-                text_item = self._canvas.create_text(
-                    placement.x_px,
-                    placement.y_px,
-                    text=f"{marker.reference}\n{marker.name}",
-                    fill=_POTA_MARKER_TEXT,
-                    font=("DejaVu Sans", 14, "bold"),
-                    justify="center",
-                    anchor="center",
-                    tags="map-pota",
-                )
+                existing = items.get(key)
+                if existing is None:
+                    text_item = self._canvas.create_text(
+                        placement.x_px,
+                        placement.y_px,
+                        text=f"{marker.reference}\n{marker.name}",
+                        fill=_POTA_MARKER_TEXT,
+                        font=("DejaVu Sans", 14, "bold"),
+                        justify="center",
+                        anchor="center",
+                        tags="map-pota",
+                    )
+                    rectangle = self._canvas.create_rectangle(
+                        placement.x_px,
+                        placement.y_px,
+                        placement.x_px,
+                        placement.y_px,
+                        fill=_POTA_MARKER_FILL,
+                        outline=_POTA_MARKER_OUTLINE,
+                        width=2,
+                        tags="map-pota",
+                    )
+                    self._canvas.tag_lower(rectangle, text_item)
+                    items[key] = ("label", (text_item, rectangle))
+                else:
+                    text_item, rectangle = existing[1]
+                    self._canvas.coords(text_item, placement.x_px, placement.y_px)
+                    self._canvas.itemconfigure(
+                        text_item,
+                        text=f"{marker.reference}\n{marker.name}",
+                    )
+
+                text_item, rectangle = items[key][1]
                 bbox = self._canvas.bbox(text_item)
                 if bbox is None:
-                    self._canvas.delete(text_item)
+                    self._canvas.itemconfigure(text_item, state="hidden")
+                    self._canvas.itemconfigure(rectangle, state="hidden")
                     continue
                 padded = (bbox[0] - 7, bbox[1] - 5, bbox[2] + 7, bbox[3] + 5)
-                if any(
+                overlaps = any(
                     not (
                         padded[2] < other[0]
                         or padded[0] > other[2]
@@ -580,16 +689,15 @@ class LiveMapWidgets:
                         or padded[1] > other[3]
                     )
                     for other in occupied
-                ):
-                    self._canvas.delete(text_item)
-                    continue
-                rectangle = self._canvas.create_rectangle(
-                    *padded,
-                    fill=_POTA_MARKER_FILL,
-                    outline=_POTA_MARKER_OUTLINE,
-                    width=2,
-                    tags="map-pota",
                 )
+                if overlaps:
+                    self._canvas.itemconfigure(text_item, state="hidden")
+                    self._canvas.itemconfigure(rectangle, state="hidden")
+                    continue
+
+                self._canvas.coords(rectangle, *padded)
+                self._canvas.itemconfigure(text_item, state="normal")
+                self._canvas.itemconfigure(rectangle, state="normal")
                 self._canvas.tag_lower(rectangle, text_item)
                 occupied.append(padded)
 
