@@ -14,7 +14,10 @@ from rolling_thunder.application_secrets import (
     load_application_secrets,
 )
 from rolling_thunder.browse_control import BrowseRadioController, browse_mode_label
-from rolling_thunder.callsign_capture import CallsignCaptureState, MockTranscriptController
+from rolling_thunder.callsign_capture import (
+    CallsignCaptureState,
+    MockTranscriptController,
+)
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
 from rolling_thunder.context_navigation import (
@@ -351,8 +354,12 @@ def run_dashboard(
         on_succeeded=commit_succeeded,
         on_failed=commit_failed,
         gps_state_provider=lambda: runtime.latest_gps_state,
-        pota_context_provider=lambda: context_navigation.state.selected is ContextId.POTA,
-        browse_context_provider=lambda: context_navigation.state.selected is ContextId.BROWSE,
+        pota_context_provider=lambda: (
+            context_navigation.state.selected is ContextId.POTA
+        ),
+        browse_context_provider=lambda: (
+            context_navigation.state.selected is ContextId.BROWSE
+        ),
         pota_spots_provider=lambda: shared_pota_spots_for_contact(
             shared_spot_panel.visible_spots
         ),
@@ -649,7 +656,9 @@ def run_dashboard(
 
     pota_card_frames: list[tk.Frame] = []
     pota_card_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
-    pota_card_texts: list[tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]] = []
+    pota_card_texts: list[
+        tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]
+    ] = []
 
     for card_index in range(_POTA_VISIBLE_CARD_COUNT):
         card_frame = tk.Frame(
