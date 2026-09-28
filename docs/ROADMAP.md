@@ -243,7 +243,8 @@ Completed and verified:
 - same-band and controlled cross-band receive-only validation
 - explicit manual band/ATAS operator handoff after cross-band success
 - Standard Com Port remaining unopened
-- no PTT, MOX, keying, tuner, power, or unattended transmit authority
+- no PTT, MOX, keying, tuner, power, or unattended transmit authority in the normal runtime
+- isolated Checkpoint 2 ATAS CAT research probe kept outside runtime composition
 
 The approved receive-tuning order is:
 
@@ -396,3 +397,23 @@ The workstream preserves these permanent rules:
 - mobile-safe audible prompts
 - movement trails, contact visualization, persistent POTA markers, and routing
   when justified by operator value and safe presentation
+
+
+### FT-891 / ATAS Checkpoint 2 Research
+
+Status: implementation ready for controlled installed-hardware testing.
+
+This checkpoint adds an isolated CLI probe to test the specific FT-891 CAT
+combination of CAT PTT plus microphone UP/DOWN with SWR/power meter readback.
+It does not add ATAS automation to the application runtime.
+
+Acceptance questions are intentionally empirical:
+
+- does `TX1;` followed by `UP;` or `DN;` physically move the ATAS
+- does UP/DOWN followed immediately by `TX1;` behave differently
+- can `RM6;` be read while CAT PTT is active
+- does the raw SWR value change in a direction useful for bounded tuning
+- does every failure path return the radio to receive
+
+Only if physical testing proves reliable behavior should a later checkpoint
+design a typed, explicit operator-triggered ATAS tuning service.
