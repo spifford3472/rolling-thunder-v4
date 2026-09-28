@@ -17,13 +17,14 @@ from rolling_thunder.live_map_ui import (
     LiveMapWidgets,
     live_map_status_color,
     live_map_status_lines,
+    plan_pota_marker_updates,
     radar_matches_map,
     radar_status_color,
     rotate_marker_points,
 )
 from rolling_thunder.live_radar_service import LiveRadarSnapshot, RadarDataStatus
 from rolling_thunder.map_tiles import build_map_viewport
-from rolling_thunder.pota_map_markers import PotaMapMarkerSnapshot
+from rolling_thunder.pota_map_markers import PotaMapMarker, PotaMapMarkerSnapshot
 
 NOW = datetime(2026, 8, 2, 20, 0, tzinfo=UTC)
 
@@ -319,3 +320,92 @@ def test_layer_ordering_handles_disabled_radar_without_missing_tag_error() -> No
     widgets._raise_radar_layer()
 
     assert calls == [(999, "map-pota")]
+
+
+
+def test_pota_marker_update_plan_retains_stable_parks_across_viewport_refresh() -> None:
+    viewport_a = build_map_viewport(
+        GeoPoint(latitude=39.52, longitude=-84.06),
+        zoom=10,
+        width_px=512,
+        height_px=512,
+    )
+    viewport_b = build_map_viewport(
+        GeoPoint(latitude=39.53, longitude=-84.05),
+        zoom=10,
+        width_px=512,
+        height_px=512,
+    )
+    retained = PotaMapMarker(
+        reference="US-1234",
+        name="Retained Park",
+        latitude=39.60,
+        longitude=-84.10,
+    )
+    removed = PotaMapMarker(
+        reference="US-2222",
+        name="Removed Park",
+        latitude=39.10,
+        longitude=-84.40,
+    )
+    added = PotaMapMarker(
+        reference="US-3333",
+        name="Added Park",
+        latitude=39.80,
+        longitude=-83.90,
+    )
+    previous = PotaMapMarkerSnapshot(
+        viewport=viewport_a,
+        markers=(retained, removed),
+        detail="POTA MARKERS READY",
+        updated_at=NOW,
+    )
+    current = PotaMapMarkerSnapshot(
+        viewport=viewport_b,
+        markers=(retained, added),
+        detail="POTA MARKERS READY",
+        updated_at=NOW,
+    )
+
+    plan = plan_pota_marker_updates(previous, current)
+
+    assert plan.retain == (("US-1234", 39.6, -84.1),)
+    assert plan.remove == (("US-2222", 39.1, -84.4),)
+    assert plan.add == (("US-3333", 39.8, -83.9),)
+
+
+def test_pota_marker_update_plan_does_not_treat_viewport_motion_as_marker_replacement() -> None:
+    marker = PotaMapMarker(
+        reference="US-1234",
+        name="Stable Park",
+        latitude=39.60,
+        longitude=-84.10,
+    )
+    previous = PotaMapMarkerSnapshot(
+        viewport=build_map_viewport(
+            GeoPoint(latitude=39.52, longitude=-84.06),
+            zoom=10,
+            width_px=512,
+            height_px=512,
+        ),
+        markers=(marker,),
+        detail="POTA MARKERS READY",
+        updated_at=NOW,
+    )
+    current = PotaMapMarkerSnapshot(
+        viewport=build_map_viewport(
+            GeoPoint(latitude=39.54, longitude=-84.04),
+            zoom=10,
+            width_px=512,
+            height_px=512,
+        ),
+        markers=(marker,),
+        detail="POTA MARKERS READY",
+        updated_at=NOW,
+    )
+
+    plan = plan_pota_marker_updates(previous, current)
+
+    assert plan.remove == ()
+    assert plan.add == ()
+    assert plan.retain == (("US-1234", 39.6, -84.1),)
