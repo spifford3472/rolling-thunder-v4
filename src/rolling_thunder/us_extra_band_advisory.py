@@ -151,7 +151,7 @@ def us_extra_band_advisory(
             return BandAdvisory(BandAdvisoryLevel.OK)
         return BandAdvisory(
             BandAdvisoryLevel.MODE_RESTRICTED,
-            f"{mode.value} NOT AUTHORIZED HERE",
+            f"{_mode_label(mode)} NOT AUTHORIZED HERE",
         )
 
     if mode is RadioMode.DATA:
@@ -164,7 +164,7 @@ def us_extra_band_advisory(
 
     return BandAdvisory(
         BandAdvisoryLevel.MODE_RESTRICTED,
-        f"{mode.value} NOT AUTHORIZED HERE",
+        f"{_mode_label(mode)} NOT AUTHORIZED HERE",
     )
 
 
@@ -209,10 +209,17 @@ def _sixty_meter_advisory(
     if in_continuous or on_usb_carrier or on_cw_center:
         return BandAdvisory(
             BandAdvisoryLevel.MODE_RESTRICTED,
-            f"{mode.value} NOT AUTHORIZED HERE",
+            f"{_mode_label(mode)} NOT AUTHORIZED HERE",
         )
 
     return BandAdvisory(
         BandAdvisoryLevel.OUT_OF_BAND,
         "OUTSIDE US EXTRA BAND",
     )
+
+
+
+def _mode_label(mode: RadioMode) -> str:
+    if mode in {RadioMode.LSB, RadioMode.USB}:
+        return "SSB"
+    return mode.value
