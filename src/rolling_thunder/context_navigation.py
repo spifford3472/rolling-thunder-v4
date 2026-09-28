@@ -12,6 +12,7 @@ class ContextId(StrEnum):
 
     POTA = "pota"
     DX = "dx"
+    BROWSE = "browse"
     REPEATERS = "repeaters"
     AI = "ai"
     WEATHER = "weather"
@@ -45,6 +46,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "2",
         "DX",
         "Future DX details here.",
+    ),
+    ContextDefinition(
+        ContextId.BROWSE,
+        "BROWSE",
+        "b",
+        "BROWSE",
+        "Free-form receive tuning and contact logging.",
     ),
     ContextDefinition(
         ContextId.REPEATERS,
