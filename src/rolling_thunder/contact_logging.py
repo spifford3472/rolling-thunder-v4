@@ -61,6 +61,7 @@ class ContactLoggingService:
         gps_state: GPSState | None = None,
         pota_context_active: bool = False,
         pota_spots: tuple[PotaSpot, ...] = (),
+        notes: str | None = None,
     ) -> Contact:
         """Persist one contact, returning it only after the durable write succeeds."""
         callsign = pending_callsign.strip().upper()
@@ -98,7 +99,7 @@ class ContactLoggingService:
             pota_reference=metadata.pota_reference,
             grid_source=metadata.grid_source,
             enrichment_state=metadata.enrichment_state,
-            notes=metadata.notes,
+            notes=notes if notes is not None else metadata.notes,
         )
         self._repository.add(contact)
         return contact
