@@ -35,7 +35,19 @@ class BandAdvisory:
     message: str | None = None
 
 
+_SIXTY_METER_CONTINUOUS = (5_351_500, 5_366_500)
+_SIXTY_METER_USB_CARRIERS = (5_330_500, 5_346_500, 5_371_500, 5_403_500)
+_SIXTY_METER_CW_CENTERS = (5_332_000, 5_348_000, 5_373_000, 5_405_000)
+
+
 US_EXTRA_BANDS: tuple[AmateurExtraBand, ...] = (
+    AmateurExtraBand(
+        "160m",
+        1_800_000,
+        2_000_000,
+        ((1_800_000, 2_000_000),),
+        ((1_800_000, 2_000_000),),
+    ),
     AmateurExtraBand(
         "80m",
         3_500_000,
@@ -112,6 +124,10 @@ def us_extra_band_advisory(
     if frequency is None or mode is None:
         return BandAdvisory(BandAdvisoryLevel.OK)
 
+    sixty_meter = _sixty_meter_advisory(frequency.hz, mode)
+    if sixty_meter is not None:
+        return sixty_meter
+
     band = next(
         (
             candidate
@@ -154,3 +170,49 @@ def us_extra_band_advisory(
 
 def _inside_any(frequency_hz: int, ranges: tuple[tuple[int, int], ...]) -> bool:
     return any(lower <= frequency_hz <= upper for lower, upper in ranges)
+
+
+
+def _sixty_meter_advisory(
+    frequency_hz: int,
+    mode: RadioMode,
+) -> BandAdvisory | None:
+    """Evaluate the current US 60 m segment/channels, when applicable."""
+    in_continuous = (
+        _SIXTY_METER_CONTINUOUS[0]
+        <= frequency_hz
+        <= _SIXTY_METER_CONTINUOUS[1]
+    )
+    in_sixty_envelope = 5_330_500 <= frequency_hz <= 5_406_400
+    on_usb_carrier = frequency_hz in _SIXTY_METER_USB_CARRIERS
+    on_cw_center = frequency_hz in _SIXTY_METER_CW_CENTERS
+
+    if not in_sixty_envelope:
+        return None
+
+    if mode is RadioMode.CW:
+        if in_continuous or on_cw_center:
+            return BandAdvisory(BandAdvisoryLevel.OK)
+        return BandAdvisory(
+            BandAdvisoryLevel.OUT_OF_BAND,
+            "OUTSIDE US EXTRA BAND",
+        )
+
+    if mode in {RadioMode.USB, RadioMode.DATA}:
+        if in_continuous or on_usb_carrier:
+            return BandAdvisory(BandAdvisoryLevel.OK)
+        return BandAdvisory(
+            BandAdvisoryLevel.OUT_OF_BAND,
+            "OUTSIDE US EXTRA BAND",
+        )
+
+    if in_continuous or on_usb_carrier or on_cw_center:
+        return BandAdvisory(
+            BandAdvisoryLevel.MODE_RESTRICTED,
+            f"{mode.value} NOT AUTHORIZED HERE",
+        )
+
+    return BandAdvisory(
+        BandAdvisoryLevel.OUT_OF_BAND,
+        "OUTSIDE US EXTRA BAND",
+    )
