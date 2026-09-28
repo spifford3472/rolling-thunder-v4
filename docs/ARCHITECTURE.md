@@ -577,9 +577,17 @@ The operator manually sets/confirms the band and tunes the ATAS-120 before
 transmitting. The unresolved CAT/front-panel band-context behavior is tracked in
 issue #149.
 
-The FT-891 Standard Com Port remains unopened. No component exposes PTT, MOX, CW
-keying, voice keying, digital TX control, tuner control, power control, or
+The FT-891 Standard Com Port remains unopened. Normal runtime components expose no PTT,
+MOX, CW keying, voice keying, digital TX control, tuner control, power control, or
 unattended transmit authority.
+
+Checkpoint 2 adds one deliberately separate command-line ATAS research probe. It is
+not composed into the runtime or `Radio` protocol, cannot be invoked from Tkinter,
+physical controls, or voice, and refuses to run while another process owns the CAT
+port. It may briefly key RF only after explicit operator acknowledgement and bounded
+bench-test preconditions, and it always attempts `RX;` plus `TX0;` in a `finally`
+path. Successful CAT responses are research observations, not production ATAS
+authority.
 
 Voice input and ESP32 input are operator-input mechanisms, not direct radio
 control.
