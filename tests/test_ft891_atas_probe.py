@@ -62,20 +62,22 @@ def test_ptt_first_probe_orders_commands_and_forces_receive() -> None:
             direction=AtasProbeDirection.UP,
             order=AtasProbeOrder.PTT_FIRST,
             inter_command_delay_ms=50,
-            keyed_duration_s=3.0,
+            keyed_duration_s=0.5,
+            direction_repeat_interval_ms=250,
         ),
         sleeper=sleeps.append,
     )
 
     assert result.swr_meter_raw == 7
     assert result.power_meter_raw == 21
-    assert sleeps == [0.05, 3.0]
+    assert sleeps == [0.05, 0.25, 0.25]
     assert transport.events == [
         ("open",),
         ("query", b"TX;"),
         ("query", b"FA;"),
         ("query", b"MD0;"),
         ("command", b"TX1;"),
+        ("command", b"UP;"),
         ("command", b"UP;"),
         ("query", b"TX;"),
         ("query", b"RM6;"),
@@ -105,13 +107,15 @@ def test_control_first_probe_places_direction_before_ptt() -> None:
             order=AtasProbeOrder.CONTROL_FIRST,
             inter_command_delay_ms=0,
             keyed_duration_s=0.5,
+            direction_repeat_interval_ms=250,
         ),
         sleeper=lambda _seconds: None,
     )
 
-    assert transport.events[4:6] == [
+    assert transport.events[4:7] == [
         ("command", b"DN;"),
         ("command", b"TX1;"),
+        ("command", b"DN;"),
     ]
     assert transport.events[-3:] == [
         ("command", b"RX;"),
@@ -161,6 +165,7 @@ def test_probe_forces_receive_when_meter_query_fails() -> None:
                 order=AtasProbeOrder.PTT_FIRST,
                 inter_command_delay_ms=0,
                 keyed_duration_s=0.5,
+                direction_repeat_interval_ms=250,
             ),
             sleeper=lambda _seconds: None,
         )
@@ -173,14 +178,22 @@ def test_probe_forces_receive_when_meter_query_fails() -> None:
 
 
 @pytest.mark.parametrize(
-    ("delay", "duration"),
-    [(-1, 0.5), (501, 0.5), (0, 0.49), (0, 3.01)],
+    ("delay", "duration", "repeat"),
+    [
+        (-1, 0.5, 150),
+        (501, 0.5, 150),
+        (0, 0.49, 150),
+        (0, 3.01, 150),
+        (0, 0.5, 99),
+        (0, 0.5, 501),
+    ],
 )
-def test_probe_request_bounds_delays(delay: int, duration: float) -> None:
+def test_probe_request_bounds_delays(delay: int, duration: float, repeat: int) -> None:
     with pytest.raises(ValueError):
         AtasProbeRequest(
             direction=AtasProbeDirection.UP,
             order=AtasProbeOrder.PTT_FIRST,
             inter_command_delay_ms=delay,
             keyed_duration_s=duration,
+            direction_repeat_interval_ms=repeat,
         )
