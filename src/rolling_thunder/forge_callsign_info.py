@@ -224,7 +224,11 @@ class ForgeCallsignInfoService:
             latitude = profile.latitude
             longitude = profile.longitude
             source = "qrz"
-        elif profile is not None and profile.grid is not None:
+        elif (
+            profile is not None
+            and profile.grid is not None
+            and (profile.geoloc or "").casefold() not in {"state", "dxcc"}
+        ):
             try:
                 latitude, longitude = maidenhead_grid_center(profile.grid)
             except ValueError:
