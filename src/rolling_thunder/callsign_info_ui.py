@@ -204,16 +204,20 @@ class CallsignInfoOverlayWidgets:
             rely=1.0,
             anchor="se",
             relwidth=0.80,
-            relheight=0.72,
+            relheight=0.66,
             x=-12,
             y=-12,
         )
         self.frame.place_forget()
-        self.frame.grid_columnconfigure(0, weight=1)
-        self.frame.grid_columnconfigure(1, weight=3)
-        self.frame.grid_rowconfigure(0, weight=5)
-        self.frame.grid_rowconfigure(1, weight=3)
-        self.frame.grid_rowconfigure(2, weight=1)
+        # Keep weather legible at all times. Long identity text wraps on the
+        # right instead of stealing width from the weather block.
+        self.frame.grid_columnconfigure(0, weight=2, minsize=360)
+        self.frame.grid_columnconfigure(1, weight=5, minsize=420)
+        # Only the map absorbs spare vertical space; details/history stay at
+        # their requested heights so blank space cannot open below the text.
+        self.frame.grid_rowconfigure(0, weight=1)
+        self.frame.grid_rowconfigure(1, weight=0)
+        self.frame.grid_rowconfigure(2, weight=0)
 
         self._map = tk.Canvas(
             self.frame,
@@ -263,23 +267,27 @@ class CallsignInfoOverlayWidgets:
         self._name = tk.StringVar(value="")
         self._license = tk.StringVar(value="")
         self._identity = tk.StringVar(value="")
-        tk.Label(
+        self._name_label = tk.Label(
             details,
             textvariable=self._name,
             bg=_PANEL,
             fg=_BRIGHT,
             font=("DejaVu Sans", 40, "bold"),
+            justify="left",
             anchor="w",
-        ).pack(fill="x", padx=12, pady=(7, 0))
-        tk.Label(
+        )
+        self._name_label.pack(fill="x", padx=12, pady=(7, 0))
+        self._license_label = tk.Label(
             details,
             textvariable=self._license,
             bg=_PANEL,
             fg=_BRIGHT,
             font=("DejaVu Sans", 30, "bold"),
+            justify="left",
             anchor="w",
-        ).pack(fill="x", padx=12)
-        tk.Label(
+        )
+        self._license_label.pack(fill="x", padx=12)
+        self._identity_label = tk.Label(
             details,
             textvariable=self._identity,
             bg=_PANEL,
@@ -287,7 +295,8 @@ class CallsignInfoOverlayWidgets:
             font=("DejaVu Sans", 30),
             justify="left",
             anchor="w",
-        ).pack(fill="x", padx=12)
+        )
+        self._identity_label.pack(fill="x", padx=12)
 
         history = tk.Frame(self.frame, bg=_PANEL)
         history.grid(
