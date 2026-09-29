@@ -14,7 +14,7 @@ The implementation establishes and validates:
 - independent typed band-context, frequency, and mode operations
 - guarded cross-band receive tuning
 - exact frequency and receive-mode read-back verification
-- shared POTA/DX two-press receive tuning through `ReceiveTuningService`
+- shared POTA/DX single-press receive tuning through `ReceiveTuningService`
 - explicit manual band/ATAS-120 operator handoff after a cross-band receive tune
 
 This work adds no PTT, MOX, CW keying, voice keying, tuner control, power control,
@@ -201,7 +201,7 @@ Same-band tuning bypasses memory recall and still verifies frequency and mode.
 `ReceiveTuningService` also refuses ordered receive tuning while the current
 radio state reports `transmitting=True`.
 
-## Shared POTA/DX Two-Press Path
+## Shared POTA/DX Single-Press Path
 
 Checkpoint 8 routes POTA and DX through the same operator-command and tuning
 path:
@@ -214,21 +214,19 @@ encoder / keyboard activation
     -> Ft891Radio
 ```
 
-The operator contract is exactly two presses:
+The current operator contract is one activation on the currently selected,
+still-valid target:
 
 ```text
-first press
-    -> stage exact selected identity/callsign/frequency/mode
-    -> no CAT
-    -> no radio change
-
-second press on the same still-valid target
-    -> submit exact staged action
+single press
+    -> validate current radio state and selected identity
+    -> snapshot exact callsign/frequency/mode
+    -> submit the exact action
     -> background receive tuning
     -> ReceiveTuningService
 ```
 
-There is no third confirmation/execution press in the shared checkpoint-8 path.
+There is no persistent receive-confirmation stage.
 
 Before staging or tuning, the active-panel command controller requires the latest
 radio state to be connected, to have known frequency and mode, and not to report
@@ -242,7 +240,7 @@ No neighboring row can inherit a staged action.
 
 ## Background Tuning Boundary
 
-The second press does not perform blocking CAT work in Tkinter.
+The single activation does not perform blocking CAT work in Tkinter.
 
 `SharedSpotTuneController` owns background submission of the exact
 `StagedSpotAction`. It publishes immutable tuning state for UI presentation:
@@ -296,7 +294,7 @@ After a CAT failure or physical radio power-off:
   recovery
 
 Shared receive-tuning operations use the ordered application service only after
-explicit operator confirmation. Blocking CAT work must not run directly from a
+explicit operator activation. Blocking CAT work must not run directly from a
 Tkinter widget callback.
 
 ## ATAS-120 Manual Band / Tune Warning
@@ -324,9 +322,9 @@ Current checkpoint-8 behavior is:
   state
 - the warning does not claim that the ATAS-120 is tuned
 
-Back is not the ATAS acknowledgement mechanism in checkpoint 8. Within the
-shared POTA/DX panel, Back cancels staging first and clears selection on a later
-Back action. The band/ATAS reminder is a timed `StatusMessageService` message.
+Back is not the ATAS acknowledgement mechanism. Within the current shared
+POTA/DX panel, Back clears the selected row. The band/ATAS reminder is a timed
+`StatusMessageService` message.
 
 The operator must manually set/confirm the FT-891 band and tune the ATAS-120
 before transmitting.
@@ -369,8 +367,7 @@ boundaries, and deterministic schedulers. Coverage includes:
 - ordered receive-tuning call sequence
 - receive-tuning rejection while transmitting
 - serialized FT-891 CAT operations
-- first shared activation staging only
-- second shared activation submitting the exact staged action
+- single shared activation submitting the exact selected action
 - POTA and DX sharing the same execution boundary
 - stale/action-mutated staging rejection
 - selection, filter, context, Back, and radio-state invalidation
@@ -389,21 +386,17 @@ parked.
 
 Accepted results include:
 
-- POTA first press stages only and does not change the radio
-- DX first press stages only and does not change the radio
-- same-band POTA second press tunes the selected receive frequency as expected
-- same-band DX second press tunes the exact selected DX frequency
+- POTA single press tunes the selected receive frequency as expected
+- DX single press tunes the exact selected DX frequency
 - same-band operation produces no false `SET BAND ... TUNE ATAS-120` warning
 - cross-band POTA exact receive frequency/mode tuning succeeds with the manual
   band/ATAS handoff
 - cross-band DX exact receive frequency/mode tuning succeeds with the manual
   band/ATAS handoff
-- selection change invalidates staging
-- band-filter change invalidates staging
-- mode-filter change invalidates staging
-- Back cancels staging without tuning
-- radio power loss invalidates staging
-- reconnection does not resurrect or execute an old staged target
+- selection, band-filter, and mode-filter changes do not execute a stale target
+- Back clears selection without tuning
+- radio power loss prevents activation
+- reconnection does not resurrect or execute an old target
 - Enhanced CAT remains the only FT-891 interface owned by Rolling Thunder
 - the Standard TX-capable USB interface remains closed
 - no PTT, MOX, keying, tuner, power, or transmit operation occurs
