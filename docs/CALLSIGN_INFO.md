@@ -81,6 +81,7 @@ Instead the overlay shows simple current weather:
 
 - temperature in Fahrenheit
 - a compact condition such as SUNNY, CLOUDY, RAIN, SNOW, or THUNDERSTORMS
+- small provider attribution required by the existing Open-Meteo integration
 
 Open-Meteo is normalized on Forge. Weather failure is optional enrichment failure and must not suppress otherwise useful callsign/history information.
 
