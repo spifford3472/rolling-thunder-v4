@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import struct
 import subprocess
 import tempfile
 import wave
@@ -38,15 +37,15 @@ class FT8PcmPeriod:
 
     period: FT8Period
     sample_rate_hz: int
-    samples: tuple[int, ...]
+    pcm_s16le: bytes
 
     def __post_init__(self) -> None:
         if self.sample_rate_hz <= 0:
             raise ValueError("sample_rate_hz must be positive")
-        if not self.samples:
-            raise ValueError("samples must not be empty")
-        if any(sample < -32768 or sample > 32767 for sample in self.samples):
-            raise ValueError("samples must be signed 16-bit PCM values")
+        if not self.pcm_s16le:
+            raise ValueError("pcm_s16le must not be empty")
+        if len(self.pcm_s16le) % 2:
+            raise ValueError("pcm_s16le must contain complete signed 16-bit samples")
 
     @classmethod
     def from_wav(cls, path: Path, *, period: FT8Period) -> FT8PcmPeriod:
@@ -58,9 +57,7 @@ class FT8PcmPeriod:
                 raise FT8DecoderError("FT8 reference WAV must contain 16-bit PCM")
             frames = source.readframes(source.getnframes())
             sample_rate_hz = source.getframerate()
-        count = len(frames) // 2
-        samples = struct.unpack(f"<{count}h", frames)
-        return cls(period=period, sample_rate_hz=sample_rate_hz, samples=tuple(samples))
+        return cls(period=period, sample_rate_hz=sample_rate_hz, pcm_s16le=frames)
 
 
 class FT8Decoder(Protocol):
@@ -295,4 +292,4 @@ def _write_wav(path: Path, pcm: FT8PcmPeriod) -> None:
         target.setnchannels(1)
         target.setsampwidth(2)
         target.setframerate(pcm.sample_rate_hz)
-        target.writeframes(struct.pack(f"<{len(pcm.samples)}h", *pcm.samples))
+        target.writeframes(pcm.pcm_s16le)
