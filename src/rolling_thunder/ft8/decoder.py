@@ -15,8 +15,9 @@ from rolling_thunder.ft8.domain import FT8Decode, FT8MessageKind, FT8Period
 
 _FT8MON_LINE = re.compile(
     r"^\d{6}\s+(?P<snr>[+-]?\d+)\s+"
+    r"(?P<correct_bits>\d+)\s+"
     r"(?P<dt>[+-]?\d+(?:\.\d+)?)\s+"
-    r"(?P<freq>\d+)\s+(?P<message>.+?)\s*$"
+    r"(?P<freq>\d+(?:\.\d+)?)\s+(?P<message>.+?)\s*$"
 )
 _FT8LIB_LINE = re.compile(
     r"^\d{6}\s+(?P<snr>[+-]?\d+(?:\.\d+)?)\s+"
@@ -209,9 +210,10 @@ class Ft8monDecoder(_SavedWavSubprocessDecoder):
             period=period,
             snr_db=int(match.group("snr")),
             dt_seconds=float(match.group("dt")),
-            audio_frequency_hz=int(match.group("freq")),
+            audio_frequency_hz=round(float(match.group("freq"))),
             message=match.group("message"),
             backend="ft8mon",
+            metadata={"correct_bits": match.group("correct_bits")},
         )
 
 
