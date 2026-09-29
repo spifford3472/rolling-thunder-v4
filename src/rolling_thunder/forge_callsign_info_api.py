@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from json import dumps
-from typing import Mapping
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from rolling_thunder.callsign_info import CallsignInfoResponse
