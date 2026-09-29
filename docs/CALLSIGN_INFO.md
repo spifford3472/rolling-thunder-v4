@@ -9,7 +9,7 @@ The callsign-information overlay answers four operator questions without replaci
 3. What is the current weather there?
 4. Have I worked them before?
 
-The overlay is optional, appears over the lower-right portion of the live map only after a complete useful lookup has loaded, uses deliberately oversized in-car typography, and never participates in durable contact Commit.
+The overlay is optional, appears over the lower-right portion of the live map only after a complete useful lookup has loaded, uses deliberately oversized in-car typography, and never participates in durable contact Commit. The compact layout uses a map across the top, a narrow weather column beside contact identity details, and a full-width two-line contact-history strip across the bottom.
 
 ## Architecture
 
@@ -81,7 +81,7 @@ The profile may still display textual information when no reliable coordinate ex
 
 ## Weather
 
-The QRZ photograph is deliberately not used by this feature.
+The QRZ photograph is deliberately not used by this feature. The current local QSO time is rendered in the upper-right of the mini-map rather than consuming identity-panel space.
 
 Instead the overlay shows simple current weather:
 
@@ -107,7 +107,7 @@ rather than rendering an empty prior-contact section.
 
 When a prior QSO exists the compact response may include:
 
-- previous date/time
+- previous date/time, flattened with the station-location name onto one summary line
 - station-location name
 - comment or notes
 - mobile indication when reliably inferred from station-location identity
