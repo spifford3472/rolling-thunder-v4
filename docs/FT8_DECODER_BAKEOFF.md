@@ -144,3 +144,29 @@ the lightweight decoder is dramatically faster on this sample, while the
 heavier decoder recovered the known signal. One sample is not sufficient for a
 backend decision; the broader corpus and independent WSJT-X oracle remain
 required.
+
+
+## Round 1 same-WAV comparison
+
+Five saved WAV periods from the pinned `kgoba/ft8_lib` repository were decoded
+by both candidates on `anvilmobile`. Across the paired repository text files
+there were 79 reference messages.
+
+| Backend | Reference matches | Missed | Unmatched decodes | Recall vs repository text | Total wall time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `kgoba/ft8_lib` | 55 | 24 | 8 | 69.6% | 0.4584 s |
+| `ft8mon` | 61 | 18 | 21 | 77.2% | 27.0298 s |
+
+On this five-period sample, `ft8mon` matched 6 additional reference messages
+(7.6 percentage points more recall) but required about 59 times the aggregate
+wall-clock time.
+
+The unmatched-decode counts are **not** treated as false-positive counts. The
+paired text files come from the `ft8_lib` repository and are useful for a
+reproducible same-input comparison, but they are not an independent truth set.
+The exact same WAV periods must be compared with the pinned/current WSJT-X
+reference before classifying misses or extras as decoder errors.
+
+Production remained active from
+`/home/geoff/projects/rolling-thunder-v4`; this round used saved WAV files
+only and did not open live audio or issue CAT/PTT/RF actions.
