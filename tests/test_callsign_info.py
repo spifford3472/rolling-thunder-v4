@@ -178,7 +178,7 @@ def test_regional_map_framing_distinguishes_alaska_hawaii_and_large_dx() -> None
     assert callsign_map_zoom("United States", "HI") == 6
     assert callsign_map_zoom("United States", "OH") == 6
     assert callsign_map_zoom("Australia", None) == 4
-    assert callsign_map_zoom("Germany", None) == 6
+    assert callsign_map_zoom("Germany", None) == 5
 
 
 def test_lookup_state_retains_pota_target_for_async_presentation() -> None:
@@ -216,3 +216,43 @@ def test_late_response_for_replaced_callsign_cannot_resurrect_old_overlay() -> N
     assert final.callsign == "W1AW"
     assert final.response is not None
     assert final.response.callsign == "W1AW"
+
+
+
+def test_dxcc_center_can_frame_map_without_inventing_station_pin() -> None:
+    response = CallsignInfoResponse(
+        callsign="DX1AA",
+        profile=CallsignInfoProfile(
+            callsign="DX1AA",
+            country="Example Country",
+            latitude=10.0,
+            longitude=20.0,
+            coordinate_source="dxcc",
+        ),
+        last_qso=CallsignInfoLastQso(exists=False),
+    )
+
+    presentation = build_callsign_info_presentation(response)
+
+    assert presentation.target is not None
+    assert presentation.pin_visible is False
+    assert presentation.location_note == "COUNTRY / REGION VIEW"
+
+
+def test_grid_center_fallback_is_marked_approximate() -> None:
+    response = CallsignInfoResponse(
+        callsign="W1AW",
+        profile=CallsignInfoProfile(
+            callsign="W1AW",
+            country="United States",
+            state="CT",
+            grid="FN31pr",
+        ),
+        last_qso=CallsignInfoLastQso(exists=False),
+    )
+
+    presentation = build_callsign_info_presentation(response)
+
+    assert presentation.target is not None
+    assert presentation.pin_visible is True
+    assert presentation.location_note == "APPROX GRID CENTER"
