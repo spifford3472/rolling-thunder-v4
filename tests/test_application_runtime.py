@@ -126,6 +126,8 @@ def test_runtime_composes_and_starts_mock_hardware() -> None:
     assert runtime.gps_polling.is_running is True
     assert runtime.pota_enrichment.is_running is True
     assert isinstance(runtime.status_messages, StatusMessageService)
+    assert runtime.ft8_receive is None
+    assert runtime.latest_ft8_receive_state is None
     gps_state = runtime.latest_gps_state
     assert gps_state is not None
     assert gps_state.connection_state is GPSConnectionState.CONNECTED
