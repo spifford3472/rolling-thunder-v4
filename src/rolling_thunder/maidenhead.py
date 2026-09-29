@@ -35,3 +35,50 @@ def maidenhead_grid(latitude: float, longitude: float) -> MaidenheadGrid:
         f"{chr(ord('a') + subsquare_latitude)}"
     )
     return locator
+
+
+
+def maidenhead_grid_center(grid: MaidenheadGrid | str) -> tuple[float, float]:
+    """Return the geographic center of a validated 4/6/8-character locator."""
+    value = str(grid).strip()
+    if len(value) not in {4, 6, 8}:
+        raise ValueError("Maidenhead grid must contain 4, 6, or 8 characters.")
+
+    upper = value.upper()
+    if not (
+        "A" <= upper[0] <= "R"
+        and "A" <= upper[1] <= "R"
+        and upper[2:4].isdigit()
+    ):
+        raise ValueError("Maidenhead grid is not structurally valid.")
+
+    longitude = (ord(upper[0]) - ord("A")) * 20.0 - 180.0
+    latitude = (ord(upper[1]) - ord("A")) * 10.0 - 90.0
+    longitude += int(upper[2]) * 2.0
+    latitude += int(upper[3]) * 1.0
+    longitude_size = 2.0
+    latitude_size = 1.0
+
+    if len(value) >= 6:
+        if not (
+            "A" <= upper[4] <= "X"
+            and "A" <= upper[5] <= "X"
+        ):
+            raise ValueError("Maidenhead subsquare is not structurally valid.")
+        longitude_size /= 24.0
+        latitude_size /= 24.0
+        longitude += (ord(upper[4]) - ord("A")) * longitude_size
+        latitude += (ord(upper[5]) - ord("A")) * latitude_size
+
+    if len(value) == 8:
+        if not upper[6:8].isdigit():
+            raise ValueError("Maidenhead extended square is not structurally valid.")
+        longitude_size /= 10.0
+        latitude_size /= 10.0
+        longitude += int(upper[6]) * longitude_size
+        latitude += int(upper[7]) * latitude_size
+
+    return (
+        latitude + latitude_size / 2.0,
+        longitude + longitude_size / 2.0,
+    )
