@@ -26,11 +26,11 @@ from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.domain import RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
-from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
+from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
 from rolling_thunder.home_platform import HomePlatformClient
