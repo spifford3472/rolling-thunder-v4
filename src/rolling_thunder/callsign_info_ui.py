@@ -27,12 +27,14 @@ _FIRST = "#42ff72"
 class CallsignInfoPresentation:
     callsign: str
     name: str | None
+    license_line: str | None
     identity_lines: tuple[str, ...]
+    local_time_text: str
     weather_temperature: str | None
     weather_condition: str | None
     weather_attribution: str | None
     history_heading: str
-    history_lines: tuple[str, ...]
+    history_line: str | None
     target: GeoPoint | None
     pin_visible: bool
     location_note: str | None
@@ -50,7 +52,12 @@ def build_callsign_info_presentation(
     profile = response.profile
     identity: list[str] = []
     name = profile.name if profile is not None else None
+    license_line: str | None = None
     if profile is not None:
+        if profile.license_class:
+            license_line = f"License: {profile.license_class}"
+            if profile.license_expiration_date:
+                license_line += f"  Exp {profile.license_expiration_date}"
         for value in (profile.address1, profile.address2):
             if value and value not in identity:
                 identity.append(value)
@@ -61,16 +68,11 @@ def build_callsign_info_presentation(
             identity.append(region)
         if profile.grid:
             identity.append(f"Grid {profile.grid.upper()}")
-        if profile.license_class:
-            license_line = f"License: {profile.license_class}"
-            if profile.license_expiration_date:
-                license_line += f"  Exp {profile.license_expiration_date}"
-            identity.append(license_line)
         if profile.birth_year is not None:
             identity.append(f"Born: {profile.birth_year}")
 
     clock = local_time or datetime.now().astimezone()
-    identity.append(f"QSO Local Time: {clock.strftime('%H:%M')}")
+    local_time_text = f"LOCAL {clock.strftime('%H:%M')}"
 
     target: GeoPoint | None = None
     pin_visible = False
@@ -121,36 +123,38 @@ def build_callsign_info_presentation(
     previous = response.last_qso
     if not previous.exists:
         history_heading = "FIRST CONTACT"
-        history_lines: tuple[str, ...] = ()
+        history_line = None
     else:
         history_heading = "LAST CONTACT"
-        lines: list[str] = []
+        parts: list[str] = []
         if previous.occurred_at is not None:
-            lines.append(previous.occurred_at.astimezone().strftime("%b %d, %Y %H:%M"))
+            parts.append(previous.occurred_at.astimezone().strftime("%b %d, %Y %H:%M"))
         if previous.station_location:
             label = f"From: {previous.station_location}"
             if previous.mobile is True:
                 label += " — MOBILE"
-            lines.append(label)
+            parts.append(label)
         if previous.pota_reference:
-            lines.append(f"Their POTA: {previous.pota_reference}")
+            parts.append(f"Their POTA: {previous.pota_reference}")
         if previous.my_pota_reference:
-            lines.append(f"My POTA: {previous.my_pota_reference}")
+            parts.append(f"My POTA: {previous.my_pota_reference}")
         if previous.comments:
-            lines.append(f"Comment: {previous.comments}")
+            parts.append(f"Comment: {previous.comments}")
         elif previous.notes:
-            lines.append(f"Comment: {previous.notes}")
-        history_lines = tuple(lines)
+            parts.append(f"Comment: {previous.notes}")
+        history_line = "    ".join(parts) or None
 
     return CallsignInfoPresentation(
         callsign=response.callsign,
         name=name,
+        license_line=license_line,
         identity_lines=tuple(identity),
+        local_time_text=local_time_text,
         weather_temperature=weather_temp,
         weather_condition=weather_condition,
         weather_attribution=weather_attribution,
         history_heading=history_heading,
-        history_lines=history_lines,
+        history_line=history_line,
         target=target,
         pin_visible=pin_visible,
         location_note=location_note,
@@ -199,16 +203,17 @@ class CallsignInfoOverlayWidgets:
             relx=1.0,
             rely=1.0,
             anchor="se",
-            relwidth=0.86,
-            relheight=0.86,
+            relwidth=0.80,
+            relheight=0.72,
             x=-12,
             y=-12,
         )
         self.frame.place_forget()
-        self.frame.grid_columnconfigure(0, weight=2)
+        self.frame.grid_columnconfigure(0, weight=1)
         self.frame.grid_columnconfigure(1, weight=3)
-        self.frame.grid_rowconfigure(0, weight=2)
+        self.frame.grid_rowconfigure(0, weight=5)
         self.frame.grid_rowconfigure(1, weight=3)
+        self.frame.grid_rowconfigure(2, weight=1)
 
         self._map = tk.Canvas(
             self.frame,
@@ -256,9 +261,8 @@ class CallsignInfoOverlayWidgets:
         details = tk.Frame(self.frame, bg=_PANEL)
         details.grid(row=1, column=1, sticky="nsew", padx=(2, 0), pady=(2, 0))
         self._name = tk.StringVar(value="")
+        self._license = tk.StringVar(value="")
         self._identity = tk.StringVar(value="")
-        self._history_heading = tk.StringVar(value="")
-        self._history = tk.StringVar(value="")
         tk.Label(
             details,
             textvariable=self._name,
@@ -269,31 +273,50 @@ class CallsignInfoOverlayWidgets:
         ).pack(fill="x", padx=12, pady=(7, 0))
         tk.Label(
             details,
+            textvariable=self._license,
+            bg=_PANEL,
+            fg=_BRIGHT,
+            font=("DejaVu Sans", 30, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=12)
+        tk.Label(
+            details,
             textvariable=self._identity,
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 28),
+            font=("DejaVu Sans", 30),
             justify="left",
             anchor="w",
         ).pack(fill="x", padx=12)
+
+        history = tk.Frame(self.frame, bg=_PANEL)
+        history.grid(
+            row=2,
+            column=0,
+            columnspan=2,
+            sticky="nsew",
+            pady=(2, 0),
+        )
+        self._history_heading = tk.StringVar(value="")
+        self._history = tk.StringVar(value="")
         self._history_label = tk.Label(
-            details,
+            history,
             textvariable=self._history_heading,
             bg=_PANEL,
             fg=_ACCENT,
-            font=("DejaVu Sans", 34, "bold"),
+            font=("DejaVu Sans", 32, "bold"),
             anchor="w",
         )
-        self._history_label.pack(fill="x", padx=12, pady=(5, 0))
+        self._history_label.pack(fill="x", padx=14, pady=(5, 0))
         tk.Label(
-            details,
+            history,
             textvariable=self._history,
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 27),
+            font=("DejaVu Sans", 30),
             justify="left",
             anchor="w",
-        ).pack(fill="x", padx=12)
+        ).pack(fill="x", padx=14, pady=(0, 5))
 
     @property
     def map_size(self) -> tuple[int, int]:
@@ -312,6 +335,7 @@ class CallsignInfoOverlayWidgets:
             if presentation.name
             else presentation.callsign
         )
+        self._license.set(presentation.license_line or "")
         self._identity.set("\n".join(presentation.identity_lines))
         self._weather_temp.set(presentation.weather_temperature or "")
         self._weather_condition.set(presentation.weather_condition or "")
@@ -320,19 +344,20 @@ class CallsignInfoOverlayWidgets:
         self._history_label.configure(
             fg=_FIRST if presentation.history_heading == "FIRST CONTACT" else _ACCENT
         )
-        self._history.set("\n".join(presentation.history_lines))
+        self._history.set(presentation.history_line or "")
         self._draw_map(
             map_snapshot,
             presentation.target,
             pin_visible=presentation.pin_visible,
             location_note=presentation.location_note,
+            local_time_text=presentation.local_time_text,
         )
         self.frame.place(
             relx=1.0,
             rely=1.0,
             anchor="se",
-            relwidth=0.86,
-            relheight=0.86,
+            relwidth=0.80,
+            relheight=0.72,
             x=-12,
             y=-12,
         )
@@ -345,6 +370,7 @@ class CallsignInfoOverlayWidgets:
         *,
         pin_visible: bool,
         location_note: str | None,
+        local_time_text: str,
     ) -> None:
         canvas = self._map
         canvas.delete("all")
@@ -390,13 +416,13 @@ class CallsignInfoOverlayWidgets:
                 x = width / 2 + target_x - center_x
                 y = height / 2 + target_y - center_y
                 canvas.create_oval(
-                    x - 9,
-                    y - 9,
-                    x + 9,
-                    y + 9,
+                    x - 18,
+                    y - 18,
+                    x + 18,
+                    y + 18,
                     fill="#ff4d4d",
                     outline="#ffffff",
-                    width=3,
+                    width=4,
                 )
         if location_note:
             canvas.create_text(
@@ -407,6 +433,15 @@ class CallsignInfoOverlayWidgets:
                 font=("DejaVu Sans", 20, "bold"),
                 anchor="nw",
             )
+
+        canvas.create_text(
+            width - 12,
+            10,
+            text=local_time_text,
+            fill="#000000",
+            font=("DejaVu Sans", 24, "bold"),
+            anchor="ne",
+        )
 
         visible_keys = set(self._map_photos)
         if len(self._map_photo_cache) > 64:
