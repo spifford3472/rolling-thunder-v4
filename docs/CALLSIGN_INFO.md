@@ -9,7 +9,7 @@ The callsign-information overlay answers four operator questions without replaci
 3. What is the current weather there?
 4. Have I worked them before?
 
-The overlay is optional, appears over the lower-right portion of the live map only after a complete useful lookup has loaded, and never participates in durable contact Commit.
+The overlay is optional, appears over the lower-right portion of the live map only after a complete useful lookup has loaded, uses deliberately oversized in-car typography, and never participates in durable contact Commit.
 
 ## Architecture
 
@@ -61,6 +61,11 @@ The Pi owns:
 - overlay and mini-map presentation
 
 The Pi does not receive QRZ or Wavelog credentials.
+
+The contact mini-map deliberately uses a dedicated online tile cache and does not
+blend installed regional MBTiles into that viewport. This keeps worldwide contact
+maps visually consistent and avoids a viewport straddling the edge of a regional
+night-map package showing dark installed tiles beside light online tiles.
 
 ## Location priority
 
