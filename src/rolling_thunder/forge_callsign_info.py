@@ -23,6 +23,11 @@ MonotonicClock = Callable[[], float]
 UtcClock = Callable[[], datetime]
 
 
+class QrzProfileLookup(Protocol):
+    def lookup_profile(self, callsign: str) -> QrzCallsignProfile | None:
+        """Return one normalized QRZ profile."""
+
+
 class CallsignWeatherProvider(Protocol):
     def fetch_weather(self, location: MobileLocationRecord) -> WeatherSnapshot:
         """Fetch normalized weather for one location."""
@@ -39,7 +44,7 @@ class ForgeCallsignInfoService:
 
     def __init__(
         self,
-        qrz_lookup: object,
+        qrz_lookup: QrzProfileLookup,
         wavelog: WavelogClient,
         weather: CallsignWeatherProvider | None,
         *,
