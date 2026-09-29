@@ -404,3 +404,61 @@ Checkpoint #162 is not production-accepted until the exact Ready-for-review head
 Deployment does not change radio authority. The Forge service has no code path for CAT, frequency or mode changes, PTT/MOX, keying, tuner control, power control, or transmit control.
 
 All operator-confirmed receive tuning remains on the Pi and must route through `ReceiveTuningService`.
+
+
+## v4.2 callsign-information service
+
+The callsign-information overlay uses a separate on-demand Forge process so the
+retained spot API continues to serve already-published state without live QRZ,
+Wavelog, or weather provider work in its handlers.
+
+Tracked deployment assets:
+
+```text
+config/forge-callsign-info.example.yaml
+deploy/systemd/rolling-thunder-forge-callsign-info.service
+deploy/systemd/forge-callsign-info.env.example
+```
+
+Recommended production installation:
+
+```text
+application: /opt/rolling-thunder-forge-callsign-info
+config:      /etc/rolling-thunder/forge-callsign-info.yaml
+secrets:     /etc/rolling-thunder/forge-callsign-info.env
+listener:    192.168.9.170:8788
+```
+
+The environment file contains QRZ username/password and the Wavelog v2 bearer
+token. The token must permit QSO reads as well as whatever permissions are used
+by the independent contact-sync service. Secrets remain outside YAML and Git.
+
+The Pi calls only the compact private endpoint:
+
+```text
+GET /api/v1/contact-intelligence/{callsign}
+```
+
+and may append POTA park latitude/longitude for the current activation. Forge
+uses those coordinates for target weather while QRZ remains the identity source.
+
+Health and listener checks:
+
+```bash
+curl -fsS http://192.168.9.170:8788/health
+ss -lntp | grep '192.168.9.170:8788'
+sudo systemctl status rolling-thunder-forge-callsign-info.service
+```
+
+The same private RadioLAN/CarLAN-over-WireGuard trust boundary applies. TCP 8788
+must not be publicly forwarded or exposed through UPnP.
+
+Failure of this independent service never blocks local logging, radio polling,
+mapping, or contact Commit. A QRZ or Wavelog lookup failure returns service
+unavailability so the Pi shows no callsign overlay. An empty successful Wavelog
+history result is different and is presented as FIRST CONTACT. Weather is
+optional enrichment: its failure does not suppress otherwise valid identity and
+history data.
+
+Open-Meteo attribution remains required. The compact response carries the
+provider attribution text and the overlay displays it in muted small text.
