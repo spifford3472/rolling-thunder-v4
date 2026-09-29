@@ -25,6 +25,28 @@ class InlineExecutor(Executor):
         return future
 
 
+class DeferredExecutor(Executor):
+    def __init__(self) -> None:
+        self.jobs: list[
+            tuple[Callable[..., Any], tuple[object, ...], dict[str, object], Future[Any]]
+        ] = []
+
+    def submit(
+        self,
+        fn: Callable[..., Any],
+        /,
+        *args: object,
+        **kwargs: object,
+    ) -> Future[Any]:
+        future: Future[Any] = Future()
+        self.jobs.append((fn, args, kwargs, future))
+        return future
+
+    def run(self, index: int) -> None:
+        fn, args, kwargs, future = self.jobs[index]
+        future.set_result(fn(*args, **kwargs))
+
+
 class FakeClient:
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -172,3 +194,25 @@ def test_lookup_state_retains_pota_target_for_async_presentation() -> None:
     state = service.state
     assert state.target_latitude == 39.7
     assert state.target_longitude == -84.2
+
+
+
+def test_late_response_for_replaced_callsign_cannot_resurrect_old_overlay() -> None:
+    client = FakeClient()
+    executor = DeferredExecutor()
+    service = CallsignInfoLookupService(client, executor=executor)
+
+    assert service.observe_callsign("K1AAA") is True
+    assert service.observe_callsign("W1AW") is True
+
+    executor.run(0)
+    state_after_old = service.state
+    assert state_after_old.callsign == "W1AW"
+    assert state_after_old.response is None
+    assert state_after_old.loading is True
+
+    executor.run(1)
+    final = service.state
+    assert final.callsign == "W1AW"
+    assert final.response is not None
+    assert final.response.callsign == "W1AW"
