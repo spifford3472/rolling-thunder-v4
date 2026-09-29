@@ -1073,3 +1073,26 @@ implementation.
 Checkpoint 2 opens no FT8 audio device, installs no decoder, opens no FT-891
 Standard Com Port, adds no PTT capability, adds no transmit-audio capability,
 performs no database migration, and cannot transmit RF.
+
+
+## Checkpoint 3 implementation boundary
+
+Checkpoint 3 introduces the first receive decoder module but still does not
+compose FT8 into production runtime behavior.
+
+The decoder-facing input is project-owned `FT8PcmPeriod`: an explicit
+`FT8Period`, sample rate, and mono signed-16-bit PCM samples. Saved WAV files
+are a benchmark/test source only; backend-specific filenames and process/native
+types are not the application decoder API.
+
+The initial adapters are `Ft8LibDecoder` for `kgoba/ft8_lib` and
+`Ft8monDecoder` for `rtmrtmrtmrtm/ft8mon`. Both normalize exclusively into
+the existing `FT8Decode`; the Checkpoint 2 requirements for SNR, DT, and
+positive audio frequency remain intact.
+
+The exact candidate revisions and benchmark ledger live in
+`docs/FT8_DECODER_BAKEOFF.md`.
+
+Checkpoint 3 remains saved/reference-WAV receive-only: no DigiRig capture,
+production worker, QSO execution, logging, PTT, CAT transmit command, transmit
+audio, waveform generation, or RF transmission is added.
