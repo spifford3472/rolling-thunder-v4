@@ -1,10 +1,10 @@
 """Project-owned immutable FT8 domain models."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Mapping
 
 from pydantic import TypeAdapter
 
