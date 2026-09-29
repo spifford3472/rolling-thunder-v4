@@ -9,7 +9,8 @@
 - adds UTC-boundary-aligned persistent `arecord` capture
 - adds bounded background capture/decode workers with reconnect and degraded state
 - connects live `Ft8LibDecoder` output to the existing `FT8CQActivityManager`
-- physically validates clean live audio and 11 real on-air decodes in one FT8 period
+- physically validates clean live audio and 11 real on-air decodes in one direct decoder period
+- validates application-composed live receive across two consecutive periods with 19 decodes, 4 CQ activities, zero drops, and clean shutdown
 - keeps FT8 disabled by default and composes no FT8 resources when disabled
 - adds no playback, PTT, CAT TX, waveform generation, automated QSO, logging, or RF
 
