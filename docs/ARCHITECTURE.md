@@ -908,3 +908,25 @@ ft8:
 The QSO retry budget is six attempts per unchanged state/message. CQ discovery
 has no station-selection authority, and terminal QSO outcomes require an
 explicit reset before another station can be authorized.
+
+
+## Experimental v4.3 FT8 decoder foundation
+
+Checkpoint 3 adds a receive-only project-owned decoder boundary under
+`src/rolling_thunder/ft8/decoder.py` without composing it into
+`ApplicationRuntime` or the production service.
+
+The application-facing input is an `FT8PcmPeriod` containing an explicit
+`FT8Period`, sample rate, and immutable mono signed-16-bit little-endian PCM
+bytes. Backend-specific WAV paths, subprocess handles, and native decoder
+objects do not cross that boundary.
+
+Saved-WAV adapters currently exist for the pinned `kgoba/ft8_lib` and
+`rtmrtmrtmrtm/ft8mon` candidates. Both normalize into the existing immutable
+`FT8Decode` domain type. The official WSJT-X 3.0.2 ARM64 build is used only
+as an isolated saved-WAV oracle during the bake-off and is not a production
+dependency.
+
+Checkpoint 3 still adds no live DigiRig capture, decoder worker, QSO execution,
+successful-QSO logging, CAT transmit action, PTT, transmit audio, waveform
+generation, or RF authority.
