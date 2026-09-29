@@ -2,29 +2,29 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import re
 import struct
 import subprocess
 import tempfile
-from typing import Protocol
 import wave
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Protocol
 
 from rolling_thunder.ft8.domain import FT8Decode, FT8MessageKind, FT8Period
 
 _FT8MON_LINE = re.compile(
-    r"^\\d{6}\\s+(?P<snr>[+-]?\\d+)\\s+"
-    r"(?P<dt>[+-]?\\d+(?:\\.\\d+)?)\\s+"
-    r"(?P<freq>\\d+)\\s+(?P<message>.+?)\\s*$"
+    r"^\d{6}\s+(?P<snr>[+-]?\d+)\s+"
+    r"(?P<dt>[+-]?\d+(?:\.\d+)?)\s+"
+    r"(?P<freq>\d+)\s+(?P<message>.+?)\s*$"
 )
 _FT8LIB_LINE = re.compile(
-    r"^\\d{6}\\s+(?P<snr>[+-]?\\d+(?:\\.\\d+)?)\\s+"
-    r"(?P<dt>[+-]?\\d+(?:\\.\\d+)?)\\s+"
-    r"(?P<freq>\\d+(?:\\.\\d+)?)\\s+~\\s+(?P<message>.+?)\\s*$"
+    r"^\d{6}\s+(?P<snr>[+-]?\d+(?:\.\d+)?)\s+"
+    r"(?P<dt>[+-]?\d+(?:\.\d+)?)\s+"
+    r"(?P<freq>\d+(?:\.\d+)?)\s+~\s+(?P<message>.+?)\s*$"
 )
-_REPORT = re.compile(r"^[+-]\\d{2}$")
-_R_REPORT = re.compile(r"^R([+-]\\d{2})$")
+_REPORT = re.compile(r"^[+-]\d{2}$")
+_R_REPORT = re.compile(r"^R([+-]\d{2})$")
 
 
 class FT8DecoderError(RuntimeError):
