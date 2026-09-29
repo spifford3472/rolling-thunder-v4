@@ -4,9 +4,9 @@ from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.decoder import (
     FT8Decoder,
     FT8DecoderError,
-    FT8PcmPeriod,
     Ft8LibDecoder,
     Ft8monDecoder,
+    FT8PcmPeriod,
 )
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
