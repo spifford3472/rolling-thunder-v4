@@ -68,8 +68,9 @@ For the current contact:
 
 1. If the pending callsign came from a selected POTA spot with park coordinates, use the park coordinate for the overlay pin and weather.
 2. Otherwise use QRZ latitude/longitude when available.
-3. QRZ coordinates whose source is only a state or DXCC center are not used for weather.
-4. Missing coordinates never invent a pin.
+3. QRZ coordinates whose source is only a state or DXCC center may center a country/region map, but do not receive a station pin or target weather.
+4. Grid-center fallback is explicitly labeled approximate.
+5. Missing coordinates never invent a pin.
 
 The profile may still display textual information when no reliable coordinate exists.
 
