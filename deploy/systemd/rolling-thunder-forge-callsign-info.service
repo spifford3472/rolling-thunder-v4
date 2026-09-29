@@ -1,0 +1,39 @@
+[Unit]
+Description=Rolling Thunder Forge Callsign Information Service
+Documentation=file:/opt/rolling-thunder-forge-callsign-info/docs/CALLSIGN_INFO.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=rollingthunder
+Group=rollingthunder
+WorkingDirectory=/opt/rolling-thunder-forge-callsign-info
+
+EnvironmentFile=/etc/rolling-thunder/forge-callsign-info.env
+
+ExecStart=/opt/rolling-thunder-forge-callsign-info/.venv/bin/rolling-thunder-forge-callsign-info --config /etc/rolling-thunder/forge-callsign-info.yaml
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
