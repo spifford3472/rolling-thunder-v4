@@ -1163,11 +1163,6 @@ def run_dashboard(
                 )
                 callsign_map_snapshot = None
                 if runtime.callsign_map is not None and callsign_presentation.target is not None:
-                    if (
-                        runtime.live_map is not None
-                        and runtime.callsign_map.style is not runtime.live_map.style
-                    ):
-                        runtime.callsign_map.set_style(runtime.live_map.style)
                     runtime.callsign_map.set_zoom(callsign_presentation.map_zoom)
                     info_map_width, info_map_height = callsign_info_widgets.map_size
                     if info_map_width >= 64 and info_map_height >= 64:
