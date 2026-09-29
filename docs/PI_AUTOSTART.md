@@ -1,7 +1,7 @@
 # Raspberry Pi Dashboard Autostart
 
-Rolling Thunder v4.2 checkpoint 1 adds a systemd-managed dashboard startup path for
-the installed Raspberry Pi.
+Rolling Thunder uses a systemd-managed dashboard startup path on the installed
+Raspberry Pi.
 
 ## Design
 
@@ -14,8 +14,8 @@ The launcher validates the production checkout, virtual-environment UI entry
 point, and active YAML configuration before launch. Missing prerequisites fail
 visibly in the journal instead of creating a silent boot loop.
 
-The dashboard remains the existing `rolling-thunder-ui` application. This
-checkpoint does not create a second application entry point or move application
+The dashboard remains the existing `rolling-thunder-ui` application. The
+launcher does not create a second application entry point or move application
 logic into systemd.
 
 The unit uses `Restart=on-failure` with a ten-second restart delay. A normal
@@ -23,46 +23,68 @@ operator/systemd stop is not treated as a failure.
 
 ## Production paths
 
-The checked-in unit assumes the established production worktree:
+The supported production checkout is:
 
 ```text
-/home/geoff/projects/rolling-thunder-v4-regional
+/home/geoff/projects/rolling-thunder-v4
 ```
 
-and:
+The production virtual environment and configuration are:
 
 ```text
 /home/geoff/projects/rolling-thunder-v4/.venv/bin/rolling-thunder-ui
-/home/geoff/projects/rolling-thunder-v4-regional/config/rolling-thunder.yaml
+/home/geoff/projects/rolling-thunder-v4/config/rolling-thunder.yaml
 ```
 
-The service runs as `geoff` and uses the production arrangement verified on `anvilmobile`: the regional worktree is the working directory, while the Python environment is `/home/geoff/projects/rolling-thunder-v4/.venv`. LightDM/Xorg provides display `:0`, `/home/geoff/.Xauthority`, and `/run/user/1000`. The launcher also refuses to start when an existing Rolling Thunder dashboard process is already running.
+The service runs as `geoff` with the production checkout as its working
+directory. LightDM/Xorg provides display `:0`,
+`/home/geoff/.Xauthority`, and `/run/user/1000`. The launcher also refuses
+to start when an existing Rolling Thunder dashboard process is already running.
+
+The launcher defaults `ROLLING_THUNDER_APP_DIR` to the same production
+checkout. The systemd unit sets that value explicitly so the runtime location
+is unambiguous.
 
 ## Installation
 
-After the checkpoint branch is deployed to the production worktree:
+From the production checkout:
 
 ```bash
-sudo install -m 0755 \
-  /home/geoff/projects/rolling-thunder-v4-regional/deploy/rolling-thunder-autostart \
-  /home/geoff/projects/rolling-thunder-v4-regional/deploy/rolling-thunder-autostart
+cd /home/geoff/projects/rolling-thunder-v4
+
+chmod 0755 deploy/rolling-thunder-autostart
 
 sudo install -m 0644 \
-  /home/geoff/projects/rolling-thunder-v4-regional/deploy/systemd/rolling-thunder.service \
+  deploy/systemd/rolling-thunder.service \
   /etc/systemd/system/rolling-thunder.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable rolling-thunder.service
 ```
 
-The first `install` command intentionally reapplies executable mode to the
-checked-out launcher. It does not copy the launcher outside the production
-worktree.
+The launcher remains in the production checkout; it is not copied to a separate
+runtime directory.
+
+## Legacy v4.2 path override
+
+During the v4.2.0 release transition, `anvilmobile` used the local drop-in:
+
+```text
+/etc/systemd/system/rolling-thunder.service.d/v4.2-main.conf
+```
+
+to override an older checked-in base unit that still referenced
+`/home/geoff/projects/rolling-thunder-v4-regional`.
+
+The corrected base unit now contains the same production path directly. Keep the
+legacy drop-in installed until the corrected base unit has been physically tested
+on `anvilmobile`. Remove it only after verifying that the effective unit is
+unchanged apart from the redundant override.
 
 ## Verification without the three-minute delay
 
-For an initial supervised test, create a systemd drop-in rather than editing the
-checked-in unit:
+For a supervised test, use a temporary drop-in rather than editing the checked-in
+unit:
 
 ```bash
 sudo systemctl edit rolling-thunder.service
@@ -84,27 +106,33 @@ systemctl status rolling-thunder.service --no-pager -l
 journalctl -u rolling-thunder.service -n 100 --no-pager
 ```
 
-Remove the test override with:
+Remove only the temporary zero-delay override after the supervised test. Do not
+remove `v4.2-main.conf` until the corrected base service has passed the
+Checkpoint 0 acceptance test.
 
-```bash
-sudo systemctl revert rolling-thunder.service
-sudo systemctl daemon-reload
-```
+## Checkpoint 0 acceptance
 
-The production service then returns to the checked-in 180-second delay.
+Checkpoint 0 is accepted on `anvilmobile` when all of the following are
+observed:
 
-## Boot acceptance
+1. the checked-in unit points only to `/home/geoff/projects/rolling-thunder-v4`;
+2. the launcher defaults to that same production checkout;
+3. the installed effective unit starts the dashboard from that checkout;
+4. radio, GPS, controls, map, logging, and other existing behavior remains unchanged;
+5. stopping the service terminates the dashboard cleanly;
+6. the service restarts correctly after a supervised failure/start test; and
+7. after the base-unit test succeeds, removing the legacy `v4.2-main.conf`
+   drop-in does not change the effective production paths.
 
-Checkpoint 1 is accepted on `anvilmobile` when all of the following are observed:
+A reboot/180-second startup test should be performed before final merge approval
+when practical.
 
-1. the service is enabled;
-2. a reboot reaches the graphical desktop normally;
-3. the dashboard does not launch immediately;
-4. the journal records the 180-second startup wait;
-5. the dashboard appears after the delay without SSH intervention;
-6. radio/GPS/controls/map initialization behaves as it did under manual startup;
-7. stopping the service terminates the dashboard cleanly; and
-8. an unexpected dashboard failure is restarted by systemd.
+## v4.2.0 recovery
 
-If the desktop uses a different display or X authority path, record the actual
-installed values in the pull-request acceptance notes before merge.
+The immutable v4.2.0 recovery point is tag `v4.2.0`, commit
+`3f5a9c22bc600883b1eb8d868d92e2f58658cc24`.
+
+Checkpoint 0 does not change application code, configuration data, databases,
+audio rules, udev rules, or radio behavior. If rollback is required, restore the
+v4.2.0 checkout and the known-good `v4.2-main.conf` drop-in before restarting
+`rolling-thunder.service`.
