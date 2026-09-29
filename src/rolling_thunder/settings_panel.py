@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from rolling_thunder.callsign_info_service import CallsignInfoState
 from rolling_thunder.map_zoom import MapZoomSettingsController, MapZoomSettingsState
 
 
@@ -21,17 +22,11 @@ class RadarImageTarget(Protocol):
         ...
 
 
-class CallsignInfoToggleState(Protocol):
-    """Small immutable state view needed by Settings."""
-
-    enabled: bool
-
-
 class CallsignInfoTarget(Protocol):
     """Runtime callsign-info visibility capability used by Settings."""
 
     @property
-    def state(self) -> CallsignInfoToggleState:
+    def state(self) -> CallsignInfoState:
         ...
 
     def set_enabled(self, enabled: bool) -> bool:
