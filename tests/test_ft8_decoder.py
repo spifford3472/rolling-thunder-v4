@@ -56,7 +56,7 @@ def test_message_normalization(
 
 def test_ft8mon_output_normalizes_into_project_decode() -> None:
     decoder = Ft8monDecoder("ft8mon")
-    decode = decoder._parse_line(  # noqa: SLF001
+    decode = decoder._parse_line(
         "094445 -19 0.0 820 CQ DX WD6DBM CM97",
         period=FT8Period(index=100),
     )
@@ -76,7 +76,7 @@ def test_ft8mon_output_normalizes_into_project_decode() -> None:
 
 def test_ft8_lib_output_normalizes_required_metrics() -> None:
     decoder = Ft8LibDecoder("decode_ft8")
-    decode = decoder._parse_line(  # noqa: SLF001
+    decode = decoder._parse_line(
         "000000 +12.5 +0.25 1000 ~  CQ K1ABC EM79",
         period=FT8Period(index=101),
     )
@@ -95,7 +95,7 @@ def test_ft8_lib_output_normalizes_required_metrics() -> None:
 
 def test_malformed_backend_line_is_ignored() -> None:
     assert (
-        Ft8monDecoder("ft8mon")._parse_line(  # noqa: SLF001
+        Ft8monDecoder("ft8mon")._parse_line(
             "not decoder output",
             period=FT8Period(index=100),
         )
@@ -105,7 +105,7 @@ def test_malformed_backend_line_is_ignored() -> None:
 
 def test_partially_supported_message_is_retained_as_other() -> None:
     decoder = Ft8monDecoder("ft8mon")
-    decode = decoder._parse_line(  # noqa: SLF001
+    decode = decoder._parse_line(
         "094445 -10 0.3 601 THIS IS UNSUPPORTED",
         period=FT8Period(index=100),
     )
