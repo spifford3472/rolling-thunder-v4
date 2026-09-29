@@ -27,6 +27,10 @@ from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.domain import RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft891_radio import Ft891Radio
+from rolling_thunder.ft8.activity import FT8CQActivityManager
+from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
+from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
+from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
 from rolling_thunder.home_platform import HomePlatformClient
@@ -156,6 +160,7 @@ class ApplicationRuntime:
     pota_spot_polling: PotaSpotPollingService | None = None
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
+    ft8_receive: FT8ReceiveService | None = None
     _started: bool = False
 
     @classmethod
@@ -206,6 +211,8 @@ class ApplicationRuntime:
         pota_map_executor: Executor | None = None,
         callsign_info_executor: Executor | None = None,
         callsign_map_executor: Executor | None = None,
+        ft8_audio_input: FT8AudioInput | None = None,
+        ft8_decoder: FT8Decoder | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -421,6 +428,27 @@ class ApplicationRuntime:
             executor=enrichment_executor,
         )
 
+        ft8_receive: FT8ReceiveService | None = None
+        if config.ft8.enabled:
+            decoder_executable = config.ft8.receive.decoder_executable
+            if decoder_executable is None:
+                raise ValueError(
+                    "FT8 decoder executable is required when FT8 is enabled."
+                )
+            resolved_audio_input = ft8_audio_input or AlsaArecordFT8AudioInput(
+                config.ft8.receive.audio_device
+            )
+            resolved_decoder = ft8_decoder or Ft8LibDecoder(
+                str(decoder_executable),
+                timeout_s=config.ft8.receive.decoder_timeout_s,
+            )
+            ft8_receive = FT8ReceiveService(
+                resolved_audio_input,
+                resolved_decoder,
+                FT8CQActivityManager(),
+                reconnect_delay_s=config.ft8.receive.reconnect_delay_s,
+            )
+
         live_map: LiveMapService | None = None
         callsign_map: LiveMapService | None = None
         live_radar: LiveRadarOverlayService | None = None
@@ -559,7 +587,15 @@ class ApplicationRuntime:
             pi_forge_location_publishing=pi_forge_location_publishing,
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
+            ft8_receive=ft8_receive,
         )
+
+    @property
+    def latest_ft8_receive_state(self) -> FT8ReceiveState | None:
+        """Return immutable FT8 receive state without performing I/O."""
+        if self.ft8_receive is None:
+            return None
+        return self.ft8_receive.latest_state
 
     @property
     def pota_receive_tune_executor(self) -> PotaReceiveTuneExecutor:
@@ -667,6 +703,8 @@ class ApplicationRuntime:
             raise RuntimeError("Application runtime is already started.")
 
         state = self.polling.start()
+        if self.ft8_receive is not None:
+            self.ft8_receive.start()
         if self.gps_polling is not None:
             self.gps_polling.start()
         if self.clock_sync is not None:
@@ -713,6 +751,8 @@ class ApplicationRuntime:
         if not self._started:
             return self.radio.get_state()
 
+        if self.ft8_receive is not None:
+            self.ft8_receive.stop()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.stop()
         self.pota_enrichment.stop()
