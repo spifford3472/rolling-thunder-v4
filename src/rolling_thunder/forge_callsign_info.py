@@ -268,6 +268,7 @@ class ForgeCallsignInfoService:
                 is_day=snapshot.current.is_day,
             ),
             location_source=source,
+            attribution=snapshot.source.attribution_text,
         )
 
     @staticmethod
