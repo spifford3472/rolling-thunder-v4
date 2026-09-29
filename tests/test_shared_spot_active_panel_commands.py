@@ -332,3 +332,43 @@ def test_rejected_tune_does_not_preload_callsign() -> None:
 
     assert commands.activate_selection() is False
     assert pending.callsigns == []
+
+
+
+class RecordingBrowsePanel:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def cycle_step(self) -> bool:
+        self.calls.append("cycle_step")
+        return True
+
+    def cycle_mode(self) -> bool:
+        self.calls.append("cycle_mode")
+        return True
+
+    def adjust_frequency(self, direction: int) -> bool:
+        self.calls.append(f"adjust:{direction}")
+        return True
+
+
+def test_browse_context_routes_encoder_and_buttons_without_spot_selection() -> None:
+    navigation = ContextNavigationController(ContextId.BROWSE)
+    panel = RecordingSharedPanel()
+    browse = RecordingBrowsePanel()
+    commands = SharedSpotActivePanelCommandController(
+        navigation,
+        panel,
+        current_frequency=lambda: Frequency(hz=14_250_000),
+        browse_panel=browse,
+    )
+    panel.calls.clear()
+
+    assert commands.move_previous() is True
+    assert commands.move_next() is True
+    assert commands.secondary() is True
+    assert commands.tertiary() is True
+    assert commands.activate_selection() is False
+
+    assert browse.calls == ["adjust:-1", "adjust:1", "cycle_step", "cycle_mode"]
+    assert panel.calls == []

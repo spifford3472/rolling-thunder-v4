@@ -757,3 +757,61 @@ new bounds. Exact viewport equality is not required for temporary presentation.
 
 This also prevents stationary GPS position jitter from causing the park layer to
 blink off and back on.
+
+## Browse Operating Context
+
+Browse is a free-form receive and logging context placed immediately after DX in
+the dashboard context cycle. It is intentionally independent of POTA/DX spot
+selection and provider state.
+
+The existing shared callsign-capture state remains authoritative. Browse does not
+preload a callsign from any spot source; callsigns are entered through the same
+Voice workflow used elsewhere and Commit/Discard retain their existing behavior.
+
+Browse receive controls route through the context-aware active-panel boundary:
+
+- encoder left: decrease receive frequency by the selected step
+- encoder right: increase receive frequency by the selected step
+- Button #2 / secondary: cycle 100 Hz, 500 Hz, and 1 kHz tuning steps
+- Button #3 / tertiary: cycle CW, FM, SSB, and AM
+
+The UI presents SSB as one operator-facing mode. Radio execution maps SSB to LSB
+below 10 MHz and USB at or above 10 MHz. Browse tuning is receive-only, runs on a
+background worker, does not expose raw CAT, and retains the existing no-PTT/no-MOX
+safety boundary.
+
+Browse Commit uses the existing durable local contact pipeline. With a valid GPS
+fix, the contact note is:
+
+`Mobile Contact from <latitude>, <longitude> (<six-character-grid>)`
+
+If GPS is unavailable, the contact still commits and records
+`Mobile Contact (GPS unavailable)` rather than inventing coordinates.
+
+
+### Browse US Amateur Extra advisory
+
+Browse includes a presentation-only US Amateur Extra frequency/mode advisory.
+The rules live in `us_extra_band_advisory.py` rather than the Tk layer so the
+regulatory boundaries are deterministic and unit tested.
+
+Presentation is intentionally advisory and does not create transmit authority or
+a CAT/PTT interlock:
+
+- red with white text: the tuned carrier is outside a configured US Amateur
+  Extra allocation/channel;
+- yellow with dark text: the carrier is inside an allocation but the selected
+  emission family is not authorized in that segment;
+- no warning box: the frequency/mode combination passes the advisory.
+
+CW is treated according to Part 97's rule permitting CW anywhere the control
+operator is otherwise authorized. SSB/AM/FM are evaluated as phone-family
+Browse modes for the requested sub-band warning. DATA is also evaluated for
+radios entering Browse while already in DATA mode.
+
+The rule set includes 160, 80/75, current 60 m privileges, 40, 30, 20, 17, 15,
+12, 10, and 6 meters. Current 60 m channel/segment handling is special-cased,
+and Browse SSB selects USB on 60 m.
+
+The advisory does not calculate occupied emission bandwidth at a band edge and
+must not be treated as a substitute for operator compliance with Part 97.

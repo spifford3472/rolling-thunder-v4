@@ -192,3 +192,40 @@ def test_controller_records_worked_pota_only_after_durable_commit() -> None:
     committed, spots = tracker.records[0]
     assert committed.pota_reference == "US-1234"
     assert spots == (pota_spot,)
+
+
+
+def test_controller_adds_browse_mobile_contact_note_from_current_gps() -> None:
+    repository = BlockingRepository()
+    succeeded = Event()
+    now = datetime(2026, 7, 25, 14, 0, tzinfo=UTC)
+    position = GPSPosition(
+        fix_state=GPSFixState.THREE_DIMENSIONAL,
+        latitude=39.5309,
+        longitude=-84.0866,
+        altitude_m=250.0,
+        updated_at=now,
+    )
+    gps_state = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=position,
+        updated_at=now,
+    )
+    controller = ContactCommitController(
+        ContactLoggingService(repository, FixedClock()),
+        on_started=lambda callsign: None,
+        on_succeeded=lambda callsign: succeeded.set(),
+        on_failed=lambda message: None,
+        gps_state_provider=lambda: gps_state,
+        browse_context_provider=lambda: True,
+    )
+
+    assert controller.start_commit("KI5VNB", connected_radio()) is True
+    assert repository.started.wait(timeout=2)
+    repository.release.set()
+    assert succeeded.wait(timeout=2)
+
+    contact = repository.contacts[0]
+    assert contact.notes == "Mobile Contact from 39.530900, -84.086600 (EM79wm)"
+    assert contact.my_grid == "EM79wm"
+    assert contact.pota_reference is None

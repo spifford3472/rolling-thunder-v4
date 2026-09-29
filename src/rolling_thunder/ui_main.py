@@ -13,7 +13,11 @@ from rolling_thunder.application_secrets import (
     SecretConfigurationError,
     load_application_secrets,
 )
-from rolling_thunder.callsign_capture import CallsignCaptureState, MockTranscriptController
+from rolling_thunder.browse_control import BrowseRadioController, browse_mode_label
+from rolling_thunder.callsign_capture import (
+    CallsignCaptureState,
+    MockTranscriptController,
+)
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
 from rolling_thunder.context_navigation import (
@@ -79,6 +83,10 @@ from rolling_thunder.status_strip import (
     build_status_bar_routine_message,
     build_status_strip_snapshot,
 )
+from rolling_thunder.us_extra_band_advisory import (
+    BandAdvisoryLevel,
+    us_extra_band_advisory,
+)
 from rolling_thunder.weather_alert_panel import (
     WeatherAlertPanelController,
 )
@@ -91,6 +99,7 @@ _BACKGROUND = "#080808"
 _PANEL_BACKGROUND = "#101010"
 _SECONDARY_BACKGROUND = "#151515"
 _CONTEXT_SELECTED = "#2a3f4b"
+_BROWSE_HEADER_BACKGROUND = "#315f73"
 _BORDER = "#303030"
 _BRIGHT = "#ffffff"
 _DISABLED = "#777777"
@@ -265,6 +274,10 @@ def run_dashboard(
         shared_spot_tuning,
         runtime.status_messages,
     )
+    browse_controls = BrowseRadioController(
+        runtime.radio,
+        radio_state=lambda: runtime.latest_radio_state,
+    )
     repeater_panel_runtime = RepeaterPanelRuntime.build(
         database_path=config.storage.database_path,
         gps_state=lambda: runtime.latest_gps_state,
@@ -283,6 +296,7 @@ def run_dashboard(
         radio_state=lambda: runtime.latest_radio_state,
         shared_tuning=shared_spot_tuning,
         pending_callsign=capture,
+        browse_panel=browse_controls,
         settings_panel=settings_panel,
         repeater_panel=repeater_panel,
         repeater_active_overrides=repeater_panel_runtime.persistence,
@@ -345,7 +359,12 @@ def run_dashboard(
         on_succeeded=commit_succeeded,
         on_failed=commit_failed,
         gps_state_provider=lambda: runtime.latest_gps_state,
-        pota_context_provider=lambda: context_navigation.state.selected is ContextId.POTA,
+        pota_context_provider=lambda: (
+            context_navigation.state.selected is ContextId.POTA
+        ),
+        browse_context_provider=lambda: (
+            context_navigation.state.selected is ContextId.BROWSE
+        ),
         pota_spots_provider=lambda: shared_pota_spots_for_contact(
             shared_spot_panel.visible_spots
         ),
@@ -549,6 +568,141 @@ def run_dashboard(
     log_widgets = LogWidgets(context_content)
     dmr_widgets = DmrWidgets(context_content)
 
+    browse_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
+    browse_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(4, 8))
+    browse_frame.grid_columnconfigure(0, weight=1)
+    browse_frame.grid_columnconfigure(1, weight=1)
+    browse_frame.grid_rowconfigure(0, weight=3)
+    browse_frame.grid_rowconfigure(1, weight=2)
+    browse_frame.grid_remove()
+
+    browse_frequency_card = tk.Frame(
+        browse_frame,
+        bg=_PANEL_BACKGROUND,
+        highlightthickness=2,
+        highlightbackground=_BROWSE_HEADER_BACKGROUND,
+    )
+    browse_frequency_card.grid(
+        row=0,
+        column=0,
+        columnspan=2,
+        sticky="nsew",
+        padx=4,
+        pady=(4, 8),
+    )
+    browse_frequency_card.grid_columnconfigure(0, weight=1)
+    browse_frequency_card.grid_rowconfigure(1, weight=1)
+    browse_frequency_card.grid_rowconfigure(2, weight=0)
+
+    tk.Label(
+        browse_frequency_card,
+        text="FREQUENCY",
+        bg=_BROWSE_HEADER_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 44, "bold"),
+        anchor="center",
+    ).grid(row=0, column=0, sticky="ew", ipady=7)
+
+    browse_frequency_text = tk.StringVar(value="---.--- MHz")
+    tk.Label(
+        browse_frequency_card,
+        textvariable=browse_frequency_text,
+        bg=_PANEL_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 40, "bold"),
+        anchor="center",
+    ).grid(row=1, column=0, sticky="nsew", padx=12, pady=12)
+
+    browse_warning_text = tk.StringVar(value="")
+    browse_warning_label = tk.Label(
+        browse_frequency_card,
+        textvariable=browse_warning_text,
+        bg=_FAILURE,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 26, "bold"),
+        anchor="center",
+        justify="center",
+    )
+    browse_warning_label.grid(
+        row=2,
+        column=0,
+        sticky="ew",
+        padx=12,
+        pady=(0, 12),
+        ipady=7,
+    )
+    browse_warning_label.grid_remove()
+
+    browse_mode_card = tk.Frame(
+        browse_frame,
+        bg=_PANEL_BACKGROUND,
+        highlightthickness=2,
+        highlightbackground=_BROWSE_HEADER_BACKGROUND,
+    )
+    browse_mode_card.grid(
+        row=1,
+        column=0,
+        sticky="nsew",
+        padx=(4, 6),
+        pady=(0, 4),
+    )
+    browse_mode_card.grid_columnconfigure(0, weight=1)
+    browse_mode_card.grid_rowconfigure(1, weight=1)
+
+    tk.Label(
+        browse_mode_card,
+        text="MODE",
+        bg=_BROWSE_HEADER_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 40, "bold"),
+        anchor="center",
+    ).grid(row=0, column=0, sticky="ew", ipady=6)
+
+    browse_mode_text = tk.StringVar(value="--")
+    tk.Label(
+        browse_mode_card,
+        textvariable=browse_mode_text,
+        bg=_PANEL_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 36, "bold"),
+        anchor="center",
+    ).grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+    browse_step_card = tk.Frame(
+        browse_frame,
+        bg=_PANEL_BACKGROUND,
+        highlightthickness=2,
+        highlightbackground=_BROWSE_HEADER_BACKGROUND,
+    )
+    browse_step_card.grid(
+        row=1,
+        column=1,
+        sticky="nsew",
+        padx=(6, 4),
+        pady=(0, 4),
+    )
+    browse_step_card.grid_columnconfigure(0, weight=1)
+    browse_step_card.grid_rowconfigure(1, weight=1)
+
+    tk.Label(
+        browse_step_card,
+        text="STEP",
+        bg=_BROWSE_HEADER_BACKGROUND,
+        fg=_BRIGHT,
+        font=("DejaVu Sans", 40, "bold"),
+        anchor="center",
+    ).grid(row=0, column=0, sticky="ew", ipady=6)
+
+    browse_step_text = tk.StringVar(value="100 Hz")
+    tk.Label(
+        browse_step_card,
+        textvariable=browse_step_text,
+        bg=_PANEL_BACKGROUND,
+        fg=_WARNING,
+        font=("DejaVu Sans", 36, "bold"),
+        anchor="center",
+    ).grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
     pota_panel_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     pota_panel_frame.grid(row=1, column=0, sticky="nsew")
     pota_panel_frame.grid_columnconfigure(0, weight=1)
@@ -586,7 +740,9 @@ def run_dashboard(
 
     pota_card_frames: list[tk.Frame] = []
     pota_card_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
-    pota_card_texts: list[tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]] = []
+    pota_card_texts: list[
+        tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]
+    ] = []
 
     for card_index in range(_POTA_VISIBLE_CARD_COUNT):
         card_frame = tk.Frame(
@@ -807,6 +963,7 @@ def run_dashboard(
 
     def show_standard_context_body() -> None:
         """Show the reusable text body and hide specialized context viewports."""
+        browse_frame.grid_remove()
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
@@ -817,6 +974,7 @@ def run_dashboard(
 
     def show_pota_context_body() -> None:
         """Show the POTA/DX card viewport and hide other context bodies."""
+        browse_frame.grid_remove()
         context_body_label.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
@@ -825,8 +983,20 @@ def run_dashboard(
         dmr_widgets.hide()
         pota_panel_frame.grid()
 
+    def show_browse_context_body() -> None:
+        """Show free-form Browse radio state and hide unrelated context bodies."""
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
+        settings_widgets.hide()
+        weather_widgets.hide()
+        log_widgets.hide()
+        dmr_widgets.hide()
+        browse_frame.grid()
+
     def show_repeater_context_body() -> None:
         """Show local repeaters and hide the generic/POTA/settings/weather bodies."""
+        browse_frame.grid_remove()
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
         settings_widgets.hide()
@@ -837,6 +1007,7 @@ def run_dashboard(
 
     def show_settings_context_body() -> None:
         """Show Settings controls and hide the generic/POTA/repeater/weather bodies."""
+        browse_frame.grid_remove()
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
@@ -847,6 +1018,7 @@ def run_dashboard(
 
     def show_weather_context_body() -> None:
         """Show retained weather and hide other context bodies."""
+        browse_frame.grid_remove()
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
@@ -857,6 +1029,7 @@ def run_dashboard(
 
     def show_log_context_body() -> None:
         """Show the local Log snapshot and hide every unrelated context body."""
+        browse_frame.grid_remove()
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
@@ -1081,6 +1254,38 @@ def run_dashboard(
                 footer_lines.append(panel.error_line)
             footer_lines.append("SELECT A SPOT — PRESS TO TUNE")
             pota_footer_text.set("\n".join(footer_lines))
+        elif selected_context.selected is ContextId.BROWSE:
+            show_browse_context_body()
+            health_frame.grid_remove()
+            context_title_text.set("BROWSE")
+            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            browse_state = browse_controls.state
+            browse_mode_text.set(browse_mode_label(radio_state.mode))
+            browse_frequency_text.set(
+                f"{radio_state.frequency.mhz:.6f} MHz"
+                if radio_state.frequency is not None
+                else "---.------ MHz"
+            )
+            browse_step_text.set(browse_state.step_label.upper())
+            browse_advisory = us_extra_band_advisory(
+                radio_state.frequency,
+                radio_state.mode,
+            )
+            if browse_advisory.level is BandAdvisoryLevel.OK:
+                browse_warning_label.grid_remove()
+            else:
+                browse_warning_text.set(browse_advisory.message or "")
+                if browse_advisory.level is BandAdvisoryLevel.OUT_OF_BAND:
+                    browse_warning_label.configure(
+                        bg=_FAILURE,
+                        fg=_BRIGHT,
+                    )
+                else:
+                    browse_warning_label.configure(
+                        bg=_WARNING,
+                        fg=_HEALTH_DARK_TEXT,
+                    )
+                browse_warning_label.grid()
         elif selected_context.selected is ContextId.REPEATERS:
             show_repeater_context_body()
             health_frame.grid_remove()
@@ -1248,6 +1453,10 @@ def run_dashboard(
     root.bind(
         ".",
         lambda _event: execute_panel_action(ControlAction.PANEL_SECONDARY),
+    )
+    root.bind(
+        "/",
+        lambda _event: execute_panel_action(ControlAction.PANEL_TERTIARY),
     )
 
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
