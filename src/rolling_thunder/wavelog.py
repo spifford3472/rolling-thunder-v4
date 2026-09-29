@@ -375,7 +375,7 @@ class WavelogClient:
             if value is None:
                 continue
             try:
-                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                parsed = datetime.fromisoformat(value)
             except ValueError:
                 continue
             if parsed.tzinfo is None or parsed.utcoffset() is None:
