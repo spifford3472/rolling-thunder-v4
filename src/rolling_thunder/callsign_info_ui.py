@@ -30,6 +30,7 @@ class CallsignInfoPresentation:
     identity_lines: tuple[str, ...]
     weather_temperature: str | None
     weather_condition: str | None
+    weather_attribution: str | None
     history_heading: str
     history_lines: tuple[str, ...]
     target: GeoPoint | None
@@ -93,9 +94,11 @@ def build_callsign_info_presentation(
 
     weather_temp = None
     weather_condition = None
+    weather_attribution = None
     if response.weather is not None:
         weather_temp = f"{response.weather.temperature_f}°F"
         weather_condition = response.weather.condition
+        weather_attribution = response.weather.attribution
 
     previous = response.last_qso
     if not previous.exists:
@@ -127,6 +130,7 @@ def build_callsign_info_presentation(
         identity_lines=tuple(identity),
         weather_temperature=weather_temp,
         weather_condition=weather_condition,
+        weather_attribution=weather_attribution,
         history_heading=history_heading,
         history_lines=history_lines,
         target=target,
@@ -197,6 +201,7 @@ class CallsignInfoOverlayWidgets:
 
         self._weather_temp = tk.StringVar(value="")
         self._weather_condition = tk.StringVar(value="")
+        self._weather_attribution = tk.StringVar(value="")
         weather = tk.Frame(self.frame, bg=_PANEL)
         weather.grid(row=1, column=0, sticky="nsew", padx=(0, 2), pady=(2, 0))
         tk.Label(
@@ -220,6 +225,13 @@ class CallsignInfoOverlayWidgets:
             fg=_BRIGHT,
             font=("DejaVu Sans", 18, "bold"),
         ).pack(anchor="w", padx=12)
+        tk.Label(
+            weather,
+            textvariable=self._weather_attribution,
+            bg=_PANEL,
+            fg=_MUTED,
+            font=("DejaVu Sans", 9),
+        ).pack(anchor="w", padx=12, pady=(4, 0))
 
         details = tk.Frame(self.frame, bg=_PANEL)
         details.grid(row=1, column=1, sticky="nsew", padx=(2, 0), pady=(2, 0))
@@ -283,6 +295,7 @@ class CallsignInfoOverlayWidgets:
         self._identity.set("\n".join(presentation.identity_lines))
         self._weather_temp.set(presentation.weather_temperature or "")
         self._weather_condition.set(presentation.weather_condition or "")
+        self._weather_attribution.set(presentation.weather_attribution or "")
         self._history_heading.set(presentation.history_heading)
         self._history_label.configure(
             fg=_FIRST if presentation.history_heading == "FIRST CONTACT" else _ACCENT
