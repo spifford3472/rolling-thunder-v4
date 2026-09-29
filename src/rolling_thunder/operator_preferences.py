@@ -20,6 +20,7 @@ class OperatorPreferenceKey(StrEnum):
 
     MAP_ZOOM = "map.zoom"
     RADAR_IMAGE_ENABLED = "radar.image.enabled"
+    CALLSIGN_INFO_ENABLED = "callsign.info.enabled"
 
 
 class OperatorPreferenceRepository:
@@ -64,6 +65,22 @@ class OperatorPreferenceRepository:
         """Persist the operator's Pi-side radar-image choice atomically."""
         self._write_text(
             OperatorPreferenceKey.RADAR_IMAGE_ENABLED,
+            "1" if enabled else "0",
+        )
+
+    def read_callsign_info_enabled(self) -> bool | None:
+        """Return stored callsign-info visibility choice, or None when absent."""
+        raw = self._read_text(OperatorPreferenceKey.CALLSIGN_INFO_ENABLED)
+        if raw == "1":
+            return True
+        if raw == "0":
+            return False
+        return None
+
+    def write_callsign_info_enabled(self, enabled: bool) -> None:
+        """Persist the operator's callsign-info choice atomically."""
+        self._write_text(
+            OperatorPreferenceKey.CALLSIGN_INFO_ENABLED,
             "1" if enabled else "0",
         )
 
@@ -155,6 +172,14 @@ class OperatorPreferenceService:
         executor.submit(self._write_radar_image_safely, enabled)
         return True
 
+    def persist_callsign_info_enabled(self, enabled: bool) -> bool:
+        """Queue one callsign-info preference write without blocking the caller."""
+        executor = self._write_executor()
+        if executor is None:
+            return False
+        executor.submit(self._write_callsign_info_safely, enabled)
+        return True
+
     def stop(self) -> None:
         """Stop accepting writes without blocking dashboard shutdown."""
         with self._lock:
@@ -181,6 +206,17 @@ class OperatorPreferenceService:
     def _write_map_zoom_safely(self, zoom: int) -> None:
         try:
             self._repository.write_map_zoom(zoom)
+        except (StorageError, ValueError) as error:
+            with self._lock:
+                self._last_error = str(error)
+            return
+
+        with self._lock:
+            self._last_error = None
+
+    def _write_callsign_info_safely(self, enabled: bool) -> None:
+        try:
+            self._repository.write_callsign_info_enabled(enabled)
         except (StorageError, ValueError) as error:
             with self._lock:
                 self._last_error = str(error)

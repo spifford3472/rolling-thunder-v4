@@ -2,7 +2,7 @@
 
 import pytest
 
-from rolling_thunder.maidenhead import maidenhead_grid
+from rolling_thunder.maidenhead import maidenhead_grid, maidenhead_grid_center
 
 
 def test_calculates_six_character_grid() -> None:
@@ -37,3 +37,16 @@ def test_rejects_coordinates_outside_legal_bounds(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         maidenhead_grid(latitude, longitude)
+
+
+
+def test_grid_center_round_trips_inside_same_locator() -> None:
+    latitude, longitude = maidenhead_grid_center("EM79xm")
+
+    assert maidenhead_grid(latitude, longitude) == "EM79xm"
+
+
+def test_four_character_grid_center_is_supported() -> None:
+    latitude, longitude = maidenhead_grid_center("EM79")
+
+    assert maidenhead_grid(latitude, longitude).startswith("EM79")

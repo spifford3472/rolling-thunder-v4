@@ -47,9 +47,29 @@ class FakeRadar:
 class FakePersistence:
     def __init__(self) -> None:
         self.values: list[bool] = []
+        self.callsign_values: list[bool] = []
 
     def persist_radar_image_enabled(self, enabled: bool) -> bool:
         self.values.append(enabled)
+        return True
+
+    def persist_callsign_info_enabled(self, enabled: bool) -> bool:
+        self.callsign_values.append(enabled)
+        return True
+
+
+class FakeCallsignInfo:
+    def __init__(self, enabled: bool = True) -> None:
+        self._enabled = enabled
+
+    @property
+    def state(self) -> object:
+        return type("State", (), {"enabled": self._enabled})()
+
+    def set_enabled(self, enabled: bool) -> bool:
+        if enabled == self._enabled:
+            return False
+        self._enabled = enabled
         return True
 
 
@@ -112,3 +132,21 @@ def test_manual_map_style_toggle_notifies_automatic_policy() -> None:
     assert controller.toggle_map_style() is True
     assert map_zoom.style_toggle_count == 1
     assert automation.override_count == 1
+
+
+
+def test_callsign_info_toggle_updates_runtime_and_persists() -> None:
+    persistence = FakePersistence()
+    callsign = FakeCallsignInfo(enabled=True)
+    controller = DashboardSettingsController(
+        None,
+        None,
+        persistence,
+        callsign_info=callsign,  # type: ignore[arg-type]
+    )
+
+    assert controller.state.callsign_info_available is True
+    assert controller.state.callsign_info_enabled is True
+    assert controller.toggle_callsign_info() is True
+    assert controller.state.callsign_info_enabled is False
+    assert persistence.callsign_values == [False]

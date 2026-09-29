@@ -158,3 +158,31 @@ def test_preference_service_submits_radar_image_write_nonblocking(tmp_path: Path
     assert service.persist_radar_image_enabled(False) is True
     assert repository.read_radar_image_enabled() is False
     assert service.last_error is None
+
+
+
+def test_callsign_info_choice_round_trips_through_shared_application_database(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+    repository = OperatorPreferenceRepository(database_path)
+
+    assert repository.read_callsign_info_enabled() is None
+
+    repository.write_callsign_info_enabled(False)
+    assert OperatorPreferenceRepository(database_path).read_callsign_info_enabled() is False
+
+    repository.write_callsign_info_enabled(True)
+    assert OperatorPreferenceRepository(database_path).read_callsign_info_enabled() is True
+
+
+def test_preference_service_submits_callsign_info_write_nonblocking(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+    repository = OperatorPreferenceRepository(database_path)
+    service = OperatorPreferenceService(repository, executor=ImmediateExecutor())
+
+    assert service.persist_callsign_info_enabled(False) is True
+    assert repository.read_callsign_info_enabled() is False
+    assert service.last_error is None

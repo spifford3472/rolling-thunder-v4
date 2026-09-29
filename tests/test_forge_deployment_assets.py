@@ -63,3 +63,35 @@ def test_production_example_contains_no_qrz_credentials() -> None:
     assert "password:" not in text.lower()
     assert "ROLLING_THUNDER_QRZ_USERNAME=..." in text
     assert "ROLLING_THUNDER_QRZ_PASSWORD=..." in text
+
+
+
+CALLSIGN_UNIT_PATH = ROOT / "deploy/systemd/rolling-thunder-forge-callsign-info.service"
+CALLSIGN_CONFIG_PATH = ROOT / "config/forge-callsign-info.example.yaml"
+
+
+def test_callsign_info_service_uses_private_unprivileged_deployment() -> None:
+    unit = CALLSIGN_UNIT_PATH.read_text(encoding="utf-8")
+    config = yaml.safe_load(CALLSIGN_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    assert "User=rollingthunder" in unit
+    assert "Group=rollingthunder" in unit
+    assert "NoNewPrivileges=true" in unit
+    assert "CapabilityBoundingSet=" in unit
+    assert config["server"] == {
+        "bind_host": "192.168.9.170",
+        "bind_port": 8788,
+    }
+
+
+def test_callsign_info_service_keeps_credentials_out_of_yaml_and_unit() -> None:
+    unit = CALLSIGN_UNIT_PATH.read_text(encoding="utf-8")
+    text = CALLSIGN_CONFIG_PATH.read_text(encoding="utf-8")
+
+    assert "EnvironmentFile=/etc/rolling-thunder/forge-callsign-info.env" in unit
+    assert "ROLLING_THUNDER_QRZ_USERNAME=" not in unit
+    assert "ROLLING_THUNDER_QRZ_PASSWORD=" not in unit
+    assert "ROLLING_THUNDER_WAVELOG_V2_TOKEN=" not in unit
+    assert "username:" not in text.lower()
+    assert "password:" not in text.lower()
+    assert "token:" not in text.lower()

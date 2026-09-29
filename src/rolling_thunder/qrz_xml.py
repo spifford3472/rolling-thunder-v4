@@ -36,12 +36,23 @@ class QrzAuthenticationError(QrzLookupError):
 
 @dataclass(frozen=True)
 class QrzCallsignProfile:
-    """Optional presentation metadata returned for one QRZ callsign record."""
+    """Normalized presentation metadata returned for one QRZ callsign record."""
 
     callsign: str
     name: str | None
     image_url: str | None
     grid: MaidenheadGrid | None = None
+    address1: str | None = None
+    address2: str | None = None
+    state: str | None = None
+    country: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    geoloc: str | None = None
+    license_class: str | None = None
+    license_effective_date: str | None = None
+    license_expiration_date: str | None = None
+    birth_year: int | None = None
 
 
 def normalize_qrz_callsign(callsign: Callsign | str) -> str:
@@ -104,12 +115,35 @@ class QrzXmlCallsignNameProvider:
             returned_callsign = self._child_text(callsign_node, "call") or callsign
             image_url = self._child_text(callsign_node, "image")
             grid = self._validated_grid(self._child_text(callsign_node, "grid"))
+            latitude = self._validated_coordinate(
+                self._child_text(callsign_node, "lat"),
+                minimum=-90.0,
+                maximum=90.0,
+            )
+            longitude = self._validated_coordinate(
+                self._child_text(callsign_node, "lon"),
+                minimum=-180.0,
+                maximum=180.0,
+            )
             self._refresh_session_key(root)
             return QrzCallsignProfile(
                 callsign=returned_callsign,
                 name=display_name,
                 image_url=image_url,
                 grid=grid,
+                address1=self._child_text(callsign_node, "addr1"),
+                address2=self._child_text(callsign_node, "addr2"),
+                state=self._child_text(callsign_node, "state"),
+                country=self._child_text(callsign_node, "country"),
+                latitude=latitude,
+                longitude=longitude,
+                geoloc=self._child_text(callsign_node, "geoloc"),
+                license_class=self._child_text(callsign_node, "class"),
+                license_effective_date=self._child_text(callsign_node, "efdate"),
+                license_expiration_date=self._child_text(callsign_node, "expdate"),
+                birth_year=self._validated_birth_year(
+                    self._child_text(callsign_node, "born")
+                ),
             )
 
         error = self._session_text(root, "Error")
@@ -209,6 +243,32 @@ class QrzXmlCallsignNameProvider:
             return _GRID_ADAPTER.validate_python(value)
         except ValidationError:
             return None
+
+    @staticmethod
+    def _validated_coordinate(
+        value: str | None,
+        *,
+        minimum: float,
+        maximum: float,
+    ) -> float | None:
+        """Return one bounded QRZ coordinate without failing the whole profile."""
+        if value is None:
+            return None
+        try:
+            coordinate = float(value)
+        except ValueError:
+            return None
+        if not minimum <= coordinate <= maximum:
+            return None
+        return coordinate
+
+    @staticmethod
+    def _validated_birth_year(value: str | None) -> int | None:
+        """Return QRZ's optional four-digit birth year when plausible."""
+        if value is None or len(value) != 4 or not value.isdigit():
+            return None
+        year = int(value)
+        return year if 1900 <= year <= 2100 else None
 
     @staticmethod
     def _is_not_found(message: str) -> bool:

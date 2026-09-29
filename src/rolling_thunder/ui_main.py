@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from rolling_thunder.active_panel_commands import (
@@ -17,6 +17,10 @@ from rolling_thunder.browse_control import BrowseRadioController, browse_mode_la
 from rolling_thunder.callsign_capture import (
     CallsignCaptureState,
     MockTranscriptController,
+)
+from rolling_thunder.callsign_info_ui import (
+    CallsignInfoOverlayWidgets,
+    build_callsign_info_presentation,
 )
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
@@ -211,11 +215,15 @@ def run_dashboard(
         return 2
 
     runtime = ApplicationRuntime.from_config(config, secrets=secrets)
-    stored_radar_image = OperatorPreferenceRepository(
+    preference_repository = OperatorPreferenceRepository(
         config.storage.database_path
-    ).read_radar_image_enabled()
+    )
+    stored_radar_image = preference_repository.read_radar_image_enabled()
     if runtime.live_radar is not None and stored_radar_image is not None:
         runtime.live_radar.set_display_enabled(stored_radar_image)
+    stored_callsign_info = preference_repository.read_callsign_info_enabled()
+    if runtime.callsign_info is not None and stored_callsign_info is not None:
+        runtime.callsign_info.set_enabled(stored_callsign_info)
 
     preference_service = runtime.operator_preferences
     if preference_service is None:
@@ -225,6 +233,7 @@ def run_dashboard(
         runtime.live_radar,
         preference_service,
         runtime.map_solar,
+        runtime.callsign_info,
     )
     weather_panel = WeatherPanelController()
     weather_alert_panel = WeatherAlertPanelController()
@@ -937,6 +946,7 @@ def run_dashboard(
         pota_label_min_zoom=config.pota_map.label_min_zoom,
         pota_dot_diameter_px=config.pota_map.dot_diameter_px,
     )
+    callsign_info_widgets = CallsignInfoOverlayWidgets(situational)
 
     status_bar = StatusBarWidgets(root)
     status_bar.frame.grid(
@@ -1122,6 +1132,55 @@ def run_dashboard(
             connectivity,
         )
         pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
+
+        pota_latitude: float | None = None
+        pota_longitude: float | None = None
+        selected_spot = shared_spot_panel.selected_spot
+        if (
+            context_navigation.state.selected is ContextId.POTA
+            and selected_spot is not None
+            and selected_spot.callsign == pending_callsign
+            and selected_spot.pota is not None
+            and selected_spot.pota.latitude is not None
+            and selected_spot.pota.longitude is not None
+        ):
+            pota_latitude = selected_spot.pota.latitude
+            pota_longitude = selected_spot.pota.longitude
+
+        if runtime.callsign_info is not None:
+            runtime.callsign_info.observe_callsign(
+                pending_callsign or None,
+                pota_latitude=pota_latitude,
+                pota_longitude=pota_longitude,
+            )
+            callsign_info_state = runtime.callsign_info.state
+            if callsign_info_state.response is not None:
+                callsign_presentation = build_callsign_info_presentation(
+                    callsign_info_state.response,
+                    pota_latitude=callsign_info_state.target_latitude,
+                    pota_longitude=callsign_info_state.target_longitude,
+                    local_time=datetime.now().astimezone(),
+                )
+                callsign_map_snapshot = None
+                if runtime.callsign_map is not None and callsign_presentation.target is not None:
+                    runtime.callsign_map.set_zoom(callsign_presentation.map_zoom)
+                    info_map_width, info_map_height = callsign_info_widgets.map_size
+                    if info_map_width >= 64 and info_map_height >= 64:
+                        runtime.callsign_map.request_viewport(
+                            callsign_presentation.target,
+                            width_px=info_map_width,
+                            height_px=info_map_height,
+                        )
+                    callsign_map_snapshot = runtime.callsign_map.latest_state
+                callsign_info_widgets.show(
+                    callsign_presentation,
+                    callsign_map_snapshot,
+                )
+            else:
+                callsign_info_widgets.hide()
+        else:
+            callsign_info_widgets.hide()
+
         voice_state = view.voice_state.upper()
         voice_engaged = voice_state in {
             "ACTIVE",

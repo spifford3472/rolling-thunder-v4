@@ -384,10 +384,20 @@ The workstream preserves these permanent rules:
 - significant installed display, GPS, Forge deployment, physical-control, and
   FT-891 behavior requires owner acceptance before merge
 
+## v4.2 Callsign Information Overlay
+
+Status: implementation in progress on PR #209; requires Forge/anvilmobile and
+in-car physical acceptance before merge.
+
+The feature adds an optional pending-callsign overlay with QRZ identity/QTH,
+regional map, simple target weather, and Wavelog previous-QSO context. POTA park
+coordinates take priority over QRZ home coordinates for the current activation.
+No previous QSO is presented explicitly as FIRST CONTACT. Provider failures
+remain outside Commit and produce no intrusive error overlay.
+
 ## Later Possibilities
 
 - typed bidirectional ESP32 LED feedback
-- Wavelog integration
 - Maestro or Flex station detection
 - enhanced contest workflows
 - telemetry to Grafana

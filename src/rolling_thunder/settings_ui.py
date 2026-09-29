@@ -51,7 +51,7 @@ def _map_style_presentation(
 
 
 class SettingsWidgets:
-    """Render visually consistent map zoom, map style, and radar controls."""
+    """Render visually consistent map, radar, and callsign-info controls."""
 
     def __init__(self, parent: Any) -> None:
         import tkinter as tk
@@ -130,14 +130,14 @@ class SettingsWidgets:
             instruction_variable=radar_instruction,
         )
 
-        self._switch = tk.Canvas(
+        self._radar_switch = tk.Canvas(
             radar_card,
             width=112,
             height=56,
             bg=_PANEL_BACKGROUND,
             highlightthickness=0,
         )
-        self._switch.grid(
+        self._radar_switch.grid(
             row=0,
             column=1,
             rowspan=2,
@@ -145,7 +145,32 @@ class SettingsWidgets:
             padx=(12, 18),
             pady=14,
         )
-        self._draw_switch(enabled=False, available=False)
+        self._draw_switch(self._radar_switch, enabled=False, available=False)
+
+        callsign_card = self._create_card(content, row=3)
+        callsign_title = tk.StringVar(value="CALLSIGN INFO")
+        callsign_instruction = tk.StringVar(value="Context Button #3")
+        self._create_card_text(
+            callsign_card,
+            title_variable=callsign_title,
+            instruction_variable=callsign_instruction,
+        )
+        self._callsign_switch = tk.Canvas(
+            callsign_card,
+            width=112,
+            height=56,
+            bg=_PANEL_BACKGROUND,
+            highlightthickness=0,
+        )
+        self._callsign_switch.grid(
+            row=0,
+            column=1,
+            rowspan=2,
+            sticky="e",
+            padx=(12, 18),
+            pady=14,
+        )
+        self._draw_switch(self._callsign_switch, enabled=False, available=False)
 
     def _create_card(self, parent: Any, *, row: int) -> Any:
         card = self._tk.Frame(
@@ -215,12 +240,17 @@ class SettingsWidgets:
         )
 
         self._draw_switch(
+            self._radar_switch,
             enabled=state.radar_image_enabled,
             available=state.radar_available,
         )
+        self._draw_switch(
+            self._callsign_switch,
+            enabled=state.callsign_info_enabled,
+            available=state.callsign_info_available,
+        )
 
-    def _draw_switch(self, *, enabled: bool, available: bool) -> None:
-        canvas = self._switch
+    def _draw_switch(self, canvas: Any, *, enabled: bool, available: bool) -> None:
         canvas.delete("all")
         track = _HEALTHY if enabled and available else _DISABLED
         knob = _BRIGHT if available else _MUTED

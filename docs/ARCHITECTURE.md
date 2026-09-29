@@ -815,3 +815,42 @@ and Browse SSB selects USB on 60 m.
 
 The advisory does not calculate occupied emission bandwidth at a band edge and
 must not be treated as a substitute for operator compliance with Part 97.
+
+
+## Callsign Information Overlay
+
+Rolling Thunder may show an optional lower-right map overlay after a pending
+callsign is entered through an existing legitimate callsign path. The overlay is
+informational only and never participates in durable Commit.
+
+An independent Forge process owns on-demand QRZ, Wavelog-history, and target
+weather provider work. This preserves the retained Forge spot API rule that its
+request handlers read already-published state rather than performing provider
+refresh I/O.
+
+The Pi uses one bounded background request per pending callsign. A monotonic
+generation identifies every request/presentation lifecycle. Callsign replacement,
+Commit/discard clearing, timeout, service stop, and the Settings toggle invalidate
+the generation so a late response cannot resurrect stale information.
+
+Current-location priority is POTA park coordinate when the selected pending POTA
+spot has one, otherwise QRZ QTH coordinates. The same selected coordinate drives
+the overlay mini-map and simple current weather. QRZ state/DXCC-center coordinates
+are not treated as precise weather locations.
+
+The feature deliberately omits QRZ profile photographs. Weather is considered
+more operationally useful and avoids image-download/cache complexity.
+
+When Wavelog has no previous exact-callsign QSO, the prior-contact region displays
+`FIRST CONTACT`.
+
+A second regional map service uses the same map architecture, installed package
+format, cache policy, and tile resolver types as the main live map, but owns its
+own worker/resolver lifecycle. Tkinter consumes immutable map snapshots only.
+
+Settings Context Button #3 toggles CALLSIGN INFO. The preference is persisted
+through the existing asynchronous operator-preference service. When disabled,
+active presentation is cleared immediately and no new lookup is started.
+
+See `docs/CALLSIGN_INFO.md` for the API model, cache policy, lifecycle, weather
+rules, deployment, and limitations.
