@@ -193,6 +193,7 @@ class CallsignInfoOverlayWidgets:
         )
         self._map.grid(row=0, column=0, columnspan=2, sticky="nsew")
         self._map_photos: dict[MapTileKey, Any] = {}
+        self._map_photo_cache: dict[MapTileKey, tuple[bytes, Any]] = {}
 
         self._weather_temp = tk.StringVar(value="")
         self._weather_condition = tk.StringVar(value="")
@@ -321,7 +322,14 @@ class CallsignInfoOverlayWidgets:
                         outline="#26363d",
                     )
                     continue
-                photo = self._tk.PhotoImage(data=b64encode(tile.png).decode("ascii"))
+                cached = self._map_photo_cache.get(placement.key)
+                if cached is not None and cached[0] == tile.png:
+                    photo = cached[1]
+                else:
+                    photo = self._tk.PhotoImage(
+                        data=b64encode(tile.png).decode("ascii")
+                    )
+                    self._map_photo_cache[placement.key] = (tile.png, photo)
                 self._map_photos[placement.key] = photo
                 canvas.create_image(
                     placement.x_px,
@@ -349,6 +357,14 @@ class CallsignInfoOverlayWidgets:
                     outline="#ffffff",
                     width=3,
                 )
+        visible_keys = set(self._map_photos)
+        if len(self._map_photo_cache) > 64:
+            for key in tuple(self._map_photo_cache):
+                if key not in visible_keys:
+                    self._map_photo_cache.pop(key, None)
+                if len(self._map_photo_cache) <= 64:
+                    break
+
         if not canvas.find_all():
             canvas.create_text(
                 width / 2,
