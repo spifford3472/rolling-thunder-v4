@@ -1,16 +1,16 @@
 """Tests for the receive-only Checkpoint 3 FT8 decoder boundary."""
 
-from pathlib import Path
 import subprocess
 import wave
+from pathlib import Path
 
 import pytest
 
 from rolling_thunder.ft8.decoder import (
     FT8DecoderError,
-    FT8PcmPeriod,
     Ft8LibDecoder,
     Ft8monDecoder,
+    FT8PcmPeriod,
     parse_ft8_message,
 )
 from rolling_thunder.ft8.domain import FT8MessageKind, FT8Period
@@ -146,7 +146,7 @@ def test_wav_loader_requires_mono_16_bit_pcm(tmp_path: Path) -> None:
         target.setnchannels(1)
         target.setsampwidth(2)
         target.setframerate(12_000)
-        target.writeframes(b"\\x00\\x00\\x01\\x00")
+        target.writeframes(bytes((0, 0, 1, 0)))
 
     pcm = FT8PcmPeriod.from_wav(path, period=FT8Period(index=102))
 
