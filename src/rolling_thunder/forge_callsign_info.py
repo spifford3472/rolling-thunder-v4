@@ -129,10 +129,7 @@ class ForgeCallsignInfoService:
             if entry is not None and entry.expires_at > now:
                 return entry.value if isinstance(entry.value, QrzCallsignProfile) else None
 
-        try:
-            profile = self._qrz_lookup.lookup_profile(callsign)
-        except QrzLookupError:
-            return None
+        profile = self._qrz_lookup.lookup_profile(callsign)
 
         ttl = self._profile_ttl_s if profile is not None else self._negative_profile_ttl_s
         with self._lock:
@@ -146,10 +143,7 @@ class ForgeCallsignInfoService:
             if entry is not None and entry.expires_at > now:
                 return entry.value if isinstance(entry.value, WavelogQsoSummary) else None
 
-        try:
-            qso = self._wavelog.latest_qso(callsign)
-        except WavelogError:
-            qso = None
+        qso = self._wavelog.latest_qso(callsign)
 
         with self._lock:
             self._history_cache[callsign] = _CacheEntry(qso, now + self._history_ttl_s)
@@ -162,10 +156,7 @@ class ForgeCallsignInfoService:
             if entry is not None and entry.expires_at > now and isinstance(entry.value, dict):
                 return dict(entry.value)
 
-        try:
-            locations = self._wavelog.list_station_locations()
-        except WavelogError:
-            return {}
+        locations = self._wavelog.list_station_locations()
         names = {item.station_id: item.name for item in locations}
         with self._lock:
             self._station_cache = _CacheEntry(names, now + self._station_ttl_s)
