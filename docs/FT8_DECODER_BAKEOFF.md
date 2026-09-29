@@ -79,3 +79,25 @@ Before installing a native package or Python dependency on the Pi, add the exact
 package, location, purpose, and removal command to `docs/V4.3_ROLLBACK.md`.
 
 No live ALSA/PipeWire/DigiRig capture is permitted in Checkpoint 3.
+
+
+## Raspberry Pi build result
+
+On `anvilmobile` (aarch64, Debian 13), both pinned candidates built successfully.
+
+- `kgoba/ft8_lib` at `9fec6ca39886edbf96f4f5e71edc76da5074e871`
+  built its `decode_ft8` executable and completed its bundled encode/decode
+  test suite successfully.
+- `rtmrtmrtmrtm/ft8mon` at
+  `1b36a1336255a140516d32f4665b6e006eb82157` built an ARM64 executable
+  successfully with the stock Makefile against FFTW, libsndfile, PortAudio,
+  libstdc++, and libc.
+
+The production service remained active and pointed at
+`/home/geoff/projects/rolling-thunder-v4`. No live audio device, CAT/PTT
+operation, or RF transmission was used during either build.
+
+The pinned `ft8_lib` repository also contains recorded WAV fixtures paired
+with text result files. These are suitable for the first same-input candidate
+comparison; their text files are treated as repository-provided reference
+results, not as a substitute for the later independent WSJT-X oracle.
