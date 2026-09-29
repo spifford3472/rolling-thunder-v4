@@ -606,8 +606,11 @@ class FT8ReceiveConfig(ConfigurationModel):
         if isinstance(value, str) and not value.strip():
             raise ValueError("must not be empty")
         path = Path(value) if isinstance(value, (str, Path)) else value
-        if isinstance(path, Path) and str(path) == ".":
-            raise ValueError("must name an executable")
+        if isinstance(path, Path):
+            if str(path) == ".":
+                raise ValueError("must name an executable")
+            if not path.is_absolute():
+                raise ValueError("must be an absolute path")
         return path
 
 
