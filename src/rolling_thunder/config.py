@@ -576,6 +576,19 @@ class StorageConfig(ConfigurationModel):
         return value
 
 
+class FT8QsoConfig(ConfigurationModel):
+    """Hardware-independent FT8 QSO policy settings."""
+
+    attempts_per_state: int = Field(default=6, ge=1, le=20)
+
+
+class FT8Config(ConfigurationModel):
+    """Experimental native FT8 feature boundary."""
+
+    enabled: bool = False
+    qso: FT8QsoConfig = FT8QsoConfig()
+
+
 class ApplicationConfig(ConfigurationModel):
     """Complete Rolling Thunder application configuration."""
 
@@ -592,6 +605,7 @@ class ApplicationConfig(ConfigurationModel):
     map: MapConfig = MapConfig()
     radar: RadarConfig = RadarConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
+    ft8: FT8Config = FT8Config()
     storage: StorageConfig = StorageConfig()
 
     @model_validator(mode="after")
