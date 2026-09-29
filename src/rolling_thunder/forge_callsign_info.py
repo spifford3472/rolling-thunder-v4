@@ -22,8 +22,8 @@ from rolling_thunder.forge_weather import (
     WeatherConditionToken,
     WeatherSnapshot,
 )
-from rolling_thunder.qrz_xml import QrzCallsignProfile, QrzLookupError, normalize_qrz_callsign
-from rolling_thunder.wavelog import WavelogClient, WavelogError, WavelogQsoSummary
+from rolling_thunder.qrz_xml import QrzCallsignProfile, normalize_qrz_callsign
+from rolling_thunder.wavelog import WavelogClient, WavelogQsoSummary
 
 MonotonicClock = Callable[[], float]
 UtcClock = Callable[[], datetime]
