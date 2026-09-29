@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from rolling_thunder.callsign_info import CallsignInfoResponse
 from rolling_thunder.forge_callsign_info import ForgeCallsignInfoService
+from rolling_thunder.qrz_xml import QrzLookupError
+from rolling_thunder.wavelog import WavelogError
 
 _JSON = "application/json; charset=utf-8"
 _PREFIX = "/api/v1/contact-intelligence/"
@@ -85,7 +87,7 @@ class ForgeCallsignInfoApiApplication:
             )
         except ValueError as error:
             return self._error(422, "invalid_request", str(error))
-        except Exception:
+        except (QrzLookupError, WavelogError, OSError):
             _LOGGER.exception("Callsign-info lookup failed")
             return self._error(
                 503,
