@@ -12,6 +12,8 @@
 - validates both native decoder candidates on the Raspberry Pi and compares them
   against an isolated official WSJT-X 3.0.2 saved-WAV oracle
 - stores decoder input as compact immutable signed-16-bit little-endian PCM bytes
+- selects `kgoba/ft8_lib` as the initial receive backend after the Pi bake-off,
+  while retaining `ft8mon` as the higher-sensitivity comparison/fallback candidate
 - remains receive-only with no live DigiRig audio, production worker, PTT, CAT TX,
   transmit audio, logging, or RF transmission
 
