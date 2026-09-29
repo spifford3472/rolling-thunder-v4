@@ -91,7 +91,47 @@ def test_first_contact_replaces_empty_history_section() -> None:
     )
 
     assert presentation.history_heading == "FIRST CONTACT"
-    assert presentation.history_lines == ()
+    assert presentation.history_line is None
+    assert presentation.local_time_text == "LOCAL 20:17"
+
+
+def test_license_is_separated_from_identity_for_call_header() -> None:
+    response = CallsignInfoResponse(
+        callsign="W1AW",
+        profile=CallsignInfoProfile(
+            callsign="W1AW",
+            name="ARRL HQ",
+            license_class="E",
+            license_expiration_date="2030-01-01",
+            country="United States",
+            state="CT",
+        ),
+        last_qso=CallsignInfoLastQso(exists=False),
+    )
+
+    presentation = build_callsign_info_presentation(response)
+
+    assert presentation.license_line == "License: E  Exp 2030-01-01"
+    assert all(not line.startswith("License:") for line in presentation.identity_lines)
+    assert all(not line.startswith("QSO Local Time:") for line in presentation.identity_lines)
+
+
+def test_previous_contact_is_flattened_to_one_summary_line() -> None:
+    response = CallsignInfoResponse(
+        callsign="W8LRJ",
+        last_qso=CallsignInfoLastQso(
+            exists=True,
+            occurred_at=datetime(2026, 9, 9, 14, 10, tzinfo=UTC),
+            station_location="US-1456 - High Cliff State Park",
+        ),
+    )
+
+    presentation = build_callsign_info_presentation(response)
+
+    assert presentation.history_heading == "LAST CONTACT"
+    assert presentation.history_line is not None
+    assert "From: US-1456 - High Cliff State Park" in presentation.history_line
+    assert "\n" not in presentation.history_line
 
 
 def test_pota_location_wins_for_map_and_weather_context() -> None:
@@ -160,7 +200,6 @@ def test_disable_hides_and_reenable_allows_current_callsign_to_lookup_again() ->
     assert client.calls == ["W1AW", "W1AW"]
 
 
-
 def test_missing_location_does_not_invent_map_pin() -> None:
     response = CallsignInfoResponse(
         callsign="W1AW",
@@ -196,7 +235,6 @@ def test_lookup_state_retains_pota_target_for_async_presentation() -> None:
     assert state.target_longitude == -84.2
 
 
-
 def test_late_response_for_replaced_callsign_cannot_resurrect_old_overlay() -> None:
     client = FakeClient()
     executor = DeferredExecutor()
@@ -216,7 +254,6 @@ def test_late_response_for_replaced_callsign_cannot_resurrect_old_overlay() -> N
     assert final.callsign == "W1AW"
     assert final.response is not None
     assert final.response.callsign == "W1AW"
-
 
 
 def test_dxcc_center_can_frame_map_without_inventing_station_pin() -> None:
