@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
-from typing import Callable, Protocol
+from typing import Protocol
 
 from rolling_thunder.callsign_info import CallsignInfoResponse
 from rolling_thunder.callsign_info_client import CallsignInfoClientError
