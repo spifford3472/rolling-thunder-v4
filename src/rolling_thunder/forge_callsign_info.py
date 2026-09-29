@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import RLock
 from time import monotonic
-from typing import Callable, Literal, Protocol
+from typing import Literal, Protocol
 
 from rolling_thunder.callsign_info import (
     CallsignInfoLastQso,
@@ -15,7 +16,11 @@ from rolling_thunder.callsign_info import (
     CallsignInfoWeather,
 )
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
-from rolling_thunder.forge_weather import WeatherConditionToken, WeatherSnapshot
+from rolling_thunder.forge_weather import (
+    ForgeWeatherProviderError,
+    WeatherConditionToken,
+    WeatherSnapshot,
+)
 from rolling_thunder.qrz_xml import QrzCallsignProfile, QrzLookupError, normalize_qrz_callsign
 from rolling_thunder.wavelog import WavelogClient, WavelogError, WavelogQsoSummary
 
@@ -242,7 +247,7 @@ class ForgeCallsignInfoService:
                         received_at=stamp,
                     )
                 )
-            except Exception:
+            except (ForgeWeatherProviderError, OSError, ValueError):
                 return None
             with self._lock:
                 self._weather_cache[key] = _CacheEntry(
