@@ -9,6 +9,9 @@
 - normalizes candidate output exclusively into the existing `FT8Decode` model
 - adds safe timeout/process-failure handling and common FT8 message normalization tests
 - adds a reproducible decoder bake-off ledger with pinned candidate revisions
+- validates both native decoder candidates on the Raspberry Pi and compares them
+  against an isolated official WSJT-X 3.0.2 saved-WAV oracle
+- stores decoder input as compact immutable signed-16-bit little-endian PCM bytes
 - remains receive-only with no live DigiRig audio, production worker, PTT, CAT TX,
   transmit audio, logging, or RF transmission
 
