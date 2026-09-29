@@ -39,6 +39,16 @@ forge:
   refresh_interval_s: 60.0
   refresh_on_start: true
   max_response_bytes: 1048576
+  callsign_info:
+    # Independent Forge QRZ/Wavelog/current-weather service.
+    enabled: false
+    # Production example: http://192.168.9.170:8788
+    api_url: null
+    request_timeout_s: 5.0
+    max_response_bytes: 65536
+    # Maximum time a successfully loaded overlay remains visible.
+    overlay_timeout_s: 120.0
+
   weather:
     # Consumes only Forge /api/v1/weather. The Pi never contacts a public
     # weather provider through this retained-weather path.
