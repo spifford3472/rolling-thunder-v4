@@ -234,3 +234,62 @@ The final primary-backend decision must weigh this measured sensitivity gap
 against real-time period budget, CPU/memory measurements, integration
 complexity, licensing, and maintainability. Decode count alone is not the
 selection criterion.
+
+
+## Final Pi performance measurements
+
+The five-period corpus was rerun with per-process resource accounting after the
+project-owned PCM boundary was changed to compact immutable S16LE bytes.
+
+| Backend | Total wall | Total CPU | Peak RSS |
+| --- | ---: | ---: | ---: |
+| `kgoba/ft8_lib` | 0.4364 s | 0.4304 s | 7,952 KB |
+| `ft8mon` | 26.8534 s | 86.3105 s | 31,376 KB |
+| WSJT-X 3.0.2 oracle | 68.6970 s | 68.6755 s | 71,936 KB |
+
+On the individual periods, `ft8_lib` completed in roughly 0.06-0.10 seconds.
+`ft8mon` required roughly 5.2-5.5 seconds of wall time and about 16.5-17.8
+CPU-seconds per period, demonstrating significant multi-core CPU demand on the
+Pi. WSJT-X deep decoding was intentionally used only as an oracle.
+
+## Checkpoint 3 backend selection
+
+**Initial primary backend: `kgoba/ft8_lib`.**
+
+This selection is based on the complete Checkpoint 3 criteria rather than
+decode count alone:
+
+- it has substantially lower latency, CPU demand, and memory footprint;
+- its saved-WAV interface is deterministic and simple to isolate;
+- it is MIT licensed and small enough to understand/vendor or build
+  reproducibly;
+- it normalizes cleanly into the project-owned `FT8Decode` boundary;
+- its sub-second Pi decode time leaves substantially more timing margin for the
+  future slot-driven QSO state machine and for the rest of Rolling Thunder's
+  map, radio, GPS, networking, and UI workload.
+
+The selection has an explicit sensitivity limitation: on the five-period
+WSJT-X 3.0.2 oracle corpus, `ft8_lib` matched 62/88 oracle messages (70.5%),
+while `ft8mon` matched 70/88 (79.5%). The project therefore retains
+`ft8mon` as the higher-sensitivity comparison/fallback candidate for later
+experimentation.
+
+This is an **initial integration choice**, not a claim that `ft8_lib` is the
+most sensitive FT8 decoder. Checkpoint 4 live-receive testing may revisit the
+choice if real DigiRig audio demonstrates that the sensitivity gap materially
+harms the operating workflow or if a different backend can meet both
+sensitivity and slot-latency requirements.
+
+WSJT-X remains reference/oracle only and is not selected as a Rolling Thunder
+runtime dependency.
+
+### Selection caveats
+
+- The corpus is small: five recorded periods and 88 WSJT-X message texts.
+- WSJT-X text output is treated as the comparison oracle, not metaphysical RF
+  truth; candidate-only decodes are disagreements, not automatically proven
+  false positives.
+- `ft8_lib`'s example decoder SNR is an approximation and must not be treated
+  as directly calibrated to WSJT-X SNR.
+- No conclusion from Checkpoint 3 authorizes live audio, QSO execution,
+  transmission, CAT keying, PTT, or RF.
