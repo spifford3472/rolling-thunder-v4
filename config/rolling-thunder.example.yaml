@@ -175,6 +175,14 @@ physical_controls:
     encoder-switch-short: activate_selection
     encoder-switch-long: back
 
+ft8:
+  # Experimental v4.3 native FT8 foundation. Checkpoint 2 is domain-only:
+  # enabling this flag does not compose a decoder, audio worker, PTT, or CAT TX.
+  enabled: false
+  qso:
+    # Retry budget is per unchanged QSO transmit state/message, not per whole QSO.
+    attempts_per_state: 6
+
 storage:
   database_path: data/rolling-thunder.db
   contact_backups:
