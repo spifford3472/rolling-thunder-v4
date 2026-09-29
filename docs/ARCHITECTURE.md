@@ -930,3 +930,11 @@ dependency.
 Checkpoint 3 still adds no live DigiRig capture, decoder worker, QSO execution,
 successful-QSO logging, CAT transmit action, PTT, transmit audio, waveform
 generation, or RF authority.
+
+
+Checkpoint 3's Pi bake-off selects `kgoba/ft8_lib` as the initial receive
+backend for the next experimental checkpoint because its bounded sub-second
+decode time and low memory/CPU footprint provide substantially more FT8 slot
+timing margin. The measured sensitivity deficit versus `ft8mon` is retained
+as an explicit architectural limitation, and `ft8mon` remains a comparison
+or fallback candidate. WSJT-X 3.0.2 is benchmark/oracle only.
