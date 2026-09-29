@@ -118,7 +118,9 @@ class CallsignInfoLookupService:
                 if self._callsign is not None or self._response is not None or self._loading:
                     self._invalidate_locked(clear_callsign=True)
                 return False
-            if self._callsign == normalized and (self._loading or self._response is not None):
+            # One pending callsign gets at most one lookup/presentation lifecycle.
+            # Failure or timeout stays quiet until the callsign changes or is cleared.
+            if self._callsign == normalized:
                 return False
 
             self._generation += 1
