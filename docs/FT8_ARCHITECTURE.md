@@ -1166,3 +1166,24 @@ ALSA selector, decoder timeout, and reconnect delay.
 Checkpoint 4 remains strictly receive-only: no playback device, PTT, MOX, CAT
 transmit command, transmit waveform, automatic QSO, station selection, or QSO
 logging is added.
+
+
+### Checkpoint 4 live application acceptance
+
+The application-composed receive pipeline was physically exercised on
+`anvilmobile` using the real DigiRig capture path and selected
+`kgoba/ft8_lib` decoder while radio and GPS adapters remained mocked.
+
+Observed acceptance result:
+
+- two consecutive complete FT8 periods captured
+- zero dropped periods
+- 19 normalized decodes published
+- four CQ activities retained by `FT8CQActivityManager`
+- no receive-pipeline error
+- clean transition from STARTING to RUNNING to STOPPED
+- DigiRig capture device released on shutdown
+- no orphaned `arecord` process after shutdown
+
+This validates the live receive composition without enabling CAT, PTT,
+playback, transmit audio, waveform generation, or RF authority.
