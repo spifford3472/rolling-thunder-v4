@@ -1125,3 +1125,44 @@ oracle only.
 
 The backend selection does not compose a decoder into the production runtime.
 Live DigiRig audio remains a Checkpoint 4 concern.
+
+## Checkpoint 4 live receive pipeline
+
+Checkpoint 4 composes the first live FT8 receive-only path. It remains disabled
+by default and adds no transmit authority.
+
+The installed DigiRig DR-891 C-Media device was physically validated on
+`anvilmobile` as native mono S16_LE at 44.1/48 kHz. ALSA
+`plughw:CARD=Device,DEV=0` was then validated to provide mono S16_LE at
+12 kHz directly, so Rolling Thunder does not add an application-side resampling
+library or machine-wide ALSA/PipeWire configuration.
+
+Initial capture testing found the USB codec at +23 dB capture gain with AGC on,
+which heavily clipped the receive waveform. Receive-only test settings of AGC
+off and 0 dB capture gain produced a clean test capture with approximately
+-18.8 dBFS peak, -29.2 dBFS RMS, and no full-scale samples.
+
+A live 15-second 12 kHz capture decoded successfully with the selected
+`kgoba/ft8_lib` backend: the decoder exited successfully and produced 11
+real on-air messages in the validation period.
+
+The application boundary is `FT8AudioInput`. The concrete
+`AlsaArecordFT8AudioInput` owns a persistent receive-only `arecord` process,
+waits for a clean UTC 15-second boundary before opening the stream, reads exact
+360,000-byte mono S16_LE periods, and releases the process/device on shutdown.
+
+`FT8ReceiveService` owns separate capture and decode threads. Capture never
+runs on Tkinter. A queue of at most one complete period separates capture from
+decode; if decoding falls behind, stale queued work is discarded rather than
+allowing an unbounded backlog. Decodes are normalized through the existing
+`FT8Decoder` contract and CQ messages are published through the existing
+`FT8CQActivityManager`.
+
+When `ft8.enabled` is false, `ApplicationRuntime` does not construct an FT8
+audio input, decoder, or receive worker. When enabled, the decoder executable
+must be configured with an absolute path. The receive configuration owns the
+ALSA selector, decoder timeout, and reconnect delay.
+
+Checkpoint 4 remains strictly receive-only: no playback device, PTT, MOX, CAT
+transmit command, transmit waveform, automatic QSO, station selection, or QSO
+logging is added.
