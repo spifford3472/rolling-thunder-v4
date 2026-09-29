@@ -21,11 +21,17 @@ class RadarImageTarget(Protocol):
         ...
 
 
+class CallsignInfoToggleState(Protocol):
+    """Small immutable state view needed by Settings."""
+
+    enabled: bool
+
+
 class CallsignInfoTarget(Protocol):
     """Runtime callsign-info visibility capability used by Settings."""
 
     @property
-    def state(self) -> object:
+    def state(self) -> CallsignInfoToggleState:
         ...
 
     def set_enabled(self, enabled: bool) -> bool:
@@ -85,10 +91,9 @@ class DashboardSettingsController:
         """Return immutable current Settings state without I/O."""
         radar = self._radar
         callsign_info = self._callsign_info
-        callsign_enabled = False
-        if callsign_info is not None:
-            state = getattr(callsign_info, "state", None)
-            callsign_enabled = bool(getattr(state, "enabled", False))
+        callsign_enabled = (
+            callsign_info.state.enabled if callsign_info is not None else False
+        )
         return DashboardSettingsState(
             map_zoom=self._map_zoom.state if self._map_zoom is not None else None,
             radar_available=radar is not None,
@@ -119,7 +124,7 @@ class DashboardSettingsController:
         target = self._callsign_info
         if target is None:
             return False
-        current = bool(getattr(target.state, "enabled", False))
+        current = target.state.enabled
         enabled = not current
         if not target.set_enabled(enabled):
             return False
