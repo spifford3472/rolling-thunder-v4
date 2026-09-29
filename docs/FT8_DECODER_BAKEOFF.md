@@ -170,3 +170,26 @@ reference before classifying misses or extras as decoder errors.
 Production remained active from
 `/home/geoff/projects/rolling-thunder-v4`; this round used saved WAV files
 only and did not open live audio or issue CAT/PTT/RF actions.
+
+
+## WSJT-X 3.0.2 oracle smoke test
+
+The official WSJT-X 3.0.2 ARM64 AppImage was extracted in the experimental
+tools directory and its bundled standalone `jt9` decoder was run in FT8 deep
+mode against `test/wav/191111_110115.wav`.
+
+Observed:
+
+- WSJT-X 3.0.2 `jt9 -8 -d 3`: decoded
+  `GJ0KYZ RK9AX MO05` at 1234 Hz, matching the repository reference message;
+  wall time was about 8.84 seconds.
+- `ft8mon`: decoded the same expected message plus one additional
+  partial/hashed message.
+- `kgoba/ft8_lib`: decoded zero messages on this period.
+
+This establishes that the first `ft8_lib` miss is a real miss relative to the
+independent WSJT-X oracle, while the additional `ft8mon` message remains
+unconfirmed and must not yet be labeled a false positive.
+
+The oracle run used saved WAV input only. WSJT-X GUI, live audio, CAT/PTT, and
+RF were not used.
