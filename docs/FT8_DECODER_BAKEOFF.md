@@ -193,3 +193,44 @@ unconfirmed and must not yet be labeled a false positive.
 
 The oracle run used saved WAV input only. WSJT-X GUI, live audio, CAT/PTT, and
 RF were not used.
+
+
+## Three-way WSJT-X oracle comparison
+
+The same five saved WAV periods were decoded on `anvilmobile` by both
+candidate backends and by the official WSJT-X 3.0.2 standalone `jt9`
+decoder in FT8 deep mode.
+
+Across those five periods, WSJT-X decoded 88 distinct message texts.
+
+| Backend | Matches vs WSJT-X | Missed vs WSJT-X | Extra vs WSJT-X | Recall vs WSJT-X | Total wall time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `kgoba/ft8_lib` | 62 | 26 | 1 | 70.5% | 0.4617 s |
+| `ft8mon` | 70 | 18 | 12 | 79.5% | 26.8744 s |
+| WSJT-X 3.0.2 oracle | 88 | — | — | 100% reference | 69.2605 s |
+
+On this corpus, `ft8mon` recovered 8 more WSJT-X messages than
+`kgoba/ft8_lib`, a 9.0 percentage-point recall advantage, while taking about
+58 times longer in aggregate.
+
+The candidate "extra vs WSJT-X" counts are disagreements with this specific
+WSJT-X deep-decoder run, not proven RF false positives. Several `ft8mon`
+extras are alternate hashed/partial renderings of messages that WSJT-X rendered
+with `<...>`; those require semantic normalization before treating them as
+independent false detections.
+
+### Interpretation
+
+- `kgoba/ft8_lib` has a very large latency/resource advantage and a clean,
+  simple standalone saved-WAV path, but on this corpus it misses materially more
+  WSJT-X decodes.
+- `ft8mon` is substantially more sensitive on this corpus, but its roughly
+  5.2-5.5 second per-period runtime is a significant Raspberry Pi budget and its
+  output needs normalization for its `correct_bits` field and hashed callsign
+  representations.
+- WSJT-X 3.0.2 remains the reference/oracle, not the intended embedded backend.
+
+The final primary-backend decision must weigh this measured sensitivity gap
+against real-time period budget, CPU/memory measurements, integration
+complexity, licensing, and maintainability. Decode count alone is not the
+selection criterion.
