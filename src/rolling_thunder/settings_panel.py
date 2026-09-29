@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from rolling_thunder.callsign_info_service import CallsignInfoState
+from rolling_thunder.callsign_info_service import CallsignInfoLookupService
 from rolling_thunder.map_zoom import MapZoomSettingsController, MapZoomSettingsState
 
 
@@ -19,17 +19,6 @@ class RadarImageTarget(Protocol):
 
     def set_display_enabled(self, enabled: bool) -> bool:
         """Change Pi-side radar image work and return whether it changed."""
-        ...
-
-
-class CallsignInfoTarget(Protocol):
-    """Runtime callsign-info visibility capability used by Settings."""
-
-    @property
-    def state(self) -> CallsignInfoState:
-        ...
-
-    def set_enabled(self, enabled: bool) -> bool:
         ...
 
 
@@ -73,7 +62,7 @@ class DashboardSettingsController:
         radar: RadarImageTarget | None,
         persistence: RadarImagePersistence,
         map_style_automation: MapStyleAutomation | None = None,
-        callsign_info: CallsignInfoTarget | None = None,
+        callsign_info: CallsignInfoLookupService | None = None,
     ) -> None:
         self._map_zoom = map_zoom
         self._radar = radar
