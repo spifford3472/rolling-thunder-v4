@@ -386,6 +386,21 @@ class WavelogClient:
         time_value = cls._optional_text(item.get("time_on"))
         if date_value is None:
             return None
+
+        # Wavelog v2 normally returns qso_date as one combined timestamp,
+        # for example "2026-06-16 17:06:00". Preserve compatibility with
+        # date-only/ADIF-shaped payloads that carry time_on separately.
+        try:
+            parsed_date = datetime.fromisoformat(date_value)
+        except ValueError:
+            parsed_date = None
+        if parsed_date is not None and (
+            " " in date_value or "T" in date_value
+        ):
+            if parsed_date.tzinfo is None or parsed_date.utcoffset() is None:
+                parsed_date = parsed_date.replace(tzinfo=UTC)
+            return parsed_date.astimezone(UTC)
+
         digits_date = date_value.replace("-", "")
         digits_time = (time_value or "000000").replace(":", "")
         if len(digits_time) == 4:
