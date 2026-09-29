@@ -882,3 +882,29 @@ No current v4.2/v4.3-main safety claim is weakened by this design document:
 software PTT/MOX/keying and FT8 transmission remain absent until an explicitly
 approved later checkpoint implements and physically validates the narrow
 transmit boundary.
+
+
+## Experimental v4.3 FT8 domain foundation
+
+Checkpoint 2 introduces a hardware-independent FT8 package without changing the
+production runtime composition. The package owns immutable FT8 periods, decodes,
+CQ activity, frozen one-QSO authorization context, deterministic timing, and a
+bounded QSO state machine.
+
+The only transmit-facing boundary is `DigitalTransmitSession`, which is
+logical and fake-only at this checkpoint. It is separate from the generic
+receive-side `Radio` protocol. No PTT, CAT transmit command, audio output,
+decoder, waveform generator, persistence path, or hardware worker is composed.
+
+FT8 configuration defaults to disabled:
+
+```yaml
+ft8:
+  enabled: false
+  qso:
+    attempts_per_state: 6
+```
+
+The QSO retry budget is six attempts per unchanged state/message. CQ discovery
+has no station-selection authority, and terminal QSO outcomes require an
+explicit reset before another station can be authorized.

@@ -1,5 +1,18 @@
 # Changelog
 
+## v4.3.0 — experimental development
+
+### FT8 Checkpoint 2
+
+- adds disabled-by-default typed FT8 configuration
+- adds immutable project-owned FT8 period, decode, CQ-activity, and QSO models
+- adds UTC/monotonic FT8 clock abstractions with deterministic fake time
+- adds in-memory CQ deduplication and four-period/60-second expiry
+- adds a bounded fake-only QSO state machine with six attempts per unchanged state
+- adds explicit ABORT, retry-exhausted, completion, error, and reset behavior
+- adds a narrow logical transmit-session protocol with no physical implementation
+- adds no decoder, audio capture/playback, PTT, CAT keying, database migration, or RF transmission
+
 ## v4.2.0 — 2026-09-28
 
 Rolling Thunder v4.2.0 expands the mobile operating dashboard with improved startup,

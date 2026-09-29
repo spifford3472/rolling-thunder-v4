@@ -953,3 +953,123 @@ Begin by adding only:
 
 Do not open DigiRig audio, install a decoder, open the Standard Com Port, add
 PTT commands, or create a running FT8 worker in Checkpoint 2.
+
+
+## Checkpoint 2 implemented foundation
+
+Checkpoint 2 implements the hardware-independent portion of this architecture
+under `src/rolling_thunder/ft8/`. It deliberately does not compose an FT8
+runtime into the production application.
+
+### Implemented modules
+
+```text
+src/rolling_thunder/ft8/
+    __init__.py
+    domain.py
+    timing.py
+    activity.py
+    qso.py
+    transmit.py
+```
+
+There are no placeholder decoder, encoder, audio, or logging modules.
+
+### Configuration
+
+The implemented typed configuration is:
+
+```yaml
+ft8:
+  enabled: false
+  qso:
+    attempts_per_state: 6
+```
+
+The section is optional so older configuration files remain valid. FT8 remains
+disabled by default. Checkpoint 2 adds no runtime FT8 composition, so parsing
+`enabled: true` does not open hardware or start workers.
+
+### Period and timing model
+
+`FT8Period` uses a stable UTC-aligned 15-second index:
+
+```text
+period_index = floor(unix_utc_seconds / 15)
+```
+
+UTC determines protocol-slot identity and even/odd parity. Elapsed/deadline
+behavior uses a separate monotonic source. `SystemFT8Clock` observes system
+time without changing it, while `FakeFT8Clock` advances UTC and monotonic time
+deterministically for tests without real sleeps.
+
+### Normalized decode and CQ activity
+
+`FT8Decode` is immutable and decoder-independent. It owns normalized period,
+SNR, DT, audio frequency, raw message, message kind, callsigns, optional grid,
+optional report, optional CQ qualifier, and read-only backend metadata.
+
+`FT8CQActivityManager` accepts only normalized decodes. CQ entries are keyed by
+normalized callsign, repeated CQs refresh the latest signal details, older
+decodes cannot replace newer activity, and non-CQ traffic never becomes a
+browser entry. The default expiry is four FT8 periods (60 seconds). Snapshots
+are immutable and carry no station-selection or transmit authority.
+
+### Frozen QSO authorization context
+
+`FT8QsoContext` is created for exactly one operator-selected station and freezes
+the local/remote callsigns, target audio frequency, radio frequency/band/mode,
+local grid, optional location metadata, selected TX parity, and authorization
+UTC/period. Later GPS/location changes cannot mutate an active context.
+
+### QSO state machine
+
+`FT8QsoController` implements explicit states:
+
+```text
+IDLE
+AUTHORIZED
+WAIT_TX_CALL
+TX_CALL
+WAIT_REPORT
+TX_REPORT
+WAIT_R_REPORT
+TX_R_REPORT
+WAIT_73
+TX_73
+COMPLETED
+ABORTED
+RETRY_EXHAUSTED
+ERROR
+```
+
+The controller accepts an explicit authorization, starts slot-driven operation,
+and advances only on fresh expected normalized decodes from the authorized
+remote callsign. Traffic from another station, stale periods, duplicate periods,
+wrong receive parity, or unexpected message kinds cannot redirect or advance
+the QSO.
+
+The six-attempt rule applies independently to each unchanged outbound
+state/message. A valid response resets the counter for the newly advanced
+state. After six unanswered attempts, the next eligible transmission
+opportunity enters `RETRY_EXHAUSTED` rather than creating a seventh request.
+
+ABORT is idempotent, terminal outcomes generate no additional requests, and an
+explicit reset is required to discard the old authorization and return to
+`IDLE`. Completion never begins another QSO automatically.
+
+### Fake-only transmit boundary
+
+`DigitalTransmitSession` is a narrow logical protocol. It accepts only an
+immutable `FT8TransmitRequest` containing the already-frozen QSO context,
+logical message kind, exact authorized FT8 period, and per-state attempt number.
+
+Checkpoint 2 provides only `RecordingDigitalTransmitSession`, a test fake. It
+contains no serial port, CAT command, PTT, audio device, waveform, or RF
+implementation.
+
+### Checkpoint 2 safety guarantee
+
+Checkpoint 2 opens no FT8 audio device, installs no decoder, opens no FT-891
+Standard Com Port, adds no PTT capability, adds no transmit-audio capability,
+performs no database migration, and cannot transmit RF.
