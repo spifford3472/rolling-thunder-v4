@@ -1,7 +1,7 @@
 """Hardware-independent FT8 domain and application foundation."""
 
 from rolling_thunder.ft8.activity import FT8CQActivityManager
-from rolling_thunder.ft8.domain import (
+from rolling_thunder.ft8.decoder import (\n    FT8Decoder,\n    FT8DecoderError,\n    FT8PcmPeriod,\n    Ft8LibDecoder,\n    Ft8monDecoder,\n)\nfrom rolling_thunder.ft8.domain import (
     FT8CQActivity,
     FT8Decode,
     FT8MessageKind,
