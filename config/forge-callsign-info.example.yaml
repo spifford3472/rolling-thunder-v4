@@ -1,0 +1,26 @@
+# Forge-local callsign/last-QSO/current-weather intelligence service.
+server:
+  bind_host: "192.168.9.170"
+  bind_port: 8788
+
+wavelog:
+  base_url: "http://192.168.9.170:8086"
+  station_location_name: "Mobile"
+  request_timeout_s: 5.0
+
+weather:
+  enabled: true
+  endpoint: "https://api.open-meteo.com/v1/forecast"
+  request_timeout_s: 5.0
+  cache_ttl_s: 900.0
+
+qrz_request_timeout_s: 5.0
+profile_cache_ttl_s: 5184000.0
+negative_profile_cache_ttl_s: 86400.0
+history_cache_ttl_s: 60.0
+station_cache_ttl_s: 21600.0
+
+# Required environment secrets:
+# ROLLING_THUNDER_QRZ_USERNAME
+# ROLLING_THUNDER_QRZ_PASSWORD
+# ROLLING_THUNDER_WAVELOG_V2_TOKEN
