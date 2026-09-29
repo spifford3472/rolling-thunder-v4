@@ -263,7 +263,10 @@ class ForgeCallsignInfoService:
 
         return CallsignInfoWeather(
             temperature_f=round(snapshot.current.temperature_c * 9 / 5 + 32),
-            condition=_condition_text(snapshot.current.condition),
+            condition=_condition_text(
+                snapshot.current.condition,
+                is_day=snapshot.current.is_day,
+            ),
             location_source=source,
         )
 
@@ -291,9 +294,13 @@ class ForgeCallsignInfoService:
         )
 
 
-def _condition_text(condition: WeatherConditionToken) -> str:
+def _condition_text(
+    condition: WeatherConditionToken,
+    *,
+    is_day: bool,
+) -> str:
     mapping = {
-        WeatherConditionToken.CLEAR: "SUNNY",
+        WeatherConditionToken.CLEAR: "SUNNY" if is_day else "CLEAR",
         WeatherConditionToken.PARTLY_CLOUDY: "PARTLY CLOUDY",
         WeatherConditionToken.CLOUDY: "CLOUDY",
         WeatherConditionToken.FOG: "FOG",
