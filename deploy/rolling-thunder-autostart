@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly APP_DIR="${ROLLING_THUNDER_APP_DIR:-/home/geoff/projects/rolling-thunder-v4-regional}"
+readonly APP_DIR="${ROLLING_THUNDER_APP_DIR:-/home/geoff/projects/rolling-thunder-v4}"
 readonly VENV_DIR="${ROLLING_THUNDER_VENV_DIR:-/home/geoff/projects/rolling-thunder-v4/.venv}"
 readonly CONFIG_PATH="${ROLLING_THUNDER_CONFIG:-${APP_DIR}/config/rolling-thunder.yaml}"
 readonly STARTUP_DELAY_SECONDS="${ROLLING_THUNDER_STARTUP_DELAY_SECONDS:-180}"
