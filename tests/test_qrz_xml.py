@@ -71,6 +71,17 @@ def test_lookup_logs_in_once_and_reuses_session_key() -> None:
                     <name>KLINE</name>
                     <image>https://cdn-xml.qrz.com/ki5vnb.jpg</image>
                     <grid>em79XM</grid>
+                    <addr1>1 Radio Way</addr1>
+                    <addr2>Testville</addr2>
+                    <state>OH</state>
+                    <country>United States</country>
+                    <lat>39.53</lat>
+                    <lon>-84.09</lon>
+                    <geoloc>geocode</geoloc>
+                    <class>E</class>
+                    <efdate>2022-05-01</efdate>
+                    <expdate>2032-05-01</expdate>
+                    <born>1972</born>
                   </Callsign>
                   <Session><Key>SESSION-1</Key></Session>
                 </QRZDatabase>
@@ -101,6 +112,17 @@ def test_lookup_logs_in_once_and_reuses_session_key() -> None:
     assert profile.name == "Geoff KLINE"
     assert profile.image_url == "https://cdn-xml.qrz.com/ki5vnb.jpg"
     assert profile.grid == "EM79xm"
+    assert profile.address1 == "1 Radio Way"
+    assert profile.address2 == "Testville"
+    assert profile.state == "OH"
+    assert profile.country == "United States"
+    assert profile.latitude == 39.53
+    assert profile.longitude == -84.09
+    assert profile.geoloc == "geocode"
+    assert profile.license_class == "E"
+    assert profile.license_effective_date == "2022-05-01"
+    assert profile.license_expiration_date == "2032-05-01"
+    assert profile.birth_year == 1972
     assert provider.lookup_name("W8O") == "Special Event"
 
     assert len(transport.requests) == 3
