@@ -582,11 +582,49 @@ class FT8QsoConfig(ConfigurationModel):
     attempts_per_state: int = Field(default=6, ge=1, le=20)
 
 
+class FT8ReceiveConfig(ConfigurationModel):
+    """Receive-only FT8 capture and decoder settings."""
+
+    audio_device: str = "plughw:CARD=Device,DEV=0"
+    decoder_executable: Path | None = None
+    decoder_timeout_s: float = Field(default=12.0, gt=0, le=60)
+    reconnect_delay_s: float = Field(default=2.0, gt=0, le=60)
+
+    @field_validator("audio_device")
+    @classmethod
+    def validate_audio_device(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be empty")
+        return normalized
+
+    @field_validator("decoder_executable", mode="before")
+    @classmethod
+    def validate_decoder_executable(cls, value: object) -> object:
+        if value is None:
+            return value
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        path = Path(value) if isinstance(value, (str, Path)) else value
+        if isinstance(path, Path) and str(path) == ".":
+            raise ValueError("must name an executable")
+        return path
+
+
 class FT8Config(ConfigurationModel):
     """Experimental native FT8 feature boundary."""
 
     enabled: bool = False
+    receive: FT8ReceiveConfig = FT8ReceiveConfig()
     qso: FT8QsoConfig = FT8QsoConfig()
+
+    @model_validator(mode="after")
+    def validate_enabled_receive(self) -> Self:
+        if self.enabled and self.receive.decoder_executable is None:
+            raise ValueError(
+                "ft8.receive.decoder_executable must be configured when ft8.enabled is true"
+            )
+        return self
 
 
 class ApplicationConfig(ConfigurationModel):
