@@ -1,8 +1,14 @@
 """Tests for the receive-only FT8 audio boundary."""
 
+from io import BytesIO
+from typing import Any, cast
+
+import pytest
+
 from rolling_thunder.ft8.audio import (
     FT8_PERIOD_BYTES,
     FT8_SAMPLE_RATE_HZ,
+    FT8AudioInputError,
     AlsaArecordFT8AudioInput,
     AlsaCaptureCommand,
 )
@@ -38,3 +44,17 @@ def test_alsa_audio_input_rejects_blank_device() -> None:
         assert "must not be blank" in str(exc)
     else:
         raise AssertionError("blank FT8 audio device was accepted")
+
+
+class _ShortProcess:
+    def __init__(self) -> None:
+        self.stdout = BytesIO(b"\x00\x00" * 100)
+        self.stderr = BytesIO(b"capture ended")
+
+
+def test_incomplete_capture_is_rejected() -> None:
+    audio = AlsaArecordFT8AudioInput("plughw:CARD=Device,DEV=0")
+    process = cast(Any, _ShortProcess())
+
+    with pytest.raises(FT8AudioInputError, match="before a complete period"):
+        audio._read_exact(process, FT8_PERIOD_BYTES)
