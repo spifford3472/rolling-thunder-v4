@@ -99,8 +99,13 @@ def build_callsign_info_presentation(
             zoom = 5
         else:
             target = GeoPoint(grid_latitude, grid_longitude)
-            pin_visible = True
-            location_note = "APPROX GRID CENTER"
+            source = (profile.coordinate_source or "").casefold()
+            pin_visible = source not in {"state", "dxcc"}
+            location_note = (
+                "COUNTRY / REGION VIEW"
+                if source in {"state", "dxcc"}
+                else "APPROX GRID CENTER"
+            )
             zoom = callsign_map_zoom(profile.country, profile.state)
     else:
         zoom = 5
