@@ -66,7 +66,7 @@ def test_static_qrz_profile_uses_long_cache_independently_of_history() -> None:
     wavelog = FakeWavelog(None)
     service = ForgeCallsignInfoService(
         qrz,
-        wavelog,  # type: ignore[arg-type]
+        wavelog,
         None,
         profile_ttl_s=1000,
         history_ttl_s=10,
@@ -86,7 +86,7 @@ def test_static_qrz_profile_uses_long_cache_independently_of_history() -> None:
 def test_no_previous_qso_is_explicit_first_contact_state() -> None:
     service = ForgeCallsignInfoService(
         FakeQrz(profile()),
-        FakeWavelog(None),  # type: ignore[arg-type]
+        FakeWavelog(None),
         None,
     )
 
@@ -110,7 +110,7 @@ def test_previous_mobile_qso_uses_station_location_name() -> None:
     )
     service = ForgeCallsignInfoService(
         FakeQrz(profile()),
-        FakeWavelog(qso),  # type: ignore[arg-type]
+        FakeWavelog(qso),
         None,
     )
 
@@ -127,7 +127,7 @@ def test_negative_qrz_result_uses_short_cache() -> None:
     qrz = FakeQrz(None)
     service = ForgeCallsignInfoService(
         qrz,
-        FakeWavelog(None),  # type: ignore[arg-type]
+        FakeWavelog(None),
         None,
         negative_profile_ttl_s=5,
         monotonic_clock=clock,
