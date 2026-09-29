@@ -37,6 +37,8 @@ class CallsignInfoState:
     response: CallsignInfoResponse | None
     shown_at_monotonic: float | None
     last_error: str | None = None
+    target_latitude: float | None = None
+    target_longitude: float | None = None
 
 
 class CallsignInfoLookupService:
@@ -66,7 +68,9 @@ class CallsignInfoLookupService:
         self._response: CallsignInfoResponse | None = None
         self._shown_at: float | None = None
         self._last_error: str | None = None
-        self._future: Future[object] | None = None
+        self._target_latitude: float | None = None
+        self._target_longitude: float | None = None
+        self._future: Future[None] | None = None
         self._stopped = False
 
     @property
@@ -90,6 +94,8 @@ class CallsignInfoLookupService:
                 response=self._response,
                 shown_at_monotonic=self._shown_at,
                 last_error=self._last_error,
+                target_latitude=self._target_latitude,
+                target_longitude=self._target_longitude,
             )
 
     def set_enabled(self, enabled: bool) -> bool:
@@ -131,6 +137,8 @@ class CallsignInfoLookupService:
             self._response = None
             self._shown_at = None
             self._last_error = None
+            self._target_latitude = pota_latitude
+            self._target_longitude = pota_longitude
             executor = self._executor
             if executor is None:
                 executor = ThreadPoolExecutor(
@@ -214,3 +222,5 @@ class CallsignInfoLookupService:
         self._last_error = None
         if clear_callsign:
             self._callsign = None
+            self._target_latitude = None
+            self._target_longitude = None
