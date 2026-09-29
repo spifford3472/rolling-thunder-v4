@@ -10,6 +10,7 @@ from typing import Any
 from rolling_thunder.callsign_info import CallsignInfoResponse
 from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.live_map_service import LiveMapSnapshot
+from rolling_thunder.maidenhead import maidenhead_grid_center
 from rolling_thunder.map_tiles import MapTileKey, web_mercator_world_pixel
 
 _BACKGROUND = "#080c0f"
@@ -79,6 +80,14 @@ def build_callsign_info_presentation(
     ):
         target = GeoPoint(profile.latitude, profile.longitude)
         zoom = callsign_map_zoom(profile.country, profile.state)
+    elif profile is not None and profile.grid:
+        try:
+            grid_latitude, grid_longitude = maidenhead_grid_center(profile.grid)
+        except ValueError:
+            zoom = 5
+        else:
+            target = GeoPoint(grid_latitude, grid_longitude)
+            zoom = callsign_map_zoom(profile.country, profile.state)
     else:
         zoom = 5
 
