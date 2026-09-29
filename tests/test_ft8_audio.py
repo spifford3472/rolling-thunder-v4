@@ -8,9 +8,9 @@ import pytest
 from rolling_thunder.ft8.audio import (
     FT8_PERIOD_BYTES,
     FT8_SAMPLE_RATE_HZ,
-    FT8AudioInputError,
     AlsaArecordFT8AudioInput,
     AlsaCaptureCommand,
+    FT8AudioInputError,
 )
 
 
