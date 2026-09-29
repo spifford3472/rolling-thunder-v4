@@ -57,7 +57,7 @@ def test_message_normalization(
 def test_ft8mon_output_normalizes_into_project_decode() -> None:
     decoder = Ft8monDecoder("ft8mon")
     decode = decoder._parse_line(
-        "094445 -19 0.0 820 CQ DX WD6DBM CM97",
+        "094445 -19 147 0.00 820.4 CQ DX WD6DBM CM97",
         period=FT8Period(index=100),
     )
 
@@ -72,6 +72,7 @@ def test_ft8mon_output_normalizes_into_project_decode() -> None:
     assert decode.grid == "CM97"
     assert decode.cq_qualifier == "DX"
     assert decode.backend_metadata["decoder"] == "ft8mon"
+    assert decode.backend_metadata["correct_bits"] == "147"
 
 
 def test_ft8_lib_output_normalizes_required_metrics() -> None:
