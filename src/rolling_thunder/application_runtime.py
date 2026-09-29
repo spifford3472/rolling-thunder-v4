@@ -131,6 +131,7 @@ class ApplicationRuntime:
     gps_polling: GPSPollingService | None = None
     clock_sync: ClockSynchronizationService | None = None
     live_map: LiveMapService | None = None
+    callsign_map: LiveMapService | None = None
     pota_map_markers: PotaMapMarkerService | None = None
     live_radar: LiveRadarOverlayService | None = None
     map_zoom_settings: MapZoomSettingsController | None = None
@@ -200,6 +201,7 @@ class ApplicationRuntime:
         radar_executor: Executor | None = None,
         pota_map_executor: Executor | None = None,
         callsign_info_executor: Executor | None = None,
+        callsign_map_executor: Executor | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -416,6 +418,7 @@ class ApplicationRuntime:
         )
 
         live_map: LiveMapService | None = None
+        callsign_map: LiveMapService | None = None
         live_radar: LiveRadarOverlayService | None = None
         map_zoom_settings: MapZoomSettingsController | None = None
         map_solar: MapSolarStyleService | None = None
@@ -453,6 +456,32 @@ class ApplicationRuntime:
                 zoom=effective_zoom,
                 executor=map_executor,
             )
+            if config.forge.callsign_info.enabled:
+                callsign_map_cache = MapTileCache(
+                    map_config.cache_directory,
+                    retention=timedelta(days=map_config.cache_retention_days),
+                    maximum_tiles=map_config.maximum_cached_tiles,
+                )
+                callsign_map_client = MapTileClient(
+                    map_config.tile_url_template,
+                    timeout_s=map_config.request_timeout_s,
+                    transport=map_transport,
+                )
+                callsign_map_registry = InstalledMapRegistry.load(
+                    map_config.installed_packages
+                )
+                callsign_map_resolver = MapTileResolver(
+                    callsign_map_registry,
+                    callsign_map_cache,
+                    callsign_map_client,
+                    style=map_config.style,
+                    online_attribution=map_config.online_attribution,
+                )
+                callsign_map = LiveMapService(
+                    callsign_map_resolver,
+                    zoom=6,
+                    executor=callsign_map_executor,
+                )
             map_zoom_settings = MapZoomSettingsController(
                 live_map,
                 zoom_bounds,
@@ -505,6 +534,7 @@ class ApplicationRuntime:
             gps_polling=gps_polling,
             clock_sync=clock_sync,
             live_map=live_map,
+            callsign_map=callsign_map,
             pota_map_markers=pota_map_markers,
             live_radar=live_radar,
             map_zoom_settings=map_zoom_settings,
@@ -640,6 +670,8 @@ class ApplicationRuntime:
             self.pi_forge_location_publishing.start()
         if self.live_map is not None:
             self.live_map.start()
+        if self.callsign_map is not None:
+            self.callsign_map.start()
         if self.pota_map_markers is not None:
             self.pota_map_markers.start()
         if self.map_solar is not None:
@@ -699,6 +731,8 @@ class ApplicationRuntime:
             self.map_solar.stop()
         if self.pota_map_markers is not None:
             self.pota_map_markers.stop()
+        if self.callsign_map is not None:
+            self.callsign_map.stop()
         if self.live_map is not None:
             self.live_map.stop()
         if self.callsign_info is not None:
