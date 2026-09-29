@@ -1,6 +1,6 @@
-import pytest
-
 """Forge callsign-intelligence aggregation tests."""
+
+import pytest
 
 from rolling_thunder.forge_callsign_info import ForgeCallsignInfoService
 from rolling_thunder.qrz_xml import QrzCallsignProfile
