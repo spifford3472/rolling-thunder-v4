@@ -11,7 +11,7 @@ from rolling_thunder.ft8.domain import (
     FT8QsoState,
 )
 from rolling_thunder.ft8.qso import FT8QsoController
-from rolling_thunder.ft8.timing import FT8Clock, FakeFT8Clock, SystemFT8Clock
+from rolling_thunder.ft8.timing import FakeFT8Clock, FT8Clock, SystemFT8Clock
 from rolling_thunder.ft8.transmit import (
     DigitalTransmitSession,
     FT8TransmitKind,
