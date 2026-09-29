@@ -228,15 +228,13 @@ single press
 
 There is no persistent receive-confirmation stage.
 
-Before staging or tuning, the active-panel command controller requires the latest
-radio state to be connected, to have known frequency and mode, and not to report
-transmitting. Otherwise staging is invalidated and the action fails closed.
+Before tuning, the active-panel command controller requires the latest radio
+state to be connected, to have known frequency and mode, and not to report
+transmitting. Otherwise the activation fails closed.
 
-Rotation, selection change, POTA/DX context change, band/mode filter change,
-identity disappearance, action-critical callsign/frequency/mode mutation,
-Back/Cancel, or radio invalidation clears staging.
-
-No neighboring row can inherit a staged action.
+The submitted action is an exact snapshot of the selected identity, callsign,
+frequency, and mode. Selection/filter/context changes after submission cannot
+redirect that in-flight action to a neighboring row.
 
 ## Background Tuning Boundary
 
@@ -369,8 +367,8 @@ boundaries, and deterministic schedulers. Coverage includes:
 - serialized FT-891 CAT operations
 - single shared activation submitting the exact selected action
 - POTA and DX sharing the same execution boundary
-- stale/action-mutated staging rejection
-- selection, filter, context, Back, and radio-state invalidation
+- exact selected-action snapshot behavior
+- selection, filter, context, Back, and radio-state rejection/cancellation behavior
 - background tune success and failure state
 - exact timed `SET BAND TO <BAND> METERS — TUNE ATAS-120` warning
 - no band/ATAS warning for same-band tuning
