@@ -12,7 +12,10 @@ from rolling_thunder.callsign_info import (
     CallsignInfoWeather,
 )
 from rolling_thunder.callsign_info_service import CallsignInfoLookupService
-from rolling_thunder.callsign_info_ui import build_callsign_info_presentation
+from rolling_thunder.callsign_info_ui import (
+    build_callsign_info_presentation,
+    callsign_map_zoom,
+)
 
 
 class InlineExecutor(Executor):
@@ -133,3 +136,39 @@ def test_disable_hides_and_reenable_allows_current_callsign_to_lookup_again() ->
     assert service.set_enabled(True) is True
     assert service.observe_callsign("W1AW") is True
     assert client.calls == ["W1AW", "W1AW"]
+
+
+
+def test_missing_location_does_not_invent_map_pin() -> None:
+    response = CallsignInfoResponse(
+        callsign="W1AW",
+        profile=CallsignInfoProfile(callsign="W1AW", name="Test Operator"),
+        last_qso=CallsignInfoLastQso(exists=False),
+    )
+
+    presentation = build_callsign_info_presentation(response)
+
+    assert presentation.target is None
+
+
+def test_regional_map_framing_distinguishes_alaska_hawaii_and_large_dx() -> None:
+    assert callsign_map_zoom("United States", "AK") == 4
+    assert callsign_map_zoom("United States", "HI") == 6
+    assert callsign_map_zoom("United States", "OH") == 6
+    assert callsign_map_zoom("Australia", None) == 4
+    assert callsign_map_zoom("Germany", None) == 6
+
+
+def test_lookup_state_retains_pota_target_for_async_presentation() -> None:
+    client = FakeClient()
+    service = CallsignInfoLookupService(client, executor=InlineExecutor())
+
+    service.observe_callsign(
+        "W1AW",
+        pota_latitude=39.7,
+        pota_longitude=-84.2,
+    )
+
+    state = service.state
+    assert state.target_latitude == 39.7
+    assert state.target_longitude == -84.2
