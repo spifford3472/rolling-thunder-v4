@@ -2,6 +2,16 @@
 
 ## v4.3.0 — experimental development
 
+### FT8 Checkpoint 3 — in progress
+
+- adds a project-owned receive decoder protocol and mono signed-16-bit PCM period input
+- adds saved-WAV subprocess adapters for `kgoba/ft8_lib` and `ft8mon`
+- normalizes candidate output exclusively into the existing `FT8Decode` model
+- adds safe timeout/process-failure handling and common FT8 message normalization tests
+- adds a reproducible decoder bake-off ledger with pinned candidate revisions
+- remains receive-only with no live DigiRig audio, production worker, PTT, CAT TX,
+  transmit audio, logging, or RF transmission
+
 ### FT8 Checkpoint 2
 
 - adds disabled-by-default typed FT8 configuration
