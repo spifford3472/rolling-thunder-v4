@@ -101,3 +101,31 @@ The pinned `ft8_lib` repository also contains recorded WAV fixtures paired
 with text result files. These are suitable for the first same-input candidate
 comparison; their text files are treated as repository-provided reference
 results, not as a substitute for the later independent WSJT-X oracle.
+
+
+## Preliminary saved-WAV smoke result
+
+A first direct Pi smoke test used
+`test/wav/191111_110115.wav` from the pinned `kgoba/ft8_lib` checkout.
+
+The paired repository result file contains the expected message
+`GJ0KYZ RK9AX MO05`.
+
+Observed on `anvilmobile`:
+
+- pinned `kgoba/ft8_lib/decode_ft8`: completed successfully but decoded zero
+  messages;
+- pinned `ft8mon`: decoded the expected `GJ0KYZ RK9AX MO05` message and one
+  additional hashed/partial message.
+
+The `ft8_lib` repository's own `utils/run_tests.py` invokes
+`./decode_ft8 WAV` with the same basic command form, so the zero-decode result
+is not explained by an obvious missing command-line option.
+
+The actual pinned `ft8mon` output format includes an additional
+`correct_bits` column between SNR and DT and uses fractional audio frequency.
+The Rolling Thunder adapter was updated to normalize that pinned output rather
+than relying on the older README example format.
+
+This is preliminary evidence only. Backend selection remains pending a broader
+same-WAV corpus and independent WSJT-X comparison.
