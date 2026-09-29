@@ -50,6 +50,7 @@ class CallsignInfoWeather(DomainModel):
     temperature_f: int = Field(ge=-150, le=160)
     condition: str = Field(min_length=1, max_length=40)
     location_source: Literal["pota", "qrz"]
+    attribution: str | None = Field(default=None, max_length=256)
 
 
 class CallsignInfoResponse(DomainModel):
