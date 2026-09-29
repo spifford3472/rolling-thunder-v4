@@ -129,3 +129,18 @@ than relying on the older README example format.
 
 This is preliminary evidence only. Backend selection remains pending a broader
 same-WAV corpus and independent WSJT-X comparison.
+
+
+### First measured Pi smoke timing
+
+On the same `191111_110115.wav` fixture:
+
+- `kgoba/ft8_lib/decode_ft8` returned zero decodes in about 0.051 seconds.
+- `ft8mon` returned two decodes in about 5.49 seconds, including the expected
+  `GJ0KYZ RK9AX MO05` message.
+
+This illustrates the expected tradeoff that Checkpoint 3 is intended to measure:
+the lightweight decoder is dramatically faster on this sample, while the
+heavier decoder recovered the known signal. One sample is not sufficient for a
+backend decision; the broader corpus and independent WSJT-X oracle remain
+required.
