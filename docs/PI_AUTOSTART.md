@@ -76,10 +76,15 @@ During the v4.2.0 release transition, `anvilmobile` used the local drop-in:
 to override an older checked-in base unit that still referenced
 `/home/geoff/projects/rolling-thunder-v4-regional`.
 
-The corrected base unit now contains the same production path directly. Keep the
-legacy drop-in installed until the corrected base unit has been physically tested
-on `anvilmobile`. Remove it only after verifying that the effective unit is
-unchanged apart from the redundant override.
+Checkpoint 0 physically verified the corrected base unit on `anvilmobile`.
+The legacy drop-in is no longer active and was archived as:
+
+```text
+/etc/systemd/system/v4.2-main.conf.retired-cp0
+```
+
+The installed effective unit now uses only the corrected base-unit production
+paths. The retired copy is retained only as a recovery artifact.
 
 ## Verification without the three-minute delay
 
@@ -106,9 +111,9 @@ systemctl status rolling-thunder.service --no-pager -l
 journalctl -u rolling-thunder.service -n 100 --no-pager
 ```
 
-Remove only the temporary zero-delay override after the supervised test. Do not
-remove `v4.2-main.conf` until the corrected base service has passed the
-Checkpoint 0 acceptance test.
+Remove only the temporary zero-delay override after the supervised test. The
+legacy `v4.2-main.conf` compatibility override has already been retired after
+Checkpoint 0 physical acceptance.
 
 ## Checkpoint 0 acceptance
 
@@ -124,8 +129,9 @@ observed:
 7. after the base-unit test succeeds, removing the legacy `v4.2-main.conf`
    drop-in does not change the effective production paths.
 
-A reboot/180-second startup test should be performed before final merge approval
-when practical.
+Checkpoint 0 was physically accepted and merged as PR #211. The corrected
+production paths and 180-second startup delay are now the supported v4.3
+baseline.
 
 ## v4.2.0 recovery
 
@@ -133,6 +139,7 @@ The immutable v4.2.0 recovery point is tag `v4.2.0`, commit
 `3f5a9c22bc600883b1eb8d868d92e2f58658cc24`.
 
 Checkpoint 0 does not change application code, configuration data, databases,
-audio rules, udev rules, or radio behavior. If rollback is required, restore the
-v4.2.0 checkout and the known-good `v4.2-main.conf` drop-in before restarting
-`rolling-thunder.service`.
+audio rules, udev rules, or radio behavior. If rollback to the protected
+v4.2.0 point is required, restore the v4.2.0 checkout and, if the v4.2.0 base
+unit requires it, restore the archived `v4.2-main.conf.retired-cp0` as the
+active compatibility drop-in before restarting `rolling-thunder.service`.

@@ -854,3 +854,31 @@ active presentation is cleared immediately and no new lookup is started.
 
 See `docs/CALLSIGN_INFO.md` for the API model, cache policy, lifecycle, weather
 rules, deployment, and limitations.
+
+
+## v4.3 Experimental FT8 architecture
+
+Status: architecture/research only; no FT8 runtime or transmit authority is
+implemented on `main`.
+
+The v4.3 experiment is documented in `docs/FT8_ARCHITECTURE.md`. It preserves
+the generic `Radio` protocol as receive-side and keeps all future FT8 transmit
+authority behind a separate, narrow, operator-authorized capability.
+
+The proposed FT8 path is feature-gated and disabled by default. When disabled,
+no decoder, FT8 audio worker, FT8 timing worker, QSO worker, PTT backend, or
+FT8-specific CAT operation may be constructed.
+
+The installed target hardware is the FT-891 + DigiRig DR-891. The existing
+Enhanced CAT path remains a single serialized owner; v4.3 must not create a
+second unsynchronized connection. DigiRig audio and any future PTT mechanism
+remain separate typed hardware boundaries.
+
+Checkpoint 1 selects no production decoder. It requires a later on-Pi benchmark
+of `ft8_lib` and `ft8mon` against current WSJT-X reference decodes before
+the initial receive backend is chosen.
+
+No current v4.2/v4.3-main safety claim is weakened by this design document:
+software PTT/MOX/keying and FT8 transmission remain absent until an explicitly
+approved later checkpoint implements and physically validates the narrow
+transmit boundary.
