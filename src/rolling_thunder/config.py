@@ -167,6 +167,24 @@ class SpeechConfig(ConfigurationModel):
         return self
 
 
+class ForgeCallsignInfoClientConfig(ConfigurationModel):
+    """On-demand callsign-information lookup settings."""
+
+    enabled: bool = False
+    api_url: AnyHttpUrl | None = None
+    request_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    max_response_bytes: int = Field(default=65_536, ge=1_024, le=1_048_576)
+    overlay_timeout_s: float = Field(default=120.0, ge=10.0, le=120.0)
+
+    @model_validator(mode="after")
+    def validate_enabled_client(self) -> Self:
+        if self.enabled and self.api_url is None:
+            raise ValueError(
+                "forge.callsign_info.api_url must be configured when enabled"
+            )
+        return self
+
+
 class ForgeWeatherClientConfig(ConfigurationModel):
     """Optional Pi-side retained-weather polling settings under Forge."""
 
@@ -242,6 +260,7 @@ class ForgeConfig(ConfigurationModel):
         ge=1_024,
         le=16_777_216,
     )
+    callsign_info: ForgeCallsignInfoClientConfig = ForgeCallsignInfoClientConfig()
     weather: ForgeWeatherClientConfig = ForgeWeatherClientConfig()
     weather_alerts: ForgeWeatherAlertClientConfig = (
         ForgeWeatherAlertClientConfig()
@@ -253,6 +272,10 @@ class ForgeConfig(ConfigurationModel):
         if self.enabled and self.api_url is None:
             raise ValueError(
                 "forge.api_url must be configured when forge.enabled is true"
+            )
+        if self.callsign_info.enabled and not self.enabled:
+            raise ValueError(
+                "forge.enabled must be true when forge.callsign_info.enabled is true"
             )
         if self.weather.enabled and not self.enabled:
             raise ValueError(
