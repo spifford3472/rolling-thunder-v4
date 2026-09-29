@@ -21,6 +21,17 @@ class RadarImageTarget(Protocol):
         ...
 
 
+class CallsignInfoTarget(Protocol):
+    """Runtime callsign-info visibility capability used by Settings."""
+
+    @property
+    def state(self) -> object:
+        ...
+
+    def set_enabled(self, enabled: bool) -> bool:
+        ...
+
+
 class MapStyleAutomation(Protocol):
     """Automatic map-style policy notified by explicit operator overrides."""
 
@@ -36,6 +47,10 @@ class RadarImagePersistence(Protocol):
         """Queue durable persistence for the radar-image setting."""
         ...
 
+    def persist_callsign_info_enabled(self, enabled: bool) -> bool:
+        """Queue durable persistence for the callsign-info setting."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class DashboardSettingsState:
@@ -44,6 +59,8 @@ class DashboardSettingsState:
     map_zoom: MapZoomSettingsState | None
     radar_available: bool
     radar_image_enabled: bool
+    callsign_info_available: bool
+    callsign_info_enabled: bool
 
 
 class DashboardSettingsController:
@@ -55,20 +72,29 @@ class DashboardSettingsController:
         radar: RadarImageTarget | None,
         persistence: RadarImagePersistence,
         map_style_automation: MapStyleAutomation | None = None,
+        callsign_info: CallsignInfoTarget | None = None,
     ) -> None:
         self._map_zoom = map_zoom
         self._radar = radar
         self._persistence = persistence
         self._map_style_automation = map_style_automation
+        self._callsign_info = callsign_info
 
     @property
     def state(self) -> DashboardSettingsState:
         """Return immutable current Settings state without I/O."""
         radar = self._radar
+        callsign_info = self._callsign_info
+        callsign_enabled = False
+        if callsign_info is not None:
+            state = getattr(callsign_info, "state", None)
+            callsign_enabled = bool(getattr(state, "enabled", False))
         return DashboardSettingsState(
             map_zoom=self._map_zoom.state if self._map_zoom is not None else None,
             radar_available=radar is not None,
             radar_image_enabled=radar.display_enabled if radar is not None else False,
+            callsign_info_available=callsign_info is not None,
+            callsign_info_enabled=callsign_enabled,
         )
 
     def zoom_out(self) -> bool:
@@ -86,6 +112,18 @@ class DashboardSettingsController:
         automation = self._map_style_automation
         if automation is not None:
             automation.note_manual_override()
+        return True
+
+    def toggle_callsign_info(self) -> bool:
+        """Toggle callsign information immediately and persist the operator choice."""
+        target = self._callsign_info
+        if target is None:
+            return False
+        current = bool(getattr(target.state, "enabled", False))
+        enabled = not current
+        if not target.set_enabled(enabled):
+            return False
+        self._persistence.persist_callsign_info_enabled(enabled)
         return True
 
     def toggle_radar(self) -> bool:
