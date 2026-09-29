@@ -1109,3 +1109,19 @@ temporary saved-WAV adapters preserve those bytes directly.
 This representation is backend-independent and is intended to remain suitable
 for the later live-audio checkpoint without making the application layer depend
 on WAV filenames, subprocess objects, or backend-native buffers.
+
+
+### Checkpoint 3 selected receive backend
+
+Checkpoint 3 selects `kgoba/ft8_lib` as the **initial** Rolling Thunder FT8
+receive backend for the next integration checkpoint. The decision is based on
+the documented Pi bake-off in `docs/FT8_DECODER_BAKEOFF.md`.
+
+The selection prioritizes bounded decode latency and resource use required by a
+future slot-driven mobile application while explicitly accepting lower measured
+recall than `ft8mon` on the small saved-WAV oracle corpus. `ft8mon` remains
+a higher-sensitivity comparison/fallback candidate; WSJT-X 3.0.2 remains an
+oracle only.
+
+The backend selection does not compose a decoder into the production runtime.
+Live DigiRig audio remains a Checkpoint 4 concern.
