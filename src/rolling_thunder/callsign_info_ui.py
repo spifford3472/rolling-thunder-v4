@@ -199,16 +199,16 @@ class CallsignInfoOverlayWidgets:
             relx=1.0,
             rely=1.0,
             anchor="se",
-            relwidth=0.72,
-            relheight=0.72,
+            relwidth=0.86,
+            relheight=0.86,
             x=-12,
             y=-12,
         )
         self.frame.place_forget()
         self.frame.grid_columnconfigure(0, weight=2)
         self.frame.grid_columnconfigure(1, weight=3)
-        self.frame.grid_rowconfigure(0, weight=3)
-        self.frame.grid_rowconfigure(1, weight=2)
+        self.frame.grid_rowconfigure(0, weight=2)
+        self.frame.grid_rowconfigure(1, weight=3)
 
         self._map = tk.Canvas(
             self.frame,
@@ -229,28 +229,28 @@ class CallsignInfoOverlayWidgets:
             text="WEATHER",
             bg=_PANEL,
             fg=_MUTED,
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", 28, "bold"),
         ).pack(anchor="w", padx=12, pady=(8, 0))
         tk.Label(
             weather,
             textvariable=self._weather_temp,
             bg=_PANEL,
             fg=_WEATHER,
-            font=("DejaVu Sans Mono", 38, "bold"),
+            font=("DejaVu Sans Mono", 88, "bold"),
         ).pack(anchor="w", padx=12)
         tk.Label(
             weather,
             textvariable=self._weather_condition,
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", 34, "bold"),
         ).pack(anchor="w", padx=12)
         tk.Label(
             weather,
             textvariable=self._weather_attribution,
             bg=_PANEL,
             fg=_MUTED,
-            font=("DejaVu Sans", 9),
+            font=("DejaVu Sans", 12),
         ).pack(anchor="w", padx=12, pady=(4, 0))
 
         details = tk.Frame(self.frame, bg=_PANEL)
@@ -264,7 +264,7 @@ class CallsignInfoOverlayWidgets:
             textvariable=self._name,
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 25, "bold"),
+            font=("DejaVu Sans", 40, "bold"),
             anchor="w",
         ).pack(fill="x", padx=12, pady=(7, 0))
         tk.Label(
@@ -272,7 +272,7 @@ class CallsignInfoOverlayWidgets:
             textvariable=self._identity,
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 16),
+            font=("DejaVu Sans", 28),
             justify="left",
             anchor="w",
         ).pack(fill="x", padx=12)
@@ -281,7 +281,7 @@ class CallsignInfoOverlayWidgets:
             textvariable=self._history_heading,
             bg=_PANEL,
             fg=_ACCENT,
-            font=("DejaVu Sans", 20, "bold"),
+            font=("DejaVu Sans", 34, "bold"),
             anchor="w",
         )
         self._history_label.pack(fill="x", padx=12, pady=(5, 0))
@@ -290,7 +290,7 @@ class CallsignInfoOverlayWidgets:
             textvariable=self._history,
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 15),
+            font=("DejaVu Sans", 27),
             justify="left",
             anchor="w",
         ).pack(fill="x", padx=12)
@@ -331,8 +331,8 @@ class CallsignInfoOverlayWidgets:
             relx=1.0,
             rely=1.0,
             anchor="se",
-            relwidth=0.72,
-            relheight=0.72,
+            relwidth=0.86,
+            relheight=0.86,
             x=-12,
             y=-12,
         )
@@ -404,7 +404,7 @@ class CallsignInfoOverlayWidgets:
                 10,
                 text=location_note,
                 fill=_BRIGHT,
-                font=("DejaVu Sans", 11, "bold"),
+                font=("DejaVu Sans", 20, "bold"),
                 anchor="nw",
             )
 
@@ -422,5 +422,5 @@ class CallsignInfoOverlayWidgets:
                 height / 2,
                 text="MAP UNAVAILABLE",
                 fill=_MUTED,
-                font=("DejaVu Sans", 18, "bold"),
+                font=("DejaVu Sans", 28, "bold"),
             )
