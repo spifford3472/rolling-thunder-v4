@@ -20,7 +20,7 @@ def _pcm() -> FT8PcmPeriod:
     return FT8PcmPeriod(
         period=FT8Period(index=100),
         sample_rate_hz=12_000,
-        samples=(0, 100, -100, 0),
+        pcm_s16le=bytes((0, 0, 100, 0, 156, 255, 0, 0)),
     )
 
 
@@ -153,13 +153,13 @@ def test_wav_loader_requires_mono_16_bit_pcm(tmp_path: Path) -> None:
 
     assert pcm.period == FT8Period(index=102)
     assert pcm.sample_rate_hz == 12_000
-    assert pcm.samples == (0, 1)
+    assert pcm.pcm_s16le == bytes((0, 0, 1, 0))
 
 
-def test_pcm_contract_rejects_out_of_range_samples() -> None:
-    with pytest.raises(ValueError, match="signed 16-bit"):
+def test_pcm_contract_rejects_partial_sample_bytes() -> None:
+    with pytest.raises(ValueError, match="complete signed 16-bit samples"):
         FT8PcmPeriod(
             period=FT8Period(index=100),
             sample_rate_hz=12_000,
-            samples=(40_000,),
+            pcm_s16le=b"\x00",
         )
