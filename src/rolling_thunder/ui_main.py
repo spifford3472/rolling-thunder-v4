@@ -1157,12 +1157,17 @@ def run_dashboard(
             if callsign_info_state.response is not None:
                 callsign_presentation = build_callsign_info_presentation(
                     callsign_info_state.response,
-                    pota_latitude=pota_latitude,
-                    pota_longitude=pota_longitude,
+                    pota_latitude=callsign_info_state.target_latitude,
+                    pota_longitude=callsign_info_state.target_longitude,
                     local_time=datetime.now().astimezone(),
                 )
                 callsign_map_snapshot = None
                 if runtime.callsign_map is not None and callsign_presentation.target is not None:
+                    if (
+                        runtime.live_map is not None
+                        and runtime.callsign_map.style is not runtime.live_map.style
+                    ):
+                        runtime.callsign_map.set_style(runtime.live_map.style)
                     runtime.callsign_map.set_zoom(callsign_presentation.map_zoom)
                     info_map_width, info_map_height = callsign_info_widgets.map_size
                     if info_map_width >= 64 and info_map_height >= 64:
