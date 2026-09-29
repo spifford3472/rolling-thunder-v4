@@ -1,6 +1,6 @@
 """Focused tests for callsign information presentation and lifecycle."""
 
-from concurrent.futures import Future
+from concurrent.futures import Executor, Future
 from datetime import UTC, datetime
 from typing import Any, Callable
 
@@ -14,7 +14,7 @@ from rolling_thunder.callsign_info_service import CallsignInfoLookupService
 from rolling_thunder.callsign_info_ui import build_callsign_info_presentation
 
 
-class InlineExecutor:
+class InlineExecutor(Executor):
     def submit(self, fn: Callable[..., Any], *args: object, **kwargs: object) -> Future[Any]:
         future: Future[Any] = Future()
         try:
