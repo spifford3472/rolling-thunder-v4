@@ -16,6 +16,7 @@ from rolling_thunder.callsign_info import (
     CallsignInfoWeather,
 )
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
+from rolling_thunder.maidenhead import maidenhead_grid_center
 from rolling_thunder.forge_weather import (
     ForgeWeatherProviderError,
     WeatherConditionToken,
@@ -223,6 +224,12 @@ class ForgeCallsignInfoService:
         ):
             latitude = profile.latitude
             longitude = profile.longitude
+            source = "qrz"
+        elif profile is not None and profile.grid is not None:
+            try:
+                latitude, longitude = maidenhead_grid_center(profile.grid)
+            except ValueError:
+                return None
             source = "qrz"
         else:
             return None
