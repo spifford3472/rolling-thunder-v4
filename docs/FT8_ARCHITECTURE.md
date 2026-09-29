@@ -1081,7 +1081,7 @@ Checkpoint 3 introduces the first receive decoder module but still does not
 compose FT8 into production runtime behavior.
 
 The decoder-facing input is project-owned `FT8PcmPeriod`: an explicit
-`FT8Period`, sample rate, and mono signed-16-bit PCM samples. Saved WAV files
+`FT8Period`, sample rate, and immutable mono signed-16-bit little-endian PCM bytes. Saved WAV files
 are a benchmark/test source only; backend-specific filenames and process/native
 types are not the application decoder API.
 
@@ -1096,3 +1096,16 @@ The exact candidate revisions and benchmark ledger live in
 Checkpoint 3 remains saved/reference-WAV receive-only: no DigiRig capture,
 production worker, QSO execution, logging, PTT, CAT transmit command, transmit
 audio, waveform generation, or RF transmission is added.
+
+
+### Checkpoint 3 PCM representation
+
+The decoder boundary stores one period as immutable signed-16-bit little-endian
+PCM bytes rather than a Python tuple of integer sample objects. At 12 kHz, a
+15-second mono FT8 period is therefore approximately 360 kB of payload rather
+than several megabytes of Python integer/object overhead. WAV loading and
+temporary saved-WAV adapters preserve those bytes directly.
+
+This representation is backend-independent and is intended to remain suitable
+for the later live-audio checkpoint without making the application layer depend
+on WAV filenames, subprocess objects, or backend-native buffers.
