@@ -59,8 +59,8 @@ class DashboardSettingsState:
     map_zoom: MapZoomSettingsState | None
     radar_available: bool
     radar_image_enabled: bool
-    callsign_info_available: bool
-    callsign_info_enabled: bool
+    callsign_info_available: bool = False
+    callsign_info_enabled: bool = False
 
 
 class DashboardSettingsController:
