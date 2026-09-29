@@ -177,6 +177,9 @@ class SettingsPanelCommands(Protocol):
     def toggle_map_style(self) -> bool:
         ...
 
+    def toggle_callsign_info(self) -> bool:
+        ...
+
     def zoom_out(self) -> bool:
         ...
 
@@ -360,6 +363,11 @@ class SharedSpotActivePanelCommandController:
     def tertiary(self) -> bool:
         if self._browse_is_active():
             return self._browse_panel is not None and self._browse_panel.cycle_mode()
+        if self._settings_is_active():
+            return (
+                self._settings_panel is not None
+                and self._settings_panel.toggle_callsign_info()
+            )
         return False
 
     def tertiary_long(self) -> bool:
