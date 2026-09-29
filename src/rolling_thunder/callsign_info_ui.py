@@ -34,6 +34,8 @@ class CallsignInfoPresentation:
     history_heading: str
     history_lines: tuple[str, ...]
     target: GeoPoint | None
+    pin_visible: bool
+    location_note: str | None
     map_zoom: int
 
 
@@ -71,8 +73,11 @@ def build_callsign_info_presentation(
     identity.append(f"QSO Local Time: {clock.strftime('%H:%M')}")
 
     target: GeoPoint | None = None
+    pin_visible = False
+    location_note: str | None = None
     if pota_latitude is not None and pota_longitude is not None:
         target = GeoPoint(pota_latitude, pota_longitude)
+        pin_visible = True
         zoom = 7
     elif (
         profile is not None
@@ -80,6 +85,12 @@ def build_callsign_info_presentation(
         and profile.longitude is not None
     ):
         target = GeoPoint(profile.latitude, profile.longitude)
+        source = (profile.coordinate_source or "").casefold()
+        pin_visible = source not in {"state", "dxcc"}
+        if source in {"state", "dxcc"}:
+            location_note = "COUNTRY / REGION VIEW"
+        elif source in {"grid", "zip"}:
+            location_note = "APPROX LOCATION"
         zoom = callsign_map_zoom(profile.country, profile.state)
     elif profile is not None and profile.grid:
         try:
@@ -88,6 +99,8 @@ def build_callsign_info_presentation(
             zoom = 5
         else:
             target = GeoPoint(grid_latitude, grid_longitude)
+            pin_visible = True
+            location_note = "APPROX GRID CENTER"
             zoom = callsign_map_zoom(profile.country, profile.state)
     else:
         zoom = 5
@@ -134,6 +147,8 @@ def build_callsign_info_presentation(
         history_heading=history_heading,
         history_lines=history_lines,
         target=target,
+        pin_visible=pin_visible,
+        location_note=location_note,
         map_zoom=zoom,
     )
 
@@ -159,7 +174,7 @@ def callsign_map_zoom(country: str | None, state: str | None) -> int:
         return 4
     if normalized_country in {"india", "argentina", "mexico", "south africa"}:
         return 5
-    return 6
+    return 5
 
 
 class CallsignInfoOverlayWidgets:
@@ -301,7 +316,12 @@ class CallsignInfoOverlayWidgets:
             fg=_FIRST if presentation.history_heading == "FIRST CONTACT" else _ACCENT
         )
         self._history.set("\n".join(presentation.history_lines))
-        self._draw_map(map_snapshot, presentation.target)
+        self._draw_map(
+            map_snapshot,
+            presentation.target,
+            pin_visible=presentation.pin_visible,
+            location_note=presentation.location_note,
+        )
         self.frame.place(
             relx=1.0,
             rely=1.0,
@@ -317,6 +337,9 @@ class CallsignInfoOverlayWidgets:
         self,
         snapshot: LiveMapSnapshot | None,
         target: GeoPoint | None,
+        *,
+        pin_visible: bool,
+        location_note: str | None,
     ) -> None:
         canvas = self._map
         canvas.delete("all")
@@ -350,7 +373,7 @@ class CallsignInfoOverlayWidgets:
                     image=photo,
                     anchor="nw",
                 )
-            if target is not None:
+            if target is not None and pin_visible:
                 target_x, target_y = web_mercator_world_pixel(
                     target,
                     snapshot.viewport.zoom,
@@ -370,6 +393,16 @@ class CallsignInfoOverlayWidgets:
                     outline="#ffffff",
                     width=3,
                 )
+        if location_note:
+            canvas.create_text(
+                10,
+                10,
+                text=location_note,
+                fill=_BRIGHT,
+                font=("DejaVu Sans", 11, "bold"),
+                anchor="nw",
+            )
+
         visible_keys = set(self._map_photos)
         if len(self._map_photo_cache) > 64:
             for key in tuple(self._map_photo_cache):
