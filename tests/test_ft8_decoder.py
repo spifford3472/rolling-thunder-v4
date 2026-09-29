@@ -107,7 +107,7 @@ def test_malformed_backend_line_is_ignored() -> None:
 def test_partially_supported_message_is_retained_as_other() -> None:
     decoder = Ft8monDecoder("ft8mon")
     decode = decoder._parse_line(
-        "094445 -10 0.3 601 THIS IS UNSUPPORTED",
+        "094445 -10 147 0.30 601.0 THIS IS UNSUPPORTED",
         period=FT8Period(index=100),
     )
 
