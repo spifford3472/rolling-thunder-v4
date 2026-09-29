@@ -1073,3 +1073,55 @@ implementation.
 Checkpoint 2 opens no FT8 audio device, installs no decoder, opens no FT-891
 Standard Com Port, adds no PTT capability, adds no transmit-audio capability,
 performs no database migration, and cannot transmit RF.
+
+
+## Checkpoint 3 implementation boundary
+
+Checkpoint 3 introduces the first receive decoder module but still does not
+compose FT8 into production runtime behavior.
+
+The decoder-facing input is project-owned `FT8PcmPeriod`: an explicit
+`FT8Period`, sample rate, and immutable mono signed-16-bit little-endian PCM bytes. Saved WAV files
+are a benchmark/test source only; backend-specific filenames and process/native
+types are not the application decoder API.
+
+The initial adapters are `Ft8LibDecoder` for `kgoba/ft8_lib` and
+`Ft8monDecoder` for `rtmrtmrtmrtm/ft8mon`. Both normalize exclusively into
+the existing `FT8Decode`; the Checkpoint 2 requirements for SNR, DT, and
+positive audio frequency remain intact.
+
+The exact candidate revisions and benchmark ledger live in
+`docs/FT8_DECODER_BAKEOFF.md`.
+
+Checkpoint 3 remains saved/reference-WAV receive-only: no DigiRig capture,
+production worker, QSO execution, logging, PTT, CAT transmit command, transmit
+audio, waveform generation, or RF transmission is added.
+
+
+### Checkpoint 3 PCM representation
+
+The decoder boundary stores one period as immutable signed-16-bit little-endian
+PCM bytes rather than a Python tuple of integer sample objects. At 12 kHz, a
+15-second mono FT8 period is therefore approximately 360 kB of payload rather
+than several megabytes of Python integer/object overhead. WAV loading and
+temporary saved-WAV adapters preserve those bytes directly.
+
+This representation is backend-independent and is intended to remain suitable
+for the later live-audio checkpoint without making the application layer depend
+on WAV filenames, subprocess objects, or backend-native buffers.
+
+
+### Checkpoint 3 selected receive backend
+
+Checkpoint 3 selects `kgoba/ft8_lib` as the **initial** Rolling Thunder FT8
+receive backend for the next integration checkpoint. The decision is based on
+the documented Pi bake-off in `docs/FT8_DECODER_BAKEOFF.md`.
+
+The selection prioritizes bounded decode latency and resource use required by a
+future slot-driven mobile application while explicitly accepting lower measured
+recall than `ft8mon` on the small saved-WAV oracle corpus. `ft8mon` remains
+a higher-sensitivity comparison/fallback candidate; WSJT-X 3.0.2 remains an
+oracle only.
+
+The backend selection does not compose a decoder into the production runtime.
+Live DigiRig audio remains a Checkpoint 4 concern.
