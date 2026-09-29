@@ -1,5 +1,31 @@
 # Changelog
 
+## v4.2.0 — 2026-09-28
+
+Rolling Thunder v4.2.0 expands the mobile operating dashboard with improved startup,
+offline mapping, POTA awareness, browsing, and callsign intelligence.
+
+### Highlights
+
+- systemd-managed Raspberry Pi dashboard autostart with an intentional startup delay
+- nationwide POTA park catalog ingestion and refresh support
+- regional offline DAY/NIGHT map packages with automatic solar style selection
+- POTA park markers and labels integrated into the live map
+- streamlined single-press shared POTA/DX receive tuning workflow
+- Browse operating page for direct band/mode exploration
+- Forge-backed callsign information overlay using QRZ identity, Wavelog contact history,
+  and Open-Meteo current weather
+- first-contact detection plus compact previous-contact summaries
+- dedicated worldwide contact mini-map with consistent online tiles and POTA-location priority
+- in-vehicle callsign overlay typography, weather, history strip, map marker, and layout refined
+  through installed-hardware acceptance testing
+
+### Safety boundary
+
+Rolling Thunder v4.2.0 preserves the existing receive-only software control boundary.
+The release does not add PTT, MOX, CW keying, tuner, power-control, automatic-transmit,
+or unattended-transmit authority.
+
 ## v4.1.0 — 2026-09-25
 
 First official Rolling Thunder v4 release.
