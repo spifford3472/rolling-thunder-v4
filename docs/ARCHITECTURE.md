@@ -938,3 +938,24 @@ decode time and low memory/CPU footprint provide substantially more FT8 slot
 timing margin. The measured sensitivity deficit versus `ft8mon` is retained
 as an explicit architectural limitation, and `ft8mon` remains a comparison
 or fallback candidate. WSJT-X 3.0.2 is benchmark/oracle only.
+
+## Experimental v4.3 FT8 live receive composition
+
+Checkpoint 4 composes the receive-only FT8 pipeline when and only when
+`ft8.enabled` is true. The pipeline is:
+
+```text
+DigiRig ALSA capture
+  -> FT8AudioInput
+  -> FT8PcmPeriod
+  -> Ft8LibDecoder
+  -> FT8Decode
+  -> FT8CQActivityManager
+```
+
+The concrete ALSA adapter is isolated below the project-owned audio protocol.
+Runtime/UI code does not open ALSA device paths or subprocesses directly.
+Capture and decode are background-owned and use a bounded one-period handoff so
+Tkinter cannot block and decoder backlog cannot grow without bound.
+
+This checkpoint does not add an FT8 browser UI or any transmit capability.
