@@ -1,8 +1,14 @@
+import pytest
+
 """Forge callsign-intelligence aggregation tests."""
 
 from rolling_thunder.forge_callsign_info import ForgeCallsignInfoService
 from rolling_thunder.qrz_xml import QrzCallsignProfile
-from rolling_thunder.wavelog import WavelogQsoSummary, WavelogStationLocation
+from rolling_thunder.wavelog import (
+    WavelogConnectionError,
+    WavelogQsoSummary,
+    WavelogStationLocation,
+)
 
 
 class Clock:
@@ -140,3 +146,21 @@ def test_negative_qrz_result_uses_short_cache() -> None:
     service.lookup("W1AW")
 
     assert qrz.calls == ["W1AW", "W1AW"]
+
+
+
+class FailingWavelog(FakeWavelog):
+    def latest_qso(self, callsign: str) -> WavelogQsoSummary | None:
+        del callsign
+        raise WavelogConnectionError("offline")
+
+
+def test_wavelog_failure_is_not_reported_as_first_contact() -> None:
+    service = ForgeCallsignInfoService(
+        FakeQrz(profile()),
+        FailingWavelog(None),
+        None,
+    )
+
+    with pytest.raises(WavelogConnectionError):
+        service.lookup("W1AW")
