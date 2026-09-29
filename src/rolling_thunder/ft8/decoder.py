@@ -48,7 +48,7 @@ class FT8PcmPeriod:
             raise ValueError("samples must be signed 16-bit PCM values")
 
     @classmethod
-    def from_wav(cls, path: Path, *, period: FT8Period) -> "FT8PcmPeriod":
+    def from_wav(cls, path: Path, *, period: FT8Period) -> FT8PcmPeriod:
         """Load a mono 16-bit PCM WAV used by the Checkpoint 3 benchmark harness."""
         with wave.open(str(path), "rb") as source:
             if source.getnchannels() != 1:
@@ -232,9 +232,9 @@ class Ft8LibDecoder(_SavedWavSubprocessDecoder):
         raw_snr = float(match.group("snr"))
         return _normalized_decode(
             period=period,
-            snr_db=int(round(raw_snr)),
+            snr_db=round(raw_snr),
             dt_seconds=float(match.group("dt")),
-            audio_frequency_hz=int(round(float(match.group("freq")))),
+            audio_frequency_hz=round(float(match.group("freq"))),
             message=match.group("message"),
             backend="kgoba/ft8_lib",
             metadata={"raw_snr": match.group("snr")},
