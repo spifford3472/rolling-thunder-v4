@@ -626,6 +626,22 @@ The sequence is intentional. Do not collapse the GPS trust/OS privilege boundary
 Forge write/weather boundary, repeater data/UI boundary, or FT-891 capability/
 integration boundary into one large pull request.
 
+## Callsign Information Guidance
+
+Pending-callsign identity/history/weather enrichment is optional operator
+intelligence and must remain outside durable Commit. The Pi may request one
+bounded background lookup from the independent Forge callsign-info service, but
+Tkinter must only consume immutable published state.
+
+POTA park coordinates override QRZ home coordinates for the current-contact
+mini-map and target weather. QRZ profile photographs are not used by this
+feature. A missing previous Wavelog QSO is presented explicitly as FIRST CONTACT.
+
+Late responses must be generation-checked against the current pending callsign,
+and provider/network failure must produce no intrusive overlay.
+
+See `docs/CALLSIGN_INFO.md`.
+
 ## Definition of Done
 
 A feature is complete when all applicable criteria are satisfied:
