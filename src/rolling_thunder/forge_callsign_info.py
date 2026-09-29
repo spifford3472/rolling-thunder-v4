@@ -16,14 +16,14 @@ from rolling_thunder.callsign_info import (
     CallsignInfoWeather,
 )
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
-from rolling_thunder.maidenhead import maidenhead_grid_center
 from rolling_thunder.forge_weather import (
     ForgeWeatherProviderError,
     WeatherConditionToken,
     WeatherSnapshot,
 )
+from rolling_thunder.maidenhead import maidenhead_grid_center
 from rolling_thunder.qrz_xml import QrzCallsignProfile, normalize_qrz_callsign
-from rolling_thunder.wavelog import WavelogClient, WavelogQsoSummary
+from rolling_thunder.wavelog import WavelogQsoSummary, WavelogStationLocation
 
 MonotonicClock = Callable[[], float]
 UtcClock = Callable[[], datetime]
@@ -32,6 +32,14 @@ UtcClock = Callable[[], datetime]
 class QrzProfileLookup(Protocol):
     def lookup_profile(self, callsign: str) -> QrzCallsignProfile | None:
         """Return one normalized QRZ profile."""
+
+
+class WavelogHistoryLookup(Protocol):
+    def latest_qso(self, callsign: str) -> WavelogQsoSummary | None:
+        """Return the newest exact-callsign QSO."""
+
+    def list_station_locations(self) -> tuple[WavelogStationLocation, ...]:
+        """Return station-location identities used by historical QSOs."""
 
 
 class CallsignWeatherProvider(Protocol):
@@ -51,7 +59,7 @@ class ForgeCallsignInfoService:
     def __init__(
         self,
         qrz_lookup: QrzProfileLookup,
-        wavelog: WavelogClient,
+        wavelog: WavelogHistoryLookup,
         weather: CallsignWeatherProvider | None,
         *,
         profile_ttl_s: float = 60 * 24 * 60 * 60,
