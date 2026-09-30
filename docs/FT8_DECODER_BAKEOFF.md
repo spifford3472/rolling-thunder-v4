@@ -1,6 +1,6 @@
 # FT8 Decoder Bake-Off — Checkpoint 3
 
-Status: in progress  
+Status: complete  
 Date started: 2026-09-29  
 Rolling Thunder base: `3e4640c8f76b7fa69473660809f796b8c40cc57c`
 
