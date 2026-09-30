@@ -1,5 +1,6 @@
 """Deterministic tests for the Checkpoint 7 FT8 QSO coordinator."""
 
+import threading
 from datetime import timedelta
 
 from rolling_thunder.ft8.coordinator import FT8QsoCoordinator
@@ -122,3 +123,43 @@ def test_coordinator_abort_is_idempotent() -> None:
     assert coordinator.state is FT8QsoState.ABORTED
     assert coordinator.terminal_reason == "operator abort"
     assert session.cancel_count == 1
+
+
+
+class _BlockingTransmitSession:
+    def __init__(self) -> None:
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.cancelled = threading.Event()
+
+    def request(self, request: object) -> None:
+        _ = request
+        self.entered.set()
+        self.release.wait(2)
+
+    def cancel(self) -> None:
+        self.cancelled.set()
+
+
+def test_abort_reaches_transmit_cancel_while_request_is_blocked() -> None:
+    context = _context()
+    clock = FakeFT8Clock(context.authorized_utc)
+    session = _BlockingTransmitSession()
+    coordinator = FT8QsoCoordinator(session, clock)
+    coordinator.authorize(context)
+    coordinator.start_qso()
+
+    clock.advance(14)
+    tick_thread = threading.Thread(target=coordinator.tick)
+    tick_thread.start()
+    assert session.entered.wait(1)
+
+    abort_thread = threading.Thread(target=coordinator.abort)
+    abort_thread.start()
+    assert session.cancelled.wait(1)
+
+    session.release.set()
+    tick_thread.join(1)
+    abort_thread.join(1)
+
+    assert coordinator.state is FT8QsoState.ABORTED
