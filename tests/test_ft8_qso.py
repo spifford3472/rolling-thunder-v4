@@ -267,3 +267,13 @@ def test_abort_is_safe_from_every_reachable_nonterminal_state(prepare: str) -> N
 
     assert controller.state is FT8QsoState.ABORTED
     assert session.cancel_count == 1
+
+
+
+def test_missing_destination_decode_cannot_advance_qso() -> None:
+    controller, _ = _started()
+    controller.on_period(FT8Period(index=101))
+
+    controller.on_decode(_decode(102, FT8MessageKind.REPORT, destination=None))
+
+    assert controller.state is FT8QsoState.WAIT_REPORT
