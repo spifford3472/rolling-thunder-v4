@@ -198,3 +198,27 @@ def test_session_requires_current_authorized_period() -> None:
         session.request(_request(context))
 
     assert executor.qso_requests == []
+
+
+
+class FailingEncoder:
+    def encode(self, message: str, *, base_frequency_hz: int) -> FT8Waveform:
+        _ = (message, base_frequency_hz)
+        raise RuntimeError("synthetic encoder failure")
+
+
+def test_session_encoder_failure_fails_before_physical_executor() -> None:
+    context = _context()
+    clock = FakeFT8Clock(FT8Period(101).start_utc)
+    executor = RecordingFT8HardwareTransmitExecutor()
+    session = HardwareDigitalTransmitSession(
+        FT8QsoSessionAuthorization("qso-1", context),
+        FailingEncoder(),
+        executor,
+        clock,
+    )
+
+    with pytest.raises(FT8QsoTransmitError, match="encoder failed"):
+        session.request(_request(context))
+
+    assert executor.qso_requests == []
