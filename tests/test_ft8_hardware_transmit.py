@@ -132,7 +132,7 @@ def test_cancel_and_close_are_idempotent_in_hardware_free_fake() -> None:
     executor.close()
 
     assert executor.cancel_count == 2
-    assert executor.close_count == 2
+    assert executor.close_count == 1
 
 
 
