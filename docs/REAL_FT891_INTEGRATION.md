@@ -468,3 +468,20 @@ Physical owner-supervised testing on `anvilmobile` validated the narrow CAT PTT 
 - Production Rolling Thunder was stopped only long enough to release the CAT device and was restarted after the test.
 
 This validates CAT PTT as the selected Checkpoint 6 physical keying mechanism. It does not authorize automated QSO transmission. DigiRig playback and combined audio/PTT remain separate later validation phases.
+
+### Checkpoint 6C DigiRig playback validation — 2026-09-29
+
+The initial playback-only test exposed an important DR-891 behavior: mono playback through `plughw:CARD=Device,DEV=0` caused the radio to enter transmit because payload audio reached the DR-891 right-channel VOX/PTT path.
+
+The playback adapter was then changed to explicit stereo S16_LE with FT8 payload on the left channel and digital silence on the right channel. The owner-supervised retest passed:
+
+- FT8 payload: left channel only.
+- Right channel: all-zero PCM.
+- No CAT PTT command was sent.
+- No Standard-port, RTS, or DTR control was used.
+- The FT-891 TX indicator remained off for the entire finite playback.
+- No RF transmission occurred.
+- The `aplay` process exited normally.
+- The DigiRig playback PCM device was released after playback.
+
+This validates left-only stereo playback as the Checkpoint 6 audio mechanism. Combined CAT PTT plus playback remains a separate Phase 6D validation and is not yet authorized for automated QSO operation.
