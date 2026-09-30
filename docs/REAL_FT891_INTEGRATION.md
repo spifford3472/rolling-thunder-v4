@@ -510,3 +510,20 @@ For subsequent combined RF tests, the owner-side harness must:
 - continue to treat every CAT meter value as the FT-891 documented raw 0-255 scale rather than watts, SWR ratio, or calibrated ALC units;
 - keep the 17-second software key-down bound and unconditional CAT TX-off cleanup.
 
+### Checkpoint 6D full combined FT8 dummy-load test — 2026-09-29
+
+The first full owner-supervised combined test passed the transmit-control path at 14.074000 MHz in DATA mode with the FT-891 power menu set to 5 W:
+
+- CAT PTT asserted and the radio visibly transmitted.
+- The validated left-only FT8 waveform played through the DigiRig.
+- Right-channel digital silence did not trigger the DR-891 VOX/PTT path independently.
+- The executor completed the full slot and returned the radio to receive automatically.
+- No aplay process remained and the DigiRig playback device was released.
+- Production service restarted successfully.
+- 30 CAT meter samples were captured during the slot. Sustained raw POWER was about 31-35, sustained raw ALC about 115-128, and raw SWR reported 255 during the modulated portion, returning to 0 when RF fell away.
+- The owner identified the test load as a homemade dummy load with known high SWR; the normal antenna does not exhibit that high SWR. The raw SWR=255 result therefore reflects the test load and is not treated as a transmit-path fault.
+
+Interpretation notes:
+- Yaesu CAT meter outputs are raw relative values rather than calibrated engineering units.
+- The sustained ALC raw level is significantly above the no-audio baseline and should be investigated before antenna transmission; DATA DATA GAIN and/or playback amplitude may need reduction.
+
