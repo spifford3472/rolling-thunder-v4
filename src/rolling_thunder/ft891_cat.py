@@ -217,6 +217,16 @@ def parse_operating_context_reply(reply: bytes) -> Ft891OperatingContext:
     }.get(context_code, Ft891OperatingContext.UNKNOWN)
 
 
+def encode_cat_transmit_on() -> bytes:
+    """Return the FT-891 CAT command for CAT-controlled transmit."""
+    return b"TX1;"
+
+
+def encode_cat_transmit_off() -> bytes:
+    """Return the FT-891 CAT command that returns the radio to receive."""
+    return b"TX0;"
+
+
 def encode_read_frequency() -> bytes:
     """Return the CAT command that reads VFO-A frequency."""
     return b"FA;"
