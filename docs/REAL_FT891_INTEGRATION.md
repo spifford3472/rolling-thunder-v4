@@ -2,8 +2,11 @@
 
 ## Scope
 
-This document covers the installed Yaesu FT-891 integration and the safe
-receive-only control path used by Rolling Thunder.
+This document covers the installed Yaesu FT-891 integration. The normal
+Rolling Thunder radio path remains receive-only. Rolling Thunder v4.3
+Checkpoint 6 separately permits a disabled-by-default, owner-initiated,
+physically supervised FT8 hardware-test capability while that boundary is
+being validated.
 
 The implementation establishes and validates:
 
@@ -32,14 +35,16 @@ The two interfaces have different safety roles:
 | Enhanced Com Port | `if00-port0` | `/dev/ttyUSB2` | CAT state and approved receive control |
 | Standard Com Port | `if01-port0` | `/dev/ttyUSB3` | PTT, CW keying, and digital TX control |
 
-Rolling Thunder must use only the Enhanced Com Port:
+The normal Rolling Thunder `hardware.radio_device` path must use only the Enhanced Com Port:
 
 ```text
 /dev/serial/by-id/usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_011F42E9-if00-port0
 ```
 
-The Standard Com Port must not be configured as `hardware.radio_device` and must
-remain unopened.
+The Standard Com Port must not be configured as `hardware.radio_device`.
+Checkpoint 6 may inspect it non-destructively and may use it only if a later
+owner-approved physical test proves that it is the single safest FT8 PTT
+mechanism. No RTS/DTR line may be manipulated speculatively.
 
 The transient `/dev/ttyUSB*` numbers are diagnostic observations only. They may
 change after reconnects or other USB enumeration changes; configuration must use
@@ -427,3 +432,24 @@ Operator behavior:
 This intentionally handles stale spot data: if another operator takes over the
 frequency before the provider refreshes, the operator can use Voice to replace
 the automatically preloaded callsign before Commit.
+
+
+## v4.3 Checkpoint 6 experimental FT8 transmit boundary
+
+The generic `Radio` interface and ordinary receive-tuning path remain
+receive-only. Checkpoint 6 does not add PTT or generic transmit methods to
+`Radio`.
+
+Physical FT8 testing must use a separate explicit owner-test executor that:
+
+- cannot be injected as the `DigitalTransmitSession` consumed by
+  `FT8QsoController`;
+- serializes any Enhanced-CAT PTT command through the existing `Ft891Radio`
+  ownership/locking path if CAT PTT is selected;
+- uses exactly one verified PTT mechanism;
+- accepts only completely prepared bounded PCM;
+- guarantees release in normal, cancel, timeout, exception, and close paths;
+- remains disabled and uncomposed in the production runtime during Checkpoint 6.
+
+The selected PTT mechanism and measured lead/tail/watchdog timings must be added
+here after physical acceptance.
