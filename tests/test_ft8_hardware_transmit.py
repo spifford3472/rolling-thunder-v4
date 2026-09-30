@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import threading
 from datetime import UTC, datetime
 
 import pytest
@@ -394,3 +395,77 @@ def test_qso_request_rejects_context_frequency_mismatch() -> None:
             expected_radio_frequency_hz=7_074_000,
             expected_radio_mode="DATA",
         )
+
+
+
+def test_qso_executor_rejects_disconnected_radio_before_keying() -> None:
+    state = RadioState(
+        connection_state=RadioConnectionState.DISCONNECTED,
+        updated_at=datetime(2026, 9, 30, tzinfo=UTC),
+    )
+    radio = _FakeRadio(state)
+    audio = _FakeAudioOutput()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, audio)
+
+    with pytest.raises(RuntimeError, match="connected radio"):
+        executor.execute_qso(_qso_hardware_request())
+
+    assert radio.ptt.events == ["release"]
+    assert audio.waveforms == []
+
+
+class _FailingKeyPtt(_FakePtt):
+    def key(self) -> None:
+        self.events.append("key")
+        raise RuntimeError("synthetic CAT PTT failure")
+
+
+def test_qso_executor_releases_after_ptt_key_failure() -> None:
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = _FailingKeyPtt()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, _FakeAudioOutput())
+
+    with pytest.raises(RuntimeError, match="synthetic CAT PTT failure"):
+        executor.execute_qso(_qso_hardware_request())
+
+    assert radio.ptt.events == ["key", "release"]
+
+
+class _BlockingAudioOutput:
+    def __init__(self) -> None:
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def play(self, waveform: FT8Waveform) -> None:
+        _ = waveform
+        self.entered.set()
+        self.release.wait(2)
+
+
+def test_qso_executor_prevents_overlap_and_cancel_forces_rx_while_playing() -> None:
+    radio = _FakeRadio(_connected_state())
+    audio = _BlockingAudioOutput()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, audio)
+    errors: list[Exception] = []
+
+    def run_first() -> None:
+        try:
+            executor.execute_qso(_qso_hardware_request())
+        except Exception as exc:  # pragma: no cover - assertion captures unexpected failure
+            errors.append(exc)
+
+    worker = threading.Thread(target=run_first)
+    worker.start()
+    assert audio.entered.wait(1)
+
+    with pytest.raises(RuntimeError, match="already active"):
+        executor.execute_qso(_qso_hardware_request())
+
+    executor.cancel_qso()
+    assert radio.ptt.events[:2] == ["key", "cancel"]
+
+    audio.release.set()
+    worker.join(1)
+
+    assert errors == []
+    assert radio.ptt.events[-1] == "release"
