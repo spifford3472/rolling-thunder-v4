@@ -110,13 +110,13 @@ def test_ft8_lib_adapter_returns_immutable_in_memory_pcm(
             target.setnchannels(1)
             target.setsampwidth(2)
             target.setframerate(FT8_SAMPLE_RATE_HZ)
-            target.writeframes(b"\\x00\\x00" * FT8_SLOT_SAMPLES)
+            target.writeframes(b"\x00\x00" * FT8_SLOT_SAMPLES)
         return subprocess.CompletedProcess(
             args=argv,
             returncode=0,
             stdout=(
-                "Packed data: 01 02 03 04 05 06 07 08 09 0a\\n"
-                f"FSK tones: {'0' * FT8_CHANNEL_SYMBOLS}\\n"
+                "Packed data: 01 02 03 04 05 06 07 08 09 0a\n"
+                f"FSK tones: {'0' * FT8_CHANNEL_SYMBOLS}\n"
             ),
             stderr="",
         )
