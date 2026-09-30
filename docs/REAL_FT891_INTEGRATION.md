@@ -538,3 +538,14 @@ Observed modulation-period raw CAT meter values:
 
 This shows that reducing DATA DATA GAIN substantially lowers ALC without materially reducing output power at the configured 5 W level. Menu 16-14 was manually changed to 25 for this test and remains a reversible radio-side setting.
 
+### Checkpoint 6D ALC optimization — DATA DATA GAIN 20
+
+With FT-891 menu 16-14 DATA DATA GAIN reduced to 20, the owner-supervised 5 W dummy-load FT8 test completed successfully.
+
+Observed modulation-period raw CAT meter values:
+- ALC: approximately 2-9 raw during sustained FT8 modulation.
+- POWER: approximately 29-35 raw during sustained modulation, essentially unchanged from the gain-25 and gain-50 tests.
+- SWR: 255 raw on the known high-SWR homemade dummy load, returning to 0 when modulation ended.
+
+This is the best observed ALC result so far: compared with gain 50 (roughly 115-128 raw) and gain 25 (roughly 24-35 raw), gain 20 minimizes ALC while preserving the configured 5 W output behavior. Menu 16-14 is currently set to 20 and remains a reversible radio-side setting.
+
