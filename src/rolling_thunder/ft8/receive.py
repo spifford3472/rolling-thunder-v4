@@ -65,6 +65,7 @@ class FT8ReceiveService:
         self._activity_manager = activity_manager
         self._reconnect_delay_s = reconnect_delay_s
         self._observer = observer
+        self._observer_lock = threading.Lock()
         self._periods: queue.Queue[FT8PcmPeriod] = queue.Queue(maxsize=1)
         self._stop_event = threading.Event()
         self._capture_thread: threading.Thread | None = None
@@ -81,6 +82,11 @@ class FT8ReceiveService:
     @property
     def is_running(self) -> bool:
         return self._capture_thread is not None
+
+    def set_observer(self, observer: FT8ReceiveObserver | None) -> None:
+        """Attach or detach the single active-QSO decode observer."""
+        with self._observer_lock:
+            self._observer = observer
 
     def start(self) -> None:
         if self._capture_thread is not None:
@@ -177,12 +183,14 @@ class FT8ReceiveService:
                 )
 
     def _notify_decodes(self, decodes: tuple[FT8Decode, ...]) -> None:
-        observer = self._observer
+        with self._observer_lock:
+            observer = self._observer
         if observer is not None:
             observer.on_decodes(decodes)
 
     def _notify_receive_error(self, detail: str) -> None:
-        observer = self._observer
+        with self._observer_lock:
+            observer = self._observer
         if observer is not None:
             observer.on_receive_error(detail)
 
