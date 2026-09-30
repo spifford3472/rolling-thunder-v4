@@ -24,8 +24,8 @@ FT8_OCCUPIED_DURATION_S = FT8_CHANNEL_SYMBOLS * FT8_SYMBOL_DURATION_S
 FT8_SLOT_SAMPLES = 15 * FT8_SAMPLE_RATE_HZ
 FT8_PCM_SAMPLE_WIDTH_BYTES = 2
 
-_PACKED_RE = re.compile(r"^Packed data:\\s+((?:[0-9a-fA-F]{2}\\s+){9}[0-9a-fA-F]{2})\\s*$")
-_TONES_RE = re.compile(r"^FSK tones:\\s+([0-7]{79})\\s*$")
+_PACKED_RE = re.compile(r"^Packed data:\s+((?:[0-9a-fA-F]{2}\s+){9}[0-9a-fA-F]{2})\s*$")
+_TONES_RE = re.compile(r"^FSK tones:\s+([0-7]{79})\s*$")
 
 
 class FT8EncoderError(RuntimeError):
