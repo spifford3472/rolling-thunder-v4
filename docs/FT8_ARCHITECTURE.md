@@ -83,14 +83,9 @@ Enhanced CAT remains owned by the existing FT-891 adapter/arbitration path.
 CP2105 interface 01 has been observed as `/dev/ttyUSB3` and is presently
 unused by Rolling Thunder.
 
-Existing documentation associates this interface with PTT/CW/digital-transmit
-control, but v4.3 Checkpoint 1 does not authorize opening it. Whether future FT8
-PTT should use this interface, an Enhanced-CAT command, or another mechanism is
-an experimental question that must be answered with a later parked hardware
-test before transmit implementation.
-
-No design may assume RTS, DTR, or another Standard-port line is PTT without
-physical verification.
+Checkpoint 6 resolved the PTT experiment in favor of the Enhanced CAT
+`TX1;`/`TX0;` path. The Standard Com Port remains unused by Rolling Thunder.
+Checkpoint 7 must not use RTS, DTR, GPIO, HID, or another PTT mechanism.
 
 ### DigiRig C-Media audio
 
@@ -982,7 +977,7 @@ and must never be repointed to an experimental FT8 worktree.
 2. Add future FT8 transmit authority through a separate narrow capability.
 3. Keep UI free of serial/audio/timing/transmit ownership.
 4. Use stable DigiRig ALSA card/device naming, not numeric ALSA card indexes.
-5. Treat the Standard Com Port and C-Media HID PTT behavior as unverified.
+5. Keep the Standard Com Port, RTS/DTR, GPIO, and HID outside the selected CP7 PTT path; use only the CP6-verified Enhanced CAT capability.
 6. Do not create a second Enhanced-CAT owner.
 7. Use project-owned decode/QSO models so decoder backends remain replaceable.
 8. Use WSJT-X as the reference oracle, not the embedded architectural core.
