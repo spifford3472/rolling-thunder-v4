@@ -18,8 +18,11 @@ from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
     FT8HardwareTestAuthorization,
     FT8HardwareTestRequest,
+    FT8QsoHardwareTransmitAuthorization,
+    FT8QsoHardwareTransmitRequest,
     RecordingFT8HardwareTransmitExecutor,
 )
+from rolling_thunder.ft8.domain import FT8Period, FT8PeriodParity, FT8QsoContext
 from rolling_thunder.ft8.transmit import RecordingDigitalTransmitSession
 
 
@@ -322,5 +325,72 @@ def test_hardware_test_request_rejects_unsafe_keydown_bounds(value: float) -> No
             waveform=_waveform(),
             maximum_key_down_s=value,
             expected_radio_frequency_hz=14_074_000,
+            expected_radio_mode="DATA",
+        )
+
+
+
+def _qso_context() -> FT8QsoContext:
+    period = FT8Period(100)
+    return FT8QsoContext(
+        local_callsign="KI5VNB",
+        remote_callsign="K1ABC",
+        target_audio_frequency_hz=1500,
+        radio_frequency_hz=14_074_000,
+        radio_band="20m",
+        radio_mode="DATA",
+        local_grid="EM79xm",
+        tx_parity=FT8PeriodParity.ODD,
+        authorized_period=period,
+        authorized_utc=period.start_utc,
+        signal_report_db=-10,
+    )
+
+
+def _qso_hardware_request() -> FT8QsoHardwareTransmitRequest:
+    context = _qso_context()
+    return FT8QsoHardwareTransmitRequest(
+        authorization=FT8QsoHardwareTransmitAuthorization(
+            authorization_id="qso-1",
+            authorized_at_utc=context.authorized_utc,
+            context=context,
+        ),
+        waveform=_waveform(),
+        maximum_key_down_s=14.5,
+        expected_radio_frequency_hz=context.radio_frequency_hz,
+        expected_radio_mode=context.radio_mode,
+    )
+
+
+def test_qso_request_uses_same_bounded_executor_without_test_authorization() -> None:
+    radio = _FakeRadio(_connected_state())
+    audio = _FakeAudioOutput()
+    watchdogs = _WatchdogFactory()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio,
+        audio,
+        watchdog_factory=watchdogs,
+    )
+
+    executor.execute_qso(_qso_hardware_request())
+
+    assert radio.ptt.events == ["key", "release"]
+    assert audio.waveforms == [_qso_hardware_request().waveform]
+    assert watchdogs.timers[0].delay_s == 14.5
+
+
+def test_qso_request_rejects_context_frequency_mismatch() -> None:
+    context = _qso_context()
+
+    with pytest.raises(ValueError, match="frequency must match"):
+        FT8QsoHardwareTransmitRequest(
+            authorization=FT8QsoHardwareTransmitAuthorization(
+                authorization_id="qso-1",
+                authorized_at_utc=context.authorized_utc,
+                context=context,
+            ),
+            waveform=_waveform(),
+            maximum_key_down_s=14.5,
+            expected_radio_frequency_hz=7_074_000,
             expected_radio_mode="DATA",
         )
