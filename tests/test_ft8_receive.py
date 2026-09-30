@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import FT8AudioInputError
-from rolling_thunder.ft8.decoder import FT8PcmPeriod
+from rolling_thunder.ft8.decoder import FT8DecoderError, FT8PcmPeriod
 from rolling_thunder.ft8.domain import FT8Decode, FT8MessageKind, FT8Period
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveStatus
 
@@ -62,6 +62,17 @@ class RecordingDecoder:
                 grid="FN31",
             ),
         )
+
+
+class FailOnceDecoder:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def decode(self, pcm: FT8PcmPeriod) -> tuple[FT8Decode, ...]:
+        self.calls += 1
+        if self.calls == 1:
+            raise FT8DecoderError("synthetic decoder failure")
+        return ()
 
 
 class SlowDecoder:
@@ -167,3 +178,23 @@ def test_receive_service_reports_unavailable_audio_as_degraded() -> None:
 
 def test_test_period_reference_is_utc_aware() -> None:
     assert datetime(2026, 9, 29, 23, 30, tzinfo=UTC).utcoffset() is not None
+
+
+def test_receive_service_recovers_after_transient_decoder_failure() -> None:
+    audio = FakeAudioInput([_period(300), _period(301)])
+    decoder = FailOnceDecoder()
+    service = FT8ReceiveService(
+        audio,
+        decoder,
+        FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+    )
+
+    service.start()
+    _wait_until(lambda: decoder.calls >= 2)
+    _wait_until(lambda: service.latest_state.status is FT8ReceiveStatus.RUNNING)
+    state = service.latest_state
+    service.stop()
+
+    assert state.last_error is None
+    assert state.periods_captured >= 2
