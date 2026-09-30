@@ -1201,3 +1201,14 @@ complete FT8 period, and decoded four on-air messages.
 Shutdown after recovery released the DigiRig capture device and left no orphaned
 `arecord` process. This validates startup-unavailable and reconnect recovery
 without a machine-wide audio reconfiguration.
+
+
+### Checkpoint 4 disabled-state acceptance
+
+The application was physically exercised with `ft8.enabled: false`. In that
+configuration `ApplicationRuntime` composed no `FT8ReceiveService`,
+reported no FT8 receive state, started and stopped normally, opened no
+`arecord` process, and left the DigiRig capture device unused.
+
+This confirms the Checkpoint 4 feature gate prevents FT8 audio, decoder, and
+receive-worker resource acquisition when disabled.
