@@ -350,6 +350,7 @@ def test_runtime_ft8_receive_only_creates_no_transmit_authority() -> None:
     )
 
     assert runtime.ft8_receive is not None
+    assert runtime.ft8_panel is not None
     assert runtime.ft8_qso is None
     assert runtime.ft8_hardware_transmit is None
 
@@ -369,5 +370,6 @@ def test_runtime_ft8_transmit_requires_explicit_gate() -> None:
     )
 
     assert runtime.ft8_receive is not None
+    assert runtime.ft8_panel is not None
     assert runtime.ft8_qso is not None
     assert runtime.ft8_hardware_transmit is executor
