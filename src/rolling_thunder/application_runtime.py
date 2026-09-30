@@ -31,8 +31,8 @@ from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
 from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
-from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
 from rolling_thunder.ft8.coordinator import FT8QsoResult
+from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
 from rolling_thunder.ft8.hardware_transmit import (
