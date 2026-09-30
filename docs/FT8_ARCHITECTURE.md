@@ -1,6 +1,6 @@
 # Rolling Thunder v4.3 Experimental FT8 Architecture
 
-Status: Checkpoints 1–6 implemented; Checkpoint 7 controlled automated-QSO execution in deterministic integration  
+Status: Checkpoints 1–6 implemented; Checkpoint 7 controlled automated-QSO execution in deterministic integration
 Date: 2026-09-29  
 Implementation state: receive, decoder, hardware-independent QSO state machine, offline encoder/waveform, and the bounded FT-891/DigiRig physical executor are implemented. Checkpoint 7 adds a separate QSO authorization/session/coordinator path but remains blocked from live RF until deterministic acceptance and explicit owner approval.
 
