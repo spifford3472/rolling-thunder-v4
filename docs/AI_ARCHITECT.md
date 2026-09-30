@@ -103,7 +103,7 @@ merely because it is interesting.
 When priorities conflict, prefer this order:
 
 1. Operator and driving safety
-2. No software transmission authority
+2. No general or unattended software transmission authority
 3. Preservation of contact data
 4. Reliable offline operation
 5. Predictable and visible failure behavior
@@ -204,7 +204,7 @@ Avoid:
 - untested hardware-dependent application logic
 - direct ESP32-to-radio authority
 - voice-originated unattended tuning
-- PTT, MOX, keying, or transmit commands
+- general-purpose PTT, MOX, keying, or transmit commands outside explicitly approved bounded capabilities
 - broad rewrites when a small vertical slice will work
 
 Use the simplest design that preserves the required safety and architectural
@@ -399,22 +399,42 @@ first integration pull request.
 
 These are permanent constraints:
 
-- no software PTT
-- no MOX
-- no CW keying
-- no voice keying
+- no general-purpose software PTT or MOX capability
+- no CW keying or voice keying
 - no unattended transmit
-- no automatic transmit
 - no voice command may directly tune or transmit
-- no ESP32 event may name a raw CAT command
+- no ESP32 event may name a raw CAT command or directly authorize transmit
+- no network request may directly authorize transmit
 - physical controls use the same application-command and confirmation boundaries
   as the UI
 - operator-confirmed receive/repeater configuration must use typed application
   services and the typed `Radio` boundary
 - a receive-selection press routes through the typed application service and never issues raw CAT from UI/control code
-- radio state in the current scope remains `transmitting=False`
+- the generic `Radio` contract remains receive-side and does not gain PTT, MOX,
+  keying, or generic transmit methods
 
-A proposal that violates these rules must be rejected or redesigned.
+### v4.3 experimental FT8 exception
+
+Checkpoint 6 may introduce one disabled-by-default, owner-initiated, physically
+supervised, tightly bounded FT8 hardware-test transmit capability. This is a
+narrow architecture exception for proving the FT-891 + DigiRig execution
+boundary; it is not general software transmission authority.
+
+During Checkpoint 6:
+
+- only an explicit owner test harness may invoke the physical executor;
+- `FT8QsoController` and its existing `DigitalTransmitSession` remain
+  hardware-independent and must not be wired to RF;
+- CQ activity, UI callbacks, voice, ESP32 controls, Forge, network requests, and
+  logging have no physical transmit authority;
+- exactly one verified PTT mechanism may be active;
+- every key-down operation is bounded by cancellation, guaranteed release, and
+  a maximum watchdog;
+- disabling FT8 must create no playback, PTT, or transmit-executor resource.
+
+Any broader automated FT8 QSO authority requires a later explicit architecture
+checkpoint and owner approval. A proposal outside this narrow exception must be
+rejected or redesigned.
 
 The existing FT-891 cross-band limitation is also part of the safety contract:
 regular-memory CAT recall is best-effort context only and must not be described
