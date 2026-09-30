@@ -36,6 +36,7 @@ from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
     FT8QsoHardwareTransmitExecutor,
 )
+from rolling_thunder.ft8.domain import FT8QsoContext
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.ft8.session import (
@@ -498,12 +499,8 @@ class ApplicationRuntime:
                 )
 
             def build_ft8_session(
-                context: object,
+                context: FT8QsoContext,
             ) -> HardwareDigitalTransmitSession:
-                from rolling_thunder.ft8.domain import FT8QsoContext
-
-                if not isinstance(context, FT8QsoContext):
-                    raise TypeError("FT8 session factory requires FT8QsoContext")
                 assert resolved_ft8_executor is not None
                 return HardwareDigitalTransmitSession(
                     FT8QsoSessionAuthorization(uuid4().hex, context),
