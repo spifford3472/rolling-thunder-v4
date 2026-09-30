@@ -70,5 +70,29 @@ PYTHONPATH=src \
     -m pytest -q tests/test_ft8_encoder.py
 ```
 
-Checkpoint 5 still requires final repeated-run latency and process-memory
-measurement before its performance acceptance is closed.
+## Repeated-run performance and memory
+
+A final 50-iteration Raspberry Pi run encoded `K1ABC KI5VNB R-10` at a 1500 Hz
+audio base frequency. All 50 generated PCM waveforms had the same SHA-256:
+
+`b0fcd4f7a5163f14c7a8ef4277d9f6a11fb7889f29a9651cd0b3c42556371461`
+
+Observed encode + waveform latency:
+
+- minimum: 10.905 ms
+- median: 12.573 ms
+- mean: 13.465 ms
+- p95: 19.252 ms
+- maximum: 21.003 ms
+
+Observed output remained 180,000 samples / 360,000 PCM bytes on every iteration.
+
+Approximate maximum resident set size reported by Python `resource.getrusage` was
+30,036 KiB for both the Python process and child-process accounting in this run.
+That figure is suitable as a coarse Raspberry Pi process-memory observation, not
+as a precise per-component allocation measurement.
+
+The opt-in pinned reference-vector test also passed all 21 encoder tests in
+0.84 seconds, and `git diff --check` passed.
+
+Checkpoint 5 performance acceptance is complete.
