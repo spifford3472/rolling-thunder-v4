@@ -2,7 +2,14 @@
 
 ## v4.3.0 — experimental development
 
-### FT8 Checkpoint 5 — in progress
+### FT8 Checkpoint 6 — in progress
+
+- begins the controlled FT-891 / DigiRig hardware-transmit boundary
+- keeps physical transmit disconnected from `FT8QsoController` and live CQ activity
+- preserves disabled-by-default behavior and the protected v4.2.0 rollback point
+- requires one physically verified PTT mechanism, bounded audio playback, guaranteed release, and watchdog protection before acceptance
+
+### FT8 Checkpoint 5 — complete
 
 - reconciles the CQ-answer QSO sequence before physical transmit work
 - freezes the outbound FT8 signal report in the authorized QSO context

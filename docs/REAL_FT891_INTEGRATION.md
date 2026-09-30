@@ -2,8 +2,11 @@
 
 ## Scope
 
-This document covers the installed Yaesu FT-891 integration and the safe
-receive-only control path used by Rolling Thunder.
+This document covers the installed Yaesu FT-891 integration. The normal
+Rolling Thunder radio path remains receive-only. Rolling Thunder v4.3
+Checkpoint 6 separately permits a disabled-by-default, owner-initiated,
+physically supervised FT8 hardware-test capability while that boundary is
+being validated.
 
 The implementation establishes and validates:
 
@@ -32,14 +35,16 @@ The two interfaces have different safety roles:
 | Enhanced Com Port | `if00-port0` | `/dev/ttyUSB2` | CAT state and approved receive control |
 | Standard Com Port | `if01-port0` | `/dev/ttyUSB3` | PTT, CW keying, and digital TX control |
 
-Rolling Thunder must use only the Enhanced Com Port:
+The normal Rolling Thunder `hardware.radio_device` path must use only the Enhanced Com Port:
 
 ```text
 /dev/serial/by-id/usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_011F42E9-if00-port0
 ```
 
-The Standard Com Port must not be configured as `hardware.radio_device` and must
-remain unopened.
+The Standard Com Port must not be configured as `hardware.radio_device`.
+Checkpoint 6 may inspect it non-destructively and may use it only if a later
+owner-approved physical test proves that it is the single safest FT8 PTT
+mechanism. No RTS/DTR line may be manipulated speculatively.
 
 The transient `/dev/ttyUSB*` numbers are diagnostic observations only. They may
 change after reconnects or other USB enumeration changes; configuration must use
@@ -427,3 +432,120 @@ Operator behavior:
 This intentionally handles stale spot data: if another operator takes over the
 frequency before the provider refreshes, the operator can use Voice to replace
 the automatically preloaded callsign before Commit.
+
+
+## v4.3 Checkpoint 6 experimental FT8 transmit boundary
+
+The generic `Radio` interface and ordinary receive-tuning path remain
+receive-only. Checkpoint 6 does not add PTT or generic transmit methods to
+`Radio`.
+
+Physical FT8 testing must use a separate explicit owner-test executor that:
+
+- cannot be injected as the `DigitalTransmitSession` consumed by
+  `FT8QsoController`;
+- serializes any Enhanced-CAT PTT command through the existing `Ft891Radio`
+  ownership/locking path if CAT PTT is selected;
+- uses exactly one verified PTT mechanism;
+- accepts only completely prepared bounded PCM;
+- guarantees release in normal, cancel, timeout, exception, and close paths;
+- remains disabled and uncomposed in the production runtime during Checkpoint 6.
+
+The selected PTT mechanism and measured lead/tail/watchdog timings must be added
+here after physical acceptance.
+
+### Checkpoint 6B CAT PTT hardware validation — 2026-09-29
+
+Physical owner-supervised testing on `anvilmobile` validated the narrow CAT PTT path against the FT-891 with a dummy load connected.
+
+- Enhanced CAT interface 00 remained the only PTT control path.
+- Stable device: `/dev/serial/by-id/usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_011F42E9-if00-port0`.
+- CAT rate: 38400 bps.
+- `TX1;` visibly placed the FT-891 control head into transmit.
+- The bounded test then sent `TX0;` and completed without leaving the radio keyed.
+- No DigiRig audio was played.
+- Standard interface 01, RTS, and DTR were not used.
+- Production Rolling Thunder was stopped only long enough to release the CAT device and was restarted after the test.
+
+This validates CAT PTT as the selected Checkpoint 6 physical keying mechanism. It does not authorize automated QSO transmission. DigiRig playback and combined audio/PTT remain separate later validation phases.
+
+### Checkpoint 6C DigiRig playback validation — 2026-09-29
+
+The initial playback-only test exposed an important DR-891 behavior: mono playback through `plughw:CARD=Device,DEV=0` caused the radio to enter transmit because payload audio reached the DR-891 right-channel VOX/PTT path.
+
+The playback adapter was then changed to explicit stereo S16_LE with FT8 payload on the left channel and digital silence on the right channel. The owner-supervised retest passed:
+
+- FT8 payload: left channel only.
+- Right channel: all-zero PCM.
+- No CAT PTT command was sent.
+- No Standard-port, RTS, or DTR control was used.
+- The FT-891 TX indicator remained off for the entire finite playback.
+- No RF transmission occurred.
+- The `aplay` process exited normally.
+- The DigiRig playback PCM device was released after playback.
+
+This validates left-only stereo playback as the Checkpoint 6 audio mechanism. Combined CAT PTT plus playback remains a separate Phase 6D validation and is not yet authorized for automated QSO operation.
+
+### Checkpoint 6D DATA-mode CAT PTT + meter isolation — 2026-09-29
+
+Owner-supervised dummy-load isolation test passed the transmit-control and CAT-meter portions before FT8 audio was added:
+
+- Radio verified at 14.074 MHz and temporarily changed from USB to DATA.
+- CAT PTT asserted and the FT-891 visibly entered transmit for about three seconds.
+- No DigiRig audio was played.
+- Repeated CAT meter reads succeeded while keyed.
+- After the initial transition sample, ALC stabilized at raw 002, POWER at raw 001, and SWR at raw 000.
+- The first ALC read immediately after keying returned raw 252 and is treated as a transition sample, not a steady-state reading.
+- CAT PTT release returned the radio to receive.
+- An immediate attempt to restore USB reported DATA on verification. This is consistent with a post-PTT command/readback timing race and must be handled with a short receive-settle delay before mode restoration in the owner test harness.
+- Production service was restarted successfully.
+
+This test validates that CAT PTT and RM4/RM5/RM6 sampling can coexist on the serialized Enhanced CAT path. FT8 audio was not involved in this isolation test.
+
+### Checkpoint 6D harness refinements — 2026-09-29
+
+For subsequent combined RF tests, the owner-side harness must:
+- wait 0.5 seconds after CAT PTT release before restoring the pre-test mode, to avoid the observed immediate post-TX mode readback race;
+- retain all raw meter samples in the log, but exclude the first two samples after key-up from steady-state ALC/power/SWR summaries;
+- continue to treat every CAT meter value as the FT-891 documented raw 0-255 scale rather than watts, SWR ratio, or calibrated ALC units;
+- keep the 17-second software key-down bound and unconditional CAT TX-off cleanup.
+
+### Checkpoint 6D full combined FT8 dummy-load test — 2026-09-29
+
+The first full owner-supervised combined test passed the transmit-control path at 14.074000 MHz in DATA mode with the FT-891 power menu set to 5 W:
+
+- CAT PTT asserted and the radio visibly transmitted.
+- The validated left-only FT8 waveform played through the DigiRig.
+- Right-channel digital silence did not trigger the DR-891 VOX/PTT path independently.
+- The executor completed the full slot and returned the radio to receive automatically.
+- No aplay process remained and the DigiRig playback device was released.
+- Production service restarted successfully.
+- 30 CAT meter samples were captured during the slot. Sustained raw POWER was about 31-35, sustained raw ALC about 115-128, and raw SWR reported 255 during the modulated portion, returning to 0 when RF fell away.
+- The owner identified the test load as a homemade dummy load with known high SWR; the normal antenna does not exhibit that high SWR. The raw SWR=255 result therefore reflects the test load and is not treated as a transmit-path fault.
+
+Interpretation notes:
+- Yaesu CAT meter outputs are raw relative values rather than calibrated engineering units.
+- The sustained ALC raw level is significantly above the no-audio baseline and should be investigated before antenna transmission; DATA DATA GAIN and/or playback amplitude may need reduction.
+
+### Checkpoint 6D ALC optimization — DATA DATA GAIN 25
+
+With FT-891 menu 16-14 DATA DATA GAIN reduced from 50 to 25, the owner-supervised 5 W dummy-load FT8 test completed successfully.
+
+Observed modulation-period raw CAT meter values:
+- ALC: approximately 24-35 raw during sustained FT8 modulation (versus roughly 115-128 at gain 50).
+- POWER: approximately 29-35 raw during sustained modulation, essentially unchanged from the gain-50 test.
+- SWR: 255 raw on the known high-SWR homemade dummy load, returning to 0 when modulation ended.
+
+This shows that reducing DATA DATA GAIN substantially lowers ALC without materially reducing output power at the configured 5 W level. Menu 16-14 was manually changed to 25 for this test and remains a reversible radio-side setting.
+
+### Checkpoint 6D ALC optimization — DATA DATA GAIN 20
+
+With FT-891 menu 16-14 DATA DATA GAIN reduced to 20, the owner-supervised 5 W dummy-load FT8 test completed successfully.
+
+Observed modulation-period raw CAT meter values:
+- ALC: approximately 2-9 raw during sustained FT8 modulation.
+- POWER: approximately 29-35 raw during sustained modulation, essentially unchanged from the gain-25 and gain-50 tests.
+- SWR: 255 raw on the known high-SWR homemade dummy load, returning to 0 when modulation ended.
+
+This is the best observed ALC result so far: compared with gain 50 (roughly 115-128 raw) and gain 25 (roughly 24-35 raw), gain 20 minimizes ALC while preserving the configured 5 W output behavior. Menu 16-14 is currently set to 20 and remains a reversible radio-side setting.
+

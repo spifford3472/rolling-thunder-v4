@@ -19,6 +19,7 @@ _REPEATER_SHIFT_REPLY_PATTERN: Final = re.compile(rb"OS0([0-2]);")
 _6M_REPEATER_OFFSET_REPLY_PATTERN: Final = re.compile(rb"EX0905([0-9]{4});")
 _CTCSS_TONE_REPLY_PATTERN: Final = re.compile(rb"CN00([0-9]{3});")
 _CTCSS_BEHAVIOR_REPLY_PATTERN: Final = re.compile(rb"CT0([0-3]);")
+_METER_REPLY_PATTERN: Final = re.compile(rb"RM([456])([0-9]{3});")
 
 _MODE_TO_CAT: Final[dict[RadioMode, bytes]] = {
     RadioMode.LSB: b"1",
@@ -215,6 +216,50 @@ def parse_operating_context_reply(reply: bytes) -> Ft891OperatingContext:
         b"2": Ft891OperatingContext.MEMORY_TUNE,
         b"5": Ft891OperatingContext.PMS,
     }.get(context_code, Ft891OperatingContext.UNKNOWN)
+
+
+def encode_cat_transmit_on() -> bytes:
+    """Return the FT-891 CAT command for CAT-controlled transmit."""
+    return b"TX1;"
+
+
+def encode_cat_transmit_off() -> bytes:
+    """Return the FT-891 CAT command that returns the radio to receive."""
+    return b"TX0;"
+
+
+def encode_read_meter(selector: int) -> bytes:
+    """Return one FT-891 RM meter read command for ALC, power, or SWR."""
+    if selector not in {4, 5, 6}:
+        raise ValueError("FT-891 meter selector must be 4 (ALC), 5 (PO), or 6 (SWR)")
+    return f"RM{selector};".encode("ascii")
+
+
+def parse_meter_reply(reply: bytes, *, expected_selector: int) -> int:
+    """Parse one strict FT-891 RM reply and return the raw 0-255 value."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    if expected_selector not in {4, 5, 6}:
+        raise ValueError("expected_selector must be 4, 5, or 6")
+
+    match = _METER_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 meter reply: {reply!r}; expected RMx###;."
+        )
+
+    selector = int(match.group(1))
+    value = int(match.group(2))
+    if selector != expected_selector:
+        raise Ft891CatError(
+            "FT-891 meter reply selector mismatch: "
+            f"expected {expected_selector}, got {selector}."
+        )
+    if not 0 <= value <= 255:
+        raise Ft891CatError(
+            f"FT-891 meter reply is outside the documented 0-255 range: {value}."
+        )
+    return value
 
 
 def encode_read_frequency() -> bytes:

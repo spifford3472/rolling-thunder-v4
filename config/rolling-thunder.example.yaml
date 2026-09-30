@@ -176,8 +176,9 @@ physical_controls:
     encoder-switch-long: back
 
 ft8:
-  # Experimental v4.3 native FT8 receive pipeline. Disabled means no FT8
-  # capture device, decoder process, or receive worker is created.
+  # Experimental v4.3 native FT8 subsystem. Disabled means no FT8 capture
+  # device, decoder process, receive worker, playback device, PTT capability,
+  # physical transmit executor, or transmit worker is created.
   enabled: false
   receive:
     # DigiRig DR-891 C-Media capture. ALSA plug performs 44.1/48 kHz -> 12 kHz.

@@ -1,8 +1,8 @@
 # Rolling Thunder v4.3 Experimental FT8 Architecture
 
-Status: Checkpoint 1 architecture/research baseline  
+Status: Checkpoints 1–5 implemented; Checkpoint 6 controlled hardware-transmit work in progress  
 Date: 2026-09-29  
-Implementation state: design only; no FT8 runtime, audio capture, transmit audio, or software PTT is introduced by this document.
+Implementation state: receive, decoder, hardware-independent QSO state machine, and offline encoder/waveform are implemented. Checkpoint 6 may add only the separately bounded owner-test physical transmit capability described below.
 
 ## Purpose
 
@@ -152,8 +152,9 @@ FT8 QSO controller/state machine
         |
         +------> DigitalTransmitSession
         |            |
-        |            +----> narrow PTT backend
-        |            +----> transmit-audio output
+        |            +----> hardware-free logical requests in Checkpoint 6
+        |
+        +------> [NO physical RF connection in Checkpoint 6]
         |
         +------> completed-QSO logging adapter
                      |
@@ -248,8 +249,6 @@ AUTHORIZED
 WAIT_TX_CALL
 TX_CALL
 WAIT_REPORT
-TX_REPORT
-WAIT_R_REPORT
 TX_R_REPORT
 WAIT_73
 TX_73
@@ -518,37 +517,38 @@ advance deterministically.
 FT8 must not add `ptt_on()`, `ptt_off()`, raw CAT access, or generic transmit
 methods to `Radio`.
 
-Use a separate capability such as:
+Checkpoint 2 already introduced `DigitalTransmitSession` as the
+hardware-independent logical sink used by `FT8QsoController`. During Checkpoint
+6 that interface remains hardware-free. No physical implementation may satisfy
+or be injected as that QSO-controller dependency.
+
+Checkpoint 6 instead uses a structurally separate owner-test capability, for
+example:
 
 ```text
-DigitalTransmitSession
-    begin_authorized_slot(request)
-    abort()
-    close()
+Explicit owner test harness
+    -> FT8HardwareTransmitExecutor
+         -> one verified narrow PTT backend
+         -> FT8AudioOutput
 ```
 
-with a backend such as:
+The concrete API can change, but it must not expose the same `request()`
+interface consumed by `FT8QsoController`.
 
-```text
-FT8TransmitBackend
-```
+A hardware-test request must be immutable and bounded and contain only the
+execution data needed for one explicitly authorized test, such as:
 
-The concrete API can change, but the authority rules cannot.
+- completely prepared immutable PCM/waveform
+- expected radio/device context
+- maximum duration/watchdog bound
+- explicit owner-test authorization/token
+- optional slot/timing identity when the test is slot-bound
 
-The transmit request must be immutable and bounded:
+The physical executor must not choose callsigns, construct a QSO state, select a
+station, retry, hop bands, log a contact, or continue a live exchange.
 
-- one already-authorized remote callsign
-- one encoded FT8 message
-- one audio frequency
-- one UTC period/slot
-- one maximum duration
-- one local QSO context/token
-
-The backend must not choose callsigns, construct the next QSO state, select a
-new station, hop bands, or keep PTT asserted beyond the requested slot.
-
-The QSO controller owns policy. The backend owns only execution of one bounded
-authorized transmission.
+Checkpoint 6 proves only this execution boundary. Connecting the QSO controller
+to physical RF requires a later explicit architecture checkpoint.
 
 ## CAT and PTT ownership
 
