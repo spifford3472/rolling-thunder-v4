@@ -60,3 +60,15 @@ class FakeFT8Clock:
             raise ValueError("fake FT8 clock cannot move backward")
         self._now_utc += timedelta(seconds=seconds)
         self._monotonic_seconds += seconds
+
+    def advance_utc_only(self, seconds: float) -> None:
+        """Advance wall-clock UTC only to simulate a system-time anomaly."""
+        if seconds < 0:
+            raise ValueError("fake FT8 UTC advance cannot be negative")
+        self._now_utc += timedelta(seconds=seconds)
+
+    def advance_monotonic_only(self, seconds: float) -> None:
+        """Advance monotonic time only to simulate clock divergence."""
+        if seconds < 0:
+            raise ValueError("fake FT8 monotonic advance cannot be negative")
+        self._monotonic_seconds += seconds
