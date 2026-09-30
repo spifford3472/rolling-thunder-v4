@@ -311,11 +311,16 @@ class RecordingFT8HardwareTransmitExecutor:
         self.cancel_count = 0
         self.qso_cancel_count = 0
         self.close_count = 0
+        self._closed = False
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
+        if self._closed:
+            raise RuntimeError("FT8 hardware transmit executor is closed")
         self.requests.append(request)
 
     def execute_qso(self, request: FT8QsoHardwareTransmitRequest) -> None:
+        if self._closed:
+            raise RuntimeError("FT8 hardware transmit executor is closed")
         self.qso_requests.append(request)
 
     def cancel_test(self) -> None:
@@ -325,6 +330,9 @@ class RecordingFT8HardwareTransmitExecutor:
         self.qso_cancel_count += 1
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         self.close_count += 1
 
 
