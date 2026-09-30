@@ -222,3 +222,21 @@ def test_session_encoder_failure_fails_before_physical_executor() -> None:
         session.request(_request(context))
 
     assert executor.qso_requests == []
+
+
+
+def test_session_rejects_silent_waveform_before_physical_executor() -> None:
+    context = _context()
+    clock = FakeFT8Clock(FT8Period(101).start_utc)
+    executor = RecordingFT8HardwareTransmitExecutor()
+    session = HardwareDigitalTransmitSession(
+        FT8QsoSessionAuthorization("qso-1", context),
+        FakeEncoder(_waveform(active_end_s=0.0)),
+        executor,
+        clock,
+    )
+
+    with pytest.raises(FT8QsoTransmitError, match="no transmit-bearing samples"):
+        session.request(_request(context))
+
+    assert executor.qso_requests == []
