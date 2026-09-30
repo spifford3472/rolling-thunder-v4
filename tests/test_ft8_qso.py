@@ -26,6 +26,7 @@ def _context() -> FT8QsoContext:
         tx_parity=FT8PeriodParity.ODD,
         authorized_period=FT8Period(index=100),
         authorized_utc=datetime.fromtimestamp(1501, tz=UTC),
+        signal_report_db=-10,
         latitude=39.5,
         longitude=-84.1,
         location_label="mobile",
@@ -69,17 +70,13 @@ def test_synthetic_exchange_completes_without_starting_second_qso() -> None:
     assert session.requests[-1].kind is FT8TransmitKind.CALL
 
     controller.on_decode(_decode(102, FT8MessageKind.REPORT))
-    assert controller.state is FT8QsoState.TX_REPORT
+    assert controller.state is FT8QsoState.TX_R_REPORT
     assert controller.attempt_count == 0
     controller.on_period(FT8Period(index=103))
-    assert session.requests[-1].kind is FT8TransmitKind.REPORT
-
-    controller.on_decode(_decode(104, FT8MessageKind.R_REPORT))
-    controller.on_period(FT8Period(index=105))
     assert session.requests[-1].kind is FT8TransmitKind.R_REPORT
 
-    controller.on_decode(_decode(106, FT8MessageKind.ACK_73))
-    controller.on_period(FT8Period(index=107))
+    controller.on_decode(_decode(104, FT8MessageKind.ACK_73))
+    controller.on_period(FT8Period(index=105))
 
     assert controller.state is FT8QsoState.COMPLETED
     assert session.requests[-1].kind is FT8TransmitKind.SEVENTY_THREE
@@ -117,7 +114,7 @@ def test_valid_advancement_resets_retry_budget_for_next_message() -> None:
     assert controller.attempt_count == 0
     controller.on_period(FT8Period(index=105))
 
-    assert session.requests[-1].kind is FT8TransmitKind.REPORT
+    assert session.requests[-1].kind is FT8TransmitKind.R_REPORT
     assert session.requests[-1].attempt == 1
 
 
@@ -131,9 +128,9 @@ def test_unrelated_stale_duplicate_and_wrong_parity_decodes_are_ignored() -> Non
     assert controller.state is FT8QsoState.WAIT_REPORT
 
     controller.on_decode(_decode(102, FT8MessageKind.REPORT))
-    assert controller.state is FT8QsoState.TX_REPORT
+    assert controller.state is FT8QsoState.TX_R_REPORT
     controller.on_decode(_decode(102, FT8MessageKind.R_REPORT))
-    assert controller.state is FT8QsoState.TX_REPORT
+    assert controller.state is FT8QsoState.TX_R_REPORT
 
 
 def test_manual_abort_is_idempotent_and_prevents_future_requests() -> None:
