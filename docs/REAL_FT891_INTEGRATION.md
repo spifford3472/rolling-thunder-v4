@@ -485,3 +485,19 @@ The playback adapter was then changed to explicit stereo S16_LE with FT8 payload
 - The DigiRig playback PCM device was released after playback.
 
 This validates left-only stereo playback as the Checkpoint 6 audio mechanism. Combined CAT PTT plus playback remains a separate Phase 6D validation and is not yet authorized for automated QSO operation.
+
+### Checkpoint 6D DATA-mode CAT PTT + meter isolation — 2026-09-29
+
+Owner-supervised dummy-load isolation test passed the transmit-control and CAT-meter portions before FT8 audio was added:
+
+- Radio verified at 14.074 MHz and temporarily changed from USB to DATA.
+- CAT PTT asserted and the FT-891 visibly entered transmit for about three seconds.
+- No DigiRig audio was played.
+- Repeated CAT meter reads succeeded while keyed.
+- After the initial transition sample, ALC stabilized at raw 002, POWER at raw 001, and SWR at raw 000.
+- The first ALC read immediately after keying returned raw 252 and is treated as a transition sample, not a steady-state reading.
+- CAT PTT release returned the radio to receive.
+- An immediate attempt to restore USB reported DATA on verification. This is consistent with a post-PTT command/readback timing race and must be handled with a short receive-settle delay before mode restoration in the owner test harness.
+- Production service was restarted successfully.
+
+This test validates that CAT PTT and RM4/RM5/RM6 sampling can coexist on the serialized Enhanced CAT path. FT8 audio was not involved in this isolation test.
