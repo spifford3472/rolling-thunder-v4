@@ -31,6 +31,7 @@ from rolling_thunder.ft891_cat import (
     encode_read_ctcss_tone,
     encode_read_frequency,
     encode_read_information,
+    encode_read_meter,
     encode_read_memory_channel,
     encode_read_mode,
     encode_read_repeater_shift,
@@ -47,6 +48,7 @@ from rolling_thunder.ft891_cat import (
     parse_ctcss_tone_reply,
     parse_frequency_reply,
     parse_memory_channel_reply,
+    parse_meter_reply,
     parse_mode_reply,
     parse_operating_context_reply,
     parse_repeater_shift_reply,
@@ -158,6 +160,24 @@ class Ft891Radio:
                 self._transport.command(encode_cat_transmit_off())
             finally:
                 self._cp6_cat_ptt_asserted = False
+
+    def read_cp6_tx_meters(self) -> tuple[int, int, int]:
+        """Read raw ALC, power, and SWR meters for the supervised CP6 test."""
+        with self._operation_lock:
+            self._require_connected()
+            alc = parse_meter_reply(
+                self._transport.query(encode_read_meter(4)),
+                expected_selector=4,
+            )
+            power = parse_meter_reply(
+                self._transport.query(encode_read_meter(5)),
+                expected_selector=5,
+            )
+            swr = parse_meter_reply(
+                self._transport.query(encode_read_meter(6)),
+                expected_selector=6,
+            )
+            return alc, power, swr
 
     def refresh_state(self) -> RadioState:
         """Read current frequency and mode, detecting CAT device loss."""
