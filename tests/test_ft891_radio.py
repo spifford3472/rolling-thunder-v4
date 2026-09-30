@@ -27,6 +27,7 @@ class FakeTransport:
         }
         self.open_error: RadioConnectionError | None = None
         self.query_errors: dict[bytes, RadioConnectionError] = {}
+        self.command_errors: dict[bytes, RadioConnectionError] = {}
 
     def open(self) -> None:
         if self.open_error is not None:
@@ -45,6 +46,9 @@ class FakeTransport:
 
     def command(self, command: bytes) -> None:
         self.commands.append(command)
+        error = self.command_errors.get(command)
+        if error is not None:
+            raise error
 
 
 def fixed_clock() -> datetime:
@@ -308,3 +312,82 @@ def test_connect_failure_closes_transport_and_records_error() -> None:
     assert transport.opened is False
     assert state.connection_state is RadioConnectionState.ERROR
     assert state.last_error == "device unavailable"
+
+
+
+def test_cp6_cat_ptt_keys_and_releases_through_existing_radio_owner() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+
+    capability.key()
+    capability.release()
+
+    assert transport.commands[-2:] == [b"TX1;", b"TX0;"]
+
+
+def test_cp6_cat_ptt_key_is_idempotent_while_asserted() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+
+    capability.key()
+    capability.key()
+    capability.release()
+
+    assert transport.commands[-2:] == [b"TX1;", b"TX0;"]
+
+
+def test_cp6_cat_ptt_repeated_release_sends_receive_command() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+
+    capability.release()
+    capability.release()
+
+    assert transport.commands[-2:] == [b"TX0;", b"TX0;"]
+
+
+def test_cp6_cat_ptt_failed_key_attempts_immediate_release() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.command_errors[b"TX1;"] = RadioConnectionError("CAT write failed")
+    capability = radio.create_cp6_cat_ptt_capability()
+
+    with pytest.raises(RadioConnectionError, match="CAT write failed"):
+        capability.key()
+
+    assert transport.commands[-2:] == [b"TX1;", b"TX0;"]
+
+
+def test_cp6_cat_ptt_cancel_and_close_release_receive() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+
+    capability.key()
+    capability.cancel()
+    capability.key()
+    capability.close()
+    capability.close()
+
+    assert transport.commands[-4:] == [b"TX1;", b"TX0;", b"TX1;", b"TX0;"]
+
+
+def test_disconnect_releases_cp6_cat_ptt_before_closing_transport() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+    capability.key()
+
+    radio.disconnect()
+
+    assert transport.commands[-2:] == [b"TX1;", b"TX0;"]
+    assert transport.opened is False
