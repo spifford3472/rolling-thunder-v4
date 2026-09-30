@@ -6,7 +6,13 @@ import pytest
 
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.decoder import FT8PcmPeriod
-from rolling_thunder.ft8.domain import FT8Period, FT8PeriodParity, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8Decode,
+    FT8Period,
+    FT8PeriodParity,
+    FT8QsoContext,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.receive import FT8ReceiveService
 from rolling_thunder.ft8.timing import FakeFT8Clock
@@ -25,7 +31,8 @@ class EmptyAudioInput:
 
 
 class EmptyDecoder:
-    def decode(self, pcm: FT8PcmPeriod) -> tuple[()]:
+    def decode(self, pcm: FT8PcmPeriod) -> tuple[FT8Decode, ...]:
+        _ = pcm
         return ()
 
 
