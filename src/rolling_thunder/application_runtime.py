@@ -40,6 +40,7 @@ from rolling_thunder.ft8.hardware_transmit import (
     FT8QsoHardwareTransmitExecutor,
 )
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
+from rolling_thunder.ft8.panel import FT8PanelController
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.ft8.session import (
     FT8QsoSessionAuthorization,
@@ -179,6 +180,7 @@ class ApplicationRuntime:
     ft8_receive: FT8ReceiveService | None = None
     ft8_authorization: FT8QsoAuthorizationService | None = None
     ft8_qso: FT8OperatorQsoService | None = None
+    ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
 
@@ -630,7 +632,7 @@ class ApplicationRuntime:
                 executor=radar_executor,
             )
 
-        return cls(
+        runtime = cls(
             radio=radio,
             polling=RadioPollingService(
                 radio,
@@ -670,6 +672,17 @@ class ApplicationRuntime:
             ft8_qso=ft8_qso,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
+        if ft8_receive is not None:
+            runtime.ft8_panel = FT8PanelController(
+                receive_state=lambda: runtime.latest_ft8_receive_state,
+                qso_state=lambda: runtime.latest_ft8_qso_state,
+                qso_context=lambda: runtime.latest_ft8_qso_context,
+                qso_result=lambda: runtime.latest_ft8_qso_result,
+                authorize=runtime.authorize_ft8_qso,
+                abort=runtime.abort_ft8_qso,
+                return_to_browser=runtime.return_ft8_to_browser,
+            )
+        return runtime
 
     @property
     def latest_ft8_receive_state(self) -> FT8ReceiveState | None:
