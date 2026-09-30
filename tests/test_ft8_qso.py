@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
 from rolling_thunder.ft8.domain import (
     FT8Decode,
     FT8MessageKind,
@@ -161,3 +163,107 @@ def test_error_is_terminal_and_explicit_reset_clears_authorization() -> None:
     assert controller.state is FT8QsoState.IDLE
     assert controller.context is None
     assert controller.attempt_count == 0
+
+
+
+def test_wrong_destination_decode_cannot_advance_qso() -> None:
+    controller, _ = _started()
+    controller.on_period(FT8Period(index=101))
+
+    controller.on_decode(
+        _decode(102, FT8MessageKind.REPORT, destination="W9WRONG")
+    )
+
+    assert controller.state is FT8QsoState.WAIT_REPORT
+
+
+@pytest.mark.parametrize("final_text", ["RRR", "RR73", "73"])
+def test_all_supported_final_ack_variants_complete_same_exchange(final_text: str) -> None:
+    controller, session = _started()
+    controller.on_period(FT8Period(index=101))
+    controller.on_decode(_decode(102, FT8MessageKind.REPORT))
+    controller.on_period(FT8Period(index=103))
+
+    final = _decode(104, FT8MessageKind.ACK_73)
+    final = FT8Decode(
+        period=final.period,
+        snr_db=final.snr_db,
+        dt_seconds=final.dt_seconds,
+        audio_frequency_hz=final.audio_frequency_hz,
+        raw_message=f"KI5VNB K1ABC {final_text}",
+        kind=FT8MessageKind.ACK_73,
+        source_callsign=final.source_callsign,
+        destination_callsign=final.destination_callsign,
+    )
+    controller.on_decode(final)
+    controller.on_period(FT8Period(index=105))
+
+    assert controller.state is FT8QsoState.COMPLETED
+    assert session.requests[-1].kind is FT8TransmitKind.SEVENTY_THREE
+
+
+def test_r_report_phase_has_its_own_six_attempt_retry_budget() -> None:
+    controller, session = _started()
+    controller.on_period(FT8Period(index=101))
+    controller.on_decode(_decode(102, FT8MessageKind.REPORT))
+
+    for period_index in (103, 105, 107, 109, 111, 113):
+        controller.on_period(FT8Period(index=period_index))
+
+    r_reports = [
+        request
+        for request in session.requests
+        if request.kind is FT8TransmitKind.R_REPORT
+    ]
+    assert len(r_reports) == 6
+    assert [request.attempt for request in r_reports] == [1, 2, 3, 4, 5, 6]
+
+    controller.on_period(FT8Period(index=115))
+
+    assert controller.state is FT8QsoState.RETRY_EXHAUSTED
+    assert session.cancel_count == 1
+
+
+def test_out_of_order_final_ack_before_report_advancement_is_ignored() -> None:
+    controller, _ = _started()
+    controller.on_period(FT8Period(index=101))
+
+    controller.on_decode(_decode(102, FT8MessageKind.ACK_73))
+
+    assert controller.state is FT8QsoState.WAIT_REPORT
+
+
+@pytest.mark.parametrize(
+    "prepare",
+    [
+        "authorized",
+        "wait_tx_call",
+        "wait_report",
+        "tx_r_report",
+        "wait_73",
+        "tx_73",
+    ],
+)
+def test_abort_is_safe_from_every_reachable_nonterminal_state(prepare: str) -> None:
+    session = RecordingDigitalTransmitSession()
+    controller = FT8QsoController(session)
+    controller.authorize(_context())
+
+    if prepare == "authorized":
+        pass
+    else:
+        controller.start()
+        if prepare in {"wait_report", "tx_r_report", "wait_73", "tx_73"}:
+            controller.on_period(FT8Period(index=101))
+        if prepare in {"tx_r_report", "wait_73", "tx_73"}:
+            controller.on_decode(_decode(102, FT8MessageKind.REPORT))
+        if prepare in {"wait_73", "tx_73"}:
+            controller.on_period(FT8Period(index=103))
+        if prepare == "tx_73":
+            controller.on_decode(_decode(104, FT8MessageKind.ACK_73))
+
+    controller.abort()
+    controller.abort()
+
+    assert controller.state is FT8QsoState.ABORTED
+    assert session.cancel_count == 1
