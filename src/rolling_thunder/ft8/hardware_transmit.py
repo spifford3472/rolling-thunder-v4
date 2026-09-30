@@ -1,9 +1,9 @@
-"""Checkpoint 6 boundary for explicit, supervised FT8 hardware tests.
+"""Bounded FT8 hardware transmit executor.
 
-The physical executor contract is intentionally distinct from
-`DigitalTransmitSession`, which remains the hardware-independent sink used by
-`FT8QsoController`. Nothing in this module grants the QSO controller, UI,
-voice, network, or spot activity transmit authority.
+Checkpoint 6 introduced a supervised owner-test request. Checkpoint 7 retains
+that API and adds a separate QSO-authorized request. Both use the same verified
+CAT/PTT, watchdog, radio-verification, and left-only audio mechanics. Neither
+API is a general-purpose application PTT surface.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Protocol
 
 from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.ft8.audio_output import FT8AudioOutput
+from rolling_thunder.ft8.domain import FT8QsoContext
 from rolling_thunder.ft8.encoder import FT8_SAMPLE_RATE_HZ, FT8Waveform
 
 
@@ -36,6 +37,25 @@ class FT8HardwareTestAuthorization:
 
 
 @dataclass(frozen=True, slots=True)
+class FT8QsoHardwareTransmitAuthorization:
+    """One physical-transmit authority tied to one frozen QSO context."""
+
+    authorization_id: str
+    authorized_at_utc: datetime
+    context: FT8QsoContext
+
+    def __post_init__(self) -> None:
+        if not self.authorization_id.strip():
+            raise ValueError("authorization_id must not be blank")
+        if self.authorized_at_utc.tzinfo is None or self.authorized_at_utc.utcoffset() is None:
+            raise ValueError("authorized_at_utc must be timezone-aware")
+        normalized = self.authorized_at_utc.astimezone(UTC)
+        object.__setattr__(self, "authorized_at_utc", normalized)
+        if normalized != self.context.authorized_utc:
+            raise ValueError("QSO hardware authorization must match the frozen QSO context")
+
+
+@dataclass(frozen=True, slots=True)
 class FT8HardwareTestRequest:
     """One bounded, already-prepared, explicitly authorized hardware test."""
 
@@ -46,22 +66,42 @@ class FT8HardwareTestRequest:
     expected_radio_mode: str
 
     def __post_init__(self) -> None:
-        if not math.isfinite(self.maximum_key_down_s) or self.maximum_key_down_s <= 0:
-            raise ValueError("maximum_key_down_s must be finite and positive")
-        if self.maximum_key_down_s > 20.0:
-            raise ValueError("maximum_key_down_s must not exceed 20 seconds")
-        if self.expected_radio_frequency_hz <= 0:
-            raise ValueError("expected_radio_frequency_hz must be positive")
-        if not self.expected_radio_mode.strip():
-            raise ValueError("expected_radio_mode must not be blank")
-        if self.waveform.sample_rate_hz != FT8_SAMPLE_RATE_HZ:
-            raise ValueError("hardware-test waveform must use the FT8 12000 Hz sample rate")
-        if not self.waveform.pcm_s16le:
-            raise ValueError("hardware-test waveform PCM must not be empty")
+        _validate_physical_request(
+            waveform=self.waveform,
+            maximum_key_down_s=self.maximum_key_down_s,
+            expected_radio_frequency_hz=self.expected_radio_frequency_hz,
+            expected_radio_mode=self.expected_radio_mode,
+            label="hardware-test",
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FT8QsoHardwareTransmitRequest:
+    """One bounded physical transmit belonging to one authorized QSO."""
+
+    authorization: FT8QsoHardwareTransmitAuthorization
+    waveform: FT8Waveform
+    maximum_key_down_s: float
+    expected_radio_frequency_hz: int
+    expected_radio_mode: str
+
+    def __post_init__(self) -> None:
+        _validate_physical_request(
+            waveform=self.waveform,
+            maximum_key_down_s=self.maximum_key_down_s,
+            expected_radio_frequency_hz=self.expected_radio_frequency_hz,
+            expected_radio_mode=self.expected_radio_mode,
+            label="QSO",
+        )
+        context = self.authorization.context
+        if self.expected_radio_frequency_hz != context.radio_frequency_hz:
+            raise ValueError("QSO hardware frequency must match the frozen QSO context")
+        if self.expected_radio_mode.strip().upper() != context.radio_mode.strip().upper():
+            raise ValueError("QSO hardware mode must match the frozen QSO context")
 
 
 class FT8HardwareTransmitExecutor(Protocol):
-    """Separate owner-test capability; never the QSO controller session port."""
+    """Owner-test physical capability retained from Checkpoint 6."""
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
         """Execute one already-authorized supervised hardware test."""
@@ -76,8 +116,20 @@ class FT8HardwareTransmitExecutor(Protocol):
         ...
 
 
+class FT8QsoHardwareTransmitExecutor(Protocol):
+    """Physical capability available only to one CP7 QSO transmit session."""
+
+    def execute_qso(self, request: FT8QsoHardwareTransmitRequest) -> None:
+        """Execute one already-authorized QSO waveform."""
+        ...
+
+    def cancel_qso(self) -> None:
+        """Force receive and revoke the active QSO transmit."""
+        ...
+
+
 class FT8TestPtt(Protocol):
-    """Narrow PTT capability used only by the CP6 owner-test executor."""
+    """Narrow PTT capability used only by the bounded FT8 executor."""
 
     def key(self) -> None:
         """Assert the selected physical PTT mechanism."""
@@ -97,14 +149,14 @@ class FT8TestPtt(Protocol):
 
 
 class FT8TestRadio(Protocol):
-    """Minimum concrete-radio surface needed by the CP6 owner test."""
+    """Minimum concrete-radio surface needed by the bounded FT8 executor."""
 
     def refresh_state(self) -> RadioState:
         """Read the current physical frequency and mode."""
         ...
 
     def create_cp6_cat_ptt_capability(self) -> FT8TestPtt:
-        """Return the already-validated CP6 CAT PTT capability."""
+        """Return the already-validated Enhanced-CAT FT8 PTT capability."""
         ...
 
 
@@ -130,7 +182,7 @@ def _threading_watchdog(delay_s: float, callback: Callable[[], None]) -> Watchdo
 
 
 class BoundedFT8HardwareTransmitExecutor:
-    """Supervised CP6 executor combining verified CAT PTT and left-only audio."""
+    """Combine verified Enhanced-CAT PTT and left-only DigiRig playback."""
 
     def __init__(
         self,
@@ -148,23 +200,69 @@ class BoundedFT8HardwareTransmitExecutor:
         self._closed = False
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
+        self._execute(
+            waveform=request.waveform,
+            maximum_key_down_s=request.maximum_key_down_s,
+            expected_radio_frequency_hz=request.expected_radio_frequency_hz,
+            expected_radio_mode=request.expected_radio_mode,
+            label="hardware test",
+        )
+
+    def execute_qso(self, request: FT8QsoHardwareTransmitRequest) -> None:
+        self._execute(
+            waveform=request.waveform,
+            maximum_key_down_s=request.maximum_key_down_s,
+            expected_radio_frequency_hz=request.expected_radio_frequency_hz,
+            expected_radio_mode=request.expected_radio_mode,
+            label="QSO transmit",
+        )
+
+    def cancel_test(self) -> None:
+        """Force receive even when no owner test is currently active."""
+        self._ptt.cancel()
+
+    def cancel_qso(self) -> None:
+        """Force receive even when no QSO transmit is currently active."""
+        self._ptt.cancel()
+
+    def close(self) -> None:
+        """Force receive and permanently close the executor."""
         with self._lock:
             if self._closed:
-                raise RuntimeError("FT8 hardware test executor is closed")
+                return
+            self._closed = True
+        self._ptt.close()
+
+    def _execute(
+        self,
+        *,
+        waveform: FT8Waveform,
+        maximum_key_down_s: float,
+        expected_radio_frequency_hz: int,
+        expected_radio_mode: str,
+        label: str,
+    ) -> None:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("FT8 hardware transmit executor is closed")
             if self._active:
-                raise RuntimeError("FT8 hardware test is already active")
+                raise RuntimeError("FT8 hardware transmit is already active")
             self._active = True
 
         watchdog: WatchdogTimer | None = None
         try:
-            self._verify_radio(request)
+            self._verify_radio(
+                expected_radio_frequency_hz=expected_radio_frequency_hz,
+                expected_radio_mode=expected_radio_mode,
+                label=label,
+            )
             self._ptt.key()
             watchdog = self._watchdog_factory(
-                request.maximum_key_down_s,
+                maximum_key_down_s,
                 self._ptt.release,
             )
             watchdog.start()
-            self._audio_output.play(request.waveform)
+            self._audio_output.play(waveform)
         finally:
             if watchdog is not None:
                 watchdog.cancel()
@@ -174,52 +272,75 @@ class BoundedFT8HardwareTransmitExecutor:
                 with self._lock:
                     self._active = False
 
-    def cancel_test(self) -> None:
-        """Force receive even when no test is currently active."""
-        self._ptt.cancel()
-
-    def close(self) -> None:
-        """Force receive and permanently close the owner-test executor."""
-        with self._lock:
-            if self._closed:
-                return
-            self._closed = True
-        self._ptt.close()
-
-    def _verify_radio(self, request: FT8HardwareTestRequest) -> None:
+    def _verify_radio(
+        self,
+        *,
+        expected_radio_frequency_hz: int,
+        expected_radio_mode: str,
+        label: str,
+    ) -> None:
         state = self._radio.refresh_state()
         if state.connection_state is not RadioConnectionState.CONNECTED:
-            raise RuntimeError("FT8 hardware test requires a connected radio")
+            raise RuntimeError(f"FT8 {label} requires a connected radio")
         if state.transmitting:
-            raise RuntimeError("FT8 hardware test requires the radio to be in receive")
-        if state.frequency is None or state.frequency.hz != request.expected_radio_frequency_hz:
+            raise RuntimeError(f"FT8 {label} requires the radio to be in receive")
+        if state.frequency is None or state.frequency.hz != expected_radio_frequency_hz:
             actual = None if state.frequency is None else state.frequency.hz
             raise RuntimeError(
-                "FT8 hardware test frequency mismatch: "
-                f"expected {request.expected_radio_frequency_hz} Hz, got {actual}"
+                f"FT8 {label} frequency mismatch: "
+                f"expected {expected_radio_frequency_hz} Hz, got {actual}"
             )
-        expected_mode = request.expected_radio_mode.strip().upper()
+        expected_mode = expected_radio_mode.strip().upper()
         actual_mode = None if state.mode is None else state.mode.value
         if actual_mode != expected_mode:
             raise RuntimeError(
-                "FT8 hardware test mode mismatch: "
-                f"expected {expected_mode}, got {actual_mode}"
+                f"FT8 {label} mode mismatch: expected {expected_mode}, got {actual_mode}"
             )
 
 
 class RecordingFT8HardwareTransmitExecutor:
-    """Hardware-free fake for Checkpoint 6 architecture and application tests."""
+    """Hardware-free fake supporting both CP6 and CP7 physical boundaries."""
 
     def __init__(self) -> None:
         self.requests: list[FT8HardwareTestRequest] = []
+        self.qso_requests: list[FT8QsoHardwareTransmitRequest] = []
         self.cancel_count = 0
+        self.qso_cancel_count = 0
         self.close_count = 0
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
         self.requests.append(request)
 
+    def execute_qso(self, request: FT8QsoHardwareTransmitRequest) -> None:
+        self.qso_requests.append(request)
+
     def cancel_test(self) -> None:
         self.cancel_count += 1
 
+    def cancel_qso(self) -> None:
+        self.qso_cancel_count += 1
+
     def close(self) -> None:
         self.close_count += 1
+
+
+def _validate_physical_request(
+    *,
+    waveform: FT8Waveform,
+    maximum_key_down_s: float,
+    expected_radio_frequency_hz: int,
+    expected_radio_mode: str,
+    label: str,
+) -> None:
+    if not math.isfinite(maximum_key_down_s) or maximum_key_down_s <= 0:
+        raise ValueError("maximum_key_down_s must be finite and positive")
+    if maximum_key_down_s > 20.0:
+        raise ValueError("maximum_key_down_s must not exceed 20 seconds")
+    if expected_radio_frequency_hz <= 0:
+        raise ValueError("expected_radio_frequency_hz must be positive")
+    if not expected_radio_mode.strip():
+        raise ValueError("expected_radio_mode must not be blank")
+    if waveform.sample_rate_hz != FT8_SAMPLE_RATE_HZ:
+        raise ValueError(f"{label} waveform must use the FT8 12000 Hz sample rate")
+    if not waveform.pcm_s16le:
+        raise ValueError(f"{label} waveform PCM must not be empty")
