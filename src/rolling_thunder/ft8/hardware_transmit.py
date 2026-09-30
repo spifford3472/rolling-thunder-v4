@@ -127,6 +127,10 @@ class FT8QsoHardwareTransmitExecutor(Protocol):
         """Force receive and revoke the active QSO transmit."""
         ...
 
+    def close(self) -> None:
+        """Force receive and permanently close the physical executor."""
+        ...
+
 
 class FT8TestPtt(Protocol):
     """Narrow PTT capability used only by the bounded FT8 executor."""
