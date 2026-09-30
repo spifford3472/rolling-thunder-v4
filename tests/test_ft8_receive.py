@@ -221,3 +221,55 @@ def test_receive_service_recovers_after_transient_decoder_failure() -> None:
 
     assert state.last_error is None
     assert state.periods_captured >= 2
+
+
+class RecordingObserver:
+    def __init__(self) -> None:
+        self.decode_batches: list[tuple[FT8Decode, ...]] = []
+        self.errors: list[str] = []
+
+    def on_decodes(self, decodes: tuple[FT8Decode, ...]) -> None:
+        self.decode_batches.append(decodes)
+
+    def on_receive_error(self, detail: str) -> None:
+        self.errors.append(detail)
+
+
+def test_receive_service_fans_out_normalized_decodes_to_observer() -> None:
+    observer = RecordingObserver()
+    service = FT8ReceiveService(
+        FakeAudioInput([_period(400)]),
+        RecordingDecoder(),
+        FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+        observer=observer,
+    )
+
+    service.start()
+    _wait_until(lambda: bool(observer.decode_batches))
+    service.stop()
+
+    assert len(observer.decode_batches) == 1
+    assert observer.decode_batches[0][0].source_callsign == "K1ABC"
+
+
+def test_receive_service_reports_decoder_failure_to_observer() -> None:
+    observer = RecordingObserver()
+    decoder = FailOnceDecoder()
+    audio = GatedSecondPeriodAudioInput(
+        [_period(500), _period(501)],
+        release_second=decoder.first_failure,
+    )
+    service = FT8ReceiveService(
+        audio,
+        decoder,
+        FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+        observer=observer,
+    )
+
+    service.start()
+    _wait_until(lambda: bool(observer.errors))
+    service.stop()
+
+    assert observer.errors[0] == "synthetic decoder failure"
