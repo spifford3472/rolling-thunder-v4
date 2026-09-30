@@ -23,6 +23,8 @@ from rolling_thunder.fm_repeater import (
 from rolling_thunder.ft891_cat import (
     Ft891CatError,
     Ft891OperatingContext,
+    encode_cat_transmit_off,
+    encode_cat_transmit_on,
     encode_memory_to_vfo_a,
     encode_read_6m_repeater_offset,
     encode_read_ctcss_behavior,
@@ -74,6 +76,7 @@ class Ft891Radio:
         self._transport = transport
         self._clock = clock
         self._operation_lock = RLock()
+        self._cp6_cat_ptt_asserted = False
         self._state = RadioState(
             connection_state=RadioConnectionState.DISCONNECTED,
             updated_at=self._timestamp(),
@@ -113,6 +116,8 @@ class Ft891Radio:
     def disconnect(self) -> RadioState:
         """Close CAT and report a disconnected state."""
         with self._operation_lock:
+            if self._cp6_cat_ptt_asserted:
+                self._release_cp6_cat_ptt()
             self._transport.close()
             self._state = RadioState(
                 connection_state=RadioConnectionState.DISCONNECTED,
@@ -125,6 +130,34 @@ class Ft891Radio:
         """Return the latest immutable state snapshot."""
         with self._operation_lock:
             return self._state
+
+    def create_cp6_cat_ptt_capability(self) -> "Ft891CatPttCapability":
+        """Create the isolated owner-test CAT PTT capability for Checkpoint 6."""
+        return Ft891CatPttCapability(self)
+
+    def _assert_cp6_cat_ptt(self) -> None:
+        with self._operation_lock:
+            self._require_connected()
+            if self._cp6_cat_ptt_asserted:
+                return
+            try:
+                self._transport.command(encode_cat_transmit_on())
+            except RadioConnectionError:
+                try:
+                    self._transport.command(encode_cat_transmit_off())
+                except RadioConnectionError:
+                    pass
+                self._cp6_cat_ptt_asserted = False
+                raise
+            self._cp6_cat_ptt_asserted = True
+
+    def _release_cp6_cat_ptt(self) -> None:
+        with self._operation_lock:
+            self._require_connected()
+            try:
+                self._transport.command(encode_cat_transmit_off())
+            finally:
+                self._cp6_cat_ptt_asserted = False
 
     def refresh_state(self) -> RadioState:
         """Read current frequency and mode, detecting CAT device loss."""
@@ -469,3 +502,41 @@ class Ft891Radio:
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             raise ValueError("FT-891 clock must return a timezone-aware datetime.")
         return timestamp.astimezone(UTC)
+
+
+
+class Ft891CatPttCapability:
+    """Checkpoint 6 owner-test CAT PTT capability.
+
+    This concrete capability is intentionally absent from the generic Radio
+    protocol and has no audio, QSO-state, retry, UI, voice, or network authority.
+    """
+
+    def __init__(self, radio: Ft891Radio) -> None:
+        self._radio = radio
+        self._closed = False
+
+    def key(self) -> None:
+        """Assert CAT PTT once for an explicitly supervised CP6 test."""
+        if self._closed:
+            raise RadioConnectionError("FT-891 CAT PTT capability is closed.")
+        self._radio._assert_cp6_cat_ptt()
+
+    def release(self) -> None:
+        """Return the FT-891 to receive; repeated calls are safe."""
+        if self._closed:
+            return
+        self._radio._release_cp6_cat_ptt()
+
+    def cancel(self) -> None:
+        """Cancel the owner test by returning the FT-891 to receive."""
+        self.release()
+
+    def close(self) -> None:
+        """Release PTT before permanently closing this capability."""
+        if self._closed:
+            return
+        try:
+            self._radio._release_cp6_cat_ptt()
+        finally:
+            self._closed = True
