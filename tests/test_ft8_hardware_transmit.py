@@ -74,10 +74,11 @@ def test_test_authorization_requires_identity_and_aware_time() -> None:
             approved_at_utc=datetime(2026, 9, 30, tzinfo=UTC),
         )
 
+    naive_time = datetime(2026, 9, 30, tzinfo=UTC).replace(tzinfo=None)
     with pytest.raises(ValueError, match="timezone-aware"):
         FT8HardwareTestAuthorization(
             authorization_id="owner-test-1",
-            approved_at_utc=datetime(2026, 9, 30),
+            approved_at_utc=naive_time,
         )
 
 
