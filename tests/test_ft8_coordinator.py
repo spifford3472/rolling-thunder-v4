@@ -163,3 +163,21 @@ def test_abort_reaches_transmit_cancel_while_request_is_blocked() -> None:
     abort_thread.join(1)
 
     assert coordinator.state is FT8QsoState.ABORTED
+
+
+
+def test_coordinator_fails_closed_when_utc_and_monotonic_diverge() -> None:
+    context = _context()
+    clock = FakeFT8Clock(context.authorized_utc)
+    session = RecordingDigitalTransmitSession()
+    coordinator = FT8QsoCoordinator(session, clock)
+    coordinator.authorize(context)
+    coordinator.start_qso()
+
+    clock.advance_utc_only(15)
+    coordinator.tick()
+
+    assert coordinator.state is FT8QsoState.ERROR
+    assert coordinator.terminal_reason == "system UTC and monotonic clocks diverged"
+    assert session.requests == []
+    assert session.cancel_count == 1
