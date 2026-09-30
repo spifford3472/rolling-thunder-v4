@@ -84,6 +84,18 @@ def test_authorization_freezes_selected_cq_radio_and_gps() -> None:
     assert context.location_label == "GPS"
 
 
+def test_authorization_accepts_usb_and_freezes_mode() -> None:
+    service = _service(100)
+
+    context = service.authorize(
+        _activity(),
+        radio_state=_radio(mode=RadioMode.USB),
+        gps_state=None,
+    )
+
+    assert context.radio_mode == "USB"
+
+
 def test_authorization_explicitly_falls_back_to_configured_home_grid() -> None:
     service = _service(100)
 
@@ -98,7 +110,7 @@ def test_authorization_explicitly_falls_back_to_configured_home_grid() -> None:
 @pytest.mark.parametrize(
     ("radio_state", "message"),
     [
-        (_radio(mode=RadioMode.USB), "DATA mode"),
+        (_radio(mode=RadioMode.LSB), "DATA or USB mode"),
         (_radio(transmitting=True), "radio in receive"),
         (
             RadioState(

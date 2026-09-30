@@ -13,6 +13,7 @@ from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_b
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
 
 FT8_CQ_MAX_AGE_PERIODS = 4
+FT8_QSO_ALLOWED_RADIO_MODES = frozenset({RadioMode.DATA, RadioMode.USB})
 
 
 class FT8QsoAuthorizationError(RuntimeError):
@@ -48,8 +49,10 @@ class FT8QsoAuthorizationService:
             raise FT8QsoAuthorizationError("FT8 QSO authorization requires the radio in receive")
         if radio_state.frequency is None or radio_state.mode is None:
             raise FT8QsoAuthorizationError("FT8 QSO authorization requires known radio state")
-        if radio_state.mode is not RadioMode.DATA:
-            raise FT8QsoAuthorizationError("FT8 QSO authorization requires DATA mode")
+        if radio_state.mode not in FT8_QSO_ALLOWED_RADIO_MODES:
+            raise FT8QsoAuthorizationError(
+                "FT8 QSO authorization requires DATA or USB mode"
+            )
 
         try:
             band = resolve_radio_band(radio_state.frequency)

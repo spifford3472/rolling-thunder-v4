@@ -76,8 +76,9 @@ def _request(context: FT8QsoContext) -> FT8TransmitRequest:
     )
 
 
-def test_session_executes_only_matching_data_mode_qso() -> None:
-    context = _context()
+@pytest.mark.parametrize("mode", ["DATA", "USB"])
+def test_session_executes_only_matching_supported_mode_qso(mode: str) -> None:
+    context = _context(mode=mode)
     clock = FakeFT8Clock(FT8Period(101).start_utc + timedelta(seconds=0.10))
     encoder = FakeEncoder(_waveform())
     executor = RecordingFT8HardwareTransmitExecutor()
@@ -96,7 +97,7 @@ def test_session_executes_only_matching_data_mode_qso() -> None:
     assert physical.authorization.authorization_id == "qso-1"
     assert physical.authorization.context == context
     assert physical.expected_radio_frequency_hz == 14_074_000
-    assert physical.expected_radio_mode == "DATA"
+    assert physical.expected_radio_mode == mode
     assert physical.maximum_key_down_s == pytest.approx(14.70)
 
 
@@ -118,7 +119,7 @@ def test_session_rejects_late_start_before_any_physical_request() -> None:
 
 
 def test_session_rejects_wrong_radio_mode() -> None:
-    context = _context(mode="DIG-U")
+    context = _context(mode="LSB")
     clock = FakeFT8Clock(FT8Period(101).start_utc)
     executor = RecordingFT8HardwareTransmitExecutor()
     session = HardwareDigitalTransmitSession(
@@ -128,7 +129,7 @@ def test_session_rejects_wrong_radio_mode() -> None:
         clock,
     )
 
-    with pytest.raises(FT8QsoTransmitError, match="requires DATA mode"):
+    with pytest.raises(FT8QsoTransmitError, match="requires DATA or USB mode"):
         session.request(_request(context))
 
     assert executor.qso_requests == []

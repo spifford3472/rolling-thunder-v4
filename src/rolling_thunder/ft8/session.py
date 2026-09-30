@@ -20,7 +20,7 @@ from rolling_thunder.ft8.hardware_transmit import (
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.ft8.transmit import DigitalTransmitSession, FT8TransmitRequest
 
-FT8_QSO_REQUIRED_RADIO_MODE = "DATA"
+FT8_QSO_ALLOWED_RADIO_MODES = frozenset({"DATA", "USB"})
 FT8_TX_RELEASE_MARGIN_S = 0.20
 
 
@@ -69,9 +69,10 @@ class HardwareDigitalTransmitSession(DigitalTransmitSession):
             raise FT8QsoTransmitError("transmit request does not match authorized QSO context")
 
         context = request.context
-        if context.radio_mode.strip().upper() != FT8_QSO_REQUIRED_RADIO_MODE:
+        radio_mode = context.radio_mode.strip().upper()
+        if radio_mode not in FT8_QSO_ALLOWED_RADIO_MODES:
             raise FT8QsoTransmitError(
-                f"FT8 QSO transmit requires {FT8_QSO_REQUIRED_RADIO_MODE} mode"
+                "FT8 QSO transmit requires DATA or USB mode"
             )
 
         message = message_from_transmit_request(request)
@@ -94,7 +95,7 @@ class HardwareDigitalTransmitSession(DigitalTransmitSession):
             waveform=waveform,
             maximum_key_down_s=maximum_key_down_s,
             expected_radio_frequency_hz=context.radio_frequency_hz,
-            expected_radio_mode=FT8_QSO_REQUIRED_RADIO_MODE,
+            expected_radio_mode=radio_mode,
         )
         try:
             self._executor.execute_qso(hardware_request)
