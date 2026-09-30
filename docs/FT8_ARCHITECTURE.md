@@ -1269,3 +1269,90 @@ reported no FT8 receive state, started and stopped normally, opened no
 
 This confirms the Checkpoint 4 feature gate prevents FT8 audio, decoder, and
 receive-worker resource acquisition when disabled.
+
+## Known-good FT-891 / DigiRig FT8 station baseline (owner-validated 2026-09-30)
+
+The following settings are the current known-good baseline for the installed
+FT-891 + DigiRig DR-891 path on 20 m FT8. These are validation facts for later
+station-preflight work; Checkpoint 7 must not grow an automatic radio optimizer.
+
+### FT-891 receive / data settings
+
+- RF frequency for 20 m FT8 validation: 14.074000 MHz.
+- Mode: DATA.
+- 08-01 DATA MODE: OTHERS.
+- 08-05 DATA LCUT FREQ: OFF.
+- 08-06 DATA LCUT SLOPE: 18 dB/oct.
+- 08-07 DATA HCUT FREQ: OFF.
+- 08-08 DATA HCUT SLOPE: 18 dB/oct.
+- 08-11 DATA OUT LEVEL: 50.
+- 08-12 DATA BFO: USB.
+- Receiver AGC: AUTO.
+- Noise Blanker: OFF for FT8. Owner testing showed NB level 7 reduced DigiRig
+  receive audio by about 22 dB and prevented normal FT8 decoding; disabling NB
+  restored approximately -30.5 dBFS RMS / -19.1 dBFS peak and immediate decode.
+- PROC value 14 was observed but is a transmit speech-processing setting and is
+  not part of the FT8 receive baseline.
+
+### DigiRig C-Media receive settings
+
+- ALSA device: plughw:CARD=Device,DEV=0.
+- Mic Capture Volume: 12 / 34% / 0.00 dB.
+- Mic Capture Switch: ON.
+- USB codec Auto Gain Control: OFF.
+- Known-good receive target observed in DATA mode with NB OFF: approximately
+  -30 dBFS RMS and -19 dBFS peak during an active 20 m FT8 period.
+
+### FT-891 transmit settings used for controlled validation
+
+- HF PWR: 5 W during owner-supervised validation.
+- DATA DATA GAIN: 20.
+- CAT PTT: Enhanced CAT TX1/TX0 path only.
+- DigiRig playback: FT8 payload on LEFT channel, RIGHT channel digital zero.
+- Commercial MFJ-260C dummy-load validation produced raw CAT ALC 2, raw POWER
+  about 17-20, and raw SWR about 13 during sustained modulation. The earlier
+  homemade load produced pegged raw SWR 255 and elevated ALC and must not be
+  used as the calibration reference.
+
+## Deferred Checkpoint 10 — FT8 station calibration and preflight
+
+Checkpoint 10 should add a bounded, operator-visible FT8 station calibration /
+preflight capability rather than silently changing radio parameters during a
+QSO. Its goal is to detect configuration drift and adapt safely when antennas,
+feedline, or surrounding RF conditions change.
+
+Checkpoint 10 should, at minimum:
+
+1. Read or verify all CAT-addressable FT8-critical FT-891 settings that are
+   safely queryable, comparing them to the known-good baseline above.
+2. Verify receive state before transmit: exact frequency, DATA mode, DATA BFO,
+   DATA mode selection, NB state when queryable, DigiRig capture gain/AGC, and
+   live receive audio level.
+3. Run receive-only level/decode checks first and reject calibration when input
+   is clipped, nearly silent, or produces no usable FT8 activity.
+4. Support an explicitly authorized dummy-load transmit calibration that samples
+   raw ALC, POWER, and SWR and always retains the existing bounded watchdog and
+   unconditional CAT TX-off cleanup.
+5. Explore CAT control of DATA DATA GAIN only after read/write behavior is
+   independently validated. Any adjustment must be bounded, reversible, and
+   operator-visible. Do not implement a fast closed-loop gain controller inside
+   an FT8 symbol stream.
+6. Prefer adjustments between FT8 transmit periods, with hard minimum/maximum
+   gain values and a maximum step per calibration iteration.
+7. Keep RF power fixed during the first calibration implementation. Treat RF
+   power control as a separate later capability rather than coupling two control
+   loops at once.
+8. Detect poor antenna/load conditions and fail closed instead of trying to
+   compensate for high SWR by increasing audio drive or RF power.
+9. Never auto-tune, select another antenna, change bands, or begin unattended
+   transmission as part of calibration.
+10. Record the measured station profile (band, antenna/profile identifier if
+    available, RX level, selected DATA DATA GAIN, ALC/POWER/SWR observations,
+    timestamp) so later checks can detect meaningful drift without assuming one
+    global setting fits every antenna or installation.
+
+Checkpoint 10 acceptance should include deterministic fake-hardware tests,
+receive-only live validation, dummy-load validation, and only then a separately
+authorized antenna test. It should remain independent of Wavelog persistence and
+of automatic station selection.
+
