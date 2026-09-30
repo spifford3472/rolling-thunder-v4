@@ -8,6 +8,11 @@ import pytest
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
+from rolling_thunder.ft8.decoder import FT8PcmPeriod
+from rolling_thunder.ft8.domain import FT8Decode, FT8Period
+from rolling_thunder.ft8.encoder import FT8Waveform
+from rolling_thunder.ft8.hardware_transmit import RecordingFT8HardwareTransmitExecutor
+from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.gps import (
     GPSConnectionError,
     GPSConnectionState,
@@ -288,3 +293,81 @@ def test_runtime_stop_before_start_is_safe() -> None:
 
 def test_test_clock_reference_is_timezone_aware() -> None:
     assert datetime(2026, 7, 25, tzinfo=UTC).utcoffset() is not None
+
+
+
+class _UnusedFT8AudioInput:
+    def start(self) -> None:
+        return
+
+    def read_period(self) -> FT8PcmPeriod:
+        raise RuntimeError("not used")
+
+    def stop(self) -> None:
+        return
+
+
+class _UnusedFT8Decoder:
+    def decode(self, pcm: FT8PcmPeriod) -> tuple[FT8Decode, ...]:
+        _ = pcm
+        return ()
+
+
+class _UnusedFT8Encoder:
+    def encode(self, message: str, *, base_frequency_hz: int) -> FT8Waveform:
+        _ = (message, base_frequency_hz)
+        raise RuntimeError("not used")
+
+
+def _ft8_runtime_config(*, transmit_enabled: bool) -> ApplicationConfig:
+    ft8: dict[str, object] = {
+        "enabled": True,
+        "receive": {
+            "decoder_executable": "/opt/ft8_lib/decode_ft8",
+        },
+    }
+    if transmit_enabled:
+        ft8["transmit"] = {
+            "enabled": True,
+            "encoder_executable": "/opt/ft8_lib/gen_ft8",
+        }
+    return ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {"mock": True},
+            "ft8": ft8,
+        }
+    )
+
+
+def test_runtime_ft8_receive_only_creates_no_transmit_authority() -> None:
+    runtime = ApplicationRuntime.from_config(
+        _ft8_runtime_config(transmit_enabled=False),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_decoder=_UnusedFT8Decoder(),
+    )
+
+    assert runtime.ft8_receive is not None
+    assert runtime.ft8_qso is None
+    assert runtime.ft8_hardware_transmit is None
+
+
+def test_runtime_ft8_transmit_requires_explicit_gate() -> None:
+    executor = RecordingFT8HardwareTransmitExecutor()
+    period = FT8Period(100)
+    runtime = ApplicationRuntime.from_config(
+        _ft8_runtime_config(transmit_enabled=True),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_decoder=_UnusedFT8Decoder(),
+        ft8_encoder=_UnusedFT8Encoder(),
+        ft8_clock=FakeFT8Clock(period.start_utc),
+        ft8_hardware_executor=executor,
+    )
+
+    assert runtime.ft8_receive is not None
+    assert runtime.ft8_qso is not None
+    assert runtime.ft8_hardware_transmit is executor
