@@ -702,7 +702,7 @@ def test_ft8_transmit_requires_parent_ft8_enable() -> None:
     with pytest.raises(ValueError, match="ft8.transmit.enabled requires ft8.enabled"):
         ApplicationConfig.model_validate(
             {
-                "operator": {"callsign": "KI5VNB"},
+                "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
                 "ft8": {
                     "enabled": False,
                     "transmit": {
@@ -718,7 +718,7 @@ def test_ft8_transmit_requires_absolute_encoder_when_enabled() -> None:
     with pytest.raises(ValueError, match="encoder_executable"):
         ApplicationConfig.model_validate(
             {
-                "operator": {"callsign": "KI5VNB"},
+                "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
                 "ft8": {
                     "enabled": True,
                     "receive": {
@@ -734,7 +734,7 @@ def test_ft8_transmit_requires_absolute_encoder_when_enabled() -> None:
     with pytest.raises(ValueError, match="absolute path"):
         ApplicationConfig.model_validate(
             {
-                "operator": {"callsign": "KI5VNB"},
+                "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
                 "ft8": {
                     "enabled": True,
                     "receive": {
