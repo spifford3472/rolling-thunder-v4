@@ -9,6 +9,7 @@ import pytest
 
 import rolling_thunder.ft8.qso as qso_module
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
+from rolling_thunder.ft8.domain import FT8Period, FT8PeriodParity, FT8QsoContext
 from rolling_thunder.ft8.encoder import (
     FT8_SAMPLE_RATE_HZ,
     FT8EncodedMessage,
@@ -22,7 +23,6 @@ from rolling_thunder.ft8.hardware_transmit import (
     FT8QsoHardwareTransmitRequest,
     RecordingFT8HardwareTransmitExecutor,
 )
-from rolling_thunder.ft8.domain import FT8Period, FT8PeriodParity, FT8QsoContext
 from rolling_thunder.ft8.transmit import RecordingDigitalTransmitSession
 
 
