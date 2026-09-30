@@ -2,12 +2,26 @@
 
 ## v4.3.0 — experimental development
 
-### FT8 Checkpoint 6 — in progress
+### FT8 Checkpoint 7 — in progress
+
+- adds a QSO-specific physical authorization path separate from CP6 owner-test authorization
+- adds a production `DigitalTransmitSession` bridge using the validated encoder and bounded FT-891/DigiRig executor
+- requires exact frozen context, DATA mode, frequency verification, correct parity, and a safe slot-start window before keying
+- preserves the validated 15-second encoder reference PCM and derives runtime RF timing from its final non-zero sample plus release margin
+- fans normalized receive decodes to one active QSO coordinator while CQ browsing continues independently
+- adds immediate ABORT/failure cancellation toward RX, single-active-QSO ownership, and immutable terminal results
+- adds separate `ft8.transmit.enabled` gating so receive-only FT8 creates no transmit resources
+- adds a presentation-safe CQ browser controller that can select only one currently visible CQ and never auto-selects a second station
+- keeps successful-contact persistence/Wavelog writes outside Checkpoint 7
+- remains blocked from live automated RF until deterministic acceptance is green and the owner explicitly approves physical testing
+
+### FT8 Checkpoint 6 — complete
 
 - begins the controlled FT-891 / DigiRig hardware-transmit boundary
 - keeps physical transmit disconnected from `FT8QsoController` and live CQ activity
 - preserves disabled-by-default behavior and the protected v4.2.0 rollback point
-- requires one physically verified PTT mechanism, bounded audio playback, guaranteed release, and watchdog protection before acceptance
+- physically validated Enhanced-CAT `TX1;`/`TX0;`, left-only DigiRig playback, bounded key-down, watchdog release, and CAT meter monitoring
+- established FT-891 DATA DATA GAIN 20 as the best tested ALC setting at the configured 5 W dummy-load test level
 
 ### FT8 Checkpoint 5 — complete
 
