@@ -1,8 +1,8 @@
 # Rolling Thunder v4.3 Experimental FT8 Architecture
 
-Status: Checkpoints 1–5 implemented; Checkpoint 6 controlled hardware-transmit work in progress  
+Status: Checkpoints 1–6 implemented; Checkpoint 7 controlled automated-QSO execution in deterministic integration  
 Date: 2026-09-29  
-Implementation state: receive, decoder, hardware-independent QSO state machine, and offline encoder/waveform are implemented. Checkpoint 6 may add only the separately bounded owner-test physical transmit capability described below.
+Implementation state: receive, decoder, hardware-independent QSO state machine, offline encoder/waveform, and the bounded FT-891/DigiRig physical executor are implemented. Checkpoint 7 adds a separate QSO authorization/session/coordinator path but remains blocked from live RF until deterministic acceptance and explicit owner approval.
 
 ## Purpose
 
@@ -151,15 +151,16 @@ FT8 QSO controller/state machine
         +------> FT8 encoder
         |
         +------> DigitalTransmitSession
-        |            |
-        |            +----> hardware-free logical requests in Checkpoint 6
-        |
-        +------> [NO physical RF connection in Checkpoint 6]
-        |
-        +------> completed-QSO logging adapter
                      |
-                     v
-             ContactLoggingService
+                     +----> HardwareDigitalTransmitSession
+                               |
+                               +----> exact message mapping / encoder
+                               +----> slot-safety validation
+                               +----> QSO-specific physical authorization
+                               +----> bounded FT-891/DigiRig executor
+
+Checkpoint 7 produces only an immutable terminal QSO result. Successful-contact
+persistence and Wavelog integration remain explicitly outside this checkpoint.
 
 FT8 receive worker
         |
@@ -904,16 +905,47 @@ Before testing:
 The goal is only to establish the correct DR-891/FT-891 PTT mechanism and
 fail-safe behavior.
 
-### Later transmit checkpoint
+### Checkpoint 7 - controlled automated QSO execution
 
-Only after Checkpoint 6 proves the hardware boundary:
+Checkpoint 6 proved the hardware boundary. Checkpoint 7 may connect one
+explicitly operator-authorized QSO to that bounded physical capability.
 
-- implement bounded `DigitalTransmitSession`
-- implement FT8 audio output
-- integrate state-machine-driven encoded audio
-- prove PTT release on every controlled error path
-- retain manual ABORT
-- keep automatic next-station selection prohibited
+The implementation keeps CP6 owner-test authorization distinct from CP7 QSO
+authorization. It adds:
+
+- a production `HardwareDigitalTransmitSession` implementing the narrow
+  `DigitalTransmitSession` contract;
+- a QSO-specific physical authorization/request API rather than fabricating
+  CP6 owner-test requests;
+- a coordinator using `FT8Clock` and normalized decoder events;
+- a single-active-QSO operator service and presentation-safe CQ-browser
+  controller;
+- explicit DATA-mode, frequency, context, parity, stale-CQ, and timing checks;
+- immediate transmit cancellation on ABORT or receive failure;
+- an immutable terminal QSO result with no contact persistence.
+
+The validated 15-second encoder reference PCM is not rewritten. Runtime timing
+scans the waveform for its final non-zero sample and rejects any start that
+cannot keep RF-bearing audio plus the configured CAT-release margin inside the
+authorized 15-second period. The remaining padded silence may finish after PTT
+has already been forced to RX.
+
+Configuration has two independent gates:
+
+```yaml
+ft8:
+  enabled: false
+  transmit:
+    enabled: false
+```
+
+`ft8.enabled: false` creates no FT8 resources. With FT8 receive enabled but
+`ft8.transmit.enabled: false`, no encoder, playback output, physical executor,
+or QSO transmit authority is composed.
+
+No live CP7 automated QSO or antenna RF test is authorized by this
+documentation update. Physical validation remains a separate owner-approved
+phase after deterministic gates are green.
 
 ## Rollback/dependency policy
 
