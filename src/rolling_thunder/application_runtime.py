@@ -477,16 +477,18 @@ class ApplicationRuntime:
         ft8_authorization: FT8QsoAuthorizationService | None = None
         ft8_qso: FT8OperatorQsoService | None = None
         resolved_ft8_executor: FT8QsoHardwareTransmitExecutor | None = None
-        resolved_ft8_clock = ft8_clock or SystemFT8Clock()
+        resolved_ft8_clock: FT8Clock | None = None
         if config.ft8.enabled:
+            resolved_ft8_clock = ft8_clock or SystemFT8Clock()
             ft8_authorization = FT8QsoAuthorizationService(
                 local_callsign=config.operator.callsign,
                 home_grid=config.operator.home_grid,
                 clock=resolved_ft8_clock,
             )
         if config.ft8.transmit.enabled:
-            if ft8_receive is None:
-                raise RuntimeError("FT8 QSO execution requires the receive service")
+            if ft8_receive is None or resolved_ft8_clock is None:
+                raise RuntimeError("FT8 QSO execution requires enabled FT8 receive/timing")
+            active_ft8_clock = resolved_ft8_clock
             encoder_executable = config.ft8.transmit.encoder_executable
             if encoder_executable is None:
                 raise ValueError(
@@ -518,14 +520,14 @@ class ApplicationRuntime:
                     FT8QsoSessionAuthorization(uuid4().hex, context),
                     resolved_ft8_encoder,
                     resolved_ft8_executor,
-                    resolved_ft8_clock,
+                    active_ft8_clock,
                     release_margin_s=config.ft8.transmit.release_margin_s,
                 )
 
             ft8_qso = FT8OperatorQsoService(
                 ft8_receive,
                 build_ft8_session,
-                resolved_ft8_clock,
+                active_ft8_clock,
                 attempts_per_state=config.ft8.qso.attempts_per_state,
             )
 
