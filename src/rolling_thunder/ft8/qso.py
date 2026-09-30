@@ -137,8 +137,6 @@ class FT8QsoController:
         self._last_consumed_decode_period_index = decode.period.index
         self._attempt_count = 0
         if self._state is FT8QsoState.WAIT_REPORT:
-            self._state = FT8QsoState.TX_REPORT
-        elif self._state is FT8QsoState.WAIT_R_REPORT:
             self._state = FT8QsoState.TX_R_REPORT
         elif self._state is FT8QsoState.WAIT_73:
             self._state = FT8QsoState.TX_73
@@ -176,12 +174,6 @@ class FT8QsoController:
                 FT8QsoState.TX_CALL,
                 FT8QsoState.WAIT_REPORT,
             )
-        if self._state in {FT8QsoState.TX_REPORT, FT8QsoState.WAIT_R_REPORT}:
-            return (
-                FT8TransmitKind.REPORT,
-                FT8QsoState.TX_REPORT,
-                FT8QsoState.WAIT_R_REPORT,
-            )
         if self._state in {FT8QsoState.TX_R_REPORT, FT8QsoState.WAIT_73}:
             return (
                 FT8TransmitKind.R_REPORT,
@@ -199,8 +191,6 @@ class FT8QsoController:
     def _expected_decode_kind(self) -> FT8MessageKind | None:
         if self._state is FT8QsoState.WAIT_REPORT:
             return FT8MessageKind.REPORT
-        if self._state is FT8QsoState.WAIT_R_REPORT:
-            return FT8MessageKind.R_REPORT
         if self._state is FT8QsoState.WAIT_73:
             return FT8MessageKind.ACK_73
         return None
