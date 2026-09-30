@@ -13,10 +13,10 @@ from rolling_thunder.ft8.audio_output import (
     FT8AudioOutputError,
 )
 from rolling_thunder.ft8.encoder import (
-    FT8EncodedMessage,
-    FT8Waveform,
     FT8_SAMPLE_RATE_HZ,
     FT8_SLOT_SAMPLES,
+    FT8EncodedMessage,
+    FT8Waveform,
 )
 
 
