@@ -93,6 +93,24 @@ def test_coordinator_fails_closed_on_receive_error() -> None:
     assert session.cancel_count == 1
 
 
+def test_worker_processes_immediately_next_period_after_full_slot_transmit() -> None:
+    context = _context()
+    clock = FakeFT8Clock(context.authorized_utc)
+    coordinator = FT8QsoCoordinator(RecordingDigitalTransmitSession(), clock)
+    coordinator.authorize(context)
+    coordinator.start_qso()
+
+    # Model a physical transmit call returning 0.4 s after the next boundary.
+    clock.advance(15.4)
+
+    assert coordinator._next_worker_delay_s(clock.now_utc()) == 0.0
+
+    coordinator.tick()
+
+    assert coordinator.state is not FT8QsoState.ERROR
+    assert coordinator.terminal_reason is None
+
+
 def test_coordinator_fails_closed_when_utc_skips_a_period() -> None:
     context = _context()
     clock = FakeFT8Clock(context.authorized_utc)
