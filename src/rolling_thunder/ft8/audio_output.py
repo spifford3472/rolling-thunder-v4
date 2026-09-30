@@ -53,7 +53,7 @@ class AlsaPlaybackCommand:
             "-f",
             "S16_LE",
             "-c",
-            "1",
+            "2",
             "-r",
             str(self.sample_rate_hz),
             "-t",
@@ -84,10 +84,12 @@ class AlsaAplayFT8AudioOutput:
                 f"FT8 playback waveform must contain exactly {expected_bytes} PCM bytes"
             )
 
+        stereo_pcm = self._left_only_stereo(waveform.pcm_s16le)
+
         try:
             completed = subprocess.run(
                 self._command.argv(),
-                input=waveform.pcm_s16le,
+                input=stereo_pcm,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 check=False,
@@ -104,3 +106,14 @@ class AlsaAplayFT8AudioOutput:
             raise FT8AudioOutputError(
                 f"FT8 playback exited {completed.returncode}{suffix}"
             )
+
+
+    @staticmethod
+    def _left_only_stereo(mono_pcm_s16le: bytes) -> bytes:
+        """Expand mono S16_LE to stereo with payload left and silence right."""
+        stereo = bytearray(len(mono_pcm_s16le) * 2)
+        target = memoryview(stereo)
+        source = memoryview(mono_pcm_s16le)
+        for offset in range(0, len(mono_pcm_s16le), 2):
+            target[offset * 2 : offset * 2 + 2] = source[offset : offset + 2]
+        return bytes(stereo)
