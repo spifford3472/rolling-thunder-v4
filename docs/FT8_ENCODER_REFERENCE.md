@@ -1,6 +1,6 @@
 # FT8 Offline Encoder Reference — Checkpoint 5
 
-Status: validation in progress  
+Status: validation complete  
 Date: 2026-09-29  
 Backend: `kgoba/ft8_lib`  
 Pinned revision: `9fec6ca39886edbf96f4f5e71edc76da5074e871`
