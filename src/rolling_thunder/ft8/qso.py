@@ -118,7 +118,7 @@ class FT8QsoController:
         context = self._require_context()
         if decode.source_callsign != context.remote_callsign:
             return
-        if decode.destination_callsign not in {None, context.local_callsign}:
+        if decode.destination_callsign != context.local_callsign:
             return
         if decode.period.parity is context.tx_parity:
             return
