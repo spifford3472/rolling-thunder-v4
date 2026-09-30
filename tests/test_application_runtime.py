@@ -373,3 +373,26 @@ def test_runtime_ft8_transmit_requires_explicit_gate() -> None:
     assert runtime.ft8_panel is not None
     assert runtime.ft8_qso is not None
     assert runtime.ft8_hardware_transmit is executor
+
+
+
+def test_runtime_stop_closes_ft8_executor_even_before_start() -> None:
+    executor = RecordingFT8HardwareTransmitExecutor()
+    period = FT8Period(100)
+    runtime = ApplicationRuntime.from_config(
+        _ft8_runtime_config(transmit_enabled=True),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_decoder=_UnusedFT8Decoder(),
+        ft8_encoder=_UnusedFT8Encoder(),
+        ft8_clock=FakeFT8Clock(period.start_utc),
+        ft8_hardware_executor=executor,
+    )
+
+    runtime.stop()
+    runtime.stop()
+
+    assert executor.requests == []
+    assert executor.qso_requests == []
+    assert executor.close_count == 1
