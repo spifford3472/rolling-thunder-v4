@@ -689,7 +689,7 @@ repeaters:
 def test_ft8_transmit_is_disabled_by_default() -> None:
     config = ApplicationConfig.model_validate(
         {
-            "operator": {"callsign": "KI5VNB"},
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
         }
     )
 
