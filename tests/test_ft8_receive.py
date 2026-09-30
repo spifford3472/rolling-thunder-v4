@@ -67,12 +67,33 @@ class RecordingDecoder:
 class FailOnceDecoder:
     def __init__(self) -> None:
         self.calls = 0
+        self.first_failure = threading.Event()
 
     def decode(self, pcm: FT8PcmPeriod) -> tuple[FT8Decode, ...]:
         self.calls += 1
         if self.calls == 1:
+            self.first_failure.set()
             raise FT8DecoderError("synthetic decoder failure")
         return ()
+
+
+class GatedSecondPeriodAudioInput(FakeAudioInput):
+    def __init__(
+        self,
+        periods: Sequence[FT8PcmPeriod],
+        *,
+        release_second: threading.Event,
+    ) -> None:
+        super().__init__(periods)
+        self._release_second = release_second
+        self._reads = 0
+
+    def read_period(self) -> FT8PcmPeriod:
+        self._reads += 1
+        if self._reads == 2:
+            if not self._release_second.wait(2):
+                raise FT8AudioInputError("second test period was not released")
+        return super().read_period()
 
 
 class SlowDecoder:
@@ -181,8 +202,11 @@ def test_test_period_reference_is_utc_aware() -> None:
 
 
 def test_receive_service_recovers_after_transient_decoder_failure() -> None:
-    audio = FakeAudioInput([_period(300), _period(301)])
     decoder = FailOnceDecoder()
+    audio = GatedSecondPeriodAudioInput(
+        [_period(300), _period(301)],
+        release_second=decoder.first_failure,
+    )
     service = FT8ReceiveService(
         audio,
         decoder,
