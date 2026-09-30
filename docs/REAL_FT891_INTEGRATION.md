@@ -453,3 +453,18 @@ Physical FT8 testing must use a separate explicit owner-test executor that:
 
 The selected PTT mechanism and measured lead/tail/watchdog timings must be added
 here after physical acceptance.
+
+### Checkpoint 6B CAT PTT hardware validation — 2026-09-29
+
+Physical owner-supervised testing on `anvilmobile` validated the narrow CAT PTT path against the FT-891 with a dummy load connected.
+
+- Enhanced CAT interface 00 remained the only PTT control path.
+- Stable device: `/dev/serial/by-id/usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_011F42E9-if00-port0`.
+- CAT rate: 38400 bps.
+- `TX1;` visibly placed the FT-891 control head into transmit.
+- The bounded test then sent `TX0;` and completed without leaving the radio keyed.
+- No DigiRig audio was played.
+- Standard interface 01, RTS, and DTR were not used.
+- Production Rolling Thunder was stopped only long enough to release the CAT device and was restarted after the test.
+
+This validates CAT PTT as the selected Checkpoint 6 physical keying mechanism. It does not authorize automated QSO transmission. DigiRig playback and combined audio/PTT remain separate later validation phases.
