@@ -7,7 +7,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from rolling_thunder.ft8.domain import FT8Decode, FT8MessageKind, FT8Period, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8Decode,
+    FT8MessageKind,
+    FT8Period,
+    FT8QsoContext,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.qso import FT8QsoController
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.ft8.transmit import DigitalTransmitSession
