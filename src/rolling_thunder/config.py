@@ -614,19 +614,60 @@ class FT8ReceiveConfig(ConfigurationModel):
         return path
 
 
+class FT8TransmitConfig(ConfigurationModel):
+    """Additional explicit gate for Checkpoint 7 physical QSO execution."""
+
+    enabled: bool = False
+    audio_device: str = "plughw:CARD=Device,DEV=0"
+    encoder_executable: Path | None = None
+    release_margin_s: float = Field(default=0.20, gt=0, lt=15)
+
+    @field_validator("audio_device")
+    @classmethod
+    def validate_audio_device(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be empty")
+        return normalized
+
+    @field_validator("encoder_executable", mode="before")
+    @classmethod
+    def validate_encoder_executable(cls, value: object) -> object:
+        if value is None:
+            return value
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        path = Path(value) if isinstance(value, (str, Path)) else value
+        if isinstance(path, Path):
+            if str(path) == ".":
+                raise ValueError("must name an executable")
+            if not path.is_absolute():
+                raise ValueError("must be an absolute path")
+        return path
+
+
 class FT8Config(ConfigurationModel):
     """Experimental native FT8 feature boundary."""
 
     enabled: bool = False
     receive: FT8ReceiveConfig = FT8ReceiveConfig()
+    transmit: FT8TransmitConfig = FT8TransmitConfig()
     qso: FT8QsoConfig = FT8QsoConfig()
 
     @model_validator(mode="after")
-    def validate_enabled_receive(self) -> Self:
+    def validate_enabled_resources(self) -> Self:
         if self.enabled and self.receive.decoder_executable is None:
             raise ValueError(
                 "ft8.receive.decoder_executable must be configured when ft8.enabled is true"
             )
+        if self.transmit.enabled:
+            if not self.enabled:
+                raise ValueError("ft8.transmit.enabled requires ft8.enabled")
+            if self.transmit.encoder_executable is None:
+                raise ValueError(
+                    "ft8.transmit.encoder_executable must be configured when "
+                    "ft8.transmit.enabled is true"
+                )
         return self
 
 
