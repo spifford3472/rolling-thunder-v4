@@ -2,7 +2,19 @@
 
 ## v4.3.0 — experimental development
 
-### FT8 Checkpoint 3 — in progress
+### FT8 Checkpoint 4 — in progress
+
+- adds typed receive-only DigiRig audio configuration and `FT8AudioInput`
+- validates ALSA `plughw:CARD=Device,DEV=0` direct conversion to 12 kHz mono S16_LE
+- adds UTC-boundary-aligned persistent `arecord` capture
+- adds bounded background capture/decode workers with reconnect and degraded state
+- connects live `Ft8LibDecoder` output to the existing `FT8CQActivityManager`
+- physically validates clean live audio and 11 real on-air decodes in one direct decoder period
+- validates application-composed live receive across two consecutive periods with 19 decodes, 4 CQ activities, zero drops, and clean shutdown
+- keeps FT8 disabled by default and composes no FT8 resources when disabled
+- adds no playback, PTT, CAT TX, waveform generation, automated QSO, logging, or RF
+
+### FT8 Checkpoint 3
 
 - adds a project-owned receive decoder protocol and mono signed-16-bit PCM period input
 - adds saved-WAV subprocess adapters for `kgoba/ft8_lib` and `ft8mon`

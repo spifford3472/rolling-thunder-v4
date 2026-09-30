@@ -23,6 +23,8 @@ def test_ft8_defaults_disabled_when_section_is_absent(tmp_path: Path) -> None:
     config = load_config(_write(tmp_path))
 
     assert config.ft8.enabled is False
+    assert config.ft8.receive.audio_device == "plughw:CARD=Device,DEV=0"
+    assert config.ft8.receive.decoder_executable is None
     assert config.ft8.qso.attempts_per_state == 6
 
 
@@ -32,18 +34,34 @@ def test_explicit_ft8_disabled_parses(tmp_path: Path) -> None:
     assert config.ft8.enabled is False
 
 
-def test_ft8_enabled_parses_without_hardware_settings(tmp_path: Path) -> None:
+def test_ft8_enabled_requires_decoder_executable(tmp_path: Path) -> None:
+    path = _write(tmp_path, "ft8:\n  enabled: true\n")
+
+    with pytest.raises(ConfigurationValidationError, match="decoder_executable"):
+        load_config(path)
+
+
+def test_ft8_enabled_parses_receive_settings(tmp_path: Path) -> None:
     config = load_config(
         _write(
             tmp_path,
             "ft8:\n"
             "  enabled: true\n"
+            "  receive:\n"
+            "    audio_device: plughw:CARD=Device,DEV=0\n"
+            "    decoder_executable: /opt/rolling-thunder/decode_ft8\n"
+            "    decoder_timeout_s: 10\n"
+            "    reconnect_delay_s: 1\n"
             "  qso:\n"
             "    attempts_per_state: 6\n",
         )
     )
 
     assert config.ft8.enabled is True
+    assert config.ft8.receive.audio_device == "plughw:CARD=Device,DEV=0"
+    assert config.ft8.receive.decoder_executable == Path("/opt/rolling-thunder/decode_ft8")
+    assert config.ft8.receive.decoder_timeout_s == 10
+    assert config.ft8.receive.reconnect_delay_s == 1
     assert config.ft8.qso.attempts_per_state == 6
 
 
@@ -58,4 +76,16 @@ def test_ft8_retry_count_is_validated(tmp_path: Path, attempts: int) -> None:
     )
 
     with pytest.raises(ConfigurationValidationError, match="ft8.qso.attempts_per_state"):
+        load_config(path)
+
+
+def test_ft8_receive_audio_device_must_not_be_blank(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "ft8:\n"
+        "  receive:\n"
+        "    audio_device: '   '\n",
+    )
+
+    with pytest.raises(ConfigurationValidationError, match="ft8.receive.audio_device"):
         load_config(path)

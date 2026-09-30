@@ -176,9 +176,16 @@ physical_controls:
     encoder-switch-long: back
 
 ft8:
-  # Experimental v4.3 native FT8 foundation. Checkpoint 2 is domain-only:
-  # enabling this flag does not compose a decoder, audio worker, PTT, or CAT TX.
+  # Experimental v4.3 native FT8 receive pipeline. Disabled means no FT8
+  # capture device, decoder process, or receive worker is created.
   enabled: false
+  receive:
+    # DigiRig DR-891 C-Media capture. ALSA plug performs 44.1/48 kHz -> 12 kHz.
+    audio_device: plughw:CARD=Device,DEV=0
+    # Required only when ft8.enabled is true.
+    decoder_executable: null
+    decoder_timeout_s: 12.0
+    reconnect_delay_s: 2.0
   qso:
     # Retry budget is per unchanged QSO transmit state/message, not per whole QSO.
     attempts_per_state: 6
