@@ -501,3 +501,12 @@ Owner-supervised dummy-load isolation test passed the transmit-control and CAT-m
 - Production service was restarted successfully.
 
 This test validates that CAT PTT and RM4/RM5/RM6 sampling can coexist on the serialized Enhanced CAT path. FT8 audio was not involved in this isolation test.
+
+### Checkpoint 6D harness refinements — 2026-09-29
+
+For subsequent combined RF tests, the owner-side harness must:
+- wait 0.5 seconds after CAT PTT release before restoring the pre-test mode, to avoid the observed immediate post-TX mode readback race;
+- retain all raw meter samples in the log, but exclude the first two samples after key-up from steady-state ALC/power/SWR summaries;
+- continue to treat every CAT meter value as the FT-891 documented raw 0-255 scale rather than watts, SWR ratio, or calibrated ALC units;
+- keep the 17-second software key-down bound and unconditional CAT TX-off cleanup.
+
