@@ -844,19 +844,49 @@ endpoint, then integrate the chosen `FT8AudioInput`.
 Test unplug/replug, unavailable device, overflow behavior, cancellation, and
 runtime shutdown.
 
-### Checkpoint 5 - CQ browser/QSO simulation
+### Checkpoint 5 - offline encoder and waveform
 
 No RF transmission.
 
-Drive complete QSO sequences with:
+Checkpoint 2 already implemented most of the hardware-independent QSO simulation
+originally planned here. Checkpoint 5 therefore adds the project-owned offline
+message/encoder/waveform boundary and reconciles the CQ-answer exchange against
+the standard FT8 sequence before encoding it.
 
-- fake decoder
-- fake clock
-- fake encoder
-- fake transmit session
+For the current MVP, an operator-authorized answer to a decoded CQ follows:
 
-Validate operator selection, per-state retry limit, stale/irrelevant decodes,
-ABORT, errors, and terminal return to CQ browsing.
+```text
+remote local GRID4
+remote local R+report
+remote local 73
+```
+
+with received remote report and final RRR/RR73/73 controlling advancement.
+The outbound report is frozen in `FT8QsoContext` at authorization time and is
+restricted to the standard -50 through +49 dB range.
+
+The selected encoder remains pinned `kgoba/ft8_lib` at
+`9fec6ca39886edbf96f4f5e71edc76da5074e871`. Rolling Thunder's adapter
+invokes only its offline `gen_ft8` executable, validates its packed payload
+and 79-tone output, reads the generated temporary WAV back into immutable mono
+S16_LE PCM, and removes the temporary file before returning.
+
+Verified protocol/waveform constants from the pinned implementation are:
+
+- 79 FT8 channel symbols;
+- 0.160 second symbol duration;
+- 6.25 Hz tone spacing;
+- 12.64 seconds occupied modulation;
+- 12 kHz sample rate;
+- mono signed-16-bit little-endian PCM;
+- 180,000 samples / 360,000 PCM bytes for the padded 15-second slot.
+
+Checkpoint 5 does not compose the encoder into `ApplicationRuntime`, does not
+create an audio output, and cannot open CAT/PTT or transmit RF.
+
+The CQ browser/UI remains a later checkpoint. Existing Checkpoint 2 fake-driven
+QSO tests continue to cover operator authorization, retry bounds, stale traffic,
+ABORT, errors, and terminal behavior.
 
 ### Checkpoint 6 - PTT mechanism experiment
 

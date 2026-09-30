@@ -60,6 +60,7 @@ def test_qso_context_is_frozen_snapshot() -> None:
         tx_parity=FT8PeriodParity.ODD,
         authorized_period=FT8Period(index=100),
         authorized_utc=datetime.fromtimestamp(1501, tz=UTC),
+        signal_report_db=-12,
     )
     source.update({"grid": "EM89aa", "latitude": 40.0, "longitude": -83.0})
 
@@ -68,6 +69,7 @@ def test_qso_context_is_frozen_snapshot() -> None:
     assert context.local_grid == "EM79xm"
     assert context.latitude == 39.5
     assert context.longitude == -84.1
+    assert context.signal_report_db == -12
     with pytest.raises(FrozenInstanceError):
         context.local_grid = "EM89aa"  # type: ignore[misc]
 
@@ -82,4 +84,22 @@ def test_invalid_decode_values_are_rejected() -> None:
             raw_message="CQ K1ABC EM79",
             kind=FT8MessageKind.CQ,
             source_callsign="K1ABC",
+        )
+
+
+@pytest.mark.parametrize("report", [-51, 50])
+def test_qso_context_rejects_out_of_range_signal_report(report: int) -> None:
+    with pytest.raises(ValueError, match="signal_report_db"):
+        FT8QsoContext(
+            local_callsign="KI5VNB",
+            remote_callsign="K1ABC",
+            target_audio_frequency_hz=1500,
+            radio_frequency_hz=14_074_000,
+            radio_band="20m",
+            radio_mode="DIG-U",
+            local_grid="EM79xm",
+            tx_parity=FT8PeriodParity.ODD,
+            authorized_period=FT8Period(index=100),
+            authorized_utc=datetime.fromtimestamp(1501, tz=UTC),
+            signal_report_db=report,
         )

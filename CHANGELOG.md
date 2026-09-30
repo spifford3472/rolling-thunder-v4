@@ -2,7 +2,16 @@
 
 ## v4.3.0 — experimental development
 
-### FT8 Checkpoint 4 — in progress
+### FT8 Checkpoint 5 — in progress
+
+- reconciles the CQ-answer QSO sequence before physical transmit work
+- freezes the outbound FT8 signal report in the authorized QSO context
+- adds a project-owned offline encoder/waveform boundary
+- reuses the pinned `kgoba/ft8_lib` encoder instead of reimplementing CRC/LDPC/Costas logic
+- validates deterministic 79-tone, 12 kHz mono S16_LE 15-second slot waveforms
+- adds no playback, PTT, CAT TX, runtime transmit worker, logging, or RF
+
+### FT8 Checkpoint 4
 
 - adds typed receive-only DigiRig audio configuration and `FT8AudioInput`
 - validates ALSA `plughw:CARD=Device,DEV=0` direct conversion to 12 kHz mono S16_LE
