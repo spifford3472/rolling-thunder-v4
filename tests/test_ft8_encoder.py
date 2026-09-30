@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import os
 import subprocess
 import wave
 from datetime import UTC, datetime
@@ -175,3 +177,66 @@ def test_invalid_encoder_output_fails_closed(
         Ft8LibEncoder("/opt/ft8_lib/gen_ft8").encode(
             "K1ABC KI5VNB EM79", base_frequency_hz=1500
         )
+
+
+_PINNED_REFERENCE_VECTORS = (
+    (
+        "K1ABC KI5VNB EM79",
+        "09bde354baee568847c8",
+        "3140652032247523612626436605107432343140652117772401013222332703243147553140652",
+        "6b4701d3e353f12b9927c6a254379d33baaeae1b2a2b2692d6f3c020f4f784b3",
+    ),
+    (
+        "K1ABC KI5VNB -10",
+        "09bde354baee569faa48",
+        "3140652032247523612626436617463325173140652114252146701241357264504012473140652",
+        "84a8853e2636c41c420372954340761cb743f34817439bfa4b140d0c1af2444e",
+    ),
+    (
+        "K1ABC KI5VNB R-10",
+        "09bde354baee56bfaa48",
+        "3140652032247523612626436627463326563140652222516626577077002162670134673140652",
+        "b0fcd4f7a5163f14c7a8ef4277d9f6a11fb7889f29a9651cd0b3c42556371461",
+    ),
+    (
+        "K1ABC KI5VNB RRR",
+        "09bde354baee569fa488",
+        "3140652032247523612626436617455525013140652516660741025453700441605307253140652",
+        "c8a077aaafe853da80fc03f283d8b9718892484d45bd9a936dee18d9389d0862",
+    ),
+    (
+        "K1ABC KI5VNB RR73",
+        "09bde354baee569fa4c8",
+        "3140652032247523612626436617455433223140652146263166111674404703754264413140652",
+        "2232c04332476af898a68343f10ac9e985e56cd6757ec844aafa7548414e8800",
+    ),
+    (
+        "K1ABC KI5VNB 73",
+        "09bde354baee569fa508",
+        "3140652032247523612626436617456032013140652666262751357020763332321611543140652",
+        "05bf11b382786a927ccf9ba4d82fa14773309fdb4aee22f78ceb6bd57bf0af55",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("message", "packed_hex", "tones_text", "pcm_sha256"),
+    _PINNED_REFERENCE_VECTORS,
+)
+def test_pinned_ft8_lib_reference_vectors_when_available(
+    message: str,
+    packed_hex: str,
+    tones_text: str,
+    pcm_sha256: str,
+) -> None:
+    executable = os.environ.get("ROLLING_THUNDER_FT8_GEN_FT8")
+    if not executable:
+        pytest.skip("set ROLLING_THUNDER_FT8_GEN_FT8 for pinned backend vectors")
+
+    waveform = Ft8LibEncoder(executable).encode(message, base_frequency_hz=1500)
+
+    assert waveform.encoded.packed_payload.hex() == packed_hex
+    assert "".join(str(tone) for tone in waveform.encoded.tones) == tones_text
+    assert waveform.sample_count == FT8_SLOT_SAMPLES
+    assert len(waveform.pcm_s16le) == 360_000
+    assert hashlib.sha256(waveform.pcm_s16le).hexdigest() == pcm_sha256
