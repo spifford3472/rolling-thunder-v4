@@ -245,6 +245,13 @@ Completed and verified:
 - Standard Com Port remaining unopened
 - no PTT, MOX, keying, tuner, power, or unattended transmit authority
 
+Rolling Thunder v4.3 Checkpoint 6 is a separate experimental hardware
+validation track. It may add a disabled-by-default, owner-initiated and
+physically supervised FT8 test executor without changing the generic `Radio`
+contract or granting transmit authority to UI, voice, ESP32, network, CQ
+activity, or the existing `FT8QsoController`. Automated live FT8 QSO execution
+remains outside Checkpoint 6.
+
 The approved receive-tuning order is:
 
 ```text
