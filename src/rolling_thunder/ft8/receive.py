@@ -55,6 +55,7 @@ class FT8ReceiveService:
         self._capture_thread: threading.Thread | None = None
         self._decode_thread: threading.Thread | None = None
         self._state_lock = threading.Lock()
+        self._capture_healthy = False
         self._state = FT8ReceiveState()
 
     @property
@@ -102,12 +103,16 @@ class FT8ReceiveService:
         while not self._stop_event.is_set():
             try:
                 self._audio_input.start()
+                with self._state_lock:
+                    self._capture_healthy = True
                 self._set_state(status=FT8ReceiveStatus.RUNNING, last_error=None)
                 while not self._stop_event.is_set():
                     period = self._audio_input.read_period()
                     self._record_capture(period)
                     self._publish_period(period)
             except (FT8AudioInputError, OSError) as exc:
+                with self._state_lock:
+                    self._capture_healthy = False
                 if self._stop_event.is_set():
                     break
                 self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=str(exc))
@@ -135,14 +140,20 @@ class FT8ReceiveService:
             snapshot = self._activity_manager.snapshot(current_period=period.period)
             with self._state_lock:
                 state = self._state
+                recovered_status = (
+                    FT8ReceiveStatus.RUNNING
+                    if self._capture_healthy
+                    else state.status
+                )
+                recovered_error = None if self._capture_healthy else state.last_error
                 self._state = FT8ReceiveState(
-                    status=state.status,
+                    status=recovered_status,
                     last_period=period.period,
                     periods_captured=state.periods_captured,
                     periods_dropped=state.periods_dropped,
                     decode_count=state.decode_count + len(decodes),
                     cq_activity=snapshot,
-                    last_error=state.last_error,
+                    last_error=recovered_error,
                 )
 
     def _publish_period(self, period: FT8PcmPeriod) -> None:
