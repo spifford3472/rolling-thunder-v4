@@ -42,6 +42,7 @@ class FT8QsoCoordinator:
         *,
         attempts_per_state: int = 6,
     ) -> None:
+        self._transmit_session = transmit_session
         self._controller = FT8QsoController(
             transmit_session,
             attempts_per_state=attempts_per_state,
@@ -131,6 +132,7 @@ class FT8QsoCoordinator:
 
     def on_receive_error(self, detail: str) -> None:
         """Fail an active QSO when its decoder/receive path becomes unavailable."""
+        self._transmit_session.cancel()
         with self._lock:
             if self._controller.state in {
                 FT8QsoState.IDLE,
@@ -144,12 +146,13 @@ class FT8QsoCoordinator:
 
     def abort(self) -> None:
         """Idempotently abort and force the transmit session toward receive."""
+        self._stop_event.set()
+        self._transmit_session.cancel()
         with self._lock:
             self._controller.abort()
             if self._controller.state is FT8QsoState.ABORTED:
                 self._terminal_reason = "operator abort"
             self._capture_terminal_result_locked()
-        self._stop_event.set()
 
     def reset(self) -> None:
         """Reset only after a terminal QSO result."""
