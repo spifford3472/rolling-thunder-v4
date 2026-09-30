@@ -122,6 +122,8 @@ class HardwareDigitalTransmitSession(DigitalTransmitSession):
             raise FT8QsoTransmitError("system UTC is before the authorized FT8 period")
 
         active_end_s = _last_nonzero_sample_end_s(waveform)
+        if active_end_s <= 0:
+            raise FT8QsoTransmitError("FT8 waveform contains no transmit-bearing samples")
         latest_safe_start_s = FT8_PERIOD_SECONDS - active_end_s - self._release_margin_s
         if elapsed_s > latest_safe_start_s:
             raise FT8QsoTransmitError(
