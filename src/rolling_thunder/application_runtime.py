@@ -32,7 +32,8 @@ from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
 from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
 from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext
+from rolling_thunder.ft8.coordinator import FT8QsoResult
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
 from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
@@ -693,6 +694,33 @@ class ApplicationRuntime:
         """Abort the active FT8 QSO without exposing CAT/PTT to callers."""
         if self.ft8_qso is not None:
             self.ft8_qso.abort()
+
+    def return_ft8_to_browser(self) -> FT8QsoResult | None:
+        """Release one terminal QSO and restore CQ-browser ownership."""
+        if self.ft8_qso is None:
+            return None
+        return self.ft8_qso.return_to_browser()
+
+    @property
+    def latest_ft8_qso_state(self) -> FT8QsoState:
+        """Return presentation-safe FT8 QSO state."""
+        if self.ft8_qso is None:
+            return FT8QsoState.IDLE
+        return self.ft8_qso.state
+
+    @property
+    def latest_ft8_qso_context(self) -> FT8QsoContext | None:
+        """Return the active frozen QSO context, when present."""
+        if self.ft8_qso is None:
+            return None
+        return self.ft8_qso.context
+
+    @property
+    def latest_ft8_qso_result(self) -> FT8QsoResult | None:
+        """Return the immutable terminal QSO result without persistence."""
+        if self.ft8_qso is None:
+            return None
+        return self.ft8_qso.result
 
     @property
     def pota_receive_tune_executor(self) -> PotaReceiveTuneExecutor:
