@@ -391,3 +391,28 @@ def test_disconnect_releases_cp6_cat_ptt_before_closing_transport() -> None:
 
     assert transport.commands[-2:] == [b"TX1;", b"TX0;"]
     assert transport.opened is False
+
+
+
+def test_cp6_tx_meters_read_alc_power_and_swr() -> None:
+    transport = FakeTransport()
+    transport.replies[b"RM4;"] = b"RM4123;"
+    transport.replies[b"RM5;"] = b"RM5045;"
+    transport.replies[b"RM6;"] = b"RM6007;"
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    alc, power, swr = radio.read_cp6_tx_meters()
+
+    assert (alc, power, swr) == (123, 45, 7)
+    assert transport.commands[-3:] == [b"RM4;", b"RM5;", b"RM6;"]
+
+
+def test_cp6_tx_meter_selector_mismatch_is_rejected() -> None:
+    transport = FakeTransport()
+    transport.replies[b"RM4;"] = b"RM5123;"
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    with pytest.raises(RadioError, match="selector mismatch"):
+        radio.read_cp6_tx_meters()
