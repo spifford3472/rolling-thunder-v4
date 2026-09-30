@@ -44,7 +44,7 @@ def test_alsa_playback_command_is_finite_12khz_mono_s16le() -> None:
         "-f",
         "S16_LE",
         "-c",
-        "1",
+        "2",
         "-r",
         "12000",
         "-t",
@@ -96,7 +96,13 @@ def test_playback_passes_exact_pcm_to_finite_aplay(
     output.play(waveform)
 
     assert len(calls) == 1
-    assert calls[0]["input"] == waveform.pcm_s16le
+    stereo_pcm = calls[0]["input"]
+    assert isinstance(stereo_pcm, bytes)
+    assert len(stereo_pcm) == len(waveform.pcm_s16le) * 2
+    assert stereo_pcm[0:2] == waveform.pcm_s16le[0:2]
+    assert stereo_pcm[2:4] == b"\x00\x00"
+    assert stereo_pcm[-4:-2] == waveform.pcm_s16le[-2:]
+    assert stereo_pcm[-2:] == b"\x00\x00"
     assert calls[0]["timeout"] == 20.0
     assert calls[0]["check"] is False
 
@@ -123,3 +129,15 @@ def test_playback_wraps_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(FT8AudioOutputError, match="timed out"):
         output.play(_waveform())
+
+
+
+def test_left_only_stereo_never_places_payload_on_right_channel() -> None:
+    mono = b"\x01\x02\x03\x04\xff\x7f"
+    stereo = AlsaAplayFT8AudioOutput._left_only_stereo(mono)
+
+    assert stereo == (
+        b"\x01\x02\x00\x00"
+        b"\x03\x04\x00\x00"
+        b"\xff\x7f\x00\x00"
+    )
