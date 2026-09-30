@@ -149,6 +149,7 @@ class FT8QsoContext:
     tx_parity: FT8PeriodParity
     authorized_period: FT8Period
     authorized_utc: datetime
+    signal_report_db: int
     latitude: float | None = None
     longitude: float | None = None
     location_label: str | None = None
@@ -167,6 +168,8 @@ class FT8QsoContext:
         object.__setattr__(self, "local_grid", _GRID_ADAPTER.validate_python(self.local_grid))
         if self.target_audio_frequency_hz <= 0:
             raise ValueError("target_audio_frequency_hz must be positive")
+        if not -50 <= self.signal_report_db <= 49:
+            raise ValueError("signal_report_db must be between -50 and +49 dB")
         if self.radio_frequency_hz <= 0:
             raise ValueError("radio_frequency_hz must be positive")
         if not self.radio_band.strip():
