@@ -451,7 +451,7 @@ def test_qso_executor_prevents_overlap_and_cancel_forces_rx_while_playing() -> N
     def run_first() -> None:
         try:
             executor.execute_qso(_qso_hardware_request())
-        except Exception as exc:  # pragma: no cover - assertion captures unexpected failure
+        except RuntimeError as exc:  # pragma: no cover - assertion captures unexpected failure
             errors.append(exc)
 
     worker = threading.Thread(target=run_first)
