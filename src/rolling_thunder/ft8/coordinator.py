@@ -214,12 +214,11 @@ class FT8QsoCoordinator:
     def _worker_loop(self) -> None:
         while not self._stop_event.is_set():
             now = self._clock.now_utc()
-            current = FT8Period.from_utc(now)
-            delay_s = (current.index + 1) * 15.0 - now.timestamp()
+            delay_s = self._next_worker_delay_s(now)
             if delay_s < 0:
                 self.on_receive_error("invalid negative FT8 boundary delay")
                 return
-            if self._stop_event.wait(delay_s):
+            if delay_s > 0 and self._stop_event.wait(delay_s):
                 return
             self.tick()
             if self.state in {
@@ -229,6 +228,22 @@ class FT8QsoCoordinator:
                 FT8QsoState.ERROR,
             }:
                 return
+
+    def _next_worker_delay_s(self, now: datetime) -> float:
+        """Return zero when an unprocessed period is already current.
+
+        Physical FT8 transmit execution can occupy essentially the entire
+        15-second slot and may return just after the following boundary.  In
+        that case the worker must process the newly-current period immediately
+        instead of sleeping until one more boundary and manufacturing a
+        false "skipped an FT8 period" failure.
+        """
+        current = FT8Period.from_utc(now)
+        with self._lock:
+            previous = self._last_observed_period
+        if previous is not None and current.index > previous.index:
+            return 0.0
+        return (current.index + 1) * 15.0 - now.timestamp()
 
     def _fail_locked(self, reason: str) -> None:
         self._terminal_reason = reason
