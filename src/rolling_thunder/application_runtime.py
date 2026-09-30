@@ -30,8 +30,9 @@ from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
+from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
 from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
-from rolling_thunder.ft8.domain import FT8QsoContext
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext
 from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
 from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
@@ -175,6 +176,7 @@ class ApplicationRuntime:
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
     ft8_receive: FT8ReceiveService | None = None
+    ft8_authorization: FT8QsoAuthorizationService | None = None
     ft8_qso: FT8OperatorQsoService | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
@@ -469,8 +471,16 @@ class ApplicationRuntime:
                 reconnect_delay_s=config.ft8.receive.reconnect_delay_s,
             )
 
+        ft8_authorization: FT8QsoAuthorizationService | None = None
         ft8_qso: FT8OperatorQsoService | None = None
         resolved_ft8_executor: FT8QsoHardwareTransmitExecutor | None = None
+        resolved_ft8_clock = ft8_clock or SystemFT8Clock()
+        if config.ft8.enabled:
+            ft8_authorization = FT8QsoAuthorizationService(
+                local_callsign=config.operator.callsign,
+                home_grid=config.operator.home_grid,
+                clock=resolved_ft8_clock,
+            )
         if config.ft8.transmit.enabled:
             if ft8_receive is None:
                 raise RuntimeError("FT8 QSO execution requires the receive service")
@@ -479,7 +489,6 @@ class ApplicationRuntime:
                 raise ValueError(
                     "FT8 encoder executable is required when FT8 transmit is enabled."
                 )
-            resolved_ft8_clock = ft8_clock or SystemFT8Clock()
             resolved_ft8_encoder = ft8_encoder or Ft8LibEncoder(str(encoder_executable))
             if ft8_hardware_executor is not None:
                 resolved_ft8_executor = ft8_hardware_executor
@@ -656,6 +665,7 @@ class ApplicationRuntime:
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
             ft8_receive=ft8_receive,
+            ft8_authorization=ft8_authorization,
             ft8_qso=ft8_qso,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
@@ -666,6 +676,23 @@ class ApplicationRuntime:
         if self.ft8_receive is None:
             return None
         return self.ft8_receive.latest_state
+
+    def authorize_ft8_qso(self, activity: FT8CQActivity) -> FT8QsoContext:
+        """Freeze and start one explicitly selected FT8 CQ through application services."""
+        if self.ft8_authorization is None or self.ft8_qso is None:
+            raise RuntimeError("FT8 QSO transmit execution is disabled")
+        context = self.ft8_authorization.authorize(
+            activity,
+            radio_state=self.latest_radio_state,
+            gps_state=self.latest_gps_state,
+        )
+        self.ft8_qso.authorize_and_start(context)
+        return context
+
+    def abort_ft8_qso(self) -> None:
+        """Abort the active FT8 QSO without exposing CAT/PTT to callers."""
+        if self.ft8_qso is not None:
+            self.ft8_qso.abort()
 
     @property
     def pota_receive_tune_executor(self) -> PotaReceiveTuneExecutor:
