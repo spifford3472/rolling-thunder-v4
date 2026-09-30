@@ -8,14 +8,14 @@ never exposes a general-purpose PTT capability.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC
 
 from rolling_thunder.ft8.domain import FT8_PERIOD_SECONDS, FT8QsoContext
 from rolling_thunder.ft8.encoder import FT8Encoder, FT8Waveform, message_from_transmit_request
 from rolling_thunder.ft8.hardware_transmit import (
     FT8QsoHardwareTransmitAuthorization,
-    FT8QsoHardwareTransmitRequest,
     FT8QsoHardwareTransmitExecutor,
+    FT8QsoHardwareTransmitRequest,
 )
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.ft8.transmit import DigitalTransmitSession, FT8TransmitRequest
