@@ -889,6 +889,10 @@ class ApplicationRuntime:
     def stop(self) -> RadioState:
         """Stop polling and disconnect configured hardware safely."""
         if not self._started:
+            if self.ft8_qso is not None:
+                self.ft8_qso.close()
+            if self.ft8_hardware_transmit is not None:
+                self.ft8_hardware_transmit.close()
             return self.radio.get_state()
 
         if self.ft8_qso is not None:
