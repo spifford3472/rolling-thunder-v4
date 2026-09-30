@@ -52,6 +52,8 @@ class FT8QsoCoordinator:
         self._stop_event = threading.Event()
         self._worker: threading.Thread | None = None
         self._last_observed_period: FT8Period | None = None
+        self._last_clock_utc: datetime | None = None
+        self._last_monotonic: float | None = None
         self._terminal_reason: str | None = None
         self._started_utc: datetime | None = None
         self._received_report_db: int | None = None
@@ -82,6 +84,8 @@ class FT8QsoCoordinator:
         with self._lock:
             self._controller.authorize(context)
             self._last_observed_period = context.authorized_period
+            self._last_clock_utc = self._clock.now_utc()
+            self._last_monotonic = self._clock.monotonic()
             self._terminal_reason = None
             self._started_utc = None
             self._received_report_db = None
@@ -96,7 +100,24 @@ class FT8QsoCoordinator:
     def tick(self) -> None:
         """Process the current UTC period at most once."""
         with self._lock:
-            period = self._clock.current_period()
+            now_utc = self._clock.now_utc()
+            monotonic_now = self._clock.monotonic()
+            if self._last_clock_utc is not None and self._last_monotonic is not None:
+                utc_delta = (now_utc - self._last_clock_utc).total_seconds()
+                monotonic_delta = monotonic_now - self._last_monotonic
+                if utc_delta < 0:
+                    self._fail_locked("system UTC moved backward")
+                    return
+                if monotonic_delta < 0:
+                    self._fail_locked("monotonic clock moved backward")
+                    return
+                if abs(utc_delta - monotonic_delta) > 1.0:
+                    self._fail_locked("system UTC and monotonic clocks diverged")
+                    return
+            self._last_clock_utc = now_utc
+            self._last_monotonic = monotonic_now
+
+            period = FT8Period.from_utc(now_utc)
             previous = self._last_observed_period
             if previous is not None:
                 if period.index < previous.index:
@@ -159,6 +180,8 @@ class FT8QsoCoordinator:
         with self._lock:
             self._controller.reset()
             self._last_observed_period = None
+            self._last_clock_utc = None
+            self._last_monotonic = None
             self._terminal_reason = None
             self._started_utc = None
             self._received_report_db = None
