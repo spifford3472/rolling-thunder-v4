@@ -23,7 +23,7 @@ def _context() -> FT8QsoContext:
         target_audio_frequency_hz=1500,
         radio_frequency_hz=14_074_000,
         radio_band="20m",
-        radio_mode="DIG-U",
+        radio_mode="DATA",
         local_grid="EM79xm",
         tx_parity=FT8PeriodParity.ODD,
         authorized_period=FT8Period(index=100),
@@ -171,7 +171,7 @@ def test_wrong_destination_decode_cannot_advance_qso() -> None:
     controller.on_period(FT8Period(index=101))
 
     controller.on_decode(
-        _decode(102, FT8MessageKind.REPORT, destination="W9WRONG")
+        _decode(102, FT8MessageKind.REPORT, destination="W9ABC")
     )
 
     assert controller.state is FT8QsoState.WAIT_REPORT
