@@ -90,9 +90,8 @@ class GatedSecondPeriodAudioInput(FakeAudioInput):
 
     def read_period(self) -> FT8PcmPeriod:
         self._reads += 1
-        if self._reads == 2:
-            if not self._release_second.wait(2):
-                raise FT8AudioInputError("second test period was not released")
+        if self._reads == 2 and not self._release_second.wait(2):
+            raise FT8AudioInputError("second test period was not released")
         return super().read_period()
 
 
