@@ -4,11 +4,26 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
 
-from rolling_thunder.ft8.domain import FT8Decode, FT8Period, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.domain import FT8Decode, FT8MessageKind, FT8Period, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.qso import FT8QsoController
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.ft8.transmit import DigitalTransmitSession
+
+
+@dataclass(frozen=True, slots=True)
+class FT8QsoResult:
+    """Immutable terminal result; persistence belongs to a later checkpoint."""
+
+    status: FT8QsoState
+    context: FT8QsoContext
+    sent_report_db: int
+    received_report_db: int | None
+    started_utc: datetime
+    ended_utc: datetime
+    terminal_reason: str | None = None
 
 
 class FT8QsoCoordinator:
@@ -31,6 +46,9 @@ class FT8QsoCoordinator:
         self._worker: threading.Thread | None = None
         self._last_observed_period: FT8Period | None = None
         self._terminal_reason: str | None = None
+        self._started_utc: datetime | None = None
+        self._received_report_db: int | None = None
+        self._result: FT8QsoResult | None = None
 
     @property
     def state(self) -> FT8QsoState:
@@ -47,17 +65,26 @@ class FT8QsoCoordinator:
         with self._lock:
             return self._terminal_reason
 
+    @property
+    def result(self) -> FT8QsoResult | None:
+        with self._lock:
+            return self._result
+
     def authorize(self, context: FT8QsoContext) -> None:
         """Freeze exactly one operator-selected station into this coordinator."""
         with self._lock:
             self._controller.authorize(context)
             self._last_observed_period = context.authorized_period
             self._terminal_reason = None
+            self._started_utc = None
+            self._received_report_db = None
+            self._result = None
 
     def start_qso(self) -> None:
         """Start deterministic slot-driven QSO operation."""
         with self._lock:
             self._controller.start()
+            self._started_utc = self._clock.now_utc()
 
     def tick(self) -> None:
         """Process the current UTC period at most once."""
@@ -78,12 +105,23 @@ class FT8QsoCoordinator:
                 self._controller.on_period(period)
             except (OSError, RuntimeError, ValueError) as exc:
                 self._fail_locked(str(exc))
+                return
+            self._capture_terminal_result_locked()
 
     def on_decodes(self, decodes: Sequence[FT8Decode]) -> None:
         """Forward normalized decodes; the controller filters authorization relevance."""
         with self._lock:
             for decode in decodes:
+                before = self._controller.state
                 self._controller.on_decode(decode)
+                after = self._controller.state
+                if (
+                    before is FT8QsoState.WAIT_REPORT
+                    and after is FT8QsoState.TX_R_REPORT
+                    and decode.kind is FT8MessageKind.REPORT
+                ):
+                    self._received_report_db = decode.report_db
+            self._capture_terminal_result_locked()
 
     def on_receive_error(self, detail: str) -> None:
         """Fail an active QSO when its decoder/receive path becomes unavailable."""
@@ -104,6 +142,7 @@ class FT8QsoCoordinator:
             self._controller.abort()
             if self._controller.state is FT8QsoState.ABORTED:
                 self._terminal_reason = "operator abort"
+            self._capture_terminal_result_locked()
         self._stop_event.set()
 
     def reset(self) -> None:
@@ -112,6 +151,9 @@ class FT8QsoCoordinator:
             self._controller.reset()
             self._last_observed_period = None
             self._terminal_reason = None
+            self._started_utc = None
+            self._received_report_db = None
+            self._result = None
 
     def start_worker(self) -> None:
         """Start one background period-boundary observer."""
@@ -159,4 +201,30 @@ class FT8QsoCoordinator:
     def _fail_locked(self, reason: str) -> None:
         self._terminal_reason = reason
         self._controller.fail()
+        self._capture_terminal_result_locked()
         self._stop_event.set()
+
+    def _capture_terminal_result_locked(self) -> None:
+        if self._result is not None:
+            return
+        state = self._controller.state
+        if state not in {
+            FT8QsoState.COMPLETED,
+            FT8QsoState.ABORTED,
+            FT8QsoState.RETRY_EXHAUSTED,
+            FT8QsoState.ERROR,
+        }:
+            return
+        context = self._controller.context
+        started = self._started_utc
+        if context is None or started is None:
+            return
+        self._result = FT8QsoResult(
+            status=state,
+            context=context,
+            sent_report_db=context.signal_report_db,
+            received_report_db=self._received_report_db,
+            started_utc=started,
+            ended_utc=self._clock.now_utc(),
+            terminal_reason=self._terminal_reason,
+        )
