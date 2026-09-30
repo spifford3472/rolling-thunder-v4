@@ -1187,3 +1187,17 @@ Observed acceptance result:
 
 This validates the live receive composition without enabling CAT, PTT,
 playback, transmit audio, waveform generation, or RF authority.
+
+
+### Checkpoint 4 unavailable-device recovery acceptance
+
+The receive service was also started with the DigiRig intentionally absent.
+The live application entered `DEGRADED` with the ALSA device-open failure,
+without crashing or touching transmit hardware. After the C-Media DigiRig was
+physically reconnected, the configured `plughw:CARD=Device,DEV=0` selector
+resolved again automatically, the service returned to `RUNNING`, captured a
+complete FT8 period, and decoded four on-air messages.
+
+Shutdown after recovery released the DigiRig capture device and left no orphaned
+`arecord` process. This validates startup-unavailable and reconnect recovery
+without a machine-wide audio reconfiguration.
