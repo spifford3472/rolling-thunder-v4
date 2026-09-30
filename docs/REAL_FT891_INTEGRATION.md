@@ -527,3 +527,14 @@ Interpretation notes:
 - Yaesu CAT meter outputs are raw relative values rather than calibrated engineering units.
 - The sustained ALC raw level is significantly above the no-audio baseline and should be investigated before antenna transmission; DATA DATA GAIN and/or playback amplitude may need reduction.
 
+### Checkpoint 6D ALC optimization — DATA DATA GAIN 25
+
+With FT-891 menu 16-14 DATA DATA GAIN reduced from 50 to 25, the owner-supervised 5 W dummy-load FT8 test completed successfully.
+
+Observed modulation-period raw CAT meter values:
+- ALC: approximately 24-35 raw during sustained FT8 modulation (versus roughly 115-128 at gain 50).
+- POWER: approximately 29-35 raw during sustained modulation, essentially unchanged from the gain-50 test.
+- SWR: 255 raw on the known high-SWR homemade dummy load, returning to 0 when modulation ended.
+
+This shows that reducing DATA DATA GAIN substantially lowers ALC without materially reducing output power at the configured 5 W level. Menu 16-14 was manually changed to 25 for this test and remains a reversible radio-side setting.
+
