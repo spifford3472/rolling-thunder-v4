@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -41,6 +41,7 @@ class FT8QsoCoordinator:
         clock: FT8Clock,
         *,
         attempts_per_state: int = 6,
+        terminal_result_handler: Callable[[FT8QsoResult], object] | None = None,
     ) -> None:
         self._transmit_session = transmit_session
         self._controller = FT8QsoController(
@@ -58,6 +59,7 @@ class FT8QsoCoordinator:
         self._started_utc: datetime | None = None
         self._received_report_db: int | None = None
         self._result: FT8QsoResult | None = None
+        self._terminal_result_handler = terminal_result_handler
 
     @property
     def state(self) -> FT8QsoState:
@@ -266,7 +268,7 @@ class FT8QsoCoordinator:
         started = self._started_utc
         if context is None or started is None:
             return
-        self._result = FT8QsoResult(
+        result = FT8QsoResult(
             status=state,
             context=context,
             sent_report_db=context.signal_report_db,
@@ -275,3 +277,6 @@ class FT8QsoCoordinator:
             ended_utc=self._clock.now_utc(),
             terminal_reason=self._terminal_reason,
         )
+        self._result = result
+        if self._terminal_result_handler is not None:
+            self._terminal_result_handler(result)
