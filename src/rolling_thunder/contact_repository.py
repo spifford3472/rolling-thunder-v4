@@ -731,9 +731,7 @@ class ContactRepository:
             or existing.notes != candidate.notes
         ):
             return False
-        if candidate.grid is not None and existing.grid != candidate.grid:
-            return False
-        return True
+        return candidate.grid is None or existing.grid == candidate.grid
 
     @staticmethod
     def _validate_limit(limit: int) -> None:
