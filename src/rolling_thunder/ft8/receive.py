@@ -6,11 +6,12 @@ import queue
 import threading
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Protocol
 
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import FT8AudioInput, FT8AudioInputError
 from rolling_thunder.ft8.decoder import FT8Decoder, FT8DecoderError, FT8PcmPeriod
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8Decode, FT8Period
 
 
 class FT8ReceiveStatus(StrEnum):
@@ -18,6 +19,18 @@ class FT8ReceiveStatus(StrEnum):
     STARTING = "starting"
     RUNNING = "running"
     DEGRADED = "degraded"
+
+
+class FT8ReceiveObserver(Protocol):
+    """Optional normalized decode/error sink used by an active QSO coordinator."""
+
+    def on_decodes(self, decodes: tuple[FT8Decode, ...]) -> None:
+        """Observe one decoder result without affecting CQ ingestion."""
+        ...
+
+    def on_receive_error(self, detail: str) -> None:
+        """Observe a receive/decoder failure."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +56,7 @@ class FT8ReceiveService:
         activity_manager: FT8CQActivityManager,
         *,
         reconnect_delay_s: float = 2.0,
+        observer: FT8ReceiveObserver | None = None,
     ) -> None:
         if reconnect_delay_s <= 0:
             raise ValueError("reconnect_delay_s must be positive")
@@ -50,6 +64,8 @@ class FT8ReceiveService:
         self._decoder = decoder
         self._activity_manager = activity_manager
         self._reconnect_delay_s = reconnect_delay_s
+        self._observer = observer
+        self._observer_lock = threading.Lock()
         self._periods: queue.Queue[FT8PcmPeriod] = queue.Queue(maxsize=1)
         self._stop_event = threading.Event()
         self._capture_thread: threading.Thread | None = None
@@ -66,6 +82,11 @@ class FT8ReceiveService:
     @property
     def is_running(self) -> bool:
         return self._capture_thread is not None
+
+    def set_observer(self, observer: FT8ReceiveObserver | None) -> None:
+        """Attach or detach the single active-QSO decode observer."""
+        with self._observer_lock:
+            self._observer = observer
 
     def start(self) -> None:
         if self._capture_thread is not None:
@@ -115,7 +136,9 @@ class FT8ReceiveService:
                     self._capture_healthy = False
                 if self._stop_event.is_set():
                     break
-                self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=str(exc))
+                detail = str(exc)
+                self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=detail)
+                self._notify_receive_error(detail)
                 self._audio_input.stop()
                 if self._stop_event.wait(self._reconnect_delay_s):
                     break
@@ -132,11 +155,14 @@ class FT8ReceiveService:
             try:
                 decodes = self._decoder.decode(period)
             except (FT8DecoderError, OSError) as exc:
-                self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=str(exc))
+                detail = str(exc)
+                self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=detail)
+                self._notify_receive_error(detail)
                 continue
 
             for decode in decodes:
                 self._activity_manager.ingest(decode)
+            self._notify_decodes(decodes)
             snapshot = self._activity_manager.snapshot(current_period=period.period)
             with self._state_lock:
                 state = self._state
@@ -155,6 +181,18 @@ class FT8ReceiveService:
                     cq_activity=snapshot,
                     last_error=recovered_error,
                 )
+
+    def _notify_decodes(self, decodes: tuple[FT8Decode, ...]) -> None:
+        with self._observer_lock:
+            observer = self._observer
+        if observer is not None:
+            observer.on_decodes(decodes)
+
+    def _notify_receive_error(self, detail: str) -> None:
+        with self._observer_lock:
+            observer = self._observer
+        if observer is not None:
+            observer.on_receive_error(detail)
 
     def _publish_period(self, period: FT8PcmPeriod) -> None:
         try:

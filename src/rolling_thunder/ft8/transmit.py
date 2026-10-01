@@ -50,9 +50,15 @@ class RecordingDigitalTransmitSession:
     def __init__(self) -> None:
         self.requests: list[FT8TransmitRequest] = []
         self.cancel_count = 0
+        self._cancelled = False
 
     def request(self, request: FT8TransmitRequest) -> None:
+        if self._cancelled:
+            raise RuntimeError("recording FT8 transmit session is cancelled")
         self.requests.append(request)
 
     def cancel(self) -> None:
+        if self._cancelled:
+            return
+        self._cancelled = True
         self.cancel_count += 1

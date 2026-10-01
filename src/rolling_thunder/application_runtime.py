@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from time import monotonic
+from uuid import uuid4
 
 from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.callsign_info_client import HttpCallsignInfoClient
@@ -28,8 +29,24 @@ from rolling_thunder.domain import RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
+from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
+from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
+from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
+from rolling_thunder.ft8.hardware_transmit import (
+    BoundedFT8HardwareTransmitExecutor,
+    FT8QsoHardwareTransmitExecutor,
+)
+from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
+from rolling_thunder.ft8.panel import FT8PanelController
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
+from rolling_thunder.ft8.session import (
+    FT8QsoSessionAuthorization,
+    HardwareDigitalTransmitSession,
+)
+from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
@@ -161,6 +178,10 @@ class ApplicationRuntime:
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
     ft8_receive: FT8ReceiveService | None = None
+    ft8_authorization: FT8QsoAuthorizationService | None = None
+    ft8_qso: FT8OperatorQsoService | None = None
+    ft8_panel: FT8PanelController | None = None
+    ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
 
     @classmethod
@@ -213,6 +234,10 @@ class ApplicationRuntime:
         callsign_map_executor: Executor | None = None,
         ft8_audio_input: FT8AudioInput | None = None,
         ft8_decoder: FT8Decoder | None = None,
+        ft8_audio_output: FT8AudioOutput | None = None,
+        ft8_encoder: FT8Encoder | None = None,
+        ft8_clock: FT8Clock | None = None,
+        ft8_hardware_executor: FT8QsoHardwareTransmitExecutor | None = None,
     ) -> "ApplicationRuntime":
         """Build configured hardware, persistence, and application services."""
         radio: Radio
@@ -449,6 +474,63 @@ class ApplicationRuntime:
                 reconnect_delay_s=config.ft8.receive.reconnect_delay_s,
             )
 
+        ft8_authorization: FT8QsoAuthorizationService | None = None
+        ft8_qso: FT8OperatorQsoService | None = None
+        resolved_ft8_executor: FT8QsoHardwareTransmitExecutor | None = None
+        resolved_ft8_clock: FT8Clock | None = None
+        if config.ft8.enabled:
+            resolved_ft8_clock = ft8_clock or SystemFT8Clock()
+            ft8_authorization = FT8QsoAuthorizationService(
+                local_callsign=config.operator.callsign,
+                home_grid=config.operator.home_grid,
+                clock=resolved_ft8_clock,
+            )
+        if config.ft8.transmit.enabled:
+            if ft8_receive is None or resolved_ft8_clock is None:
+                raise RuntimeError("FT8 QSO execution requires enabled FT8 receive/timing")
+            active_ft8_clock = resolved_ft8_clock
+            encoder_executable = config.ft8.transmit.encoder_executable
+            if encoder_executable is None:
+                raise ValueError(
+                    "FT8 encoder executable is required when FT8 transmit is enabled."
+                )
+            resolved_ft8_encoder = ft8_encoder or Ft8LibEncoder(str(encoder_executable))
+            if ft8_hardware_executor is not None:
+                resolved_ft8_executor = ft8_hardware_executor
+            else:
+                if not isinstance(radio, Ft891Radio):
+                    raise ValueError(
+                        "FT8 transmit requires the real FT-891 adapter "
+                        "or an injected test executor."
+                    )
+                resolved_ft8_audio_output = (
+                    ft8_audio_output
+                    or AlsaAplayFT8AudioOutput(config.ft8.transmit.audio_device)
+                )
+                resolved_ft8_executor = BoundedFT8HardwareTransmitExecutor(
+                    radio,
+                    resolved_ft8_audio_output,
+                )
+
+            def build_ft8_session(
+                context: FT8QsoContext,
+            ) -> HardwareDigitalTransmitSession:
+                assert resolved_ft8_executor is not None
+                return HardwareDigitalTransmitSession(
+                    FT8QsoSessionAuthorization(uuid4().hex, context),
+                    resolved_ft8_encoder,
+                    resolved_ft8_executor,
+                    active_ft8_clock,
+                    release_margin_s=config.ft8.transmit.release_margin_s,
+                )
+
+            ft8_qso = FT8OperatorQsoService(
+                ft8_receive,
+                build_ft8_session,
+                active_ft8_clock,
+                attempts_per_state=config.ft8.qso.attempts_per_state,
+            )
+
         live_map: LiveMapService | None = None
         callsign_map: LiveMapService | None = None
         live_radar: LiveRadarOverlayService | None = None
@@ -552,7 +634,7 @@ class ApplicationRuntime:
                 executor=radar_executor,
             )
 
-        return cls(
+        runtime = cls(
             radio=radio,
             polling=RadioPollingService(
                 radio,
@@ -588,7 +670,21 @@ class ApplicationRuntime:
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
             ft8_receive=ft8_receive,
+            ft8_authorization=ft8_authorization,
+            ft8_qso=ft8_qso,
+            ft8_hardware_transmit=resolved_ft8_executor,
         )
+        if ft8_receive is not None:
+            runtime.ft8_panel = FT8PanelController(
+                receive_state=lambda: runtime.latest_ft8_receive_state,
+                qso_state=lambda: runtime.latest_ft8_qso_state,
+                qso_context=lambda: runtime.latest_ft8_qso_context,
+                qso_result=lambda: runtime.latest_ft8_qso_result,
+                authorize=runtime.authorize_ft8_qso,
+                abort=runtime.abort_ft8_qso,
+                return_to_browser=runtime.return_ft8_to_browser,
+            )
+        return runtime
 
     @property
     def latest_ft8_receive_state(self) -> FT8ReceiveState | None:
@@ -596,6 +692,50 @@ class ApplicationRuntime:
         if self.ft8_receive is None:
             return None
         return self.ft8_receive.latest_state
+
+    def authorize_ft8_qso(self, activity: FT8CQActivity) -> FT8QsoContext:
+        """Freeze and start one explicitly selected FT8 CQ through application services."""
+        if self.ft8_authorization is None or self.ft8_qso is None:
+            raise RuntimeError("FT8 QSO transmit execution is disabled")
+        context = self.ft8_authorization.authorize(
+            activity,
+            radio_state=self.latest_radio_state,
+            gps_state=self.latest_gps_state,
+        )
+        self.ft8_qso.authorize_and_start(context)
+        return context
+
+    def abort_ft8_qso(self) -> None:
+        """Abort the active FT8 QSO without exposing CAT/PTT to callers."""
+        if self.ft8_qso is not None:
+            self.ft8_qso.abort()
+
+    def return_ft8_to_browser(self) -> FT8QsoResult | None:
+        """Release one terminal QSO and restore CQ-browser ownership."""
+        if self.ft8_qso is None:
+            return None
+        return self.ft8_qso.return_to_browser()
+
+    @property
+    def latest_ft8_qso_state(self) -> FT8QsoState:
+        """Return presentation-safe FT8 QSO state."""
+        if self.ft8_qso is None:
+            return FT8QsoState.IDLE
+        return self.ft8_qso.state
+
+    @property
+    def latest_ft8_qso_context(self) -> FT8QsoContext | None:
+        """Return the active frozen QSO context, when present."""
+        if self.ft8_qso is None:
+            return None
+        return self.ft8_qso.context
+
+    @property
+    def latest_ft8_qso_result(self) -> FT8QsoResult | None:
+        """Return the immutable terminal QSO result without persistence."""
+        if self.ft8_qso is None:
+            return None
+        return self.ft8_qso.result
 
     @property
     def pota_receive_tune_executor(self) -> PotaReceiveTuneExecutor:
@@ -749,8 +889,16 @@ class ApplicationRuntime:
     def stop(self) -> RadioState:
         """Stop polling and disconnect configured hardware safely."""
         if not self._started:
+            if self.ft8_qso is not None:
+                self.ft8_qso.close()
+            if self.ft8_hardware_transmit is not None:
+                self.ft8_hardware_transmit.close()
             return self.radio.get_state()
 
+        if self.ft8_qso is not None:
+            self.ft8_qso.close()
+        if self.ft8_hardware_transmit is not None:
+            self.ft8_hardware_transmit.close()
         if self.ft8_receive is not None:
             self.ft8_receive.stop()
         if self.pota_spot_polling is not None:

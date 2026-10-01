@@ -4,9 +4,9 @@
 
 This document covers the installed Yaesu FT-891 integration. The normal
 Rolling Thunder radio path remains receive-only. Rolling Thunder v4.3
-Checkpoint 6 separately permits a disabled-by-default, owner-initiated,
-physically supervised FT8 hardware-test capability while that boundary is
-being validated.
+Checkpoint 6 validated a separate owner-supervised FT8 hardware-test capability,
+and Checkpoint 7 may reuse those bounded mechanics only through an independent
+operator-QSO authorization boundary.
 
 The implementation establishes and validates:
 
@@ -42,9 +42,9 @@ The normal Rolling Thunder `hardware.radio_device` path must use only the Enhanc
 ```
 
 The Standard Com Port must not be configured as `hardware.radio_device`.
-Checkpoint 6 may inspect it non-destructively and may use it only if a later
-owner-approved physical test proves that it is the single safest FT8 PTT
-mechanism. No RTS/DTR line may be manipulated speculatively.
+Checkpoint 6 selected Enhanced-CAT `TX1;` / `TX0;` as the verified FT8 PTT
+mechanism. The Standard Com Port remains unused by Rolling Thunder; CP7 does not
+use RTS, DTR, GPIO, HID, or another PTT mechanism.
 
 The transient `/dev/ttyUSB*` numbers are diagnostic observations only. They may
 change after reconnects or other USB enumeration changes; configuration must use
@@ -549,3 +549,43 @@ Observed modulation-period raw CAT meter values:
 
 This is the best observed ALC result so far: compared with gain 50 (roughly 115-128 raw) and gain 25 (roughly 24-35 raw), gain 20 minimizes ALC while preserving the configured 5 W output behavior. Menu 16-14 is currently set to 20 and remains a reversible radio-side setting.
 
+
+
+## v4.3 Checkpoint 7 deterministic QSO execution boundary
+
+Checkpoint 7 introduces no new FT-891 PTT mechanism. It reuses the CP6-validated
+Enhanced CAT capability through the existing serialized `Ft891Radio` ownership
+path and the bounded FT8 executor.
+
+The CP7 production path is deliberately distinct from the CP6 owner-test API:
+
+```text
+operator selects one current CQ
+    -> frozen FT8QsoContext
+    -> FT8QsoController / coordinator
+    -> HardwareDigitalTransmitSession
+    -> QSO-specific physical authorization
+    -> BoundedFT8HardwareTransmitExecutor
+    -> Enhanced CAT TX1/TX0 + left-only DigiRig playback
+```
+
+Before keying, the physical path requires the radio to be connected, in receive,
+at the exact frozen frequency, and already in `DATA` mode. CP7 does not
+silently change the radio mode.
+
+The DigiRig playback rule remains unchanged: FT8 payload is placed only on the
+left channel and the right channel is digital silence.
+
+The encoder reference remains a padded 15-second waveform with 12.64 seconds of
+nominal occupied FT8 modulation. CP7 derives a safe-start cutoff from the
+waveform's actual final non-zero sample and reserves a configurable CAT-release
+margin. A request that has missed that window fails closed before PTT.
+
+Two configuration gates are required before application runtime may compose
+transmit resources: `ft8.enabled: true` and `ft8.transmit.enabled: true`.
+Receive-only FT8 therefore remains possible without creating encoder, playback,
+PTT, executor, or automated-QSO transmit authority.
+
+No Checkpoint 7 automated RF or real-station QSO has been physically accepted
+yet. Those tests remain blocked pending green deterministic acceptance and
+explicit owner authorization.

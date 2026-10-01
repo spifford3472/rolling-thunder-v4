@@ -187,6 +187,15 @@ ft8:
     decoder_executable: null
     decoder_timeout_s: 12.0
     reconnect_delay_s: 2.0
+  transmit:
+    # Independent RF gate. Keep false for receive-only FT8.
+    enabled: false
+    # Required only when ft8.transmit.enabled is true.
+    encoder_executable: null
+    # DigiRig DR-891 playback device; payload is left channel, right is silence.
+    audio_device: plughw:CARD=Device,DEV=0
+    # Reserve time for CAT TX-off before the next 15-second FT8 period.
+    release_margin_s: 0.20
   qso:
     # Retry budget is per unchanged QSO transmit state/message, not per whole QSO.
     attempts_per_state: 6

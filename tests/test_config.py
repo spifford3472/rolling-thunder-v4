@@ -684,3 +684,66 @@ repeaters:
         match=r"repeaters\.source_path",
     ):
         load_config(path)
+
+
+def test_ft8_transmit_is_disabled_by_default() -> None:
+    config = ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+        }
+    )
+
+    assert config.ft8.enabled is False
+    assert config.ft8.transmit.enabled is False
+    assert config.ft8.transmit.encoder_executable is None
+
+
+def test_ft8_transmit_requires_parent_ft8_enable() -> None:
+    with pytest.raises(ValueError, match="ft8.transmit.enabled requires ft8.enabled"):
+        ApplicationConfig.model_validate(
+            {
+                "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+                "ft8": {
+                    "enabled": False,
+                    "transmit": {
+                        "enabled": True,
+                        "encoder_executable": "/opt/ft8_lib/gen_ft8",
+                    },
+                },
+            }
+        )
+
+
+def test_ft8_transmit_requires_absolute_encoder_when_enabled() -> None:
+    with pytest.raises(ValueError, match="encoder_executable"):
+        ApplicationConfig.model_validate(
+            {
+                "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+                "ft8": {
+                    "enabled": True,
+                    "receive": {
+                        "decoder_executable": "/opt/ft8_lib/decode_ft8",
+                    },
+                    "transmit": {
+                        "enabled": True,
+                    },
+                },
+            }
+        )
+
+    with pytest.raises(ValueError, match="absolute path"):
+        ApplicationConfig.model_validate(
+            {
+                "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+                "ft8": {
+                    "enabled": True,
+                    "receive": {
+                        "decoder_executable": "/opt/ft8_lib/decode_ft8",
+                    },
+                    "transmit": {
+                        "enabled": True,
+                        "encoder_executable": "gen_ft8",
+                    },
+                },
+            }
+        )

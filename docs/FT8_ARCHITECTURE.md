@@ -1,8 +1,8 @@
 # Rolling Thunder v4.3 Experimental FT8 Architecture
 
-Status: Checkpoints 1–5 implemented; Checkpoint 6 controlled hardware-transmit work in progress  
+Status: Checkpoints 1–6 implemented; Checkpoint 7 controlled automated-QSO execution in deterministic integration
 Date: 2026-09-29  
-Implementation state: receive, decoder, hardware-independent QSO state machine, and offline encoder/waveform are implemented. Checkpoint 6 may add only the separately bounded owner-test physical transmit capability described below.
+Implementation state: receive, decoder, hardware-independent QSO state machine, offline encoder/waveform, and the bounded FT-891/DigiRig physical executor are implemented. Checkpoint 7 adds a separate QSO authorization/session/coordinator path but remains blocked from live RF until deterministic acceptance and explicit owner approval.
 
 ## Purpose
 
@@ -83,14 +83,9 @@ Enhanced CAT remains owned by the existing FT-891 adapter/arbitration path.
 CP2105 interface 01 has been observed as `/dev/ttyUSB3` and is presently
 unused by Rolling Thunder.
 
-Existing documentation associates this interface with PTT/CW/digital-transmit
-control, but v4.3 Checkpoint 1 does not authorize opening it. Whether future FT8
-PTT should use this interface, an Enhanced-CAT command, or another mechanism is
-an experimental question that must be answered with a later parked hardware
-test before transmit implementation.
-
-No design may assume RTS, DTR, or another Standard-port line is PTT without
-physical verification.
+Checkpoint 6 resolved the PTT experiment in favor of the Enhanced CAT
+`TX1;`/`TX0;` path. The Standard Com Port remains unused by Rolling Thunder.
+Checkpoint 7 must not use RTS, DTR, GPIO, HID, or another PTT mechanism.
 
 ### DigiRig C-Media audio
 
@@ -151,15 +146,16 @@ FT8 QSO controller/state machine
         +------> FT8 encoder
         |
         +------> DigitalTransmitSession
-        |            |
-        |            +----> hardware-free logical requests in Checkpoint 6
-        |
-        +------> [NO physical RF connection in Checkpoint 6]
-        |
-        +------> completed-QSO logging adapter
                      |
-                     v
-             ContactLoggingService
+                     +----> HardwareDigitalTransmitSession
+                               |
+                               +----> exact message mapping / encoder
+                               +----> slot-safety validation
+                               +----> QSO-specific physical authorization
+                               +----> bounded FT-891/DigiRig executor
+
+Checkpoint 7 produces only an immutable terminal QSO result. Successful-contact
+persistence and Wavelog integration remain explicitly outside this checkpoint.
 
 FT8 receive worker
         |
@@ -904,16 +900,47 @@ Before testing:
 The goal is only to establish the correct DR-891/FT-891 PTT mechanism and
 fail-safe behavior.
 
-### Later transmit checkpoint
+### Checkpoint 7 - controlled automated QSO execution
 
-Only after Checkpoint 6 proves the hardware boundary:
+Checkpoint 6 proved the hardware boundary. Checkpoint 7 may connect one
+explicitly operator-authorized QSO to that bounded physical capability.
 
-- implement bounded `DigitalTransmitSession`
-- implement FT8 audio output
-- integrate state-machine-driven encoded audio
-- prove PTT release on every controlled error path
-- retain manual ABORT
-- keep automatic next-station selection prohibited
+The implementation keeps CP6 owner-test authorization distinct from CP7 QSO
+authorization. It adds:
+
+- a production `HardwareDigitalTransmitSession` implementing the narrow
+  `DigitalTransmitSession` contract;
+- a QSO-specific physical authorization/request API rather than fabricating
+  CP6 owner-test requests;
+- a coordinator using `FT8Clock` and normalized decoder events;
+- a single-active-QSO operator service and presentation-safe CQ-browser
+  controller;
+- explicit DATA-mode, frequency, context, parity, stale-CQ, and timing checks;
+- immediate transmit cancellation on ABORT or receive failure;
+- an immutable terminal QSO result with no contact persistence.
+
+The validated 15-second encoder reference PCM is not rewritten. Runtime timing
+scans the waveform for its final non-zero sample and rejects any start that
+cannot keep RF-bearing audio plus the configured CAT-release margin inside the
+authorized 15-second period. The remaining padded silence may finish after PTT
+has already been forced to RX.
+
+Configuration has two independent gates:
+
+```yaml
+ft8:
+  enabled: false
+  transmit:
+    enabled: false
+```
+
+`ft8.enabled: false` creates no FT8 resources. With FT8 receive enabled but
+`ft8.transmit.enabled: false`, no encoder, playback output, physical executor,
+or QSO transmit authority is composed.
+
+No live CP7 automated QSO or antenna RF test is authorized by this
+documentation update. Physical validation remains a separate owner-approved
+phase after deterministic gates are green.
 
 ## Rollback/dependency policy
 
@@ -950,7 +977,7 @@ and must never be repointed to an experimental FT8 worktree.
 2. Add future FT8 transmit authority through a separate narrow capability.
 3. Keep UI free of serial/audio/timing/transmit ownership.
 4. Use stable DigiRig ALSA card/device naming, not numeric ALSA card indexes.
-5. Treat the Standard Com Port and C-Media HID PTT behavior as unverified.
+5. Keep the Standard Com Port, RTS/DTR, GPIO, and HID outside the selected CP7 PTT path; use only the CP6-verified Enhanced CAT capability.
 6. Do not create a second Enhanced-CAT owner.
 7. Use project-owned decode/QSO models so decoder backends remain replaceable.
 8. Use WSJT-X as the reference oracle, not the embedded architectural core.
@@ -1242,3 +1269,89 @@ reported no FT8 receive state, started and stopped normally, opened no
 
 This confirms the Checkpoint 4 feature gate prevents FT8 audio, decoder, and
 receive-worker resource acquisition when disabled.
+
+## Known-good FT-891 / DigiRig FT8 station baseline (owner-validated 2026-09-30)
+
+The following settings are the current known-good baseline for the installed
+FT-891 + DigiRig DR-891 path on 20 m FT8. These are validation facts for later
+station-preflight work; Checkpoint 7 must not grow an automatic radio optimizer.
+
+### FT-891 receive / data settings
+
+- RF frequency for 20 m FT8 validation: 14.074000 MHz.
+- Mode: DATA.
+- 08-01 DATA MODE: OTHERS.
+- 08-05 DATA LCUT FREQ: OFF.
+- 08-06 DATA LCUT SLOPE: 18 dB/oct.
+- 08-07 DATA HCUT FREQ: OFF.
+- 08-08 DATA HCUT SLOPE: 18 dB/oct.
+- 08-11 DATA OUT LEVEL: 50.
+- 08-12 DATA BFO: USB.
+- Receiver AGC: AUTO.
+- Noise Blanker: OFF for FT8. Owner testing showed NB level 7 reduced DigiRig
+  receive audio by about 22 dB and prevented normal FT8 decoding; disabling NB
+  restored approximately -30.5 dBFS RMS / -19.1 dBFS peak and immediate decode.
+- PROC value 14 was observed but is a transmit speech-processing setting and is
+  not part of the FT8 receive baseline.
+
+### DigiRig C-Media receive settings
+
+- ALSA device: plughw:CARD=Device,DEV=0.
+- Mic Capture Volume: 12 / 34% / 0.00 dB.
+- Mic Capture Switch: ON.
+- USB codec Auto Gain Control: OFF.
+- Known-good receive target observed in DATA mode with NB OFF: approximately
+  -30 dBFS RMS and -19 dBFS peak during an active 20 m FT8 period.
+
+### FT-891 transmit settings used for controlled validation
+
+- HF PWR: 5 W during owner-supervised validation.
+- DATA DATA GAIN: 20.
+- CAT PTT: Enhanced CAT TX1/TX0 path only.
+- DigiRig playback: FT8 payload on LEFT channel, RIGHT channel digital zero.
+- Commercial MFJ-260C dummy-load validation produced raw CAT ALC 2, raw POWER
+  about 17-20, and raw SWR about 13 during sustained modulation. The earlier
+  homemade load produced pegged raw SWR 255 and elevated ALC and must not be
+  used as the calibration reference.
+
+## Deferred Checkpoint 10 — FT8 station calibration and preflight
+
+Checkpoint 10 should add a bounded, operator-visible FT8 station calibration /
+preflight capability rather than silently changing radio parameters during a
+QSO. Its goal is to detect configuration drift and adapt safely when antennas,
+feedline, or surrounding RF conditions change.
+
+Checkpoint 10 should, at minimum:
+
+1. Read or verify all CAT-addressable FT8-critical FT-891 settings that are
+   safely queryable, comparing them to the known-good baseline above.
+2. Verify receive state before transmit: exact frequency, DATA mode, DATA BFO,
+   DATA mode selection, NB state when queryable, DigiRig capture gain/AGC, and
+   live receive audio level.
+3. Run receive-only level/decode checks first and reject calibration when input
+   is clipped, nearly silent, or produces no usable FT8 activity.
+4. Support an explicitly authorized dummy-load transmit calibration that samples
+   raw ALC, POWER, and SWR and always retains the existing bounded watchdog and
+   unconditional CAT TX-off cleanup.
+5. Explore CAT control of DATA DATA GAIN only after read/write behavior is
+   independently validated. Any adjustment must be bounded, reversible, and
+   operator-visible. Do not implement a fast closed-loop gain controller inside
+   an FT8 symbol stream.
+6. Prefer adjustments between FT8 transmit periods, with hard minimum/maximum
+   gain values and a maximum step per calibration iteration.
+7. Keep RF power fixed during the first calibration implementation. Treat RF
+   power control as a separate later capability rather than coupling two control
+   loops at once.
+8. Detect poor antenna/load conditions and fail closed instead of trying to
+   compensate for high SWR by increasing audio drive or RF power.
+9. Never auto-tune, select another antenna, change bands, or begin unattended
+   transmission as part of calibration.
+10. Record the measured station profile (band, antenna/profile identifier if
+    available, RX level, selected DATA DATA GAIN, ALC/POWER/SWR observations,
+    timestamp) so later checks can detect meaningful drift without assuming one
+    global setting fits every antenna or installation.
+
+Checkpoint 10 acceptance should include deterministic fake-hardware tests,
+receive-only live validation, dummy-load validation, and only then a separately
+authorized antenna test. It should remain independent of Wavelog persistence and
+of automatic station selection.
