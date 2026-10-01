@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 13
+CURRENT_SCHEMA_VERSION: Final = 14
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -451,7 +451,147 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         CREATE INDEX pota_worked_markers_day_index
         ON pota_worked_markers (utc_date, worked_at)
         """,
-    ),
+    ),,
+    14: (
+        """
+        CREATE TABLE contact_sync_retries_v14_backup AS
+        SELECT
+            contact_id,
+            attempt_count,
+            next_attempt_at,
+            last_error,
+            updated_at
+        FROM contact_sync_retries
+        """,
+        "DROP TABLE contact_sync_retries",
+        """
+        CREATE TABLE contacts_v14 (
+            contact_id TEXT PRIMARY KEY,
+            callsign TEXT NOT NULL,
+            frequency_hz INTEGER NOT NULL
+                CHECK (frequency_hz > 0 AND frequency_hz <= 300000000000),
+            mode TEXT NOT NULL
+                CHECK (mode IN ('AM', 'CW', 'DATA', 'DMR', 'FT8', 'FM', 'LSB', 'USB')),
+            started_at TEXT NOT NULL,
+            rst_sent TEXT NOT NULL,
+            rst_received TEXT NOT NULL,
+            grid TEXT,
+            notes TEXT CHECK (notes IS NULL OR length(notes) <= 2000),
+            synchronization_state TEXT NOT NULL DEFAULT 'pending'
+                CHECK (
+                    synchronization_state IN (
+                        'pending',
+                        'synchronized',
+                        'failed'
+                    )
+                ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            my_grid TEXT,
+            pota_reference TEXT,
+            grid_source TEXT
+                CHECK (
+                    grid_source IS NULL
+                    OR grid_source IN ('pota_park', 'qrz')
+                ),
+            enrichment_state TEXT NOT NULL DEFAULT 'ready'
+                CHECK (enrichment_state IN ('ready', 'pending_qrz'))
+        )
+        """,
+        """
+        INSERT INTO contacts_v14 (
+            contact_id,
+            callsign,
+            frequency_hz,
+            mode,
+            started_at,
+            rst_sent,
+            rst_received,
+            grid,
+            notes,
+            synchronization_state,
+            created_at,
+            updated_at,
+            my_grid,
+            pota_reference,
+            grid_source,
+            enrichment_state
+        )
+        SELECT
+            contact_id,
+            callsign,
+            frequency_hz,
+            mode,
+            started_at,
+            rst_sent,
+            rst_received,
+            grid,
+            notes,
+            synchronization_state,
+            created_at,
+            updated_at,
+            my_grid,
+            pota_reference,
+            grid_source,
+            enrichment_state
+        FROM contacts
+        """,
+        "DROP TABLE contacts",
+        "ALTER TABLE contacts_v14 RENAME TO contacts",
+        """
+        CREATE INDEX contacts_started_at_index
+        ON contacts (started_at DESC)
+        """,
+        """
+        CREATE INDEX contacts_synchronization_state_index
+        ON contacts (synchronization_state, started_at)
+        """,
+        """
+        CREATE INDEX contacts_callsign_index
+        ON contacts (callsign, started_at DESC)
+        """,
+        """
+        CREATE INDEX contacts_sync_enrichment_index
+        ON contacts (
+            synchronization_state,
+            enrichment_state,
+            started_at
+        )
+        """,
+        """
+        CREATE TABLE contact_sync_retries (
+            contact_id TEXT PRIMARY KEY,
+            attempt_count INTEGER NOT NULL CHECK (attempt_count >= 1),
+            next_attempt_at TEXT NOT NULL,
+            last_error TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (contact_id)
+                REFERENCES contacts (contact_id)
+                ON DELETE CASCADE
+        )
+        """,
+        """
+        INSERT INTO contact_sync_retries (
+            contact_id,
+            attempt_count,
+            next_attempt_at,
+            last_error,
+            updated_at
+        )
+        SELECT
+            contact_id,
+            attempt_count,
+            next_attempt_at,
+            last_error,
+            updated_at
+        FROM contact_sync_retries_v14_backup
+        """,
+        "DROP TABLE contact_sync_retries_v14_backup",
+        """
+        CREATE INDEX contact_sync_retries_due_index
+        ON contact_sync_retries (next_attempt_at, contact_id)
+        """,
+    )
 }
 
 
