@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import MappingProxyType
+from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
 
@@ -153,6 +154,8 @@ class FT8QsoContext:
     latitude: float | None = None
     longitude: float | None = None
     location_label: str | None = None
+    remote_grid: str | None = None
+    qso_id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -166,6 +169,12 @@ class FT8QsoContext:
             _CALLSIGN_ADAPTER.validate_python(self.remote_callsign),
         )
         object.__setattr__(self, "local_grid", _GRID_ADAPTER.validate_python(self.local_grid))
+        if self.remote_grid is not None:
+            object.__setattr__(
+                self,
+                "remote_grid",
+                _GRID_ADAPTER.validate_python(self.remote_grid),
+            )
         if self.target_audio_frequency_hz <= 0:
             raise ValueError("target_audio_frequency_hz must be positive")
         if not -50 <= self.signal_report_db <= 49:
