@@ -15,6 +15,6 @@ repos:
 
       - id: pytest
         name: Pytest
-        entry: pytest
+        entry: bash -c 'PYTHONPATH=src pytest'
         language: system
         pass_filenames: false
