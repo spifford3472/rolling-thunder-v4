@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Protocol
+from uuid import UUID
 
 from rolling_thunder.contact_metadata import resolve_contact_metadata
-from rolling_thunder.domain import Contact, RadioConnectionState, RadioState
+from rolling_thunder.domain import (
+    Contact,
+    ContactEnrichmentState,
+    RadioConnectionState,
+    RadioMode,
+    RadioState,
+)
 from rolling_thunder.gps import GPSState
 from rolling_thunder.pota_spots import PotaSpot
 
@@ -23,10 +30,13 @@ class Clock(Protocol):
 
 
 class ContactWriter(Protocol):
-    """Persist a completed contact before returning."""
+    """Persist completed contacts before returning."""
 
     def add(self, contact: Contact) -> None:
         """Durably store one contact."""
+
+    def add_idempotent(self, contact: Contact) -> Contact:
+        """Durably store once or return the identical existing contact."""
 
 
 class SystemClock:
@@ -103,3 +113,38 @@ class ContactLoggingService:
         )
         self._repository.add(contact)
         return contact
+
+    def commit_completed(
+        self,
+        *,
+        contact_id: UUID,
+        callsign: str,
+        frequency_hz: int,
+        mode: RadioMode,
+        started_at: datetime,
+        rst_sent: str,
+        rst_received: str,
+        my_grid: str | None,
+        grid: str | None = None,
+        notes: str | None = None,
+    ) -> Contact:
+        """Persist an immutable completed-QSO snapshot without mutable radio/GPS state."""
+        enrichment_state = (
+            ContactEnrichmentState.PENDING_QRZ
+            if grid is None and self._qrz_fallback_available
+            else ContactEnrichmentState.READY
+        )
+        contact = Contact(
+            contact_id=contact_id,
+            callsign=callsign,
+            frequency_hz=frequency_hz,
+            mode=mode,
+            started_at=started_at,
+            rst_sent=rst_sent,
+            rst_received=rst_received,
+            grid=grid,
+            my_grid=my_grid,
+            enrichment_state=enrichment_state,
+            notes=notes,
+        )
+        return self._repository.add_idempotent(contact)
