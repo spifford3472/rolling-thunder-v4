@@ -29,11 +29,13 @@ class FT8OperatorQsoService:
         clock: FT8Clock,
         *,
         attempts_per_state: int = 6,
+        terminal_result_handler: Callable[[FT8QsoResult], object] | None = None,
     ) -> None:
         self._receive_service = receive_service
         self._transmit_session_factory = transmit_session_factory
         self._clock = clock
         self._attempts_per_state = attempts_per_state
+        self._terminal_result_handler = terminal_result_handler
         self._lock = RLock()
         self._coordinator: FT8QsoCoordinator | None = None
 
@@ -68,6 +70,7 @@ class FT8OperatorQsoService:
                 session,
                 self._clock,
                 attempts_per_state=self._attempts_per_state,
+                terminal_result_handler=self._terminal_result_handler,
             )
             coordinator.authorize(context)
             coordinator.start_qso()
