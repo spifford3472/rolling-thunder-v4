@@ -1355,4 +1355,3 @@ Checkpoint 10 acceptance should include deterministic fake-hardware tests,
 receive-only live validation, dummy-load validation, and only then a separately
 authorized antenna test. It should remain independent of Wavelog persistence and
 of automatic station selection.
-
