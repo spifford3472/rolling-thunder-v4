@@ -114,6 +114,19 @@ class ContactRepository:
                 f"{self._database_path}: {contact.contact_id}: {error}"
             ) from error
 
+    def add_idempotent(self, contact: Contact) -> Contact:
+        """Persist once, returning the existing identical contact on replay."""
+        try:
+            self.add(contact)
+            return contact
+        except ContactAlreadyExistsError:
+            existing = self.get(contact.contact_id)
+            if existing == contact:
+                return existing
+            raise ContactConflictError(
+                f"Contact UUID was reused with different data: {contact.contact_id}"
+            )
+
     def get(self, contact_id: UUID) -> Contact | None:
         """Retrieve one contact by UUID, or return None when it is absent."""
         try:
