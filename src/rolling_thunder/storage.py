@@ -451,7 +451,7 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         CREATE INDEX pota_worked_markers_day_index
         ON pota_worked_markers (utc_date, worked_at)
         """,
-    ),,
+    ),
     14: (
         """
         CREATE TABLE contact_sync_retries_v14_backup AS
