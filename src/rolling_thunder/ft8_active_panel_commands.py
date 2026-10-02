@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Protocol
 
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.ft8.domain import FT8QsoState
 from rolling_thunder.ft8.panel import FT8PanelMode, FT8PanelSnapshot
 
 
