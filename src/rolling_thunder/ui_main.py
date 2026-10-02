@@ -1465,6 +1465,10 @@ def run_dashboard(
                             f"GRID: {context.local_grid or '------'}  "
                             f"FREQ: {context.radio_frequency_hz / 1_000_000:.6f} MHz"
                         )
+                    lines.append(
+                        "ATTEMPT "
+                        f"{ft8_snapshot.attempt_count}/{ft8_snapshot.attempts_per_state}"
+                    )
                     lines.append("BACK / X = ABORT")
                 else:
                     result = ft8_snapshot.result
