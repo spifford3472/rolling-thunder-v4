@@ -28,6 +28,7 @@ def test_defaults_to_pota_context() -> None:
         ("6", ContextId.WEATHER),
         ("7", ContextId.LOG),
         ("8", ContextId.DMR),
+        ("9", ContextId.FT8),
     ],
 )
 def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId) -> None:
