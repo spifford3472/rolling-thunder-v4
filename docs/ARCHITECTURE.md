@@ -858,7 +858,13 @@ rules, deployment, and limitations.
 
 ## v4.3 Experimental FT8 architecture
 
-Status: architecture/research only; no FT8 runtime or transmit authority is
+Status: experimental runtime integration through Checkpoint 9; disabled by default.
+The implementation includes receive/decode, one explicitly operator-authorized
+bounded QSO path, successful-contact persistence, and a presentation/controller
+boundary. Production migration remains separately owner-approved.
+
+Earlier Checkpoint 1 architecture notes below describe the original research
+boundary and are retained as historical design context. FT8 runtime or transmit authority is
 implemented on `main`.
 
 The v4.3 experiment is documented in `docs/FT8_ARCHITECTURE.md`. It preserves
