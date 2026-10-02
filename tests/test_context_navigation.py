@@ -80,10 +80,11 @@ def test_select_next_advances_through_contexts() -> None:
     assert controller.select_next().selected is ContextId.SETTINGS
     assert controller.select_next().selected is ContextId.LOG
     assert controller.select_next().selected is ContextId.DMR
+    assert controller.select_next().selected is ContextId.FT8
 
 
-def test_select_next_wraps_from_dmr_to_pota() -> None:
-    controller = ContextNavigationController(ContextId.DMR)
+def test_select_next_wraps_from_ft8_to_pota() -> None:
+    controller = ContextNavigationController(ContextId.FT8)
 
     state = controller.select_next()
 
