@@ -859,12 +859,11 @@ class ApplicationRuntime:
         self._started = True
         try:
             self._start_remaining_services()
-        except Exception:
+        except (OSError, RuntimeError, ValueError):
             try:
                 self.stop()
-            except Exception:
-                # Preserve the original startup failure after best-effort cleanup.
-                pass
+            except (OSError, RuntimeError, ValueError) as cleanup_error:
+                print(f"Rolling Thunder startup cleanup error: {cleanup_error}")
             raise
         return state
 
