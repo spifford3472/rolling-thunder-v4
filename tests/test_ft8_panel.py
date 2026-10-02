@@ -183,6 +183,32 @@ def test_panel_drops_selection_when_cq_expires() -> None:
     assert panel.activate_selection() is None
 
 
+
+
+def test_receive_only_panel_browses_but_does_not_authorize() -> None:
+    authorized: list[str] = []
+    panel = FT8PanelController(
+        receive_state=lambda: FT8ReceiveState(cq_activity=(_activity(),)),
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda activity: authorized.append(activity.callsign) or pytest.fail(
+            "receive-only panel must not authorize"
+        ),
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+        authorization_enabled=lambda: False,
+    )
+
+    assert panel.select_next() == "K1ABC"
+
+    snapshot = panel.snapshot()
+    assert snapshot.mode is FT8PanelMode.BROWSE
+    assert snapshot.authorization_enabled is False
+    assert panel.activate_selection() is None
+    assert panel.selected_callsign == "K1ABC"
+    assert authorized == []
+
 def test_panel_snapshot_exposes_bounded_retry_progress() -> None:
     panel = FT8PanelController(
         receive_state=lambda: FT8ReceiveState(),
