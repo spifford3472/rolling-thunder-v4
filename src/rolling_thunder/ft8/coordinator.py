@@ -177,14 +177,17 @@ class FT8QsoCoordinator:
                 FT8QsoState.ERROR,
             }:
                 return
-            self._fail_locked(f"FT8 receive failure: {detail}")
+            self._fail_locked(
+                f"FT8 receive failure: {detail}",
+                session_already_cancelled=True,
+            )
 
     def abort(self) -> None:
         """Idempotently abort and force the transmit session toward receive."""
         self._stop_event.set()
         self._transmit_session.cancel()
         with self._lock:
-            self._controller.abort()
+            self._controller.abort(session_already_cancelled=True)
             if self._controller.state is FT8QsoState.ABORTED:
                 self._terminal_reason = "operator abort"
             self._capture_terminal_result_locked()
@@ -259,9 +262,14 @@ class FT8QsoCoordinator:
             return 0.0
         return (current.index + 1) * 15.0 - now.timestamp()
 
-    def _fail_locked(self, reason: str) -> None:
+    def _fail_locked(
+        self,
+        reason: str,
+        *,
+        session_already_cancelled: bool = False,
+    ) -> None:
         self._terminal_reason = reason
-        self._controller.fail()
+        self._controller.fail(session_already_cancelled=session_already_cancelled)
         self._capture_terminal_result_locked()
         self._stop_event.set()
 
