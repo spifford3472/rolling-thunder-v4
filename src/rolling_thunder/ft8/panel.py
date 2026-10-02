@@ -28,6 +28,8 @@ class FT8PanelSnapshot:
     qso_state: FT8QsoState
     active_context: FT8QsoContext | None = None
     result: FT8QsoResult | None = None
+    attempt_count: int = 0
+    attempts_per_state: int = 0
 
 
 class FT8PanelController:
@@ -42,6 +44,8 @@ class FT8PanelController:
         authorize: Callable[[FT8CQActivity], FT8QsoContext],
         abort: Callable[[], None],
         return_to_browser: Callable[[], FT8QsoResult | None],
+        attempt_count: Callable[[], int] | None = None,
+        attempts_per_state: Callable[[], int] | None = None,
     ) -> None:
         self._receive_state = receive_state
         self._qso_state = qso_state
@@ -50,6 +54,8 @@ class FT8PanelController:
         self._authorize = authorize
         self._abort = abort
         self._return_to_browser = return_to_browser
+        self._attempt_count = attempt_count or (lambda: 0)
+        self._attempts_per_state = attempts_per_state or (lambda: 0)
         self._selected_callsign: str | None = None
 
     def snapshot(self) -> FT8PanelSnapshot:
@@ -85,6 +91,8 @@ class FT8PanelController:
             qso_state=state,
             active_context=context,
             result=result,
+            attempt_count=self._attempt_count(),
+            attempts_per_state=self._attempts_per_state(),
         )
 
     @property
