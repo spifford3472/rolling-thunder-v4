@@ -1,7 +1,7 @@
 # Rolling Thunder v4.3 Experimental FT8 Architecture
 
 Status: Checkpoints 1–9 implemented and CP9 acceptance complete; merge/deployment pending explicit owner approval
-Date: 2026-10-02  
+Date: 2026-10-02
 Implementation state: the native FT8 MVP is implemented end to end behind disabled-by-default feature gates. Continuous receive, decoding, CQ browsing, explicit one-station authorization, bounded QSO execution, Enhanced-CAT/DigiRig transmit, frozen-grid logging, schema-14 FT8 persistence, and normal ContactSyncService/Forge/Wavelog integration are present. Installed-hardware CP9 acceptance includes a completed real 5 W QSO, fail-closed error paths, clean shutdown, and Raspberry Pi performance validation. Production remains on the protected v4.2-compatible deployment until separately approved.
 
 ## Purpose
