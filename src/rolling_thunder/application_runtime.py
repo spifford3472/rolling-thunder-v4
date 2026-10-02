@@ -696,6 +696,7 @@ class ApplicationRuntime:
                 attempts_per_state=lambda: (
                     0 if runtime.ft8_qso is None else runtime.ft8_qso.attempts_per_state
                 ),
+                authorization_enabled=lambda: runtime.ft8_qso is not None,
             )
         return runtime
 
