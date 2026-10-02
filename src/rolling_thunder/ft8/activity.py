@@ -2,7 +2,7 @@
 
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Decode, FT8MessageKind, FT8Period
 
-DEFAULT_CQ_EXPIRY_PERIODS = 4
+DEFAULT_CQ_EXPIRY_PERIODS = 6
 
 
 class FT8CQActivityManager:
@@ -25,44 +25,75 @@ class FT8CQActivityManager:
             self._latest_period = decode.period
         self.expire(decode.period)
 
-        if decode.kind is not FT8MessageKind.CQ or decode.source_callsign is None:
+        callsign = decode.source_callsign
+        if callsign is None:
             return
 
-        existing = self._activity.get(decode.source_callsign)
-        if existing is not None and decode.period < existing.last_period:
+        existing = self._activity.get(callsign)
+
+        if decode.kind is not FT8MessageKind.CQ:
+            if existing is None or decode.period < existing.last_any_decode:
+                return
+            self._activity[callsign] = FT8CQActivity(
+                callsign=existing.callsign,
+                last_cq=existing.last_cq,
+                last_any_decode=decode.period,
+                cq_count=existing.cq_count,
+                snr_db=existing.snr_db,
+                dt_seconds=existing.dt_seconds,
+                audio_frequency_hz=existing.audio_frequency_hz,
+                grid=decode.grid if decode.grid is not None else existing.grid,
+                cq_qualifier=existing.cq_qualifier,
+                pota_cq=existing.pota_cq,
+                active_non_cq=True,
+            )
             return
 
-        self._activity[decode.source_callsign] = FT8CQActivity(
-            callsign=decode.source_callsign,
+        if existing is not None and decode.period < existing.last_cq:
+            return
+
+        is_new_cq_period = existing is None or decode.period > existing.last_cq
+        cq_count = 1 if existing is None else existing.cq_count + int(is_new_cq_period)
+        qualifier = (
+            decode.cq_qualifier
+            if decode.cq_qualifier is not None
+            else (existing.cq_qualifier if existing else None)
+        )
+        pota_cq = _decode_is_pota_cq(decode) or (existing.pota_cq if existing else False)
+
+        self._activity[callsign] = FT8CQActivity(
+            callsign=callsign,
             grid=decode.grid if decode.grid is not None else (existing.grid if existing else None),
-            last_period=decode.period,
+            last_cq=decode.period,
+            last_any_decode=decode.period,
+            cq_count=cq_count,
             snr_db=decode.snr_db,
             dt_seconds=decode.dt_seconds,
             audio_frequency_hz=decode.audio_frequency_hz,
-            cq_qualifier=(
-                decode.cq_qualifier
-                if decode.cq_qualifier is not None
-                else (existing.cq_qualifier if existing else None)
-            ),
+            cq_qualifier=qualifier,
+            pota_cq=pota_cq,
+            active_non_cq=False,
         )
 
     def expire(self, current_period: FT8Period) -> None:
-        """Expire entries at or beyond the configured period age."""
+        """Expire entries after the configured number of periods without any traffic."""
         stale = [
             callsign
             for callsign, activity in self._activity.items()
-            if current_period.index - activity.last_period.index >= self._expiry_periods
+            if current_period.index - activity.last_any_decode.index >= self._expiry_periods
         ]
         for callsign in stale:
             del self._activity[callsign]
 
     def snapshot(self, *, current_period: FT8Period | None = None) -> tuple[FT8CQActivity, ...]:
-        """Return an immutable recency-ordered snapshot for future presentation."""
+        """Return immutable insertion-ordered CQ activity for presentation."""
         if current_period is not None:
             self.expire(current_period)
-        return tuple(
-            sorted(
-                self._activity.values(),
-                key=lambda item: (-item.last_period.index, item.callsign),
-            )
-        )
+        return tuple(self._activity.values())
+
+
+def _decode_is_pota_cq(decode: FT8Decode) -> bool:
+    """Return whether this decoded CQ explicitly carries a POTA token."""
+    if decode.cq_qualifier is not None and decode.cq_qualifier.strip().upper() == "POTA":
+        return True
+    return "POTA" in {token.upper() for token in decode.raw_message.split()}
