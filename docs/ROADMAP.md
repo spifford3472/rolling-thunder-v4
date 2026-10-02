@@ -256,7 +256,7 @@ slot coordinator, normalized decode feed, and manual ABORT. The generic `Radio`
 contract remains receive-side; UI, voice, ESP32, Forge/network services, POTA/DX
 activity, and unrelated application paths receive no independent PTT authority.
 
-Checkpoint 7 remains disabled by default behind both `ft8.enabled` and
+Checkpoint 7 is complete and remains disabled by default behind both `ft8.enabled` and
 `ft8.transmit.enabled`. It produces an immutable terminal QSO result but does
 not yet write a successful contact to SQLite/Wavelog. Automatic next-station
 selection, unattended CQ hunting, autonomous band hopping, and voice-controlled
