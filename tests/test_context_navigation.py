@@ -42,7 +42,7 @@ def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId
 def test_unknown_shortcut_preserves_selection() -> None:
     controller = ContextNavigationController(ContextId.DX)
 
-    changed = controller.select_shortcut("9")
+    changed = controller.select_shortcut("0")
 
     assert changed is False
     assert controller.state.selected is ContextId.DX
