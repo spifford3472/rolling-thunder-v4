@@ -50,6 +50,8 @@ class FT8QsoCoordinator:
         )
         self._clock = clock
         self._lock = threading.RLock()
+        self._cancel_lock = threading.Lock()
+        self._session_cancelled = False
         self._stop_event = threading.Event()
         self._worker: threading.Thread | None = None
         self._last_observed_period: FT8Period | None = None
@@ -101,6 +103,7 @@ class FT8QsoCoordinator:
             self._last_clock_utc = self._clock.now_utc()
             self._last_monotonic = self._clock.monotonic()
             self._terminal_reason = None
+            self._session_cancelled = False
             self._started_utc = None
             self._received_report_db = None
             self._result = None
@@ -167,7 +170,7 @@ class FT8QsoCoordinator:
 
     def on_receive_error(self, detail: str) -> None:
         """Fail an active QSO when its decoder/receive path becomes unavailable."""
-        self._transmit_session.cancel()
+        cancelled = self._cancel_transmit_session_once()
         with self._lock:
             if self._controller.state in {
                 FT8QsoState.IDLE,
@@ -179,15 +182,15 @@ class FT8QsoCoordinator:
                 return
             self._fail_locked(
                 f"FT8 receive failure: {detail}",
-                session_already_cancelled=True,
+                session_already_cancelled=cancelled,
             )
 
     def abort(self) -> None:
         """Idempotently abort and force the transmit session toward receive."""
         self._stop_event.set()
-        self._transmit_session.cancel()
+        cancelled = self._cancel_transmit_session_once()
         with self._lock:
-            self._controller.abort(session_already_cancelled=True)
+            self._controller.abort(session_already_cancelled=cancelled)
             if self._controller.state is FT8QsoState.ABORTED:
                 self._terminal_reason = "operator abort"
             self._capture_terminal_result_locked()
@@ -261,6 +264,15 @@ class FT8QsoCoordinator:
         if previous is not None and current.index > previous.index:
             return 0.0
         return (current.index + 1) * 15.0 - now.timestamp()
+
+    def _cancel_transmit_session_once(self) -> bool:
+        """Cancel physical transmit authority at most once for this QSO."""
+        with self._cancel_lock:
+            if self._session_cancelled:
+                return True
+            self._transmit_session.cancel()
+            self._session_cancelled = True
+            return True
 
     def _fail_locked(
         self,
