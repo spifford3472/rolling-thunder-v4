@@ -56,6 +56,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "Free-form receive tuning and contact logging.",
     ),
     ContextDefinition(
+        ContextId.FT8,
+        "FT8",
+        "9",
+        "FT8",
+        "Native FT8 CQ browser and one-QSO operator workflow.",
+    ),
+    ContextDefinition(
         ContextId.REPEATERS,
         "REPEATERS",
         "3",
@@ -96,13 +103,6 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "8",
         "DMR HOTSPOT",
         "Live hotspot audio, caller history, and staged DMR logging.",
-    ),
-    ContextDefinition(
-        ContextId.FT8,
-        "FT8",
-        "9",
-        "FT8",
-        "Native FT8 CQ browser and one-QSO operator workflow.",
     ),
 )
 
