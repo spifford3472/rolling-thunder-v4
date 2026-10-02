@@ -7,13 +7,28 @@ import threading
 from dataclasses import dataclass
 from typing import Protocol
 
+from rolling_thunder.ft8.audio_buffer import (
+    FT8AudioBuffer,
+    FT8AudioBufferError,
+)
 from rolling_thunder.ft8.decoder import FT8PcmPeriod
 from rolling_thunder.ft8.domain import FT8_PERIOD_SECONDS, FT8Period
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 
 FT8_SAMPLE_RATE_HZ = 12_000
 FT8_SAMPLE_WIDTH_BYTES = 2
-FT8_PERIOD_BYTES = FT8_SAMPLE_RATE_HZ * FT8_SAMPLE_WIDTH_BYTES * FT8_PERIOD_SECONDS
+FT8_PERIOD_SAMPLES = FT8_SAMPLE_RATE_HZ * FT8_PERIOD_SECONDS
+FT8_PERIOD_BYTES = FT8_PERIOD_SAMPLES * FT8_SAMPLE_WIDTH_BYTES
+
+# Keep continuous reads short so the software FT8 boundary cannot be displaced
+# by a large userspace audio read.
+FT8_CAPTURE_CHUNK_MS = 50
+FT8_CAPTURE_CHUNK_BYTES = (
+    FT8_SAMPLE_RATE_HZ
+    * FT8_SAMPLE_WIDTH_BYTES
+    * FT8_CAPTURE_CHUNK_MS
+    // 1000
+)
 
 
 class FT8AudioInputError(RuntimeError):
@@ -24,7 +39,7 @@ class FT8AudioInput(Protocol):
     """Project-owned receive-only PCM source."""
 
     def start(self) -> None:
-        """Open capture at a clean UTC FT8 period boundary."""
+        """Open continuous receive-only capture."""
 
     def read_period(self) -> FT8PcmPeriod:
         """Return one complete UTC-aligned mono S16_LE period."""
@@ -59,7 +74,7 @@ class AlsaCaptureCommand:
 
 
 class AlsaArecordFT8AudioInput:
-    """Persistent receive-only ALSA capture aligned to UTC FT8 periods."""
+    """Continuous receive-only ALSA capture with FT8 period extraction."""
 
     def __init__(
         self,
@@ -73,11 +88,16 @@ class AlsaArecordFT8AudioInput:
             raise ValueError("FT8 audio device must not be blank")
         if sample_rate_hz != FT8_SAMPLE_RATE_HZ:
             raise ValueError("FT8 receive capture must use 12000 Hz")
+
         self._command = AlsaCaptureCommand(normalized, sample_rate_hz)
         self._clock = clock or SystemFT8Clock()
         self._stop_event = threading.Event()
         self._process: subprocess.Popen[bytes] | None = None
+        self._reader_thread: threading.Thread | None = None
+        self._reader_error: FT8AudioInputError | None = None
+        self._buffer: FT8AudioBuffer | None = None
         self._next_period: FT8Period | None = None
+        self._next_period_start_sample: int | None = None
         self._lock = threading.Lock()
 
     @property
@@ -89,16 +109,10 @@ class AlsaArecordFT8AudioInput:
             if self._process is not None:
                 raise RuntimeError("FT8 audio input is already started")
             self._stop_event.clear()
-
-        now = self._clock.now_utc()
-        current = FT8Period.from_utc(now)
-        target = FT8Period(current.index + 1)
-        wait_s = (target.start_utc - now).total_seconds()
-        if wait_s > 0 and self._stop_event.wait(wait_s):
-            raise FT8AudioInputError("FT8 audio capture cancelled before start")
-
-        if self._clock.current_period() != target:
-            raise FT8AudioInputError("system clock changed while aligning FT8 capture")
+            self._reader_error = None
+            self._next_period = None
+            self._next_period_start_sample = None
+            buffer = FT8AudioBuffer()
 
         try:
             process = subprocess.Popen(
@@ -110,26 +124,83 @@ class AlsaArecordFT8AudioInput:
         except OSError as exc:
             raise FT8AudioInputError(f"could not start FT8 capture: {exc}") from exc
 
+        if process.stdout is None:
+            process.terminate()
+            process.wait(timeout=2)
+            raise FT8AudioInputError("FT8 capture stdout is unavailable")
+
+        reader = threading.Thread(
+            target=self._reader_loop,
+            args=(process, buffer),
+            name="ft8-alsa-reader",
+            daemon=True,
+        )
+
         with self._lock:
             if self._stop_event.is_set():
                 process.terminate()
                 process.wait(timeout=2)
                 raise FT8AudioInputError("FT8 audio capture cancelled during start")
             self._process = process
-            self._next_period = target
+            self._buffer = buffer
+            self._reader_thread = reader
+
+        reader.start()
 
     def read_period(self) -> FT8PcmPeriod:
         with self._lock:
             process = self._process
+            buffer = self._buffer
             period = self._next_period
-        if process is None or period is None or process.stdout is None:
+            start_sample = self._next_period_start_sample
+
+        if process is None or buffer is None:
             raise FT8AudioInputError("FT8 audio input is not started")
 
-        pcm = self._read_exact(process, FT8_PERIOD_BYTES)
+        if period is None or start_sample is None:
+            self._wait_for_initial_audio(process, buffer)
+
+            now = self._clock.now_utc()
+            current = FT8Period.from_utc(now)
+            period = FT8Period(current.index + 1)
+            wait_s = (period.start_utc - now).total_seconds()
+
+            if wait_s > 0 and self._stop_event.wait(wait_s):
+                raise FT8AudioInputError("FT8 audio capture cancelled")
+
+            if self._clock.current_period() != period:
+                raise FT8AudioInputError(
+                    "system clock changed while aligning FT8 capture"
+                )
+
+            start_sample = buffer.next_sample
+
+            with self._lock:
+                self._next_period = period
+                self._next_period_start_sample = start_sample
+
+        end_sample = start_sample + FT8_PERIOD_SAMPLES
+        self._wait_for_samples(process, buffer, end_sample)
+
+        try:
+            pcm = buffer.extract(
+                start_sample=start_sample,
+                sample_count=FT8_PERIOD_SAMPLES,
+            )
+        except FT8AudioBufferError as exc:
+            raise FT8AudioInputError(f"could not extract FT8 period: {exc}") from exc
+
         with self._lock:
-            if self._next_period != period:
-                raise FT8AudioInputError("FT8 capture period identity changed unexpectedly")
+            if (
+                self._next_period != period
+                or self._next_period_start_sample != start_sample
+            ):
+                raise FT8AudioInputError(
+                    "FT8 capture period identity changed unexpectedly"
+                )
+
             self._next_period = FT8Period(period.index + 1)
+            self._next_period_start_sample = end_sample
 
         return FT8PcmPeriod(
             period=period,
@@ -139,39 +210,136 @@ class AlsaArecordFT8AudioInput:
 
     def stop(self) -> None:
         self._stop_event.set()
+
         with self._lock:
             process = self._process
+            reader = self._reader_thread
             self._process = None
+            self._reader_thread = None
+            self._buffer = None
             self._next_period = None
-        if process is None:
-            return
-        if process.poll() is None:
+            self._next_period_start_sample = None
+
+        if process is not None and process.poll() is None:
             process.terminate()
             try:
                 process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=2)
-        if process.stdout is not None:
-            process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
+
+        if reader is not None:
+            reader.join(timeout=2)
+
+        if process is not None:
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+
+    def _reader_loop(
+        self,
+        process: subprocess.Popen[bytes],
+        buffer: FT8AudioBuffer,
+    ) -> None:
+        if process.stdout is None:
+            self._set_reader_error("FT8 capture stdout is unavailable")
+            return
+
+        while not self._stop_event.is_set():
+            try:
+                chunk = process.stdout.read(FT8_CAPTURE_CHUNK_BYTES)
+            except OSError as exc:
+                if not self._stop_event.is_set():
+                    self._set_reader_error(f"FT8 audio capture read failed: {exc}")
+                return
+
+            if not chunk:
+                if not self._stop_event.is_set():
+                    detail = ""
+                    if process.stderr is not None and process.poll() is not None:
+                        detail = process.stderr.read().decode(
+                            errors="replace"
+                        ).strip()
+                    suffix = f": {detail}" if detail else ""
+                    self._set_reader_error(
+                        f"FT8 capture ended unexpectedly{suffix}"
+                    )
+                return
+
+            try:
+                buffer.append(chunk)
+            except FT8AudioBufferError as exc:
+                self._set_reader_error(f"invalid FT8 capture audio: {exc}")
+                return
+
+    def _wait_for_initial_audio(
+        self,
+        process: subprocess.Popen[bytes],
+        buffer: FT8AudioBuffer,
+    ) -> None:
+        while buffer.next_sample == 0:
+            self._raise_if_capture_failed(process)
+
+            if self._stop_event.wait(0.05):
+                raise FT8AudioInputError("FT8 audio capture cancelled")
+
+    def _wait_for_samples(
+        self,
+        process: subprocess.Popen[bytes],
+        buffer: FT8AudioBuffer,
+        end_sample: int,
+    ) -> None:
+        while not buffer.wait_for_sample(end_sample, timeout_s=0.1):
+            self._raise_if_capture_failed(process)
+
+            if self._stop_event.is_set():
+                raise FT8AudioInputError("FT8 audio capture cancelled")
+
+    def _raise_if_capture_failed(
+        self,
+        process: subprocess.Popen[bytes],
+    ) -> None:
+        with self._lock:
+            reader_error = self._reader_error
+
+        if reader_error is not None:
+            raise reader_error
+
+        if process.poll() is not None:
+            raise FT8AudioInputError("FT8 capture process exited unexpectedly")
+
+    def _set_reader_error(self, detail: str) -> None:
+        with self._lock:
+            if self._reader_error is None:
+                self._reader_error = FT8AudioInputError(detail)
 
     def _read_exact(self, process: subprocess.Popen[bytes], size: int) -> bytes:
+        """Legacy bounded read helper retained for regression coverage."""
         if process.stdout is None:
             raise FT8AudioInputError("FT8 capture stdout is unavailable")
+
         chunks: list[bytes] = []
         remaining = size
+
         while remaining:
             if self._stop_event.is_set():
                 raise FT8AudioInputError("FT8 audio capture cancelled")
+
             chunk = process.stdout.read(remaining)
+
             if not chunk:
                 detail = ""
                 if process.stderr is not None:
-                    detail = process.stderr.read().decode(errors="replace").strip()
+                    detail = process.stderr.read().decode(
+                        errors="replace"
+                    ).strip()
                 suffix = f": {detail}" if detail else ""
-                raise FT8AudioInputError(f"FT8 capture ended before a complete period{suffix}")
+                raise FT8AudioInputError(
+                    f"FT8 capture ended before a complete period{suffix}"
+                )
+
             chunks.append(chunk)
             remaining -= len(chunk)
+
         return b"".join(chunks)
