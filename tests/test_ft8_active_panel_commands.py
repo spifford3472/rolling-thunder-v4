@@ -1,7 +1,5 @@
 """Tests for FT8-aware active-panel command routing."""
 
-from dataclasses import dataclass
-
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
 from rolling_thunder.ft8.domain import FT8QsoState
 from rolling_thunder.ft8.panel import FT8PanelMode, FT8PanelSnapshot
@@ -12,16 +10,44 @@ class Delegate:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def activate_context(self, context_id: ContextId) -> None: self.calls.append(f"activate:{context_id}")
-    def primary(self) -> bool: self.calls.append("primary"); return True
-    def secondary(self) -> bool: self.calls.append("secondary"); return True
-    def tertiary(self) -> bool: self.calls.append("tertiary"); return True
-    def tertiary_long(self) -> bool: self.calls.append("tertiary_long"); return True
-    def move_previous(self) -> bool: self.calls.append("move_previous"); return True
-    def move_next(self) -> bool: self.calls.append("move_next"); return True
-    def activate_selection(self) -> bool: self.calls.append("activate_selection"); return True
-    def back(self) -> bool: self.calls.append("back"); return True
-    def synchronize_radio_state(self) -> bool: self.calls.append("sync"); return True
+    def activate_context(self, context_id: ContextId) -> None:
+        self.calls.append(f"activate:{context_id}")
+
+    def primary(self) -> bool:
+        self.calls.append("primary")
+        return True
+
+    def secondary(self) -> bool:
+        self.calls.append("secondary")
+        return True
+
+    def tertiary(self) -> bool:
+        self.calls.append("tertiary")
+        return True
+
+    def tertiary_long(self) -> bool:
+        self.calls.append("tertiary_long")
+        return True
+
+    def move_previous(self) -> bool:
+        self.calls.append("move_previous")
+        return True
+
+    def move_next(self) -> bool:
+        self.calls.append("move_next")
+        return True
+
+    def activate_selection(self) -> bool:
+        self.calls.append("activate_selection")
+        return True
+
+    def back(self) -> bool:
+        self.calls.append("back")
+        return True
+
+    def synchronize_radio_state(self) -> bool:
+        self.calls.append("sync")
+        return True
 
 
 class Panel:
@@ -37,15 +63,31 @@ class Panel:
         return FT8PanelSnapshot(mode=self.mode, cq_activity=(), qso_state=state)
 
     def select_previous(self) -> str | None:
-        self.calls.append("previous"); self.selected_callsign = "K1ABC"; return self.selected_callsign
+        self.calls.append("previous")
+        self.selected_callsign = "K1ABC"
+        return self.selected_callsign
+
     def select_next(self) -> str | None:
-        self.calls.append("next"); self.selected_callsign = "W1XYZ"; return self.selected_callsign
+        self.calls.append("next")
+        self.selected_callsign = "W1XYZ"
+        return self.selected_callsign
+
     def clear_selection(self) -> bool:
-        self.calls.append("clear"); changed = self.selected_callsign is not None; self.selected_callsign = None; return changed
+        self.calls.append("clear")
+        changed = self.selected_callsign is not None
+        self.selected_callsign = None
+        return changed
+
     def activate_selection(self) -> object | None:
-        self.calls.append("activate"); return object() if self.selected_callsign else None
-    def abort(self) -> None: self.calls.append("abort")
-    def return_to_browser(self) -> object | None: self.calls.append("return"); return object()
+        self.calls.append("activate")
+        return object() if self.selected_callsign else None
+
+    def abort(self) -> None:
+        self.calls.append("abort")
+
+    def return_to_browser(self) -> object | None:
+        self.calls.append("return")
+        return object()
 
 
 def test_ft8_context_owns_selection_and_activation_without_delegate() -> None:
