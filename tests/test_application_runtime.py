@@ -396,3 +396,41 @@ def test_runtime_stop_closes_ft8_executor_even_before_start() -> None:
     assert executor.requests == []
     assert executor.qso_requests == []
     assert executor.close_count == 1
+
+
+class _RecordingLifecycleService:
+    def __init__(self) -> None:
+        self.start_count = 0
+        self.stop_count = 0
+
+    def start(self) -> None:
+        self.start_count += 1
+
+    def stop(self) -> None:
+        self.stop_count += 1
+
+
+class _FailingStartService:
+    def start(self) -> None:
+        raise RuntimeError("injected startup failure")
+
+    def stop(self) -> None:
+        return
+
+
+def test_runtime_start_failure_rolls_back_ft8_service() -> None:
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    ft8 = _RecordingLifecycleService()
+    runtime.ft8_receive = ft8  # type: ignore[assignment]
+    assert runtime.gps_polling is not None
+    runtime.gps_polling = _FailingStartService()  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError, match="injected startup failure"):
+        runtime.start()
+
+    assert ft8.start_count == 1
+    assert ft8.stop_count == 1
