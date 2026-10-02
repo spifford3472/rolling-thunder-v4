@@ -1454,7 +1454,10 @@ def run_dashboard(
                                 f"{activity.audio_frequency_hz:4d} Hz  {grid}"
                             )
                     lines.append("")
-                    lines.append("ROTATE TO SELECT — PRESS TO AUTHORIZE ONE QSO")
+                    if ft8_snapshot.authorization_enabled:
+                        lines.append("ROTATE TO SELECT — PRESS TO AUTHORIZE ONE QSO")
+                    else:
+                        lines.append("ROTATE TO BROWSE — RECEIVE ONLY / TX DISABLED")
                 elif ft8_snapshot.mode is FT8PanelMode.ACTIVE:
                     context = ft8_snapshot.active_context
                     lines.append("")
