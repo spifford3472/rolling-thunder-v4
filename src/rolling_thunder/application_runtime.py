@@ -690,6 +690,12 @@ class ApplicationRuntime:
                 authorize=runtime.authorize_ft8_qso,
                 abort=runtime.abort_ft8_qso,
                 return_to_browser=runtime.return_ft8_to_browser,
+                attempt_count=lambda: (
+                    0 if runtime.ft8_qso is None else runtime.ft8_qso.attempt_count
+                ),
+                attempts_per_state=lambda: (
+                    0 if runtime.ft8_qso is None else runtime.ft8_qso.attempts_per_state
+                ),
             )
         return runtime
 
