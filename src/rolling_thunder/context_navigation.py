@@ -19,6 +19,7 @@ class ContextId(StrEnum):
     SETTINGS = "settings"
     LOG = "log"
     DMR = "dmr"
+    FT8 = "ft8"
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "8",
         "DMR HOTSPOT",
         "Live hotspot audio, caller history, and staged DMR logging.",
+    ),
+    ContextDefinition(
+        ContextId.FT8,
+        "FT8",
+        "9",
+        "FT8",
+        "Native FT8 CQ browser and one-QSO operator workflow.",
     ),
 )
 

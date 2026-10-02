@@ -2,7 +2,29 @@
 
 ## v4.3.0 — experimental development
 
-### FT8 Checkpoint 8 — in progress
+### FT8 Checkpoint 9 — acceptance complete; merge pending owner approval
+
+- completes native FT8 MVP product integration on top of the merged CP2-CP8.1 runtime
+- adds a first-class FT8 dashboard context and presentation-owned CQ selection
+- routes keyboard/physical controls through the existing FT8PanelController boundary
+- exposes bounded per-state retry progress without exposing CAT/PTT/audio internals to the UI
+- hardens partial-startup rollback so already-started FT8 resources are stopped after later startup failure
+- validates disabled, receive-only, DigiRig reconnect, CAT disconnect fail-closed, ABORT, retry exhaustion, successful-QSO, frozen-grid, shutdown, and Raspberry Pi resource behavior on installed hardware
+- completes a real 5 W FT8 QSO with KE5ETC on 7.074 MHz, including directed report exchange, final acknowledgement, final 73, frozen GPS grid EM79xm, and exactly one isolated schema-14 FT8 contact
+- confirms an incomplete live QSO with W5XO is not logged
+- records five continuous receive periods with 35 decodes, zero dropped periods, about 3.1% average of one CPU core, and about 50 MB Python peak RSS on anvilmobile
+- passes the full repository regression suite at CP9 acceptance: 2337 passed, 7 skipped, Ruff clean, and git diff check clean
+- keeps production migration, schema-14 installation, release tagging, and PR merge separately owner-approved
+
+### FT8 Checkpoint 8.1 — complete
+
+- replaces UTC-boundary arecord startup with persistent continuous capture
+- drains PCM continuously into a bounded absolute-sample rolling buffer
+- extracts exact 180000-sample 12 kHz FT8 periods at UTC boundaries
+- preserves automatic DigiRig disconnect/reconnect recovery without orphaned arecord processes
+
+
+### FT8 Checkpoint 8 — complete
 
 - adds first-class `RadioMode.FT8` for successful-contact logging while preserving USB/DATA as the physical FT-891 execution mode
 - adds schema v14 support for FT8 contacts without creating a parallel FT8 database or sync path
@@ -13,7 +35,7 @@
 - serializes successful native FT8 contacts as ADIF `MODE=FT8`
 - keeps POTA/DX FT8-session launching as a future enhancement rather than expanding Checkpoint 8 scope
 
-### FT8 Checkpoint 7 — in progress
+### FT8 Checkpoint 7 — complete
 
 - adds a QSO-specific physical authorization path separate from CP6 owner-test authorization
 - adds a production `DigitalTransmitSession` bridge using the validated encoder and bounded FT-891/DigiRig executor

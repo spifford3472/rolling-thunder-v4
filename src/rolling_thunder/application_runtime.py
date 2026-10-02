@@ -690,6 +690,13 @@ class ApplicationRuntime:
                 authorize=runtime.authorize_ft8_qso,
                 abort=runtime.abort_ft8_qso,
                 return_to_browser=runtime.return_ft8_to_browser,
+                attempt_count=lambda: (
+                    0 if runtime.ft8_qso is None else runtime.ft8_qso.attempt_count
+                ),
+                attempts_per_state=lambda: (
+                    0 if runtime.ft8_qso is None else runtime.ft8_qso.attempts_per_state
+                ),
+                authorization_enabled=lambda: runtime.ft8_qso is not None,
             )
         return runtime
 
@@ -850,6 +857,19 @@ class ApplicationRuntime:
             raise RuntimeError("Application runtime is already started.")
 
         state = self.polling.start()
+        self._started = True
+        try:
+            self._start_remaining_services()
+        except (OSError, RuntimeError, ValueError):
+            try:
+                self.stop()
+            except (OSError, RuntimeError, ValueError) as cleanup_error:
+                print(f"Rolling Thunder startup cleanup error: {cleanup_error}")
+            raise
+        return state
+
+    def _start_remaining_services(self) -> None:
+        """Start services after radio polling with rollback handled by start()."""
         if self.ft8_receive is not None:
             self.ft8_receive.start()
         if self.gps_polling is not None:
@@ -890,8 +910,6 @@ class ApplicationRuntime:
         self.pota_enrichment.start()
         if self.pota_spot_polling is not None:
             self.pota_spot_polling.start()
-        self._started = True
-        return state
 
     def stop(self) -> RadioState:
         """Stop polling and disconnect configured hardware safely."""

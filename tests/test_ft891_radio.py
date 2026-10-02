@@ -340,16 +340,32 @@ def test_cp6_cat_ptt_key_is_idempotent_while_asserted() -> None:
     assert transport.commands[-2:] == [b"TX1;", b"TX0;"]
 
 
-def test_cp6_cat_ptt_repeated_release_sends_receive_command() -> None:
+def test_cp6_cat_ptt_release_is_noop_until_ptt_was_asserted() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+    commands_before = list(transport.commands)
+
+    capability.release()
+    capability.release()
+
+    assert transport.commands == commands_before
+
+
+def test_cp6_cat_ptt_release_sends_receive_once_after_assertion() -> None:
     transport = FakeTransport()
     radio = Ft891Radio(transport, clock=fixed_clock)
     radio.connect()
     capability = radio.create_cp6_cat_ptt_capability()
 
+    capability.key()
     capability.release()
+    commands_after_release = list(transport.commands)
     capability.release()
 
-    assert transport.commands[-2:] == [b"TX0;", b"TX0;"]
+    assert commands_after_release[-2:] == [b"TX1;", b"TX0;"]
+    assert transport.commands == commands_after_release
 
 
 def test_cp6_cat_ptt_failed_key_attempts_immediate_release() -> None:

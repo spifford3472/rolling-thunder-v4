@@ -155,6 +155,8 @@ class Ft891Radio:
 
     def _release_cp6_cat_ptt(self) -> None:
         with self._operation_lock:
+            if not self._cp6_cat_ptt_asserted:
+                return
             self._require_connected()
             try:
                 self._transport.command(encode_cat_transmit_off())

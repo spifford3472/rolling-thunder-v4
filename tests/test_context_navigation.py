@@ -28,6 +28,7 @@ def test_defaults_to_pota_context() -> None:
         ("6", ContextId.WEATHER),
         ("7", ContextId.LOG),
         ("8", ContextId.DMR),
+        ("9", ContextId.FT8),
     ],
 )
 def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId) -> None:
@@ -42,7 +43,7 @@ def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId
 def test_unknown_shortcut_preserves_selection() -> None:
     controller = ContextNavigationController(ContextId.DX)
 
-    changed = controller.select_shortcut("9")
+    changed = controller.select_shortcut("0")
 
     assert changed is False
     assert controller.state.selected is ContextId.DX
@@ -80,10 +81,11 @@ def test_select_next_advances_through_contexts() -> None:
     assert controller.select_next().selected is ContextId.SETTINGS
     assert controller.select_next().selected is ContextId.LOG
     assert controller.select_next().selected is ContextId.DMR
+    assert controller.select_next().selected is ContextId.FT8
 
 
-def test_select_next_wraps_from_dmr_to_pota() -> None:
-    controller = ContextNavigationController(ContextId.DMR)
+def test_select_next_wraps_from_ft8_to_pota() -> None:
+    controller = ContextNavigationController(ContextId.FT8)
 
     state = controller.select_next()
 

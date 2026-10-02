@@ -42,6 +42,8 @@ from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
 from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
+from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
@@ -333,7 +335,9 @@ def run_dashboard(
         runtime.stop()
         return 3
     active_panel_commands: (
-        LogAwareActivePanelCommands | DmrAwareActivePanelCommands
+        LogAwareActivePanelCommands
+        | DmrAwareActivePanelCommands
+        | FT8AwareActivePanelCommands
     )
     if dmr_panel_runtime is None:
         active_panel_commands = log_aware_active_panel_commands
@@ -342,6 +346,12 @@ def run_dashboard(
             context_navigation,
             log_aware_active_panel_commands,
             dmr_panel_runtime.commands,
+        )
+    if runtime.ft8_panel is not None:
+        active_panel_commands = FT8AwareActivePanelCommands(
+            context_navigation,
+            active_panel_commands,
+            runtime.ft8_panel,
         )
 
     status_monitor = build_status_monitor(config)
@@ -1395,6 +1405,82 @@ def run_dashboard(
                         dmr_panel_runtime.commit.status,
                     )
                 )
+        elif selected_context.selected is ContextId.FT8:
+            show_standard_context_body()
+            health_frame.grid_remove()
+            context_title_text.set("FT8")
+            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_body_label.configure(font=("DejaVu Sans Mono", 20), wraplength=560)
+            if runtime.ft8_panel is None:
+                context_body_text.set(
+                    "Native FT8 is disabled.\n\n"
+                    "Enable ft8.enabled for receive-only CQ browsing.\n"
+                    "FT8 transmit remains independently gated."
+                )
+            else:
+                ft8_snapshot = runtime.ft8_panel.snapshot()
+                receive_state = runtime.latest_ft8_receive_state
+                receive_status = (
+                    "UNKNOWN"
+                    if receive_state is None
+                    else receive_state.status.value.upper()
+                )
+                lines = [
+                    f"RX: {receive_status}    QSO: {ft8_snapshot.qso_state.value.upper()}",
+                ]
+                if receive_state is not None:
+                    lines.append(
+                        "PERIODS "
+                        f"{receive_state.periods_captured}  "
+                        f"DECODES {receive_state.decode_count}  "
+                        f"DROPPED {receive_state.periods_dropped}"
+                    )
+                    if receive_state.last_error:
+                        lines.append(f"ERROR: {receive_state.last_error}")
+
+                if ft8_snapshot.mode is FT8PanelMode.BROWSE:
+                    lines.append("")
+                    lines.append("CQ STATIONS")
+                    selected_callsign = runtime.ft8_panel.selected_callsign
+                    if not ft8_snapshot.cq_activity:
+                        lines.append("  Waiting for CQ decodes...")
+                    else:
+                        for activity in ft8_snapshot.cq_activity[:8]:
+                            marker_text = ">" if activity.callsign == selected_callsign else " "
+                            grid = activity.grid or "------"
+                            lines.append(
+                                f"{marker_text} {activity.callsign:<10} "
+                                f"{activity.snr_db:+3d} dB  "
+                                f"{activity.audio_frequency_hz:4d} Hz  {grid}"
+                            )
+                    lines.append("")
+                    if ft8_snapshot.authorization_enabled:
+                        lines.append("ROTATE TO SELECT — PRESS TO AUTHORIZE ONE QSO")
+                    else:
+                        lines.append("ROTATE TO BROWSE — RECEIVE ONLY / TX DISABLED")
+                elif ft8_snapshot.mode is FT8PanelMode.ACTIVE:
+                    context = ft8_snapshot.active_context
+                    lines.append("")
+                    lines.append("ACTIVE QSO")
+                    if context is not None:
+                        lines.append(f"CALL: {context.remote_callsign}")
+                        lines.append(
+                            f"GRID: {context.local_grid or '------'}  "
+                            f"FREQ: {context.radio_frequency_hz / 1_000_000:.6f} MHz"
+                        )
+                    lines.append(
+                        "ATTEMPT "
+                        f"{ft8_snapshot.attempt_count}/{ft8_snapshot.attempts_per_state}"
+                    )
+                    lines.append("BACK / X = ABORT")
+                else:
+                    result = ft8_snapshot.result
+                    lines.append("")
+                    lines.append(f"RESULT: {ft8_snapshot.qso_state.value.upper()}")
+                    if result is not None and result.terminal_reason:
+                        lines.append(result.terminal_reason)
+                    lines.append("BACK / X = RETURN TO CQ BROWSER")
+                context_body_text.set("\n".join(lines))
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
             context_title_text.set(selected_context.definition.title)

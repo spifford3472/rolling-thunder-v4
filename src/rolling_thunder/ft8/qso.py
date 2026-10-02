@@ -53,6 +53,11 @@ class FT8QsoController:
     def attempt_count(self) -> int:
         return self._attempt_count
 
+    @property
+    def attempts_per_state(self) -> int:
+        """Return the immutable retry budget for the current controller."""
+        return self._attempts_per_state
+
     def authorize(self, context: FT8QsoContext) -> None:
         """Authorize exactly one remote station from the idle state."""
         if self._state is not FT8QsoState.IDLE:
@@ -141,20 +146,24 @@ class FT8QsoController:
         elif self._state is FT8QsoState.WAIT_73:
             self._state = FT8QsoState.TX_73
 
-    def abort(self) -> None:
+    def abort(self, *, session_already_cancelled: bool = False) -> None:
         """Idempotently cancel an authorized/active QSO."""
         if self._state is FT8QsoState.IDLE or self._state in _TERMINAL_STATES:
             return
         if not self._cancelled:
-            self._transmit_session.cancel()
+            if not session_already_cancelled:
+                self._transmit_session.cancel()
             self._cancelled = True
         self._state = FT8QsoState.ABORTED
 
-    def fail(self) -> None:
+    def fail(self, *, session_already_cancelled: bool = False) -> None:
         """Enter explicit ERROR state and revoke future fake transmission."""
         if self._state is FT8QsoState.IDLE or self._state in _TERMINAL_STATES:
             return
-        self._enter_terminal(FT8QsoState.ERROR)
+        self._enter_terminal(
+            FT8QsoState.ERROR,
+            session_already_cancelled=session_already_cancelled,
+        )
 
     def reset(self) -> None:
         """Explicitly clear a terminal QSO and return to CQ-ready idle state."""
@@ -200,10 +209,16 @@ class FT8QsoController:
             raise RuntimeError("active FT8 QSO is missing authorization context")
         return self._context
 
-    def _enter_terminal(self, state: FT8QsoState) -> None:
+    def _enter_terminal(
+        self,
+        state: FT8QsoState,
+        *,
+        session_already_cancelled: bool = False,
+    ) -> None:
         if state not in _TERMINAL_STATES:
             raise ValueError("terminal transition requires a terminal state")
         if not self._cancelled and state is not FT8QsoState.COMPLETED:
-            self._transmit_session.cancel()
+            if not session_already_cancelled:
+                self._transmit_session.cancel()
             self._cancelled = True
         self._state = state
