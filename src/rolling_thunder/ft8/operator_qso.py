@@ -54,6 +54,22 @@ class FT8OperatorQsoService:
             return self._coordinator.context
 
     @property
+    def attempt_count(self) -> int:
+        """Return attempts used for the current unchanged state."""
+        with self._lock:
+            if self._coordinator is None:
+                return 0
+            return self._coordinator.attempt_count
+
+    @property
+    def attempts_per_state(self) -> int:
+        """Return the configured retry budget per unchanged state."""
+        with self._lock:
+            if self._coordinator is None:
+                return self._attempts_per_state
+            return self._coordinator.attempts_per_state
+
+    @property
     def result(self) -> FT8QsoResult | None:
         with self._lock:
             if self._coordinator is None:
