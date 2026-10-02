@@ -114,6 +114,19 @@ class ContactRepository:
                 f"{self._database_path}: {contact.contact_id}: {error}"
             ) from error
 
+    def add_idempotent(self, contact: Contact) -> Contact:
+        """Persist once, returning the existing identical contact on replay."""
+        try:
+            self.add(contact)
+            return contact
+        except ContactAlreadyExistsError:
+            existing = self.get(contact.contact_id)
+            if existing is not None and self._same_idempotent_payload(existing, contact):
+                return existing
+            raise ContactConflictError(
+                f"Contact UUID was reused with different data: {contact.contact_id}"
+            )
+
     def get(self, contact_id: UUID) -> Contact | None:
         """Retrieve one contact by UUID, or return None when it is absent."""
         try:
@@ -702,6 +715,23 @@ class ContactRepository:
         if completed is None:
             raise StorageError(f"Contact disappeared after enrichment: {contact_id}")
         return completed
+
+    @staticmethod
+    def _same_idempotent_payload(existing: Contact, candidate: Contact) -> bool:
+        """Compare immutable QSO data while allowing later sync/enrichment state changes."""
+        if (
+            existing.callsign != candidate.callsign
+            or existing.frequency_hz != candidate.frequency_hz
+            or existing.mode is not candidate.mode
+            or existing.started_at != candidate.started_at
+            or existing.rst_sent != candidate.rst_sent
+            or existing.rst_received != candidate.rst_received
+            or existing.my_grid != candidate.my_grid
+            or existing.pota_reference != candidate.pota_reference
+            or existing.notes != candidate.notes
+        ):
+            return False
+        return candidate.grid is None or existing.grid == candidate.grid
 
     @staticmethod
     def _validate_limit(limit: int) -> None:

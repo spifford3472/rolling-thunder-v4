@@ -480,6 +480,8 @@ def contact_to_adif(contact: Contact) -> str:
 
 
 def _adif_mode(mode: RadioMode) -> tuple[str, str | None]:
+    if mode is RadioMode.FT8:
+        return "FT8", None
     if mode is RadioMode.USB:
         return "SSB", "USB"
     if mode is RadioMode.LSB:

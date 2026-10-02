@@ -39,6 +39,7 @@ from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
     FT8QsoHardwareTransmitExecutor,
 )
+from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.panel import FT8PanelController
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
@@ -180,6 +181,7 @@ class ApplicationRuntime:
     ft8_receive: FT8ReceiveService | None = None
     ft8_authorization: FT8QsoAuthorizationService | None = None
     ft8_qso: FT8OperatorQsoService | None = None
+    ft8_logging: FT8QsoLoggingService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
@@ -453,6 +455,12 @@ class ApplicationRuntime:
             executor=enrichment_executor,
         )
 
+        contact_logging = ContactLoggingService(
+            repository,
+            qrz_fallback_available=qrz_provider is not None,
+        )
+        ft8_logging = FT8QsoLoggingService(contact_logging)
+
         ft8_receive: FT8ReceiveService | None = None
         if config.ft8.enabled:
             decoder_executable = config.ft8.receive.decoder_executable
@@ -529,6 +537,7 @@ class ApplicationRuntime:
                 build_ft8_session,
                 active_ft8_clock,
                 attempts_per_state=config.ft8.qso.attempts_per_state,
+                terminal_result_handler=ft8_logging.handle_terminal_result,
             )
 
         live_map: LiveMapService | None = None
@@ -641,10 +650,7 @@ class ApplicationRuntime:
                 polling_scheduler,
                 interval_s=interval_s,
             ),
-            contact_logging=ContactLoggingService(
-                repository,
-                qrz_fallback_available=qrz_provider is not None,
-            ),
+            contact_logging=contact_logging,
             gps=gps,
             gps_polling=gps_polling,
             clock_sync=clock_sync,
@@ -672,6 +678,7 @@ class ApplicationRuntime:
             ft8_receive=ft8_receive,
             ft8_authorization=ft8_authorization,
             ft8_qso=ft8_qso,
+            ft8_logging=ft8_logging,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
         if ft8_receive is not None:

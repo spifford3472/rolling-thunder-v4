@@ -1355,3 +1355,43 @@ Checkpoint 10 acceptance should include deterministic fake-hardware tests,
 receive-only live validation, dummy-load validation, and only then a separately
 authorized antenna test. It should remain independent of Wavelog persistence and
 of automatic station selection.
+
+
+## Checkpoint 8 successful-QSO persistence
+
+Checkpoint 8 consumes only the immutable terminal `FT8QsoResult`. A result is
+eligible for contact creation only when its state is `COMPLETED`; aborted,
+retry-exhausted, error, incomplete, or malformed results create no successful
+contact.
+
+Each authorized QSO now owns a stable UUID carried by its frozen
+`FT8QsoContext`. That UUID becomes the local `Contact.contact_id`, providing
+a deterministic exactly-once key across duplicate completion notifications,
+SQLite persistence, Pi-to-Forge synchronization, and the existing Forge
+idempotency ledger.
+
+Two mode concepts remain deliberately separate:
+
+- `FT8QsoContext.radio_mode` is the actual FT-891 execution mode verified by
+  CP7 and remains USB or DATA.
+- `Contact.mode` is the operating/logging mode and is `FT8` for a successful
+  native FT8 QSO.
+
+Forge therefore emits ADIF `MODE=FT8` rather than incorrectly logging the
+contact as SSB/USB or generic DATA.
+
+The local station Maidenhead grid is captured during authorization and remains
+immutable for the entire QSO. Successful logging uses that frozen
+`context.local_grid` as `MY_GRIDSQUARE`; it never re-reads current GPS at
+completion time. A later QSO performs a fresh authorization and may therefore
+capture a different grid after vehicle movement.
+
+When the selected CQ already includes a valid remote grid, that grid is frozen
+with the QSO context and may be stored as the contacted grid. Missing remote
+grid information remains eligible for the existing asynchronous QRZ enrichment
+path and never blocks the durable local contact write.
+
+Checkpoint 8 does not change POTA/DX selection behavior. First-class
+`RadioMode.FT8` intentionally prepares the domain for a later enhancement
+where an FT8 POTA/DX selection may enter the native FT8 QSO workflow and attach
+the selected park/context metadata after successful completion.

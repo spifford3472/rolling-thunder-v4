@@ -84,6 +84,7 @@ class FT8QsoAuthorizationService:
             latitude=latitude,
             longitude=longitude,
             location_label=location_label,
+            remote_grid=activity.grid,
         )
 
     def _freeze_location(

@@ -2,6 +2,17 @@
 
 ## v4.3.0 — experimental development
 
+### FT8 Checkpoint 8 — in progress
+
+- adds first-class `RadioMode.FT8` for successful-contact logging while preserving USB/DATA as the physical FT-891 execution mode
+- adds schema v14 support for FT8 contacts without creating a parallel FT8 database or sync path
+- gives each authorized FT8 QSO a stable UUID used as the durable contact/idempotency key
+- logs only immutable `COMPLETED` results with actual signed dB reports, original QSO start time, frozen frequency, and frozen local Maidenhead grid
+- preserves a selected remote CQ grid when available and otherwise reuses existing QRZ enrichment
+- reuses the existing local SQLite -> ContactSyncService -> Forge -> Wavelog path
+- serializes successful native FT8 contacts as ADIF `MODE=FT8`
+- keeps POTA/DX FT8-session launching as a future enhancement rather than expanding Checkpoint 8 scope
+
 ### FT8 Checkpoint 7 — in progress
 
 - adds a QSO-specific physical authorization path separate from CP6 owner-test authorization
