@@ -577,9 +577,13 @@ The operator manually sets/confirms the band and tunes the ATAS-120 before
 transmitting. The unresolved CAT/front-panel band-context behavior is tracked in
 issue #149.
 
-The FT-891 Standard Com Port remains unopened. No component exposes PTT, MOX, CW
-keying, voice keying, digital TX control, tuner control, power control, or
-unattended transmit authority.
+The FT-891 Standard Com Port remains unopened. The generic `Radio` path still
+exposes no PTT, MOX, CW keying, voice keying, tuner control, power control, or
+unattended transmit authority. Native FT8 is the sole exception for digital TX:
+when both FT8 feature gates are enabled, a separate QSO-specific bounded executor
+uses the CP6-validated serialized Enhanced-CAT `TX1;`/`TX0;` path and DigiRig
+audio. That authority is not added to `Radio` and is not available to unrelated
+application paths.
 
 Voice input and ESP32 input are operator-input mechanisms, not direct radio
 control.
