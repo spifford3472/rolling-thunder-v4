@@ -72,6 +72,18 @@ class FT8QsoCoordinator:
             return self._controller.context
 
     @property
+    def attempt_count(self) -> int:
+        """Return attempts used for the current unchanged QSO state."""
+        with self._lock:
+            return self._controller.attempt_count
+
+    @property
+    def attempts_per_state(self) -> int:
+        """Return the bounded retry budget for each unchanged QSO state."""
+        with self._lock:
+            return self._controller.attempts_per_state
+
+    @property
     def terminal_reason(self) -> str | None:
         with self._lock:
             return self._terminal_reason
