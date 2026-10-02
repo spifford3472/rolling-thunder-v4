@@ -249,18 +249,28 @@ Rolling Thunder v4.3 Checkpoint 6 completed the separate supervised FT8
 hardware-validation track using Enhanced-CAT `TX1;`/`TX0;`, bounded left-only
 DigiRig playback, watchdog release, and explicit frequency/mode verification.
 
-Checkpoint 7 is now the experimental controlled-QSO integration track. It may
-connect exactly one explicitly operator-selected CQ station to the validated
-physical executor through a QSO-specific authorization, `DigitalTransmitSession`,
-slot coordinator, normalized decode feed, and manual ABORT. The generic `Radio`
-contract remains receive-side; UI, voice, ESP32, Forge/network services, POTA/DX
-activity, and unrelated application paths receive no independent PTT authority.
+Checkpoints 7 through 9 complete the experimental controlled-QSO MVP. One
+explicitly operator-selected CQ station may be connected to the validated physical
+executor through a QSO-specific authorization, `DigitalTransmitSession`, slot
+coordinator, normalized decode feed, manual ABORT, and bounded per-state retry
+policy. The generic `Radio` contract remains receive-side; UI, voice, ESP32,
+Forge/network services, POTA/DX activity, and unrelated application paths receive
+no independent PTT authority.
 
-Checkpoint 7 is complete and remains disabled by default behind both `ft8.enabled` and
-`ft8.transmit.enabled`. It produces an immutable terminal QSO result but does
-not yet write a successful contact to SQLite/Wavelog. Automatic next-station
-selection, unattended CQ hunting, autonomous band hopping, and voice-controlled
-FT8 transmission remain prohibited.
+The FT8 feature remains disabled by default behind `ft8.enabled`, with physical
+transmit additionally gated by `ft8.transmit.enabled`. Successful `COMPLETED`
+results use the existing local SQLite -> ContactSyncService -> Forge -> Wavelog
+path and ADIF `MODE=FT8`; aborted, retry-exhausted, error, and incomplete
+exchanges are not logged. The local Maidenhead grid is frozen at authorization
+for the lifetime of that QSO, and the next QSO takes a fresh location snapshot.
+
+Installed-hardware CP9 acceptance on `anvilmobile` proved receive-only operation,
+DigiRig recovery, CAT-loss fail-closed behavior, idempotent ABORT, six-attempt
+retry exhaustion, a real 5 W completed FT8 QSO on 7.074 MHz, isolated schema-14
+logging, clean shutdown, and low Pi resource use. Production schema migration,
+deployment, tagging, and merge remain separately owner-approved. Automatic
+next-station selection, unattended CQ hunting, autonomous band hopping, and
+voice-controlled FT8 transmission remain prohibited.
 
 The approved receive-tuning order is:
 
