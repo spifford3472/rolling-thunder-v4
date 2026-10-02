@@ -181,3 +181,23 @@ def test_panel_drops_selection_when_cq_expires() -> None:
 
     assert panel.selected_callsign is None
     assert panel.activate_selection() is None
+
+
+def test_panel_snapshot_exposes_bounded_retry_progress() -> None:
+    panel = FT8PanelController(
+        receive_state=lambda: FT8ReceiveState(),
+        qso_state=lambda: FT8QsoState.WAIT_REPORT,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda activity: pytest.fail(f"unexpected selection {activity}"),
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+        attempt_count=lambda: 3,
+        attempts_per_state=lambda: 6,
+    )
+
+    snapshot = panel.snapshot()
+
+    assert snapshot.mode is FT8PanelMode.ACTIVE
+    assert snapshot.attempt_count == 3
+    assert snapshot.attempts_per_state == 6
