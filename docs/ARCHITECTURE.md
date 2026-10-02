@@ -859,35 +859,40 @@ rules, deployment, and limitations.
 ## v4.3 Experimental FT8 architecture
 
 Status: experimental runtime integration through Checkpoint 9; disabled by default.
-The implementation includes receive/decode, one explicitly operator-authorized
-bounded QSO path, successful-contact persistence, and a presentation/controller
-boundary. Production migration remains separately owner-approved.
+Production deployment and schema migration remain separately owner-approved.
 
-Earlier Checkpoint 1 architecture notes below describe the original research
-boundary and are retained as historical design context. FT8 runtime or transmit authority is
-implemented on `main`.
+The native FT8 path now includes:
 
-The v4.3 experiment is documented in `docs/FT8_ARCHITECTURE.md`. It preserves
-the generic `Radio` protocol as receive-side and keeps all future FT8 transmit
-authority behind a separate, narrow, operator-authorized capability.
+- feature-gated continuous DigiRig receive and `ft8_lib` decoding;
+- CQ activity publication and a presentation-safe browser/controller boundary;
+- one explicitly operator-authorized bounded QSO at a time;
+- a narrow FT-891/DigiRig transmit executor using serialized Enhanced CAT ownership;
+- frozen QSO context, including the local Maidenhead grid, frequency, parity,
+  audio frequency, callsign, remote grid when known, and stable QSO UUID;
+- successful-contact persistence through the normal local SQLite -> sync -> Forge
+  -> Wavelog path with ADIF `MODE=FT8`;
+- continuous receive buffering introduced by Checkpoint 8.1;
+- Checkpoint 9 dashboard/control integration and lifecycle hardening.
 
-The proposed FT8 path is feature-gated and disabled by default. When disabled,
-no decoder, FT8 audio worker, FT8 timing worker, QSO worker, PTT backend, or
-FT8-specific CAT operation may be constructed.
+The generic `Radio` protocol remains receive-side. FT8 transmit authority is not
+added to that interface and is available only through the separate bounded FT8
+QSO capability when both `ft8.enabled` and `ft8.transmit.enabled` are true.
+Voice, AI, network services, unrelated panels, and background discovery cannot
+authorize FT8 transmission.
 
-The installed target hardware is the FT-891 + DigiRig DR-891. The existing
-Enhanced CAT path remains a single serialized owner; v4.3 must not create a
-second unsynchronized connection. DigiRig audio and any future PTT mechanism
-remain separate typed hardware boundaries.
+When FT8 is disabled, no FT8 decoder, capture/playback worker, QSO worker,
+encoder, playback device, or FT8-specific CAT/PTT authority is composed. With
+receive enabled but transmit disabled, CQ browsing is available while encoder,
+playback, physical executor, and QSO transmit authority remain absent.
 
-Checkpoint 1 selects no production decoder. It requires a later on-Pi benchmark
-of `ft8_lib` and `ft8mon` against current WSJT-X reference decodes before
-the initial receive backend is chosen.
+The installed target hardware is the Yaesu FT-891 + DigiRig DR-891. Enhanced CAT
+remains single-owner and serialized through the existing FT-891 adapter. DigiRig
+receive/playback remain typed audio boundaries, with FT8 payload on the left
+channel and digital silence on the right during transmit.
 
-No current v4.2/v4.3-main safety claim is weakened by this design document:
-software PTT/MOX/keying and FT8 transmission remain absent until an explicitly
-approved later checkpoint implements and physically validates the narrow
-transmit boundary.
+The checkpoint-specific sections below are retained as historical development
+records. Where they say a later capability did not yet exist, that statement
+applies to that checkpoint, not to the current merged v4.3 experimental state.
 
 
 ## Experimental v4.3 FT8 domain foundation
