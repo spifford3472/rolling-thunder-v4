@@ -50,6 +50,7 @@ class FT8PanelController:
         self._authorize = authorize
         self._abort = abort
         self._return_to_browser = return_to_browser
+        self._selected_callsign: str | None = None
 
     def snapshot(self) -> FT8PanelSnapshot:
         """Return current CQ browser/QSO presentation state without I/O."""
@@ -71,6 +72,13 @@ class FT8PanelController:
         else:
             mode = FT8PanelMode.ACTIVE
 
+        if mode is FT8PanelMode.BROWSE:
+            visible_callsigns = {activity.callsign for activity in cq_activity}
+            if self._selected_callsign not in visible_callsigns:
+                self._selected_callsign = None
+        else:
+            self._selected_callsign = None
+
         return FT8PanelSnapshot(
             mode=mode,
             cq_activity=cq_activity,
@@ -78,6 +86,34 @@ class FT8PanelController:
             active_context=context,
             result=result,
         )
+
+    @property
+    def selected_callsign(self) -> str | None:
+        """Return the currently highlighted CQ callsign, if still visible."""
+        self.snapshot()
+        return self._selected_callsign
+
+    def select_previous(self) -> str | None:
+        """Move the CQ-browser cursor toward the previous visible station."""
+        return self._move_selection(-1)
+
+    def select_next(self) -> str | None:
+        """Move the CQ-browser cursor toward the next visible station."""
+        return self._move_selection(1)
+
+    def clear_selection(self) -> bool:
+        """Clear a browse-only CQ highlight without changing QSO state."""
+        if self.snapshot().mode is not FT8PanelMode.BROWSE or self._selected_callsign is None:
+            return False
+        self._selected_callsign = None
+        return True
+
+    def activate_selection(self) -> FT8QsoContext | None:
+        """Authorize exactly the highlighted CQ station, if one exists."""
+        callsign = self.selected_callsign
+        if callsign is None:
+            return None
+        return self.select_callsign(callsign)
 
     def select_callsign(self, callsign: str) -> FT8QsoContext:
         """Authorize exactly one currently visible CQ station."""
@@ -93,7 +129,22 @@ class FT8PanelController:
         )
         if len(matches) != 1:
             raise ValueError("selected FT8 CQ must identify exactly one current station")
-        return self._authorize(matches[0])
+        context = self._authorize(matches[0])
+        self._selected_callsign = None
+        return context
+
+    def _move_selection(self, direction: int) -> str | None:
+        snapshot = self.snapshot()
+        if snapshot.mode is not FT8PanelMode.BROWSE or not snapshot.cq_activity:
+            return self._selected_callsign
+        callsigns = tuple(activity.callsign for activity in snapshot.cq_activity)
+        if self._selected_callsign is None:
+            index = 0 if direction > 0 else len(callsigns) - 1
+        else:
+            current = callsigns.index(self._selected_callsign)
+            index = max(0, min(len(callsigns) - 1, current + direction))
+        self._selected_callsign = callsigns[index]
+        return self._selected_callsign
 
     def abort(self) -> None:
         """Submit ABORT through the application-owned QSO service."""
