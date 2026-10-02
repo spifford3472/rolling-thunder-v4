@@ -117,12 +117,16 @@ class FT8CQActivity:
     """Immutable browser-oriented CQ activity snapshot item."""
 
     callsign: str
-    last_period: FT8Period
+    last_cq: FT8Period
+    last_any_decode: FT8Period
+    cq_count: int
     snr_db: int
     dt_seconds: float
     audio_frequency_hz: int
     grid: str | None = None
     cq_qualifier: str | None = None
+    pota_cq: bool = False
+    active_non_cq: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -134,6 +138,15 @@ class FT8CQActivity:
             object.__setattr__(self, "grid", _GRID_ADAPTER.validate_python(self.grid))
         if self.audio_frequency_hz <= 0:
             raise ValueError("FT8 CQ audio_frequency_hz must be positive")
+        if self.cq_count < 1:
+            raise ValueError("FT8 CQ count must be at least 1")
+        if self.last_any_decode < self.last_cq:
+            raise ValueError("FT8 last_any_decode cannot precede last_cq")
+
+    @property
+    def last_period(self) -> FT8Period:
+        """Compatibility alias for the most recent CQ period."""
+        return self.last_cq
 
 
 @dataclass(frozen=True, slots=True)
