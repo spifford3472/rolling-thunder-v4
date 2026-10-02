@@ -30,6 +30,7 @@ class FT8PanelSnapshot:
     result: FT8QsoResult | None = None
     attempt_count: int = 0
     attempts_per_state: int = 0
+    authorization_enabled: bool = False
 
 
 class FT8PanelController:
@@ -46,6 +47,7 @@ class FT8PanelController:
         return_to_browser: Callable[[], FT8QsoResult | None],
         attempt_count: Callable[[], int] | None = None,
         attempts_per_state: Callable[[], int] | None = None,
+        authorization_enabled: Callable[[], bool] | None = None,
     ) -> None:
         self._receive_state = receive_state
         self._qso_state = qso_state
@@ -56,6 +58,7 @@ class FT8PanelController:
         self._return_to_browser = return_to_browser
         self._attempt_count = attempt_count or (lambda: 0)
         self._attempts_per_state = attempts_per_state or (lambda: 0)
+        self._authorization_enabled = authorization_enabled or (lambda: True)
         self._selected_callsign: str | None = None
 
     def snapshot(self) -> FT8PanelSnapshot:
@@ -93,6 +96,7 @@ class FT8PanelController:
             result=result,
             attempt_count=self._attempt_count(),
             attempts_per_state=self._attempts_per_state(),
+            authorization_enabled=self._authorization_enabled(),
         )
 
     @property
@@ -118,6 +122,9 @@ class FT8PanelController:
 
     def activate_selection(self) -> FT8QsoContext | None:
         """Authorize exactly the highlighted CQ station, if one exists."""
+        snapshot = self.snapshot()
+        if not snapshot.authorization_enabled:
+            return None
         callsign = self.selected_callsign
         if callsign is None:
             return None
