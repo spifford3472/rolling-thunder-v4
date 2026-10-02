@@ -59,7 +59,7 @@ class FT8CQActivityManager:
             if decode.cq_qualifier is not None
             else (existing.cq_qualifier if existing else None)
         )
-        pota_cq = _decode_is_pota_cq(decode) or (existing.pota_cq if existing else False)
+        pota_cq = _decode_is_pota_cq(decode)
 
         self._activity[callsign] = FT8CQActivity(
             callsign=callsign,
