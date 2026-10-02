@@ -53,6 +53,11 @@ class FT8QsoController:
     def attempt_count(self) -> int:
         return self._attempt_count
 
+    @property
+    def attempts_per_state(self) -> int:
+        """Return the immutable retry budget for the current controller."""
+        return self._attempts_per_state
+
     def authorize(self, context: FT8QsoContext) -> None:
         """Authorize exactly one remote station from the idle state."""
         if self._state is not FT8QsoState.IDLE:
