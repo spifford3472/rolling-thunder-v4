@@ -75,17 +75,24 @@ def test_select_next_advances_through_contexts() -> None:
 
     assert controller.select_next().selected is ContextId.DX
     assert controller.select_next().selected is ContextId.BROWSE
+    assert controller.select_next().selected is ContextId.FT8
     assert controller.select_next().selected is ContextId.REPEATERS
     assert controller.select_next().selected is ContextId.AI
     assert controller.select_next().selected is ContextId.WEATHER
     assert controller.select_next().selected is ContextId.SETTINGS
     assert controller.select_next().selected is ContextId.LOG
     assert controller.select_next().selected is ContextId.DMR
+
+
+def test_ft8_follows_browse_in_physical_navigation_order() -> None:
+    controller = ContextNavigationController(ContextId.BROWSE)
+
     assert controller.select_next().selected is ContextId.FT8
+    assert controller.select_next().selected is ContextId.REPEATERS
 
 
-def test_select_next_wraps_from_ft8_to_pota() -> None:
-    controller = ContextNavigationController(ContextId.FT8)
+def test_select_next_wraps_from_dmr_to_pota() -> None:
+    controller = ContextNavigationController(ContextId.DMR)
 
     state = controller.select_next()
 
