@@ -144,6 +144,46 @@ def test_coordinator_abort_is_idempotent() -> None:
 
 
 
+
+
+class _CountingCancelSession:
+    def __init__(self) -> None:
+        self.cancel_count = 0
+
+    def request(self, request: object) -> None:
+        _ = request
+
+    def cancel(self) -> None:
+        self.cancel_count += 1
+
+
+def test_coordinator_abort_calls_session_cancel_exactly_once() -> None:
+    context = _context()
+    session = _CountingCancelSession()
+    coordinator = FT8QsoCoordinator(session, FakeFT8Clock(context.authorized_utc))
+    coordinator.authorize(context)
+    coordinator.start_qso()
+
+    coordinator.abort()
+    coordinator.abort()
+
+    assert coordinator.state is FT8QsoState.ABORTED
+    assert session.cancel_count == 1
+
+
+def test_receive_error_calls_session_cancel_exactly_once() -> None:
+    context = _context()
+    session = _CountingCancelSession()
+    coordinator = FT8QsoCoordinator(session, FakeFT8Clock(context.authorized_utc))
+    coordinator.authorize(context)
+    coordinator.start_qso()
+
+    coordinator.on_receive_error("decoder unavailable")
+
+    assert coordinator.state is FT8QsoState.ERROR
+    assert session.cancel_count == 1
+
+
 class _BlockingTransmitSession:
     def __init__(self) -> None:
         self.entered = threading.Event()
