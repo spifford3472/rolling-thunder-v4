@@ -1,10 +1,16 @@
 # Rolling Thunder v4.3 Experimental FT8 Architecture
 
-Status: Checkpoints 1–6 implemented; Checkpoint 7 controlled automated-QSO execution in deterministic integration
-Date: 2026-09-29  
-Implementation state: receive, decoder, hardware-independent QSO state machine, offline encoder/waveform, and the bounded FT-891/DigiRig physical executor are implemented. Checkpoint 7 adds a separate QSO authorization/session/coordinator path but remains blocked from live RF until deterministic acceptance and explicit owner approval.
+Status: Checkpoints 1–9 implemented and CP9 acceptance complete; merge/deployment pending explicit owner approval
+Date: 2026-10-02  
+Implementation state: the native FT8 MVP is implemented end to end behind disabled-by-default feature gates. Continuous receive, decoding, CQ browsing, explicit one-station authorization, bounded QSO execution, Enhanced-CAT/DigiRig transmit, frozen-grid logging, schema-14 FT8 persistence, and normal ContactSyncService/Forge/Wavelog integration are present. Installed-hardware CP9 acceptance includes a completed real 5 W QSO, fail-closed error paths, clean shutdown, and Raspberry Pi performance validation. Production remains on the protected v4.2-compatible deployment until separately approved.
 
 ## Purpose
+
+> Current-state note: sections below that describe individual checkpoints are retained
+> as historical design records. Statements such as "future", "proposed", or "blocked
+> from live RF" apply to the checkpoint being documented unless explicitly repeated
+> in the current-status sections. The authoritative current state is Checkpoint 9
+> acceptance complete, feature-gated, and not yet production-deployed.
 
 Rolling Thunder v4.3 explores an optional native FT8 workflow for the installed
 Yaesu FT-891 + DigiRig DR-891 mobile station.
@@ -72,16 +78,16 @@ The existing working FT-891 CAT path is:
 /dev/serial/by-id/usb-Silicon_Labs_CP2105_Dual_USB_to_UART_Bridge_Controller_011F42E9-if00-port0
 ```
 
-This is CP2105 interface 00 and has been observed as `/dev/ttyUSB2`. The
-`/dev/ttyUSB*` number is diagnostic only and must never be treated as stable
-configuration.
+This is CP2105 interface 00 and was observed as `/dev/ttyUSB1` during CP9
+acceptance. The `/dev/ttyUSB*` number is diagnostic only and must never be
+treated as stable configuration.
 
 Enhanced CAT remains owned by the existing FT-891 adapter/arbitration path.
 
 ### Standard Com Port
 
-CP2105 interface 01 has been observed as `/dev/ttyUSB3` and is presently
-unused by Rolling Thunder.
+CP2105 interface 01 was observed as `/dev/ttyUSB2` during CP9 acceptance and
+remains unused by Rolling Thunder.
 
 Checkpoint 6 resolved the PTT experiment in favor of the Enhanced CAT
 `TX1;`/`TX0;` path. The Standard Com Port remains unused by Rolling Thunder.
@@ -154,8 +160,11 @@ FT8 QSO controller/state machine
                                +----> QSO-specific physical authorization
                                +----> bounded FT-891/DigiRig executor
 
-Checkpoint 7 produces only an immutable terminal QSO result. Successful-contact
-persistence and Wavelog integration remain explicitly outside this checkpoint.
+Checkpoint 7 introduced the immutable terminal QSO result. Checkpoint 8 then
+connected only successful `COMPLETED` results to the existing local-first
+contact pipeline with a stable QSO UUID, frozen local grid, signed FT8 reports,
+schema-14 `RadioMode.FT8`, and ADIF `MODE=FT8`. Checkpoint 9 composes that
+path into the dashboard and installed-hardware runtime.
 
 FT8 receive worker
         |
