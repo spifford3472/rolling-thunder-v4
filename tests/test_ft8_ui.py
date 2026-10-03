@@ -1,5 +1,6 @@
 """Tests for mobile FT8 CQ browser presentation."""
 
+from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period
 from rolling_thunder.ft8_ui import (
     FT8_BROWSER_HEADERS,
@@ -52,10 +53,10 @@ def test_cq_lifecycle_maps_white_gray_yellow() -> None:
     )
 
     assert [row.call_presentation for row in viewport.rows] == [
-        FT8CallPresentation.WHITE,
+        FT8CallPresentation.YELLOW,
+        FT8CallPresentation.YELLOW,
         FT8CallPresentation.WHITE,
         FT8CallPresentation.GRAY,
-        FT8CallPresentation.YELLOW,
     ]
 
 
@@ -103,3 +104,36 @@ def test_selected_station_remains_in_view_without_reordering_source() -> None:
         "K7ABC",
         "K8ABC",
     ]
+
+
+def test_failed_and_aborted_attempt_history_overrides_cq_lifecycle_color() -> None:
+    viewport = build_ft8_browser_viewport(
+        (
+            _activity("K1FAIL", cq_count=1),
+            _activity("K2ABRT", cq_count=7, active_non_cq=True),
+        ),
+        selected_callsign=None,
+        attempt_states={
+            "K1FAIL": FT8AttemptVisualState.FAILED,
+            "K2ABRT": FT8AttemptVisualState.ABORTED,
+        },
+    )
+
+    failed, aborted = viewport.rows
+    assert failed.call_presentation is FT8CallPresentation.RED
+    assert failed.call_text == "! K1FAIL"
+    assert aborted.call_presentation is FT8CallPresentation.BLUE
+    assert aborted.call_text == "■ K2ABRT"
+
+
+def test_attempt_history_does_not_add_non_cq_rows() -> None:
+    viewport = build_ft8_browser_viewport(
+        (_activity("K1ABC"),),
+        selected_callsign=None,
+        attempt_states={
+            "K1ABC": FT8AttemptVisualState.FAILED,
+            "K9NOTCQ": FT8AttemptVisualState.ABORTED,
+        },
+    )
+
+    assert [row.callsign for row in viewport.rows] == ["K1ABC"]
