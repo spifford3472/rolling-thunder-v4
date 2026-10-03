@@ -5,7 +5,6 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-
 import pytest
 
 from rolling_thunder.forge_ft8_performance import (
@@ -57,7 +56,6 @@ def _attempt(
         last_qso_state=outcome.value,
     )
 
-
 def test_forge_schema_creation_preserves_existing_database_data(tmp_path: Path) -> None:
     database = tmp_path / "forge.db"
     with sqlite3.connect(database) as connection:
@@ -79,7 +77,6 @@ def test_forge_schema_creation_preserves_existing_database_data(tmp_path: Path) 
             """
         ).fetchone()
     assert version == (1,)
-
 
 def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None:
     repository = ForgeFT8PerformanceRepository(tmp_path / "forge.db")
@@ -120,7 +117,6 @@ def test_identical_replay_is_idempotent_and_changed_payload_conflicts(
 
     with pytest.raises(ForgeFT8PerformanceConflictError):
         repository.persist(_attempt(callsign="K2XYZ"))
-
 
 def test_service_returns_typed_utc_acknowledgement(tmp_path: Path) -> None:
     now = datetime(2026, 10, 2, 20, 5, tzinfo=UTC)
