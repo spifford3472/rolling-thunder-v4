@@ -102,6 +102,37 @@ def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None
     assert row["voacap_path"] is None
 
 
+def test_preparation_failure_persists_with_unknown_radio_context(
+    tmp_path: Path,
+) -> None:
+    repository = ForgeFT8PerformanceRepository(tmp_path / "forge.db")
+    started = datetime(2026, 10, 2, 20, 0, tzinfo=UTC)
+    attempt = FT8PerformanceAttempt(
+        attempt_id=UUID("00000000-0000-0000-0000-000000000399"),
+        callsign="K1ABC",
+        outcome=FT8AttemptOutcome.PREPARATION_FAILED,
+        success=False,
+        terminal_state="preparation_failed",
+        terminal_reason="radio frequency unavailable",
+        started_at_utc=started,
+        ended_at_utc=started + timedelta(seconds=1),
+        utc_date=date(2026, 10, 2),
+        band=None,
+        dial_frequency_hz=None,
+        sent_report_db=-8,
+        local_grid="EM79xm",
+        remote_grid="FN31",
+        audio_frequency_hz=1500,
+    )
+
+    assert repository.persist(attempt) is FT8PerformanceUploadDisposition.ACCEPTED
+
+    row = repository.get_row(str(attempt.attempt_id))
+    assert row is not None
+    assert row["band"] is None
+    assert row["dial_frequency_hz"] is None
+
+
 def test_identical_replay_is_idempotent_and_changed_payload_conflicts(
     tmp_path: Path,
 ) -> None:
