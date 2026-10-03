@@ -44,13 +44,23 @@ class FT8AwareActivePanelCommands:
         ft8_panel: FT8PanelCommands,
         *,
         cycle_band: Callable[[], bool] | None = None,
+        exit_ft8: Callable[[], bool] | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._delegate = delegate
         self._ft8_panel = ft8_panel
         self._cycle_band = cycle_band
+        self._exit_ft8 = exit_ft8
+        self._last_context_id = context_navigation.state.selected
 
     def activate_context(self, context_id: ContextId) -> None:
+        leaving_ft8 = (
+            self._last_context_id is ContextId.FT8
+            and context_id is not ContextId.FT8
+        )
+        if leaving_ft8 and self._exit_ft8 is not None:
+            self._exit_ft8()
+        self._last_context_id = context_id
         self._delegate.activate_context(context_id)
 
     def primary(self) -> bool:
