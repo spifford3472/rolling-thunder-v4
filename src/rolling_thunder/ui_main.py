@@ -357,6 +357,7 @@ def run_dashboard(
                 if runtime.ft8_band_control is None
                 else runtime.ft8_band_control.cycle_band
             ),
+            exit_ft8=runtime.exit_ft8_context,
         )
 
     status_monitor = build_status_monitor(config)
