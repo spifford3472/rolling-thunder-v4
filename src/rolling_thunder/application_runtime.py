@@ -30,6 +30,10 @@ from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
+from rolling_thunder.ft8.attempt_history import (
+    FT8AttemptHistoryService,
+    FT8AttemptVisualState,
+)
 from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
 from rolling_thunder.ft8.band_control import FT8BandController
 from rolling_thunder.ft8.coordinator import FT8QsoResult
@@ -202,6 +206,7 @@ class ApplicationRuntime:
     ft8_logging: FT8QsoLoggingService | None = None
     ft8_worked_today: FT8WorkedTodayService | None = None
     ft8_performance_recorder: FT8PerformanceRecorder | None = None
+    ft8_attempt_history: FT8AttemptHistoryService | None = None
     ft8_performance_sync: FT8PerformanceSyncService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
@@ -497,10 +502,22 @@ class ApplicationRuntime:
             if config.ft8.enabled
             else None
         )
+        ft8_attempt_history = (
+            None
+            if ft8_performance_outbox is None
+            else FT8AttemptHistoryService(ft8_performance_outbox)
+        )
         ft8_performance_recorder = (
             None
             if ft8_performance_outbox is None
-            else FT8PerformanceRecorder(ft8_performance_outbox)
+            else FT8PerformanceRecorder(
+                ft8_performance_outbox,
+                attempt_handler=(
+                    None
+                    if ft8_attempt_history is None
+                    else ft8_attempt_history.record
+                ),
+            )
         )
         ft8_performance_sync = None
         if ft8_performance_outbox is not None and isinstance(
@@ -784,6 +801,7 @@ class ApplicationRuntime:
             ft8_logging=ft8_logging,
             ft8_worked_today=ft8_worked_today,
             ft8_performance_recorder=ft8_performance_recorder,
+            ft8_attempt_history=ft8_attempt_history,
             ft8_performance_sync=ft8_performance_sync,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
@@ -890,6 +908,21 @@ class ApplicationRuntime:
         if self.ft8_qso_start is None:
             return True
         return self.ft8_qso_start.reset_to_idle()
+
+    def ft8_attempt_visual_state(
+        self,
+        callsign: str,
+    ) -> FT8AttemptVisualState | None:
+        """Return today's prior failed/aborted state for a visible CQ on this band."""
+        history = self.ft8_attempt_history
+        frequency = self.latest_radio_state.frequency
+        if history is None or frequency is None:
+            return None
+        try:
+            band = resolve_radio_band(frequency)
+        except RadioBandResolutionError:
+            return None
+        return history.state_for(callsign, band.value)
 
     def enter_ft8_context(self) -> bool:
         """Apply the owner-required FT8 receive settings without transmit authority."""
