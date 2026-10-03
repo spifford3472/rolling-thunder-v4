@@ -97,10 +97,14 @@ class FT8AwareActivePanelCommands:
     def tertiary(self) -> bool:
         if not self._ft8_is_active():
             return self._delegate.tertiary()
-        if self._ft8_panel.snapshot().mode is not FT8PanelMode.ACTIVE:
-            return False
-        self._ft8_panel.abort()
-        return True
+        mode = self._ft8_panel.snapshot().mode
+        if mode is FT8PanelMode.ACTIVE:
+            self._ft8_panel.abort()
+            return True
+        if mode is FT8PanelMode.TERMINAL:
+            self._ft8_panel.return_to_browser()
+            return True
+        return False
 
     def tertiary_long(self) -> bool:
         if not self._ft8_is_active():
@@ -134,6 +138,9 @@ class FT8AwareActivePanelCommands:
         if not self._ft8_is_active():
             return self._delegate.activate_selection()
         snapshot = self._ft8_panel.snapshot()
+        if snapshot.mode is FT8PanelMode.TERMINAL:
+            self._ft8_panel.return_to_browser()
+            return True
         if snapshot.mode is not FT8PanelMode.BROWSE:
             return False
         return self._ft8_panel.activate_selection()
