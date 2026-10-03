@@ -5,9 +5,9 @@ from __future__ import annotations
 import tkinter as tk
 
 from rolling_thunder.ft8_ui import (
+    FT8_POTA_TREE_GLYPH,
     FT8BrowserViewport,
     FT8CallPresentation,
-    FT8_POTA_TREE_GLYPH,
 )
 
 _BACKGROUND = "#151515"
