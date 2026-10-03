@@ -231,3 +231,40 @@ def test_qso_start_error_is_published_without_transmit_retry() -> None:
     assert controller.status.error == (
         "FT8 QSO start failed after radio preparation: selected CQ expired"
     )
+
+
+def test_reset_to_idle_clears_terminal_start_status_for_next_station() -> None:
+    radio = Radio()
+    starts: list[str] = []
+    controller = FT8QsoStartController(
+        FT8RadioPreparationService(radio),
+        lambda activity, state, _seed: starts.append(activity.callsign),
+        worker_launcher=_run_now,
+    )
+
+    assert controller.start(_activity(), attempt_seed=_seed()) is True
+    assert controller.status.state is FT8QsoStartState.STARTED
+    assert controller.status.activity is not None
+
+    assert controller.reset_to_idle() is True
+
+    assert controller.status.state is FT8QsoStartState.IDLE
+    assert controller.status.activity is None
+    assert controller.status.error is None
+    assert controller.status.attempt_seed is None
+
+
+def test_reset_to_idle_refuses_to_clear_busy_preparation() -> None:
+    radio = Radio()
+    queued: list[object] = []
+    controller = FT8QsoStartController(
+        FT8RadioPreparationService(radio),
+        lambda activity, state, _seed: None,
+        worker_launcher=queued.append,
+    )
+
+    assert controller.start(_activity(), attempt_seed=_seed()) is True
+    assert controller.status.state is FT8QsoStartState.PREPARING
+
+    assert controller.reset_to_idle() is False
+    assert controller.status.state is FT8QsoStartState.PREPARING
