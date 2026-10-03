@@ -885,6 +885,12 @@ class ApplicationRuntime:
             return None
         return self.ft8_qso_start.status
 
+    def clear_ft8_qso_start_status(self) -> bool:
+        """Clear a non-busy prior FT8 start result before a new selection."""
+        if self.ft8_qso_start is None:
+            return True
+        return self.ft8_qso_start.reset_to_idle()
+
     def enter_ft8_context(self) -> bool:
         """Apply the owner-required FT8 receive settings without transmit authority."""
         if self.ft8_band_control is None:
