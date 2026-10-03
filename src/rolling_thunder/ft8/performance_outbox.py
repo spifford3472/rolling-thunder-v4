@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from json import dumps, loads
 from pathlib import Path
@@ -75,6 +75,24 @@ class FT8PerformanceOutboxRepository:
                 f"FT8 performance attempt could not be stored: {attempt.attempt_id}: {error}"
             ) from error
         return attempt
+
+    def list_for_utc_date(self, utc_date: date) -> list[FT8PerformanceAttempt]:
+        """Return all stored attempts whose payload belongs to one UTC date."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                rows = connection.execute(
+                    """
+                    SELECT payload_json
+                    FROM ft8_performance_outbox
+                    ORDER BY created_at ASC, attempt_id ASC
+                    """
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"FT8 performance history could not be read: {error}"
+            ) from error
+        attempts = [self._decode(row[0]) for row in rows]
+        return [attempt for attempt in attempts if attempt.utc_date == utc_date]
 
     def list_ready(
         self,
