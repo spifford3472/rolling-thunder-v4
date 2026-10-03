@@ -207,6 +207,21 @@ def test_context_button_3_is_inert_in_ft8_when_no_qso_is_active() -> None:
     assert delegate.calls == []
 
 
+
+def test_ft8_context_button_3_aborts_active_qso_only() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    commands = FT8AwareActivePanelCommands(navigation, delegate, panel)
+
+    assert commands.tertiary() is False
+    panel.mode = FT8PanelMode.ACTIVE
+    assert commands.tertiary() is True
+
+    assert panel.calls == ["abort"]
+    assert delegate.calls == []
+
+
 def test_non_ft8_context_preserves_delegate_behavior() -> None:
     navigation = ContextNavigationController(ContextId.POTA)
     delegate = Delegate()
