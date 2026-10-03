@@ -104,6 +104,28 @@ class FT8PanelController:
             authorization_enabled=self._authorization_enabled(),
         )
 
+    def visible_cq_activity(self, *, limit: int = 8) -> tuple[FT8CQActivity, ...]:
+        """Return a selection-following CQ viewport without reordering activity."""
+        if limit < 1:
+            raise ValueError("FT8 CQ viewport limit must be at least 1")
+        snapshot = self.snapshot()
+        activity = snapshot.cq_activity
+        if len(activity) <= limit:
+            return activity
+
+        selected = self._selected_callsign
+        if selected is None:
+            return activity[:limit]
+
+        callsigns = tuple(item.callsign for item in activity)
+        try:
+            selected_index = callsigns.index(selected)
+        except ValueError:
+            return activity[:limit]
+
+        start = min(max(0, selected_index - limit + 1), len(activity) - limit)
+        return activity[start : start + limit]
+
     @property
     def selected_callsign(self) -> str | None:
         """Return the currently highlighted CQ callsign, if still visible."""
