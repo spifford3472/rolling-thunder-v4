@@ -6,19 +6,21 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import Lock, Thread
+from typing import Protocol
 
-from rolling_thunder.domain import RadioMode, RadioState
+from rolling_thunder.domain import Frequency, RadioMode, RadioState
 from rolling_thunder.ft8.bands import ft8_frequency_for_band, next_automated_ft8_band
 from rolling_thunder.radio import RadioBand, RadioError
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 from rolling_thunder.receive_tuning import ReceiveTuneOutcome
 
 
-class FT8ReceiveTuner:
-    """Protocol-like narrow receive tuner used by the FT8 band controller."""
+class FT8ReceiveTuner(Protocol):
+    """Narrow receive tuner used by the FT8 band controller."""
 
-    def tune(self, frequency: object, mode: RadioMode) -> ReceiveTuneOutcome:
-        raise NotImplementedError
+    def tune(self, frequency: Frequency, mode: RadioMode) -> ReceiveTuneOutcome:
+        """Perform one verified receive-only tune."""
+        ...
 
 
 class FT8BandTuneState(StrEnum):
@@ -45,7 +47,7 @@ class FT8BandController:
 
     def __init__(
         self,
-        tuner: object,
+        tuner: FT8ReceiveTuner,
         radio_state: Callable[[], RadioState],
     ) -> None:
         self._tuner = tuner
