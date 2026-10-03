@@ -117,7 +117,13 @@ class FT8Widgets:
     def hide(self) -> None:
         self.frame.grid_remove()
 
-    def update(self, viewport: FT8BrowserViewport, *, transmit_enabled: bool) -> None:
+    def update(
+        self,
+        viewport: FT8BrowserViewport,
+        *,
+        transmit_enabled: bool,
+        distance_text: str | None = None,
+    ) -> None:
         self.more_above.set("▲ MORE ▲" if viewport.hidden_above else "")
         self.more_below.set("▼ MORE ▼" if viewport.hidden_below else "")
 
@@ -155,6 +161,9 @@ class FT8Widgets:
             frame.grid()
 
         if transmit_enabled:
-            self.footer.set("BUTTON 1 BAND  •  ROTATE SELECT  •  PRESS ENCODER START")
+            footer = "BUTTON 1 BAND  •  ROTATE SELECT  •  PRESS ENCODER START"
         else:
-            self.footer.set("BUTTON 1 BAND  •  ROTATE SELECT  •  RECEIVE ONLY")
+            footer = "BUTTON 1 BAND  •  ROTATE SELECT  •  RECEIVE ONLY"
+        if distance_text:
+            footer += f"\n{distance_text}"
+        self.footer.set(footer)
