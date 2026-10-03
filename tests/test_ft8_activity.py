@@ -69,6 +69,21 @@ def test_non_cq_for_existing_cq_updates_any_decode_and_marks_active() -> None:
     assert activity.grid == "EM80aa"
 
 
+def test_non_cq_active_marker_expires_after_ten_seconds() -> None:
+    now = {"value": 100.0}
+    manager = FT8CQActivityManager(monotonic_clock=lambda: now["value"])
+    manager.ingest(_decode(100))
+    manager.ingest(_decode(101, kind=FT8MessageKind.REPORT))
+
+    assert manager.snapshot()[0].active_non_cq is True
+
+    now["value"] = 109.999
+    assert manager.snapshot()[0].active_non_cq is True
+
+    now["value"] = 110.0
+    assert manager.snapshot()[0].active_non_cq is False
+
+
 def test_subsequent_cq_clears_non_cq_active_state() -> None:
     manager = FT8CQActivityManager()
     manager.ingest(_decode(100))
