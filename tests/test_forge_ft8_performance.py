@@ -18,7 +18,6 @@ from rolling_thunder.ft8.performance import (
     FT8PerformanceUploadDisposition,
 )
 
-
 _DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000301")
 
 def _attempt(
