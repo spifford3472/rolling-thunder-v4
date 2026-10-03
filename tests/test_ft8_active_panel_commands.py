@@ -337,3 +337,22 @@ def test_non_ft8_context_preserves_delegate_behavior() -> None:
 
     assert delegate.calls == ["move_next", "activate_selection", "back"]
     assert panel.calls == []
+
+
+def test_selecting_new_ft8_station_clears_stale_start_status() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    resets: list[str] = []
+    commands = FT8AwareActivePanelCommands(
+        navigation,
+        delegate,
+        panel,
+        clear_start_status=lambda: resets.append("reset") is None,
+    )
+
+    assert commands.move_next() is True
+    assert resets == ["reset"]
+
+    assert commands.move_previous() is True
+    assert resets == ["reset", "reset"]
