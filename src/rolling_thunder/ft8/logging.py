@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from threading import RLock
 
 from rolling_thunder.contact_logging import ContactLoggingService
@@ -14,8 +15,14 @@ from rolling_thunder.storage import StorageError
 class FT8QsoLoggingService:
     """Persist only immutable successful FT8 terminal results."""
 
-    def __init__(self, contact_logging: ContactLoggingService) -> None:
+    def __init__(
+        self,
+        contact_logging: ContactLoggingService,
+        *,
+        completed_contact_handler: Callable[[Contact], None] | None = None,
+    ) -> None:
         self._contact_logging = contact_logging
+        self._completed_contact_handler = completed_contact_handler
         self._lock = RLock()
         self._latest_contact: Contact | None = None
         self._latest_error: str | None = None
@@ -59,6 +66,8 @@ class FT8QsoLoggingService:
         with self._lock:
             self._latest_contact = contact
             self._latest_error = None
+        if self._completed_contact_handler is not None:
+            self._completed_contact_handler(contact)
         return contact
 
 
