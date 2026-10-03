@@ -13,7 +13,7 @@ def _state(frequency_hz: int = 14_074_000) -> RadioState:
     return RadioState(
         connection_state=RadioConnectionState.CONNECTED,
         frequency=Frequency(hz=frequency_hz),
-        mode=RadioMode.DATA,
+        mode=RadioMode.USB,
         transmitting=False,
         updated_at=datetime(2026, 10, 2, 20, 0, tzinfo=UTC),
     )
@@ -39,16 +39,22 @@ class Tuner:
 
 def test_cycle_band_moves_20m_to_17m_ft8_frequency() -> None:
     tuner = Tuner()
-    controller = FT8BandController(tuner, lambda: _state())
+    bfo_calls: list[str] = []
+    controller = FT8BandController(
+        tuner,
+        lambda: _state(),
+        ensure_usb_bfo=lambda: bfo_calls.append("usb"),
+    )
 
     assert controller.cycle_band() is True
     assert tuner.called.wait(timeout=1.0)
 
-    assert tuner.calls == [(Frequency(hz=18_100_000), RadioMode.DATA)]
+    assert tuner.calls == [(Frequency(hz=18_100_000), RadioMode.USB)]
     assert controller.status.state is FT8BandTuneState.SUCCEEDED
     assert controller.status.target_band is RadioBand.BAND_17M
     assert controller.status.outcome is not None
     assert controller.status.outcome.band_changed is True
+    assert bfo_calls == ["usb"]
 
 
 def test_cycle_from_60m_falls_back_to_20m_automated_band() -> None:
@@ -58,7 +64,7 @@ def test_cycle_from_60m_falls_back_to_20m_automated_band() -> None:
     assert controller.cycle_band() is True
     assert tuner.called.wait(timeout=1.0)
 
-    assert tuner.calls == [(Frequency(hz=14_074_000), RadioMode.DATA)]
+    assert tuner.calls == [(Frequency(hz=14_074_000), RadioMode.USB)]
 
 
 def test_band_tune_failure_is_published_without_retry() -> None:
