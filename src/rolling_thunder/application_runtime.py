@@ -51,6 +51,7 @@ from rolling_thunder.ft8.session import (
 )
 from rolling_thunder.ft8.start_control import FT8QsoStartController, FT8QsoStartStatus
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
+from rolling_thunder.ft8.worked_today import FT8WorkedTodayService
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
@@ -117,6 +118,7 @@ from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
 from rolling_thunder.qrz_profile_image import QrzProfileImageProvider
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
 from rolling_thunder.radio import Radio
+from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.serial_gps import SerialGPSReceiver
@@ -187,6 +189,7 @@ class ApplicationRuntime:
     ft8_qso: FT8OperatorQsoService | None = None
     ft8_qso_start: FT8QsoStartController | None = None
     ft8_logging: FT8QsoLoggingService | None = None
+    ft8_worked_today: FT8WorkedTodayService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
@@ -464,7 +467,17 @@ class ApplicationRuntime:
             repository,
             qrz_fallback_available=qrz_provider is not None,
         )
-        ft8_logging = FT8QsoLoggingService(contact_logging)
+        ft8_worked_today = (
+            FT8WorkedTodayService(repository) if config.ft8.enabled else None
+        )
+        ft8_logging = FT8QsoLoggingService(
+            contact_logging,
+            completed_contact_handler=(
+                None
+                if ft8_worked_today is None
+                else ft8_worked_today.record_completed
+            ),
+        )
 
         ft8_receive: FT8ReceiveService | None = None
         if config.ft8.enabled:
@@ -691,6 +704,7 @@ class ApplicationRuntime:
             ft8_authorization=ft8_authorization,
             ft8_qso=ft8_qso,
             ft8_logging=ft8_logging,
+            ft8_worked_today=ft8_worked_today,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
         if (
@@ -719,6 +733,17 @@ class ApplicationRuntime:
                 start_prepared_ft8_qso,
             )
 
+        def ft8_activity_visible(activity: FT8CQActivity) -> bool:
+            worked = runtime.ft8_worked_today
+            state = runtime.latest_radio_state
+            if worked is None or state.frequency is None:
+                return True
+            try:
+                band = resolve_radio_band(state.frequency)
+            except RadioBandResolutionError:
+                return True
+            return not worked.is_suppressed(activity.callsign, band)
+
         if ft8_receive is not None:
             runtime.ft8_panel = FT8PanelController(
                 receive_state=lambda: runtime.latest_ft8_receive_state,
@@ -735,6 +760,7 @@ class ApplicationRuntime:
                     0 if runtime.ft8_qso is None else runtime.ft8_qso.attempts_per_state
                 ),
                 authorization_enabled=lambda: runtime.ft8_qso is not None,
+                activity_filter=ft8_activity_visible,
             )
         return runtime
 
