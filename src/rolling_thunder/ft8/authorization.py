@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import UUID
 
 from rolling_thunder.domain import GPSFixState, RadioConnectionState, RadioMode, RadioState
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8PeriodParity, FT8QsoContext
@@ -34,6 +35,7 @@ class FT8QsoAuthorizationService:
         *,
         radio_state: RadioState,
         gps_state: GPSState | None,
+        qso_id: UUID | None = None,
     ) -> FT8QsoContext:
         """Freeze one selected CQ without tuning, keying, or starting a QSO."""
         current_period = self.clock.current_period()
@@ -85,6 +87,8 @@ class FT8QsoAuthorizationService:
             longitude=longitude,
             location_label=location_label,
             remote_grid=activity.grid,
+            pota_cq=activity.pota_cq,
+            **({} if qso_id is None else {"qso_id": qso_id}),
         )
 
     def _freeze_location(
