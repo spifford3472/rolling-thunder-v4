@@ -1410,7 +1410,7 @@ def run_dashboard(
             health_frame.grid_remove()
             context_title_text.set("FT8")
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
-            context_body_label.configure(font=("DejaVu Sans Mono", 20), wraplength=560)
+            context_body_label.configure(font=("DejaVu Sans Mono", 18), wraplength=620)
             if runtime.ft8_panel is None:
                 context_body_text.set(
                     "Native FT8 is disabled.\n\n"
@@ -1445,17 +1445,21 @@ def run_dashboard(
                     if not ft8_snapshot.cq_activity:
                         lines.append("  Waiting for CQ decodes...")
                     else:
-                        for activity in ft8_snapshot.cq_activity[:8]:
-                            marker_text = ">" if activity.callsign == selected_callsign else " "
+                        for activity in runtime.ft8_panel.visible_cq_activity(limit=8):
+                            selected = activity.callsign == selected_callsign
+                            marker_text = "▶" if selected else " "
                             grid = activity.grid or "------"
+                            pota_marker = " 🌲" if activity.pota_cq else ""
+                            active_marker = " *" if activity.active_non_cq else ""
                             lines.append(
                                 f"{marker_text} {activity.callsign:<10} "
                                 f"{activity.snr_db:+3d} dB  "
-                                f"{activity.audio_frequency_hz:4d} Hz  {grid}"
+                                f"{activity.audio_frequency_hz:4d} Hz  {grid}  "
+                                f"CQ×{activity.cq_count}{pota_marker}{active_marker}"
                             )
                     lines.append("")
                     if ft8_snapshot.authorization_enabled:
-                        lines.append("ROTATE TO SELECT — PRESS TO AUTHORIZE ONE QSO")
+                        lines.append("ROTATE TO SELECT — PRESS ENCODER TO AUTHORIZE ONE QSO")
                     else:
                         lines.append("ROTATE TO BROWSE — RECEIVE ONLY / TX DISABLED")
                 elif ft8_snapshot.mode is FT8PanelMode.ACTIVE:
@@ -1472,14 +1476,15 @@ def run_dashboard(
                         "ATTEMPT "
                         f"{ft8_snapshot.attempt_count}/{ft8_snapshot.attempts_per_state}"
                     )
-                    lines.append("BACK / X = ABORT")
+                    lines.append("BUTTON 3 — ABORT QSO NOW")
+                    lines.append("BACK / X — ABORT QSO")
                 else:
                     result = ft8_snapshot.result
                     lines.append("")
                     lines.append(f"RESULT: {ft8_snapshot.qso_state.value.upper()}")
                     if result is not None and result.terminal_reason:
                         lines.append(result.terminal_reason)
-                    lines.append("BACK / X = RETURN TO CQ BROWSER")
+                    lines.append("BACK / X — RETURN TO CQ BROWSER")
                 context_body_text.set("\n".join(lines))
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
