@@ -157,6 +157,28 @@ def test_ft8_back_aborts_active_qso_and_acknowledges_terminal_result() -> None:
     assert delegate.calls == []
 
 
+def test_leaving_ft8_context_requests_restore_once() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    exits: list[str] = []
+    commands = FT8AwareActivePanelCommands(
+        navigation,
+        delegate,
+        panel,
+        exit_ft8=lambda: exits.append("exit") is None,
+    )
+
+    commands.activate_context(ContextId.FT8)
+    assert exits == []
+
+    commands.activate_context(ContextId.REPEATERS)
+    assert exits == ["exit"]
+
+    commands.activate_context(ContextId.AI)
+    assert exits == ["exit"]
+
+
 def test_non_ft8_context_preserves_delegate_behavior() -> None:
     navigation = ContextNavigationController(ContextId.POTA)
     delegate = Delegate()
