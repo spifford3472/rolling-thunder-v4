@@ -164,6 +164,37 @@ def test_panel_browser_selection_is_bounded_and_requires_explicit_activation() -
     assert panel.selected_callsign is None
 
 
+def test_panel_visible_cq_viewport_follows_selection_without_reordering() -> None:
+    activity = tuple(_activity(f"K{index}ABC") for index in range(1, 11))
+    panel = FT8PanelController(
+        receive_state=lambda: FT8ReceiveState(cq_activity=activity),
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda item: pytest.fail(f"unexpected selection {item}"),
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+    )
+
+    assert [item.callsign for item in panel.visible_cq_activity(limit=4)] == [
+        "K1ABC",
+        "K2ABC",
+        "K3ABC",
+        "K4ABC",
+    ]
+
+    for _ in range(6):
+        panel.select_next()
+
+    assert panel.selected_callsign == "K6ABC"
+    assert [item.callsign for item in panel.visible_cq_activity(limit=4)] == [
+        "K3ABC",
+        "K4ABC",
+        "K5ABC",
+        "K6ABC",
+    ]
+
+
 def test_panel_drops_selection_when_cq_expires() -> None:
     current = {"receive": FT8ReceiveState(cq_activity=(_activity(),))}
     panel = FT8PanelController(
