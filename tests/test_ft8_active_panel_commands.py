@@ -102,6 +102,27 @@ def test_ft8_context_owns_selection_and_activation_without_delegate() -> None:
     assert delegate.calls == []
 
 
+def test_ft8_context_button_1_cycles_band_only_in_browser() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    band_calls: list[str] = []
+    commands = FT8AwareActivePanelCommands(
+        navigation,
+        delegate,
+        panel,
+        cycle_band=lambda: band_calls.append("cycle") is None,
+    )
+
+    assert commands.primary() is True
+    assert band_calls == ["cycle"]
+
+    panel.mode = FT8PanelMode.ACTIVE
+    assert commands.primary() is False
+    assert band_calls == ["cycle"]
+    assert delegate.calls == []
+
+
 def test_ft8_context_button_3_short_aborts_only_active_qso() -> None:
     navigation = ContextNavigationController(ContextId.FT8)
     delegate = Delegate()
