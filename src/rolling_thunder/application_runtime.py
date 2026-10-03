@@ -43,6 +43,12 @@ from rolling_thunder.ft8.hardware_transmit import (
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.panel import FT8PanelController
+from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
+from rolling_thunder.ft8.performance_recording import (
+    FT8PerformanceRecorder,
+    build_ft8_attempt_seed,
+)
+from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
 from rolling_thunder.ft8.radio_preparation import FT8RadioPreparationService
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.ft8.session import (
@@ -190,6 +196,8 @@ class ApplicationRuntime:
     ft8_qso_start: FT8QsoStartController | None = None
     ft8_logging: FT8QsoLoggingService | None = None
     ft8_worked_today: FT8WorkedTodayService | None = None
+    ft8_performance_recorder: FT8PerformanceRecorder | None = None
+    ft8_performance_sync: FT8PerformanceSyncService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
@@ -206,6 +214,7 @@ class ApplicationRuntime:
         home_platform_scheduler: PollScheduler | None = None,
         contact_qrz_enrichment_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
+        ft8_performance_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
         forge_weather_scheduler: PollScheduler | None = None,
@@ -478,6 +487,26 @@ class ApplicationRuntime:
                 else ft8_worked_today.record_completed
             ),
         )
+        ft8_performance_recorder = (
+            FT8PerformanceRecorder(
+                FT8PerformanceOutboxRepository(config.storage.database_path)
+            )
+            if config.ft8.enabled
+            else None
+        )
+        ft8_performance_sync = None
+        if (
+            config.ft8.enabled
+            and home_platform_client is not None
+            and ft8_performance_recorder is not None
+        ):
+            ft8_performance_sync = FT8PerformanceSyncService(
+                ft8_performance_recorder._repository,
+                home_platform_client,  # type: ignore[arg-type]
+                ft8_performance_sync_scheduler or ThreadingPollScheduler(),
+                interval_s=platform_config.contact_sync_interval_s,
+                batch_size=platform_config.contact_sync_batch_size,
+            )
 
         ft8_receive: FT8ReceiveService | None = None
         if config.ft8.enabled:
@@ -556,12 +585,18 @@ class ApplicationRuntime:
                     release_margin_s=config.ft8.transmit.release_margin_s,
                 )
 
+            def handle_ft8_terminal_result(result: FT8QsoResult) -> object:
+                contact = ft8_logging.handle_terminal_result(result)
+                if ft8_performance_recorder is not None:
+                    ft8_performance_recorder.record_qso_result(result)
+                return contact
+
             ft8_qso = FT8OperatorQsoService(
                 ft8_receive,
                 build_ft8_session,
                 active_ft8_clock,
                 attempts_per_state=config.ft8.qso.attempts_per_state,
-                terminal_result_handler=ft8_logging.handle_terminal_result,
+                terminal_result_handler=handle_ft8_terminal_result,
             )
 
         live_map: LiveMapService | None = None
@@ -705,6 +740,8 @@ class ApplicationRuntime:
             ft8_qso=ft8_qso,
             ft8_logging=ft8_logging,
             ft8_worked_today=ft8_worked_today,
+            ft8_performance_recorder=ft8_performance_recorder,
+            ft8_performance_sync=ft8_performance_sync,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
         if (
@@ -718,19 +755,30 @@ class ApplicationRuntime:
             def start_prepared_ft8_qso(
                 activity: FT8CQActivity,
                 prepared_radio_state: RadioState,
+                attempt_seed: object,
             ) -> None:
+                from rolling_thunder.ft8.performance import FT8AttemptSeed
+
+                if not isinstance(attempt_seed, FT8AttemptSeed):
+                    raise TypeError("attempt_seed must be an FT8AttemptSeed")
                 assert runtime.ft8_authorization is not None
                 assert runtime.ft8_qso is not None
                 context = runtime.ft8_authorization.authorize(
                     activity,
                     radio_state=prepared_radio_state,
                     gps_state=runtime.latest_gps_state,
+                    qso_id=attempt_seed.attempt_id,
                 )
                 runtime.ft8_qso.authorize_and_start(context)
 
             runtime.ft8_qso_start = FT8QsoStartController(
                 preparation,
                 start_prepared_ft8_qso,
+                preparation_failure_handler=(
+                    None
+                    if runtime.ft8_performance_recorder is None
+                    else runtime.ft8_performance_recorder.record_preparation_failure
+                ),
             )
 
         def ft8_activity_visible(activity: FT8CQActivity) -> bool:
@@ -776,7 +824,14 @@ class ApplicationRuntime:
         if self.ft8_authorization is None or self.ft8_qso is None:
             return False
         if self.ft8_qso_start is not None:
-            return self.ft8_qso_start.start(activity)
+            seed = build_ft8_attempt_seed(
+                activity,
+                radio_state=self.latest_radio_state,
+                gps_state=self.latest_gps_state,
+                home_grid=self.ft8_authorization.home_grid,
+                started_at_utc=self.ft8_authorization.clock.now_utc(),
+            )
+            return self.ft8_qso_start.start(activity, attempt_seed=seed)
         self.authorize_ft8_qso(activity)
         return True
 
