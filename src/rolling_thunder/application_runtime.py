@@ -1041,6 +1041,8 @@ class ApplicationRuntime:
             self.contact_qrz_enrichment.start()
         if self.contact_sync is not None:
             self.contact_sync.start()
+        if self.ft8_performance_sync is not None:
+            self.ft8_performance_sync.start()
         if self.network_keepalive is not None:
             self.network_keepalive.start()
         if self.pi_forge_spot_polling is not None:
@@ -1079,6 +1081,8 @@ class ApplicationRuntime:
             self.pi_forge_spot_polling.stop()
         if self.network_keepalive is not None:
             self.network_keepalive.stop()
+        if self.ft8_performance_sync is not None:
+            self.ft8_performance_sync.stop()
         if self.contact_sync is not None:
             self.contact_sync.stop()
         if self.contact_qrz_enrichment is not None:
