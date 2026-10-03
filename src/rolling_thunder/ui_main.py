@@ -361,6 +361,7 @@ def run_dashboard(
                 if runtime.ft8_band_control is None
                 else runtime.ft8_band_control.cycle_band
             ),
+            enter_ft8=runtime.enter_ft8_context,
             exit_ft8=runtime.exit_ft8_context,
             pending_callsign=capture,
         )
