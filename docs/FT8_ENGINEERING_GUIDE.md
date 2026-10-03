@@ -100,6 +100,26 @@ Non-successful attempt:
 
 The outbox is idempotent by stable attempt UUID and synchronizes to Forge for future AI/statistical analysis.
 
+## Operator-Authorization Semantics
+
+FT8 transmit authority is based on an explicit operator intent event, not on a
+particular hardware input device.
+
+The v4.3.0 implementation treats a short rotary-encoder press on the selected
+eligible CQ station as the authorization event for exactly one bounded QSO.
+
+Future interfaces, including voice control, may issue the same typed
+authorization only when they resolve to one specific currently eligible station
+and traverse the same authorization/preparation boundary. The input source does
+not bypass CQ eligibility, freshness checks, band/frequency preparation, timing,
+retry limits, or fail-closed behavior.
+
+A generic wake word, passive speech, background decoding, AI output, network
+message, or stale selection is not operator authorization.
+
+Authorization is single-use: terminal completion, failure, abort, or cancellation
+does not implicitly authorize a subsequent station.
+
 ## Safety Boundaries
 
 - UI widgets do not own CAT/PTT/audio authority.
