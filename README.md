@@ -97,8 +97,12 @@ corrective information.
 ## Transmit Safety Boundary
 
 Rolling Thunder v4.3.0 includes a narrowly scoped native FT8 transmit path.
-Transmission is allowed only after FT8 is explicitly enabled, the operator
-selects one currently eligible CQ station, and the FT-891 passes fail-closed
+Transmission is allowed only after FT8 is explicitly enabled and the operator
+authorizes one currently eligible CQ station. In v4.3.0, authorization occurs
+when the operator selects the station on the FT8 page and short-presses the
+rotary encoder switch. A future explicit voice command may provide the same
+authorization only when it resolves to one currently eligible station through
+the same authorization boundary. The FT-891 must then pass fail-closed
 radio-preparation and timing checks. Each authorization covers one bounded QSO;
 Rolling Thunder never automatically selects or calls the next station.
 
