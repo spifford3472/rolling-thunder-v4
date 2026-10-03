@@ -354,6 +354,7 @@ class LiveMapWidgets:
         radar_snapshot: LiveRadarSnapshot | None = None,
         pota_snapshot: PotaMapMarkerSnapshot | None = None,
         weather: WeatherPanelPresentation | None = None,
+        ft8_status: str | None = None,
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
@@ -393,7 +394,13 @@ class LiveMapWidgets:
                 presentation.is_current,
                 presentation.heading_degrees or 0.0,
             )
-        self._draw_status(presentation, snapshot, radar_snapshot, weather)
+        self._draw_status(
+            presentation,
+            snapshot,
+            radar_snapshot,
+            weather,
+            ft8_status=ft8_status,
+        )
 
     def _draw_base(
         self,
@@ -986,6 +993,8 @@ class LiveMapWidgets:
         snapshot: LiveMapSnapshot | None,
         radar: LiveRadarSnapshot | None,
         weather: WeatherPanelPresentation | None,
+        *,
+        ft8_status: str | None = None,
     ) -> None:
         info = self._info_controller.update(presentation, snapshot, weather)
         lines = live_map_info_lines(info)
@@ -1050,6 +1059,29 @@ class LiveMapWidgets:
             health_left + 22,
             154,
         )
+
+        if ft8_status is not None:
+            banner_top = 232
+            banner_bottom = 302
+            canvas.create_rectangle(
+                12,
+                banner_top,
+                width - 12,
+                banner_bottom,
+                fill=_STATUS_BACKGROUND,
+                outline=_ACCENT,
+                width=4,
+                tags="map-overlay",
+            )
+            canvas.create_text(
+                width / 2,
+                (banner_top + banner_bottom) / 2,
+                text=f"FT8  •  {ft8_status}",
+                fill=_MARKER_OUTLINE,
+                font=("DejaVu Sans", 28, "bold"),
+                anchor="center",
+                tags="map-overlay",
+            )
 
         if radar is not None and radar.attribution is not None:
             observed = (
