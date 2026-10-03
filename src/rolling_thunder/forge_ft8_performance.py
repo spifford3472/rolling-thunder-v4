@@ -51,7 +51,6 @@ class ForgeFT8PerformanceRepository:
     ) -> FT8PerformanceUploadDisposition:
         """Insert exactly once or accept an identical replay."""
         payload_sha256 = _payload_sha256(attempt)
-        values = attempt.model_dump(mode="python")
         try:
             with sqlite3.connect(self._database_path) as connection:
                 connection.execute("BEGIN IMMEDIATE")
