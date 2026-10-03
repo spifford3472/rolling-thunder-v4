@@ -5,6 +5,8 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
+_DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000301")
+
 import pytest
 
 from rolling_thunder.forge_ft8_performance import (
@@ -21,7 +23,7 @@ from rolling_thunder.ft8.performance import (
 
 def _attempt(
     *,
-    attempt_id: UUID = UUID("00000000-0000-0000-0000-000000000301"),
+    attempt_id: UUID = _DEFAULT_ATTEMPT_ID,
     callsign: str = "K1ABC",
     outcome: FT8AttemptOutcome = FT8AttemptOutcome.ABORTED,
 ) -> FT8PerformanceAttempt:
