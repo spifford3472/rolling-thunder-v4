@@ -94,3 +94,22 @@ def test_failure_uses_exponential_retry_without_duplicate_payload(tmp_path: Path
     )
     assert repository.list_ready(now + timedelta(seconds=14)) == []
     assert repository.list_ready(now + timedelta(seconds=15)) == [attempt]
+
+
+def test_list_for_utc_date_returns_only_matching_attempt_payloads(tmp_path: Path) -> None:
+    repository = FT8PerformanceOutboxRepository(tmp_path / "contacts.db")
+    today = _attempt(
+        attempt_id=UUID("00000000-0000-0000-0000-000000000291"),
+    )
+    yesterday = today.model_copy(
+        update={
+            "attempt_id": UUID("00000000-0000-0000-0000-000000000292"),
+            "started_at_utc": today.started_at_utc - timedelta(days=1),
+            "ended_at_utc": today.ended_at_utc - timedelta(days=1),
+            "utc_date": today.utc_date - timedelta(days=1),
+        }
+    )
+    repository.add_idempotent(today)
+    repository.add_idempotent(yesterday)
+
+    assert repository.list_for_utc_date(today.utc_date) == [today]
