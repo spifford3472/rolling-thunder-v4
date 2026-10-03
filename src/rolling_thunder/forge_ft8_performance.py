@@ -267,8 +267,10 @@ class ForgeFT8PerformanceRepository:
                         started_at_utc TEXT NOT NULL,
                         ended_at_utc TEXT NOT NULL,
                         utc_date TEXT NOT NULL CHECK(length(utc_date) = 10),
-                        band TEXT NOT NULL,
-                        dial_frequency_hz INTEGER NOT NULL CHECK(dial_frequency_hz > 0),
+                        band TEXT,
+                        dial_frequency_hz INTEGER CHECK(
+                            dial_frequency_hz IS NULL OR dial_frequency_hz > 0
+                        ),
                         mode TEXT NOT NULL CHECK(mode = 'FT8'),
                         tx_power_target_watts INTEGER NOT NULL CHECK(tx_power_target_watts > 0),
                         power_meter_raw INTEGER CHECK(
