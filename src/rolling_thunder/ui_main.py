@@ -42,7 +42,9 @@ from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
 from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
+from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8.status import operator_ft8_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import build_ft8_browser_viewport
 from rolling_thunder.ft8_widgets import FT8Widgets
@@ -1150,12 +1152,27 @@ def run_dashboard(
             and live_map_snapshot.viewport is not None
         ):
             runtime.live_radar.request_viewport(live_map_snapshot.viewport)
+        ft8_map_status: str | None = None
+        if (
+            context_navigation.state.selected is ContextId.FT8
+            and runtime.ft8_panel is not None
+        ):
+            map_ft8_snapshot = runtime.ft8_panel.snapshot()
+            start_status = runtime.latest_ft8_qso_start_status
+            ft8_map_status = operator_ft8_status(
+                panel_mode=map_ft8_snapshot.mode,
+                qso_state=map_ft8_snapshot.qso_state,
+                selected_callsign=runtime.ft8_panel.selected_callsign,
+                start_state=None if start_status is None else start_status.state,
+            ).value
+
         live_map_widgets.update(
             live_map_presentation,
             live_map_snapshot,
             runtime.latest_live_radar_state,
             runtime.latest_pota_map_marker_state,
             weather_presentation,
+            ft8_status=ft8_map_status,
         )
 
         connectivity = build_runtime_connectivity_status(
@@ -1502,9 +1519,26 @@ def run_dashboard(
                         selected_callsign=selected_callsign,
                         visible_rows=ft8_widgets.visible_rows,
                     )
+                    selected_activity = next(
+                        (row for row in ft8_snapshot.cq_activity if row.callsign == selected_callsign),
+                        None,
+                    )
+                    current_grid = (
+                        view.grid
+                        if view.grid != "—"
+                        else str(config.operator.home_grid)
+                    )
                     ft8_widgets.update(
                         viewport,
                         transmit_enabled=ft8_snapshot.authorization_enabled,
+                        distance_text=(
+                            None
+                            if selected_activity is None
+                            else format_maidenhead_distance(
+                                current_grid,
+                                selected_activity.grid,
+                            )
+                        ),
                     )
                 else:
                     show_standard_context_body()
@@ -1526,6 +1560,12 @@ def run_dashboard(
                             )
                             lines.append(
                                 f"FREQ  {context.radio_frequency_hz / 1_000_000:.6f} MHz"
+                            )
+                            lines.append(
+                                format_maidenhead_distance(
+                                    context.local_grid,
+                                    context.remote_grid,
+                                )
                             )
                         lines.append(
                             "ATTEMPT "
