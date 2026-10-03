@@ -164,19 +164,41 @@ class FT8QsoStartController:
                 attempt_seed,
             )
         except (RuntimeError, ValueError) as error:
-            with self._lock:
-                self._status = FT8QsoStartStatus(
-                    state=FT8QsoStartState.FAILED,
-                    activity=activity,
-                    error=str(error),
-                    attempt_seed=attempt_seed,
-                )
+            self._handle_post_prepare_failure(
+                activity,
+                attempt_seed,
+                f"FT8 QSO start failed after radio preparation: {error}",
+            )
             return
 
         with self._lock:
             self._status = FT8QsoStartStatus(
                 state=FT8QsoStartState.STARTED,
                 activity=activity,
+                attempt_seed=attempt_seed,
+            )
+
+    def _handle_post_prepare_failure(
+        self,
+        activity: FT8CQActivity,
+        attempt_seed: FT8AttemptSeed,
+        reason: str,
+    ) -> None:
+        failure_reason = reason
+        try:
+            self._preparation.restore_after_ft8()
+        except FT8RadioPreparationError as restore_error:
+            failure_reason = f"{failure_reason}; rollback failed: {restore_error}"
+
+        handler = self._preparation_failure_handler
+        if handler is not None:
+            handler(attempt_seed, failure_reason)
+
+        with self._lock:
+            self._status = FT8QsoStartStatus(
+                state=FT8QsoStartState.FAILED,
+                activity=activity,
+                error=failure_reason,
                 attempt_seed=attempt_seed,
             )
 
