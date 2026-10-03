@@ -36,7 +36,7 @@ class FT8CQActivityManager:
                 return
             self._activity[callsign] = FT8CQActivity(
                 callsign=existing.callsign,
-                last_cq=existing.last_cq,
+                last_period=existing.last_cq,
                 last_any_decode=decode.period,
                 cq_count=existing.cq_count,
                 snr_db=existing.snr_db,
@@ -64,7 +64,7 @@ class FT8CQActivityManager:
         self._activity[callsign] = FT8CQActivity(
             callsign=callsign,
             grid=decode.grid if decode.grid is not None else (existing.grid if existing else None),
-            last_cq=decode.period,
+            last_period=decode.period,
             last_any_decode=decode.period,
             cq_count=cq_count,
             snr_db=decode.snr_db,
