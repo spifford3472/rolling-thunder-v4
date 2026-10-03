@@ -22,6 +22,8 @@ class FT8PreparedRadio(Protocol):
 
     def set_frequency(self, frequency: Frequency) -> RadioState: ...
 
+    def set_mode(self, mode: RadioMode) -> RadioState: ...
+
     def set_power_watts(self, power_watts: int) -> int: ...
 
     def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo: ...
@@ -84,6 +86,7 @@ class FT8RadioPreparationService:
             power_watts = self._radio.set_power_watts(FT8_OPERATING_POWER_WATTS)
             if initial.frequency != target_frequency:
                 self._radio.set_frequency(target_frequency)
+            self._radio.set_mode(RadioMode.USB)
             ssb_bfo = self._radio.set_ssb_bfo(Ft891SsbBfo.USB)
             verified = self._radio.refresh_state()
         except (RadioError, ValueError) as error:
@@ -97,6 +100,12 @@ class FT8RadioPreparationService:
             raise FT8RadioPreparationError(
                 "FT8 radio preparation frequency verification failed: "
                 f"expected {target_frequency.hz} Hz, got {actual_hz}."
+            )
+        if verified.mode is not RadioMode.USB:
+            actual_mode = None if verified.mode is None else verified.mode.value
+            raise FT8RadioPreparationError(
+                "FT8 radio preparation mode verification failed: "
+                f"expected USB, got {actual_mode}."
             )
         if power_watts != FT8_OPERATING_POWER_WATTS:
             raise FT8RadioPreparationError(
