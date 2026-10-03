@@ -30,6 +30,7 @@ from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
+from rolling_thunder.ft8.band_control import FT8BandController
 from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
@@ -179,6 +180,7 @@ class ApplicationRuntime:
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
     ft8_receive: FT8ReceiveService | None = None
+    ft8_band_control: FT8BandController | None = None
     ft8_authorization: FT8QsoAuthorizationService | None = None
     ft8_qso: FT8OperatorQsoService | None = None
     ft8_logging: FT8QsoLoggingService | None = None
@@ -482,6 +484,12 @@ class ApplicationRuntime:
                 reconnect_delay_s=config.ft8.receive.reconnect_delay_s,
             )
 
+        ft8_band_control = (
+            FT8BandController(ReceiveTuningService(radio), radio.get_state)
+            if config.ft8.enabled
+            else None
+        )
+
         ft8_authorization: FT8QsoAuthorizationService | None = None
         ft8_qso: FT8OperatorQsoService | None = None
         resolved_ft8_executor: FT8QsoHardwareTransmitExecutor | None = None
@@ -676,6 +684,7 @@ class ApplicationRuntime:
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
             ft8_receive=ft8_receive,
+            ft8_band_control=ft8_band_control,
             ft8_authorization=ft8_authorization,
             ft8_qso=ft8_qso,
             ft8_logging=ft8_logging,
