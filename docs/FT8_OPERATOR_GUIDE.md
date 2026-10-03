@@ -47,6 +47,28 @@ It is retained as machine-analysis/performance telemetry so later analysis can u
 
 After acknowledging the terminal FT8 result with the encoder switch, the browser returns to IDLE and the operator can select another station.
 
+## Operator Authorization
+
+Starting an FT8 QSO requires an explicit operator authorization for one eligible
+CQ station.
+
+In v4.3.0 the authorization action is:
+
+1. select the desired station in the FT8 CQ browser; and
+2. short-press the rotary encoder switch.
+
+That deliberate press authorizes one bounded QSO with that station only.
+
+A future voice-control implementation may provide the same authorization when
+the operator issues an explicit station-directed command (for example, a command
+to call a specific currently eligible CQ station). Voice must route through the
+same station-selection and authorization checks as the rotary control. A wake
+word, passive speech, ambiguous command, or background decode is not
+authorization.
+
+One authorization never carries forward to another station. A new QSO requires
+a new explicit operator action.
+
 ## Controls
 
 - Rotate encoder — move through eligible CQ stations.
