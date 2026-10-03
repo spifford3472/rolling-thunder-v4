@@ -270,10 +270,7 @@ def test_visible_cq_activity_follows_selection_beyond_first_page() -> None:
         )
         for index in range(10)
     )
-    receive = FT8ReceiveState(
-        status=FT8ReceiveStatus.RUNNING,
-        cq_activity=activities,
-    )
+    receive = FT8ReceiveState(cq_activity=activities)
     panel, service = _panel(receive)
 
     for _ in range(9):
