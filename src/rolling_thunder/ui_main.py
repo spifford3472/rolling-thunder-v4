@@ -363,6 +363,7 @@ def run_dashboard(
             ),
             enter_ft8=runtime.enter_ft8_context,
             exit_ft8=runtime.exit_ft8_context,
+            clear_start_status=runtime.clear_ft8_qso_start_status,
             pending_callsign=capture,
         )
 
