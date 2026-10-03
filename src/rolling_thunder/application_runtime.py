@@ -535,10 +535,10 @@ class ApplicationRuntime:
 
         ft8_band_control: FT8BandController | None = None
         if config.ft8.enabled:
-            configure_ft8_receive_settings: Callable[[], object] | None = None
-            restore_ft8_normal_settings: Callable[[], object] | None = None
+            receive_settings_callback: Callable[[], object] | None = None
+            normal_settings_callback: Callable[[], object] | None = None
             if isinstance(radio, Ft891Radio):
-                def configure_ft8_receive_settings() -> object:
+                def apply_ft8_receive_settings() -> object:
                     radio.set_ssb_bfo(Ft891SsbBfo.USB)
                     radio.set_preamp_enabled(True)
                     radio.set_narrow_enabled(False)
@@ -547,11 +547,14 @@ class ApplicationRuntime:
                 def restore_ft8_normal_settings() -> object:
                     return radio.set_ssb_bfo(Ft891SsbBfo.AUTO)
 
+                receive_settings_callback = apply_ft8_receive_settings
+                normal_settings_callback = restore_ft8_normal_settings
+
             ft8_band_control = FT8BandController(
                 ReceiveTuningService(radio),
                 radio.get_state,
-                configure_receive_settings=configure_ft8_receive_settings,
-                restore_normal_settings=restore_ft8_normal_settings,
+                configure_receive_settings=receive_settings_callback,
+                restore_normal_settings=normal_settings_callback,
             )
 
         ft8_authorization: FT8QsoAuthorizationService | None = None
