@@ -99,9 +99,9 @@ class Panel:
         self.selected_callsign = None
         return changed
 
-    def activate_selection(self) -> object | None:
+    def activate_selection(self) -> bool:
         self.calls.append("activate")
-        return object() if self.selected_callsign is not None else None
+        return self.selected_callsign is not None
 
     def abort(self) -> None:
         self.calls.append("abort")
