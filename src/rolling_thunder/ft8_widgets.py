@@ -17,6 +17,8 @@ _BORDER = "#303030"
 _WHITE = "#ffffff"
 _GRAY = "#8f8f8f"
 _YELLOW = "#ffd24a"
+_RED = "#ff3b3b"
+_BLUE = "#4aa3ff"
 _POTA_GREEN = "#42ff72"
 _MUTED = "#a8a8a8"
 
@@ -175,15 +177,13 @@ class FT8Widgets:
                 highlightthickness=4 if row.selected else 2,
             )
 
-            call_color = (
-                _WHITE
-                if row.selected
-                else {
-                    FT8CallPresentation.WHITE: _WHITE,
-                    FT8CallPresentation.GRAY: _GRAY,
-                    FT8CallPresentation.YELLOW: _YELLOW,
-                }[row.call_presentation]
-            )
+            call_color = {
+                FT8CallPresentation.YELLOW: _YELLOW,
+                FT8CallPresentation.WHITE: _WHITE,
+                FT8CallPresentation.GRAY: _GRAY,
+                FT8CallPresentation.RED: _RED,
+                FT8CallPresentation.BLUE: _BLUE,
+            }[row.call_presentation]
             pota_label = self._pota_labels[index]
             pota_label.configure(
                 text=FT8_POTA_TREE_GLYPH if row.pota_cq else "",
