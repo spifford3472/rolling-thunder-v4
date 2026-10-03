@@ -35,6 +35,7 @@ class FT8AttemptSeed(DomainModel):
     attempt_id: UUID
     callsign: Callsign
     started_at_utc: datetime
+    selection_period_index: int = Field(ge=0)
     band: str | None = Field(default=None, max_length=16)
     dial_frequency_hz: int | None = Field(default=None, gt=0, le=300_000_000_000)
     local_grid: MaidenheadGrid | None = None
