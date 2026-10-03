@@ -1,4 +1,4 @@
-"""Checkpoint 8 schema-v14 FT8 migration preservation tests."""
+"""FT8 contact and telemetry schema migration preservation tests."""
 
 import sqlite3
 from pathlib import Path
@@ -107,7 +107,7 @@ def test_v14_migration_preserves_existing_contact_and_retry_and_allows_ft8(
     _create_v13_database(database_path)
 
     assert initialize_database(database_path) == CURRENT_SCHEMA_VERSION
-    assert CURRENT_SCHEMA_VERSION == 14
+    assert CURRENT_SCHEMA_VERSION == 15
 
     repository = ContactRepository(database_path)
     legacy = repository.get(UUID("00000000-0000-0000-0000-000000000831"))
@@ -118,6 +118,15 @@ def test_v14_migration_preserves_existing_contact_and_retry_and_allows_ft8(
     assert legacy.my_grid == "EM79xm"
 
     with sqlite3.connect(database_path) as connection:
+        outbox_table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'ft8_performance_outbox'
+            """
+        ).fetchone()
+        assert outbox_table == ("ft8_performance_outbox",)
+
         retry = connection.execute(
             """
             SELECT attempt_count, next_attempt_at, last_error

@@ -469,3 +469,52 @@ def test_qso_executor_prevents_overlap_and_cancel_forces_rx_while_playing() -> N
 
     assert errors == []
     assert radio.ptt.events[-1] == "release"
+
+
+class _MeterRadio(_FakeRadio):
+    def __init__(self, state: RadioState) -> None:
+        super().__init__(state)
+        self.meter_reads = 0
+        self.two_samples = threading.Event()
+
+    def read_cp6_tx_meters(self) -> tuple[int, int, int]:
+        self.meter_reads += 1
+        if self.meter_reads >= 2:
+            self.two_samples.set()
+        return (
+            2 + self.meter_reads,
+            10 + self.meter_reads,
+            4 + self.meter_reads,
+        )
+
+
+def test_qso_executor_collects_peak_meter_summary_while_keyed() -> None:
+    radio = _MeterRadio(_connected_state())
+    audio = _BlockingAudioOutput()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, audio)
+    request = _qso_hardware_request()
+    errors: list[Exception] = []
+
+    def run() -> None:
+        try:
+            executor.execute_qso(request)
+        except RuntimeError as error:  # pragma: no cover - captured for assertion
+            errors.append(error)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    assert audio.entered.wait(1)
+    assert radio.two_samples.wait(2)
+
+    audio.release.set()
+    worker.join(2)
+
+    assert errors == []
+    summary = executor.meter_summary(request.authorization.context.qso_id)
+    assert summary is not None
+    assert summary.sample_count >= 2
+    assert summary.alc_peak_raw >= 4
+    assert summary.power_peak_raw >= 12
+    assert summary.swr_peak_raw >= 6
+    assert radio.ptt.events[0] == "key"
+    assert radio.ptt.events[-1] == "release"

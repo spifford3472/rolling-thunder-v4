@@ -129,9 +129,33 @@ def test_authorization_rejects_unsafe_radio_state(
         _service().authorize(_activity(), radio_state=radio_state, gps_state=None)
 
 
+def test_authorization_uses_frozen_selection_period_for_freshness() -> None:
+    service = _service(105)
+
+    context = service.authorize(
+        _activity(period=100),
+        radio_state=_radio(mode=RadioMode.USB),
+        gps_state=None,
+        freshness_reference_period=FT8Period(104),
+    )
+
+    assert context.remote_callsign == "K1ABC"
+    assert context.radio_mode == "USB"
+
+
+def test_authorization_accepts_cq_through_fifth_age_period() -> None:
+    context = _service(105).authorize(
+        _activity(period=100),
+        radio_state=_radio(mode=RadioMode.USB),
+        gps_state=None,
+    )
+
+    assert context.remote_callsign == "K1ABC"
+
+
 def test_authorization_rejects_stale_selected_cq() -> None:
     with pytest.raises(FT8QsoAuthorizationError, match="stale"):
-        _service(105).authorize(_activity(period=100), radio_state=_radio(), gps_state=None)
+        _service(106).authorize(_activity(period=100), radio_state=_radio(), gps_state=None)
 
 
 def test_authorization_rejects_report_outside_protocol_range() -> None:

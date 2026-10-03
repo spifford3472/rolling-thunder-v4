@@ -1,6 +1,7 @@
 """SQLite-backed persistence for Rolling Thunder contacts."""
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -11,6 +12,7 @@ from rolling_thunder.domain import (
     Contact,
     ContactEnrichmentState,
     ContactGridSource,
+    RadioMode,
     SynchronizationState,
 )
 from rolling_thunder.storage import StorageError, initialize_database
@@ -470,6 +472,53 @@ class ContactRepository:
                 f"Contacts could not be listed from {self._database_path}: {error}"
             ) from error
 
+        return self._contacts_from_rows(rows)
+
+    def list_since(
+        self,
+        started_at: datetime,
+        *,
+        mode: RadioMode | None = None,
+    ) -> list[Contact]:
+        """List contacts at or after one UTC instant, optionally limited by mode."""
+        if started_at.tzinfo is None or started_at.utcoffset() is None:
+            raise ValueError("started_at must be timezone-aware")
+        normalized = started_at.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        query = """
+            SELECT
+                contact_id,
+                callsign,
+                frequency_hz,
+                mode,
+                started_at,
+                rst_sent,
+                rst_received,
+                grid,
+                my_grid,
+                pota_reference,
+                grid_source,
+                enrichment_state,
+                notes,
+                synchronization_state
+            FROM contacts
+            WHERE started_at >= ?
+        """
+        parameters: tuple[object, ...]
+        if mode is None:
+            parameters = (normalized,)
+        else:
+            query += " AND mode = ?"
+            parameters = (normalized, mode.value)
+        query += " ORDER BY started_at DESC, contact_id ASC"
+
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(query, parameters).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(
+                f"Contacts could not be listed from {self._database_path}: {error}"
+            ) from error
         return self._contacts_from_rows(rows)
 
     def list_recent(self, *, limit: int = 100) -> list[Contact]:

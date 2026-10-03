@@ -1,8 +1,21 @@
 # Changelog
 
-## v4.3.0 — experimental development
+## v4.3.0 — 2026-10-03
 
-### FT8 Checkpoint 9 — acceptance complete; merge pending owner approval
+### Native FT8 — official supported feature
+
+- adds mobile-readable FT8 CQ rows with explicit headers and rotary selection
+- uses color-vision-friendly redundant state presentation: fresh CQ yellow, repeated CQ white, active non-CQ gray, failed/error red + `!`, operator-aborted blue + `■`
+- preserves the rule that only stations actually heard calling CQ can enter the browser; later non-CQ traffic may update an existing CQ candidate but cannot create one
+- persists same-UTC-day failed/aborted callsign+band history from the FT8 machine-analysis outbox without affecting CQ eligibility
+- preserves successful callsign+band suppression through the normal completed-contact path
+- fixes terminal-result acknowledgement so a prior FAILED state cannot block or contaminate the next selected station
+- adds separate operator-guide and engineering-guide source documents for future printable manuals
+- completes installed-display and terminal-state hardware acceptance, including successful, failed, and operator-aborted paths
+- passes final repository regression with 2,511 tests passed, 7 skipped, clean diff check, and Ruff clean except for one verified pre-existing EXE001 on unchanged tools/regional_map_builder.py
+- accepted for the v4.3.0 release after repository and installed-hardware validation
+
+### FT8 Checkpoint 9 — acceptance complete
 
 - completes native FT8 MVP product integration on top of the merged CP2-CP8.1 runtime
 - adds a first-class FT8 dashboard context and presentation-owned CQ selection
@@ -14,7 +27,7 @@
 - confirms an incomplete live QSO with W5XO is not logged
 - records five continuous receive periods with 35 decodes, zero dropped periods, about 3.1% average of one CPU core, and about 50 MB Python peak RSS on anvilmobile
 - passes the full repository regression suite at CP9 acceptance: 2337 passed, 7 skipped, Ruff clean, and git diff check clean
-- keeps production migration, schema-14 installation, release tagging, and PR merge separately owner-approved
+- completed the native FT8 MVP acceptance path that was subsequently finalized for v4.3.0
 
 ### FT8 Checkpoint 8.1 — complete
 

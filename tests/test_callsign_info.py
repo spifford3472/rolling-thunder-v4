@@ -276,6 +276,32 @@ def test_dxcc_center_can_frame_map_without_inventing_station_pin() -> None:
     assert presentation.location_note == "COUNTRY / REGION VIEW"
 
 
+def test_ft8_target_grid_overrides_qrz_location_for_map_target() -> None:
+    response = CallsignInfoResponse(
+        callsign="W1AW",
+        profile=CallsignInfoProfile(
+            callsign="W1AW",
+            country="United States",
+            state="CT",
+            latitude=41.0,
+            longitude=-72.0,
+            coordinate_source="qrz",
+        ),
+        last_qso=CallsignInfoLastQso(exists=False),
+    )
+
+    presentation = build_callsign_info_presentation(
+        response,
+        target_grid="EM79xm",
+    )
+
+    assert presentation.target is not None
+    assert 39.0 < presentation.target.latitude < 40.0
+    assert -85.0 < presentation.target.longitude < -83.0
+    assert presentation.pin_visible is True
+    assert presentation.location_note == "APPROX FT8 GRID CENTER"
+
+
 def test_grid_center_fallback_is_marked_approximate() -> None:
     response = CallsignInfoResponse(
         callsign="W1AW",

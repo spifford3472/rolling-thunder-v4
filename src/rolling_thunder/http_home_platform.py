@@ -10,6 +10,10 @@ from urllib.request import Request, urlopen
 
 from pydantic import ValidationError
 
+from rolling_thunder.ft8.performance import (
+    FT8PerformanceAttempt,
+    FT8PerformanceUploadResult,
+)
 from rolling_thunder.home_platform import (
     ContactUploadRequest,
     ContactUploadResult,
@@ -175,6 +179,49 @@ class HttpHomePlatformClient(HomePlatformClient):
         if result.contact_id != request.contact.contact_id:
             raise HomePlatformUploadError(
                 "Home Station Platform upload response returned a different contact ID."
+            )
+        return result
+
+    def upload_ft8_performance(
+        self,
+        attempt: FT8PerformanceAttempt,
+    ) -> FT8PerformanceUploadResult:
+        """Upload one FT8 performance attempt idempotently to Forge."""
+        response = self._request(
+            "POST",
+            "/ft8-performance",
+            headers={
+                "Accept": _JSON_CONTENT_TYPE,
+                "Content-Type": _JSON_CONTENT_TYPE,
+                "Idempotency-Key": str(attempt.attempt_id),
+            },
+            body=dumps(
+                attempt.model_dump(mode="json"),
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            operation="FT8 performance upload",
+        )
+        if not 200 <= response.status_code < 300:
+            raise HomePlatformUploadError(
+                "Home Station Platform FT8 performance upload returned HTTP "
+                f"{response.status_code}."
+            )
+
+        response_payload = self._decode_json(
+            response.body,
+            operation="FT8 performance upload",
+        )
+        try:
+            result = FT8PerformanceUploadResult.model_validate(response_payload)
+        except ValidationError as error:
+            raise HomePlatformUploadError(
+                "Home Station Platform FT8 performance response did not match "
+                "the expected schema."
+            ) from error
+        if result.attempt_id != attempt.attempt_id:
+            raise HomePlatformUploadError(
+                "Home Station Platform FT8 performance response returned "
+                "a different attempt ID."
             )
         return result
 

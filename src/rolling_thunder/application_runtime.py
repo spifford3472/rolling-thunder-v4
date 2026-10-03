@@ -28,12 +28,17 @@ from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.domain import RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
+from rolling_thunder.ft8.attempt_history import (
+    FT8AttemptHistoryService,
+    FT8AttemptVisualState,
+)
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
 from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
+from rolling_thunder.ft8.band_control import FT8BandController
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
 from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
@@ -42,12 +47,26 @@ from rolling_thunder.ft8.hardware_transmit import (
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.panel import FT8PanelController
+from rolling_thunder.ft8.performance import FT8AttemptSeed
+from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
+from rolling_thunder.ft8.performance_recording import (
+    FT8PerformanceRecorder,
+    build_ft8_attempt_seed,
+)
+from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
+from rolling_thunder.ft8.radio_preparation import (
+    FT8RadioPreparationService,
+    configure_ft8_receive_settings,
+)
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.ft8.session import (
     FT8QsoSessionAuthorization,
     HardwareDigitalTransmitSession,
 )
+from rolling_thunder.ft8.start_control import FT8QsoStartController, FT8QsoStartStatus
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
+from rolling_thunder.ft8.worked_today import FT8WorkedTodayService
+from rolling_thunder.ft891_cat import Ft891SsbBfo
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
@@ -114,6 +133,7 @@ from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
 from rolling_thunder.qrz_profile_image import QrzProfileImageProvider
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
 from rolling_thunder.radio import Radio
+from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.serial_gps import SerialGPSReceiver
@@ -179,9 +199,15 @@ class ApplicationRuntime:
     pota_enrichment: PotaEnrichmentService = field(default_factory=PotaEnrichmentService)
     status_messages: StatusMessageService = field(default_factory=StatusMessageService)
     ft8_receive: FT8ReceiveService | None = None
+    ft8_band_control: FT8BandController | None = None
     ft8_authorization: FT8QsoAuthorizationService | None = None
     ft8_qso: FT8OperatorQsoService | None = None
+    ft8_qso_start: FT8QsoStartController | None = None
     ft8_logging: FT8QsoLoggingService | None = None
+    ft8_worked_today: FT8WorkedTodayService | None = None
+    ft8_performance_recorder: FT8PerformanceRecorder | None = None
+    ft8_attempt_history: FT8AttemptHistoryService | None = None
+    ft8_performance_sync: FT8PerformanceSyncService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
@@ -198,6 +224,7 @@ class ApplicationRuntime:
         home_platform_scheduler: PollScheduler | None = None,
         contact_qrz_enrichment_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
+        ft8_performance_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
         forge_weather_scheduler: PollScheduler | None = None,
@@ -459,7 +486,51 @@ class ApplicationRuntime:
             repository,
             qrz_fallback_available=qrz_provider is not None,
         )
-        ft8_logging = FT8QsoLoggingService(contact_logging)
+        ft8_worked_today = (
+            FT8WorkedTodayService(repository) if config.ft8.enabled else None
+        )
+        ft8_logging = FT8QsoLoggingService(
+            contact_logging,
+            completed_contact_handler=(
+                None
+                if ft8_worked_today is None
+                else ft8_worked_today.record_completed
+            ),
+        )
+        ft8_performance_outbox = (
+            FT8PerformanceOutboxRepository(config.storage.database_path)
+            if config.ft8.enabled
+            else None
+        )
+        ft8_attempt_history = (
+            None
+            if ft8_performance_outbox is None
+            else FT8AttemptHistoryService(ft8_performance_outbox)
+        )
+        ft8_performance_recorder = (
+            None
+            if ft8_performance_outbox is None
+            else FT8PerformanceRecorder(
+                ft8_performance_outbox,
+                attempt_handler=(
+                    None
+                    if ft8_attempt_history is None
+                    else ft8_attempt_history.record
+                ),
+            )
+        )
+        ft8_performance_sync = None
+        if ft8_performance_outbox is not None and isinstance(
+            home_platform_client,
+            HttpHomePlatformClient,
+        ):
+            ft8_performance_sync = FT8PerformanceSyncService(
+                ft8_performance_outbox,
+                home_platform_client,
+                ft8_performance_sync_scheduler or ThreadingPollScheduler(),
+                interval_s=platform_config.contact_sync_interval_s,
+                batch_size=platform_config.contact_sync_batch_size,
+            )
 
         ft8_receive: FT8ReceiveService | None = None
         if config.ft8.enabled:
@@ -480,6 +551,33 @@ class ApplicationRuntime:
                 resolved_decoder,
                 FT8CQActivityManager(),
                 reconnect_delay_s=config.ft8.receive.reconnect_delay_s,
+            )
+
+        ft8_band_control: FT8BandController | None = None
+        if config.ft8.enabled:
+            receive_settings_callback: Callable[[], object] | None = None
+            normal_settings_callback: Callable[[], object] | None = None
+            if isinstance(radio, Ft891Radio):
+                def apply_ft8_receive_settings() -> object:
+                    configure_ft8_receive_settings(radio)
+                    return None
+
+                def restore_ft8_normal_settings() -> object:
+                    return radio.set_ssb_bfo(Ft891SsbBfo.AUTO)
+
+                receive_settings_callback = apply_ft8_receive_settings
+                normal_settings_callback = restore_ft8_normal_settings
+
+            ft8_band_control = FT8BandController(
+                ReceiveTuningService(radio),
+                radio.get_state,
+                configure_receive_settings=receive_settings_callback,
+                restore_normal_settings=normal_settings_callback,
+                band_changed=(
+                    ft8_receive.clear_cq_activity
+                    if ft8_receive is not None
+                    else None
+                ),
             )
 
         ft8_authorization: FT8QsoAuthorizationService | None = None
@@ -532,12 +630,33 @@ class ApplicationRuntime:
                     release_margin_s=config.ft8.transmit.release_margin_s,
                 )
 
+            def handle_ft8_terminal_result(result: FT8QsoResult) -> object:
+                contact = ft8_logging.handle_terminal_result(result)
+                if ft8_performance_recorder is not None:
+                    meter_summary = None
+                    meter_reader = getattr(resolved_ft8_executor, "meter_summary", None)
+                    if callable(meter_reader):
+                        meter_summary = meter_reader(result.context.qso_id)
+                    ft8_performance_recorder.record_qso_result(
+                        result,
+                        power_meter_raw=(
+                            None if meter_summary is None else meter_summary.power_peak_raw
+                        ),
+                        swr_meter_raw=(
+                            None if meter_summary is None else meter_summary.swr_peak_raw
+                        ),
+                        alc_meter_raw=(
+                            None if meter_summary is None else meter_summary.alc_peak_raw
+                        ),
+                    )
+                return contact
+
             ft8_qso = FT8OperatorQsoService(
                 ft8_receive,
                 build_ft8_session,
                 active_ft8_clock,
                 attempts_per_state=config.ft8.qso.attempts_per_state,
-                terminal_result_handler=ft8_logging.handle_terminal_result,
+                terminal_result_handler=handle_ft8_terminal_result,
             )
 
         live_map: LiveMapService | None = None
@@ -676,18 +795,71 @@ class ApplicationRuntime:
             pota_spot_polling=pota_spot_polling,
             pota_enrichment=pota_enrichment,
             ft8_receive=ft8_receive,
+            ft8_band_control=ft8_band_control,
             ft8_authorization=ft8_authorization,
             ft8_qso=ft8_qso,
             ft8_logging=ft8_logging,
+            ft8_worked_today=ft8_worked_today,
+            ft8_performance_recorder=ft8_performance_recorder,
+            ft8_attempt_history=ft8_attempt_history,
+            ft8_performance_sync=ft8_performance_sync,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
+        if (
+            config.ft8.transmit.enabled
+            and isinstance(radio, Ft891Radio)
+            and runtime.ft8_authorization is not None
+            and runtime.ft8_qso is not None
+        ):
+            preparation = FT8RadioPreparationService(radio)
+
+            def start_prepared_ft8_qso(
+                activity: FT8CQActivity,
+                prepared_radio_state: RadioState,
+                attempt_seed: FT8AttemptSeed,
+            ) -> None:
+                assert runtime.ft8_authorization is not None
+                assert runtime.ft8_qso is not None
+                context = runtime.ft8_authorization.authorize(
+                    activity,
+                    radio_state=prepared_radio_state,
+                    gps_state=runtime.latest_gps_state,
+                    qso_id=attempt_seed.attempt_id,
+                    freshness_reference_period=FT8Period(
+                        attempt_seed.selection_period_index
+                    ),
+                )
+                runtime.ft8_qso.authorize_and_start(context)
+
+            runtime.ft8_qso_start = FT8QsoStartController(
+                preparation,
+                start_prepared_ft8_qso,
+                preparation_failure_handler=(
+                    None
+                    if runtime.ft8_performance_recorder is None
+                    else runtime.ft8_performance_recorder.record_preparation_failure
+                ),
+                failure_recovery=lambda: configure_ft8_receive_settings(radio),
+            )
+
+        def ft8_activity_visible(activity: FT8CQActivity) -> bool:
+            worked = runtime.ft8_worked_today
+            state = runtime.latest_radio_state
+            if worked is None or state.frequency is None:
+                return True
+            try:
+                band = resolve_radio_band(state.frequency)
+            except RadioBandResolutionError:
+                return True
+            return not worked.is_suppressed(activity.callsign, band)
+
         if ft8_receive is not None:
             runtime.ft8_panel = FT8PanelController(
                 receive_state=lambda: runtime.latest_ft8_receive_state,
                 qso_state=lambda: runtime.latest_ft8_qso_state,
                 qso_context=lambda: runtime.latest_ft8_qso_context,
                 qso_result=lambda: runtime.latest_ft8_qso_result,
-                authorize=runtime.authorize_ft8_qso,
+                authorize=runtime.request_ft8_qso,
                 abort=runtime.abort_ft8_qso,
                 return_to_browser=runtime.return_ft8_to_browser,
                 attempt_count=lambda: (
@@ -697,6 +869,7 @@ class ApplicationRuntime:
                     0 if runtime.ft8_qso is None else runtime.ft8_qso.attempts_per_state
                 ),
                 authorization_enabled=lambda: runtime.ft8_qso is not None,
+                activity_filter=ft8_activity_visible,
             )
         return runtime
 
@@ -706,6 +879,68 @@ class ApplicationRuntime:
         if self.ft8_receive is None:
             return None
         return self.ft8_receive.latest_state
+
+    def request_ft8_qso(self, activity: FT8CQActivity) -> bool:
+        """Accept one selected CQ without blocking the caller on CAT preparation."""
+        if self.ft8_authorization is None or self.ft8_qso is None:
+            return False
+        if self.ft8_qso_start is not None:
+            seed = build_ft8_attempt_seed(
+                activity,
+                radio_state=self.latest_radio_state,
+                gps_state=self.latest_gps_state,
+                home_grid=self.ft8_authorization.home_grid,
+                started_at_utc=self.ft8_authorization.clock.now_utc(),
+            )
+            return self.ft8_qso_start.start(activity, attempt_seed=seed)
+        self.authorize_ft8_qso(activity)
+        return True
+
+    @property
+    def latest_ft8_qso_start_status(self) -> FT8QsoStartStatus | None:
+        """Return the immutable preparation/restore status when production prep exists."""
+        if self.ft8_qso_start is None:
+            return None
+        return self.ft8_qso_start.status
+
+    def clear_ft8_qso_start_status(self) -> bool:
+        """Clear a non-busy prior FT8 start result before a new selection."""
+        if self.ft8_qso_start is None:
+            return True
+        return self.ft8_qso_start.reset_to_idle()
+
+    def ft8_attempt_visual_state(
+        self,
+        callsign: str,
+    ) -> FT8AttemptVisualState | None:
+        """Return today's prior failed/aborted state for a visible CQ on this band."""
+        history = self.ft8_attempt_history
+        frequency = self.latest_radio_state.frequency
+        if history is None or frequency is None:
+            return None
+        try:
+            band = resolve_radio_band(frequency)
+        except RadioBandResolutionError:
+            return None
+        return history.state_for(callsign, band.value)
+
+    def enter_ft8_context(self) -> bool:
+        """Apply the owner-required FT8 receive settings without transmit authority."""
+        if self.ft8_band_control is None:
+            return True
+        return self.ft8_band_control.enter_ft8()
+
+    def exit_ft8_context(self) -> bool:
+        """Abort live FT8 work, restore 100 W when applicable, and return BFO to AUTO."""
+        if self.ft8_qso is not None:
+            self.ft8_qso.abort()
+
+        accepted = True
+        if self.ft8_qso_start is not None:
+            accepted = self.ft8_qso_start.request_restore() and accepted
+        if self.ft8_band_control is not None:
+            accepted = self.ft8_band_control.exit_ft8() and accepted
+        return accepted
 
     def authorize_ft8_qso(self, activity: FT8CQActivity) -> FT8QsoContext:
         """Freeze and start one explicitly selected FT8 CQ through application services."""
@@ -728,7 +963,10 @@ class ApplicationRuntime:
         """Release one terminal QSO and restore CQ-browser ownership."""
         if self.ft8_qso is None:
             return None
-        return self.ft8_qso.return_to_browser()
+        result = self.ft8_qso.return_to_browser()
+        if self.ft8_qso_start is not None:
+            self.ft8_qso_start.reset_to_idle()
+        return result
 
     @property
     def latest_ft8_qso_state(self) -> FT8QsoState:
@@ -899,6 +1137,8 @@ class ApplicationRuntime:
             self.contact_qrz_enrichment.start()
         if self.contact_sync is not None:
             self.contact_sync.start()
+        if self.ft8_performance_sync is not None:
+            self.ft8_performance_sync.start()
         if self.network_keepalive is not None:
             self.network_keepalive.start()
         if self.pi_forge_spot_polling is not None:
@@ -937,6 +1177,8 @@ class ApplicationRuntime:
             self.pi_forge_spot_polling.stop()
         if self.network_keepalive is not None:
             self.network_keepalive.stop()
+        if self.ft8_performance_sync is not None:
+            self.ft8_performance_sync.stop()
         if self.contact_sync is not None:
             self.contact_sync.stop()
         if self.contact_qrz_enrichment is not None:

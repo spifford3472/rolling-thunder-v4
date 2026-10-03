@@ -20,6 +20,11 @@ _6M_REPEATER_OFFSET_REPLY_PATTERN: Final = re.compile(rb"EX0905([0-9]{4});")
 _CTCSS_TONE_REPLY_PATTERN: Final = re.compile(rb"CN00([0-9]{3});")
 _CTCSS_BEHAVIOR_REPLY_PATTERN: Final = re.compile(rb"CT0([0-3]);")
 _METER_REPLY_PATTERN: Final = re.compile(rb"RM([456])([0-9]{3});")
+_POWER_REPLY_PATTERN: Final = re.compile(rb"PC([0-9]{3});")
+_SSB_BFO_REPLY_PATTERN: Final = re.compile(rb"EX1107([0-2]);")
+_PREAMP_REPLY_PATTERN: Final = re.compile(rb"PA0([01]);")
+_NARROW_REPLY_PATTERN: Final = re.compile(rb"NA0([01]);")
+_NOISE_BLANKER_REPLY_PATTERN: Final = re.compile(rb"NB0([01]);")
 
 _MODE_TO_CAT: Final[dict[RadioMode, bytes]] = {
     RadioMode.LSB: b"1",
@@ -147,6 +152,24 @@ class Ft891CatError(RadioError):
     """Raised when an FT-891 CAT command or reply is invalid."""
 
 
+class Ft891SsbBfo(StrEnum):
+    """Documented FT-891 menu 11-07 SSB BFO values."""
+
+    USB = "usb"
+    LSB = "lsb"
+    AUTO = "auto"
+
+
+_SSB_BFO_TO_CAT: Final[dict[Ft891SsbBfo, bytes]] = {
+    Ft891SsbBfo.USB: b"0",
+    Ft891SsbBfo.LSB: b"1",
+    Ft891SsbBfo.AUTO: b"2",
+}
+_CAT_TO_SSB_BFO: Final[dict[bytes, Ft891SsbBfo]] = {
+    value: key for key, value in _SSB_BFO_TO_CAT.items()
+}
+
+
 def memory_channel_for_band(band: RadioBand) -> int:
     """Return the operator-configured FT-891 memory channel for one band."""
     if not isinstance(band, RadioBand):
@@ -260,6 +283,137 @@ def parse_meter_reply(reply: bytes, *, expected_selector: int) -> int:
             f"FT-891 meter reply is outside the documented 0-255 range: {value}."
         )
     return value
+
+
+
+def encode_read_preamp_enabled() -> bytes:
+    """Read FT-891 PRE-AMP/IPO state for VFO-A."""
+    return b"PA0;"
+
+
+def encode_set_preamp_enabled(enabled: bool) -> bytes:
+    """Set FT-891 VFO-A preamp; enabled=False is IPO active."""
+    if type(enabled) is not bool:
+        raise TypeError("enabled must be a bool")
+    return b"PA01;" if enabled else b"PA00;"
+
+
+def parse_preamp_enabled_reply(reply: bytes) -> bool:
+    """Parse FT-891 PRE-AMP/IPO state; True means AMP, False means IPO."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _PREAMP_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 PRE-AMP reply: {reply!r}; expected PA0x;."
+        )
+    return match.group(1) == b"1"
+
+
+def encode_read_narrow_enabled() -> bytes:
+    """Read FT-891 VFO-A NARROW state."""
+    return b"NA0;"
+
+
+def encode_set_narrow_enabled(enabled: bool) -> bytes:
+    """Set FT-891 VFO-A NARROW state."""
+    if type(enabled) is not bool:
+        raise TypeError("enabled must be a bool")
+    return b"NA01;" if enabled else b"NA00;"
+
+
+def parse_narrow_enabled_reply(reply: bytes) -> bool:
+    """Parse FT-891 VFO-A NARROW state."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _NARROW_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 NARROW reply: {reply!r}; expected NA0x;."
+        )
+    return match.group(1) == b"1"
+
+
+def encode_read_noise_blanker_enabled() -> bytes:
+    """Read FT-891 VFO-A Noise Blanker state."""
+    return b"NB0;"
+
+
+def encode_set_noise_blanker_enabled(enabled: bool) -> bytes:
+    """Set FT-891 VFO-A Noise Blanker state."""
+    if type(enabled) is not bool:
+        raise TypeError("enabled must be a bool")
+    return b"NB01;" if enabled else b"NB00;"
+
+
+def parse_noise_blanker_enabled_reply(reply: bytes) -> bool:
+    """Parse FT-891 VFO-A Noise Blanker state."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _NOISE_BLANKER_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 Noise Blanker reply: {reply!r}; expected NB0x;."
+        )
+    return match.group(1) == b"1"
+
+
+def encode_read_power() -> bytes:
+    """Return the documented FT-891 transmitter power read command."""
+    return b"PC;"
+
+
+def encode_set_power(power_watts: int) -> bytes:
+    """Set documented FT-891 transmitter power in whole watts."""
+    if type(power_watts) is not int:
+        raise TypeError("power_watts must be an int")
+    if not 5 <= power_watts <= 100:
+        raise Ft891CatError("FT-891 CAT power must be between 5 and 100 watts")
+    return f"PC{power_watts:03d};".encode("ascii")
+
+
+def parse_power_reply(reply: bytes) -> int:
+    """Parse one complete FT-891 transmitter power reply."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+
+    match = _POWER_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 power reply: {reply!r}; expected PC###;."
+        )
+
+    power_watts = int(match.group(1))
+    if not 5 <= power_watts <= 100:
+        raise Ft891CatError(
+            f"FT-891 power reply is outside the documented range: {power_watts} W."
+        )
+    return power_watts
+
+
+def encode_read_ssb_bfo() -> bytes:
+    """Read documented menu 11-07 SSB BFO through the FT-891 EX command."""
+    return b"EX1107;"
+
+
+def encode_set_ssb_bfo(value: Ft891SsbBfo) -> bytes:
+    """Set documented menu 11-07 SSB BFO through the FT-891 EX command."""
+    if not isinstance(value, Ft891SsbBfo):
+        raise TypeError("value must be an Ft891SsbBfo")
+    return b"EX1107" + _SSB_BFO_TO_CAT[value] + b";"
+
+
+def parse_ssb_bfo_reply(reply: bytes) -> Ft891SsbBfo:
+    """Parse one complete documented menu 11-07 SSB BFO reply."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+
+    match = _SSB_BFO_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 SSB-BFO reply: {reply!r}; expected EX1107x;."
+        )
+    return _CAT_TO_SSB_BFO[match.group(1)]
 
 
 def encode_read_frequency() -> bytes:

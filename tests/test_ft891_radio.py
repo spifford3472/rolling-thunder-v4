@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode
+from rolling_thunder.ft891_cat import Ft891SsbBfo
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.radio import (
     BandChangeRequiredError,
@@ -24,6 +25,11 @@ class FakeTransport:
             b"FA;": b"FA014250000;",
             b"MD0;": b"MD02;",
             b"MC;": b"MC003;",
+            b"PC;": b"PC100;",
+            b"EX1107;": b"EX11072;",
+            b"PA0;": b"PA01;",
+            b"NA0;": b"NA00;",
+            b"NB0;": b"NB00;",
         }
         self.open_error: RadioConnectionError | None = None
         self.query_errors: dict[bytes, RadioConnectionError] = {}
@@ -162,6 +168,84 @@ def test_same_band_frequency_and_mode_changes_use_verified_commands() -> None:
     ]
     assert state.frequency == Frequency(hz=14_300_000)
     assert state.mode is RadioMode.LSB
+
+
+def test_ft8_receiver_settings_set_and_verify_readback() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    assert radio.set_preamp_enabled(True) is True
+    assert transport.commands[-2:] == [b"PA01;", b"PA0;"]
+
+    assert radio.set_narrow_enabled(False) is False
+    assert transport.commands[-2:] == [b"NA00;", b"NA0;"]
+
+    assert radio.set_noise_blanker_enabled(False) is False
+    assert transport.commands[-2:] == [b"NB00;", b"NB0;"]
+
+
+def test_power_set_and_readback_are_verified() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"PC;"] = b"PC020;"
+
+    verified = radio.set_power_watts(20)
+
+    assert verified == 20
+    assert transport.commands[-2:] == [b"PC020;", b"PC;"]
+
+
+def test_power_wrong_readback_raises_verification_error() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"PC;"] = b"PC100;"
+
+    with pytest.raises(
+        RadioVerificationError,
+        match="requested 20 W but read back 100 W",
+    ):
+        radio.set_power_watts(20)
+
+    assert transport.commands[-2:] == [b"PC020;", b"PC;"]
+
+
+def test_ssb_bfo_set_and_readback_are_verified() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"EX1107;"] = b"EX11070;"
+
+    verified = radio.set_ssb_bfo(Ft891SsbBfo.USB)
+
+    assert verified is Ft891SsbBfo.USB
+    assert transport.commands[-2:] == [b"EX11070;", b"EX1107;"]
+
+
+def test_ssb_bfo_wrong_readback_raises_verification_error() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"EX1107;"] = b"EX11072;"
+
+    with pytest.raises(
+        RadioVerificationError,
+        match="requested USB but read back AUTO",
+    ):
+        radio.set_ssb_bfo(Ft891SsbBfo.USB)
+
+    assert transport.commands[-2:] == [b"EX11070;", b"EX1107;"]
+
+
+def test_power_and_ssb_bfo_configuration_require_connection() -> None:
+    radio = Ft891Radio(FakeTransport(), clock=fixed_clock)
+
+    with pytest.raises(RadioConnectionError, match="requires a connected radio"):
+        radio.set_power_watts(20)
+    with pytest.raises(RadioConnectionError, match="requires a connected radio"):
+        radio.set_ssb_bfo(Ft891SsbBfo.USB)
 
 
 def test_select_band_recalls_mapped_memory_before_verification_reads() -> None:

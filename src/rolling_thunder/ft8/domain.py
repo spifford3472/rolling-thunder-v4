@@ -123,6 +123,10 @@ class FT8CQActivity:
     audio_frequency_hz: int
     grid: str | None = None
     cq_qualifier: str | None = None
+    last_any_decode: FT8Period | None = None
+    cq_count: int = 1
+    pota_cq: bool = False
+    active_non_cq: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -134,6 +138,17 @@ class FT8CQActivity:
             object.__setattr__(self, "grid", _GRID_ADAPTER.validate_python(self.grid))
         if self.audio_frequency_hz <= 0:
             raise ValueError("FT8 CQ audio_frequency_hz must be positive")
+        if self.cq_count < 1:
+            raise ValueError("FT8 CQ count must be at least 1")
+        if self.last_any_decode is None:
+            object.__setattr__(self, "last_any_decode", self.last_period)
+        elif self.last_any_decode < self.last_period:
+            raise ValueError("FT8 last_any_decode cannot precede last_cq")
+
+    @property
+    def last_cq(self) -> FT8Period:
+        """Return the most recent CQ period independently of other traffic."""
+        return self.last_period
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +170,7 @@ class FT8QsoContext:
     longitude: float | None = None
     location_label: str | None = None
     remote_grid: str | None = None
+    pota_cq: bool = False
     qso_id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:

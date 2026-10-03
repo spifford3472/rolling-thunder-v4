@@ -1,18 +1,33 @@
-# Rolling Thunder v4.3 Experimental FT8 Architecture
+# Rolling Thunder v4.3 Native FT8 Architecture
 
-Status: Checkpoints 1–9 implemented and CP9 acceptance complete; merge/deployment pending explicit owner approval
+Status: Checkpoints 1–9.1 are accepted. Native FT8 is an official supported
+Rolling Thunder v4.3 feature.
+
 Date: 2026-10-02
-Implementation state: the native FT8 MVP is implemented end to end behind disabled-by-default feature gates. Continuous receive, decoding, CQ browsing, explicit one-station authorization, bounded QSO execution, Enhanced-CAT/DigiRig transmit, frozen-grid logging, schema-14 FT8 persistence, and normal ContactSyncService/Forge/Wavelog integration are present. Installed-hardware CP9 acceptance includes a completed real 5 W QSO, fail-closed error paths, clean shutdown, and Raspberry Pi performance validation. Production remains on the protected v4.2-compatible deployment until separately approved.
+
+Implementation state: native FT8 is end-to-end and remains protected by explicit
+configuration and operator-authorization gates. CP9.1 provides the mobile-readable
+browser and physical-control workflow, verified 20 W / FT8-frequency / SSB-BFO USB
+preparation before a QSO, 100 W / SSB-BFO AUTO restoration when leaving FT8,
+Context Button 3 active-QSO abort, same-day per-band worked suppression, live-map
+FT8 state, and a separate schema-15 machine-analysis telemetry pipeline to Forge
+for successful, failed, and aborted attempts. Failed and aborted attempts remain
+outside the normal contact/Wavelog path.
+
+The historical pre-FT8 rollback point remains `v4.2.0` at
+`3f5a9c22bc600883b1eb8d868d92e2f58658cc24`. The v4.3.0 release tag is the
+supported recovery point for the complete native-FT8 release.
 
 ## Purpose
 
 > Current-state note: sections below that describe individual checkpoints are retained
 > as historical design records. Statements such as "future", "proposed", or "blocked
 > from live RF" apply to the checkpoint being documented unless explicitly repeated
-> in the current-status sections. The authoritative current state is Checkpoint 9
-> acceptance complete, feature-gated, and not yet production-deployed.
+> in the current-status sections. The authoritative current state is the
+> accepted v4.3.0 native FT8 implementation with explicit configuration and
+> operator-authorization gates.
 
-Rolling Thunder v4.3 explores an optional native FT8 workflow for the installed
+Rolling Thunder v4.3 provides a native FT8 workflow for the installed
 Yaesu FT-891 + DigiRig DR-891 mobile station.
 
 The intended operator experience is:
@@ -26,20 +41,59 @@ receive/decode
     -> return to the CQ browser
 ```
 
-The operator's explicit station selection is the authorization event for that
-single QSO. Rolling Thunder must never automatically select another station,
-continue to another QSO, hop bands autonomously, or create an unattended
+The operator's explicit action on one eligible station is the authorization
+event for that single QSO. In v4.3.0 this is a short rotary-encoder press on the
+selected CQ station. A future explicit station-directed voice command may provide
+the same typed authorization through the same checks. Merely highlighting a
+station, decoding traffic, hearing a wake word, or receiving ambiguous speech is
+not authorization. Rolling Thunder must never automatically select another
+station, continue to another QSO, hop bands autonomously, or create an unattended
 operating mode.
 
-This work is experimental. The protected recovery point remains:
+The historical pre-FT8 recovery point remains:
 
 ```text
 tag:    v4.2.0
 commit: 3f5a9c22bc600883b1eb8d868d92e2f58658cc24
 ```
 
-The v4.3 FT8 feature must remain disabled by default and removable without loss
-of v4.2 contact data or normal Rolling Thunder behavior.
+The v4.3.0 release tag becomes the supported recovery point for the complete
+native-FT8 code set. FT8 remains explicitly configuration-gated so receive and
+transmit authority are never created accidentally.
+
+## CP9.1 CQ browser presentation and attempt history
+
+The mobile CQ browser intentionally shows only CQ candidates. A callsign enters
+the browser only after a decoded CQ. Non-CQ traffic from an unknown callsign
+does not create a row. Once a station has called CQ, subsequent traffic can
+refresh that existing row until it expires after six FT8 periods with no traffic.
+
+The current color model is intentionally redundant with symbols for color-vision
+accessibility:
+
+- fresh CQ (first or second CQ period): yellow;
+- repeated CQ (third or later CQ period): white;
+- recent non-CQ traffic from an existing CQ candidate: gray;
+- failed/retry-exhausted/error/preparation-failed attempt: red plus `!`;
+- operator-aborted attempt: blue plus `■`;
+- explicit POTA CQ token: tree indicator independent of attempt state.
+
+The selected row adds a high-contrast border/background without replacing the
+callsign state color.
+
+Failed/aborted history is keyed by normalized callsign + band + UTC date and is
+rebuilt from the durable FT8 machine-analysis outbox. The history decorates only
+rows already eligible through CQ activity; it never manufactures CQ membership.
+If a failed/aborted station ages out, it disappears. If it later calls CQ again
+on the same band during the same UTC date, its prior red/blue state reappears.
+
+Successful callsign/band combinations remain governed separately by
+`FT8WorkedTodayService`: a completed contact is suppressed for the rest of the
+UTC date and does not remain in the browser as an attempt-history color.
+
+Operator-facing behavior is maintained in `docs/FT8_OPERATOR_GUIDE.md`.
+Detailed implementation rationale is maintained in
+`docs/FT8_ENGINEERING_GUIDE.md`.
 
 ## Existing architecture that must remain intact
 
@@ -164,7 +218,9 @@ Checkpoint 7 introduced the immutable terminal QSO result. Checkpoint 8 then
 connected only successful `COMPLETED` results to the existing local-first
 contact pipeline with a stable QSO UUID, frozen local grid, signed FT8 reports,
 schema-14 `RadioMode.FT8`, and ADIF `MODE=FT8`. Checkpoint 9 composes that
-path into the dashboard and installed-hardware runtime.
+path into the dashboard and installed-hardware runtime. Checkpoint 9.1 then adds
+schema 15 for the separate FT8 performance outbox; the contact schema semantics
+remain unchanged while machine-analysis telemetry follows its own sync/API path.
 
 FT8 receive worker
         |

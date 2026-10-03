@@ -23,6 +23,7 @@ from rolling_thunder.fm_repeater import (
 from rolling_thunder.ft891_cat import (
     Ft891CatError,
     Ft891OperatingContext,
+    Ft891SsbBfo,
     encode_cat_transmit_off,
     encode_cat_transmit_on,
     encode_memory_to_vfo_a,
@@ -34,14 +35,24 @@ from rolling_thunder.ft891_cat import (
     encode_read_memory_channel,
     encode_read_meter,
     encode_read_mode,
+    encode_read_narrow_enabled,
+    encode_read_noise_blanker_enabled,
+    encode_read_power,
+    encode_read_preamp_enabled,
     encode_read_repeater_shift,
+    encode_read_ssb_bfo,
     encode_select_band_memory,
     encode_set_6m_repeater_offset,
     encode_set_ctcss_behavior,
     encode_set_ctcss_tone,
     encode_set_frequency,
     encode_set_mode,
+    encode_set_narrow_enabled,
+    encode_set_noise_blanker_enabled,
+    encode_set_power,
+    encode_set_preamp_enabled,
     encode_set_repeater_shift,
+    encode_set_ssb_bfo,
     memory_channel_for_band,
     parse_6m_repeater_offset_reply,
     parse_ctcss_behavior_reply,
@@ -50,8 +61,13 @@ from rolling_thunder.ft891_cat import (
     parse_memory_channel_reply,
     parse_meter_reply,
     parse_mode_reply,
+    parse_narrow_enabled_reply,
+    parse_noise_blanker_enabled_reply,
     parse_operating_context_reply,
+    parse_power_reply,
+    parse_preamp_enabled_reply,
     parse_repeater_shift_reply,
+    parse_ssb_bfo_reply,
 )
 from rolling_thunder.radio import (
     BandChangeRequiredError,
@@ -282,6 +298,95 @@ class Ft891Radio:
                 )
 
             return self._state
+
+    def read_preamp_enabled(self) -> bool:
+        """Read FT-891 VFO-A preamp state; False means IPO is active."""
+        with self._operation_lock:
+            self._require_connected()
+            return parse_preamp_enabled_reply(
+                self._transport.query(encode_read_preamp_enabled())
+            )
+
+    def set_preamp_enabled(self, enabled: bool) -> bool:
+        """Set and verify FT-891 VFO-A preamp/IPO state."""
+        with self._operation_lock:
+            self._require_connected()
+            self._transport.command(encode_set_preamp_enabled(enabled))
+            verified = parse_preamp_enabled_reply(
+                self._transport.query(encode_read_preamp_enabled())
+            )
+            if verified is not enabled:
+                raise RadioVerificationError(
+                    "FT-891 PRE-AMP/IPO verification failed: requested "
+                    f"{'AMP' if enabled else 'IPO'}."
+                )
+            return verified
+
+    def set_narrow_enabled(self, enabled: bool) -> bool:
+        """Set and verify FT-891 VFO-A NARROW state."""
+        with self._operation_lock:
+            self._require_connected()
+            self._transport.command(encode_set_narrow_enabled(enabled))
+            verified = parse_narrow_enabled_reply(
+                self._transport.query(encode_read_narrow_enabled())
+            )
+            if verified is not enabled:
+                raise RadioVerificationError(
+                    "FT-891 NARROW verification failed."
+                )
+            return verified
+
+    def set_noise_blanker_enabled(self, enabled: bool) -> bool:
+        """Set and verify FT-891 VFO-A Noise Blanker state."""
+        with self._operation_lock:
+            self._require_connected()
+            self._transport.command(encode_set_noise_blanker_enabled(enabled))
+            verified = parse_noise_blanker_enabled_reply(
+                self._transport.query(encode_read_noise_blanker_enabled())
+            )
+            if verified is not enabled:
+                raise RadioVerificationError(
+                    "FT-891 Noise Blanker verification failed."
+                )
+            return verified
+
+    def read_power_watts(self) -> int:
+        """Read the configured FT-891 transmitter power through CAT."""
+        with self._operation_lock:
+            self._require_connected()
+            return parse_power_reply(self._transport.query(encode_read_power()))
+
+    def set_power_watts(self, power_watts: int) -> int:
+        """Set and verify the configured FT-891 transmitter power."""
+        with self._operation_lock:
+            self._require_connected()
+            self._transport.command(encode_set_power(power_watts))
+            verified = parse_power_reply(self._transport.query(encode_read_power()))
+            if verified != power_watts:
+                raise RadioVerificationError(
+                    "FT-891 power verification failed: requested "
+                    f"{power_watts} W but read back {verified} W."
+                )
+            return verified
+
+    def read_ssb_bfo(self) -> Ft891SsbBfo:
+        """Read documented FT-891 menu 11-07 SSB BFO."""
+        with self._operation_lock:
+            self._require_connected()
+            return parse_ssb_bfo_reply(self._transport.query(encode_read_ssb_bfo()))
+
+    def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo:
+        """Set and verify documented FT-891 menu 11-07 SSB BFO."""
+        with self._operation_lock:
+            self._require_connected()
+            self._transport.command(encode_set_ssb_bfo(value))
+            verified = parse_ssb_bfo_reply(self._transport.query(encode_read_ssb_bfo()))
+            if verified is not value:
+                raise RadioVerificationError(
+                    "FT-891 SSB-BFO verification failed: requested "
+                    f"{value.value.upper()} but read back {verified.value.upper()}."
+                )
+            return verified
 
     def select_band(self, band: RadioBand) -> RadioState:
         """Recall the dedicated band memory to VFO-A and verify the result."""

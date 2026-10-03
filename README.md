@@ -1,12 +1,13 @@
-# Rolling Thunder v4.1.0
+# Rolling Thunder v4.3.0
 
 Rolling Thunder is a Raspberry Pi-based mobile amateur-radio operating and
 logging console.
 
-**v4.1.0 is the first official Rolling Thunder v4 release.** It represents the
-accepted integrated mobile build now promoted to the `main` release line.
+**v4.3.0 is the current official Rolling Thunder release.** Native FT8 is now
+a supported part of the integrated mobile operating system after deterministic,
+repository, and installed-hardware acceptance.
 
-Its first milestone is an end-to-end mobile logging workflow using:
+The platform includes an end-to-end mobile logging and operating workflow using:
 
 - Yaesu FT-891 CAT state
 - GPS position and UTC
@@ -22,13 +23,13 @@ The authoritative design is:
 
 `docs/RollingThunder_v4.1.0_Architecture_Specification.md`
 
-## Current Milestone
+## Current Release
 
-**v4.2 mapping and operating-intelligence work**
+**v4.3.0 — native FT8 plus the v4.2 mapping and operating-intelligence platform**
 
-The current Raspberry Pi dashboard combines the existing shared POTA/DX operating
-workflow with the completed local-first map stack. The installed mobile build now
-provides:
+The current Raspberry Pi dashboard combines the shared POTA/DX workflow,
+local-first map stack, and a first-class native FT8 operating context. The
+installed mobile build provides:
 
 - regional offline DAY and NIGHT MBTiles for Ohio, Indiana, Kentucky, Michigan,
   Pennsylvania, and West Virginia from the external RT_DATA SSD
@@ -44,6 +45,13 @@ provides:
 - safe behavior when a viewport contains no parks or radar is disabled
 - local contact logging and radio/physical-control operation independent of map,
   POTA-marker, radar, Forge, or public-network availability
+- native FT8 receive/decode and CQ browsing using the installed DigiRig audio path
+- explicit single-station FT8 QSO authorization with bounded retries and no auto-next
+- verified FT-891 FT8 preparation at 20 W with SSB-BFO USB and restoration to
+  100 W / SSB-BFO AUTO when leaving FT8
+- successful FT8 contacts through the normal local-first logging/Wavelog sync path
+- separate successful/failed/aborted FT8 performance telemetry for future analysis
+- color-vision-aware FT8 CQ state presentation with redundant status markers
 
 POTA coordinates are approximate catalog pins. They are useful for operator
 awareness but are not navigation destinations or activation-boundary evidence.
@@ -86,8 +94,18 @@ config = load_config(Path("config/rolling-thunder.yaml"))
 Configuration validation failures identify the affected setting and provide
 corrective information.
 
-## Security Boundary
+## Transmit Safety Boundary
 
-Rolling Thunder does not control PTT and does not initiate transmission.
+Rolling Thunder v4.3.0 includes a narrowly scoped native FT8 transmit path.
+Transmission is allowed only after FT8 is explicitly enabled and the operator
+authorizes one currently eligible CQ station. In v4.3.0, authorization occurs
+when the operator selects the station on the FT8 page and short-presses the
+rotary encoder switch. A future explicit voice command may provide the same
+authorization only when it resolves to one currently eligible station through
+the same authorization boundary. The FT-891 must then pass fail-closed
+radio-preparation and timing checks. Each authorization covers one bounded QSO;
+Rolling Thunder never automatically selects or calls the next station.
 
-Voice, AI, remote APIs, and automated processes may not key the radio.
+Voice, AI, remote APIs, and unrelated automated processes do not independently
+key the radio. General-purpose PTT/MOX/CW/tuner authority remains outside the
+normal application boundary.

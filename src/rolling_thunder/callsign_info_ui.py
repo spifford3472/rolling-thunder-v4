@@ -46,6 +46,7 @@ def build_callsign_info_presentation(
     *,
     pota_latitude: float | None = None,
     pota_longitude: float | None = None,
+    target_grid: str | None = None,
     local_time: datetime | None = None,
 ) -> CallsignInfoPresentation:
     """Build glance-readable overlay text without I/O or timezone guessing."""
@@ -81,6 +82,16 @@ def build_callsign_info_presentation(
         target = GeoPoint(pota_latitude, pota_longitude)
         pin_visible = True
         zoom = 7
+    elif target_grid:
+        try:
+            grid_latitude, grid_longitude = maidenhead_grid_center(target_grid)
+        except ValueError:
+            zoom = 5
+        else:
+            target = GeoPoint(grid_latitude, grid_longitude)
+            pin_visible = True
+            location_note = "APPROX FT8 GRID CENTER"
+            zoom = 6
     elif (
         profile is not None
         and profile.latitude is not None

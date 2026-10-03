@@ -138,6 +138,24 @@ def test_receive_service_invokes_decoder_and_publishes_cq_activity() -> None:
     assert audio.stopped >= 1
 
 
+def test_receive_service_clear_cq_activity_removes_old_band_rows() -> None:
+    audio = FakeAudioInput([_period(150)])
+    service = FT8ReceiveService(
+        audio,
+        RecordingDecoder(),
+        FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+    )
+
+    service.start()
+    _wait_until(lambda: len(service.latest_state.cq_activity) == 1)
+
+    service.clear_cq_activity()
+
+    assert service.latest_state.cq_activity == ()
+    service.stop()
+
+
 def test_receive_service_bounds_decoder_backlog_and_drops_stale_periods() -> None:
     audio = FakeAudioInput([_period(200), _period(201), _period(202)])
     decoder = SlowDecoder()

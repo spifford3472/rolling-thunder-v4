@@ -30,6 +30,7 @@ class FT8QsoResult:
     started_utc: datetime
     ended_utc: datetime
     terminal_reason: str | None = None
+    transmit_attempt_count: int = 0
 
 
 class FT8QsoCoordinator:
@@ -308,6 +309,7 @@ class FT8QsoCoordinator:
             started_utc=started,
             ended_utc=self._clock.now_utc(),
             terminal_reason=self._terminal_reason,
+            transmit_attempt_count=self._controller.total_transmit_attempts,
         )
         self._result = result
         if self._terminal_result_handler is not None:

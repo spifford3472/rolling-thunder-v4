@@ -42,8 +42,12 @@ from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
 from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
+from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8.status import operator_ft8_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
+from rolling_thunder.ft8_ui import build_ft8_browser_viewport
+from rolling_thunder.ft8_widgets import FT8Widgets
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
@@ -352,6 +356,15 @@ def run_dashboard(
             context_navigation,
             active_panel_commands,
             runtime.ft8_panel,
+            cycle_band=(
+                None
+                if runtime.ft8_band_control is None
+                else runtime.ft8_band_control.cycle_band
+            ),
+            enter_ft8=runtime.enter_ft8_context,
+            exit_ft8=runtime.exit_ft8_context,
+            clear_start_status=runtime.clear_ft8_qso_start_status,
+            pending_callsign=capture,
         )
 
     status_monitor = build_status_monitor(config)
@@ -586,6 +599,7 @@ def run_dashboard(
     repeater_widgets = RepeaterWidgets(context_content)
     log_widgets = LogWidgets(context_content)
     dmr_widgets = DmrWidgets(context_content)
+    ft8_widgets = FT8Widgets(context_content)
 
     browse_frame = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
     browse_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(4, 8))
@@ -990,6 +1004,7 @@ def run_dashboard(
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
+        ft8_widgets.hide()
         context_body_label.grid()
 
     def show_pota_context_body() -> None:
@@ -1001,6 +1016,7 @@ def run_dashboard(
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
+        ft8_widgets.hide()
         pota_panel_frame.grid()
 
     def show_browse_context_body() -> None:
@@ -1012,6 +1028,7 @@ def run_dashboard(
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
+        ft8_widgets.hide()
         browse_frame.grid()
 
     def show_repeater_context_body() -> None:
@@ -1023,6 +1040,7 @@ def run_dashboard(
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
+        ft8_widgets.hide()
         repeater_widgets.show()
 
     def show_settings_context_body() -> None:
@@ -1034,6 +1052,7 @@ def run_dashboard(
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
+        ft8_widgets.hide()
         settings_widgets.show()
 
     def show_weather_context_body() -> None:
@@ -1045,6 +1064,7 @@ def run_dashboard(
         settings_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
+        ft8_widgets.hide()
         weather_widgets.show()
 
     def show_log_context_body() -> None:
@@ -1056,6 +1076,7 @@ def run_dashboard(
         settings_widgets.hide()
         weather_widgets.hide()
         dmr_widgets.hide()
+        ft8_widgets.hide()
         log_widgets.show()
 
     def show_dmr_context_body() -> None:
@@ -1066,7 +1087,20 @@ def run_dashboard(
         settings_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
+        ft8_widgets.hide()
         dmr_widgets.show()
+
+    def show_ft8_context_body() -> None:
+        """Show the large FT8 CQ browser and hide unrelated context bodies."""
+        browse_frame.grid_remove()
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
+        settings_widgets.hide()
+        weather_widgets.hide()
+        log_widgets.hide()
+        dmr_widgets.hide()
+        ft8_widgets.show()
 
     def refresh() -> None:
         if control_dispatcher is not None:
@@ -1121,12 +1155,27 @@ def run_dashboard(
             and live_map_snapshot.viewport is not None
         ):
             runtime.live_radar.request_viewport(live_map_snapshot.viewport)
+        ft8_map_status: str | None = None
+        if (
+            context_navigation.state.selected is ContextId.FT8
+            and runtime.ft8_panel is not None
+        ):
+            map_ft8_snapshot = runtime.ft8_panel.snapshot()
+            start_status = runtime.latest_ft8_qso_start_status
+            ft8_map_status = operator_ft8_status(
+                panel_mode=map_ft8_snapshot.mode,
+                qso_state=map_ft8_snapshot.qso_state,
+                selected_callsign=runtime.ft8_panel.selected_callsign,
+                start_state=None if start_status is None else start_status.state,
+            ).value
+
         live_map_widgets.update(
             live_map_presentation,
             live_map_snapshot,
             runtime.latest_live_radar_state,
             runtime.latest_pota_map_marker_state,
             weather_presentation,
+            ft8_status=ft8_map_status,
         )
 
         connectivity = build_runtime_connectivity_status(
@@ -1145,6 +1194,40 @@ def run_dashboard(
 
         pota_latitude: float | None = None
         pota_longitude: float | None = None
+        callsign_info_callsign = pending_callsign or None
+        callsign_info_target_grid: str | None = None
+
+        if (
+            context_navigation.state.selected is ContextId.FT8
+            and runtime.ft8_panel is not None
+        ):
+            ft8_panel_snapshot = runtime.ft8_panel.snapshot()
+            if ft8_panel_snapshot.active_context is not None:
+                callsign_info_callsign = ft8_panel_snapshot.active_context.remote_callsign
+                callsign_info_target_grid = ft8_panel_snapshot.active_context.remote_grid
+            else:
+                start_status = runtime.latest_ft8_qso_start_status
+                if start_status is not None and start_status.activity is not None:
+                    callsign_info_callsign = start_status.activity.callsign
+                    callsign_info_target_grid = start_status.activity.grid
+                else:
+                    selected_ft8_callsign = runtime.ft8_panel.selected_callsign
+                    if selected_ft8_callsign is not None:
+                        selected_activity = next(
+                            (
+                                activity
+                                for activity in ft8_panel_snapshot.cq_activity
+                                if activity.callsign == selected_ft8_callsign
+                            ),
+                            None,
+                        )
+                        callsign_info_callsign = selected_ft8_callsign
+                        callsign_info_target_grid = (
+                            None if selected_activity is None else selected_activity.grid
+                        )
+                    else:
+                        callsign_info_callsign = None
+
         selected_spot = shared_spot_panel.selected_spot
         if (
             context_navigation.state.selected is ContextId.POTA
@@ -1159,7 +1242,7 @@ def run_dashboard(
 
         if runtime.callsign_info is not None:
             runtime.callsign_info.observe_callsign(
-                pending_callsign or None,
+                callsign_info_callsign,
                 pota_latitude=pota_latitude,
                 pota_longitude=pota_longitude,
             )
@@ -1169,6 +1252,7 @@ def run_dashboard(
                     callsign_info_state.response,
                     pota_latitude=callsign_info_state.target_latitude,
                     pota_longitude=callsign_info_state.target_longitude,
+                    target_grid=callsign_info_target_grid,
                     local_time=datetime.now().astimezone(),
                 )
                 callsign_map_snapshot = None
@@ -1406,12 +1490,15 @@ def run_dashboard(
                     )
                 )
         elif selected_context.selected is ContextId.FT8:
-            show_standard_context_body()
             health_frame.grid_remove()
             context_title_text.set("FT8")
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
-            context_body_label.configure(font=("DejaVu Sans Mono", 20), wraplength=560)
             if runtime.ft8_panel is None:
+                show_standard_context_body()
+                context_body_label.configure(
+                    font=("DejaVu Sans", 26, "bold"),
+                    wraplength=620,
+                )
                 context_body_text.set(
                     "Native FT8 is disabled.\n\n"
                     "Enable ft8.enabled for receive-only CQ browsing.\n"
@@ -1425,62 +1512,94 @@ def run_dashboard(
                     if receive_state is None
                     else receive_state.status.value.upper()
                 )
-                lines = [
-                    f"RX: {receive_status}    QSO: {ft8_snapshot.qso_state.value.upper()}",
-                ]
-                if receive_state is not None:
-                    lines.append(
-                        "PERIODS "
-                        f"{receive_state.periods_captured}  "
-                        f"DECODES {receive_state.decode_count}  "
-                        f"DROPPED {receive_state.periods_dropped}"
-                    )
-                    if receive_state.last_error:
-                        lines.append(f"ERROR: {receive_state.last_error}")
+                context_title_text.set(f"FT8  •  RX {receive_status}")
 
                 if ft8_snapshot.mode is FT8PanelMode.BROWSE:
-                    lines.append("")
-                    lines.append("CQ STATIONS")
+                    show_ft8_context_body()
                     selected_callsign = runtime.ft8_panel.selected_callsign
-                    if not ft8_snapshot.cq_activity:
-                        lines.append("  Waiting for CQ decodes...")
-                    else:
-                        for activity in ft8_snapshot.cq_activity[:8]:
-                            marker_text = ">" if activity.callsign == selected_callsign else " "
-                            grid = activity.grid or "------"
-                            lines.append(
-                                f"{marker_text} {activity.callsign:<10} "
-                                f"{activity.snr_db:+3d} dB  "
-                                f"{activity.audio_frequency_hz:4d} Hz  {grid}"
+                    attempt_states = {
+                        activity.callsign: state
+                        for activity in ft8_snapshot.cq_activity
+                        if (
+                            state := runtime.ft8_attempt_visual_state(
+                                activity.callsign
                             )
-                    lines.append("")
-                    if ft8_snapshot.authorization_enabled:
-                        lines.append("ROTATE TO SELECT — PRESS TO AUTHORIZE ONE QSO")
-                    else:
-                        lines.append("ROTATE TO BROWSE — RECEIVE ONLY / TX DISABLED")
-                elif ft8_snapshot.mode is FT8PanelMode.ACTIVE:
-                    context = ft8_snapshot.active_context
-                    lines.append("")
-                    lines.append("ACTIVE QSO")
-                    if context is not None:
-                        lines.append(f"CALL: {context.remote_callsign}")
-                        lines.append(
-                            f"GRID: {context.local_grid or '------'}  "
-                            f"FREQ: {context.radio_frequency_hz / 1_000_000:.6f} MHz"
                         )
-                    lines.append(
-                        "ATTEMPT "
-                        f"{ft8_snapshot.attempt_count}/{ft8_snapshot.attempts_per_state}"
+                        is not None
+                    }
+                    viewport = build_ft8_browser_viewport(
+                        ft8_snapshot.cq_activity,
+                        selected_callsign=selected_callsign,
+                        visible_rows=ft8_widgets.visible_rows,
+                        attempt_states=attempt_states,
                     )
-                    lines.append("BACK / X = ABORT")
+                    selected_activity = next(
+                        (row for row in ft8_snapshot.cq_activity if row.callsign == selected_callsign),
+                        None,
+                    )
+                    current_grid = (
+                        view.grid
+                        if view.grid != "—"
+                        else str(config.operator.home_grid)
+                    )
+                    ft8_widgets.update(
+                        viewport,
+                        transmit_enabled=ft8_snapshot.authorization_enabled,
+                        distance_text=(
+                            None
+                            if selected_activity is None
+                            else format_maidenhead_distance(
+                                current_grid,
+                                selected_activity.grid,
+                            )
+                        ),
+                    )
                 else:
-                    result = ft8_snapshot.result
-                    lines.append("")
-                    lines.append(f"RESULT: {ft8_snapshot.qso_state.value.upper()}")
-                    if result is not None and result.terminal_reason:
-                        lines.append(result.terminal_reason)
-                    lines.append("BACK / X = RETURN TO CQ BROWSER")
-                context_body_text.set("\n".join(lines))
+                    show_standard_context_body()
+                    context_body_label.configure(
+                        font=("DejaVu Sans", 29, "bold"),
+                        wraplength=640,
+                    )
+                    lines = [
+                        f"QSO: {ft8_snapshot.qso_state.value.upper()}",
+                    ]
+                    if ft8_snapshot.mode is FT8PanelMode.ACTIVE:
+                        context = ft8_snapshot.active_context
+                        lines.append("")
+                        lines.append("ACTIVE FT8 QSO")
+                        if context is not None:
+                            lines.append(f"CALL  {context.remote_callsign}")
+                            lines.append(
+                                f"GRID  {context.local_grid or '------'}"
+                            )
+                            lines.append(
+                                f"FREQ  {context.radio_frequency_hz / 1_000_000:.6f} MHz"
+                            )
+                            lines.append(
+                                format_maidenhead_distance(
+                                    context.local_grid,
+                                    context.remote_grid,
+                                )
+                            )
+                        lines.append(
+                            "ATTEMPT "
+                            f"{ft8_snapshot.attempt_count}/{ft8_snapshot.attempts_per_state}"
+                        )
+                        lines.append("")
+                        lines.append("CONTEXT BUTTON 3 — ABORT QSO NOW")
+                        lines.append("BACK / X — ABORT QSO")
+                    else:
+                        result = ft8_snapshot.result
+                        lines.append("")
+                        lines.append(
+                            f"RESULT  {ft8_snapshot.qso_state.value.upper()}"
+                        )
+                        if result is not None and result.terminal_reason:
+                            lines.append(result.terminal_reason)
+                        lines.append("")
+                        lines.append("PRESS ENCODER — RETURN TO CQ BROWSER")
+                        lines.append("CONTEXT BUTTON 3 — RETURN TO CQ BROWSER")
+                    context_body_text.set("\n".join(lines))
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
             context_title_text.set(selected_context.definition.title)

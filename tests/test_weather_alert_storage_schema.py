@@ -29,7 +29,7 @@ def test_current_schema_retains_alert_cache_and_notification_ledger(
 
     version = initialize_database(database)
 
-    assert CURRENT_SCHEMA_VERSION == 14
+    assert CURRENT_SCHEMA_VERSION == 15
     assert version == CURRENT_SCHEMA_VERSION
 
     tables = table_names(database)

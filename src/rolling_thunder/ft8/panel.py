@@ -42,12 +42,13 @@ class FT8PanelController:
         qso_state: Callable[[], FT8QsoState],
         qso_context: Callable[[], FT8QsoContext | None],
         qso_result: Callable[[], FT8QsoResult | None],
-        authorize: Callable[[FT8CQActivity], FT8QsoContext],
+        authorize: Callable[[FT8CQActivity], bool],
         abort: Callable[[], None],
         return_to_browser: Callable[[], FT8QsoResult | None],
         attempt_count: Callable[[], int] | None = None,
         attempts_per_state: Callable[[], int] | None = None,
         authorization_enabled: Callable[[], bool] | None = None,
+        activity_filter: Callable[[FT8CQActivity], bool] | None = None,
     ) -> None:
         self._receive_state = receive_state
         self._qso_state = qso_state
@@ -59,12 +60,16 @@ class FT8PanelController:
         self._attempt_count = attempt_count or (lambda: 0)
         self._attempts_per_state = attempts_per_state or (lambda: 0)
         self._authorization_enabled = authorization_enabled or (lambda: True)
+        self._activity_filter = activity_filter or (lambda _activity: True)
         self._selected_callsign: str | None = None
 
     def snapshot(self) -> FT8PanelSnapshot:
         """Return current CQ browser/QSO presentation state without I/O."""
         receive = self._receive_state()
-        cq_activity = () if receive is None else receive.cq_activity
+        raw_activity = () if receive is None else receive.cq_activity
+        cq_activity = tuple(
+            activity for activity in raw_activity if self._activity_filter(activity)
+        )
         state = self._qso_state()
         result = self._qso_result()
         context = self._qso_context()
@@ -99,6 +104,28 @@ class FT8PanelController:
             authorization_enabled=self._authorization_enabled(),
         )
 
+    def visible_cq_activity(self, *, limit: int = 8) -> tuple[FT8CQActivity, ...]:
+        """Return a selection-following CQ viewport without reordering activity."""
+        if limit < 1:
+            raise ValueError("FT8 CQ viewport limit must be at least 1")
+        snapshot = self.snapshot()
+        activity = snapshot.cq_activity
+        if len(activity) <= limit:
+            return activity
+
+        selected = self._selected_callsign
+        if selected is None:
+            return activity[:limit]
+
+        callsigns = tuple(item.callsign for item in activity)
+        try:
+            selected_index = callsigns.index(selected)
+        except ValueError:
+            return activity[:limit]
+
+        start = min(max(0, selected_index - limit + 1), len(activity) - limit)
+        return activity[start : start + limit]
+
     @property
     def selected_callsign(self) -> str | None:
         """Return the currently highlighted CQ callsign, if still visible."""
@@ -120,18 +147,18 @@ class FT8PanelController:
         self._selected_callsign = None
         return True
 
-    def activate_selection(self) -> FT8QsoContext | None:
-        """Authorize exactly the highlighted CQ station, if one exists."""
+    def activate_selection(self) -> bool:
+        """Request exactly the highlighted CQ station, if one exists."""
         snapshot = self.snapshot()
         if not snapshot.authorization_enabled:
-            return None
+            return False
         callsign = self.selected_callsign
         if callsign is None:
-            return None
+            return False
         return self.select_callsign(callsign)
 
-    def select_callsign(self, callsign: str) -> FT8QsoContext:
-        """Authorize exactly one currently visible CQ station."""
+    def select_callsign(self, callsign: str) -> bool:
+        """Request exactly one currently visible CQ station."""
         snapshot = self.snapshot()
         if snapshot.mode is not FT8PanelMode.BROWSE:
             raise RuntimeError("cannot select another FT8 CQ while a QSO is active or terminal")
@@ -144,9 +171,10 @@ class FT8PanelController:
         )
         if len(matches) != 1:
             raise ValueError("selected FT8 CQ must identify exactly one current station")
-        context = self._authorize(matches[0])
-        self._selected_callsign = None
-        return context
+        accepted = self._authorize(matches[0])
+        if accepted:
+            self._selected_callsign = None
+        return accepted
 
     def _move_selection(self, direction: int) -> str | None:
         snapshot = self.snapshot()

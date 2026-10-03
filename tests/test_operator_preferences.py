@@ -32,6 +32,7 @@ def test_schema_migration_creates_operator_preferences_table(tmp_path: Path) -> 
     initialize_database(database_path)
 
     with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP TABLE ft8_performance_outbox")
         connection.execute("DROP TABLE pota_worked_markers")
         connection.execute("DROP TABLE repeater_active_overrides")
         connection.execute(

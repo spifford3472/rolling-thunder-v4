@@ -234,6 +234,52 @@ def test_repository_lists_newest_first_with_deterministic_ties(
     ]
 
 
+def test_repository_list_since_filters_by_utc_start_and_mode(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+    before = make_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000021"),
+        started_at=datetime(2026, 10, 1, 23, 59, tzinfo=UTC),
+    )
+    ft8_today = Contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000022"),
+        callsign="K1ABC",
+        frequency_hz=14_074_000,
+        mode=RadioMode.FT8,
+        started_at=datetime(2026, 10, 2, 0, 1, tzinfo=UTC),
+        rst_sent="-10",
+        rst_received="-08",
+        my_grid="EM79xm",
+        grid="FN31",
+    )
+    usb_today = make_contact(
+        contact_id=UUID("00000000-0000-0000-0000-000000000023"),
+        started_at=datetime(2026, 10, 2, 0, 2, tzinfo=UTC),
+    )
+    repository.add(before)
+    repository.add(ft8_today)
+    repository.add(usb_today)
+
+    contacts = repository.list_since(
+        datetime(2026, 10, 2, 0, 0, tzinfo=UTC),
+        mode=RadioMode.FT8,
+    )
+
+    assert contacts == [ft8_today]
+
+
+def test_repository_list_since_requires_timezone_aware_start(
+    tmp_path: Path,
+) -> None:
+    repository = ContactRepository(tmp_path / "contacts.db")
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        repository.list_since(
+            datetime(2026, 10, 2, 0, 0, tzinfo=UTC).replace(tzinfo=None)
+        )
+
+
 def test_repository_applies_list_limit(tmp_path: Path) -> None:
     """Recent contact listing should honor the requested limit."""
     repository = ContactRepository(tmp_path / "contacts.db")

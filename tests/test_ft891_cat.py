@@ -6,17 +6,33 @@ from rolling_thunder.cat_transport import CatTransport
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.ft891_cat import (
     Ft891CatError,
+    Ft891SsbBfo,
     encode_memory_to_vfo_a,
     encode_read_frequency,
     encode_read_memory_channel,
     encode_read_mode,
+    encode_read_narrow_enabled,
+    encode_read_noise_blanker_enabled,
+    encode_read_power,
+    encode_read_preamp_enabled,
+    encode_read_ssb_bfo,
     encode_select_band_memory,
     encode_set_frequency,
     encode_set_mode,
+    encode_set_narrow_enabled,
+    encode_set_noise_blanker_enabled,
+    encode_set_power,
+    encode_set_preamp_enabled,
+    encode_set_ssb_bfo,
     memory_channel_for_band,
     parse_frequency_reply,
     parse_memory_channel_reply,
     parse_mode_reply,
+    parse_narrow_enabled_reply,
+    parse_noise_blanker_enabled_reply,
+    parse_power_reply,
+    parse_preamp_enabled_reply,
+    parse_ssb_bfo_reply,
 )
 from rolling_thunder.radio import RadioBand
 
@@ -217,6 +233,96 @@ def test_mode_reply_rejects_malformed_data(reply: bytes) -> None:
 def test_mode_reply_rejects_unsupported_modes(reply: bytes) -> None:
     with pytest.raises(Ft891CatError, match="Unsupported FT-891 operating mode code"):
         parse_mode_reply(reply)
+
+
+def test_ft8_receive_setting_commands_match_documented_ft891_format() -> None:
+    assert encode_read_preamp_enabled() == b"PA0;"
+    assert encode_set_preamp_enabled(True) == b"PA01;"
+    assert encode_set_preamp_enabled(False) == b"PA00;"
+    assert parse_preamp_enabled_reply(b"PA01;") is True
+    assert parse_preamp_enabled_reply(b"PA00;") is False
+
+    assert encode_read_narrow_enabled() == b"NA0;"
+    assert encode_set_narrow_enabled(False) == b"NA00;"
+    assert encode_set_narrow_enabled(True) == b"NA01;"
+    assert parse_narrow_enabled_reply(b"NA00;") is False
+    assert parse_narrow_enabled_reply(b"NA01;") is True
+
+    assert encode_read_noise_blanker_enabled() == b"NB0;"
+    assert encode_set_noise_blanker_enabled(False) == b"NB00;"
+    assert encode_set_noise_blanker_enabled(True) == b"NB01;"
+    assert parse_noise_blanker_enabled_reply(b"NB00;") is False
+    assert parse_noise_blanker_enabled_reply(b"NB01;") is True
+
+
+def test_power_commands_match_documented_ft891_format() -> None:
+    assert encode_read_power() == b"PC;"
+    assert encode_set_power(5) == b"PC005;"
+    assert encode_set_power(20) == b"PC020;"
+    assert encode_set_power(100) == b"PC100;"
+
+
+@pytest.mark.parametrize("power_watts", [4, 101])
+def test_power_set_rejects_out_of_range_values(power_watts: int) -> None:
+    with pytest.raises(Ft891CatError, match="between 5 and 100 watts"):
+        encode_set_power(power_watts)
+
+
+def test_power_set_requires_integer() -> None:
+    with pytest.raises(TypeError, match="power_watts must be an int"):
+        encode_set_power(20.0)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("reply", "power_watts"),
+    [(b"PC005;", 5), (b"PC020;", 20), (b"PC100;", 100)],
+)
+def test_power_reply_parses_documented_values(reply: bytes, power_watts: int) -> None:
+    assert parse_power_reply(reply) == power_watts
+
+
+@pytest.mark.parametrize("reply", [b"", b"PC;", b"PC20;", b"PC020", b"PX020;"])
+def test_power_reply_rejects_malformed_data(reply: bytes) -> None:
+    with pytest.raises(Ft891CatError, match="Malformed FT-891 power reply"):
+        parse_power_reply(reply)
+
+
+@pytest.mark.parametrize("reply", [b"PC000;", b"PC004;", b"PC101;", b"PC999;"])
+def test_power_reply_rejects_out_of_range_values(reply: bytes) -> None:
+    with pytest.raises(Ft891CatError, match="outside the documented range"):
+        parse_power_reply(reply)
+
+
+@pytest.mark.parametrize(
+    ("value", "command", "reply"),
+    [
+        (Ft891SsbBfo.USB, b"EX11070;", b"EX11070;"),
+        (Ft891SsbBfo.LSB, b"EX11071;", b"EX11071;"),
+        (Ft891SsbBfo.AUTO, b"EX11072;", b"EX11072;"),
+    ],
+)
+def test_ssb_bfo_commands_match_documented_ex_menu_format(
+    value: Ft891SsbBfo,
+    command: bytes,
+    reply: bytes,
+) -> None:
+    assert encode_read_ssb_bfo() == b"EX1107;"
+    assert encode_set_ssb_bfo(value) == command
+    assert parse_ssb_bfo_reply(reply) is value
+
+
+def test_ssb_bfo_set_requires_typed_value() -> None:
+    with pytest.raises(TypeError, match="Ft891SsbBfo"):
+        encode_set_ssb_bfo("usb")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [b"", b"EX1107;", b"EX11073;", b"EX110700;", b"EX11070", b"EX011070;"],
+)
+def test_ssb_bfo_reply_rejects_malformed_data(reply: bytes) -> None:
+    with pytest.raises(Ft891CatError, match="Malformed FT-891 SSB-BFO reply"):
+        parse_ssb_bfo_reply(reply)
 
 
 def test_fake_transport_records_safe_read_and_set_commands() -> None:

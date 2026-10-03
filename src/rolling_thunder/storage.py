@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 14
+CURRENT_SCHEMA_VERSION: Final = 15
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -591,7 +591,36 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         CREATE INDEX contact_sync_retries_due_index
         ON contact_sync_retries (next_attempt_at, contact_id)
         """,
-    )
+    ),
+    15: (
+        """
+        CREATE TABLE ft8_performance_outbox (
+            attempt_id TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL CHECK(length(payload_json) >= 2),
+            synchronization_state TEXT NOT NULL DEFAULT 'pending'
+                CHECK (
+                    synchronization_state IN (
+                        'pending',
+                        'synchronized',
+                        'failed'
+                    )
+                ),
+            retry_count INTEGER NOT NULL DEFAULT 0 CHECK(retry_count >= 0),
+            next_attempt_at TEXT,
+            last_error TEXT CHECK(last_error IS NULL OR length(last_error) <= 1000),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE INDEX ft8_performance_outbox_sync_index
+        ON ft8_performance_outbox (
+            synchronization_state,
+            next_attempt_at,
+            created_at
+        )
+        """,
+    ),
 }
 
 

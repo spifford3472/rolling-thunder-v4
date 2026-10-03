@@ -25,6 +25,11 @@ from rolling_thunder.forge_contact_sync_config import (
     ForgeContactSyncConfigurationError,
     load_forge_contact_sync_config,
 )
+from rolling_thunder.forge_ft8_performance import (
+    ForgeFT8PerformanceRepository,
+    ForgeFT8PerformanceService,
+    ForgeFT8PerformanceStorageError,
+)
 from rolling_thunder.wavelog import WavelogClient
 
 DEFAULT_CONFIG_PATH = Path("config/forge-contact-sync.yaml")
@@ -90,14 +95,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             timeout_s=config.wavelog.request_timeout_s,
         )
         service = ForgeContactSyncService(repository, wavelog)
-        application = ForgeContactSyncApiApplication(service)
+        ft8_performance_repository = ForgeFT8PerformanceRepository(
+            config.storage.database_path
+        )
+        ft8_performance_service = ForgeFT8PerformanceService(
+            ft8_performance_repository
+        )
+        application = ForgeContactSyncApiApplication(
+            service,
+            ft8_performance_service=ft8_performance_service,
+        )
         server = ForgeContactHttpServer(
             config.server.bind_host,
             config.server.bind_port,
             application,
             logger=logger,
         )
-    except (ForgeContactSyncStorageError, OSError, ValueError) as error:
+    except (
+        ForgeContactSyncStorageError,
+        ForgeFT8PerformanceStorageError,
+        OSError,
+        ValueError,
+    ) as error:
         logger.error("Forge contact synchronization service could not start: %s", error)
         return EXIT_RUNTIME_ERROR
 
