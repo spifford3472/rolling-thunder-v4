@@ -23,6 +23,7 @@ from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_b
 from rolling_thunder.value_types import MaidenheadGrid
 
 Clock = Callable[[], datetime]
+AttemptHandler = Callable[[FT8PerformanceAttempt], None]
 
 
 def _utc_now() -> datetime:
@@ -80,9 +81,11 @@ class FT8PerformanceRecorder:
         repository: FT8PerformanceOutboxRepository,
         *,
         clock: Clock = _utc_now,
+        attempt_handler: AttemptHandler | None = None,
     ) -> None:
         self._repository = repository
         self._clock = clock
+        self._attempt_handler = attempt_handler
 
     def record_preparation_failure(
         self,
@@ -117,7 +120,10 @@ class FT8PerformanceRecorder:
             attempt_count=0,
             last_qso_state="preparation_failed",
         )
-        return self._repository.add_idempotent(attempt)
+        stored = self._repository.add_idempotent(attempt)
+        if self._attempt_handler is not None:
+            self._attempt_handler(stored)
+        return stored
 
     def record_qso_result(
         self,
@@ -169,7 +175,10 @@ class FT8PerformanceRecorder:
             attempt_count=result.transmit_attempt_count,
             last_qso_state=result.status.value,
         )
-        return self._repository.add_idempotent(attempt)
+        stored = self._repository.add_idempotent(attempt)
+        if self._attempt_handler is not None:
+            self._attempt_handler(stored)
+        return stored
 
     def _timestamp(self) -> datetime:
         value = self._clock()
