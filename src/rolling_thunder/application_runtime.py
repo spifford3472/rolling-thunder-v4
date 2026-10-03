@@ -43,6 +43,7 @@ from rolling_thunder.ft8.hardware_transmit import (
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.panel import FT8PanelController
+from rolling_thunder.ft8.performance import FT8AttemptSeed
 from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
 from rolling_thunder.ft8.performance_recording import (
     FT8PerformanceRecorder,
@@ -487,22 +488,24 @@ class ApplicationRuntime:
                 else ft8_worked_today.record_completed
             ),
         )
-        ft8_performance_recorder = (
-            FT8PerformanceRecorder(
-                FT8PerformanceOutboxRepository(config.storage.database_path)
-            )
+        ft8_performance_outbox = (
+            FT8PerformanceOutboxRepository(config.storage.database_path)
             if config.ft8.enabled
             else None
         )
+        ft8_performance_recorder = (
+            None
+            if ft8_performance_outbox is None
+            else FT8PerformanceRecorder(ft8_performance_outbox)
+        )
         ft8_performance_sync = None
-        if (
-            config.ft8.enabled
-            and home_platform_client is not None
-            and ft8_performance_recorder is not None
+        if ft8_performance_outbox is not None and isinstance(
+            home_platform_client,
+            HttpHomePlatformClient,
         ):
             ft8_performance_sync = FT8PerformanceSyncService(
-                ft8_performance_recorder._repository,
-                home_platform_client,  # type: ignore[arg-type]
+                ft8_performance_outbox,
+                home_platform_client,
                 ft8_performance_sync_scheduler or ThreadingPollScheduler(),
                 interval_s=platform_config.contact_sync_interval_s,
                 batch_size=platform_config.contact_sync_batch_size,
@@ -755,12 +758,8 @@ class ApplicationRuntime:
             def start_prepared_ft8_qso(
                 activity: FT8CQActivity,
                 prepared_radio_state: RadioState,
-                attempt_seed: object,
+                attempt_seed: FT8AttemptSeed,
             ) -> None:
-                from rolling_thunder.ft8.performance import FT8AttemptSeed
-
-                if not isinstance(attempt_seed, FT8AttemptSeed):
-                    raise TypeError("attempt_seed must be an FT8AttemptSeed")
                 assert runtime.ft8_authorization is not None
                 assert runtime.ft8_qso is not None
                 context = runtime.ft8_authorization.authorize(
