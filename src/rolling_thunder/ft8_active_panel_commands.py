@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
@@ -41,16 +42,23 @@ class FT8AwareActivePanelCommands:
         context_navigation: ContextNavigationController,
         delegate: DelegatePanelCommands,
         ft8_panel: FT8PanelCommands,
+        *,
+        cycle_band: Callable[[], bool] | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._delegate = delegate
         self._ft8_panel = ft8_panel
+        self._cycle_band = cycle_band
 
     def activate_context(self, context_id: ContextId) -> None:
         self._delegate.activate_context(context_id)
 
     def primary(self) -> bool:
-        return False if self._ft8_is_active() else self._delegate.primary()
+        if not self._ft8_is_active():
+            return self._delegate.primary()
+        if self._ft8_panel.snapshot().mode is not FT8PanelMode.BROWSE:
+            return False
+        return self._cycle_band is not None and self._cycle_band()
 
     def secondary(self) -> bool:
         return False if self._ft8_is_active() else self._delegate.secondary()
