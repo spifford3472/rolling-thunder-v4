@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from rolling_thunder.domain import GPSFixState, RadioConnectionState, RadioMode, RadioState
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8PeriodParity, FT8QsoContext
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity, FT8QsoContext
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.maidenhead import maidenhead_grid
