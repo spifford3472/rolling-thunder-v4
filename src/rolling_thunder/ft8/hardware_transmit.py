@@ -141,8 +141,7 @@ class FT8QsoHardwareTransmitExecutor(Protocol):
 
     def meter_summary(self, qso_id: UUID) -> FT8TransmitMeterSummary | None:
         """Return the peak meter summary collected for one QSO UUID."""
-        with self._lock:
-            return self._meter_summaries.get(qso_id)
+        ...
 
     def close(self) -> None:
         """Force receive and permanently close the physical executor."""
@@ -240,6 +239,11 @@ class BoundedFT8HardwareTransmitExecutor:
             label="QSO transmit",
             qso_id=request.authorization.context.qso_id,
         )
+
+    def meter_summary(self, qso_id: UUID) -> FT8TransmitMeterSummary | None:
+        """Return the peak meter summary collected for one QSO UUID."""
+        with self._lock:
+            return self._meter_summaries.get(qso_id)
 
     def cancel_test(self) -> None:
         """Force receive even when no owner test is currently active."""
@@ -402,6 +406,11 @@ class RecordingFT8HardwareTransmitExecutor:
 
     def cancel_qso(self) -> None:
         self.qso_cancel_count += 1
+
+    def meter_summary(self, qso_id: UUID) -> FT8TransmitMeterSummary | None:
+        """Hardware-free fake has no physical meter samples."""
+        _ = qso_id
+        return None
 
     def close(self) -> None:
         if self._closed:
