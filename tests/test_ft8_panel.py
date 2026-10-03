@@ -261,7 +261,7 @@ def test_visible_cq_activity_follows_selection_beyond_first_page() -> None:
     activities = tuple(
         FT8CQActivity(
             callsign=f"K1A{index:02d}",
-            last_cq=FT8Period(index=100 + index),
+            last_period=FT8Period(index=100 + index),
             last_any_decode=FT8Period(index=100 + index),
             cq_count=1,
             snr_db=-10,
