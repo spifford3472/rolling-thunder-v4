@@ -56,7 +56,12 @@ class FT8AwareActivePanelCommands:
         return False if self._ft8_is_active() else self._delegate.secondary()
 
     def tertiary(self) -> bool:
-        return False if self._ft8_is_active() else self._delegate.tertiary()
+        if not self._ft8_is_active():
+            return self._delegate.tertiary()
+        if self._ft8_panel.snapshot().mode is not FT8PanelMode.ACTIVE:
+            return False
+        self._ft8_panel.abort()
+        return True
 
     def tertiary_long(self) -> bool:
         return False if self._ft8_is_active() else self._delegate.tertiary_long()
