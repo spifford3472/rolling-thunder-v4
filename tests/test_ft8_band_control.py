@@ -67,6 +67,44 @@ def test_cycle_from_60m_falls_back_to_20m_automated_band() -> None:
     assert tuner.calls == [(Frequency(hz=14_074_000), RadioMode.USB)]
 
 
+def test_ft8_page_entry_and_exit_callbacks_run_in_background() -> None:
+    tuner = Tuner()
+    entered = Event()
+    exited = Event()
+    controller = FT8BandController(
+        tuner,
+        lambda: _state(),
+        configure_receive_settings=lambda: entered.set(),
+        restore_normal_settings=lambda: exited.set(),
+    )
+
+    assert controller.enter_ft8() is True
+    assert entered.wait(timeout=1.0)
+
+    assert controller.exit_ft8() is True
+    assert exited.wait(timeout=1.0)
+
+
+def test_band_cycle_reapplies_ft8_receive_settings_after_memory_recall() -> None:
+    tuner = Tuner()
+    settings_calls: list[str] = []
+    controller = FT8BandController(
+        tuner,
+        lambda: _state(),
+        configure_receive_settings=lambda: settings_calls.append("configured"),
+    )
+
+    assert controller.cycle_band() is True
+    assert tuner.called.wait(timeout=1.0)
+
+    deadline = __import__("time").monotonic() + 1.0
+    while controller.status.state is FT8BandTuneState.TUNING and __import__("time").monotonic() < deadline:
+        __import__("time").sleep(0.01)
+
+    assert settings_calls == ["configured"]
+    assert controller.status.state is FT8BandTuneState.SUCCEEDED
+
+
 def test_band_tune_failure_is_published_without_retry() -> None:
     tuner = Tuner()
     tuner.error = RadioConnectionError("radio unavailable")
