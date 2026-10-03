@@ -44,6 +44,17 @@ def test_unknown_current_band_defaults_cycle_to_20m() -> None:
     assert next_automated_ft8_band(RadioBand.BAND_60M) is RadioBand.BAND_20M
 
 
-def test_automated_band_cycle_wraps() -> None:
+def test_automated_band_cycle_matches_mobile_button_1_contract() -> None:
+    assert FT8_AUTOMATED_BAND_ORDER == (
+        RadioBand.BAND_40M,
+        RadioBand.BAND_30M,
+        RadioBand.BAND_20M,
+        RadioBand.BAND_17M,
+        RadioBand.BAND_15M,
+        RadioBand.BAND_12M,
+        RadioBand.BAND_10M,
+    )
+    assert next_automated_ft8_band(RadioBand.BAND_40M) is RadioBand.BAND_30M
+    assert next_automated_ft8_band(RadioBand.BAND_30M) is RadioBand.BAND_20M
     assert next_automated_ft8_band(RadioBand.BAND_20M) is RadioBand.BAND_17M
-    assert next_automated_ft8_band(RadioBand.BAND_6M) is RadioBand.BAND_160M
+    assert next_automated_ft8_band(RadioBand.BAND_10M) is RadioBand.BAND_40M
