@@ -66,7 +66,10 @@ class FT8QsoAuthorizationService:
                 "selected CQ signal report is outside the FT8 report range"
             )
 
-        local_grid, latitude, longitude, location_label = self._freeze_location(gps_state)
+        local_grid, latitude, longitude, location_label = freeze_ft8_location(
+            gps_state,
+            self.home_grid,
+        )
         authorized_utc = self.clock.now_utc()
         if self.clock.current_period() != current_period:
             raise FT8QsoAuthorizationError("FT8 period changed during authorization")
@@ -91,27 +94,28 @@ class FT8QsoAuthorizationService:
             **({} if qso_id is None else {"qso_id": qso_id}),
         )
 
-    def _freeze_location(
-        self,
-        gps_state: GPSState | None,
-    ) -> tuple[str, float | None, float | None, str]:
-        if (
-            gps_state is not None
-            and gps_state.connection_state is GPSConnectionState.CONNECTED
-            and gps_state.position is not None
-            and gps_state.position.fix_state is not GPSFixState.NO_FIX
-            and gps_state.position.latitude is not None
-            and gps_state.position.longitude is not None
-        ):
-            latitude = gps_state.position.latitude
-            longitude = gps_state.position.longitude
-            return (
-                str(maidenhead_grid(latitude, longitude)),
-                latitude,
-                longitude,
-                "GPS",
-            )
-        return str(self.home_grid), None, None, "configured home grid"
+def freeze_ft8_location(
+    gps_state: GPSState | None,
+    home_grid: MaidenheadGrid,
+) -> tuple[str, float | None, float | None, str]:
+    """Freeze the current mobile grid or configured home-grid fallback."""
+    if (
+        gps_state is not None
+        and gps_state.connection_state is GPSConnectionState.CONNECTED
+        and gps_state.position is not None
+        and gps_state.position.fix_state is not GPSFixState.NO_FIX
+        and gps_state.position.latitude is not None
+        and gps_state.position.longitude is not None
+    ):
+        latitude = gps_state.position.latitude
+        longitude = gps_state.position.longitude
+        return (
+            str(maidenhead_grid(latitude, longitude)),
+            latitude,
+            longitude,
+            "GPS",
+        )
+    return str(home_grid), None, None, "configured home grid"
 
 
 def _opposite_parity(parity: FT8PeriodParity) -> FT8PeriodParity:
