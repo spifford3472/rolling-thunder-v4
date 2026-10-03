@@ -7,6 +7,7 @@ import tkinter as tk
 from rolling_thunder.ft8_ui import (
     FT8BrowserViewport,
     FT8CallPresentation,
+    FT8_POTA_TREE_GLYPH,
 )
 
 _BACKGROUND = "#151515"
@@ -16,6 +17,7 @@ _BORDER = "#303030"
 _WHITE = "#ffffff"
 _GRAY = "#8f8f8f"
 _YELLOW = "#ffd24a"
+_POTA_GREEN = "#42ff72"
 _MUTED = "#a8a8a8"
 
 
@@ -61,6 +63,7 @@ class FT8Widgets:
 
         self._row_frames: list[tk.Frame] = []
         self._row_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
+        self._pota_labels: list[tk.Label] = []
         for index in range(visible_rows):
             row = tk.Frame(
                 self.rows_frame,
@@ -72,17 +75,45 @@ class FT8Widgets:
             values: list[tk.Label] = []
             for column, weight in enumerate((5, 2, 3, 3)):
                 row.grid_columnconfigure(column, weight=weight, uniform="ft8")
-                row_label = tk.Label(
-                    row,
-                    text="",
-                    bg=_ROW_BACKGROUND,
-                    fg=_WHITE,
-                    font=("DejaVu Sans", 27, "bold"),
-                    anchor="w" if column == 0 else "center",
-                    padx=7,
-                    pady=7,
-                )
-                row_label.grid(row=0, column=column, sticky="nsew")
+                if column == 0:
+                    call_cell = tk.Frame(row, bg=_ROW_BACKGROUND)
+                    call_cell.grid(row=0, column=0, sticky="nsew")
+                    call_cell.grid_columnconfigure(1, weight=1)
+                    pota_label = tk.Label(
+                        call_cell,
+                        text="",
+                        bg=_ROW_BACKGROUND,
+                        fg=_POTA_GREEN,
+                        font=("DejaVu Sans", 24, "bold"),
+                        anchor="center",
+                        padx=3,
+                        pady=7,
+                    )
+                    pota_label.grid(row=0, column=0, sticky="nsw")
+                    row_label = tk.Label(
+                        call_cell,
+                        text="",
+                        bg=_ROW_BACKGROUND,
+                        fg=_WHITE,
+                        font=("DejaVu Sans", 27, "bold"),
+                        anchor="w",
+                        padx=3,
+                        pady=7,
+                    )
+                    row_label.grid(row=0, column=1, sticky="nsew")
+                    self._pota_labels.append(pota_label)
+                else:
+                    row_label = tk.Label(
+                        row,
+                        text="",
+                        bg=_ROW_BACKGROUND,
+                        fg=_WHITE,
+                        font=("DejaVu Sans", 27, "bold"),
+                        anchor="center",
+                        padx=7,
+                        pady=7,
+                    )
+                    row_label.grid(row=0, column=column, sticky="nsew")
                 values.append(row_label)
             self._row_frames.append(row)
             self._row_labels.append((values[0], values[1], values[2], values[3]))
@@ -151,6 +182,13 @@ class FT8Widgets:
                     FT8CallPresentation.YELLOW: _YELLOW,
                 }[row.call_presentation]
             )
+            pota_label = self._pota_labels[index]
+            pota_label.configure(
+                text=FT8_POTA_TREE_GLYPH if row.pota_cq else "",
+                bg=background,
+                fg=_POTA_GREEN,
+            )
+
             texts = (row.call_text, row.snr_text, row.audio_text, row.grid_text)
             for column, label in enumerate(self._row_labels[index]):
                 label.configure(
@@ -158,6 +196,8 @@ class FT8Widgets:
                     bg=background,
                     fg=call_color if column == 0 else _WHITE,
                 )
+                if column == 0:
+                    label.master.configure(bg=background)
             frame.grid()
 
         if transmit_enabled:
