@@ -111,6 +111,10 @@ class PendingCallsign:
         self.calls.append(callsign)
         return True
 
+    def discard(self) -> object:
+        self.calls.append("discard")
+        return object()
+
 
 def test_ft8_selection_preloads_dashboard_callsign() -> None:
     navigation = ContextNavigationController(ContextId.FT8)
@@ -150,6 +154,27 @@ def test_ft8_context_button_1_cycles_band_only_in_browser() -> None:
     assert commands.primary() is False
     assert band_calls == ["cycle"]
     assert delegate.calls == []
+
+
+def test_ft8_band_change_clears_selection_and_dashboard_callsign() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    panel.selected_callsign = "K1ABC"
+    pending = PendingCallsign()
+    commands = FT8AwareActivePanelCommands(
+        navigation,
+        delegate,
+        panel,
+        cycle_band=lambda: True,
+        pending_callsign=pending,
+    )
+
+    assert commands.primary() is True
+
+    assert panel.selected_callsign is None
+    assert "clear" in panel.calls
+    assert pending.calls == ["discard"]
 
 
 def test_ft8_context_button_3_short_aborts_only_active_qso() -> None:
