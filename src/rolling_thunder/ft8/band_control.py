@@ -51,17 +51,44 @@ class FT8BandController:
         radio_state: Callable[[], RadioState],
         *,
         ensure_usb_bfo: Callable[[], object] | None = None,
+        configure_receive_settings: Callable[[], object] | None = None,
+        restore_normal_settings: Callable[[], object] | None = None,
     ) -> None:
         self._tuner = tuner
         self._radio_state = radio_state
         self._ensure_usb_bfo = ensure_usb_bfo
+        self._configure_receive_settings = configure_receive_settings
+        self._restore_normal_settings = restore_normal_settings
         self._lock = Lock()
+        self._operation_lock = Lock()
         self._status = FT8BandTuneStatus()
 
     @property
     def status(self) -> FT8BandTuneStatus:
         with self._lock:
             return self._status
+
+    def enter_ft8(self) -> bool:
+        """Apply verified FT8 receive settings in the background."""
+        if self._configure_receive_settings is None:
+            return True
+        Thread(
+            target=self._settings_worker,
+            daemon=True,
+            name="rolling-thunder-ft8-receive-settings",
+        ).start()
+        return True
+
+    def exit_ft8(self) -> bool:
+        """Restore owner-required normal receive settings in the background."""
+        if self._restore_normal_settings is None:
+            return True
+        Thread(
+            target=self._restore_worker,
+            daemon=True,
+            name="rolling-thunder-ft8-restore-settings",
+        ).start()
+        return True
 
     def cycle_band(self) -> bool:
         with self._lock:
@@ -95,12 +122,15 @@ class FT8BandController:
 
     def _worker(self, target_band: RadioBand) -> None:
         try:
-            outcome = self._tuner.tune(
-                ft8_frequency_for_band(target_band),
-                RadioMode.USB,
-            )
-            if self._ensure_usb_bfo is not None:
-                self._ensure_usb_bfo()
+            with self._operation_lock:
+                outcome = self._tuner.tune(
+                    ft8_frequency_for_band(target_band),
+                    RadioMode.USB,
+                )
+                if self._ensure_usb_bfo is not None:
+                    self._ensure_usb_bfo()
+                if self._configure_receive_settings is not None:
+                    self._configure_receive_settings()
         except (RadioError, ValueError) as error:
             with self._lock:
                 self._status = FT8BandTuneStatus(
@@ -116,3 +146,24 @@ class FT8BandController:
                 target_band=target_band,
                 outcome=outcome,
             )
+
+
+    def _settings_worker(self) -> None:
+        callback = self._configure_receive_settings
+        if callback is None:
+            return
+        try:
+            with self._operation_lock:
+                callback()
+        except (RadioError, ValueError):
+            return
+
+    def _restore_worker(self) -> None:
+        callback = self._restore_normal_settings
+        if callback is None:
+            return
+        try:
+            with self._operation_lock:
+                callback()
+        except (RadioError, ValueError):
+            return
