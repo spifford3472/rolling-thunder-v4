@@ -4,22 +4,71 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
+from rolling_thunder.domain import RadioState
+from rolling_thunder.ft8.authorization import freeze_ft8_location
+from rolling_thunder.ft8.bands import ft8_frequency_for_band
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.distance import maidenhead_distance_km
-from rolling_thunder.ft8.domain import FT8QsoState
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoState
 from rolling_thunder.ft8.performance import (
     FT8AttemptOutcome,
     FT8AttemptSeed,
     FT8PerformanceAttempt,
 )
 from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
+from rolling_thunder.gps import GPSState
+from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
+from rolling_thunder.value_types import MaidenheadGrid
 
 Clock = Callable[[], datetime]
 
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def build_ft8_attempt_seed(
+    activity: FT8CQActivity,
+    *,
+    radio_state: RadioState,
+    gps_state: GPSState | None,
+    home_grid: MaidenheadGrid,
+    started_at_utc: datetime,
+    attempt_id: UUID | None = None,
+) -> FT8AttemptSeed:
+    """Freeze selection metadata before any CAT preparation changes the radio."""
+    if started_at_utc.tzinfo is None or started_at_utc.utcoffset() is None:
+        raise ValueError("started_at_utc must be timezone-aware")
+
+    band_text: str | None = None
+    frequency_hz: int | None = None
+    if radio_state.frequency is not None:
+        try:
+            band = resolve_radio_band(radio_state.frequency)
+        except RadioBandResolutionError:
+            pass
+        else:
+            band_text = band.value
+            frequency_hz = ft8_frequency_for_band(band).hz
+
+    local_grid, _latitude, _longitude, _label = freeze_ft8_location(
+        gps_state,
+        home_grid,
+    )
+    return FT8AttemptSeed(
+        attempt_id=attempt_id or uuid4(),
+        callsign=activity.callsign,
+        started_at_utc=started_at_utc,
+        band=band_text,
+        dial_frequency_hz=frequency_hz,
+        local_grid=local_grid,
+        remote_grid=activity.grid,
+        audio_frequency_hz=activity.audio_frequency_hz,
+        selected_snr_db=activity.snr_db,
+        pota_cq=activity.pota_cq,
+    )
 
 
 class FT8PerformanceRecorder:
