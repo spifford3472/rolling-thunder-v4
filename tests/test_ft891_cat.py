@@ -12,17 +12,26 @@ from rolling_thunder.ft891_cat import (
     encode_read_memory_channel,
     encode_read_mode,
     encode_read_power,
+    encode_read_preamp_enabled,
+    encode_read_narrow_enabled,
+    encode_read_noise_blanker_enabled,
     encode_read_ssb_bfo,
     encode_select_band_memory,
     encode_set_frequency,
     encode_set_mode,
     encode_set_power,
+    encode_set_preamp_enabled,
+    encode_set_narrow_enabled,
+    encode_set_noise_blanker_enabled,
     encode_set_ssb_bfo,
     memory_channel_for_band,
     parse_frequency_reply,
     parse_memory_channel_reply,
     parse_mode_reply,
     parse_power_reply,
+    parse_preamp_enabled_reply,
+    parse_narrow_enabled_reply,
+    parse_noise_blanker_enabled_reply,
     parse_ssb_bfo_reply,
 )
 from rolling_thunder.radio import RadioBand
@@ -224,6 +233,26 @@ def test_mode_reply_rejects_malformed_data(reply: bytes) -> None:
 def test_mode_reply_rejects_unsupported_modes(reply: bytes) -> None:
     with pytest.raises(Ft891CatError, match="Unsupported FT-891 operating mode code"):
         parse_mode_reply(reply)
+
+
+def test_ft8_receive_setting_commands_match_documented_ft891_format() -> None:
+    assert encode_read_preamp_enabled() == b"PA0;"
+    assert encode_set_preamp_enabled(True) == b"PA01;"
+    assert encode_set_preamp_enabled(False) == b"PA00;"
+    assert parse_preamp_enabled_reply(b"PA01;") is True
+    assert parse_preamp_enabled_reply(b"PA00;") is False
+
+    assert encode_read_narrow_enabled() == b"NA0;"
+    assert encode_set_narrow_enabled(False) == b"NA00;"
+    assert encode_set_narrow_enabled(True) == b"NA01;"
+    assert parse_narrow_enabled_reply(b"NA00;") is False
+    assert parse_narrow_enabled_reply(b"NA01;") is True
+
+    assert encode_read_noise_blanker_enabled() == b"NB0;"
+    assert encode_set_noise_blanker_enabled(False) == b"NB00;"
+    assert encode_set_noise_blanker_enabled(True) == b"NB01;"
+    assert parse_noise_blanker_enabled_reply(b"NB00;") is False
+    assert parse_noise_blanker_enabled_reply(b"NB01;") is True
 
 
 def test_power_commands_match_documented_ft891_format() -> None:
