@@ -34,7 +34,7 @@ from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
 from rolling_thunder.ft8.band_control import FT8BandController
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
 from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
@@ -821,6 +821,7 @@ class ApplicationRuntime:
                     if runtime.ft8_performance_recorder is None
                     else runtime.ft8_performance_recorder.record_preparation_failure
                 ),
+                failure_recovery=lambda: configure_ft8_receive_settings(radio),
             )
 
         def ft8_activity_visible(activity: FT8CQActivity) -> bool:
