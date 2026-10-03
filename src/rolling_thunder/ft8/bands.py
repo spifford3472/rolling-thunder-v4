@@ -25,8 +25,6 @@ FT8_DIAL_FREQUENCY_HZ: Final[dict[RadioBand, int]] = {
 # Keep 60 m in the frequency plan so a manually selected 60 m VFO can still be
 # prepared safely, but omit it from automated cross-band cycling.
 FT8_AUTOMATED_BAND_ORDER: Final[tuple[RadioBand, ...]] = (
-    RadioBand.BAND_160M,
-    RadioBand.BAND_80M,
     RadioBand.BAND_40M,
     RadioBand.BAND_30M,
     RadioBand.BAND_20M,
@@ -34,7 +32,6 @@ FT8_AUTOMATED_BAND_ORDER: Final[tuple[RadioBand, ...]] = (
     RadioBand.BAND_15M,
     RadioBand.BAND_12M,
     RadioBand.BAND_10M,
-    RadioBand.BAND_6M,
 )
 
 
