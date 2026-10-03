@@ -68,7 +68,7 @@ def test_pota_metadata_adds_tree_glyph_without_callsign_inference() -> None:
         selected_callsign=None,
     )
 
-    assert FT8_POTA_TREE_GLYPH == "♣"
+    assert FT8_POTA_TREE_GLYPH == "🌲"
     assert viewport.rows[0].call_text == "K1POTA"
     assert viewport.rows[0].pota_cq is True
     assert viewport.rows[1].call_text == "K2POTA"
