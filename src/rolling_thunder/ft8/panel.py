@@ -48,6 +48,7 @@ class FT8PanelController:
         attempt_count: Callable[[], int] | None = None,
         attempts_per_state: Callable[[], int] | None = None,
         authorization_enabled: Callable[[], bool] | None = None,
+        activity_filter: Callable[[FT8CQActivity], bool] | None = None,
     ) -> None:
         self._receive_state = receive_state
         self._qso_state = qso_state
@@ -59,12 +60,16 @@ class FT8PanelController:
         self._attempt_count = attempt_count or (lambda: 0)
         self._attempts_per_state = attempts_per_state or (lambda: 0)
         self._authorization_enabled = authorization_enabled or (lambda: True)
+        self._activity_filter = activity_filter or (lambda _activity: True)
         self._selected_callsign: str | None = None
 
     def snapshot(self) -> FT8PanelSnapshot:
         """Return current CQ browser/QSO presentation state without I/O."""
         receive = self._receive_state()
-        cq_activity = () if receive is None else receive.cq_activity
+        raw_activity = () if receive is None else receive.cq_activity
+        cq_activity = tuple(
+            activity for activity in raw_activity if self._activity_filter(activity)
+        )
         state = self._qso_state()
         result = self._qso_result()
         context = self._qso_context()
