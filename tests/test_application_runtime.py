@@ -434,3 +434,39 @@ def test_runtime_start_failure_rolls_back_ft8_service() -> None:
 
     assert ft8.start_count == 1
     assert ft8.stop_count == 1
+
+
+class _TerminalQso:
+    def __init__(self) -> None:
+        self.return_count = 0
+
+    def return_to_browser(self) -> object:
+        self.return_count += 1
+        return object()
+
+
+class _StartStatusReset:
+    def __init__(self) -> None:
+        self.reset_count = 0
+
+    def reset_to_idle(self) -> bool:
+        self.reset_count += 1
+        return True
+
+
+def test_return_ft8_to_browser_clears_stale_start_status() -> None:
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    qso = _TerminalQso()
+    starter = _StartStatusReset()
+    runtime.ft8_qso = qso  # type: ignore[assignment]
+    runtime.ft8_qso_start = starter  # type: ignore[assignment]
+
+    result = runtime.return_ft8_to_browser()
+
+    assert result is not None
+    assert qso.return_count == 1
+    assert starter.reset_count == 1
