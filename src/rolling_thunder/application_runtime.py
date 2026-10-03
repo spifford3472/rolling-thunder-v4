@@ -807,6 +807,9 @@ class ApplicationRuntime:
                     radio_state=prepared_radio_state,
                     gps_state=runtime.latest_gps_state,
                     qso_id=attempt_seed.attempt_id,
+                    freshness_reference_period=FT8Period(
+                        attempt_seed.selection_period_index
+                    ),
                 )
                 runtime.ft8_qso.authorize_and_start(context)
 
