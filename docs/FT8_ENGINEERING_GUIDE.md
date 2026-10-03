@@ -110,3 +110,52 @@ The outbox is idempotent by stable attempt UUID and synchronizes to Forge for fu
 - Receive-only configuration creates no physical transmit authority.
 - Local Maidenhead grid is frozen for the duration of one authorized QSO.
 - Persistent continuous receive architecture remains independent of transmit execution.
+
+
+## CP9.1 Final Acceptance Record — 2026-10-03
+
+Checkpoint 9.1 completed installed-hardware and repository acceptance on
+`anvilmobile` using the isolated Round 4 FT8 database.
+
+Installed-hardware acceptance confirmed:
+
+- a successful 40 m FT8 QSO with N6RAM was logged exactly once through the
+  normal FT8 contact path;
+- after acknowledging success, N6RAM disappeared from the 40 m CQ browser as
+  required by same-UTC-day worked suppression;
+- a ZF2OO attempt exhausted its retry budget, displayed FAILED, returned cleanly
+  to the CQ browser after encoder acknowledgement, and did not block subsequent
+  rotary selection;
+- a W0ERB operator-aborted attempt rendered with the blue aborted presentation
+  and was recorded only as FT8 performance telemetry, not as a normal contact;
+- failed/error attempt history rendered red with the redundant `!` marker;
+- operator-aborted history rendered blue with the redundant `■` marker;
+- fresh/repeated/non-CQ CQ lifecycle colors rendered as yellow/white/gray;
+- the operator confirmed the installed display presentation was usable;
+- CQ browsing recovered correctly after terminal success, failure, and abort;
+- shutdown left no Rolling Thunder, FT8 decoder, playback, or capture process
+  behind;
+- the isolated database passed `PRAGMA integrity_check`.
+
+The Round 4 telemetry record contained successful, retry-exhausted,
+preparation-failed, and operator-aborted attempts while the normal contact table
+contained only the completed FT8 QSO. This confirms the separation between
+normal QSO logging and machine-analysis attempt telemetry.
+
+Final repository acceptance at code head
+`6d9b0a07dfb053b76623a324f139dc0144521278`:
+
+- 2,511 tests passed;
+- 7 tests skipped;
+- `git diff --check` passed;
+- focused Ruff validation passed;
+- repository-wide Ruff passed with one explicitly excluded inherited baseline
+  file: `tools/regional_map_builder.py`.
+
+The excluded file reports Ruff `EXE001` because it contains a shebang while
+being stored as non-executable mode `100644`. The blob SHA
+`69a6f884c5ac160774ff4f10a594683e4b0bcf9b` is identical on `main` and the
+CP9.1 branch, so this warning is not a CP9.1 regression and was not modified as
+part of the FT8 scope.
+
+CP9.1 remains unmerged and not production-tagged until explicit owner approval.
