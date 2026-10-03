@@ -24,6 +24,7 @@ class DelegatePanelCommands(Protocol):
 
 class PendingCallsignCommands(Protocol):
     def preload_callsign(self, callsign: str) -> bool: ...
+    def discard(self) -> object: ...
 
 
 class FT8PanelCommands(Protocol):
@@ -82,7 +83,13 @@ class FT8AwareActivePanelCommands:
             return self._delegate.primary()
         if self._ft8_panel.snapshot().mode is not FT8PanelMode.BROWSE:
             return False
-        return self._cycle_band is not None and self._cycle_band()
+        accepted = self._cycle_band is not None and self._cycle_band()
+        if not accepted:
+            return False
+        self._ft8_panel.clear_selection()
+        if self._pending_callsign is not None:
+            self._pending_callsign.discard()
+        return True
 
     def secondary(self) -> bool:
         return False if self._ft8_is_active() else self._delegate.secondary()
