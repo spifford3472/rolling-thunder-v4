@@ -1517,10 +1517,21 @@ def run_dashboard(
                 if ft8_snapshot.mode is FT8PanelMode.BROWSE:
                     show_ft8_context_body()
                     selected_callsign = runtime.ft8_panel.selected_callsign
+                    attempt_states = {
+                        activity.callsign: state
+                        for activity in ft8_snapshot.cq_activity
+                        if (
+                            state := runtime.ft8_attempt_visual_state(
+                                activity.callsign
+                            )
+                        )
+                        is not None
+                    }
                     viewport = build_ft8_browser_viewport(
                         ft8_snapshot.cq_activity,
                         selected_callsign=selected_callsign,
                         visible_rows=ft8_widgets.visible_rows,
+                        attempt_states=attempt_states,
                     )
                     selected_activity = next(
                         (row for row in ft8_snapshot.cq_activity if row.callsign == selected_callsign),
