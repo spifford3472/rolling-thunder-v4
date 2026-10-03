@@ -83,6 +83,15 @@ class FT8QsoStartController:
         with self._lock:
             return self._status
 
+    def reset_to_idle(self) -> bool:
+        """Clear one completed/failed start presentation before the next CQ."""
+        with self._lock:
+            if self._status.busy:
+                return False
+            self._exit_requested = False
+            self._status = FT8QsoStartStatus()
+            return True
+
     def start(
         self,
         activity: FT8CQActivity,
