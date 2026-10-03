@@ -4,7 +4,6 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-_DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000201")
 
 import pytest
 
@@ -15,6 +14,8 @@ from rolling_thunder.ft8.performance_outbox import (
     FT8PerformanceSyncState,
 )
 
+
+_DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000201")
 
 def _attempt(
     *,
