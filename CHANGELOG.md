@@ -2,6 +2,17 @@
 
 ## v4.3.0 — experimental development
 
+### FT8 Checkpoint 9.1 — mobile UI / production integration in validation
+
+- adds mobile-readable FT8 CQ rows with explicit headers and rotary selection
+- uses color-vision-friendly redundant state presentation: fresh CQ yellow, repeated CQ white, active non-CQ gray, failed/error red + `!`, operator-aborted blue + `■`
+- preserves the rule that only stations actually heard calling CQ can enter the browser; later non-CQ traffic may update an existing CQ candidate but cannot create one
+- persists same-UTC-day failed/aborted callsign+band history from the FT8 machine-analysis outbox without affecting CQ eligibility
+- preserves successful callsign+band suppression through the normal completed-contact path
+- fixes terminal-result acknowledgement so a prior FAILED state cannot block or contaminate the next selected station
+- adds separate operator-guide and engineering-guide source documents for future printable manuals
+- remains on the feature branch pending owner hardware acceptance and explicit merge/deployment/tag approval
+
 ### FT8 Checkpoint 9 — acceptance complete; merge pending owner approval
 
 - completes native FT8 MVP product integration on top of the merged CP2-CP8.1 runtime
