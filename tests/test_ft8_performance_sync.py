@@ -20,7 +20,6 @@ from rolling_thunder.home_platform import HomePlatformUploadError
 
 _ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000601")
 
-
 def _attempt() -> FT8PerformanceAttempt:
     started = datetime(2026, 10, 2, 20, 0, tzinfo=UTC)
     return FT8PerformanceAttempt(
@@ -42,7 +41,6 @@ def _attempt() -> FT8PerformanceAttempt:
         attempt_count=6,
     )
 
-
 class Client:
     def __init__(self) -> None:
         self.calls: list[UUID] = []
@@ -61,7 +59,6 @@ class Client:
             received_at_utc=datetime(2026, 10, 2, 20, 5, tzinfo=UTC),
         )
 
-
 class Poll:
     def cancel(self) -> None:
         return None
@@ -75,7 +72,6 @@ class Scheduler:
         del interval_s
         self.callback = callback
         return Poll()
-
 
 def test_sync_success_marks_outbox_once(tmp_path: Path) -> None:
     now = datetime(2026, 10, 2, 20, 5, tzinfo=UTC)
