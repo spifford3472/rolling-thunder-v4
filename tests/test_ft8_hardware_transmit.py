@@ -498,7 +498,7 @@ def test_qso_executor_collects_peak_meter_summary_while_keyed() -> None:
     def run() -> None:
         try:
             executor.execute_qso(request)
-        except Exception as error:  # pragma: no cover - captured for assertion
+        except RuntimeError as error:  # pragma: no cover - captured for assertion
             errors.append(error)
 
     worker = threading.Thread(target=run)
