@@ -22,6 +22,10 @@ class DelegatePanelCommands(Protocol):
     def synchronize_radio_state(self) -> bool: ...
 
 
+class PendingCallsignCommands(Protocol):
+    def preload_callsign(self, callsign: str) -> bool: ...
+
+
 class FT8PanelCommands(Protocol):
     @property
     def selected_callsign(self) -> str | None: ...
@@ -45,12 +49,14 @@ class FT8AwareActivePanelCommands:
         *,
         cycle_band: Callable[[], bool] | None = None,
         exit_ft8: Callable[[], bool] | None = None,
+        pending_callsign: PendingCallsignCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
         self._delegate = delegate
         self._ft8_panel = ft8_panel
         self._cycle_band = cycle_band
         self._exit_ft8 = exit_ft8
+        self._pending_callsign = pending_callsign
         self._last_context_id = context_navigation.state.selected
 
     def activate_context(self, context_id: ContextId) -> None:
@@ -93,15 +99,21 @@ class FT8AwareActivePanelCommands:
         if not self._ft8_is_active():
             return self._delegate.move_previous()
         before = self._ft8_panel.selected_callsign
-        self._ft8_panel.select_previous()
-        return self._ft8_panel.selected_callsign != before
+        selected = self._ft8_panel.select_previous()
+        changed = self._ft8_panel.selected_callsign != before
+        if changed and selected is not None and self._pending_callsign is not None:
+            self._pending_callsign.preload_callsign(selected)
+        return changed
 
     def move_next(self) -> bool:
         if not self._ft8_is_active():
             return self._delegate.move_next()
         before = self._ft8_panel.selected_callsign
-        self._ft8_panel.select_next()
-        return self._ft8_panel.selected_callsign != before
+        selected = self._ft8_panel.select_next()
+        changed = self._ft8_panel.selected_callsign != before
+        if changed and selected is not None and self._pending_callsign is not None:
+            self._pending_callsign.preload_callsign(selected)
+        return changed
 
     def activate_selection(self) -> bool:
         if not self._ft8_is_active():
