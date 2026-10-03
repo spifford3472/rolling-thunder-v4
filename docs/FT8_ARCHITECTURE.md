@@ -14,18 +14,18 @@ FT8 state, and a separate schema-15 machine-analysis telemetry pipeline to Forge
 for successful, failed, and aborted attempts. Failed and aborted attempts remain
 outside the normal contact/Wavelog path.
 
-The protected production rollback point remains `v4.2.0` at
-`3f5a9c22bc600883b1eb8d868d92e2f58658cc24`. CP9.1 must not be described as
-production-deployed until the owner completes the required installed-hardware
-smoke test and explicitly approves merge/deployment.
+The historical pre-FT8 rollback point remains `v4.2.0` at
+`3f5a9c22bc600883b1eb8d868d92e2f58658cc24`. The v4.3.0 release tag is the
+supported recovery point for the complete native-FT8 release.
 
 ## Purpose
 
 > Current-state note: sections below that describe individual checkpoints are retained
 > as historical design records. Statements such as "future", "proposed", or "blocked
 > from live RF" apply to the checkpoint being documented unless explicitly repeated
-> in the current-status sections. The authoritative current state is Checkpoint
-> 9.1 feature-branch integration, feature-gated and not yet production-deployed.
+> in the current-status sections. The authoritative current state is the
+> accepted v4.3.0 native FT8 implementation with explicit configuration and
+> operator-authorization gates.
 
 Rolling Thunder v4.3 provides a native FT8 workflow for the installed
 Yaesu FT-891 + DigiRig DR-891 mobile station.
