@@ -13,7 +13,7 @@ from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
 
-FT8_CQ_MAX_AGE_PERIODS = 4
+FT8_CQ_MAX_AGE_PERIODS = 5
 FT8_QSO_ALLOWED_RADIO_MODES = frozenset({RadioMode.DATA, RadioMode.USB})
 
 
