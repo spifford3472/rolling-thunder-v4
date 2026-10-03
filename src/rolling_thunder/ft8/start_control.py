@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from threading import Lock, Thread
-from typing import Protocol
 
 from rolling_thunder.domain import RadioState
 from rolling_thunder.ft8.domain import FT8CQActivity
@@ -26,11 +25,7 @@ def _launch_daemon(worker: Callable[[], None]) -> None:
     ).start()
 
 
-class FT8PreparedQsoStarter(Protocol):
-    """Start exactly one QSO after radio preparation is verified."""
-
-    def __call__(self, activity: FT8CQActivity, radio_state: RadioState) -> None:
-        ...
+FT8PreparedQsoStarter = Callable[[FT8CQActivity, RadioState], None]
 
 
 class FT8QsoStartState(StrEnum):
