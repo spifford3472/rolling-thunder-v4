@@ -64,6 +64,7 @@ class FT8Widgets:
         self._row_frames: list[tk.Frame] = []
         self._row_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
         self._pota_labels: list[tk.Label] = []
+        self._call_cells: list[tk.Frame] = []
         for index in range(visible_rows):
             row = tk.Frame(
                 self.rows_frame,
@@ -102,6 +103,7 @@ class FT8Widgets:
                     )
                     row_label.grid(row=0, column=1, sticky="nsew")
                     self._pota_labels.append(pota_label)
+                    self._call_cells.append(call_cell)
                 else:
                     row_label = tk.Label(
                         row,
@@ -197,7 +199,7 @@ class FT8Widgets:
                     fg=call_color if column == 0 else _WHITE,
                 )
                 if column == 0:
-                    label.master.configure(bg=background)
+                    self._call_cells[index].configure(bg=background)
             frame.grid()
 
         if transmit_enabled:
