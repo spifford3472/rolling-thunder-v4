@@ -5,7 +5,6 @@ from json import loads
 from pathlib import Path
 from uuid import UUID
 
-
 from rolling_thunder.domain import Contact
 from rolling_thunder.forge_contact_sync import ForgeContactSyncRepository, ForgeContactSyncService
 from rolling_thunder.forge_contact_sync_api import ForgeContactSyncApiApplication
@@ -56,7 +55,6 @@ def _attempt(
         audio_frequency_hz=1500,
     )
 
-
 def _app(tmp_path: Path) -> tuple[ForgeContactSyncApiApplication, FakeWavelog]:
     database = tmp_path / "forge.db"
     wavelog = FakeWavelog()
@@ -75,7 +73,6 @@ def _app(tmp_path: Path) -> tuple[ForgeContactSyncApiApplication, FakeWavelog]:
         wavelog,
     )
 
-
 def _upload(
     application: ForgeContactSyncApiApplication,
     attempt: FT8PerformanceAttempt,
@@ -91,7 +88,6 @@ def _upload(
         headers=headers,
         body=attempt.model_dump_json().encode(),
     )
-
 
 def test_performance_upload_is_idempotent_and_never_calls_wavelog(tmp_path: Path) -> None:
     application, wavelog = _app(tmp_path)
