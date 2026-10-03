@@ -10,6 +10,7 @@ from rolling_thunder.ft8.radio_preparation import (
     FT8_OPERATING_POWER_WATTS,
     FT8RadioPreparationError,
     FT8RadioPreparationService,
+    configure_ft8_receive_settings,
 )
 from rolling_thunder.ft891_cat import Ft891SsbBfo
 from rolling_thunder.radio import RadioConnectionError
@@ -74,6 +75,45 @@ class FakePreparedRadio:
             raise self.fail_bfo
         self.ssb_bfo = value
         return self.ssb_bfo
+
+
+class FakeReceiveConfiguredRadio:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def set_mode(self, mode: RadioMode) -> RadioState:
+        self.calls.append(f"mode:{mode.value}")
+        return _state()
+
+    def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo:
+        self.calls.append(f"bfo:{value.value}")
+        return value
+
+    def set_preamp_enabled(self, enabled: bool) -> bool:
+        self.calls.append(f"preamp:{enabled}")
+        return enabled
+
+    def set_narrow_enabled(self, enabled: bool) -> bool:
+        self.calls.append(f"narrow:{enabled}")
+        return enabled
+
+    def set_noise_blanker_enabled(self, enabled: bool) -> bool:
+        self.calls.append(f"nb:{enabled}")
+        return enabled
+
+
+def test_ft8_receive_setup_forces_usb_and_receiver_defaults() -> None:
+    radio = FakeReceiveConfiguredRadio()
+
+    configure_ft8_receive_settings(radio)
+
+    assert radio.calls == [
+        "mode:USB",
+        "bfo:usb",
+        "preamp:True",
+        "narrow:False",
+        "nb:False",
+    ]
 
 
 def test_prepare_for_qso_forces_20w_frequency_and_usb() -> None:
