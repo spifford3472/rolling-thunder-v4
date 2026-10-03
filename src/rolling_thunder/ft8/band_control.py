@@ -53,12 +53,14 @@ class FT8BandController:
         ensure_usb_bfo: Callable[[], object] | None = None,
         configure_receive_settings: Callable[[], object] | None = None,
         restore_normal_settings: Callable[[], object] | None = None,
+        band_changed: Callable[[], object] | None = None,
     ) -> None:
         self._tuner = tuner
         self._radio_state = radio_state
         self._ensure_usb_bfo = ensure_usb_bfo
         self._configure_receive_settings = configure_receive_settings
         self._restore_normal_settings = restore_normal_settings
+        self._band_changed = band_changed
         self._lock = Lock()
         self._operation_lock = Lock()
         self._status = FT8BandTuneStatus()
@@ -131,6 +133,8 @@ class FT8BandController:
                     self._ensure_usb_bfo()
                 if self._configure_receive_settings is not None:
                     self._configure_receive_settings()
+                if self._band_changed is not None:
+                    self._band_changed()
         except (RadioError, ValueError) as error:
             with self._lock:
                 self._status = FT8BandTuneStatus(
