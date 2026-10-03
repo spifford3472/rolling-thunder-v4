@@ -1,18 +1,34 @@
 """Hardware-independent FT8 CQ activity management."""
 
+from collections.abc import Callable
+from dataclasses import replace
+from time import monotonic
+
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Decode, FT8MessageKind, FT8Period
 
 DEFAULT_CQ_EXPIRY_PERIODS = 6
+DEFAULT_NON_CQ_ACTIVE_SECONDS = 10.0
 
 
 class FT8CQActivityManager:
     """Collect, deduplicate, refresh, expire, and snapshot CQ activity."""
 
-    def __init__(self, *, expiry_periods: int = DEFAULT_CQ_EXPIRY_PERIODS) -> None:
+    def __init__(
+        self,
+        *,
+        expiry_periods: int = DEFAULT_CQ_EXPIRY_PERIODS,
+        non_cq_active_seconds: float = DEFAULT_NON_CQ_ACTIVE_SECONDS,
+        monotonic_clock: Callable[[], float] = monotonic,
+    ) -> None:
         if expiry_periods < 1:
             raise ValueError("expiry_periods must be at least 1")
+        if non_cq_active_seconds <= 0:
+            raise ValueError("non_cq_active_seconds must be positive")
         self._expiry_periods = expiry_periods
+        self._non_cq_active_seconds = non_cq_active_seconds
+        self._monotonic_clock = monotonic_clock
         self._activity: dict[str, FT8CQActivity] = {}
+        self._last_non_cq_seen_at: dict[str, float] = {}
         self._latest_period: FT8Period | None = None
 
     @property
@@ -37,6 +53,7 @@ class FT8CQActivityManager:
             existing_last_any = existing.last_any_decode or existing.last_period
             if decode.period < existing_last_any:
                 return
+            self._last_non_cq_seen_at[callsign] = self._monotonic_clock()
             self._activity[callsign] = FT8CQActivity(
                 callsign=existing.callsign,
                 last_period=existing.last_cq,
@@ -64,6 +81,7 @@ class FT8CQActivityManager:
         )
         pota_cq = _decode_is_pota_cq(decode)
 
+        self._last_non_cq_seen_at.pop(callsign, None)
         self._activity[callsign] = FT8CQActivity(
             callsign=callsign,
             grid=decode.grid if decode.grid is not None else (existing.grid if existing else None),
@@ -89,12 +107,23 @@ class FT8CQActivityManager:
         ]
         for callsign in stale:
             del self._activity[callsign]
+            self._last_non_cq_seen_at.pop(callsign, None)
 
     def snapshot(self, *, current_period: FT8Period | None = None) -> tuple[FT8CQActivity, ...]:
         """Return immutable insertion-ordered CQ activity for presentation."""
         if current_period is not None:
             self.expire(current_period)
-        return tuple(self._activity.values())
+        now = self._monotonic_clock()
+        return tuple(
+            replace(
+                activity,
+                active_non_cq=(
+                    (seen_at := self._last_non_cq_seen_at.get(activity.callsign)) is not None
+                    and now - seen_at < self._non_cq_active_seconds
+                ),
+            )
+            for activity in self._activity.values()
+        )
 
 
 def _decode_is_pota_cq(decode: FT8Decode) -> bool:
