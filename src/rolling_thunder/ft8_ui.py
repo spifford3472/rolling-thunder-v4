@@ -8,7 +8,7 @@ from enum import StrEnum
 from rolling_thunder.ft8.domain import FT8CQActivity
 
 FT8_BROWSER_HEADERS = ("CALL", "SNR", "AUDIO", "GRID")
-FT8_POTA_TREE_GLYPH = "♣"
+FT8_POTA_TREE_GLYPH = "🌲"
 
 
 class FT8CallPresentation(StrEnum):
