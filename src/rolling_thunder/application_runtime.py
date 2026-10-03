@@ -533,19 +533,26 @@ class ApplicationRuntime:
                 reconnect_delay_s=config.ft8.receive.reconnect_delay_s,
             )
 
-        ft8_band_control = (
-            FT8BandController(
+        ft8_band_control: FT8BandController | None = None
+        if config.ft8.enabled:
+            configure_ft8_receive_settings: Callable[[], object] | None = None
+            restore_ft8_normal_settings: Callable[[], object] | None = None
+            if isinstance(radio, Ft891Radio):
+                def configure_ft8_receive_settings() -> object:
+                    radio.set_ssb_bfo(Ft891SsbBfo.USB)
+                    radio.set_preamp_enabled(True)
+                    radio.set_narrow_enabled(False)
+                    return radio.set_noise_blanker_enabled(False)
+
+                def restore_ft8_normal_settings() -> object:
+                    return radio.set_ssb_bfo(Ft891SsbBfo.AUTO)
+
+            ft8_band_control = FT8BandController(
                 ReceiveTuningService(radio),
                 radio.get_state,
-                ensure_usb_bfo=(
-                    (lambda: radio.set_ssb_bfo(Ft891SsbBfo.USB))
-                    if isinstance(radio, Ft891Radio)
-                    else None
-                ),
+                configure_receive_settings=configure_ft8_receive_settings,
+                restore_normal_settings=restore_ft8_normal_settings,
             )
-            if config.ft8.enabled
-            else None
-        )
 
         ft8_authorization: FT8QsoAuthorizationService | None = None
         ft8_qso: FT8OperatorQsoService | None = None
@@ -865,13 +872,23 @@ class ApplicationRuntime:
             return None
         return self.ft8_qso_start.status
 
+    def enter_ft8_context(self) -> bool:
+        """Apply the owner-required FT8 receive settings without transmit authority."""
+        if self.ft8_band_control is None:
+            return True
+        return self.ft8_band_control.enter_ft8()
+
     def exit_ft8_context(self) -> bool:
-        """Abort any live QSO first, then request required 100 W/AUTO restore."""
+        """Abort live FT8 work, restore 100 W when applicable, and return BFO to AUTO."""
         if self.ft8_qso is not None:
             self.ft8_qso.abort()
-        if self.ft8_qso_start is None:
-            return True
-        return self.ft8_qso_start.request_restore()
+
+        accepted = True
+        if self.ft8_qso_start is not None:
+            accepted = self.ft8_qso_start.request_restore() and accepted
+        if self.ft8_band_control is not None:
+            accepted = self.ft8_band_control.exit_ft8() and accepted
+        return accepted
 
     def authorize_ft8_qso(self, activity: FT8CQActivity) -> FT8QsoContext:
         """Freeze and start one explicitly selected FT8 CQ through application services."""
