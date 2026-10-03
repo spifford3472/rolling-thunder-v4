@@ -23,6 +23,7 @@ class FT8CallPresentation(StrEnum):
 class FT8BrowserRow:
     callsign: str
     call_text: str
+    pota_cq: bool
     snr_text: str
     audio_text: str
     grid_text: str
@@ -78,10 +79,10 @@ def _row(activity: FT8CQActivity, *, selected: bool) -> FT8BrowserRow:
     else:
         presentation = FT8CallPresentation.WHITE
 
-    prefix = f"{FT8_POTA_TREE_GLYPH} " if activity.pota_cq else ""
     return FT8BrowserRow(
         callsign=activity.callsign,
-        call_text=f"{prefix}{activity.callsign}",
+        call_text=activity.callsign,
+        pota_cq=activity.pota_cq,
         snr_text=f"{activity.snr_db:+d}",
         audio_text=str(activity.audio_frequency_hz),
         grid_text=activity.grid or "------",
