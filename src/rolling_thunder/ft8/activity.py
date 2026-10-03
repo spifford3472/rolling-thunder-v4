@@ -96,6 +96,12 @@ class FT8CQActivityManager:
             active_non_cq=False,
         )
 
+    def clear(self) -> None:
+        """Clear all accumulated CQ activity for a receive-context change."""
+        self._activity.clear()
+        self._last_non_cq_seen_at.clear()
+        self._latest_period = None
+
     def expire(self, current_period: FT8Period) -> None:
         """Expire entries after the configured number of periods without any traffic."""
         stale = [
