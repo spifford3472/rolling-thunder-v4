@@ -12,6 +12,13 @@ from rolling_thunder.domain import DomainModel
 from rolling_thunder.value_types import Callsign, MaidenheadGrid
 
 
+class FT8PerformanceUploadDisposition(StrEnum):
+    """Idempotent Forge persistence result."""
+
+    ACCEPTED = "accepted"
+    ALREADY_EXISTS = "already_exists"
+
+
 class FT8AttemptOutcome(StrEnum):
     """Terminal outcomes stored independently from normal QSO contacts."""
 
@@ -96,3 +103,22 @@ class FT8PerformanceAttempt(DomainModel):
     @field_serializer("utc_date")
     def serialize_date(self, value: date) -> str:
         return value.isoformat()
+
+
+class FT8PerformanceUploadResult(DomainModel):
+    """Typed acknowledgement from Forge performance persistence."""
+
+    attempt_id: UUID
+    disposition: FT8PerformanceUploadDisposition
+    received_at_utc: datetime
+
+    @field_validator("received_at_utc")
+    @classmethod
+    def normalize_received_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("must be timezone-aware")
+        return value.astimezone(UTC)
+
+    @field_serializer("received_at_utc")
+    def serialize_received_at(self, value: datetime) -> str:
+        return value.isoformat().replace("+00:00", "Z")
