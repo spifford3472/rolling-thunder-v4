@@ -78,7 +78,7 @@ class FT8PerformanceAttempt(DomainModel):
         return normalized or None
 
     @model_validator(mode="after")
-    def validate_consistency(self) -> "FT8PerformanceAttempt":
+    def validate_consistency(self) -> FT8PerformanceAttempt:
         if self.ended_at_utc < self.started_at_utc:
             raise ValueError("ended_at_utc cannot precede started_at_utc")
         if self.utc_date != self.started_at_utc.date():
