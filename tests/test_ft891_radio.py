@@ -27,6 +27,9 @@ class FakeTransport:
             b"MC;": b"MC003;",
             b"PC;": b"PC100;",
             b"EX1107;": b"EX11072;",
+            b"PA0;": b"PA01;",
+            b"NA0;": b"NA00;",
+            b"NB0;": b"NB00;",
         }
         self.open_error: RadioConnectionError | None = None
         self.query_errors: dict[bytes, RadioConnectionError] = {}
@@ -165,6 +168,21 @@ def test_same_band_frequency_and_mode_changes_use_verified_commands() -> None:
     ]
     assert state.frequency == Frequency(hz=14_300_000)
     assert state.mode is RadioMode.LSB
+
+
+def test_ft8_receiver_settings_set_and_verify_readback() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    assert radio.set_preamp_enabled(True) is True
+    assert transport.commands[-2:] == [b"PA01;", b"PA0;"]
+
+    assert radio.set_narrow_enabled(False) is False
+    assert transport.commands[-2:] == [b"NA00;", b"NA0;"]
+
+    assert radio.set_noise_blanker_enabled(False) is False
+    assert transport.commands[-2:] == [b"NB00;", b"NB0;"]
 
 
 def test_power_set_and_readback_are_verified() -> None:
