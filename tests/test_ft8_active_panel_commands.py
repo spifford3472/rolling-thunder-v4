@@ -102,6 +102,35 @@ def test_ft8_context_owns_selection_and_activation_without_delegate() -> None:
     assert delegate.calls == []
 
 
+
+class PendingCallsign:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def preload_callsign(self, callsign: str) -> bool:
+        self.calls.append(callsign)
+        return True
+
+
+def test_ft8_selection_preloads_dashboard_callsign() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    pending = PendingCallsign()
+    commands = FT8AwareActivePanelCommands(
+        navigation,
+        delegate,
+        panel,
+        pending_callsign=pending,
+    )
+
+    assert commands.move_next() is True
+    assert pending.calls == ["W1XYZ"]
+
+    assert commands.move_previous() is True
+    assert pending.calls == ["W1XYZ", "K1ABC"]
+
+
 def test_ft8_context_button_1_cycles_band_only_in_browser() -> None:
     navigation = ContextNavigationController(ContextId.FT8)
     delegate = Delegate()
