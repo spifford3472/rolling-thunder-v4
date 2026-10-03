@@ -591,7 +591,22 @@ class ApplicationRuntime:
             def handle_ft8_terminal_result(result: FT8QsoResult) -> object:
                 contact = ft8_logging.handle_terminal_result(result)
                 if ft8_performance_recorder is not None:
-                    ft8_performance_recorder.record_qso_result(result)
+                    meter_summary = None
+                    meter_reader = getattr(resolved_ft8_executor, "meter_summary", None)
+                    if callable(meter_reader):
+                        meter_summary = meter_reader(result.context.qso_id)
+                    ft8_performance_recorder.record_qso_result(
+                        result,
+                        power_meter_raw=(
+                            None if meter_summary is None else meter_summary.power_peak_raw
+                        ),
+                        swr_meter_raw=(
+                            None if meter_summary is None else meter_summary.swr_peak_raw
+                        ),
+                        alc_meter_raw=(
+                            None if meter_summary is None else meter_summary.alc_peak_raw
+                        ),
+                    )
                 return contact
 
             ft8_qso = FT8OperatorQsoService(
