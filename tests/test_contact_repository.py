@@ -275,7 +275,9 @@ def test_repository_list_since_requires_timezone_aware_start(
     repository = ContactRepository(tmp_path / "contacts.db")
 
     with pytest.raises(ValueError, match="timezone-aware"):
-        repository.list_since(datetime(2026, 10, 2, 0, 0))
+        repository.list_since(
+            datetime(2026, 10, 2, 0, 0, tzinfo=UTC).replace(tzinfo=None)
+        )
 
 
 def test_repository_applies_list_limit(tmp_path: Path) -> None:
