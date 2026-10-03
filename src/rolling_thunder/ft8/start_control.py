@@ -11,7 +11,6 @@ from typing import Protocol
 from rolling_thunder.domain import RadioState
 from rolling_thunder.ft8.domain import FT8CQActivity
 from rolling_thunder.ft8.radio_preparation import (
-    FT8PreparedRadioState,
     FT8RadioPreparationError,
     FT8RadioPreparationService,
 )
