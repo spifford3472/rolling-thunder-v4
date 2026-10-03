@@ -118,8 +118,15 @@ class FT8PerformanceRecorder:
         )
         return self._repository.add_idempotent(attempt)
 
-    def record_qso_result(self, result: FT8QsoResult) -> FT8PerformanceAttempt:
-        """Persist completed, aborted, exhausted, or error QSO telemetry."""
+    def record_qso_result(
+        self,
+        result: FT8QsoResult,
+        *,
+        power_meter_raw: int | None = None,
+        swr_meter_raw: int | None = None,
+        alc_meter_raw: int | None = None,
+    ) -> FT8PerformanceAttempt:
+        """Persist terminal QSO telemetry with optional peak transmit-meter values."""
         outcome = {
             FT8QsoState.COMPLETED: FT8AttemptOutcome.COMPLETED,
             FT8QsoState.ABORTED: FT8AttemptOutcome.ABORTED,
@@ -148,9 +155,9 @@ class FT8PerformanceRecorder:
             band=context.radio_band,
             dial_frequency_hz=context.radio_frequency_hz,
             tx_power_target_watts=20,
-            power_meter_raw=None,
-            swr_meter_raw=None,
-            alc_meter_raw=None,
+            power_meter_raw=power_meter_raw,
+            swr_meter_raw=swr_meter_raw,
+            alc_meter_raw=alc_meter_raw,
             sent_report_db=result.sent_report_db,
             received_report_db=result.received_report_db,
             local_grid=context.local_grid,
