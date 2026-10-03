@@ -29,6 +29,17 @@ def _decode(
     )
 
 
+def test_clear_drops_all_old_band_activity_and_period_state() -> None:
+    manager = FT8CQActivityManager()
+    manager.ingest(_decode(100, callsign="K1AAA"))
+    manager.ingest(_decode(101, callsign="K2BBB"))
+
+    manager.clear()
+
+    assert manager.snapshot() == ()
+    assert manager.latest_period is None
+
+
 def test_cq_is_added_and_repeated_cq_updates_without_duplicate() -> None:
     manager = FT8CQActivityManager()
     manager.ingest(_decode(100, snr=-15, audio_hz=1200))
