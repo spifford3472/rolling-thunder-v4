@@ -88,6 +88,21 @@ class FT8ReceiveService:
         with self._observer_lock:
             self._observer = observer
 
+    def clear_cq_activity(self) -> None:
+        """Drop accumulated CQ rows when the active FT8 receive band changes."""
+        self._activity_manager.clear()
+        with self._state_lock:
+            state = self._state
+            self._state = FT8ReceiveState(
+                status=state.status,
+                last_period=state.last_period,
+                periods_captured=state.periods_captured,
+                periods_dropped=state.periods_dropped,
+                decode_count=state.decode_count,
+                cq_activity=(),
+                last_error=state.last_error,
+            )
+
     def start(self) -> None:
         if self._capture_thread is not None:
             raise RuntimeError("FT8 receive service is already started")
