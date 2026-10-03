@@ -20,6 +20,7 @@ from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.ft8.audio_output import FT8AudioOutput
 from rolling_thunder.ft8.domain import FT8QsoContext
 from rolling_thunder.ft8.encoder import FT8_SAMPLE_RATE_HZ, FT8Waveform
+from rolling_thunder.radio import RadioError
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,7 +316,7 @@ class BoundedFT8HardwareTransmitExecutor:
             while not stop.wait(0.25):
                 try:
                     alc, power, swr = reader()
-                except Exception:
+                except (RadioError, RuntimeError, ValueError):
                     return
                 self._record_meter_sample(
                     qso_id,
