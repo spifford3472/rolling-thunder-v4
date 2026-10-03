@@ -5,6 +5,8 @@ from json import loads
 from pathlib import Path
 from uuid import UUID
 
+_DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000401")
+
 from rolling_thunder.domain import Contact
 from rolling_thunder.forge_contact_sync import ForgeContactSyncRepository, ForgeContactSyncService
 from rolling_thunder.forge_contact_sync_api import ForgeContactSyncApiApplication
@@ -32,7 +34,7 @@ class FakeWavelog:
 
 def _attempt(
     *,
-    attempt_id: UUID = UUID("00000000-0000-0000-0000-000000000401"),
+    attempt_id: UUID = _DEFAULT_ATTEMPT_ID,
 ) -> FT8PerformanceAttempt:
     started = datetime(2026, 10, 2, 20, 0, tzinfo=UTC)
     return FT8PerformanceAttempt(
