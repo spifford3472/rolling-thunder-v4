@@ -1,6 +1,6 @@
 """Tests for UTC-day FT8 attempt history used by CQ presentation."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
