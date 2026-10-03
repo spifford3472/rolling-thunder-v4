@@ -113,6 +113,28 @@ class FT8PanelController:
         """Move the CQ-browser cursor toward the next visible station."""
         return self._move_selection(1)
 
+    def visible_cq_activity(self, *, limit: int = 8) -> tuple[FT8CQActivity, ...]:
+        """Return a selection-following CQ viewport without reordering activity."""
+        if limit < 1:
+            raise ValueError("FT8 CQ viewport limit must be at least 1")
+        snapshot = self.snapshot()
+        activity = snapshot.cq_activity
+        if len(activity) <= limit:
+            return activity
+
+        selected = self._selected_callsign
+        if selected is None:
+            return activity[:limit]
+
+        callsigns = tuple(item.callsign for item in activity)
+        try:
+            selected_index = callsigns.index(selected)
+        except ValueError:
+            return activity[:limit]
+
+        start = max(0, selected_index - limit + 1)
+        return activity[start : start + limit]
+
     def clear_selection(self) -> bool:
         """Clear a browse-only CQ highlight without changing QSO state."""
         if self.snapshot().mode is not FT8PanelMode.BROWSE or self._selected_callsign is None:
