@@ -255,3 +255,48 @@ def test_panel_snapshot_exposes_bounded_retry_progress() -> None:
     assert snapshot.mode is FT8PanelMode.ACTIVE
     assert snapshot.attempt_count == 3
     assert snapshot.attempts_per_state == 6
+
+
+def test_visible_cq_activity_follows_selection_beyond_first_page() -> None:
+    activities = tuple(
+        FT8CQActivity(
+            callsign=f"K1A{index:02d}",
+            last_cq=FT8Period(index=100 + index),
+            last_any_decode=FT8Period(index=100 + index),
+            cq_count=1,
+            snr_db=-10,
+            dt_seconds=0.1,
+            audio_frequency_hz=1000 + index,
+        )
+        for index in range(10)
+    )
+    receive = FT8ReceiveState(
+        status=FT8ReceiveStatus.RUNNING,
+        cq_activity=activities,
+    )
+    panel, service = _panel(receive)
+
+    for _ in range(9):
+        panel.select_next()
+
+    visible = panel.visible_cq_activity(limit=8)
+
+    assert panel.selected_callsign == "K1A08"
+    assert [item.callsign for item in visible] == [
+        "K1A01",
+        "K1A02",
+        "K1A03",
+        "K1A04",
+        "K1A05",
+        "K1A06",
+        "K1A07",
+        "K1A08",
+    ]
+    assert service.authorized == []
+
+
+def test_visible_cq_activity_rejects_nonpositive_limit() -> None:
+    panel, _service = _panel(None)
+
+    with pytest.raises(ValueError, match="limit must be at least 1"):
+        panel.visible_cq_activity(limit=0)
