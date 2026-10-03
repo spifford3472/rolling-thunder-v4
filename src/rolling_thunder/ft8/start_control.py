@@ -14,6 +14,7 @@ from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationError,
     FT8RadioPreparationService,
 )
+from rolling_thunder.radio import RadioError
 
 WorkerLauncher = Callable[[Callable[[], None]], None]
 
@@ -28,6 +29,7 @@ def _launch_daemon(worker: Callable[[], None]) -> None:
 
 FT8PreparedQsoStarter = Callable[[FT8CQActivity, RadioState, FT8AttemptSeed], None]
 FT8PreparationFailureHandler = Callable[[FT8AttemptSeed, str], object]
+FT8FailureRecovery = Callable[[], object]
 
 
 class FT8QsoStartState(StrEnum):
@@ -64,12 +66,14 @@ class FT8QsoStartController:
         start_prepared_qso: FT8PreparedQsoStarter,
         *,
         preparation_failure_handler: FT8PreparationFailureHandler | None = None,
+        failure_recovery: FT8FailureRecovery | None = None,
         worker_launcher: WorkerLauncher = _launch_daemon,
     ) -> None:
         self._preparation = preparation
         self._start_prepared_qso = start_prepared_qso
         self._worker_launcher = worker_launcher
         self._preparation_failure_handler = preparation_failure_handler
+        self._failure_recovery = failure_recovery
         self._lock = Lock()
         self._status = FT8QsoStartStatus()
         self._exit_requested = False
@@ -189,6 +193,7 @@ class FT8QsoStartController:
             self._preparation.restore_after_ft8()
         except FT8RadioPreparationError as restore_error:
             failure_reason = f"{failure_reason}; rollback failed: {restore_error}"
+        failure_reason = self._recover_ft8_receive_profile(failure_reason)
 
         handler = self._preparation_failure_handler
         if handler is not None:
@@ -216,6 +221,7 @@ class FT8QsoStartController:
             preparation_error = (
                 f"{preparation_error}; rollback failed: {restore_error}"
             )
+        preparation_error = self._recover_ft8_receive_profile(preparation_error)
 
         handler = self._preparation_failure_handler
         if handler is not None:
@@ -228,6 +234,16 @@ class FT8QsoStartController:
                 error=preparation_error,
                 attempt_seed=attempt_seed,
             )
+
+    def _recover_ft8_receive_profile(self, reason: str) -> str:
+        recovery = self._failure_recovery
+        if recovery is None:
+            return reason
+        try:
+            recovery()
+        except (RadioError, RuntimeError, ValueError) as error:
+            return f"{reason}; FT8 receive-profile recovery failed: {error}"
+        return reason
 
     def _restore_worker(
         self,
