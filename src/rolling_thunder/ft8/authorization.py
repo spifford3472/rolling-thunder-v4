@@ -36,10 +36,16 @@ class FT8QsoAuthorizationService:
         radio_state: RadioState,
         gps_state: GPSState | None,
         qso_id: UUID | None = None,
+        freshness_reference_period: FT8Period | None = None,
     ) -> FT8QsoContext:
         """Freeze one selected CQ without tuning, keying, or starting a QSO."""
         current_period = self.clock.current_period()
-        age_periods = current_period.index - activity.last_period.index
+        freshness_period = freshness_reference_period or current_period
+        if freshness_period.index > current_period.index:
+            raise FT8QsoAuthorizationError(
+                "FT8 freshness reference period cannot be in the future"
+            )
+        age_periods = freshness_period.index - activity.last_period.index
         if age_periods < 0:
             raise FT8QsoAuthorizationError("selected FT8 CQ is from a future period")
         if age_periods > FT8_CQ_MAX_AGE_PERIODS:
