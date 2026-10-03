@@ -105,6 +105,21 @@ def test_band_cycle_reapplies_ft8_receive_settings_after_memory_recall() -> None
     assert controller.status.state is FT8BandTuneState.SUCCEEDED
 
 
+def test_successful_band_change_invalidates_old_band_activity() -> None:
+    tuner = Tuner()
+    cleared = Event()
+    controller = FT8BandController(
+        tuner,
+        lambda: _state(),
+        band_changed=lambda: cleared.set(),
+    )
+
+    assert controller.cycle_band() is True
+    assert tuner.called.wait(timeout=1.0)
+    assert cleared.wait(timeout=1.0)
+    assert controller.status.state is FT8BandTuneState.SUCCEEDED
+
+
 def test_band_tune_failure_is_published_without_retry() -> None:
     tuner = Tuner()
     tuner.error = RadioConnectionError("radio unavailable")
