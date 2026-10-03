@@ -51,6 +51,7 @@ class FT8AwareActivePanelCommands:
         cycle_band: Callable[[], bool] | None = None,
         enter_ft8: Callable[[], bool] | None = None,
         exit_ft8: Callable[[], bool] | None = None,
+        clear_start_status: Callable[[], bool] | None = None,
         pending_callsign: PendingCallsignCommands | None = None,
     ) -> None:
         self._context_navigation = context_navigation
@@ -59,6 +60,7 @@ class FT8AwareActivePanelCommands:
         self._cycle_band = cycle_band
         self._enter_ft8 = enter_ft8
         self._exit_ft8 = exit_ft8
+        self._clear_start_status = clear_start_status
         self._pending_callsign = pending_callsign
         self._last_context_id = context_navigation.state.selected
 
@@ -120,6 +122,8 @@ class FT8AwareActivePanelCommands:
         before = self._ft8_panel.selected_callsign
         selected = self._ft8_panel.select_previous()
         changed = self._ft8_panel.selected_callsign != before
+        if changed and self._clear_start_status is not None:
+            self._clear_start_status()
         if changed and selected is not None and self._pending_callsign is not None:
             self._pending_callsign.preload_callsign(selected)
         return changed
@@ -130,6 +134,8 @@ class FT8AwareActivePanelCommands:
         before = self._ft8_panel.selected_callsign
         selected = self._ft8_panel.select_next()
         changed = self._ft8_panel.selected_callsign != before
+        if changed and self._clear_start_status is not None:
+            self._clear_start_status()
         if changed and selected is not None and self._pending_callsign is not None:
             self._pending_callsign.preload_callsign(selected)
         return changed
