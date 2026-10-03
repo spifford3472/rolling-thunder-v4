@@ -4,7 +4,6 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-
 import pytest
 
 from rolling_thunder.ft8.performance import FT8AttemptOutcome, FT8PerformanceAttempt
@@ -43,7 +42,6 @@ def _attempt(
         last_qso_state="aborted",
     )
 
-
 def test_outbox_add_is_durable_and_idempotent(tmp_path: Path) -> None:
     path = tmp_path / "contacts.db"
     repository = FT8PerformanceOutboxRepository(path)
@@ -66,7 +64,6 @@ def test_same_attempt_id_with_changed_payload_is_rejected(tmp_path: Path) -> Non
 
     with pytest.raises(FT8PerformanceConflictError):
         repository.add_idempotent(_attempt(callsign="K2XYZ"))
-
 
 def test_synchronized_attempt_is_not_listed_ready(tmp_path: Path) -> None:
     repository = FT8PerformanceOutboxRepository(tmp_path / "contacts.db")
