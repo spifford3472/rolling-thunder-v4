@@ -56,6 +56,40 @@ commit: 3f5a9c22bc600883b1eb8d868d92e2f58658cc24
 The v4.3 FT8 feature must remain disabled by default and removable without loss
 of v4.2 contact data or normal Rolling Thunder behavior.
 
+## CP9.1 CQ browser presentation and attempt history
+
+The mobile CQ browser intentionally shows only CQ candidates. A callsign enters
+the browser only after a decoded CQ. Non-CQ traffic from an unknown callsign
+does not create a row. Once a station has called CQ, subsequent traffic can
+refresh that existing row until it expires after six FT8 periods with no traffic.
+
+The current color model is intentionally redundant with symbols for color-vision
+accessibility:
+
+- fresh CQ (first or second CQ period): yellow;
+- repeated CQ (third or later CQ period): white;
+- recent non-CQ traffic from an existing CQ candidate: gray;
+- failed/retry-exhausted/error/preparation-failed attempt: red plus `!`;
+- operator-aborted attempt: blue plus `■`;
+- explicit POTA CQ token: tree indicator independent of attempt state.
+
+The selected row adds a high-contrast border/background without replacing the
+callsign state color.
+
+Failed/aborted history is keyed by normalized callsign + band + UTC date and is
+rebuilt from the durable FT8 machine-analysis outbox. The history decorates only
+rows already eligible through CQ activity; it never manufactures CQ membership.
+If a failed/aborted station ages out, it disappears. If it later calls CQ again
+on the same band during the same UTC date, its prior red/blue state reappears.
+
+Successful callsign/band combinations remain governed separately by
+`FT8WorkedTodayService`: a completed contact is suppressed for the rest of the
+UTC date and does not remain in the browser as an attempt-history color.
+
+Operator-facing behavior is maintained in `docs/FT8_OPERATOR_GUIDE.md`.
+Detailed implementation rationale is maintained in
+`docs/FT8_ENGINEERING_GUIDE.md`.
+
 ## Existing architecture that must remain intact
 
 The current generic `Radio` protocol is deliberately receive-side. It exposes
