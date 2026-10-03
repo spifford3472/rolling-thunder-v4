@@ -49,9 +49,12 @@ class FT8BandController:
         self,
         tuner: FT8ReceiveTuner,
         radio_state: Callable[[], RadioState],
+        *,
+        ensure_usb_bfo: Callable[[], object] | None = None,
     ) -> None:
         self._tuner = tuner
         self._radio_state = radio_state
+        self._ensure_usb_bfo = ensure_usb_bfo
         self._lock = Lock()
         self._status = FT8BandTuneStatus()
 
@@ -94,8 +97,10 @@ class FT8BandController:
         try:
             outcome = self._tuner.tune(
                 ft8_frequency_for_band(target_band),
-                RadioMode.DATA,
+                RadioMode.USB,
             )
+            if self._ensure_usb_bfo is not None:
+                self._ensure_usb_bfo()
         except (RadioError, ValueError) as error:
             with self._lock:
                 self._status = FT8BandTuneStatus(
