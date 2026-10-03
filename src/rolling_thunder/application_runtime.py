@@ -59,6 +59,7 @@ from rolling_thunder.ft8.session import (
 from rolling_thunder.ft8.start_control import FT8QsoStartController, FT8QsoStartStatus
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 from rolling_thunder.ft8.worked_today import FT8WorkedTodayService
+from rolling_thunder.ft891_cat import Ft891SsbBfo
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
@@ -533,7 +534,15 @@ class ApplicationRuntime:
             )
 
         ft8_band_control = (
-            FT8BandController(ReceiveTuningService(radio), radio.get_state)
+            FT8BandController(
+                ReceiveTuningService(radio),
+                radio.get_state,
+                ensure_usb_bfo=(
+                    (lambda: radio.set_ssb_bfo(Ft891SsbBfo.USB))
+                    if isinstance(radio, Ft891Radio)
+                    else None
+                ),
+            )
             if config.ft8.enabled
             else None
         )
