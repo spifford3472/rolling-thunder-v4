@@ -2,7 +2,7 @@
 
 ## v4.3.0 — experimental development
 
-### FT8 Checkpoint 9.1 — mobile UI / production integration in validation
+### FT8 Checkpoint 9.1 — acceptance complete; merge pending owner approval
 
 - adds mobile-readable FT8 CQ rows with explicit headers and rotary selection
 - uses color-vision-friendly redundant state presentation: fresh CQ yellow, repeated CQ white, active non-CQ gray, failed/error red + `!`, operator-aborted blue + `■`
@@ -11,7 +11,9 @@
 - preserves successful callsign+band suppression through the normal completed-contact path
 - fixes terminal-result acknowledgement so a prior FAILED state cannot block or contaminate the next selected station
 - adds separate operator-guide and engineering-guide source documents for future printable manuals
-- remains on the feature branch pending owner hardware acceptance and explicit merge/deployment/tag approval
+- completes installed-display and terminal-state hardware acceptance, including successful, failed, and operator-aborted paths
+- passes final repository regression with 2,511 tests passed, 7 skipped, clean diff check, and Ruff clean except for one verified pre-existing EXE001 on unchanged tools/regional_map_builder.py
+- remains on the feature branch pending explicit owner merge/deployment/tag approval
 
 ### FT8 Checkpoint 9 — acceptance complete; merge pending owner approval
 
