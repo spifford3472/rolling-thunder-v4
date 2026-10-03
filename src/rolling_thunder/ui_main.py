@@ -1585,7 +1585,8 @@ def run_dashboard(
                         if result is not None and result.terminal_reason:
                             lines.append(result.terminal_reason)
                         lines.append("")
-                        lines.append("BACK / X — RETURN TO CQ BROWSER")
+                        lines.append("PRESS ENCODER — RETURN TO CQ BROWSER")
+                        lines.append("CONTEXT BUTTON 3 — RETURN TO CQ BROWSER")
                     context_body_text.set("\n".join(lines))
         elif selected_context.selected is ContextId.SETTINGS:
             show_settings_context_body()
