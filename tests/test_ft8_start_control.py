@@ -30,6 +30,7 @@ def _seed() -> FT8AttemptSeed:
         attempt_id=UUID("00000000-0000-0000-0000-000000000901"),
         callsign="K1ABC",
         started_at_utc=datetime(2026, 10, 2, 20, 0, tzinfo=UTC),
+        selection_period_index=0,
         band="20m",
         dial_frequency_hz=14_074_000,
         local_grid="EM79xm",
@@ -65,6 +66,17 @@ class Radio:
     def set_frequency(self, frequency: Frequency) -> RadioState:
         self.calls.append(f"frequency:{frequency.hz}")
         self.state = _state(frequency.hz)
+        return self.state
+
+    def set_mode(self, mode: RadioMode) -> RadioState:
+        self.calls.append(f"mode:{mode.value}")
+        self.state = RadioState(
+            connection_state=RadioConnectionState.CONNECTED,
+            frequency=self.state.frequency,
+            mode=mode,
+            transmitting=False,
+            updated_at=self.state.updated_at,
+        )
         return self.state
 
     def set_power_watts(self, power_watts: int) -> int:
@@ -122,6 +134,32 @@ def test_prepare_failure_never_calls_qso_starter_and_rolls_back() -> None:
     assert "USB BFO unavailable" in controller.status.error
     assert radio.power_watts == 100
     assert radio.ssb_bfo is Ft891SsbBfo.AUTO
+
+
+def test_failed_start_recovers_ft8_receive_profile_after_safe_restore() -> None:
+    radio = Radio()
+    recoveries: list[str] = []
+
+    def fail_start(
+        activity: FT8CQActivity,
+        state: RadioState,
+        seed: FT8AttemptSeed,
+    ) -> None:
+        del activity, state, seed
+        raise RuntimeError("selected CQ expired")
+
+    controller = FT8QsoStartController(
+        FT8RadioPreparationService(radio),
+        fail_start,
+        failure_recovery=lambda: recoveries.append("ft8"),
+        worker_launcher=_run_now,
+    )
+
+    assert controller.start(_activity(), attempt_seed=_seed()) is True
+
+    assert controller.status.state is FT8QsoStartState.FAILED
+    assert radio.power_watts == 100
+    assert recoveries == ["ft8"]
 
 
 def test_exit_requested_during_preparation_skips_qso_start_and_restores() -> None:
