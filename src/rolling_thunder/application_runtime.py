@@ -28,12 +28,12 @@ from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.domain import RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
-from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
-from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
 from rolling_thunder.ft8.attempt_history import (
     FT8AttemptHistoryService,
     FT8AttemptVisualState,
 )
+from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
+from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
 from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
 from rolling_thunder.ft8.band_control import FT8BandController
 from rolling_thunder.ft8.coordinator import FT8QsoResult
