@@ -136,6 +136,31 @@ def test_panel_browser_selection_is_bounded_and_requires_explicit_activation() -
     assert panel.selected_callsign is None
 
 
+def test_panel_activity_filter_hides_worked_station_and_clears_selection() -> None:
+    hidden = {"callsign": None}
+    panel = FT8PanelController(
+        receive_state=lambda: FT8ReceiveState(
+            cq_activity=(_activity("K1ABC"), _activity("K2BBB"))
+        ),
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda _activity: True,
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+        activity_filter=lambda item: item.callsign != hidden["callsign"],
+    )
+
+    assert panel.select_next() == "K1ABC"
+    hidden["callsign"] = "K1ABC"
+
+    snapshot = panel.snapshot()
+
+    assert [item.callsign for item in snapshot.cq_activity] == ["K2BBB"]
+    assert panel.selected_callsign is None
+    assert panel.activate_selection() is False
+
+
 def test_panel_visible_cq_viewport_follows_selection_without_reordering() -> None:
     activity = tuple(_activity(f"K{index}ABC") for index in range(1, 11))
     panel = FT8PanelController(
