@@ -17,7 +17,6 @@ from rolling_thunder.ft8.performance_outbox import (
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
 from rolling_thunder.home_platform import HomePlatformUploadError
 
-
 _ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000601")
 
 def _attempt() -> FT8PerformanceAttempt:
