@@ -362,6 +362,7 @@ def run_dashboard(
                 else runtime.ft8_band_control.cycle_band
             ),
             exit_ft8=runtime.exit_ft8_context,
+            pending_callsign=capture,
         )
 
     status_monitor = build_status_monitor(config)
@@ -1572,7 +1573,7 @@ def run_dashboard(
                             f"{ft8_snapshot.attempt_count}/{ft8_snapshot.attempts_per_state}"
                         )
                         lines.append("")
-                        lines.append("BUTTON 3 — ABORT QSO NOW")
+                        lines.append("CONTEXT BUTTON 3 — ABORT QSO NOW")
                         lines.append("BACK / X — ABORT QSO")
                     else:
                         result = ft8_snapshot.result
