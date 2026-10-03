@@ -25,7 +25,7 @@ from rolling_thunder.contact_qrz_enrichment import ContactQrzEnrichmentService
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
-from rolling_thunder.domain import RadioMode, RadioState
+from rolling_thunder.domain import RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
@@ -50,7 +50,10 @@ from rolling_thunder.ft8.performance_recording import (
     build_ft8_attempt_seed,
 )
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
-from rolling_thunder.ft8.radio_preparation import FT8RadioPreparationService
+from rolling_thunder.ft8.radio_preparation import (
+    FT8RadioPreparationService,
+    configure_ft8_receive_settings,
+)
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.ft8.session import (
     FT8QsoSessionAuthorization,
@@ -539,11 +542,8 @@ class ApplicationRuntime:
             normal_settings_callback: Callable[[], object] | None = None
             if isinstance(radio, Ft891Radio):
                 def apply_ft8_receive_settings() -> object:
-                    radio.set_mode(RadioMode.USB)
-                    radio.set_ssb_bfo(Ft891SsbBfo.USB)
-                    radio.set_preamp_enabled(True)
-                    radio.set_narrow_enabled(False)
-                    return radio.set_noise_blanker_enabled(False)
+                    configure_ft8_receive_settings(radio)
+                    return None
 
                 def restore_ft8_normal_settings() -> object:
                     return radio.set_ssb_bfo(Ft891SsbBfo.AUTO)
