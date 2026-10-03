@@ -12,13 +12,24 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from threading import Lock, Timer
+from threading import Event, Lock, Thread, Timer
 from typing import Protocol
+from uuid import UUID
 
 from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.ft8.audio_output import FT8AudioOutput
 from rolling_thunder.ft8.domain import FT8QsoContext
 from rolling_thunder.ft8.encoder import FT8_SAMPLE_RATE_HZ, FT8Waveform
+
+
+@dataclass(frozen=True, slots=True)
+class FT8TransmitMeterSummary:
+    """Peak raw FT-891 meter values observed while one QSO was keyed."""
+
+    sample_count: int = 0
+    alc_peak_raw: int | None = None
+    power_peak_raw: int | None = None
+    swr_peak_raw: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +138,11 @@ class FT8QsoHardwareTransmitExecutor(Protocol):
         """Force receive and revoke the active QSO transmit."""
         ...
 
+    def meter_summary(self, qso_id: UUID) -> FT8TransmitMeterSummary | None:
+        """Return the peak meter summary collected for one QSO UUID."""
+        with self._lock:
+            return self._meter_summaries.get(qso_id)
+
     def close(self) -> None:
         """Force receive and permanently close the physical executor."""
         ...
@@ -202,6 +218,7 @@ class BoundedFT8HardwareTransmitExecutor:
         self._lock = Lock()
         self._active = False
         self._closed = False
+        self._meter_summaries: dict[UUID, FT8TransmitMeterSummary] = {}
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
         self._execute(
@@ -210,6 +227,7 @@ class BoundedFT8HardwareTransmitExecutor:
             expected_radio_frequency_hz=request.expected_radio_frequency_hz,
             expected_radio_mode=request.expected_radio_mode,
             label="hardware test",
+            qso_id=None,
         )
 
     def execute_qso(self, request: FT8QsoHardwareTransmitRequest) -> None:
@@ -219,6 +237,7 @@ class BoundedFT8HardwareTransmitExecutor:
             expected_radio_frequency_hz=request.expected_radio_frequency_hz,
             expected_radio_mode=request.expected_radio_mode,
             label="QSO transmit",
+            qso_id=request.authorization.context.qso_id,
         )
 
     def cancel_test(self) -> None:
@@ -245,6 +264,7 @@ class BoundedFT8HardwareTransmitExecutor:
         expected_radio_frequency_hz: int,
         expected_radio_mode: str,
         label: str,
+        qso_id: UUID | None,
     ) -> None:
         with self._lock:
             if self._closed:
@@ -254,6 +274,8 @@ class BoundedFT8HardwareTransmitExecutor:
             self._active = True
 
         watchdog: WatchdogTimer | None = None
+        meter_stop: Event | None = None
+        meter_thread: Thread | None = None
         try:
             self._verify_radio(
                 expected_radio_frequency_hz=expected_radio_frequency_hz,
@@ -266,15 +288,66 @@ class BoundedFT8HardwareTransmitExecutor:
                 self._ptt.release,
             )
             watchdog.start()
+            if qso_id is not None:
+                meter_stop, meter_thread = self._start_meter_sampling(qso_id)
             self._audio_output.play(waveform)
         finally:
+            if meter_stop is not None:
+                meter_stop.set()
             if watchdog is not None:
                 watchdog.cancel()
             try:
                 self._ptt.release()
             finally:
+                if meter_thread is not None:
+                    meter_thread.join(timeout=1.0)
                 with self._lock:
                     self._active = False
+
+    def _start_meter_sampling(self, qso_id: UUID) -> tuple[Event, Thread] | tuple[None, None]:
+        reader = getattr(self._radio, "read_cp6_tx_meters", None)
+        if not callable(reader):
+            return None, None
+
+        stop = Event()
+
+        def sample() -> None:
+            while not stop.wait(0.25):
+                try:
+                    alc, power, swr = reader()
+                except Exception:
+                    return
+                self._record_meter_sample(
+                    qso_id,
+                    alc=alc,
+                    power=power,
+                    swr=swr,
+                )
+
+        thread = Thread(
+            target=sample,
+            daemon=True,
+            name="rolling-thunder-ft8-meters",
+        )
+        thread.start()
+        return stop, thread
+
+    def _record_meter_sample(
+        self,
+        qso_id: UUID,
+        *,
+        alc: int,
+        power: int,
+        swr: int,
+    ) -> None:
+        with self._lock:
+            previous = self._meter_summaries.get(qso_id, FT8TransmitMeterSummary())
+            self._meter_summaries[qso_id] = FT8TransmitMeterSummary(
+                sample_count=previous.sample_count + 1,
+                alc_peak_raw=_peak(previous.alc_peak_raw, alc),
+                power_peak_raw=_peak(previous.power_peak_raw, power),
+                swr_peak_raw=_peak(previous.swr_peak_raw, swr),
+            )
 
     def _verify_radio(
         self,
@@ -334,6 +407,10 @@ class RecordingFT8HardwareTransmitExecutor:
             return
         self._closed = True
         self.close_count += 1
+
+
+def _peak(previous: int | None, current: int) -> int:
+    return current if previous is None else max(previous, current)
 
 
 def _validate_physical_request(
