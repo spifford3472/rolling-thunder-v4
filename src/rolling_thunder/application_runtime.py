@@ -924,7 +924,10 @@ class ApplicationRuntime:
         """Release one terminal QSO and restore CQ-browser ownership."""
         if self.ft8_qso is None:
             return None
-        return self.ft8_qso.return_to_browser()
+        result = self.ft8_qso.return_to_browser()
+        if self.ft8_qso_start is not None:
+            self.ft8_qso_start.reset_to_idle()
+        return result
 
     @property
     def latest_ft8_qso_state(self) -> FT8QsoState:
