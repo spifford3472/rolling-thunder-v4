@@ -40,13 +40,13 @@ class FT8Widgets:
 
         header = tk.Frame(self.frame, bg=_BORDER)
         header.grid(row=1, column=0, sticky="ew", padx=2, pady=(0, 3))
-        for column, (label, weight) in enumerate(
+        for column, (header_text, weight) in enumerate(
             (("CALL", 5), ("SNR", 2), ("AUDIO", 3), ("GRID", 3))
         ):
             header.grid_columnconfigure(column, weight=weight, uniform="ft8")
             tk.Label(
                 header,
-                text=label,
+                text=header_text,
                 bg=_BORDER,
                 fg=_WHITE,
                 font=("DejaVu Sans", 24, "bold"),
@@ -72,7 +72,7 @@ class FT8Widgets:
             values: list[tk.Label] = []
             for column, weight in enumerate((5, 2, 3, 3)):
                 row.grid_columnconfigure(column, weight=weight, uniform="ft8")
-                label = tk.Label(
+                row_label = tk.Label(
                     row,
                     text="",
                     bg=_ROW_BACKGROUND,
@@ -82,8 +82,8 @@ class FT8Widgets:
                     padx=7,
                     pady=7,
                 )
-                label.grid(row=0, column=column, sticky="nsew")
-                values.append(label)
+                row_label.grid(row=0, column=column, sticky="nsew")
+                values.append(row_label)
             self._row_frames.append(row)
             self._row_labels.append((values[0], values[1], values[2], values[3]))
             row.grid_remove()
