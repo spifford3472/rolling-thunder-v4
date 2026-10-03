@@ -37,6 +37,7 @@ class FT8QsoController:
         self._state = FT8QsoState.IDLE
         self._context: FT8QsoContext | None = None
         self._attempt_count = 0
+        self._total_transmit_attempts = 0
         self._last_tx_period_index: int | None = None
         self._last_consumed_decode_period_index: int | None = None
         self._cancelled = False
@@ -54,6 +55,11 @@ class FT8QsoController:
         return self._attempt_count
 
     @property
+    def total_transmit_attempts(self) -> int:
+        """Return total transmit requests across all QSO phases."""
+        return self._total_transmit_attempts
+
+    @property
     def attempts_per_state(self) -> int:
         """Return the immutable retry budget for the current controller."""
         return self._attempts_per_state
@@ -64,6 +70,7 @@ class FT8QsoController:
             raise RuntimeError("a QSO can only be authorized from IDLE")
         self._context = context
         self._attempt_count = 0
+        self._total_transmit_attempts = 0
         self._last_tx_period_index = None
         self._last_consumed_decode_period_index = context.authorized_period.index
         self._cancelled = False
@@ -96,6 +103,7 @@ class FT8QsoController:
             return
 
         self._attempt_count += 1
+        self._total_transmit_attempts += 1
         self._state = tx_state
         self._transmit_session.request(
             FT8TransmitRequest(
@@ -172,6 +180,7 @@ class FT8QsoController:
         self._state = FT8QsoState.IDLE
         self._context = None
         self._attempt_count = 0
+        self._total_transmit_attempts = 0
         self._last_tx_period_index = None
         self._last_consumed_decode_period_index = None
         self._cancelled = False
