@@ -16,7 +16,6 @@ from rolling_thunder.ft8.performance_outbox import (
 )
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
 from rolling_thunder.home_platform import HomePlatformUploadError
-from rolling_thunder.radio_polling import ScheduledPoll
 
 
 _ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000601")
@@ -63,6 +62,11 @@ class Client:
         )
 
 
+class Poll:
+    def cancel(self) -> None:
+        return None
+
+
 class Scheduler:
     def __init__(self) -> None:
         self.callback = None
@@ -70,7 +74,7 @@ class Scheduler:
     def schedule_repeating(self, interval_s: float, callback):  # type: ignore[no-untyped-def]
         del interval_s
         self.callback = callback
-        return ScheduledPoll(cancel=lambda: None)
+        return Poll()
 
 
 def test_sync_success_marks_outbox_once(tmp_path: Path) -> None:
