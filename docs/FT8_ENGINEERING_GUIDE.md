@@ -158,4 +158,4 @@ being stored as non-executable mode `100644`. The blob SHA
 CP9.1 branch, so this warning is not a CP9.1 regression and was not modified as
 part of the FT8 scope.
 
-CP9.1 remains unmerged and not production-tagged until explicit owner approval.
+CP9.1 received explicit owner approval for merge and v4.3.0 release tagging on 2026-10-03.
