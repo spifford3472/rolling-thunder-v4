@@ -102,6 +102,25 @@ def test_ft8_context_owns_selection_and_activation_without_delegate() -> None:
     assert delegate.calls == []
 
 
+def test_ft8_context_button_3_short_aborts_only_active_qso() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    commands = FT8AwareActivePanelCommands(navigation, delegate, panel)
+
+    assert commands.tertiary() is False
+    assert panel.calls == []
+
+    panel.mode = FT8PanelMode.ACTIVE
+    assert commands.tertiary() is True
+    assert panel.calls == ["abort"]
+
+    panel.mode = FT8PanelMode.TERMINAL
+    assert commands.tertiary() is False
+    assert panel.calls == ["abort"]
+    assert delegate.calls == []
+
+
 def test_ft8_back_aborts_active_qso_and_acknowledges_terminal_result() -> None:
     navigation = ContextNavigationController(ContextId.FT8)
     delegate = Delegate()
