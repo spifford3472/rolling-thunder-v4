@@ -1174,6 +1174,40 @@ def run_dashboard(
 
         pota_latitude: float | None = None
         pota_longitude: float | None = None
+        callsign_info_callsign = pending_callsign or None
+        callsign_info_target_grid: str | None = None
+
+        if (
+            context_navigation.state.selected is ContextId.FT8
+            and runtime.ft8_panel is not None
+        ):
+            ft8_panel_snapshot = runtime.ft8_panel.snapshot()
+            if ft8_panel_snapshot.active_context is not None:
+                callsign_info_callsign = ft8_panel_snapshot.active_context.remote_callsign
+                callsign_info_target_grid = ft8_panel_snapshot.active_context.remote_grid
+            else:
+                start_status = runtime.latest_ft8_qso_start_status
+                if start_status is not None and start_status.activity is not None:
+                    callsign_info_callsign = start_status.activity.callsign
+                    callsign_info_target_grid = start_status.activity.grid
+                else:
+                    selected_ft8_callsign = runtime.ft8_panel.selected_callsign
+                    if selected_ft8_callsign is not None:
+                        selected_activity = next(
+                            (
+                                activity
+                                for activity in ft8_panel_snapshot.cq_activity
+                                if activity.callsign == selected_ft8_callsign
+                            ),
+                            None,
+                        )
+                        callsign_info_callsign = selected_ft8_callsign
+                        callsign_info_target_grid = (
+                            None if selected_activity is None else selected_activity.grid
+                        )
+                    else:
+                        callsign_info_callsign = None
+
         selected_spot = shared_spot_panel.selected_spot
         if (
             context_navigation.state.selected is ContextId.POTA
@@ -1188,7 +1222,7 @@ def run_dashboard(
 
         if runtime.callsign_info is not None:
             runtime.callsign_info.observe_callsign(
-                pending_callsign or None,
+                callsign_info_callsign,
                 pota_latitude=pota_latitude,
                 pota_longitude=pota_longitude,
             )
@@ -1198,6 +1232,7 @@ def run_dashboard(
                     callsign_info_state.response,
                     pota_latitude=callsign_info_state.target_latitude,
                     pota_longitude=callsign_info_state.target_longitude,
+                    target_grid=callsign_info_target_grid,
                     local_time=datetime.now().astimezone(),
                 )
                 callsign_map_snapshot = None
