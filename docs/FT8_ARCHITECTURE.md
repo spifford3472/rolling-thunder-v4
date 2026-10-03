@@ -1,18 +1,18 @@
-# Rolling Thunder v4.3 Experimental FT8 Architecture
+# Rolling Thunder v4.3 Native FT8 Architecture
 
-Status: Checkpoints 1–9 are accepted; Checkpoint 9.1 production integration is
-implemented on the isolated feature branch and pending owner production smoke
-testing plus explicit merge/deployment approval.
+Status: Checkpoints 1–9.1 are accepted. Native FT8 is an official supported
+Rolling Thunder v4.3 feature.
 
 Date: 2026-10-02
 
-Implementation state: the native FT8 MVP is end-to-end behind disabled-by-default
-feature gates. CP9.1 adds the mobile-readable browser and physical-control
-workflow, verified 20 W / FT8-frequency / SSB-BFO USB preparation before a QSO,
-100 W / SSB-BFO AUTO restoration when leaving FT8, Context Button 3 active-QSO
-abort, same-day per-band worked suppression, live-map FT8 state, and a separate
-schema-15 machine-analysis telemetry pipeline to Forge for both successful and
-failed attempts. Failed attempts remain outside the normal contact/Wavelog path.
+Implementation state: native FT8 is end-to-end and remains protected by explicit
+configuration and operator-authorization gates. CP9.1 provides the mobile-readable
+browser and physical-control workflow, verified 20 W / FT8-frequency / SSB-BFO USB
+preparation before a QSO, 100 W / SSB-BFO AUTO restoration when leaving FT8,
+Context Button 3 active-QSO abort, same-day per-band worked suppression, live-map
+FT8 state, and a separate schema-15 machine-analysis telemetry pipeline to Forge
+for successful, failed, and aborted attempts. Failed and aborted attempts remain
+outside the normal contact/Wavelog path.
 
 The protected production rollback point remains `v4.2.0` at
 `3f5a9c22bc600883b1eb8d868d92e2f58658cc24`. CP9.1 must not be described as
@@ -27,7 +27,7 @@ smoke test and explicitly approves merge/deployment.
 > in the current-status sections. The authoritative current state is Checkpoint
 > 9.1 feature-branch integration, feature-gated and not yet production-deployed.
 
-Rolling Thunder v4.3 explores an optional native FT8 workflow for the installed
+Rolling Thunder v4.3 provides a native FT8 workflow for the installed
 Yaesu FT-891 + DigiRig DR-891 mobile station.
 
 The intended operator experience is:
@@ -46,15 +46,16 @@ single QSO. Rolling Thunder must never automatically select another station,
 continue to another QSO, hop bands autonomously, or create an unattended
 operating mode.
 
-This work is experimental. The protected recovery point remains:
+The historical pre-FT8 recovery point remains:
 
 ```text
 tag:    v4.2.0
 commit: 3f5a9c22bc600883b1eb8d868d92e2f58658cc24
 ```
 
-The v4.3 FT8 feature must remain disabled by default and removable without loss
-of v4.2 contact data or normal Rolling Thunder behavior.
+The v4.3.0 release tag becomes the supported recovery point for the complete
+native-FT8 code set. FT8 remains explicitly configuration-gated so receive and
+transmit authority are never created accidentally.
 
 ## CP9.1 CQ browser presentation and attempt history
 
