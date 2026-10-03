@@ -52,7 +52,7 @@ After acknowledging the terminal FT8 result with the encoder switch, the browser
 - Rotate encoder — move through eligible CQ stations.
 - Short encoder press — start exactly one QSO with the selected station when FT8 transmit is enabled.
 - Button 1 — cycle supported FT8 bands and tune the standard FT8 dial frequency.
-- Button 4 during an active QSO — immediately abort the current FT8 QSO.
+- Context Button 3 during an active QSO — immediately abort the current FT8 QSO.
 - Leaving the FT8 context aborts any active FT8 work before radio restoration.
 
 ## Radio Preparation
