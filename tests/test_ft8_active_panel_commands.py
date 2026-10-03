@@ -196,6 +196,30 @@ def test_ft8_context_button_3_short_aborts_only_active_qso() -> None:
     assert delegate.calls == []
 
 
+def test_ft8_terminal_encoder_press_returns_to_browser() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    panel.mode = FT8PanelMode.TERMINAL
+    commands = FT8AwareActivePanelCommands(navigation, delegate, panel)
+
+    assert commands.activate_selection() is True
+    assert panel.calls == ["return"]
+    assert delegate.calls == []
+
+
+def test_ft8_terminal_context_button_3_returns_to_browser() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    delegate = Delegate()
+    panel = Panel()
+    panel.mode = FT8PanelMode.TERMINAL
+    commands = FT8AwareActivePanelCommands(navigation, delegate, panel)
+
+    assert commands.tertiary() is True
+    assert panel.calls == ["return"]
+    assert delegate.calls == []
+
+
 def test_ft8_back_aborts_active_qso_and_acknowledges_terminal_result() -> None:
     navigation = ContextNavigationController(ContextId.FT8)
     delegate = Delegate()
