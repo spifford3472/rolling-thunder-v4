@@ -43,9 +43,9 @@ from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import build_ft8_browser_viewport
 from rolling_thunder.ft8_widgets import FT8Widgets
-from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
