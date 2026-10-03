@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from json import dumps
 from pathlib import Path
+from typing import cast
 
 from rolling_thunder.ft8.performance import (
     FT8PerformanceAttempt,
@@ -190,7 +191,7 @@ class ForgeFT8PerformanceRepository:
         try:
             with sqlite3.connect(self._database_path) as connection:
                 connection.row_factory = sqlite3.Row
-                return connection.execute(
+                row = connection.execute(
                     """
                     SELECT *
                     FROM ft8_performance_attempts
@@ -198,6 +199,7 @@ class ForgeFT8PerformanceRepository:
                     """,
                     (attempt_id,),
                 ).fetchone()
+                return cast(sqlite3.Row | None, row)
         except sqlite3.Error as error:
             raise ForgeFT8PerformanceStorageError(
                 f"Forge FT8 performance row could not be read: {attempt_id}"
