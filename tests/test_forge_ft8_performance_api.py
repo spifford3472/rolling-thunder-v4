@@ -5,7 +5,6 @@ from json import loads
 from pathlib import Path
 from uuid import UUID
 
-_DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000401")
 
 from rolling_thunder.domain import Contact
 from rolling_thunder.forge_contact_sync import ForgeContactSyncRepository, ForgeContactSyncService
@@ -31,6 +30,8 @@ class FakeWavelog:
         self.upload_count += 1
         return WavelogUploadDisposition.IMPORTED
 
+
+_DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000401")
 
 def _attempt(
     *,
