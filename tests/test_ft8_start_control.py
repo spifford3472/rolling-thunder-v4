@@ -190,4 +190,6 @@ def test_qso_start_error_is_published_without_transmit_retry() -> None:
     assert controller.start(_activity(), attempt_seed=_seed()) is True
 
     assert controller.status.state is FT8QsoStartState.FAILED
-    assert controller.status.error == "selected CQ expired"
+    assert controller.status.error == (
+        "FT8 QSO start failed after radio preparation: selected CQ expired"
+    )
