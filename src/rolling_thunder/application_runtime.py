@@ -43,11 +43,13 @@ from rolling_thunder.ft8.hardware_transmit import (
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.panel import FT8PanelController
+from rolling_thunder.ft8.radio_preparation import FT8RadioPreparationService
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.ft8.session import (
     FT8QsoSessionAuthorization,
     HardwareDigitalTransmitSession,
 )
+from rolling_thunder.ft8.start_control import FT8QsoStartController, FT8QsoStartStatus
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
@@ -183,6 +185,7 @@ class ApplicationRuntime:
     ft8_band_control: FT8BandController | None = None
     ft8_authorization: FT8QsoAuthorizationService | None = None
     ft8_qso: FT8OperatorQsoService | None = None
+    ft8_qso_start: FT8QsoStartController | None = None
     ft8_logging: FT8QsoLoggingService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
@@ -690,13 +693,39 @@ class ApplicationRuntime:
             ft8_logging=ft8_logging,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
+        if (
+            config.ft8.transmit.enabled
+            and isinstance(radio, Ft891Radio)
+            and runtime.ft8_authorization is not None
+            and runtime.ft8_qso is not None
+        ):
+            preparation = FT8RadioPreparationService(radio)
+
+            def start_prepared_ft8_qso(
+                activity: FT8CQActivity,
+                prepared_radio_state: RadioState,
+            ) -> None:
+                assert runtime.ft8_authorization is not None
+                assert runtime.ft8_qso is not None
+                context = runtime.ft8_authorization.authorize(
+                    activity,
+                    radio_state=prepared_radio_state,
+                    gps_state=runtime.latest_gps_state,
+                )
+                runtime.ft8_qso.authorize_and_start(context)
+
+            runtime.ft8_qso_start = FT8QsoStartController(
+                preparation,
+                start_prepared_ft8_qso,
+            )
+
         if ft8_receive is not None:
             runtime.ft8_panel = FT8PanelController(
                 receive_state=lambda: runtime.latest_ft8_receive_state,
                 qso_state=lambda: runtime.latest_ft8_qso_state,
                 qso_context=lambda: runtime.latest_ft8_qso_context,
                 qso_result=lambda: runtime.latest_ft8_qso_result,
-                authorize=runtime.authorize_ft8_qso,
+                authorize=runtime.request_ft8_qso,
                 abort=runtime.abort_ft8_qso,
                 return_to_browser=runtime.return_ft8_to_browser,
                 attempt_count=lambda: (
@@ -715,6 +744,30 @@ class ApplicationRuntime:
         if self.ft8_receive is None:
             return None
         return self.ft8_receive.latest_state
+
+    def request_ft8_qso(self, activity: FT8CQActivity) -> bool:
+        """Accept one selected CQ without blocking the caller on CAT preparation."""
+        if self.ft8_authorization is None or self.ft8_qso is None:
+            return False
+        if self.ft8_qso_start is not None:
+            return self.ft8_qso_start.start(activity)
+        self.authorize_ft8_qso(activity)
+        return True
+
+    @property
+    def latest_ft8_qso_start_status(self) -> FT8QsoStartStatus | None:
+        """Return the immutable preparation/restore status when production prep exists."""
+        if self.ft8_qso_start is None:
+            return None
+        return self.ft8_qso_start.status
+
+    def exit_ft8_context(self) -> bool:
+        """Abort any live QSO first, then request required 100 W/AUTO restore."""
+        if self.ft8_qso is not None:
+            self.ft8_qso.abort()
+        if self.ft8_qso_start is None:
+            return True
+        return self.ft8_qso_start.request_restore()
 
     def authorize_ft8_qso(self, activity: FT8CQActivity) -> FT8QsoContext:
         """Freeze and start one explicitly selected FT8 CQ through application services."""
