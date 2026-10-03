@@ -62,6 +62,17 @@ class FakePreparedRadio:
         )
         return self.state
 
+    def set_mode(self, mode: RadioMode) -> RadioState:
+        self.calls.append(f"mode:{mode.value}")
+        self.state = RadioState(
+            connection_state=self.state.connection_state,
+            frequency=self.state.frequency,
+            mode=mode,
+            transmitting=False,
+            updated_at=self.state.updated_at,
+        )
+        return self.state
+
     def set_power_watts(self, power_watts: int) -> int:
         self.calls.append(f"power:{power_watts}")
         if self.fail_power is not None:
@@ -129,6 +140,7 @@ def test_prepare_for_qso_forces_20w_frequency_and_usb() -> None:
         "refresh",
         "power:20",
         "frequency:14074000",
+        "mode:USB",
         "bfo:usb",
         "refresh",
     ]
