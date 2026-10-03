@@ -11,9 +11,6 @@ from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.receive import FT8ReceiveState
 
 
-FT8_VISIBLE_CQ_COUNT = 8
-
-
 class FT8PanelMode(StrEnum):
     """High-level presentation mode for the FT8 workflow."""
 
@@ -127,37 +124,6 @@ class FT8PanelController:
             return activity[:limit]
 
         start = min(max(0, selected_index - limit + 1), len(activity) - limit)
-        return activity[start : start + limit]
-
-    def visible_cq_activity(
-        self,
-        *,
-        limit: int = FT8_VISIBLE_CQ_COUNT,
-    ) -> tuple[FT8CQActivity, ...]:
-        """Return a selection-following window over stable CQ insertion order."""
-        if limit < 1:
-            raise ValueError("FT8 visible CQ limit must be at least 1")
-        snapshot = self.snapshot()
-        activity = snapshot.cq_activity
-        if len(activity) <= limit:
-            return activity
-
-        selected = self._selected_callsign
-        if selected is None:
-            return activity[:limit]
-
-        selected_index = next(
-            (
-                index
-                for index, item in enumerate(activity)
-                if item.callsign == selected
-            ),
-            0,
-        )
-        start = min(
-            max(0, selected_index - limit + 1),
-            len(activity) - limit,
-        )
         return activity[start : start + limit]
 
     @property
