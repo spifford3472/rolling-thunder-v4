@@ -41,9 +41,13 @@ receive/decode
     -> return to the CQ browser
 ```
 
-The operator's explicit station selection is the authorization event for that
-single QSO. Rolling Thunder must never automatically select another station,
-continue to another QSO, hop bands autonomously, or create an unattended
+The operator's explicit action on one eligible station is the authorization
+event for that single QSO. In v4.3.0 this is a short rotary-encoder press on the
+selected CQ station. A future explicit station-directed voice command may provide
+the same typed authorization through the same checks. Merely highlighting a
+station, decoding traffic, hearing a wake word, or receiving ambiguous speech is
+not authorization. Rolling Thunder must never automatically select another
+station, continue to another QSO, hop bands autonomously, or create an unattended
 operating mode.
 
 The historical pre-FT8 recovery point remains:
