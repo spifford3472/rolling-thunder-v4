@@ -1,16 +1,31 @@
 # Rolling Thunder v4.3 Experimental FT8 Architecture
 
-Status: Checkpoints 1–9 implemented and CP9 acceptance complete; merge/deployment pending explicit owner approval
+Status: Checkpoints 1–9 are accepted; Checkpoint 9.1 production integration is
+implemented on the isolated feature branch and pending owner production smoke
+testing plus explicit merge/deployment approval.
+
 Date: 2026-10-02
-Implementation state: the native FT8 MVP is implemented end to end behind disabled-by-default feature gates. Continuous receive, decoding, CQ browsing, explicit one-station authorization, bounded QSO execution, Enhanced-CAT/DigiRig transmit, frozen-grid logging, schema-14 FT8 persistence, and normal ContactSyncService/Forge/Wavelog integration are present. Installed-hardware CP9 acceptance includes a completed real 5 W QSO, fail-closed error paths, clean shutdown, and Raspberry Pi performance validation. Production remains on the protected v4.2-compatible deployment until separately approved.
+
+Implementation state: the native FT8 MVP is end-to-end behind disabled-by-default
+feature gates. CP9.1 adds the mobile-readable browser and physical-control
+workflow, verified 20 W / FT8-frequency / SSB-BFO USB preparation before a QSO,
+100 W / SSB-BFO AUTO restoration when leaving FT8, Context Button 3 active-QSO
+abort, same-day per-band worked suppression, live-map FT8 state, and a separate
+schema-15 machine-analysis telemetry pipeline to Forge for both successful and
+failed attempts. Failed attempts remain outside the normal contact/Wavelog path.
+
+The protected production rollback point remains `v4.2.0` at
+`3f5a9c22bc600883b1eb8d868d92e2f58658cc24`. CP9.1 must not be described as
+production-deployed until the owner completes the required installed-hardware
+smoke test and explicitly approves merge/deployment.
 
 ## Purpose
 
 > Current-state note: sections below that describe individual checkpoints are retained
 > as historical design records. Statements such as "future", "proposed", or "blocked
 > from live RF" apply to the checkpoint being documented unless explicitly repeated
-> in the current-status sections. The authoritative current state is Checkpoint 9
-> acceptance complete, feature-gated, and not yet production-deployed.
+> in the current-status sections. The authoritative current state is Checkpoint
+> 9.1 feature-branch integration, feature-gated and not yet production-deployed.
 
 Rolling Thunder v4.3 explores an optional native FT8 workflow for the installed
 Yaesu FT-891 + DigiRig DR-891 mobile station.
@@ -164,7 +179,9 @@ Checkpoint 7 introduced the immutable terminal QSO result. Checkpoint 8 then
 connected only successful `COMPLETED` results to the existing local-first
 contact pipeline with a stable QSO UUID, frozen local grid, signed FT8 reports,
 schema-14 `RadioMode.FT8`, and ADIF `MODE=FT8`. Checkpoint 9 composes that
-path into the dashboard and installed-hardware runtime.
+path into the dashboard and installed-hardware runtime. Checkpoint 9.1 then adds
+schema 15 for the separate FT8 performance outbox; the contact schema semantics
+remain unchanged while machine-analysis telemetry follows its own sync/API path.
 
 FT8 receive worker
         |
