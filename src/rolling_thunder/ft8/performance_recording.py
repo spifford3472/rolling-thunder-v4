@@ -11,7 +11,7 @@ from rolling_thunder.ft8.authorization import freeze_ft8_location
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.distance import maidenhead_distance_km
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoState
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoState
 from rolling_thunder.ft8.performance import (
     FT8AttemptOutcome,
     FT8AttemptSeed,
@@ -61,6 +61,7 @@ def build_ft8_attempt_seed(
         attempt_id=attempt_id or uuid4(),
         callsign=activity.callsign,
         started_at_utc=started_at_utc,
+        selection_period_index=FT8Period.from_utc(started_at_utc).index,
         band=band_text,
         dial_frequency_hz=frequency_hz,
         local_grid=local_grid,
