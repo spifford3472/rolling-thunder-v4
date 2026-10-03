@@ -556,6 +556,11 @@ class ApplicationRuntime:
                 radio.get_state,
                 configure_receive_settings=receive_settings_callback,
                 restore_normal_settings=normal_settings_callback,
+                band_changed=(
+                    ft8_receive.clear_cq_activity
+                    if ft8_receive is not None
+                    else None
+                ),
             )
 
         ft8_authorization: FT8QsoAuthorizationService | None = None
