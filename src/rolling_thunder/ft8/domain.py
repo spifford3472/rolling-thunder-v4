@@ -170,6 +170,7 @@ class FT8QsoContext:
     longitude: float | None = None
     location_label: str | None = None
     remote_grid: str | None = None
+    pota_cq: bool = False
     qso_id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
