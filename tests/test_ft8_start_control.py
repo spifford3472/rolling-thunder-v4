@@ -1,9 +1,11 @@
 """Tests for background FT8 QSO preparation/start and exit restore."""
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period
+from rolling_thunder.ft8.performance import FT8AttemptSeed
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationError,
     FT8RadioPreparationService,
@@ -20,6 +22,21 @@ def _activity() -> FT8CQActivity:
         dt_seconds=0.1,
         audio_frequency_hz=1500,
         grid="FN31",
+    )
+
+
+def _seed() -> FT8AttemptSeed:
+    return FT8AttemptSeed(
+        attempt_id=UUID("00000000-0000-0000-0000-000000000901"),
+        callsign="K1ABC",
+        started_at_utc=datetime(2026, 10, 2, 20, 0, tzinfo=UTC),
+        band="20m",
+        dial_frequency_hz=14_074_000,
+        local_grid="EM79xm",
+        remote_grid="FN31",
+        audio_frequency_hz=1500,
+        selected_snr_db=-8,
+        pota_cq=False,
     )
 
 
@@ -73,13 +90,13 @@ def test_successful_prepare_starts_existing_qso_path_only_after_verification() -
     starts: list[tuple[str, int]] = []
     controller = FT8QsoStartController(
         FT8RadioPreparationService(radio),
-        lambda activity, state: starts.append(
+        lambda activity, state, _seed: starts.append(
             (activity.callsign, state.frequency.hz if state.frequency else 0)
         ),
         worker_launcher=_run_now,
     )
 
-    assert controller.start(_activity()) is True
+    assert controller.start(_activity(), attempt_seed=_seed()) is True
 
     assert starts == [("K1ABC", 14_074_000)]
     assert controller.status.state is FT8QsoStartState.STARTED
@@ -93,11 +110,11 @@ def test_prepare_failure_never_calls_qso_starter_and_rolls_back() -> None:
     starts: list[str] = []
     controller = FT8QsoStartController(
         FT8RadioPreparationService(radio),
-        lambda activity, state: starts.append(activity.callsign),
+        lambda activity, state, _seed: starts.append(activity.callsign),
         worker_launcher=_run_now,
     )
 
-    assert controller.start(_activity()) is True
+    assert controller.start(_activity(), attempt_seed=_seed()) is True
 
     assert starts == []
     assert controller.status.state is FT8QsoStartState.FAILED
@@ -113,11 +130,11 @@ def test_exit_requested_during_preparation_skips_qso_start_and_restores() -> Non
     queued: list[object] = []
     controller = FT8QsoStartController(
         FT8RadioPreparationService(radio),
-        lambda activity, state: starts.append(activity.callsign),
+        lambda activity, state, _seed: starts.append(activity.callsign),
         worker_launcher=queued.append,
     )
 
-    assert controller.start(_activity()) is True
+    assert controller.start(_activity(), attempt_seed=_seed()) is True
     assert controller.status.state is FT8QsoStartState.PREPARING
     assert controller.request_restore() is True
 
@@ -136,7 +153,7 @@ def test_explicit_exit_restore_is_background_and_idempotent_while_running() -> N
     queued: list[object] = []
     controller = FT8QsoStartController(
         FT8RadioPreparationService(radio),
-        lambda activity, state: None,
+        lambda activity, state, seed: None,
         worker_launcher=queued.append,
     )
 
@@ -156,8 +173,12 @@ def test_explicit_exit_restore_is_background_and_idempotent_while_running() -> N
 def test_qso_start_error_is_published_without_transmit_retry() -> None:
     radio = Radio()
 
-    def fail_start(activity: FT8CQActivity, state: RadioState) -> None:
-        del activity, state
+    def fail_start(
+        activity: FT8CQActivity,
+        state: RadioState,
+        seed: FT8AttemptSeed,
+    ) -> None:
+        del activity, state, seed
         raise RuntimeError("selected CQ expired")
 
     controller = FT8QsoStartController(
@@ -166,7 +187,7 @@ def test_qso_start_error_is_published_without_transmit_retry() -> None:
         worker_launcher=_run_now,
     )
 
-    assert controller.start(_activity()) is True
+    assert controller.start(_activity(), attempt_seed=_seed()) is True
 
     assert controller.status.state is FT8QsoStartState.FAILED
     assert controller.status.error == "selected CQ expired"
