@@ -191,8 +191,8 @@ def test_ft8_context_button_3_short_aborts_only_active_qso() -> None:
     assert panel.calls == ["abort"]
 
     panel.mode = FT8PanelMode.TERMINAL
-    assert commands.tertiary() is False
-    assert panel.calls == ["abort"]
+    assert commands.tertiary() is True
+    assert panel.calls == ["abort", "return"]
     assert delegate.calls == []
 
 
