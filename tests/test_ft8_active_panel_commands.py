@@ -186,6 +186,31 @@ def test_ft8_back_aborts_active_qso_and_acknowledges_terminal_result() -> None:
     assert delegate.calls == []
 
 
+def test_entering_and_leaving_ft8_context_apply_receive_lifecycle() -> None:
+    navigation = ContextNavigationController(ContextId.BROWSE)
+    delegate = Delegate()
+    panel = Panel()
+    enters: list[str] = []
+    exits: list[str] = []
+    commands = FT8AwareActivePanelCommands(
+        navigation,
+        delegate,
+        panel,
+        enter_ft8=lambda: enters.append("enter") is None,
+        exit_ft8=lambda: exits.append("exit") is None,
+    )
+
+    navigation.select(ContextId.FT8)
+    commands.activate_context(ContextId.FT8)
+    assert enters == ["enter"]
+    assert exits == []
+
+    navigation.select(ContextId.POTA)
+    commands.activate_context(ContextId.POTA)
+    assert enters == ["enter"]
+    assert exits == ["exit"]
+
+
 def test_leaving_ft8_context_requests_restore_once() -> None:
     navigation = ContextNavigationController(ContextId.FT8)
     delegate = Delegate()
