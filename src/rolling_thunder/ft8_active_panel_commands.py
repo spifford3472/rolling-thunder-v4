@@ -82,7 +82,12 @@ class FT8AwareActivePanelCommands:
         return True
 
     def tertiary_long(self) -> bool:
-        return False if self._ft8_is_active() else self._delegate.tertiary_long()
+        if not self._ft8_is_active():
+            return self._delegate.tertiary_long()
+        if self._ft8_panel.snapshot().mode is not FT8PanelMode.ACTIVE:
+            return False
+        self._ft8_panel.abort()
+        return True
 
     def move_previous(self) -> bool:
         if not self._ft8_is_active():
