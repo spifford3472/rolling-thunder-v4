@@ -22,6 +22,9 @@ _CTCSS_BEHAVIOR_REPLY_PATTERN: Final = re.compile(rb"CT0([0-3]);")
 _METER_REPLY_PATTERN: Final = re.compile(rb"RM([456])([0-9]{3});")
 _POWER_REPLY_PATTERN: Final = re.compile(rb"PC([0-9]{3});")
 _SSB_BFO_REPLY_PATTERN: Final = re.compile(rb"EX1107([0-2]);")
+_PREAMP_REPLY_PATTERN: Final = re.compile(rb"PA0([01]);")
+_NARROW_REPLY_PATTERN: Final = re.compile(rb"NA0([01]);")
+_NOISE_BLANKER_REPLY_PATTERN: Final = re.compile(rb"NB0([01]);")
 
 _MODE_TO_CAT: Final[dict[RadioMode, bytes]] = {
     RadioMode.LSB: b"1",
@@ -280,6 +283,79 @@ def parse_meter_reply(reply: bytes, *, expected_selector: int) -> int:
             f"FT-891 meter reply is outside the documented 0-255 range: {value}."
         )
     return value
+
+
+
+def encode_read_preamp_enabled() -> bytes:
+    """Read FT-891 PRE-AMP/IPO state for VFO-A."""
+    return b"PA0;"
+
+
+def encode_set_preamp_enabled(enabled: bool) -> bytes:
+    """Set FT-891 VFO-A preamp; enabled=False is IPO active."""
+    if type(enabled) is not bool:
+        raise TypeError("enabled must be a bool")
+    return b"PA01;" if enabled else b"PA00;"
+
+
+def parse_preamp_enabled_reply(reply: bytes) -> bool:
+    """Parse FT-891 PRE-AMP/IPO state; True means AMP, False means IPO."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _PREAMP_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 PRE-AMP reply: {reply!r}; expected PA0x;."
+        )
+    return match.group(1) == b"1"
+
+
+def encode_read_narrow_enabled() -> bytes:
+    """Read FT-891 VFO-A NARROW state."""
+    return b"NA0;"
+
+
+def encode_set_narrow_enabled(enabled: bool) -> bytes:
+    """Set FT-891 VFO-A NARROW state."""
+    if type(enabled) is not bool:
+        raise TypeError("enabled must be a bool")
+    return b"NA01;" if enabled else b"NA00;"
+
+
+def parse_narrow_enabled_reply(reply: bytes) -> bool:
+    """Parse FT-891 VFO-A NARROW state."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _NARROW_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 NARROW reply: {reply!r}; expected NA0x;."
+        )
+    return match.group(1) == b"1"
+
+
+def encode_read_noise_blanker_enabled() -> bytes:
+    """Read FT-891 VFO-A Noise Blanker state."""
+    return b"NB0;"
+
+
+def encode_set_noise_blanker_enabled(enabled: bool) -> bytes:
+    """Set FT-891 VFO-A Noise Blanker state."""
+    if type(enabled) is not bool:
+        raise TypeError("enabled must be a bool")
+    return b"NB01;" if enabled else b"NB00;"
+
+
+def parse_noise_blanker_enabled_reply(reply: bytes) -> bool:
+    """Parse FT-891 VFO-A Noise Blanker state."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _NOISE_BLANKER_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 Noise Blanker reply: {reply!r}; expected NB0x;."
+        )
+    return match.group(1) == b"1"
 
 
 def encode_read_power() -> bytes:
