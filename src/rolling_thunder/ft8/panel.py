@@ -42,7 +42,7 @@ class FT8PanelController:
         qso_state: Callable[[], FT8QsoState],
         qso_context: Callable[[], FT8QsoContext | None],
         qso_result: Callable[[], FT8QsoResult | None],
-        authorize: Callable[[FT8CQActivity], FT8QsoContext],
+        authorize: Callable[[FT8CQActivity], bool],
         abort: Callable[[], None],
         return_to_browser: Callable[[], FT8QsoResult | None],
         attempt_count: Callable[[], int] | None = None,
@@ -142,18 +142,18 @@ class FT8PanelController:
         self._selected_callsign = None
         return True
 
-    def activate_selection(self) -> FT8QsoContext | None:
-        """Authorize exactly the highlighted CQ station, if one exists."""
+    def activate_selection(self) -> bool:
+        """Request exactly the highlighted CQ station, if one exists."""
         snapshot = self.snapshot()
         if not snapshot.authorization_enabled:
-            return None
+            return False
         callsign = self.selected_callsign
         if callsign is None:
-            return None
+            return False
         return self.select_callsign(callsign)
 
-    def select_callsign(self, callsign: str) -> FT8QsoContext:
-        """Authorize exactly one currently visible CQ station."""
+    def select_callsign(self, callsign: str) -> bool:
+        """Request exactly one currently visible CQ station."""
         snapshot = self.snapshot()
         if snapshot.mode is not FT8PanelMode.BROWSE:
             raise RuntimeError("cannot select another FT8 CQ while a QSO is active or terminal")
@@ -166,9 +166,10 @@ class FT8PanelController:
         )
         if len(matches) != 1:
             raise ValueError("selected FT8 CQ must identify exactly one current station")
-        context = self._authorize(matches[0])
-        self._selected_callsign = None
-        return context
+        accepted = self._authorize(matches[0])
+        if accepted:
+            self._selected_callsign = None
+        return accepted
 
     def _move_selection(self, direction: int) -> str | None:
         snapshot = self.snapshot()
