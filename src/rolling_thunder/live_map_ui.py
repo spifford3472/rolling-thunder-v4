@@ -1061,15 +1061,15 @@ class LiveMapWidgets:
         )
 
         if ft8_status is not None:
-            banner_top = 232
-            banner_bottom = 302
+            banner_top = _INFO_BOX_BOTTOM + 14
+            banner_bottom = banner_top + 70
             canvas.create_rectangle(
                 12,
                 banner_top,
                 width - 12,
                 banner_bottom,
                 fill=_STATUS_BACKGROUND,
-                outline=_ACCENT,
+                outline=_HEALTHY,
                 width=4,
                 tags="map-overlay",
             )
