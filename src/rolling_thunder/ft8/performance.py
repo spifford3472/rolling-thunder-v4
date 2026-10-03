@@ -29,6 +29,32 @@ class FT8AttemptOutcome(StrEnum):
     PREPARATION_FAILED = "preparation_failed"
 
 
+class FT8AttemptSeed(DomainModel):
+    """Frozen operator-selection metadata established before radio preparation."""
+
+    attempt_id: UUID
+    callsign: Callsign
+    started_at_utc: datetime
+    band: str | None = Field(default=None, max_length=16)
+    dial_frequency_hz: int | None = Field(default=None, gt=0, le=300_000_000_000)
+    local_grid: MaidenheadGrid | None = None
+    remote_grid: MaidenheadGrid | None = None
+    audio_frequency_hz: int = Field(gt=0)
+    selected_snr_db: int = Field(ge=-50, le=49)
+    pota_cq: bool = False
+
+    @field_validator("started_at_utc")
+    @classmethod
+    def normalize_started_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("must be timezone-aware")
+        return value.astimezone(UTC)
+
+    @field_serializer("started_at_utc")
+    def serialize_started_at(self, value: datetime) -> str:
+        return value.isoformat().replace("+00:00", "Z")
+
+
 class FT8PerformanceAttempt(DomainModel):
     """One immutable terminal FT8 attempt record."""
 
@@ -43,8 +69,8 @@ class FT8PerformanceAttempt(DomainModel):
     ended_at_utc: datetime
     utc_date: date
 
-    band: str = Field(min_length=1, max_length=16)
-    dial_frequency_hz: int = Field(gt=0, le=300_000_000_000)
+    band: str | None = Field(default=None, max_length=16)
+    dial_frequency_hz: int | None = Field(default=None, gt=0, le=300_000_000_000)
     mode: str = Field(default="FT8", pattern=r"^FT8$")
     tx_power_target_watts: int = Field(default=20, ge=1, le=100)
 
