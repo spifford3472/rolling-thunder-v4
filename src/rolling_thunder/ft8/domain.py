@@ -147,7 +147,7 @@ class FT8CQActivity:
 
     @property
     def last_cq(self) -> FT8Period:
-        """Return the most recent CQ period for lifecycle policy."""
+        """Return the most recent CQ period independently of other traffic."""
         return self.last_period
 
 
