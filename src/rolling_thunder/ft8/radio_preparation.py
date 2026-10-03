@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
+from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
 from rolling_thunder.ft891_cat import Ft891SsbBfo
 from rolling_thunder.radio import RadioError
@@ -25,6 +25,25 @@ class FT8PreparedRadio(Protocol):
     def set_power_watts(self, power_watts: int) -> int: ...
 
     def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo: ...
+
+
+class FT8ReceiveConfiguredRadio(Protocol):
+    """Receive-only FT-891 settings owned by the FT8 page."""
+
+    def set_mode(self, mode: RadioMode) -> RadioState: ...
+    def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo: ...
+    def set_preamp_enabled(self, enabled: bool) -> bool: ...
+    def set_narrow_enabled(self, enabled: bool) -> bool: ...
+    def set_noise_blanker_enabled(self, enabled: bool) -> bool: ...
+
+
+def configure_ft8_receive_settings(radio: FT8ReceiveConfiguredRadio) -> None:
+    """Force and verify the receive settings required while the FT8 page owns the radio."""
+    radio.set_mode(RadioMode.USB)
+    radio.set_ssb_bfo(Ft891SsbBfo.USB)
+    radio.set_preamp_enabled(True)
+    radio.set_narrow_enabled(False)
+    radio.set_noise_blanker_enabled(False)
 
 
 class FT8RadioPreparationError(RadioError):
