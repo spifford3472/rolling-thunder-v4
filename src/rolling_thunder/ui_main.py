@@ -352,6 +352,11 @@ def run_dashboard(
             context_navigation,
             active_panel_commands,
             runtime.ft8_panel,
+            cycle_band=(
+                None
+                if runtime.ft8_band_control is None
+                else runtime.ft8_band_control.cycle_band
+            ),
         )
 
     status_monitor = build_status_monitor(config)
