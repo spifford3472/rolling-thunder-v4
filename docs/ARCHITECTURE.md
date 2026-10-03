@@ -862,21 +862,37 @@ rules, deployment, and limitations.
 
 ## v4.3 Experimental FT8 architecture
 
-Status: experimental runtime integration through Checkpoint 9; disabled by default.
-Production deployment and schema migration remain separately owner-approved.
+Status: Checkpoint 9.1 integration is implemented on the isolated feature branch,
+disabled by default, and pending owner production smoke testing and explicit
+merge/deployment approval.
 
 The native FT8 path now includes:
 
 - feature-gated continuous DigiRig receive and `ft8_lib` decoding;
-- CQ activity publication and a presentation-safe browser/controller boundary;
+- a mobile-readable CQ table immediately after Browse in physical navigation;
+- stable insertion-order CQ browsing with selection-following scrolling;
+- six-period inactivity expiry, repeated-CQ lifecycle aging, a transient
+  10-second non-CQ activity indication, and explicit POTA CQ metadata;
+- Button 1 automated FT8 band cycling across 80/40/20/15/10 meters;
+- rotary selection and short-press authorization of exactly one CQ station;
+- Context Button 3 as the visible one-shot active-QSO abort control;
 - one explicitly operator-authorized bounded QSO at a time;
 - a narrow FT-891/DigiRig transmit executor using serialized Enhanced CAT ownership;
-- frozen QSO context, including the local Maidenhead grid, frequency, parity,
-  audio frequency, callsign, remote grid when known, and stable QSO UUID;
+- verified FT-891 CAT preparation before each QSO: 20 W, the selected band's
+  standard FT8 dial frequency, and menu 11-07 SSB-BFO = USB;
+- verified FT8-screen exit restoration: 100 W and menu 11-07 SSB-BFO = AUTO;
+- frozen QSO context, including local Maidenhead grid, frequency, parity,
+  audio frequency, callsign, remote grid when known, POTA metadata, and stable
+  QSO/attempt UUID;
 - successful-contact persistence through the normal local SQLite -> sync -> Forge
   -> Wavelog path with ADIF `MODE=FT8`;
-- continuous receive buffering introduced by Checkpoint 8.1;
-- Checkpoint 9 dashboard/control integration and lifecycle hardening.
+- same-day UTC callsign+band suppression for completed FT8 contacts;
+- a separate schema-15 local FT8 performance outbox and Forge structured
+  FT8-performance table for both successful and failed attempts, including UTC
+  timestamps and failure reasons; failed attempts never enter the contact log
+  or Wavelog;
+- map-side FT8 state presentation without hiding or blocking the live map;
+- continuous receive buffering introduced by Checkpoint 8.1.
 
 The generic `Radio` protocol remains receive-side. FT8 transmit authority is not
 added to that interface and is available only through the separate bounded FT8
@@ -884,20 +900,24 @@ QSO capability when both `ft8.enabled` and `ft8.transmit.enabled` are true.
 Voice, AI, network services, unrelated panels, and background discovery cannot
 authorize FT8 transmission.
 
+Enhanced CAT remains single-owner and serialized through `Ft891Radio`. Power,
+frequency, mode/menu preparation, meter reads, and CAT PTT therefore share the
+same adapter lock rather than opening a second serial owner. The DigiRig audio
+path remains isolated behind typed capture/playback boundaries.
+
 When FT8 is disabled, no FT8 decoder, capture/playback worker, QSO worker,
 encoder, playback device, or FT8-specific CAT/PTT authority is composed. With
 receive enabled but transmit disabled, CQ browsing is available while encoder,
 playback, physical executor, and QSO transmit authority remain absent.
 
-The installed target hardware is the Yaesu FT-891 + DigiRig DR-891. Enhanced CAT
-remains single-owner and serialized through the existing FT-891 adapter. DigiRig
-receive/playback remain typed audio boundaries, with FT8 payload on the left
-channel and digital silence on the right during transmit.
+Checkpoint 9.1 remains a production-readiness branch until the owner completes
+the required Raspberry Pi UI/control/radio/Forge smoke tests and explicitly
+approves merge and deployment. The protected `v4.2.0` rollback point is
+unchanged.
 
 The checkpoint-specific sections below are retained as historical development
 records. Where they say a later capability did not yet exist, that statement
-applies to that checkpoint, not to the current merged v4.3 experimental state.
-
+applies to that checkpoint, not to the current experimental state.
 
 ## Experimental v4.3 FT8 domain foundation
 
