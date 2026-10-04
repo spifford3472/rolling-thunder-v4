@@ -18,6 +18,7 @@ from rolling_thunder.forge_snapshot_repository import (
 )
 from rolling_thunder.forge_spot_provider import (
     ForgeProviderSlice,
+    ForgeRetainedSliceConsumer,
     ForgeSpotProvider,
     ForgeSpotProviderError,
 )
@@ -271,16 +272,20 @@ class ForgeSpotAggregationService:
             provider_slice.provider: provider_slice
             for provider_slice in stored.provider_slices
         }
+        for provider, provider_slice in self._active_slices.items():
+            adapter = self._providers.get(provider)
+            if isinstance(adapter, ForgeRetainedSliceConsumer):
+                adapter.seed_retained_slice(provider_slice)
         for provider in set(self._providers) | set(self._active_slices):
-            provider_slice = self._active_slices.get(provider)
-            if provider_slice is None:
+            active_slice = self._active_slices.get(provider)
+            if active_slice is None:
                 self._provider_health[provider] = self._starting_health(provider)
             else:
                 self._provider_health[provider] = ForgeProviderHealth(
                     provider=provider,
                     status=ForgeProviderHealthStatus.DEGRADED,
-                    active_spot_count=len(provider_slice.spots),
-                    last_success_at=provider_slice.fetched_at,
+                    active_spot_count=len(active_slice.spots),
+                    last_success_at=active_slice.fetched_at,
                     last_error="Using retained Forge snapshot until a live refresh succeeds.",
                 )
 

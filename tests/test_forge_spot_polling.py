@@ -59,6 +59,12 @@ class RecordingAggregationService:
         self.state = state_for_revision(self.refresh_count)
         return self.state
 
+    def refresh_provider(self, provider: SpotProvider) -> ForgeAggregationState:
+        assert provider is SpotProvider.DX
+        self.refresh_count += 1
+        self.state = state_for_revision(self.refresh_count)
+        return self.state
+
 
 def state_for_revision(revision: int) -> ForgeAggregationState:
     status = (
@@ -162,6 +168,46 @@ def test_reentrant_scheduled_callback_does_not_overlap() -> None:
     assert service.refresh_count == 1
     assert polling.refresh_count == 1
     assert polling.is_refreshing is False
+
+
+def test_dx_cache_publication_uses_independent_fast_local_cadence() -> None:
+    service = RecordingAggregationService()
+    scheduler = RecordingScheduler()
+    polling = ForgeSpotPollingService(  # type: ignore[arg-type]
+        service,
+        scheduler,
+        interval_s=60,
+        dx_cache_publish_interval_s=5,
+        refresh_on_start=False,
+    )
+
+    polling.start()
+
+    assert scheduler.intervals == [60, 5]
+
+    scheduler.polls[1].callback()
+
+    assert service.refresh_count == 1
+    assert polling.latest_state.revision == 1
+
+
+def test_stop_cancels_full_and_dx_cache_pollers() -> None:
+    service = RecordingAggregationService()
+    scheduler = RecordingScheduler()
+    polling = ForgeSpotPollingService(  # type: ignore[arg-type]
+        service,
+        scheduler,
+        interval_s=60,
+        dx_cache_publish_interval_s=5,
+        refresh_on_start=False,
+    )
+
+    polling.start()
+    polling.stop()
+
+    assert len(scheduler.polls) == 2
+    assert scheduler.polls[0].cancelled is True
+    assert scheduler.polls[1].cancelled is True
 
 
 def test_start_rejects_duplicate_lifecycle_start() -> None:

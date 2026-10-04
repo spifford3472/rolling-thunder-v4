@@ -134,7 +134,10 @@ def test_enabled_provider_combinations_compose_without_external_work(
 
 
 def test_no_enabled_provider_is_rejected(tmp_path: Path) -> None:
-    with pytest.raises(ForgeRuntimeConfigurationError, match="POTA or DXSpider"):
+    with pytest.raises(
+        ForgeRuntimeConfigurationError,
+        match="POTA, DXSpider, or DX Summit",
+    ):
         build_forge_runtime(
             config_for(tmp_path, pota=False, dxspider=False),
             server_factory=server_factory,

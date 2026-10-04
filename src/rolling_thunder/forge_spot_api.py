@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 from pydantic import ValidationError
 
 from rolling_thunder.domain import DomainModel
+from rolling_thunder.forge_dx_connection import ForgeDxConnectionStatus
 from rolling_thunder.forge_mobile_location import (
     ForgeMobileLocationService,
     ForgeMobileLocationStorageError,
@@ -47,6 +48,15 @@ class ForgeAggregationStateSource(Protocol):
 
     def get_state(self) -> ForgeAggregationState:
         """Return one immutable already-published aggregation state."""
+        ...
+
+
+class ForgeDxConnectionStatusSource(Protocol):
+    """Read-only persistent DX connection status boundary."""
+
+    @property
+    def connection_status(self) -> ForgeDxConnectionStatus:
+        """Return current connection status without provider I/O."""
         ...
 
 
@@ -135,6 +145,7 @@ class ForgeHealthResponse(DomainModel):
     snapshot_generated_at: datetime
     active_spot_count: int
     providers: tuple[ForgeApiProviderHealth, ...]
+    dx_connection: ForgeDxConnectionStatus | None = None
     weather: ForgeApiWeatherHealth | None = None
     startup_storage_error: str | None = None
     persistence_error: str | None = None
@@ -193,10 +204,12 @@ class ForgeSpotApiApplication:
         *,
         mobile_location: ForgeMobileLocationService | None = None,
         weather: ForgeWeatherStateSource | None = None,
+        dx_connection: ForgeDxConnectionStatusSource | None = None,
     ) -> None:
         self._state_source = state_source
         self._mobile_location = mobile_location
         self._weather = weather
+        self._dx_connection = dx_connection
 
     def handle(
         self,
@@ -249,6 +262,11 @@ class ForgeSpotApiApplication:
                 snapshot_generated_at=state.snapshot.generated_at,
                 active_spot_count=len(state.snapshot.spots),
                 providers=providers,
+                dx_connection=(
+                    self._dx_connection.connection_status
+                    if self._dx_connection is not None
+                    else None
+                ),
                 weather=self._weather_health(),
                 startup_storage_error=state.startup_storage_error,
                 persistence_error=state.persistence_error,
