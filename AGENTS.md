@@ -1,72 +1,157 @@
 # Rolling Thunder v4 Agent Instructions
 
-## Required reading before any code change
+## Purpose
 
-Before modifying code, read:
+Rolling Thunder v4 is a production in-vehicle amateur-radio operating, logging,
+situational-awareness, and radio-control system. The primary mobile runtime is
+the Raspberry Pi host `anvilmobile`; the Forge host provides reusable backend
+services and heavier/provider-facing work.
 
-1. `docs/engineering/index.md`
-2. the feature guide for the area being changed
-3. every shared-component guide identified as a dependency of that feature
-4. the relevant existing subsystem documentation linked from the engineering guide
-5. the tests that protect the affected behavior
+This file is intentionally concise. It is a routing and guardrail document, not
+the full engineering manual.
 
-Do not assume a component belongs to the screen where it is visible. Rolling Thunder intentionally shares services, state, widgets, overlays, logging, tuning, location, and Forge APIs across multiple screens.
+## Required Reading
 
-## Shared-code protection rule
+Before changing code, read:
 
-A feature-scoped task does **not** grant ownership of shared behavior.
+1. `AGENTS.md`
+2. `docs/engineering/index.md`
+3. `docs/engineering/ownership-and-dependencies.md`
+4. `docs/engineering/shared-component-contracts.md`
+5. the feature/service guide named for the area being changed
+6. the relevant existing subsystem document(s) linked by the engineering index
+7. the source files and tests for the requested change
 
-Before editing any shared component, identify and review all documented consumers and their regression tests. Changes to shared components must preserve the contracts of every consumer unless the repository owner explicitly approves a cross-feature behavior change.
+For Forge work, also read `docs/engineering/forge-services.md`.
+For operator-visible behavior, also read `docs/ROLLING_THUNDER_OPERATORS_GUIDE.md`.
 
-Examples include callsign/contact-information overlays, contact logging, GPS/current-grid state, radio control, map services, shared spot presentation/tuning, status messages, and Forge clients.
+The current branch and repository code are authoritative. Historical checkpoint
+documents are context, not permission to undo later behavior.
 
-## Documentation is part of the code
+## Scope and Ownership
 
-Engineering documentation must remain synchronized with implementation.
+Do not develop directly on `main`. Make the smallest change that satisfies the
+assigned task. Do not perform unrelated refactors, renames, dependency changes,
+or architecture rewrites.
 
-If a change modifies module responsibility, public behavior, data ownership, lifecycle, dependencies, persistence, API contracts, hardware authority, UI behavior, or cross-feature consumers, update the applicable documentation in the **same branch and pull request**.
+A feature-scoped task does **not** grant ownership of shared code.
 
-If a new source module/service/screen is added, add it to the engineering source catalog and the applicable feature/subsystem guide. If a module is removed or replaced, remove or correct stale documentation.
+Before modifying a shared component:
 
-If a shared component gains or loses consumers, update `docs/engineering/shared-component-consumers.md`.
+1. identify its documented consumers;
+2. inspect the relevant regression tests for those consumers;
+3. preserve the shared contract unless the task explicitly changes it; and
+4. update the shared-component documentation when the contract or consumer set changes.
 
-If operator-visible behavior changes, update `docs/ROLLING_THUNDER_OPERATORS_GUIDE.md`.
+Examples of shared boundaries include callsign information, contact logging,
+GPS/current grid, shared spot presentation/tuning, map state, status messages,
+radio control, physical controls, Forge clients, and persistence.
 
-Documentation updates are part of Definition of Done. An agent must not claim a task is complete while its engineering or operator documentation is stale.
+## Documentation Is Part of the Change
 
-## Forge is a reusable backend platform
+Documentation maintenance is mandatory.
 
-Forge processes must be designed as reusable backend services, not as private implementation details coupled only to the Rolling Thunder dashboard.
+A code change is not complete when it leaves the engineering or operator
+documentation stale.
 
-New or modified Forge functionality should expose stable, typed/service-oriented boundaries that can be called by other authorized programs in the future. Keep provider credentials, persistence, polling/streaming lifecycles, normalization, caching, and failure handling behind those service boundaries.
+In the same branch/PR:
 
-Do not place Rolling-Thunder-screen-specific presentation logic into Forge. Do not require a Rolling Thunder UI process to invoke reusable Forge capabilities. Preserve API compatibility where practical and document intentional contract changes.
+- update the appropriate engineering guide when responsibility, dependencies,
+  lifecycle, data ownership, API behavior, hardware behavior, persistence, or
+  failure semantics change;
+- update `docs/engineering/source-file-index.md` when modules are added,
+  removed, renamed, or materially repurposed;
+- update `docs/engineering/ownership-and-dependencies.md` and
+  `docs/engineering/shared-component-contracts.md` when consumers or shared
+  contracts change;
+- update the operator guide for operator-visible screen, control, alert, status,
+  workflow, or startup changes;
+- remove or clearly mark superseded documentation rather than leaving
+  contradictory instructions.
 
-## Project purpose
+Agents must not claim a task is complete while required documentation is stale.
 
-Rolling Thunder v4 is an in-vehicle amateur-radio operating and logging system. The primary client runs on Raspberry Pi `anvilmobile`; Forge provides reusable backend APIs and heavier network/provider processing.
+## Architecture Rules
 
-The Pi remains local-first and must retain useful operation when Forge, WireGuard, cellular service, or public internet services are unavailable.
+Maintain separation between:
 
-## Development environment
+1. UI/presentation
+2. application controllers and services
+3. domain/value models
+4. persistence and network adapters
+5. hardware adapters
 
-Production Pi checkout:
+Tkinter must consume already-published state and invoke application/controller
+boundaries. Do not put blocking HTTP, SQLite, filesystem, audio, serial, CAT, or
+provider work in the UI thread.
 
-```text
-/home/geoff/projects/rolling-thunder-v4
-```
+Use typed interfaces, immutable published state, dependency injection, bounded
+work, explicit lifecycles, and deterministic mocks/fakes.
 
-Python environment:
+The Raspberry Pi remains local-first. Loss of Forge, WireGuard, cellular
+service, or public internet must not unnecessarily disable local radio, GPS,
+logging, or other locally available functions.
 
-```text
-/home/geoff/projects/rolling-thunder-v4/.venv
-```
+## Shared Radio and Safety Authority
 
-Do not develop directly on `main`. Use a focused branch/worktree.
+Do not create parallel radio-command paths merely for one feature.
 
-## Quality gates
+Respect the existing typed radio/control services and the feature-specific
+authorization boundaries documented in the engineering guides.
 
-Before a change is considered complete, run the repository's full current gates:
+Never broaden transmit authority as a side effect of unrelated work. FT8
+transmission remains an explicitly authorized, bounded workflow. Other features
+must not acquire unattended/general PTT, MOX, keying, tuner, or power authority
+without an explicitly approved design change.
+
+## Forge Service Contract
+
+Forge processes are reusable backend services, not private helper processes for
+one Rolling Thunder screen.
+
+Any Forge capability that is useful outside the local process should expose a
+stable, documented, programmatic interface so other authorized programs can
+consume it in the future.
+
+Forge code must:
+
+- separate provider adapters from published service/domain contracts;
+- avoid Tkinter/UI layout concepts in backend APIs;
+- avoid assumptions that Rolling Thunder is the only client;
+- expose truthful independent health/status;
+- keep external-provider connectivity, etiquette, rate limits, credentials, and
+  persistence on the Forge side when that is the established architecture;
+- use versioned/stable contracts where practical.
+
+Do not design a Forge API around one screen's widget structure. See
+`docs/engineering/forge-services.md`.
+
+## Hardware Abstraction
+
+Physical hardware must be accessed through typed interfaces/adapters. Application
+and UI code must not directly open device paths such as `/dev/ttyUSB*`,
+`/dev/ttyACM*`, or `/dev/snd/*`.
+
+Hardware/network failure must be visible and isolated rather than crashing the
+application.
+
+## Configuration and Secrets
+
+Use the typed configuration system. Do not scatter hard-coded configuration.
+
+Never commit passwords, API keys, private keys, access tokens, or personal
+credentials. Forge credentials remain on Forge; client code receives only the
+data required by its contract.
+
+## Tests and Quality Gates
+
+New behavior requires tests. Bug fixes should include a regression test when
+practical.
+
+Tests must run without requiring live radio hardware, Forge, or internet unless
+explicitly identified as deployment/hardware acceptance tests.
+
+Before completion, run the repository-standard gates:
 
 ```bash
 ruff check .
@@ -75,57 +160,33 @@ pytest
 git diff --check
 ```
 
-Relevant targeted tests must also pass. Hardware, full-screen UI, radio, audio, GPS, networking, systemd, or Forge changes require controlled live acceptance when automated tests cannot prove installed behavior.
+Use the active project virtual environment. Do not bypass pre-commit or CI with
+`--no-verify` unless the repository owner explicitly directs it.
 
-Do not bypass hooks or validation with `--no-verify` unless explicitly directed by the repository owner.
+Passing automated tests does not replace hardware/full-screen/operator
+acceptance where the change affects installed behavior.
 
-## Architecture principles
+## Git and Release Workflow
 
-Preserve separation between:
+Use focused feature/fix/docs branches and clear imperative commits.
 
-1. presentation/UI
-2. application controllers and services
-3. typed domain models and contracts
-4. hardware/network/persistence ports
-5. concrete adapters
-6. Forge backend services
+Do not merge a PR without explicit repository-owner authorization.
 
-Business logic must not depend directly on GUI widgets, serial ports, USB devices, network sockets, or operating-system device paths.
-
-Slow hardware, network, database, filesystem, provider, or audio work must not block the Tkinter/UI thread.
-
-## Hardware and radio authority
-
-Physical hardware must be accessed through typed interfaces/adapters. Application and UI code must not directly open device paths.
-
-Do not casually broaden transmit authority. FT8 has deliberately bounded transmit capabilities with explicit authorization/session/timing controls. Other application paths must not gain PTT/MOX/keying/tuner/power authority merely because a radio adapter technically supports it.
-
-## Local-first data safety
-
-A locally committed QSO is successful independently of Forge/Wavelog/network availability. Remote synchronization must not be inside the local commit transaction and must not delete or roll back a valid local contact on remote failure.
-
-Pending/uncertain remote state must be preserved and recoverable.
-
-## Configuration and secrets
-
-Use typed centralized configuration. Never commit passwords, API keys, bearer tokens, private keys, or personal credentials.
-
-## Scope control
-
-Make only changes needed for the assigned task. Do not perform unrelated refactoring, rename modules, restructure directories, replace dependencies, or redesign shared UI without explicit scope.
-
-When implementation and old prose disagree, current code/tests plus explicitly accepted production behavior are authoritative; correct the documentation as part of the change.
+Release/deployment changes must preserve an exact rollback point. Production
+configuration and durable databases must not be replaced casually by repository
+checkout operations.
 
 ## Definition of Done
 
 A task is complete only when:
 
 1. requested behavior is implemented;
-2. relevant targeted tests exist and pass;
-3. full Ruff, strict MyPy, pytest, and diff checks pass;
-4. affected shared consumers were reviewed;
-5. engineering documentation is synchronized;
-6. operator documentation is updated for user-visible behavior;
-7. applicable live acceptance passes;
-8. no secrets are committed;
-9. the change remains within approved scope.
+2. ownership and shared-component boundaries are preserved;
+3. relevant tests are included and pass;
+4. Ruff, strict MyPy, pytest, and `git diff --check` pass;
+5. engineering documentation reflects the code;
+6. the operator guide reflects operator-visible changes;
+7. Forge changes preserve the reusable-service contract;
+8. no secrets or machine-specific credentials are committed;
+9. required live acceptance has been completed; and
+10. the change remains limited to the approved scope.
