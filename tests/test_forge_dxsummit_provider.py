@@ -244,6 +244,6 @@ def test_fallback_nickname_obeys_worldirc_twenty_character_limit() -> None:
         nickname="ABCDEFGHIJKLMNOPQRST",
     )
 
-    assert source._fallback_nickname(1) == "ABCDEFGHIJKLMNOP-RT"
+    assert source._fallback_nickname(1) == "ABCDEFGHIJKLMNOPQ-RT"
     assert source._fallback_nickname(12) == "ABCDEFGHIJKLMNO-RT12"
     assert len(source._fallback_nickname(12)) == 20
