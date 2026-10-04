@@ -183,6 +183,19 @@ def test_build_runtime_does_not_fetch_provider_or_use_real_server(tmp_path: Path
     assert fake_server.close_count == 1
 
 
+def test_dxspider_composition_does_not_open_socket(tmp_path: Path) -> None:
+    session_factory = FailingDxSummitSessionFactory()
+
+    runtime = build_forge_runtime(
+        config_for(tmp_path, enabled=False, dxspider_enabled=True),
+        dxspider_session_factory=session_factory,  # type: ignore[arg-type]
+        server_factory=lambda host, port, application: FakeServer(),
+    )
+
+    assert runtime.dxspider is not None
+    assert session_factory.open_count == 0
+
+
 def test_dxsummit_composition_does_not_open_irc_socket(tmp_path: Path) -> None:
     session_factory = FailingDxSummitSessionFactory()
 
@@ -194,6 +207,22 @@ def test_dxsummit_composition_does_not_open_irc_socket(tmp_path: Path) -> None:
 
     assert runtime.dxsummit is not None
     assert session_factory.open_count == 0
+
+
+def test_runtime_starts_and_stops_dxspider_once(tmp_path: Path) -> None:
+    fake_server = FakeServer()
+    runtime = build_forge_runtime(
+        config_for(tmp_path),
+        scheduler=RecordingScheduler(),
+        server_factory=lambda host, port, application: fake_server,
+    )
+    dxspider = FakeDxSummitLifecycle()
+    runtime.dxspider = dxspider  # type: ignore[assignment]
+
+    runtime.run()
+
+    assert dxspider.start_count == 1
+    assert dxspider.stop_count == 1
 
 
 def test_runtime_starts_and_stops_dxsummit_once(tmp_path: Path) -> None:
