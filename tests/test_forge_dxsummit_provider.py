@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from rolling_thunder.domain import RadioMode
+from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.forge_dxsummit_provider import (
     DxSummitConnectionState,
     ForgeDxSummitSpotProvider,
@@ -15,7 +15,6 @@ from rolling_thunder.forge_spot_provider import (
     ForgeSpotProviderConnectionError,
 )
 from rolling_thunder.spot_domain import DxSpotIdentity, SpotProvider, SpotRecord
-from rolling_thunder.domain import Frequency
 
 BASE_TIME = datetime(2026, 10, 4, 1, 31, 40, tzinfo=UTC)
 DXS_LINE = (
