@@ -13,7 +13,10 @@ from rolling_thunder.forge_dxspider_provider import (
     ForgeDxSpiderSpotProvider,
     strip_telnet_negotiation,
 )
-from rolling_thunder.forge_spot_provider import ForgeSpotProviderConnectionError
+from rolling_thunder.forge_spot_provider import (
+    ForgeProviderSlice,
+    ForgeSpotProviderConnectionError,
+)
 from rolling_thunder.spot_domain import SpotProvider
 
 BASE_TIME = datetime(2026, 8, 6, 2, 5, tzinfo=UTC)
@@ -144,6 +147,49 @@ def provider_for(
         monotonic_clock=monotonic_clock or MutableMonotonic(),
     )
     return provider, factory
+
+
+def test_retained_slice_seeds_cache_before_live_spots_arrive() -> None:
+    clock = MutableClock()
+    session = FakeDxSpiderSession([])
+    provider, _ = provider_for(session, clock=clock)
+    retained_spot = provider_slice = None
+    frequency = __import__(
+        "rolling_thunder.domain",
+        fromlist=["Frequency"],
+    ).Frequency(hz=14_074_000)
+    identity = __import__(
+        "rolling_thunder.spot_domain",
+        fromlist=["DxSpotIdentity"],
+    ).DxSpotIdentity(callsign="W1AW", frequency=frequency)
+    spot = __import__(
+        "rolling_thunder.spot_domain",
+        fromlist=["SpotRecord"],
+    ).SpotRecord(
+        identity=identity,
+        callsign="W1AW",
+        frequency=frequency,
+        mode=__import__(
+            "rolling_thunder.domain",
+            fromlist=["RadioMode"],
+        ).RadioMode.DATA,
+        display_mode="FT8",
+        spotted_at=BASE_TIME,
+    )
+    retained = ForgeProviderSlice.from_spots(
+        provider=SpotProvider.DX,
+        fetched_at=BASE_TIME,
+        spots=(spot,),
+    )
+
+    provider.seed_retained_slice(retained)
+
+    assert provider.connection_status.cache_size == 1
+
+    provider._set_state(DxSpiderConnectionState.LIVE)
+    snapshot = provider.fetch_slice()
+
+    assert [str(item.callsign) for item in snapshot.spots] == ["W1AW"]
 
 
 def test_fetch_slice_is_cache_only_and_rejects_non_live_state() -> None:
