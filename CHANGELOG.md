@@ -1,5 +1,36 @@
 # Changelog
 
+## v4.4.0 — 2026-10-04
+
+### DX Summit production architecture
+- replaces the former DXSpider polling model with one long-lived Forge DX Summit IRC connection
+- keeps provider connectivity on Forge while the Raspberry Pi consumes retained/versioned Forge state
+- adds persistent connection telemetry, bounded reconnect/backoff, cache publication, and durable warm-start behavior
+- retains DXSpider only as a disabled-by-default persistent fallback
+- preserves POTA and DX provider isolation, offline retention, and Pi API compatibility
+
+### Raspberry Pi startup
+- replaces the fixed 180-second delay after every service start with a 180-second minimum Raspberry Pi uptime requirement
+- starts Rolling Thunder immediately when the Pi has already been up for at least three minutes
+- waits only the remaining time during early boot
+- preserves duplicate-dashboard detection and startup prerequisite validation
+
+### Engineering and Codex readiness
+- adds a maintained engineering guide with system topology, feature ownership, shared-component contracts, Forge service rules, source-module catalog, and test catalog
+- rewrites agent instructions so feature-scoped work must respect shared consumers and update documentation in the same change
+- explicitly defines Forge services as reusable, presentation-neutral backend capabilities suitable for other authorized programs
+- adds a comprehensive human-readable Rolling Thunder Operator's Guide covering all current dashboard contexts, overlays, alerts, offline/degraded behavior, and Forge backend responsibilities
+- marks older architecture guidance as historical where current implementation has superseded it
+
+### Validation
+- startup-specific tests: 2 passed
+- full repository tests before PR: 2,560 passed, 7 skipped
+- Ruff: clean
+- strict MyPy: clean across 259 source files
+- live startup acceptance passed on anvilmobile
+- Forge remained healthy with DX Summit live and no unnecessary reconnects during acceptance
+
+
 ## v4.3.0 — 2026-10-03
 
 ### Native FT8 — official supported feature
