@@ -434,6 +434,7 @@ def build_forge_runtime(
         aggregation,
         mobile_location=mobile_location,
         weather=weather_state_source,
+        dx_connection=dxsummit or dxspider,
     )
     radar_application = RadarAwareForgeSpotApiApplication(
         core_application,
