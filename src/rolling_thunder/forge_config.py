@@ -127,6 +127,40 @@ class ForgeDxSpiderProviderConfig(ForgeConfigurationModel):
         return normalized
 
 
+class ForgeDxSummitProviderConfig(ForgeConfigurationModel):
+    """Persistent read-only DX Summit IRC source settings."""
+
+    enabled: bool = False
+    host: str = Field(default="irc.radiochat.org", min_length=1, max_length=255)
+    port: int = Field(default=6667, ge=1, le=65_535)
+    channel: str = Field(default="#CQDX", min_length=1, max_length=100)
+    nickname: BaseCallsign = "N0CALL"
+    connect_timeout_s: float = Field(default=15.0, gt=0, le=60)
+    read_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    inactivity_timeout_s: float = Field(default=600.0, ge=60, le=3_600)
+    reconnect_initial_s: float = Field(default=5.0, gt=0, le=300)
+    reconnect_max_s: float = Field(default=300.0, gt=0, le=3_600)
+    stable_connection_s: float = Field(default=300.0, gt=0, le=3_600)
+    max_spots: int = Field(default=500, ge=1, le=5_000)
+    max_spot_age_s: float = Field(default=3_600.0, gt=0, le=86_400)
+
+    @field_validator("host", "channel")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        """Trim required IRC text fields and reject blank values."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be blank")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_reconnect_bounds(self) -> "ForgeDxSummitProviderConfig":
+        """Require the maximum reconnect delay to cover the initial delay."""
+        if self.reconnect_max_s < self.reconnect_initial_s:
+            raise ValueError("reconnect_max_s must be >= reconnect_initial_s")
+        return self
+
+
 class ForgeQrzEnrichmentConfig(ForgeConfigurationModel):
     """Optional bounded Forge-side QRZ enrichment settings."""
 
@@ -217,6 +251,7 @@ class ForgeApplicationConfig(ForgeConfigurationModel):
     aggregation: ForgeAggregationConfig = ForgeAggregationConfig()
     pota: ForgePotaProviderConfig = ForgePotaProviderConfig()
     dxspider: ForgeDxSpiderProviderConfig = ForgeDxSpiderProviderConfig()
+    dxsummit: ForgeDxSummitProviderConfig = ForgeDxSummitProviderConfig()
     qrz: ForgeQrzEnrichmentConfig = ForgeQrzEnrichmentConfig()
     weather: ForgeWeatherConfig = ForgeWeatherConfig()
     weather_alerts: ForgeWeatherAlertConfig = ForgeWeatherAlertConfig()
