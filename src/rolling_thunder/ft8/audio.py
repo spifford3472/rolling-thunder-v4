@@ -44,51 +44,6 @@ class FT8AudioInput(Protocol):
     def read_period(self) -> FT8PcmPeriod:
         """Return one complete UTC-aligned mono S16_LE period."""
 
-    def _realign_next_period(
-        self,
-        buffer: FT8AudioBuffer,
-        *,
-        completed_period: FT8Period,
-    ) -> tuple[FT8Period, int]:
-        """Re-anchor the next PCM window to UTC so USB sample drift cannot accumulate.
-
-        USB audio hardware and the Pi system clock are independent oscillators.
-        Advancing forever by exactly 180,000 captured samples therefore causes
-        the extracted FT8 windows to drift away from 15-second UTC boundaries
-        during long runtimes. Re-anchor after every completed period so any
-        sample-clock error is bounded to one FT8 period instead of accumulating
-        across days or months.
-        """
-        next_period = FT8Period(completed_period.index + 1)
-        now = self._clock.now_utc()
-
-        if now < next_period.start_utc:
-            wait_s = (next_period.start_utc - now).total_seconds()
-            if wait_s > 0 and self._stop_event.wait(wait_s):
-                raise FT8AudioInputError("FT8 audio capture cancelled")
-
-        current = self._clock.current_period()
-
-        if current.index < next_period.index:
-            raise FT8AudioInputError(
-                "system clock did not reach the expected FT8 boundary"
-            )
-
-        if current.index > next_period.index:
-            # A long scheduling/system stall crossed one or more complete slots.
-            # Skip stale slots and align to the next future UTC boundary rather
-            # than mislabeling late audio as an earlier FT8 period.
-            next_period = FT8Period(current.index + 1)
-            wait_s = (next_period.start_utc - self._clock.now_utc()).total_seconds()
-            if wait_s > 0 and self._stop_event.wait(wait_s):
-                raise FT8AudioInputError("FT8 audio capture cancelled")
-            if self._clock.current_period() != next_period:
-                raise FT8AudioInputError(
-                    "system clock changed while re-aligning FT8 capture"
-                )
-
-        return next_period, buffer.next_sample
-
     def stop(self) -> None:
         """Cancel capture and release the device."""
 
@@ -257,6 +212,51 @@ class AlsaArecordFT8AudioInput:
             sample_rate_hz=FT8_SAMPLE_RATE_HZ,
             pcm_s16le=pcm,
         )
+
+    def _realign_next_period(
+        self,
+        buffer: FT8AudioBuffer,
+        *,
+        completed_period: FT8Period,
+    ) -> tuple[FT8Period, int]:
+        """Re-anchor the next PCM window to UTC so USB sample drift cannot accumulate.
+
+        USB audio hardware and the Pi system clock are independent oscillators.
+        Advancing forever by exactly 180,000 captured samples therefore causes
+        the extracted FT8 windows to drift away from 15-second UTC boundaries
+        during long runtimes. Re-anchor after every completed period so any
+        sample-clock error is bounded to one FT8 period instead of accumulating
+        across days or months.
+        """
+        next_period = FT8Period(completed_period.index + 1)
+        now = self._clock.now_utc()
+
+        if now < next_period.start_utc:
+            wait_s = (next_period.start_utc - now).total_seconds()
+            if wait_s > 0 and self._stop_event.wait(wait_s):
+                raise FT8AudioInputError("FT8 audio capture cancelled")
+
+        current = self._clock.current_period()
+
+        if current.index < next_period.index:
+            raise FT8AudioInputError(
+                "system clock did not reach the expected FT8 boundary"
+            )
+
+        if current.index > next_period.index:
+            # A long scheduling/system stall crossed one or more complete slots.
+            # Skip stale slots and align to the next future UTC boundary rather
+            # than mislabeling late audio as an earlier FT8 period.
+            next_period = FT8Period(current.index + 1)
+            wait_s = (next_period.start_utc - self._clock.now_utc()).total_seconds()
+            if wait_s > 0 and self._stop_event.wait(wait_s):
+                raise FT8AudioInputError("FT8 audio capture cancelled")
+            if self._clock.current_period() != next_period:
+                raise FT8AudioInputError(
+                    "system clock changed while re-aligning FT8 capture"
+                )
+
+        return next_period, buffer.next_sample
 
     def stop(self) -> None:
         self._stop_event.set()
