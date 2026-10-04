@@ -11,6 +11,7 @@ from threading import Event, RLock, Thread
 from time import monotonic
 from typing import Protocol
 
+from rolling_thunder.forge_dx_connection import ForgeDxConnectionStatus
 from rolling_thunder.forge_dxsummit_irc_parser import parse_dxsummit_irc_line
 from rolling_thunder.forge_spot_provider import (
     ForgeProviderSlice,
@@ -209,6 +210,25 @@ class ForgeDxSummitSpotProvider:
     @property
     def provider(self) -> SpotProvider:
         return SpotProvider.DX
+
+    @property
+    def connection_status(self) -> ForgeDxConnectionStatus:
+        """Return provider-neutral connection status without network activity."""
+        status = self.status
+        return ForgeDxConnectionStatus(
+            source="dxsummit",
+            state=status.state.value,
+            host=self._host,
+            port=self._port,
+            channel=self._channel,
+            nickname=status.nickname,
+            connected_since=status.connected_since,
+            last_message_at=status.last_message_at,
+            last_spot_at=status.last_spot_at,
+            reconnect_count=status.reconnect_count,
+            cache_size=status.cache_size,
+            last_error=status.last_error,
+        )
 
     @property
     def is_running(self) -> bool:
