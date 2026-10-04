@@ -62,6 +62,28 @@ class RecordingTransport:
         raise AssertionError("composition must not perform provider HTTP")
 
 
+class FakeDxSummitLifecycle:
+    def __init__(self) -> None:
+        self.start_count = 0
+        self.stop_count = 0
+
+    def start(self) -> None:
+        self.start_count += 1
+
+    def stop(self) -> None:
+        self.stop_count += 1
+
+
+class FailingDxSummitSessionFactory:
+    def __init__(self) -> None:
+        self.open_count = 0
+
+    def open(self, **kwargs):
+        del kwargs
+        self.open_count += 1
+        raise AssertionError("runtime composition must not open IRC")
+
+
 class FakeServer:
     def __init__(self) -> None:
         self.serve_count = 0
@@ -82,7 +104,13 @@ class FakeServer:
         self.close_count += 1
 
 
-def config_for(tmp_path: Path, *, enabled: bool = True) -> ForgeApplicationConfig:
+def config_for(
+    tmp_path: Path,
+    *,
+    enabled: bool = True,
+    dxsummit_enabled: bool = False,
+    dxspider_enabled: bool = False,
+) -> ForgeApplicationConfig:
     return ForgeApplicationConfig.model_validate(
         {
             "storage": {"database_path": tmp_path / "forge.db"},
@@ -94,6 +122,18 @@ def config_for(tmp_path: Path, *, enabled: bool = True) -> ForgeApplicationConfi
                 "enabled": enabled,
                 "base_url": "https://api.pota.app",
                 "request_timeout_s": 3.5,
+            },
+            "dxspider": {
+                "enabled": dxspider_enabled,
+                "host": "cluster.example.invalid",
+                "login_callsign": "KI5VNB",
+            },
+            "dxsummit": {
+                "enabled": dxsummit_enabled,
+                "host": "irc.radiochat.org",
+                "port": 6667,
+                "channel": "#CQDX",
+                "nickname": "KI5VNB",
             },
         }
     )
@@ -141,6 +181,51 @@ def test_build_runtime_does_not_fetch_provider_or_use_real_server(tmp_path: Path
     assert fake_server.serve_count == 1
     assert fake_server.shutdown_count == 1
     assert fake_server.close_count == 1
+
+
+def test_dxsummit_composition_does_not_open_irc_socket(tmp_path: Path) -> None:
+    session_factory = FailingDxSummitSessionFactory()
+
+    runtime = build_forge_runtime(
+        config_for(tmp_path, enabled=False, dxsummit_enabled=True),
+        dxsummit_session_factory=session_factory,
+        server_factory=lambda host, port, application: FakeServer(),
+    )
+
+    assert runtime.dxsummit is not None
+    assert session_factory.open_count == 0
+
+
+def test_runtime_starts_and_stops_dxsummit_once(tmp_path: Path) -> None:
+    fake_server = FakeServer()
+    runtime = build_forge_runtime(
+        config_for(tmp_path),
+        scheduler=RecordingScheduler(),
+        server_factory=lambda host, port, application: fake_server,
+    )
+    dxsummit = FakeDxSummitLifecycle()
+    runtime.dxsummit = dxsummit  # type: ignore[assignment]
+
+    runtime.run()
+
+    assert dxsummit.start_count == 1
+    assert dxsummit.stop_count == 1
+
+
+def test_dxsummit_and_dxspider_cannot_both_be_enabled(tmp_path: Path) -> None:
+    with pytest.raises(
+        ForgeRuntimeConfigurationError,
+        match="cannot both be enabled",
+    ):
+        build_forge_runtime(
+            config_for(
+                tmp_path,
+                enabled=False,
+                dxsummit_enabled=True,
+                dxspider_enabled=True,
+            ),
+            server_factory=lambda host, port, application: FakeServer(),
+        )
 
 
 def test_disabled_only_provider_is_rejected(tmp_path: Path) -> None:
