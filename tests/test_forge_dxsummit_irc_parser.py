@@ -10,7 +10,6 @@ from rolling_thunder.forge_dxsummit_irc_parser import (
     strip_irc_formatting,
 )
 
-
 RECEIVED_AT = datetime(2026, 10, 4, 1, 31, 40, tzinfo=UTC)
 DXS_PREFIX = ":dxs!dxs@static.101.3.180.157.clients.your-server.de PRIVMSG #CQDX :"
 
