@@ -12,6 +12,7 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 from rolling_thunder.value_types import BaseCallsign
