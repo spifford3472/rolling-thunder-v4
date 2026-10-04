@@ -337,6 +337,11 @@ def build_forge_runtime(
         aggregation,
         polling_scheduler,
         interval_s=config.aggregation.refresh_interval_s,
+        dx_cache_publish_interval_s=(
+            config.aggregation.dx_cache_publish_interval_s
+            if dxspider is not None or dxsummit is not None
+            else None
+        ),
         refresh_on_start=config.aggregation.refresh_on_start,
     )
 
