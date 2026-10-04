@@ -110,6 +110,10 @@ class ForgeDxSpiderProviderConfig(ForgeConfigurationModel):
     login_callsign: BaseCallsign = "N0CALL"
     connect_timeout_s: float = Field(default=5.0, gt=0, le=60)
     read_timeout_s: float = Field(default=5.0, gt=0, le=60)
+    inactivity_timeout_s: float = Field(default=600.0, ge=60, le=3_600)
+    reconnect_initial_s: float = Field(default=5.0, gt=0, le=300)
+    reconnect_max_s: float = Field(default=300.0, gt=0, le=3_600)
+    stable_connection_s: float = Field(default=300.0, gt=0, le=3_600)
     max_response_bytes: int = Field(
         default=262_144,
         ge=4_096,
@@ -126,6 +130,13 @@ class ForgeDxSpiderProviderConfig(ForgeConfigurationModel):
         if not normalized:
             raise ValueError("must not be blank")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_reconnect_bounds(self) -> "ForgeDxSpiderProviderConfig":
+        """Require the maximum reconnect delay to cover the initial delay."""
+        if self.reconnect_max_s < self.reconnect_initial_s:
+            raise ValueError("reconnect_max_s must be >= reconnect_initial_s")
+        return self
 
 
 class ForgeDxSummitProviderConfig(ForgeConfigurationModel):
