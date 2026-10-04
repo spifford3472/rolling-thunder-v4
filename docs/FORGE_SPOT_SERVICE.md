@@ -234,7 +234,16 @@ A storage-load error is exposed through health state. Repository initialization 
 
 ## Refresh lifecycle
 
-`ForgeSpotPollingService` owns the refresh lifecycle and supports:
+`ForgeSpotPollingService` owns two distinct local publication cadences:
+
+- the normal provider refresh cadence, which remains 60 seconds by default and may perform external provider work such as POTA HTTP retrieval
+- an optional fast DX-cache publication cadence, 5 seconds by default, enabled only when a persistent DX Summit or DXSpider source is configured
+
+The fast DX cadence calls only the persistent provider's in-memory `fetch_slice()`. It never opens, closes, refreshes, or otherwise touches the upstream IRC/DXSpider socket. This keeps live DX publication responsive without increasing external connection or command frequency.
+
+At process startup the first complete refresh can occur while the persistent DX source is still connecting. In that case retained DX data remain available as degraded when present, and the fast local DX publication cadence promotes the live cache as soon as the source is ready rather than waiting for the next full provider interval.
+
+`ForgeSpotPollingService` otherwise supports:
 
 - positive bounded refresh interval
 - optional immediate refresh on start
