@@ -252,6 +252,18 @@ class ForgeDxSummitSpotProvider:
                 cache_size=len(self._cache),
             )
 
+    def seed_retained_slice(self, provider_slice: ForgeProviderSlice) -> None:
+        """Seed the live cache from durable retained DX state."""
+        if provider_slice.provider is not self.provider:
+            raise ValueError("DX Summit retained slice must belong to DX.")
+        now = self._aware_now()
+        with self._lock:
+            self._cache = {
+                spot.stable_key: spot
+                for spot in provider_slice.spots
+            }
+            self._prune_cache_locked(now)
+
     def start(self) -> None:
         """Start exactly one persistent background IRC connection loop."""
         with self._lock:
