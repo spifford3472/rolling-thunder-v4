@@ -3,6 +3,8 @@
 ## v4.3.0 — 2026-10-03
 
 ### Native FT8 — official supported feature
+- fixes long-running FT8 receive drift by re-anchoring each captured period to UTC instead of accumulating USB sample-clock error across uptime
+- adds deterministic 90-day sample-clock drift regression coverage for continuous mobile operation
 
 - adds mobile-readable FT8 CQ rows with explicit headers and rotary selection
 - uses color-vision-friendly redundant state presentation: fresh CQ yellow, repeated CQ white, active non-CQ gray, failed/error red + `!`, operator-aborted blue + `■`
