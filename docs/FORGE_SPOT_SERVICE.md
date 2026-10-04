@@ -241,7 +241,9 @@ A storage-load error is exposed through health state. Repository initialization 
 
 The fast DX cadence calls only the persistent provider's in-memory `fetch_slice()`. It never opens, closes, refreshes, or otherwise touches the upstream IRC/DXSpider socket. This keeps live DX publication responsive without increasing external connection or command frequency.
 
-At process startup the first complete refresh can occur while the persistent DX source is still connecting. In that case retained DX data remain available as degraded when present, and the fast local DX publication cadence promotes the live cache as soon as the source is ready rather than waiting for the next full provider interval.
+At process startup, retained DX provider state loaded from SQLite is also seeded into the configured persistent DX provider's in-memory cache. This prevents the first successful local DX publication from replacing a valid retained DX slice with an empty just-connected cache. Retained spots still obey the configured maximum spot age and naturally age out or are replaced by newer live records.
+
+The first complete refresh can still occur while the persistent DX source is connecting. In that case retained DX data remain available as degraded when present, and the fast local DX publication cadence promotes the seeded/live cache as soon as the source is ready rather than waiting for the next full provider interval.
 
 `ForgeSpotPollingService` otherwise supports:
 
