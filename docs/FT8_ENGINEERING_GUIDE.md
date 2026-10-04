@@ -179,3 +179,34 @@ CP9.1 branch, so this warning is not a CP9.1 regression and was not modified as
 part of the FT8 scope.
 
 CP9.1 received explicit owner approval for merge and v4.3.0 release tagging on 2026-10-03.
+
+
+## Long-Run Receive Clock Discipline
+
+Rolling Thunder is expected to remain continuously powered for 30–90 days or
+longer. The DigiRig USB audio oscillator and the Raspberry Pi system clock are
+independent clocks and must not be assumed to remain phase-aligned indefinitely.
+
+A production smoke test on 2026-10-03 demonstrated that the original continuous
+capture implementation could decode correctly after startup and later stop
+producing CQ rows after many hours of uninterrupted runtime. Direct capture from
+the same DigiRig path, freshly aligned to a UTC FT8 boundary, immediately decoded
+22 messages. Restarting the receive service restored CQ decoding.
+
+Root cause: the receive path initially aligned one PCM window to UTC and then
+advanced subsequent windows by exactly 180,000 captured samples. Any persistent
+USB sample-clock error therefore accumulated across every 15-second period until
+the extracted PCM windows drifted far enough from UTC FT8 boundaries to impair
+decoding.
+
+The v4.3 release fix re-anchors the next capture-window start to UTC after every
+completed FT8 period. Sample-clock error is therefore bounded to one 15-second
+period and cannot accumulate across days or months.
+
+Regression coverage includes a deterministic 90-day runtime model with a
+conservative 100 ppm USB-clock offset. The test verifies that the UTC boundary
+sample is used for the next period rather than the previous start plus a fixed
+180,000-sample increment.
+
+Operational expectation: FT8 receive must remain correctly aligned during
+30–90-day continuous Rolling Thunder uptime without requiring a service restart.
