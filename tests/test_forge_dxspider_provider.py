@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.forge_config import ForgeDxSpiderProviderConfig
 from rolling_thunder.forge_dxspider_provider import (
     DxSpiderConnectionState,
@@ -17,7 +18,7 @@ from rolling_thunder.forge_spot_provider import (
     ForgeProviderSlice,
     ForgeSpotProviderConnectionError,
 )
-from rolling_thunder.spot_domain import SpotProvider
+from rolling_thunder.spot_domain import DxSpotIdentity, SpotProvider, SpotRecord
 
 BASE_TIME = datetime(2026, 8, 6, 2, 5, tzinfo=UTC)
 
@@ -153,26 +154,12 @@ def test_retained_slice_seeds_cache_before_live_spots_arrive() -> None:
     clock = MutableClock()
     session = FakeDxSpiderSession([])
     provider, _ = provider_for(session, clock=clock)
-    retained_spot = provider_slice = None
-    frequency = __import__(
-        "rolling_thunder.domain",
-        fromlist=["Frequency"],
-    ).Frequency(hz=14_074_000)
-    identity = __import__(
-        "rolling_thunder.spot_domain",
-        fromlist=["DxSpotIdentity"],
-    ).DxSpotIdentity(callsign="W1AW", frequency=frequency)
-    spot = __import__(
-        "rolling_thunder.spot_domain",
-        fromlist=["SpotRecord"],
-    ).SpotRecord(
-        identity=identity,
+    frequency = Frequency(hz=14_074_000)
+    spot = SpotRecord(
+        identity=DxSpotIdentity(callsign="W1AW", frequency=frequency),
         callsign="W1AW",
         frequency=frequency,
-        mode=__import__(
-            "rolling_thunder.domain",
-            fromlist=["RadioMode"],
-        ).RadioMode.DATA,
+        mode=RadioMode.DATA,
         display_mode="FT8",
         spotted_at=BASE_TIME,
     )
