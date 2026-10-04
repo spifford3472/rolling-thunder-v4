@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from pydantic import field_validator, model_validator
 
@@ -68,6 +68,15 @@ class ForgeProviderSlice(DomainModel):
             fetched_at=fetched_at,
             spots=canonicalize_spots(spots),
         )
+
+
+@runtime_checkable
+class ForgeRetainedSliceConsumer(Protocol):
+    """Optional provider hook for seeding a cache from durable retained state."""
+
+    def seed_retained_slice(self, provider_slice: ForgeProviderSlice) -> None:
+        """Seed provider-local cache without performing network I/O."""
+        ...
 
 
 class ForgeSpotProvider(Protocol):
