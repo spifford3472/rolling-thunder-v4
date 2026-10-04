@@ -99,7 +99,7 @@ class SocketDxSummitIrcSession:
         while b"\n" not in self._buffer:
             try:
                 chunk = self._connection.recv(4096)
-            except socket.timeout:
+            except TimeoutError:
                 return None
             if not chunk:
                 raise ConnectionError("DX Summit IRC server closed the connection.")
