@@ -43,6 +43,20 @@ def test_direct_configuration_uses_loopback_safe_defaults() -> None:
     assert config.dxspider.max_spots == 250
     assert config.dxspider.max_spot_age_s == 3_600.0
 
+    assert config.dxsummit.enabled is False
+    assert config.dxsummit.host == "irc.radiochat.org"
+    assert config.dxsummit.port == 6667
+    assert config.dxsummit.channel == "#CQDX"
+    assert config.dxsummit.nickname == "N0CALL"
+    assert config.dxsummit.connect_timeout_s == 15.0
+    assert config.dxsummit.read_timeout_s == 5.0
+    assert config.dxsummit.inactivity_timeout_s == 600.0
+    assert config.dxsummit.reconnect_initial_s == 5.0
+    assert config.dxsummit.reconnect_max_s == 300.0
+    assert config.dxsummit.stable_connection_s == 300.0
+    assert config.dxsummit.max_spots == 500
+    assert config.dxsummit.max_spot_age_s == 3_600.0
+
     assert config.qrz.enabled is False
     assert config.qrz.request_timeout_s == 5.0
     assert config.qrz.minimum_request_interval_s == 1.0
@@ -79,6 +93,20 @@ dxspider:
   max_response_bytes: 131072
   max_spots: 125
   max_spot_age_s: 1800
+dxsummit:
+  enabled: true
+  host: " irc.radiochat.org "
+  port: 6667
+  channel: " #CQDX "
+  nickname: " ki5vnb "
+  connect_timeout_s: 12
+  read_timeout_s: 4
+  inactivity_timeout_s: 720
+  reconnect_initial_s: 7
+  reconnect_max_s: 240
+  stable_connection_s: 180
+  max_spots: 600
+  max_spot_age_s: 2700
 qrz:
   enabled: true
   request_timeout_s: 6
@@ -112,6 +140,20 @@ logging_level: warning
     assert config.dxspider.max_response_bytes == 131_072
     assert config.dxspider.max_spots == 125
     assert config.dxspider.max_spot_age_s == 1_800
+
+    assert config.dxsummit.enabled is True
+    assert config.dxsummit.host == "irc.radiochat.org"
+    assert config.dxsummit.port == 6667
+    assert config.dxsummit.channel == "#CQDX"
+    assert config.dxsummit.nickname == "KI5VNB"
+    assert config.dxsummit.connect_timeout_s == 12
+    assert config.dxsummit.read_timeout_s == 4
+    assert config.dxsummit.inactivity_timeout_s == 720
+    assert config.dxsummit.reconnect_initial_s == 7
+    assert config.dxsummit.reconnect_max_s == 240
+    assert config.dxsummit.stable_connection_s == 180
+    assert config.dxsummit.max_spots == 600
+    assert config.dxsummit.max_spot_age_s == 2_700
 
     assert config.qrz.enabled is True
     assert config.qrz.request_timeout_s == 6
@@ -161,6 +203,18 @@ logging_level: warning
             "dxspider:\n  max_spot_age_s: 0\n",
             "dxspider.max_spot_age_s",
         ),
+        ("dxsummit:\n  host: '   '\n", "dxsummit.host"),
+        ("dxsummit:\n  port: 0\n", "dxsummit.port"),
+        ("dxsummit:\n  channel: '   '\n", "dxsummit.channel"),
+        ("dxsummit:\n  nickname: invalid\n", "dxsummit.nickname"),
+        ("dxsummit:\n  inactivity_timeout_s: 30\n", "dxsummit.inactivity_timeout_s"),
+        ("dxsummit:\n  reconnect_initial_s: 0\n", "dxsummit.reconnect_initial_s"),
+        (
+            "dxsummit:\n  reconnect_initial_s: 30\n  reconnect_max_s: 10\n",
+            "dxsummit",
+        ),
+        ("dxsummit:\n  max_spots: 0\n", "dxsummit.max_spots"),
+        ("dxsummit:\n  max_spot_age_s: 0\n", "dxsummit.max_spot_age_s"),
         ("qrz:\n  request_timeout_s: 0\n", "qrz.request_timeout_s"),
         (
             "qrz:\n  minimum_request_interval_s: -1\n",
