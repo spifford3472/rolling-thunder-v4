@@ -134,6 +134,79 @@ Synchronization is opportunistic rather than dependent on a daily timer:
 - Context Button #1 on LOG requests synchronization immediately;
 - failed contacts retain restart-safe retry metadata and are retried only when due.
 
+The FT8 runtime completion handler records worked-today state and notifies the
+dashboard to request the same LOG background sync as ordinary/DMR commits.
+`commit_completed` uses the shared enrichment readiness gate: known remote
+grids are ready immediately; a missing grid with configured QRZ fallback waits
+for the shared worker, which marks lookup failure ready without a grid. An
+immediate sync request can precede enrichment completion; periodic sync remains
+the fallback. No FT8-specific station selection or Wavelog uploader exists.
+
+### Post-v4.4.0 FT8 investigation and production acceptance
+
+Cloud regression reproduced a missing immediate FT8 post-commit sync request:
+the completion handler updated worked-today state only. Cloud tests also showed
+that healthy shared sync uploads completed FT8 contacts to the dynamically
+resolved Mobile profile, including after QRZ lookup failure. The notification
+fix removes reliance on later LOG observation for the initial request; it does
+not by itself explain permanently missing contacts or repair stalled enrichment
+after a credential/configuration change. Production evidence is required.
+
+Before deployment, record the installed Pi and Forge commit SHAs and relevant
+service timestamps. Obtain the **configured** Pi database path from local
+configuration; do not assume a path from this document. Run these queries using
+SQLite read-only mode against the Pi database (or a SQLite-safe backup):
+
+```sql
+SELECT contact_id, callsign, mode, started_at, frequency_hz,
+       rst_sent, rst_received, my_grid, grid, grid_source,
+       enrichment_state, synchronization_state
+FROM contacts WHERE mode = 'FT8'
+ORDER BY started_at DESC LIMIT 20;
+
+SELECT c.contact_id, c.enrichment_state, c.synchronization_state,
+       r.attempt_count, r.next_attempt_at, r.last_error
+FROM contacts AS c LEFT JOIN contact_sync_retries AS r
+ON r.contact_id = c.contact_id
+WHERE c.mode = 'FT8' AND c.synchronization_state <> 'synchronized'
+ORDER BY c.started_at DESC LIMIT 20;
+```
+
+Compare an affected completed FT8 UUID with a known-good ordinary contact.
+`pending_qrz` is ineligible even for manual Sync; check whether the Pi QRZ worker
+is configured/running and whether it completed that lookup. `ready` + `pending`
+requires investigation of sync scheduling/configuration; `failed` requires the
+retry error. An absent local contact requires inspection of completion/logging
+errors, not a station-profile change. Correlate the affected UUID with the Forge
+ledger using SQLite read-only mode on `/var/lib/rolling-thunder/forge-contact-sync.db`:
+
+```sql
+SELECT contact_id, station_profile_id, state, remote_disposition,
+       created_at, synchronized_at, updated_at
+FROM forge_contact_sync_ledger WHERE contact_id = '<affected UUID>';
+```
+
+Collect Pi application/service logs and
+`rolling-thunder-forge-contact-sync.service` journal entries for the QSO time and
+subsequent sync attempts. Keep credentials out of collected output. Inspect the
+non-secret Home Platform enabled/base URL settings, QRZ worker availability,
+Forge `/health` result, and Wavelog's current Mobile location/logbook mapping.
+Do not rewrite states, re-log the QSO, delete the ledger, or replay RF as an
+investigation shortcut. A performance-attempt record is not a contact receipt.
+
+Keep the PR draft until installed acceptance. Preserve exact rollback SHAs,
+configuration, and SQLite-safe Pi/Forge backups. On the approved fixed Pi build,
+complete one explicitly authorized FT8 QSO and verify one local UUID, FT8 mode,
+actual reports, original start time/frequency, frozen local grid and known remote
+grid. Verify its LOG row becomes SYNC and exactly one Wavelog QSO appears in
+Mobile under KI5VNB Main with the same fields. Confirm failed/aborted/unanswered
+attempts produce no contacts. During a safe approved offline/retry test, confirm
+local durability and eventual upload, then repeated Sync/restart without a
+second Wavelog QSO. Verify an ordinary contact still follows the same path.
+Confirm the next FT8 QSO captures fresh current GPS grid. A Pi-only callback
+change does not require replacing Forge code/configuration or restarting the
+spot/weather service.
+
 ## LOG panel
 
 LOG is a normal dashboard context in the existing context-navigation cycle. It does not redefine Back, encoder movement, Context Button #2, tertiary actions, or unrelated global controls.

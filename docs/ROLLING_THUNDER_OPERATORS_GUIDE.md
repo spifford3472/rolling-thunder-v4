@@ -437,6 +437,14 @@ A successful FT8 QSO enters the normal Rolling Thunder local contact path.
 Failed/aborted attempts are not logged as ordinary QSOs, but may be retained as
 performance/analysis telemetry.
 
+After local persistence, successful FT8 contacts request the same background
+Forge/Wavelog synchronization as ordinary contacts. Forge uses its configured
+Mobile station location. A local success or performance record does not prove
+remote upload: check the LOG row for SYNC. WAIT can include optional QRZ
+enrichment; Sync Now does not bypass that readiness gate. A failed optional QRZ
+lookup releases the contact without a remote grid. If WAIT persists, collect
+the contact/enrichment and sync evidence described in `FORGE_CONTACT_SYNC.md`.
+
 For additional detail see `FT8_OPERATOR_GUIDE.md`.
 
 ---

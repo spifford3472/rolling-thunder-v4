@@ -4,6 +4,28 @@ Status: CP9.1 engineering-guide source. This document is intended to become the 
 
 ## Design Intent
 
+### Completed-contact synchronization
+
+Only a `COMPLETED` result with a received report enters
+`FT8QsoLoggingService` -> `ContactLoggingService.commit_completed` -> durable
+local `Contact`. The runtime completion callback updates worked-today state
+and the dashboard requests shared LOG background synchronization, just as for
+ordinary/DMR commits. The stable QSO UUID remains the contact/idempotency key.
+Known remote grids are immediately ready; missing grids use the existing
+optional QRZ enrichment worker when configured. A failed optional lookup releases
+the contact without a grid. `ContactSyncService` uploads eligible contacts via
+the Home Platform API to Forge; Forge alone resolves the configured Wavelog
+station location. FT8 performance telemetry remains a separate outbox and is
+not evidence of contact synchronization.
+
+`tests/test_ft8_contact_sync.py` covers dashboard completion wiring, shared
+Pi/Forge serialization, dynamically resolved Mobile profile selection, QRZ
+success/failure/absence, and idempotent replay without live services or hardware.
+The missing immediate completion notification was reproduced on v4.4.0; healthy
+LOG polling/periodic sync can still upload those contacts, so this defect alone
+does not establish the cause of a permanently missing production QSO. See
+`docs/FORGE_CONTACT_SYNC.md` for evidence collection and installed acceptance.
+
 The native FT8 subsystem is built around three separate concerns:
 
 1. **CQ eligibility/activity** — which stations are allowed to appear in the operator browser.

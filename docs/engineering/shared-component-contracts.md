@@ -28,6 +28,14 @@ semantics are shared infrastructure.
 FT8 and DMR may add feature-specific metadata, but they must not fork a weaker
 persistence model.
 
+Completed FT8 contacts participate in the same post-commit background sync
+lifecycle as ordinary contacts. `commit_completed` preserves the stable QSO
+UUID and frozen QSO data; optional QRZ enrichment uses the existing readiness
+gate. A missing grid with configured QRZ fallback is `pending_qrz` until the
+shared enrichment worker completes, including lookup failure without a grid.
+Only `ready` contacts are upload-eligible. Completion notifications request
+background work; they do not select a Wavelog station or perform remote I/O.
+
 ## Current location and QSO grid
 
 GPS/location is shared infrastructure.
