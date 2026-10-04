@@ -232,3 +232,50 @@ sample is used for the next period rather than the previous start plus a fixed
 
 Operational expectation: FT8 receive must remain correctly aligned during
 30–90-day continuous Rolling Thunder uptime without requiring a service restart.
+
+
+## FT-891 context audio source
+
+FT8 entry automatically sets and verifies menu **11-05 SSB MIC SELECT = REAR**
+(`MIC = 0`, `REAR = 1`). FT8 uses the rear DATA/RTTY audio path.
+Returning from FT8 to Browse, POTA, or DX sets **11-05 = MIC** so ordinary SSB
+voice uses the front microphone. The destination context is authoritative;
+the prior menu value is not restored.
+
+The existing typed FT-891 adapter owns CAT encoding and readback. FT8 receive
+entry/band changes and pre-QSO preparation require REAR. A failed write,
+malformed reply, or mismatched readback prevents QSO authorization; no PTT or
+transmit audio is permitted through the preparation path. Existing USB,
+11-07 SSB BFO, IPO/preamp, NAR, NB, power, and bounded transmit policy remain.
+
+Shared exit/rollback cleanup attempts MIC even if another restoration fails.
+Failed-QSO recovery that remains on the FT8 screen reapplies REAR; a requested
+context exit skips that recovery. CAT-safe shutdown performs serialized normal
+receive cleanup before disconnect. With CAT unavailable, restoration cannot be
+confirmed: check 11-05 manually before voice operation. Hardware acceptance of
+this change is still required.
+
+
+### Owner acceptance for menu 11-05
+
+Do not perform these hardware steps in Codex Cloud. On the Pi, deploy the exact
+PR commit into an isolated validation worktree with isolated validation data and
+an exact rollback point. Keep production checkout/configuration/databases intact.
+
+1. Record the commit and verify 11-05 = MIC in Browse, POTA, and DX voice contexts.
+2. Enter FT8 and verify 11-05 automatically becomes REAR.
+3. Verify USB, 11-07 USB, IPO/preamp, NAR OFF, and NB OFF remain correct; verify
+   existing power policy at its established preparation boundary.
+4. Perform owner-approved bounded FT8 operation with suitable RF conditions.
+5. Confirm successful local logging, stable contact identity, and background
+   Forge/Wavelog synchronization; verify failed/aborted attempts create no contact.
+6. Exit FT8 to each of Browse/POTA/DX and verify 11-05 = MIC and normal front-mic
+   SSB audio. Repeat with active-QSO abort followed by context exit, failed-QSO
+   exit, and CAT-safe application shutdown.
+7. Confirm an abort that remains in FT8 retains the FT8 destination profile.
+8. Perform an owner-controlled CAT failure/readback-failure check before QSO
+   authorization: verify no PTT or transmit audio, visible failure, and no retry
+   that grants authority. Restore CAT, exit FT8, and confirm MIC before voice use.
+9. Record outcomes and hardware/radio firmware details; roll back to the recorded
+   exact baseline if acceptance fails. Automated tests do not establish live RF
+   or front-microphone acceptance.

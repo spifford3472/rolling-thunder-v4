@@ -130,3 +130,35 @@ def test_band_tune_failure_is_published_without_retry() -> None:
 
     assert controller.status.state is FT8BandTuneState.FAILED
     assert controller.status.error == "radio unavailable"
+
+
+def test_shutdown_restores_normal_settings_after_inflight_entry() -> None:
+    from threading import Thread
+
+    entered = Event()
+    release = Event()
+    restored = Event()
+    calls: list[str] = []
+
+    def entry() -> None:
+        entered.set()
+        assert release.wait(timeout=2.0)
+        calls.append("rear")
+
+    def restore() -> None:
+        calls.append("mic")
+        restored.set()
+
+    controller = FT8BandController(
+        Tuner(), lambda: _state(), configure_receive_settings=entry,
+        restore_normal_settings=restore,
+    )
+    controller.enter_ft8()
+    assert entered.wait(timeout=1.0)
+    shutdown = Thread(target=controller.restore_normal_settings_for_shutdown)
+    shutdown.start()
+    assert not restored.is_set()
+    release.set()
+    shutdown.join(timeout=2.0)
+    assert not shutdown.is_alive()
+    assert calls == ["rear", "mic"]

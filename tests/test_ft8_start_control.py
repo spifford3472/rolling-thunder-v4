@@ -11,7 +11,7 @@ from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
 )
 from rolling_thunder.ft8.start_control import FT8QsoStartController, FT8QsoStartState
-from rolling_thunder.ft891_cat import Ft891SsbBfo
+from rolling_thunder.ft891_cat import Ft891SsbBfo, Ft891SsbMicSelect
 
 
 def _activity() -> FT8CQActivity:
@@ -56,6 +56,8 @@ class Radio:
         self.state = _state()
         self.power_watts = 100
         self.ssb_bfo = Ft891SsbBfo.AUTO
+        self.ssb_mic_select = Ft891SsbMicSelect.MIC
+        self.fail_mic = False
         self.fail_bfo = False
         self.calls: list[str] = []
 
@@ -83,6 +85,13 @@ class Radio:
         self.calls.append(f"power:{power_watts}")
         self.power_watts = power_watts
         return power_watts
+
+    def set_ssb_mic_select(self, value: Ft891SsbMicSelect) -> Ft891SsbMicSelect:
+        self.calls.append(f"mic:{value.value}")
+        if getattr(self, "fail_mic", False) and value is Ft891SsbMicSelect.REAR:
+            raise FT8RadioPreparationError("REAR unavailable")
+        self.ssb_mic_select = value
+        return value
 
     def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo:
         self.calls.append(f"bfo:{value.value}")
@@ -134,6 +143,7 @@ def test_prepare_failure_never_calls_qso_starter_and_rolls_back() -> None:
     assert "USB BFO unavailable" in controller.status.error
     assert radio.power_watts == 100
     assert radio.ssb_bfo is Ft891SsbBfo.AUTO
+    assert radio.ssb_mic_select is Ft891SsbMicSelect.MIC
 
 
 def test_failed_start_recovers_ft8_receive_profile_after_safe_restore() -> None:
@@ -184,6 +194,7 @@ def test_exit_requested_during_preparation_skips_qso_start_and_restores() -> Non
     assert controller.status.state is FT8QsoStartState.RESTORED
     assert radio.power_watts == 100
     assert radio.ssb_bfo is Ft891SsbBfo.AUTO
+    assert radio.ssb_mic_select is Ft891SsbMicSelect.MIC
 
 
 def test_explicit_exit_restore_is_background_and_idempotent_while_running() -> None:
@@ -206,6 +217,7 @@ def test_explicit_exit_restore_is_background_and_idempotent_while_running() -> N
     assert controller.status.state is FT8QsoStartState.RESTORED
     assert radio.power_watts == 100
     assert radio.ssb_bfo is Ft891SsbBfo.AUTO
+    assert radio.ssb_mic_select is Ft891SsbMicSelect.MIC
 
 
 def test_qso_start_error_is_published_without_transmit_retry() -> None:
@@ -268,3 +280,39 @@ def test_reset_to_idle_refuses_to_clear_busy_preparation() -> None:
 
     assert controller.reset_to_idle() is False
     assert controller.status.state is FT8QsoStartState.PREPARING
+
+
+def test_mic_failure_never_authorizes_qso_and_cleanup_sets_mic() -> None:
+    radio = Radio()
+    radio.fail_mic = True
+    starts: list[str] = []
+    controller = FT8QsoStartController(
+        FT8RadioPreparationService(radio),
+        lambda activity, state, seed: starts.append(activity.callsign),
+        worker_launcher=_run_now,
+    )
+    controller.start(_activity(), attempt_seed=_seed())
+    assert starts == []
+    assert controller.status.state is FT8QsoStartState.FAILED
+    assert "mic:mic" in radio.calls
+    assert radio.ssb_mic_select is Ft891SsbMicSelect.MIC
+
+
+def test_exit_during_failed_preparation_does_not_reapply_ft8_profile() -> None:
+    radio = Radio()
+    radio.fail_mic = True
+    recoveries: list[str] = []
+    queued: list[object] = []
+    controller = FT8QsoStartController(
+        FT8RadioPreparationService(radio),
+        lambda activity, state, seed: None,
+        failure_recovery=lambda: recoveries.append("rear"),
+        worker_launcher=queued.append,
+    )
+    controller.start(_activity(), attempt_seed=_seed())
+    controller.request_restore()
+    worker = queued.pop()
+    assert callable(worker)
+    worker()
+    assert recoveries == []
+    assert radio.ssb_mic_select is Ft891SsbMicSelect.MIC

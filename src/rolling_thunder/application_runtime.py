@@ -57,6 +57,7 @@ from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
     configure_ft8_receive_settings,
+    restore_ft8_normal_receive_settings,
 )
 from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
 from rolling_thunder.ft8.session import (
@@ -66,7 +67,6 @@ from rolling_thunder.ft8.session import (
 from rolling_thunder.ft8.start_control import FT8QsoStartController, FT8QsoStartStatus
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 from rolling_thunder.ft8.worked_today import FT8WorkedTodayService
-from rolling_thunder.ft891_cat import Ft891SsbBfo
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
@@ -568,7 +568,8 @@ class ApplicationRuntime:
                     return None
 
                 def restore_ft8_normal_settings() -> object:
-                    return radio.set_ssb_bfo(Ft891SsbBfo.AUTO)
+                    restore_ft8_normal_receive_settings(radio)
+                    return None
 
                 receive_settings_callback = apply_ft8_receive_settings
                 normal_settings_callback = restore_ft8_normal_settings
@@ -1211,6 +1212,8 @@ class ApplicationRuntime:
         if self.gps_polling is not None:
             self.gps_polling.stop()
         self.polling.stop()
+        if self.ft8_band_control is not None:
+            self.ft8_band_control.restore_normal_settings_for_shutdown()
         if self.gps is not None:
             self.gps.disconnect()
         state = self.radio.disconnect()

@@ -102,6 +102,10 @@ Depends on:
 - dashboard context/control infrastructure;
 - global status presentation where used.
 
+The typed FT-891 adapter owns menu 11-05 encoding/readback. Existing FT8
+receive/preparation services own REAR entry and MIC normal-context cleanup;
+UI contexts do not issue CAT writes.
+
 Transmit authority is intentionally FT8-scoped and bounded. It must not become a
 general application PTT capability.
 

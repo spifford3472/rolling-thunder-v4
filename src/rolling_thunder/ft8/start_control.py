@@ -245,6 +245,9 @@ class FT8QsoStartController:
             )
 
     def _recover_ft8_receive_profile(self, reason: str) -> str:
+        with self._lock:
+            if self._exit_requested:
+                return reason
         recovery = self._failure_recovery
         if recovery is None:
             return reason

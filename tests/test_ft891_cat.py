@@ -337,3 +337,44 @@ def test_fake_transport_records_safe_read_and_set_commands() -> None:
     assert parse_frequency_reply(reply) == Frequency(hz=7_200_000)
     assert transport.commands == [b"FA;", b"MD01;"]
     assert transport.opened is False
+
+
+@pytest.mark.parametrize("value, digit", [("mic", b"0"), ("rear", b"1")])
+def test_ssb_mic_select_cat_commands_and_replies(value: str, digit: bytes) -> None:
+    from rolling_thunder.ft891_cat import (
+        Ft891SsbMicSelect,
+        encode_read_ssb_mic_select,
+        encode_set_ssb_mic_select,
+        parse_ssb_mic_select_reply,
+    )
+
+    typed = Ft891SsbMicSelect(value)
+    assert encode_read_ssb_mic_select() == b"EX1105;"
+    assert encode_set_ssb_mic_select(typed) == b"EX1105" + digit + b";"
+    assert parse_ssb_mic_select_reply(b"EX1105" + digit + b";") is typed
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [b"", b"EX1105;", b"EX11052;", b"EX110500;", b"EX11050", b"EX11070;", b"EX11050;EX11051;"],
+)
+def test_ssb_mic_select_rejects_malformed_reply(reply: bytes) -> None:
+    from rolling_thunder.ft891_cat import parse_ssb_mic_select_reply
+
+    with pytest.raises(Ft891CatError):
+        parse_ssb_mic_select_reply(reply)
+
+
+@pytest.mark.parametrize("value", ["mic", 0, 1, None, True, Ft891SsbBfo.USB])
+def test_ssb_mic_select_rejects_untyped_value(value: object) -> None:
+    from rolling_thunder.ft891_cat import encode_set_ssb_mic_select
+
+    with pytest.raises(TypeError):
+        encode_set_ssb_mic_select(value)  # type: ignore[arg-type]
+
+
+def test_ssb_mic_select_reply_requires_bytes() -> None:
+    from rolling_thunder.ft891_cat import parse_ssb_mic_select_reply
+
+    with pytest.raises(TypeError):
+        parse_ssb_mic_select_reply("EX11050;")  # type: ignore[arg-type]

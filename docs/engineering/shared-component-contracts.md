@@ -79,6 +79,11 @@ authorization for one QSO target and fail-closed preparation/session checks.
 Do not reuse that implementation as implicit permission for unrelated PTT,
 MOX, keying, tuner, or unattended transmission.
 
+FT-891 FT8 context entry and pre-QSO preparation require verified menu 11-05
+SSB MIC SELECT = REAR. Shared exit to Browse/POTA/DX normalizes it to MIC,
+regardless of its prior value. Failed preparation grants no transmit authority.
+See `../FT8_ENGINEERING_GUIDE.md` for cleanup and hardware acceptance.
+
 ## Physical controls
 
 Physical controls are normalized into typed actions and dispatched through

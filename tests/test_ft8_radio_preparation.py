@@ -12,7 +12,7 @@ from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
     configure_ft8_receive_settings,
 )
-from rolling_thunder.ft891_cat import Ft891SsbBfo
+from rolling_thunder.ft891_cat import Ft891SsbBfo, Ft891SsbMicSelect
 from rolling_thunder.radio import RadioConnectionError
 
 
@@ -24,9 +24,7 @@ def _state(
 ) -> RadioState:
     return RadioState(
         connection_state=(
-            RadioConnectionState.CONNECTED
-            if connected
-            else RadioConnectionState.DISCONNECTED
+            RadioConnectionState.CONNECTED if connected else RadioConnectionState.DISCONNECTED
         ),
         frequency=Frequency(hz=frequency_hz) if connected else None,
         mode=RadioMode.DATA if connected else None,
@@ -40,6 +38,8 @@ class FakePreparedRadio:
         self.state = _state()
         self.power_watts = 100
         self.ssb_bfo = Ft891SsbBfo.AUTO
+        self.ssb_mic_select = Ft891SsbMicSelect.MIC
+        self.fail_mic = False
         self.calls: list[str] = []
         self.fail_power: Exception | None = None
         self.fail_frequency: Exception | None = None
@@ -80,6 +80,13 @@ class FakePreparedRadio:
         self.power_watts = power_watts
         return self.power_watts
 
+    def set_ssb_mic_select(self, value: Ft891SsbMicSelect) -> Ft891SsbMicSelect:
+        self.calls.append(f"mic:{value.value}")
+        if getattr(self, "fail_mic", False) and value is Ft891SsbMicSelect.REAR:
+            raise FT8RadioPreparationError("REAR unavailable")
+        self.ssb_mic_select = value
+        return value
+
     def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo:
         self.calls.append(f"bfo:{value.value}")
         if self.fail_bfo is not None:
@@ -95,6 +102,13 @@ class FakeReceiveConfiguredRadio:
     def set_mode(self, mode: RadioMode) -> RadioState:
         self.calls.append(f"mode:{mode.value}")
         return _state()
+
+    def set_ssb_mic_select(self, value: Ft891SsbMicSelect) -> Ft891SsbMicSelect:
+        self.calls.append(f"mic:{value.value}")
+        if getattr(self, "fail_mic", False) and value is Ft891SsbMicSelect.REAR:
+            raise FT8RadioPreparationError("REAR unavailable")
+        self.ssb_mic_select = value
+        return value
 
     def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo:
         self.calls.append(f"bfo:{value.value}")
@@ -121,6 +135,7 @@ def test_ft8_receive_setup_forces_usb_and_receiver_defaults() -> None:
     assert radio.calls == [
         "mode:USB",
         "bfo:usb",
+        "mic:rear",
         "preamp:True",
         "narrow:False",
         "nb:False",
@@ -142,6 +157,7 @@ def test_prepare_for_qso_forces_20w_frequency_and_usb() -> None:
         "frequency:14074000",
         "mode:USB",
         "bfo:usb",
+        "mic:rear",
         "refresh",
     ]
 
@@ -195,7 +211,7 @@ def test_restore_forces_100w_and_auto() -> None:
 
     assert radio.power_watts == FT8_EXIT_POWER_WATTS
     assert radio.ssb_bfo is Ft891SsbBfo.AUTO
-    assert radio.calls == ["power:100", "bfo:auto"]
+    assert radio.calls == ["power:100", "bfo:auto", "mic:mic"]
 
 
 def test_restore_attempts_bfo_even_when_power_restore_fails() -> None:
@@ -205,7 +221,7 @@ def test_restore_attempts_bfo_even_when_power_restore_fails() -> None:
     with pytest.raises(FT8RadioPreparationError, match="power write failed"):
         FT8RadioPreparationService(radio).restore_after_ft8()
 
-    assert radio.calls == ["power:100", "bfo:auto"]
+    assert radio.calls == ["power:100", "bfo:auto", "mic:mic"]
     assert radio.ssb_bfo is Ft891SsbBfo.AUTO
 
 
@@ -219,3 +235,40 @@ def test_restore_reports_both_failures() -> None:
 
     assert "power write failed" in str(raised.value)
     assert "BFO write failed" in str(raised.value)
+
+
+def test_repeated_entry_normalizes_mic_to_rear() -> None:
+    radio = FakeReceiveConfiguredRadio()
+    configure_ft8_receive_settings(radio)
+    configure_ft8_receive_settings(radio)
+    assert radio.ssb_mic_select is Ft891SsbMicSelect.REAR
+    assert radio.calls.count("mic:rear") == 2
+
+
+def test_prepare_rejects_mic_failure() -> None:
+    radio = FakePreparedRadio()
+    radio.fail_mic = True
+    with pytest.raises(FT8RadioPreparationError, match="REAR unavailable"):
+        FT8RadioPreparationService(radio).prepare_for_qso()
+
+
+def test_prepare_rejects_wrong_mic_readback() -> None:
+    class WrongReadback(FakePreparedRadio):
+        def set_ssb_mic_select(self, value: Ft891SsbMicSelect) -> Ft891SsbMicSelect:
+            return Ft891SsbMicSelect.MIC
+
+    with pytest.raises(FT8RadioPreparationError, match="expected REAR"):
+        FT8RadioPreparationService(WrongReadback()).prepare_for_qso()
+
+
+def test_normal_receive_restore_attempts_mic_even_with_bfo_failure() -> None:
+    from rolling_thunder.ft8.radio_preparation import restore_ft8_normal_receive_settings
+
+    class FailedBfo(FakeReceiveConfiguredRadio):
+        def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo:
+            raise RadioConnectionError("BFO failed")
+
+    radio = FailedBfo()
+    with pytest.raises(FT8RadioPreparationError, match="BFO failed"):
+        restore_ft8_normal_receive_settings(radio)
+    assert radio.ssb_mic_select is Ft891SsbMicSelect.MIC

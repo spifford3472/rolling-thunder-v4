@@ -398,7 +398,6 @@ def test_connect_failure_closes_transport_and_records_error() -> None:
     assert state.last_error == "device unavailable"
 
 
-
 def test_cp6_cat_ptt_keys_and_releases_through_existing_radio_owner() -> None:
     transport = FakeTransport()
     radio = Ft891Radio(transport, clock=fixed_clock)
@@ -493,7 +492,6 @@ def test_disconnect_releases_cp6_cat_ptt_before_closing_transport() -> None:
     assert transport.opened is False
 
 
-
 def test_cp6_tx_meters_read_alc_power_and_swr() -> None:
     transport = FakeTransport()
     transport.replies[b"RM4;"] = b"RM4123;"
@@ -516,3 +514,32 @@ def test_cp6_tx_meter_selector_mismatch_is_rejected() -> None:
 
     with pytest.raises(RadioError, match="selector mismatch"):
         radio.read_cp6_tx_meters()
+
+
+@pytest.mark.parametrize("value, digit", [("mic", b"0"), ("rear", b"1")])
+def test_ssb_mic_select_adapter_verifies_readback(value: str, digit: bytes) -> None:
+    from rolling_thunder.ft891_cat import Ft891SsbMicSelect
+
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    transport.replies[b"EX1105;"] = b"EX1105" + digit + b";"
+    typed = Ft891SsbMicSelect(value)
+    assert radio.set_ssb_mic_select(typed) is typed
+    assert transport.commands[-2:] == [b"EX1105" + digit + b";", b"EX1105;"]
+    assert radio.read_ssb_mic_select() is typed
+
+
+def test_ssb_mic_select_adapter_rejects_wrong_readback_and_disconnection() -> None:
+    from rolling_thunder.ft891_cat import Ft891SsbMicSelect
+
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    with pytest.raises(RadioConnectionError):
+        radio.set_ssb_mic_select(Ft891SsbMicSelect.REAR)
+    with pytest.raises(RadioConnectionError):
+        radio.read_ssb_mic_select()
+    radio.connect()
+    transport.replies[b"EX1105;"] = b"EX11050;"
+    with pytest.raises(RadioVerificationError, match="requested REAR but read back MIC"):
+        radio.set_ssb_mic_select(Ft891SsbMicSelect.REAR)
