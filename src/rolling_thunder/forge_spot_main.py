@@ -139,6 +139,7 @@ class ForgeSpotRuntime:
         weather_alert_polling: ForgeWeatherAlertPollingService | None = None,
         radar: ForgeRadarService | None = None,
         radar_polling: ForgeRadarPollingService | None = None,
+        dxspider: ForgeDxSpiderSpotProvider | None = None,
         dxsummit: ForgeDxSummitSpotProvider | None = None,
         logger: logging.Logger,
     ) -> None:
@@ -151,6 +152,7 @@ class ForgeSpotRuntime:
         self.weather_alert_polling = weather_alert_polling
         self.radar = radar
         self.radar_polling = radar_polling
+        self.dxspider = dxspider
         self.dxsummit = dxsummit
         self._logger = logger
 
@@ -166,6 +168,8 @@ class ForgeSpotRuntime:
         self._logger.info("Forge API listening on http://%s:%s", host, port)
 
         try:
+            if self.dxspider is not None:
+                self.dxspider.start()
             if self.dxsummit is not None:
                 self.dxsummit.start()
             self.polling.start()
@@ -187,6 +191,8 @@ class ForgeSpotRuntime:
             self.polling.stop()
             if self.dxsummit is not None:
                 self.dxsummit.stop()
+            if self.dxspider is not None:
+                self.dxspider.stop()
             self.server.close()
             server_thread.join(timeout=5.0)
 
@@ -270,13 +276,13 @@ def build_forge_runtime(
             "DXSpider and DX Summit cannot both be enabled."
         )
 
+    dxspider: ForgeDxSpiderSpotProvider | None = None
     if config.dxspider.enabled:
-        providers.append(
-            ForgeDxSpiderSpotProvider(
-                config.dxspider,
-                session_factory=dxspider_session_factory,
-            )
+        dxspider = ForgeDxSpiderSpotProvider(
+            config.dxspider,
+            session_factory=dxspider_session_factory,
         )
+        providers.append(dxspider)
 
     dxsummit: ForgeDxSummitSpotProvider | None = None
     if config.dxsummit.enabled:
@@ -453,6 +459,7 @@ def build_forge_runtime(
         weather_alert_polling=weather_alert_polling,
         radar=radar_service,
         radar_polling=radar_polling,
+        dxspider=dxspider,
         dxsummit=dxsummit,
         logger=process_logger,
     )
