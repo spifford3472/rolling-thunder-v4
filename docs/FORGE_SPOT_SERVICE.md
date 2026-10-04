@@ -295,6 +295,8 @@ Request handlers only read already-published immutable state. They never:
 
 The health endpoint exposes API schema version, service status, revision, generation time, active spot count, provider health, startup-storage error, and persistence error.
 
+When a persistent DX source is configured, health also exposes a read-only `dx_connection` object with the source name, lifecycle state, host/port, optional channel/nickname, connection start time, last received traffic, last accepted spot, reconnect count, current bounded cache size, and last connection error. Reading this telemetry performs no provider network I/O and does not reset or refresh the upstream connection.
+
 Overall status is:
 
 - `starting` while configured providers are starting and storage is clean
