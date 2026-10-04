@@ -28,6 +28,7 @@ def test_direct_configuration_uses_loopback_safe_defaults() -> None:
     assert config.server.bind_port == 8765
     assert config.storage.database_path == Path("data/forge-spots.db")
     assert config.aggregation.refresh_interval_s == 60.0
+    assert config.aggregation.dx_cache_publish_interval_s == 5.0
     assert config.aggregation.refresh_on_start is True
     assert config.pota.enabled is True
     assert str(config.pota.base_url).rstrip("/") == "https://api.pota.app"
@@ -82,6 +83,7 @@ storage:
   database_path: state/forge.db
 aggregation:
   refresh_interval_s: 45
+  dx_cache_publish_interval_s: 7
   refresh_on_start: false
 pota:
   enabled: true
@@ -133,6 +135,7 @@ logging_level: warning
     assert config.server.bind_port == 9010
     assert config.storage.database_path == (tmp_path / "state/forge.db").resolve()
     assert config.aggregation.refresh_interval_s == 45
+    assert config.aggregation.dx_cache_publish_interval_s == 7
     assert config.aggregation.refresh_on_start is False
     assert str(config.pota.base_url).rstrip("/") == (
         "https://pota.example.invalid/root"
@@ -188,6 +191,10 @@ logging_level: warning
         (
             "aggregation:\n  refresh_interval_s: 0\n",
             "aggregation.refresh_interval_s",
+        ),
+        (
+            "aggregation:\n  dx_cache_publish_interval_s: 0\n",
+            "aggregation.dx_cache_publish_interval_s",
         ),
         ("pota:\n  base_url: not-a-url\n", "pota.base_url"),
         ("pota:\n  request_timeout_s: 0\n", "pota.request_timeout_s"),
