@@ -1,231 +1,192 @@
-# Rolling Thunder v4 Development Instructions
+# Rolling Thunder v4 Agent Instructions
 
-## Project Purpose
+## Purpose
 
-Rolling Thunder v4 is an in-vehicle amateur-radio operating and logging system.
+Rolling Thunder v4 is a production in-vehicle amateur-radio operating, logging,
+situational-awareness, and radio-control system. The primary mobile runtime is
+the Raspberry Pi host `anvilmobile`; the Forge host provides reusable backend
+services and heavier/provider-facing work.
 
-The primary client runs on a Raspberry Pi 4 named `anvilmobile`. The application assists with radio control, callsign entry, contact logging, POTA activity, mapping, GPS position, and station status.
+This file is intentionally concise. It is a routing and guardrail document, not
+the full engineering manual.
 
-Forge may provide backend APIs and heavier processing, but the Raspberry Pi client must retain useful offline functionality.
+## Required Reading
 
-## Development Environment
+Before changing code, read:
 
-Primary development and hardware testing occur directly on the Raspberry Pi through VS Code Remote SSH.
+1. `AGENTS.md`
+2. `docs/engineering/index.md`
+3. `docs/engineering/ownership-and-dependencies.md`
+4. `docs/engineering/shared-component-contracts.md`
+5. the feature/service guide named for the area being changed
+6. the relevant existing subsystem document(s) linked by the engineering index
+7. the source files and tests for the requested change
 
-Project directory:
+For Forge work, also read `docs/engineering/forge-services.md`.
+For operator-visible behavior, also read `docs/ROLLING_THUNDER_OPERATORS_GUIDE.md`.
 
-```text
-~/projects/rolling-thunder-v4
-```
+The current branch and repository code are authoritative. Historical checkpoint
+documents are context, not permission to undo later behavior.
 
-Python environment:
+## Scope and Ownership
 
-```text
-.venv
-```
+Do not develop directly on `main`. Make the smallest change that satisfies the
+assigned task. Do not perform unrelated refactors, renames, dependency changes,
+or architecture rewrites.
 
-Activate it with:
+A feature-scoped task does **not** grant ownership of shared code.
 
-```bash
-source .venv/bin/activate
-```
+Before modifying a shared component:
 
-Install the project and development dependencies with:
+1. identify its documented consumers;
+2. inspect the relevant regression tests for those consumers;
+3. preserve the shared contract unless the task explicitly changes it; and
+4. update the shared-component documentation when the contract or consumer set changes.
 
-```bash
-python -m pip install -e ".[development]"
-```
+Examples of shared boundaries include callsign information, contact logging,
+GPS/current grid, shared spot presentation/tuning, map state, status messages,
+radio control, physical controls, Forge clients, and persistence.
 
-## Required Quality Checks
+## Documentation Is Part of the Change
 
-Before considering any change complete, run:
+Documentation maintenance is mandatory.
 
-```bash
-ruff check src tests
-mypy src
-pytest
-```
+A code change is not complete when it leaves the engineering or operator
+documentation stale.
 
-All checks must pass.
+In the same branch/PR:
 
-Pre-commit hooks are installed and should not be bypassed.
+- update the appropriate engineering guide when responsibility, dependencies,
+  lifecycle, data ownership, API behavior, hardware behavior, persistence, or
+  failure semantics change;
+- update `docs/engineering/source-file-index.md` when modules are added,
+  removed, renamed, or materially repurposed;
+- update `docs/engineering/ownership-and-dependencies.md` and
+  `docs/engineering/shared-component-contracts.md` when consumers or shared
+  contracts change;
+- update the operator guide for operator-visible screen, control, alert, status,
+  workflow, or startup changes;
+- remove or clearly mark superseded documentation rather than leaving
+  contradictory instructions.
 
-Do not use `--no-verify` unless the repository owner explicitly instructs you to do so.
+Agents must not claim a task is complete while required documentation is stale.
 
-## Git Workflow
+## Architecture Rules
 
-Do not develop directly on `main`.
+Maintain separation between:
 
-Create a focused feature branch for each change:
+1. UI/presentation
+2. application controllers and services
+3. domain/value models
+4. persistence and network adapters
+5. hardware adapters
 
-```text
-feature/<short-description>
-fix/<short-description>
-docs/<short-description>
-```
+Tkinter must consume already-published state and invoke application/controller
+boundaries. Do not put blocking HTTP, SQLite, filesystem, audio, serial, CAT, or
+provider work in the UI thread.
 
-Keep commits focused and use clear imperative commit messages.
+Use typed interfaces, immutable published state, dependency injection, bounded
+work, explicit lifecycles, and deterministic mocks/fakes.
 
-Examples:
+The Raspberry Pi remains local-first. Loss of Forge, WireGuard, cellular
+service, or public internet must not unnecessarily disable local radio, GPS,
+logging, or other locally available functions.
 
-```text
-Add typed application configuration
-Implement mock radio interface
-Document offline logging behavior
-```
+## Shared Radio and Safety Authority
 
-Do not merge branches or push directly to `main`.
+Do not create parallel radio-command paths merely for one feature.
 
-## Architecture Principles
+Respect the existing typed radio/control services and the feature-specific
+authorization boundaries documented in the engineering guides.
 
-Use clear separation between:
+Never broaden transmit authority as a side effect of unrelated work. FT8
+transmission remains an explicitly authorized, bounded workflow. Other features
+must not acquire unattended/general PTT, MOX, keying, tuner, or power authority
+without an explicitly approved design change.
 
-1. User interface
-2. Application services
-3. Domain models
-4. Hardware interfaces
-5. Network and persistence adapters
+## Forge Service Contract
 
-Business logic must not depend directly on GUI widgets, serial ports, USB devices, network sockets, or operating-system device paths.
+Forge processes are reusable backend services, not private helper processes for
+one Rolling Thunder screen.
+
+Any Forge capability that is useful outside the local process should expose a
+stable, documented, programmatic interface so other authorized programs can
+consume it in the future.
+
+Forge code must:
+
+- separate provider adapters from published service/domain contracts;
+- avoid Tkinter/UI layout concepts in backend APIs;
+- avoid assumptions that Rolling Thunder is the only client;
+- expose truthful independent health/status;
+- keep external-provider connectivity, etiquette, rate limits, credentials, and
+  persistence on the Forge side when that is the established architecture;
+- use versioned/stable contracts where practical.
+
+Do not design a Forge API around one screen's widget structure. See
+`docs/engineering/forge-services.md`.
 
 ## Hardware Abstraction
 
-All physical hardware must be accessed through typed interfaces or protocols.
+Physical hardware must be accessed through typed interfaces/adapters. Application
+and UI code must not directly open device paths such as `/dev/ttyUSB*`,
+`/dev/ttyACM*`, or `/dev/snd/*`.
 
-Examples include:
+Hardware/network failure must be visible and isolated rather than crashing the
+application.
 
-- FT-891 radio control
-- GPS receiver
-- USB microphone
-- ESP32 button and LED controller
-- audio devices
-- future vehicle sensors
+## Configuration and Secrets
 
-Create mock or simulated implementations before requiring physical hardware.
+Use the typed configuration system. Do not scatter hard-coded configuration.
 
-Application and UI code must never directly open paths such as:
+Never commit passwords, API keys, private keys, access tokens, or personal
+credentials. Forge credentials remain on Forge; client code receives only the
+data required by its contract.
 
-```text
-/dev/ttyUSB0
-/dev/ttyACM0
-/dev/snd/*
+## Tests and Quality Gates
+
+New behavior requires tests. Bug fixes should include a regression test when
+practical.
+
+Tests must run without requiring live radio hardware, Forge, or internet unless
+explicitly identified as deployment/hardware acceptance tests.
+
+Before completion, run the repository-standard gates:
+
+```bash
+ruff check .
+mypy src/rolling_thunder
+pytest
+git diff --check
 ```
 
-Device discovery and connection details belong in hardware adapter modules.
+Use the active project virtual environment. Do not bypass pre-commit or CI with
+`--no-verify` unless the repository owner explicitly directs it.
 
-## Offline-First Behavior
+Passing automated tests does not replace hardware/full-screen/operator
+acceptance where the change affects installed behavior.
 
-The Raspberry Pi client must remain useful when Forge, WireGuard, or internet access is unavailable.
+## Git and Release Workflow
 
-At minimum, offline mode should eventually support:
+Use focused feature/fix/docs branches and clear imperative commits.
 
-- basic contact logging
-- local storage of unsynchronized contacts
-- radio frequency and mode display when local hardware is available
-- GPS position when local hardware is available
-- later synchronization when connectivity returns
+Do not merge a PR without explicit repository-owner authorization.
 
-Network failures must not crash the application.
-
-## Configuration
-
-Configuration must not be hard-coded throughout the source code.
-
-Use a central typed configuration system for items such as:
-
-- callsign
-- home grid
-- Forge API URL
-- mock hardware mode
-- serial device preferences
-- logging behavior
-
-Do not commit passwords, API keys, private keys, access tokens, or personal credentials.
-
-## Python Standards
-
-Use Python type hints for public functions and methods.
-
-Prefer:
-
-- dataclasses for structured domain data
-- protocols or abstract base classes for hardware boundaries
-- pathlib instead of manual path manipulation
-- explicit exception types
-- small focused modules
-- dependency injection rather than global hardware instances
-
-Avoid:
-
-- untyped dictionaries passed throughout the application
-- broad `except Exception` blocks without a documented reason
-- hidden global state
-- blocking hardware or network calls in the UI thread
-- unnecessary dependencies
-- premature distributed-system complexity
-
-## Testing Requirements
-
-New behavior requires tests.
-
-Tests must:
-
-- run without connected radio hardware
-- run without Forge
-- run without internet access
-- avoid depending on timing where possible
-- use temporary directories for filesystem tests
-- use mocks or fakes at hardware and network boundaries
-
-Bug fixes should include a regression test when practical.
-
-## Scope Control
-
-Make only changes required for the assigned task.
-
-Do not perform unrelated refactoring.
-
-Do not rename modules, restructure directories, or replace dependencies unless the task requires it and the rationale is documented.
-
-When requirements are unclear, choose the smallest implementation consistent with the existing architecture and document assumptions.
-
-## Documentation
-
-Update documentation when a change affects:
-
-- architecture
-- configuration
-- setup instructions
-- hardware support
-- development workflow
-- user-visible behavior
-
-Keep documentation consistent with the implemented code.
-
-## Current Project Stage
-
-The repository currently contains:
-
-- the Python package structure
-- an application bootstrap entry point
-- an initial automated test
-- Ruff configuration
-- MyPy configuration
-- pytest configuration
-- GitHub Actions continuous integration
-- pre-commit development checks
-
-Do not assume radio, GPS, GUI, logging, or Forge integration already exists unless it is present in the repository.
+Release/deployment changes must preserve an exact rollback point. Production
+configuration and durable databases must not be replaced casually by repository
+checkout operations.
 
 ## Definition of Done
 
-A task is complete when:
+A task is complete only when:
 
-1. The requested behavior is implemented.
-2. Relevant tests are included.
-3. Ruff passes.
-4. MyPy passes.
-5. pytest passes.
-6. Documentation is updated where needed.
-7. The change is limited to the requested scope.
-8. No secrets or machine-specific credentials are committed.
+1. requested behavior is implemented;
+2. ownership and shared-component boundaries are preserved;
+3. relevant tests are included and pass;
+4. Ruff, strict MyPy, pytest, and `git diff --check` pass;
+5. engineering documentation reflects the code;
+6. the operator guide reflects operator-visible changes;
+7. Forge changes preserve the reusable-service contract;
+8. no secrets or machine-specific credentials are committed;
+9. required live acceptance has been completed; and
+10. the change remains limited to the approved scope.

@@ -4,7 +4,8 @@ set -euo pipefail
 readonly APP_DIR="${ROLLING_THUNDER_APP_DIR:-/home/geoff/projects/rolling-thunder-v4}"
 readonly VENV_DIR="${ROLLING_THUNDER_VENV_DIR:-/home/geoff/projects/rolling-thunder-v4/.venv}"
 readonly CONFIG_PATH="${ROLLING_THUNDER_CONFIG:-${APP_DIR}/config/rolling-thunder.yaml}"
-readonly STARTUP_DELAY_SECONDS="${ROLLING_THUNDER_STARTUP_DELAY_SECONDS:-180}"
+readonly MIN_UPTIME_SECONDS="${ROLLING_THUNDER_MIN_UPTIME_SECONDS:-${ROLLING_THUNDER_STARTUP_DELAY_SECONDS:-180}}"
+readonly UPTIME_PATH="${ROLLING_THUNDER_UPTIME_PATH:-/proc/uptime}"
 readonly DISPLAY_VALUE="${DISPLAY:-:0}"
 readonly XAUTHORITY_VALUE="${XAUTHORITY:-/home/geoff/.Xauthority}"
 
@@ -13,7 +14,9 @@ log() {
 }
 
 dashboard_is_running() {
-    pgrep -u "$(id -u)" -f         '[p]ython.*rolling_thunder\.ui_main|[r]olling-thunder-ui'         >/dev/null 2>&1
+    pgrep -u "$(id -u)" -f \
+        '[p]ython.*rolling_thunder\.ui_main|[r]olling-thunder-ui' \
+        >/dev/null 2>&1
 }
 
 require_file() {
@@ -34,8 +37,28 @@ require_executable() {
     fi
 }
 
-if [[ ! "$STARTUP_DELAY_SECONDS" =~ ^[0-9]+$ ]]; then
-    log "ERROR: ROLLING_THUNDER_STARTUP_DELAY_SECONDS must be a non-negative integer."
+system_uptime_seconds() {
+    local raw_uptime
+    local ignored
+
+    if [[ ! -r "$UPTIME_PATH" ]]; then
+        log "ERROR: system uptime source is not readable: ${UPTIME_PATH}"
+        exit 1
+    fi
+
+    read -r raw_uptime ignored < "$UPTIME_PATH"
+    raw_uptime="${raw_uptime%%.*}"
+
+    if [[ ! "$raw_uptime" =~ ^[0-9]+$ ]]; then
+        log "ERROR: invalid system uptime value from ${UPTIME_PATH}"
+        exit 1
+    fi
+
+    printf '%s\n' "$raw_uptime"
+}
+
+if [[ ! "$MIN_UPTIME_SECONDS" =~ ^[0-9]+$ ]]; then
+    log "ERROR: ROLLING_THUNDER_MIN_UPTIME_SECONDS must be a non-negative integer."
     exit 1
 fi
 
@@ -44,11 +67,18 @@ if dashboard_is_running; then
     exit 0
 fi
 
-log "waiting ${STARTUP_DELAY_SECONDS}s after service start before dashboard launch"
-sleep "$STARTUP_DELAY_SECONDS"
+UPTIME_SECONDS="$(system_uptime_seconds)"
+
+if (( UPTIME_SECONDS < MIN_UPTIME_SECONDS )); then
+    WAIT_SECONDS=$((MIN_UPTIME_SECONDS - UPTIME_SECONDS))
+    log "system uptime is ${UPTIME_SECONDS}s; waiting ${WAIT_SECONDS}s until minimum uptime ${MIN_UPTIME_SECONDS}s"
+    sleep "$WAIT_SECONDS"
+else
+    log "system uptime is ${UPTIME_SECONDS}s; minimum uptime ${MIN_UPTIME_SECONDS}s already satisfied"
+fi
 
 if dashboard_is_running; then
-    log "dashboard was started during the delay; not starting a duplicate"
+    log "dashboard was started while waiting; not starting a duplicate"
     exit 0
 fi
 

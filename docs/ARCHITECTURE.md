@@ -1,5 +1,7 @@
 # Rolling Thunder v4 Architecture
 
+> **Current-state note:** This document contains valuable historical design context, but it predates the current v4.4 engineering baseline. For current ownership, dependencies, shared-component contracts, Forge service rules, source/test catalogs, and agent guardrails, start with `AGENTS.md` and `docs/engineering/index.md`. When this document conflicts with the current code/tests or engineering guide, the current implementation and engineering guide are authoritative.
+
 ## Purpose
 
 Rolling Thunder v4 is an in-vehicle amateur-radio operating and logging system.
@@ -69,7 +71,7 @@ implemented architecture through checkpoint 8 of issue #129.
                                    |
                       +------------v-------------+
                       | Forge spot service       |
-                      | POTA + DXSpider + SQLite |
+                      | POTA + DX Summit + SQLite|
                       +--------------------------+
 ```
 
@@ -188,7 +190,7 @@ canonical complete snapshots, stable identities, provider-specific filters,
 stable selection, exact per-activation receive actions, and the single-press operator
 contract.
 
-Forge owns live public POTA and DXSpider provider access. The Pi receives only
+Forge owns live public POTA access and the persistent DX Summit IRC provider connection. The Pi receives only
 complete versioned Forge snapshots through the typed Forge client, validates
 them before activation, persists them transactionally, and retains the previous
 valid snapshot when a live attempt fails.

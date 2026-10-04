@@ -5,10 +5,12 @@ Raspberry Pi.
 
 ## Design
 
-The service starts after `graphical.target`, then the launcher waits 180 seconds
-before starting the dashboard. The delay is intentional: it gives Raspberry Pi OS
-and the desktop session time to settle before the Python/Tk dashboard begins its
-normal hardware, map, and service initialization.
+The service starts after `graphical.target`, then the launcher enforces a minimum
+system uptime of 180 seconds before starting the dashboard. If the Raspberry Pi has
+already been up for at least three minutes, a manual service restart launches the
+dashboard immediately. During boot, the launcher waits only for the remaining time
+until system uptime reaches three minutes. This gives Raspberry Pi OS and the desktop
+session time to settle without imposing an unnecessary delay on later restarts.
 
 The launcher validates the production checkout, virtual-environment UI entry
 point, and active YAML configuration before launch. Missing prerequisites fail
@@ -86,7 +88,7 @@ The legacy drop-in is no longer active and was archived as:
 The installed effective unit now uses only the corrected base-unit production
 paths. The retired copy is retained only as a recovery artifact.
 
-## Verification without the three-minute delay
+## Verification without the three-minute uptime requirement
 
 For a supervised test, use a temporary drop-in rather than editing the checked-in
 unit:
@@ -99,7 +101,7 @@ Use:
 
 ```ini
 [Service]
-Environment=ROLLING_THUNDER_STARTUP_DELAY_SECONDS=0
+Environment=ROLLING_THUNDER_MIN_UPTIME_SECONDS=0
 ```
 
 Then:
@@ -130,8 +132,9 @@ observed:
    drop-in does not change the effective production paths.
 
 Checkpoint 0 was physically accepted and merged as PR #211. The corrected
-production paths and 180-second startup delay are now the supported v4.3
-baseline.
+production paths and startup protections were established in the v4.3 baseline.
+Beginning with v4.4, the three-minute requirement is based on Raspberry Pi system
+uptime rather than time elapsed since each service start.
 
 ## v4.2.0 recovery
 
