@@ -190,6 +190,18 @@ class ForgeDxSpiderSpotProvider:
         with self._lock:
             return self._state
 
+    def seed_retained_slice(self, provider_slice: ForgeProviderSlice) -> None:
+        """Seed the live cache from durable retained DX state."""
+        if provider_slice.provider is not self.provider:
+            raise ValueError("DXSpider retained slice must belong to DX.")
+        now = self._normalized_clock_value()
+        with self._lock:
+            self._cache = {
+                spot.stable_key: spot
+                for spot in provider_slice.spots
+            }
+            self._prune_cache_locked(now)
+
     def start(self) -> None:
         """Start exactly one background DXSpider connection loop."""
         with self._lock:
