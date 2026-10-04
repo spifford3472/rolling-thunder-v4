@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from rolling_thunder.friend_presentation import friend_marker
 from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
 from rolling_thunder.ft8.domain import FT8CQActivity
 
@@ -32,6 +33,7 @@ class FT8BrowserRow:
     grid_text: str
     selected: bool
     call_presentation: FT8CallPresentation
+    friend_marker: str = ""
     attempt_state: FT8AttemptVisualState | None = None
 
 
@@ -49,6 +51,7 @@ def build_ft8_browser_viewport(
     selected_callsign: str | None,
     visible_rows: int = 5,
     attempt_states: dict[str, FT8AttemptVisualState] | None = None,
+    friends: frozenset[str] = frozenset(),
 ) -> FT8BrowserViewport:
     """Build a stable-order viewport that always keeps selection visible."""
     if visible_rows < 1:
@@ -69,6 +72,7 @@ def build_ft8_browser_viewport(
         _row(
             item,
             selected=item.callsign == selected_callsign,
+            friends=friends,
             attempt_state=state_map.get(item.callsign),
         )
         for item in visible
@@ -86,6 +90,7 @@ def _row(
     *,
     selected: bool,
     attempt_state: FT8AttemptVisualState | None,
+    friends: frozenset[str],
 ) -> FT8BrowserRow:
     if attempt_state is FT8AttemptVisualState.FAILED:
         presentation = FT8CallPresentation.RED
@@ -105,6 +110,7 @@ def _row(
 
     return FT8BrowserRow(
         callsign=activity.callsign,
+        friend_marker=friend_marker(activity.callsign, friends),
         call_text=call_text,
         pota_cq=activity.pota_cq,
         snr_text=f"{activity.snr_db:+d}",

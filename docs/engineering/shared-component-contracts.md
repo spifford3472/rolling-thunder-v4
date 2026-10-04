@@ -158,3 +158,13 @@ If any contract above intentionally changes, update:
 - `shared-component-consumers.md` if consumers change;
 - relevant subsystem docs;
 - the Operator's Guide if behavior is visible.
+
+
+## Friend classification is informational
+
+Known/friend directory status may decorate remote callsigns only. It must never
+affect canonical callsign identity, capture, filtering, selection, worked state,
+FT8 eligibility/retry/authorization, radio/tuning, logging or synchronization.
+Admin comments are Forge-only. Rendering uses an already-published bounded set;
+failed/stale Forge classification removes decoration without disabling local
+operations. See `../KNOWN_CALLSIGNS.md`.

@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 259.**
+**Cataloged Python modules: 264.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -345,3 +345,16 @@ Update this catalog in the same branch whenever a Python source module is added,
 removed, renamed, or materially repurposed. A new feature should be placed under
 the smallest correct ownership group; shared behavior must not be mislabeled as
 screen-owned.
+
+
+## Known/friend callsign directory
+
+- `src/rolling_thunder/known_callsigns.py` — bounded presentation-neutral directory contracts and normalized classification.
+- `src/rolling_thunder/forge_known_callsigns.py` — dedicated Forge SQLite admin records and comment-free snapshot/batch queries.
+- `src/rolling_thunder/forge_known_callsign_admin.py` — escaped private-network admin forms, CSRF protection and delete confirmation.
+- `src/rolling_thunder/known_callsign_client.py` — Pi snapshot/batch HTTP client, expiring bounded cache and scheduled worker lifecycle.
+- `src/rolling_thunder/friend_presentation.py` — no-I/O remote callsign star semantics and shared gold color.
+
+Existing callsign-info composition/router/configuration now wires this optional
+directory. ApplicationRuntime owns its Pi poller; existing remote-call
+presentation adapters consume its immutable classification only.

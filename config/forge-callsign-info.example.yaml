@@ -24,3 +24,8 @@ station_cache_ttl_s: 21600.0
 # ROLLING_THUNDER_QRZ_USERNAME
 # ROLLING_THUNDER_QRZ_PASSWORD
 # ROLLING_THUNDER_WAVELOG_V2_TOKEN
+
+# Private-network administration; do not expose this port publicly.
+known_callsigns:
+  enabled: true
+  database_path: /var/lib/rolling-thunder-forge-callsign-info/known-callsigns.sqlite3

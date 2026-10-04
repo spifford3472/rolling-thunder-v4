@@ -210,3 +210,14 @@ def test_widget_adapter_limits_preallocated_card_slots(monkeypatch: Any) -> None
         23,
         "bold",
     )
+
+
+
+def test_friend_star_uses_separate_column_from_callsign_and_detail(monkeypatch: Any) -> None:
+    _install_fake_tk(monkeypatch)
+    widgets = DmrWidgets(FakeWidget())
+    children = widgets._history_frames[0].children
+    assert children[0].options["grid_column"] == 1
+    assert children[1].options["grid_column"] == 2
+    assert widgets._history_friend_labels[0].options["grid_column"] == 0
+    assert widgets._history_friend_labels[0].options["fg"] == "#ffd24a"

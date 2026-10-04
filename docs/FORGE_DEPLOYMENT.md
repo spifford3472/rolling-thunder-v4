@@ -462,3 +462,11 @@ history data.
 
 Open-Meteo attribution remains required. The compact response carries the
 provider attribution text and the overlay displays it in muted small text.
+
+
+## Known/friend directory adoption
+
+The callsign-info unit gains its own StateDirectory for optional directory
+SQLite storage. No other Forge service changes. See `KNOWN_CALLSIGNS.md` for
+exact service/config/state locations, backup/rollback, private-network admin
+access, and mandatory service-venv installed-package/import-path verification.

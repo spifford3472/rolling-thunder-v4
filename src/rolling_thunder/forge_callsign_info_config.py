@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
 class ForgeCallsignInfoConfigurationError(Exception):
@@ -33,7 +33,22 @@ class CallsignInfoWeatherConfig(_Model):
     cache_ttl_s: float = Field(default=900.0, gt=0, le=3600)
 
 
+class KnownCallsignDirectoryConfig(_Model):
+    """Optional private-network admin directory and service-owned state."""
+
+    enabled: bool = False
+    database_path: Path = Path("/var/lib/rolling-thunder-forge-callsign-info/known-callsigns.sqlite3")
+
+    @field_validator("database_path")
+    @classmethod
+    def absolute_database_path(cls, value: Path) -> Path:
+        if not value.is_absolute():
+            raise ValueError("Known-callsign database_path must be absolute and outside the checkout")
+        return value
+
+
 class ForgeCallsignInfoConfig(_Model):
+    known_callsigns: KnownCallsignDirectoryConfig = KnownCallsignDirectoryConfig()
     server: CallsignInfoServerConfig = CallsignInfoServerConfig()
     wavelog: CallsignInfoWavelogConfig = CallsignInfoWavelogConfig()
     weather: CallsignInfoWeatherConfig = CallsignInfoWeatherConfig()

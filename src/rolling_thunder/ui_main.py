@@ -43,6 +43,7 @@ from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.domain import Contact
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
+from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
 from rolling_thunder.ft8.status import operator_ft8_status
@@ -475,15 +476,22 @@ def run_dashboard(
     ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=0)
 
     callsign_text = tk.StringVar(value="")
+    pending_call_cell = tk.Frame(logger, bg=_PANEL_BACKGROUND)
+    pending_call_cell.grid(row=1, column=0, columnspan=2, sticky="nsew")
+    pending_call_cell.grid_columnconfigure(0, weight=1)
+    pending_call_cell.grid_columnconfigure(2, weight=1)
     callsign_label = tk.Label(
-        logger,
+        pending_call_cell,
         textvariable=callsign_text,
         bg=_PANEL_BACKGROUND,
         fg=_BRIGHT,
         font=("DejaVu Sans", 72, "bold"),
         anchor="center",
     )
-    callsign_label.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=0)
+    callsign_label.grid(row=0, column=0, sticky="e", pady=0)
+    pending_friend_label = tk.Label(pending_call_cell, text="", bg=_PANEL_BACKGROUND,
+                                    fg=FRIEND_COLOR, font=("DejaVu Sans", 28, "bold"))
+    pending_friend_label.grid(row=0, column=1, sticky="w")
 
     voice_text = tk.StringVar(value="VOICE")
     voice_label = tk.Label(
@@ -781,6 +789,8 @@ def run_dashboard(
     pota_cards_container.grid_remove()
 
     pota_card_frames: list[tk.Frame] = []
+    pota_friend_labels: list[tk.Label] = []
+    pota_call_headers: list[tk.Frame] = []
     pota_card_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
     pota_card_texts: list[
         tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]
@@ -808,8 +818,16 @@ def run_dashboard(
         park_var = tk.StringVar(value="")
         location_var = tk.StringVar(value="")
 
+        call_header = tk.Frame(card_frame, bg=_PANEL_BACKGROUND)
+        call_header.grid(row=0, column=0, sticky="ew")
+        call_header.grid_columnconfigure(1, weight=1)
+        friend_label = tk.Label(call_header, text="", bg=_PANEL_BACKGROUND,
+                               fg=FRIEND_COLOR, font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"))
+        friend_label.grid(row=0, column=0, sticky="w")
+        pota_friend_labels.append(friend_label)
+        pota_call_headers.append(call_header)
         callsign_label = tk.Label(
-            card_frame,
+            call_header,
             textvariable=callsign_var,
             bg=_PANEL_BACKGROUND,
             fg=_BRIGHT,
@@ -819,7 +837,7 @@ def run_dashboard(
             padx=12,
             pady=2,
         )
-        callsign_label.grid(row=0, column=0, sticky="ew")
+        callsign_label.grid(row=0, column=1, sticky="ew")
 
         frequency_label = tk.Label(
             card_frame,
@@ -1199,6 +1217,8 @@ def run_dashboard(
             gps_state,
             connectivity,
         )
+        friends = (runtime.known_callsigns.cache.friends
+                   if runtime.known_callsigns is not None else frozenset())
         pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
 
         pota_latitude: float | None = None
@@ -1259,6 +1279,7 @@ def run_dashboard(
             if callsign_info_state.response is not None:
                 callsign_presentation = build_callsign_info_presentation(
                     callsign_info_state.response,
+                    friends=friends,
                     pota_latitude=callsign_info_state.target_latitude,
                     pota_longitude=callsign_info_state.target_longitude,
                     target_grid=callsign_info_target_grid,
@@ -1294,6 +1315,7 @@ def run_dashboard(
 
         callsign_prompt_text.set("" if pending_callsign or voice_engaged else "CALLSIGN")
         callsign_text.set(pending_callsign)
+        pending_friend_label.configure(text=friend_marker(pending_callsign, friends))
         callsign_label.configure(
             font=("DejaVu Sans", _callsign_font_size(pending_callsign), "bold")
         )
@@ -1343,7 +1365,7 @@ def run_dashboard(
             health_frame.grid_remove()
             show_pota_context_body()
             panel_state = shared_spot_panel.state
-            panel = build_shared_spot_viewport(panel_state)
+            panel = build_shared_spot_viewport(panel_state, friends=friends)
             context_title_text.set(panel.title)
             context_title_label.configure(
                 font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold")
@@ -1405,6 +1427,8 @@ def run_dashboard(
                         padx=invisible_border_width,
                         pady=invisible_border_width,
                     )
+                    pota_call_headers[card_index].configure(bg=card_background)
+                    pota_friend_labels[card_index].configure(text=card.friend_marker, bg=card_background)
                     for card_label in pota_card_labels[card_index]:
                         card_label.configure(
                             bg=card_background,
@@ -1478,7 +1502,7 @@ def run_dashboard(
             health_frame.grid_remove()
             context_title_text.set(selected_context.definition.title)
             context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
-            log_widgets.update(log_panel.latest_state)
+            log_widgets.update(log_panel.latest_state, friends=friends)
         elif selected_context.selected is ContextId.DMR:
             health_frame.grid_remove()
             context_title_text.set(selected_context.definition.title)
@@ -1496,6 +1520,7 @@ def run_dashboard(
                         dmr_panel_runtime.latest_monitor_state,
                         dmr_selection,
                         dmr_panel_runtime.commit.status,
+                        friends=friends,
                     )
                 )
         elif selected_context.selected is ContextId.FT8:
@@ -1541,6 +1566,7 @@ def run_dashboard(
                         selected_callsign=selected_callsign,
                         visible_rows=ft8_widgets.visible_rows,
                         attempt_states=attempt_states,
+                        friends=friends,
                     )
                     selected_activity = next(
                         (row for row in ft8_snapshot.cq_activity if row.callsign == selected_callsign),

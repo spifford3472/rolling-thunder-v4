@@ -325,3 +325,18 @@ def test_unknown_monitored_talkgroup_disables_log_selection_prompt() -> None:
     assert viewport.title == "DMR HOTSPOT — TG ?"
     assert viewport.history_cards == ()
     assert viewport.stage_line == "MONITORED TG UNKNOWN — KEY DESIRED TG TO ARM LOGGING"
+
+
+def test_friend_decoration_preserves_dmr_selection_and_staging() -> None:
+    from dataclasses import replace
+
+    record = _history_record(1, callsign="W1ABC")
+    monitor = _monitor(history=(record,), active_calls=(_active_call("W1ABC"),))
+    controller = DmrSelectionController()
+    selection = controller.replace_history((record,))
+    ordinary = build_dmr_viewport(monitor, selection, DmrCommitStatus())
+    decorated = build_dmr_viewport(monitor, selection, DmrCommitStatus(), friends=frozenset({"W1ABC"}))
+    assert decorated.history_cards[0].friend_marker == "★"
+    assert decorated.current_audio_cards[0].friend_marker == "★"
+    assert replace(decorated.history_cards[0], friend_marker="") == ordinary.history_cards[0]
+    assert replace(decorated.current_audio_cards[0], friend_marker="") == ordinary.current_audio_cards[0]

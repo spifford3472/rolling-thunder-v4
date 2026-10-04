@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sqlite3
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,6 +22,7 @@ from rolling_thunder.forge_callsign_info_config import (
     ForgeCallsignInfoConfigurationError,
     load_forge_callsign_info_config,
 )
+from rolling_thunder.forge_known_callsigns import ForgeKnownCallsignRepository
 from rolling_thunder.forge_open_meteo_weather import OpenMeteoForgeWeatherProvider
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
 from rolling_thunder.wavelog import WavelogClient
@@ -93,14 +95,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             station_ttl_s=config.station_cache_ttl_s,
             weather_ttl_s=config.weather.cache_ttl_s,
         )
-        application = ForgeCallsignInfoApiApplication(service)
+        directory = (ForgeKnownCallsignRepository(config.known_callsigns.database_path)
+                     if config.known_callsigns.enabled else None)
+        application = ForgeCallsignInfoApiApplication(service, known_callsigns=directory)
         server = ForgeCallsignInfoHttpServer(
             config.server.bind_host,
             config.server.bind_port,
             application,
             logger=logger,
         )
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, sqlite3.Error) as error:
         logger.error("Callsign-info service could not start: %s", error)
         return EXIT_RUNTIME_ERROR
 

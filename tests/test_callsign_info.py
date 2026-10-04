@@ -319,3 +319,14 @@ def test_grid_center_fallback_is_marked_approximate() -> None:
     assert presentation.target is not None
     assert presentation.pin_visible is True
     assert presentation.location_note == "APPROX GRID CENTER"
+
+
+def test_friend_overlay_marker_does_not_change_contact_identity() -> None:
+    from dataclasses import replace
+
+    response = CallsignInfoResponse(callsign="W1ABC", last_qso=CallsignInfoLastQso(exists=False))
+    clock = datetime(2026, 10, 4, tzinfo=UTC)
+    ordinary = build_callsign_info_presentation(response, local_time=clock)
+    decorated = build_callsign_info_presentation(response, local_time=clock, friends=frozenset({"W1ABC"}))
+    assert decorated.friend_marker == "★"
+    assert replace(decorated, friend_marker="") == ordinary

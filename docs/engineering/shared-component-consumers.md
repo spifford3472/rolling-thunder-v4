@@ -22,6 +22,7 @@ This document prevents feature-scoped work from accidentally breaking shared beh
 | Forge callsign intelligence | `forge_callsign_info*.py` | shared callsign overlay; potentially future clients | High: reusable backend API |
 | Forge contact sync | `forge_contact_sync*.py` | local contact sync, LOG status; potentially future clients | Critical: idempotency and Wavelog target safety |
 | FT8 bounded transmit path | `ft8/authorization.py`, `session.py`, `hardware_transmit.py`, `transmit.py` | FT8 only by design | Critical: must not become general transmit authority |
+| Friend classification | `known_callsigns.py`, `known_callsign_client.py`, `friend_presentation.py` | POTA/DX, FT8 CQ, pending/Browse, callsign overlay, DMR audio/history, LOG | Informational only; no command/identity changes, no UI HTTP or comment leakage |
 
 ## Required rule
 

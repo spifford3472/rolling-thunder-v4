@@ -120,3 +120,11 @@ Before changing a Forge API:
 - add request/response validation tests;
 - verify retained/offline/error semantics;
 - update this guide and the relevant API/subsystem documentation.
+
+
+## Known/friend directory
+
+The callsign-info process also owns the optional SQLite known-callsign directory,
+private browser admin, bounded active snapshot and batch classification routes.
+Comments stay on Forge; clients receive only classification. No new process or
+port is introduced. See `../KNOWN_CALLSIGNS.md` for contracts and deployment.

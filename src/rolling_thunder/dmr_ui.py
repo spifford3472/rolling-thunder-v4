@@ -8,6 +8,7 @@ from datetime import datetime
 from rolling_thunder.dmr_commit import DmrCommitStatus
 from rolling_thunder.dmr_monitor import DmrMonitorSnapshot, monitored_dmr_active_calls
 from rolling_thunder.dmr_selection import DmrSelectionState, DmrStageOrigin
+from rolling_thunder.friend_presentation import friend_marker
 
 _DEFAULT_MAX_HISTORY_ROWS = 12
 
@@ -20,6 +21,7 @@ class DmrAudioCard:
     detail_line: str
     alias_line: str
     staged: bool
+    friend_marker: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +32,7 @@ class DmrHistoryCard:
     detail_line: str
     selected: bool
     staged: bool
+    friend_marker: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +72,7 @@ def build_dmr_viewport(
     commit: DmrCommitStatus,
     *,
     max_history_rows: int = _DEFAULT_MAX_HISTORY_ROWS,
+    friends: frozenset[str] = frozenset(),
 ) -> DmrViewport:
     """Build a bounded read-only DMR dashboard presentation without I/O."""
     if max_history_rows < 1:
@@ -95,6 +99,7 @@ def build_dmr_viewport(
     active_cards = tuple(
         DmrAudioCard(
             callsign_line=call.identity.callsign,
+            friend_marker=friend_marker(call.identity.callsign, friends),
             detail_line=(
                 f"{format_dmr_timestamp(call.identity.started_at)} · "
                 f"TS{call.identity.slot} · {call.identity.target} · "
@@ -116,6 +121,7 @@ def build_dmr_viewport(
     history_cards = tuple(
         DmrHistoryCard(
             callsign_line=record.callsign,
+            friend_marker=friend_marker(record.callsign, friends),
             detail_line=_history_detail_line(
                 record.name,
                 occurred_at=record.occurred_at,

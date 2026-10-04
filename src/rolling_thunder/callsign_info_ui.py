@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from rolling_thunder.callsign_info import CallsignInfoResponse
+from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.live_map_service import LiveMapSnapshot
 from rolling_thunder.maidenhead import maidenhead_grid_center
@@ -39,6 +40,7 @@ class CallsignInfoPresentation:
     pin_visible: bool
     location_note: str | None
     map_zoom: int
+    friend_marker: str = ""
 
 
 def build_callsign_info_presentation(
@@ -48,6 +50,7 @@ def build_callsign_info_presentation(
     pota_longitude: float | None = None,
     target_grid: str | None = None,
     local_time: datetime | None = None,
+    friends: frozenset[str] = frozenset(),
 ) -> CallsignInfoPresentation:
     """Build glance-readable overlay text without I/O or timezone guessing."""
     profile = response.profile
@@ -157,6 +160,7 @@ def build_callsign_info_presentation(
 
     return CallsignInfoPresentation(
         callsign=response.callsign,
+        friend_marker=friend_marker(response.callsign, friends),
         name=name,
         license_line=license_line,
         identity_lines=tuple(identity),
@@ -278,6 +282,9 @@ class CallsignInfoOverlayWidgets:
         self._name = tk.StringVar(value="")
         self._license = tk.StringVar(value="")
         self._identity = tk.StringVar(value="")
+        self._friend_label = tk.Label(details, text="", bg=_PANEL, fg=FRIEND_COLOR,
+                                      font=("DejaVu Sans", 40, "bold"))
+        self._friend_label.pack(side="left", anchor="n", pady=(7, 0))
         self._name_label = tk.Label(
             details,
             textvariable=self._name,
@@ -350,6 +357,7 @@ class CallsignInfoOverlayWidgets:
         presentation: CallsignInfoPresentation,
         map_snapshot: LiveMapSnapshot | None,
     ) -> None:
+        self._friend_label.configure(text=presentation.friend_marker)
         self._name.set(
             f"{presentation.callsign} — {presentation.name}"
             if presentation.name
