@@ -181,3 +181,12 @@ QRZ fields are optional. The UI omits missing values rather than manufacturing d
 QRZ's `born` field is treated as a birth year only. The UI does not calculate an exact age from a year-only value.
 
 Wavelog history depends on the configured token having `qso:read` permission and on the deployed Wavelog v2 endpoint supporting filtered QSO reads.
+
+
+## Known/friend callsigns
+
+The same Forge service optionally serves `/admin/known-callsigns` and
+`/api/v1/known-callsigns`. The Pi uses independent background snapshot polling
+for gold friend stars, including this overlay. Directory comments never enter
+contact-intelligence responses. See `KNOWN_CALLSIGNS.md` for configuration,
+private-network administration, cache failure behavior, and owner acceptance.

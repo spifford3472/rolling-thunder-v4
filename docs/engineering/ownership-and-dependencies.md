@@ -231,3 +231,13 @@ A change to a shared module requires:
 
 See `shared-component-consumers.md` and
 `shared-component-contracts.md`.
+
+
+## Known/friend callsign classification
+
+Forge callsign intelligence owns durable friend data and private comments.
+`known_callsign_client.py` owns Pi background snapshot polling and expiring
+classification. Presentation consumes immutable status through
+`friend_presentation.py`; it never changes canonical identities or commands.
+Consumers are POTA/DX, FT8 CQ, shared pending/Browse callsign, contact overlay,
+DMR audio/history and LOG. See `../KNOWN_CALLSIGNS.md`.

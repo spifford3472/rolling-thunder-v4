@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
+from rolling_thunder.friend_presentation import FRIEND_COLOR
 from rolling_thunder.ft8_ui import (
     FT8_POTA_TREE_GLYPH,
     FT8BrowserViewport,
@@ -66,6 +67,7 @@ class FT8Widgets:
         self._row_frames: list[tk.Frame] = []
         self._row_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
         self._pota_labels: list[tk.Label] = []
+        self._friend_labels: list[tk.Label] = []
         self._call_cells: list[tk.Frame] = []
         for index in range(visible_rows):
             row = tk.Frame(
@@ -81,7 +83,7 @@ class FT8Widgets:
                 if column == 0:
                     call_cell = tk.Frame(row, bg=_ROW_BACKGROUND)
                     call_cell.grid(row=0, column=0, sticky="nsew")
-                    call_cell.grid_columnconfigure(1, weight=1)
+                    call_cell.grid_columnconfigure(2, weight=1)
                     pota_label = tk.Label(
                         call_cell,
                         text="",
@@ -103,7 +105,11 @@ class FT8Widgets:
                         padx=3,
                         pady=7,
                     )
-                    row_label.grid(row=0, column=1, sticky="nsew")
+                    row_label.grid(row=0, column=2, sticky="nsew")
+                    friend_label = tk.Label(call_cell, text="", bg=_ROW_BACKGROUND,
+                                            fg=FRIEND_COLOR, font=("DejaVu Sans", 24, "bold"))
+                    friend_label.grid(row=0, column=1, sticky="nsw")
+                    self._friend_labels.append(friend_label)
                     self._pota_labels.append(pota_label)
                     self._call_cells.append(call_cell)
                 else:
@@ -190,6 +196,8 @@ class FT8Widgets:
                 bg=background,
                 fg=_POTA_GREEN,
             )
+
+            self._friend_labels[index].configure(text=row.friend_marker, bg=background)
 
             texts = (row.call_text, row.snr_text, row.audio_text, row.grid_text)
             for column, label in enumerate(self._row_labels[index]):

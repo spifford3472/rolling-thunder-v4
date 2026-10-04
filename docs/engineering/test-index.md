@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 280.**
+**Cataloged Python test modules: 283.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -382,3 +382,14 @@ Add or update regression tests in the same branch as behavior changes. Keep
 tests hardware/network-independent by default using fakes, fixtures, temporary
 storage, and injected transports. Deployment-only acceptance tests must be
 clearly distinguished from CI-safe tests.
+
+
+## Known/friend callsigns
+
+- `tests/test_forge_known_callsigns.py` — SQLite persistence/schema/limits, admin CRUD/escaping/CSRF/delete confirmation, snapshot/batch privacy, real local HTTP handler.
+- `tests/test_known_callsign_client.py` — bounded transport validation, batch identity, cache refresh/failure/staleness, background polling and typed configuration.
+- `tests/test_friend_widgets.py` — headless gold-star FT8 and LOG adapters preserving outcome/selection/sync colors.
+- Existing shared-spot, FT8, callsign-info, DMR and runtime tests include decoration-only regression checks.
+
+Owner service-package, state backup, private-network admin, restart persistence,
+and installed screen acceptance remains required; see `../KNOWN_CALLSIGNS.md`.

@@ -957,3 +957,23 @@ context exit skips that recovery. CAT-safe shutdown performs serialized normal
 receive cleanup before disconnect. With CAT unavailable, restoration cannot be
 confirmed: check 11-05 manually before voice operation. Hardware acceptance of
 this change is still required.
+
+
+## Known/friend callsign stars
+
+A small gold ★ beside a remote callsign means it is an active entry in your
+Forge friend directory. Stars appear on POTA/DX cards, FT8 CQ rows, the pending
+callsign/Browse area, contact information, DMR audio/history, and LOG contacts.
+A star does not mean worked, selected, eligible for FT8, or authorized to transmit.
+
+On the trusted private network, open
+`http://192.168.9.170:8788/admin/known-callsigns`. Add or edit a callsign and an
+optional name/comment. Uncheck Active to hide its star, check Active to restore
+it, or use Delete and confirm permanent removal. Comments are private Forge
+administration data and do not travel to the vehicle's friend-status cache.
+Matches use exact uppercase callsigns, including any operating suffix.
+
+Changes normally appear on the next 30-second poll. When Forge is unavailable
+or the classification becomes stale, callsigns render without stars and normal
+operating/logging controls continue. See `KNOWN_CALLSIGNS.md` for setup and
+owner deployment/acceptance instructions.

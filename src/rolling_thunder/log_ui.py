@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from rolling_thunder.domain import SynchronizationState
+from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.log_panel import LogPanelSnapshot
 
 _BACKGROUND = "#151515"
@@ -63,6 +64,7 @@ class LogWidgets:
         )
         self._status_label.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
 
+        self._friend_labels: list[Any] = []
         self._row_vars: list[tuple[Any, Any, Any, Any, Any]] = []
         self._row_labels: list[Any] = []
         self._row_frames: list[Any] = []
@@ -97,14 +99,21 @@ class LogWidgets:
                 anchor="w",
             ).grid(row=0, column=0, sticky="w", padx=(12, 8), pady=(8, 0))
 
+            call_cell = tk.Frame(row_frame, bg=_CARD_BACKGROUND)
+            call_cell.grid(row=0, column=1, sticky="ew", padx=8, pady=(5, 0))
+            call_cell.grid_columnconfigure(1, weight=1)
+            friend_label = tk.Label(call_cell, text="", bg=_CARD_BACKGROUND,
+                                    fg=FRIEND_COLOR, font=("DejaVu Sans", 26, "bold"))
+            friend_label.grid(row=0, column=0)
+            self._friend_labels.append(friend_label)
             tk.Label(
-                row_frame,
+                call_cell,
                 textvariable=callsign,
                 bg=_CARD_BACKGROUND,
                 fg=_BRIGHT,
                 font=("DejaVu Sans", _LOG_CALLSIGN_FONT_SIZE, "bold"),
-                anchor="center",
-            ).grid(row=0, column=1, sticky="ew", padx=8, pady=(5, 0))
+                anchor="w",
+            ).grid(row=0, column=1, sticky="ew")
 
             tk.Label(
                 row_frame,
@@ -172,7 +181,7 @@ class LogWidgets:
     def hide(self) -> None:
         self._frame.grid_remove()
 
-    def update(self, snapshot: LogPanelSnapshot) -> None:
+    def update(self, snapshot: LogPanelSnapshot, *, friends: frozenset[str] = frozenset()) -> None:
         """Update rows from one immutable background-produced snapshot."""
         self._summary.set(snapshot.summary_text)
         self._status.set(snapshot.status_text)
@@ -189,6 +198,7 @@ class LogWidgets:
             timestamp, callsign, band, country, status = variables
             timestamp.set(format_log_timestamp(row.started_at))
             callsign.set(row.callsign)
+            self._friend_labels[index].configure(text=friend_marker(row.callsign, friends))
             band.set(row.band)
             country.set(row.country)
             status.set(row.status_text)

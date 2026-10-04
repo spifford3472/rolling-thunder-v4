@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rolling_thunder.forge_client import ForgeRemoteProviderStatus
+from rolling_thunder.friend_presentation import friend_marker
 from rolling_thunder.shared_spot_panel import SharedSpotPanelRow, SharedSpotPanelState
 from rolling_thunder.spot_domain import SpotProvider
 
@@ -21,6 +22,7 @@ class SharedSpotCard:
     line4: str
     selected: bool
     worked: bool
+    friend_marker: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +47,7 @@ def build_shared_spot_viewport(
     state: SharedSpotPanelState,
     *,
     max_rows: int = _DEFAULT_MAX_ROWS,
+    friends: frozenset[str] = frozenset(),
 ) -> SharedSpotViewport:
     """Build a provider-neutral three-card mobile viewport."""
     if max_rows < 1:
@@ -62,7 +65,7 @@ def build_shared_spot_viewport(
         start_index = min(start_index, max(0, total_rows - max_rows))
 
     end_index = min(total_rows, start_index + max_rows)
-    cards = tuple(_card_from_row(row) for row in state.rows[start_index:end_index])
+    cards = tuple(_card_from_row(row, friends) for row in state.rows[start_index:end_index])
 
     status_line = f"{total_rows} SPOTS"
     detail_line = _detail_line(state)
@@ -100,7 +103,7 @@ def _provider_error(state: SharedSpotPanelState) -> str | None:
     return health.last_error or f"{health.provider.value.upper()} provider {health.status.value}"
 
 
-def _card_from_row(row: SharedSpotPanelRow) -> SharedSpotCard:
+def _card_from_row(row: SharedSpotPanelRow, friends: frozenset[str]) -> SharedSpotCard:
     if row.provider is SpotProvider.POTA:
         park_reference = row.park_reference or "<UNKNOWN>"
         park_name = row.park_name or "<UNKNOWN>"
@@ -115,6 +118,7 @@ def _card_from_row(row: SharedSpotPanelRow) -> SharedSpotCard:
             line4=location,
             selected=row.selected,
             worked=row.worked,
+            friend_marker=friend_marker(row.callsign, friends),
         )
 
     metadata = "  ".join(
@@ -127,6 +131,7 @@ def _card_from_row(row: SharedSpotPanelRow) -> SharedSpotCard:
         line4=metadata or "SOURCE <UNKNOWN>",
         selected=row.selected,
         worked=False,
+        friend_marker=friend_marker(row.callsign, friends),
     )
 
 

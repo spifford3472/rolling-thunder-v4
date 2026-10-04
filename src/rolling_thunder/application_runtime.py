@@ -73,6 +73,11 @@ from rolling_thunder.gps_polling import GPSPollingService
 from rolling_thunder.home_platform import HomePlatformClient
 from rolling_thunder.home_platform_health import HomePlatformHealthService
 from rolling_thunder.http_home_platform import HttpHomePlatformClient, HttpTransport
+from rolling_thunder.known_callsign_client import (
+    HttpKnownCallsignClient,
+    KnownCallsignCache,
+    KnownCallsignPollingService,
+)
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
 from rolling_thunder.map_solar import MapSolarStyleService
@@ -183,6 +188,7 @@ class ApplicationRuntime:
     map_zoom_settings: MapZoomSettingsController | None = None
     map_solar: MapSolarStyleService | None = None
     operator_preferences: OperatorPreferenceService | None = None
+    known_callsigns: KnownCallsignPollingService | None = None
     callsign_info: CallsignInfoLookupService | None = None
     home_platform_client: HomePlatformClient | None = None
     home_platform_health: HomePlatformHealthService | None = None
@@ -392,6 +398,19 @@ class ApplicationRuntime:
                 ),
             )
         )
+
+        known_callsigns: KnownCallsignPollingService | None = None
+        friend_config = config.forge.known_callsigns
+        if friend_config.enabled:
+            assert friend_config.api_url is not None
+            known_callsigns = KnownCallsignPollingService(
+                KnownCallsignCache(
+                    HttpKnownCallsignClient(str(friend_config.api_url),
+                                           timeout_s=friend_config.request_timeout_s,
+                                           transport=callsign_info_transport or forge_transport),
+                    stale_after_s=friend_config.stale_after_s,
+                ), polling_scheduler, interval_s=friend_config.refresh_interval_s,
+            )
 
         callsign_info: CallsignInfoLookupService | None = None
         callsign_info_config = config.forge.callsign_info
@@ -786,6 +805,7 @@ class ApplicationRuntime:
             map_zoom_settings=map_zoom_settings,
             map_solar=map_solar,
             operator_preferences=operator_preferences,
+            known_callsigns=known_callsigns,
             callsign_info=callsign_info,
             home_platform_client=home_platform_client,
             home_platform_health=home_platform_health,
@@ -1114,6 +1134,8 @@ class ApplicationRuntime:
 
     def _start_remaining_services(self) -> None:
         """Start services after radio polling with rollback handled by start()."""
+        if self.known_callsigns is not None:
+            self.known_callsigns.start()
         if self.ft8_receive is not None:
             self.ft8_receive.start()
         if self.gps_polling is not None:
@@ -1201,6 +1223,8 @@ class ApplicationRuntime:
             self.callsign_map.stop()
         if self.live_map is not None:
             self.live_map.stop()
+        if self.known_callsigns is not None:
+            self.known_callsigns.stop()
         if self.callsign_info is not None:
             self.callsign_info.stop()
         if self.operator_preferences is not None:

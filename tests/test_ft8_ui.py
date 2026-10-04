@@ -137,3 +137,17 @@ def test_attempt_history_does_not_add_non_cq_rows() -> None:
     )
 
     assert [row.callsign for row in viewport.rows] == ["K1ABC"]
+
+
+def test_friend_marker_changes_only_decoration_not_ft8_identity_or_outcome() -> None:
+    from dataclasses import replace
+
+    activity = (_activity("W1ABC", pota=True), _activity("W2ABC"))
+    states = {"W1ABC": FT8AttemptVisualState.FAILED}
+    ordinary = build_ft8_browser_viewport(activity, selected_callsign="W1ABC", attempt_states=states)
+    decorated = build_ft8_browser_viewport(activity, selected_callsign="W1ABC", attempt_states=states,
+                                          friends=frozenset({"W1ABC"}))
+    assert decorated.rows[0].friend_marker == "★"
+    assert decorated.rows[1] == ordinary.rows[1]
+    assert replace(decorated.rows[0], friend_marker="") == ordinary.rows[0]
+    assert activity[0].callsign == "W1ABC"

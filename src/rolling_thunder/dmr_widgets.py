@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from rolling_thunder.dmr_ui import DmrViewport
+from rolling_thunder.friend_presentation import FRIEND_COLOR
 
 _BACKGROUND = "#151515"
 _CARD_BACKGROUND = "#101010"
@@ -86,6 +87,7 @@ class DmrWidgets:
         )
         self._audio_idle_label.grid(row=4, column=0, columnspan=2, sticky="ew", padx=4, pady=1)
 
+        self._audio_friend_labels: list[Any] = []
         self._audio_frames: list[Any] = []
         self._audio_vars: list[tuple[Any, Any, Any]] = []
         for card_index in range(_MAX_AUDIO_CARDS):
@@ -96,8 +98,13 @@ class DmrWidgets:
                 highlightbackground=_BORDER,
             )
             frame.grid(row=5 + card_index, column=0, columnspan=2, sticky="ew", padx=4, pady=1)
-            frame.grid_columnconfigure(0, weight=1)
+            frame.grid_columnconfigure(0, weight=0)
+            frame.grid_columnconfigure(1, weight=1)
 
+            friend_label = tk.Label(frame, text="", bg=_CARD_BACKGROUND,
+                                    fg=FRIEND_COLOR, font=("DejaVu Sans", 26, "bold"))
+            friend_label.grid(row=0, column=0, sticky="w")
+            self._audio_friend_labels.append(friend_label)
             callsign = tk.StringVar(value="")
             detail = tk.StringVar(value="")
             alias = tk.StringVar(value="")
@@ -108,7 +115,7 @@ class DmrWidgets:
                 fg=_BRIGHT,
                 font=("DejaVu Sans", 50, "bold"),
                 anchor="w",
-            ).grid(row=0, column=0, sticky="ew", padx=8, pady=(2, 0))
+            ).grid(row=0, column=1, sticky="ew", padx=8, pady=(2, 0))
             tk.Label(
                 frame,
                 textvariable=detail,
@@ -116,7 +123,7 @@ class DmrWidgets:
                 fg=_BRIGHT,
                 font=("DejaVu Sans", 26, "bold"),
                 anchor="w",
-            ).grid(row=1, column=0, sticky="ew", padx=8, pady=0)
+            ).grid(row=1, column=0, columnspan=2, sticky="ew", padx=8, pady=0)
             tk.Label(
                 frame,
                 textvariable=alias,
@@ -124,7 +131,7 @@ class DmrWidgets:
                 fg=_MUTED,
                 font=("DejaVu Sans", 24),
                 anchor="w",
-            ).grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 2))
+            ).grid(row=2, column=0, columnspan=2, sticky="ew", padx=8, pady=(0, 2))
             self._audio_frames.append(frame)
             self._audio_vars.append((callsign, detail, alias))
             frame.grid_remove()
@@ -138,6 +145,7 @@ class DmrWidgets:
             anchor="w",
         ).grid(row=7, column=0, columnspan=2, sticky="ew", padx=6, pady=(3, 1))
 
+        self._history_friend_labels: list[Any] = []
         self._history_frames: list[Any] = []
         self._history_vars: list[tuple[Any, Any]] = []
         for card_index in range(_MAX_HISTORY_CARDS):
@@ -155,8 +163,9 @@ class DmrWidgets:
                 padx=4,
                 pady=1,
             )
-            frame.grid_columnconfigure(0, weight=2)
-            frame.grid_columnconfigure(1, weight=3)
+            frame.grid_columnconfigure(0, weight=0)
+            frame.grid_columnconfigure(1, weight=2)
+            frame.grid_columnconfigure(2, weight=3)
 
             callsign = tk.StringVar(value="")
             detail = tk.StringVar(value="")
@@ -167,7 +176,7 @@ class DmrWidgets:
                 fg=_BRIGHT,
                 font=("DejaVu Sans", 36, "bold"),
                 anchor="w",
-            ).grid(row=0, column=0, sticky="w", padx=(8, 4), pady=0)
+            ).grid(row=0, column=1, sticky="w", padx=(8, 4), pady=0)
             tk.Label(
                 frame,
                 textvariable=detail,
@@ -177,7 +186,11 @@ class DmrWidgets:
                 anchor="e",
                 justify="right",
                 wraplength=300,
-            ).grid(row=0, column=1, sticky="e", padx=(4, 8), pady=0)
+            ).grid(row=0, column=2, sticky="e", padx=(4, 8), pady=0)
+            friend_label = tk.Label(frame, text="", bg=_CARD_BACKGROUND,
+                                    fg=FRIEND_COLOR, font=("DejaVu Sans", 26, "bold"))
+            friend_label.grid(row=0, column=0, sticky="w")
+            self._history_friend_labels.append(friend_label)
             self._history_frames.append(frame)
             self._history_vars.append((callsign, detail))
             frame.grid_remove()
@@ -261,6 +274,7 @@ class DmrWidgets:
             audio_card = viewport.current_audio_cards[index]
             callsign, detail, alias = self._audio_vars[index]
             callsign.set(audio_card.callsign_line)
+            self._audio_friend_labels[index].configure(text=audio_card.friend_marker)
             detail.set(audio_card.detail_line)
             alias.set(audio_card.alias_line)
             frame.configure(
@@ -283,6 +297,7 @@ class DmrWidgets:
                 history_card = viewport.history_cards[index]
                 callsign, detail = self._history_vars[index]
                 callsign.set(history_card.callsign_line)
+                self._history_friend_labels[index].configure(text=history_card.friend_marker)
                 detail.set(history_card.detail_line)
                 background = (
                     _SELECTED_BACKGROUND

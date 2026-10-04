@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,6 +12,13 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from rolling_thunder.callsign_info import CallsignInfoResponse
 from rolling_thunder.forge_callsign_info import ForgeCallsignInfoService
+from rolling_thunder.forge_known_callsign_admin import (
+    ADMIN_ROUTE,
+    MAX_ADMIN_BODY,
+    ForgeKnownCallsignAdmin,
+)
+from rolling_thunder.forge_known_callsigns import ForgeKnownCallsignRepository
+from rolling_thunder.known_callsigns import KnownCallsignBatch
 from rolling_thunder.qrz_xml import QrzLookupError
 from rolling_thunder.wavelog import WavelogError
 
@@ -29,8 +37,11 @@ class ForgeCallsignInfoHttpResponse:
 class ForgeCallsignInfoApiApplication:
     """Bounded router over the independent callsign-info service."""
 
-    def __init__(self, service: ForgeCallsignInfoService) -> None:
+    def __init__(self, service: ForgeCallsignInfoService, *,
+                 known_callsigns: ForgeKnownCallsignRepository | None = None) -> None:
         self._service = service
+        self._known_callsigns = known_callsigns
+        self._known_admin = ForgeKnownCallsignAdmin(known_callsigns) if known_callsigns else None
 
     def handle(
         self,
@@ -40,7 +51,14 @@ class ForgeCallsignInfoApiApplication:
         headers: Mapping[str, str] | None = None,
         body: bytes | None = None,
     ) -> ForgeCallsignInfoHttpResponse:
-        del headers, body
+        method = method.strip().upper()
+        parsed = urlsplit(target)
+        if parsed.path.startswith(ADMIN_ROUTE) or parsed.path == "/api/v1/known-callsigns":
+            try:
+                return self._handle_known(method, target, headers or {}, body or b"")
+            except (sqlite3.Error, OSError):
+                _LOGGER.exception("Known-callsign directory unavailable")
+                return self._error(503, "directory_unavailable", "Directory unavailable.")
         if method.strip().upper() != "GET":
             return self._error(405, "method_not_allowed", "Only GET is supported.", allow="GET")
 
@@ -96,6 +114,29 @@ class ForgeCallsignInfoApiApplication:
             )
         return self._json(200, response.model_dump(mode="json"))
 
+    def _handle_known(self, method: str, target: str, headers: Mapping[str, str],
+                      body: bytes) -> ForgeCallsignInfoHttpResponse:
+        repository = self._known_callsigns
+        if repository is None:
+            return self._error(503, "directory_disabled", "Known-callsign directory is disabled.")
+        if urlsplit(target).path.startswith(ADMIN_ROUTE):
+            assert self._known_admin is not None
+            status, response_headers, response_body = self._known_admin.handle(
+                method, target, headers, body
+            )
+            return ForgeCallsignInfoHttpResponse(status, response_headers, response_body)
+        if method == "GET":
+            return self._json(200, repository.snapshot().model_dump(mode="json"))
+        if method == "POST":
+            if len(body) > MAX_ADMIN_BODY:
+                return self._error(413, "request_too_large", "Request body exceeds limit.")
+            try:
+                request = KnownCallsignBatch.model_validate_json(body)
+                return self._json(200, repository.lookup(request).model_dump(mode="json"))
+            except ValueError:
+                return self._error(400, "invalid_batch", "Provide 1 to 128 valid callsigns.")
+        return self._error(405, "method_not_allowed", "Use GET or POST.", allow="GET, POST")
+
     @classmethod
     def _json(cls, status_code: int, payload: object) -> ForgeCallsignInfoHttpResponse:
         body = dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -146,10 +187,28 @@ def make_forge_callsign_info_handler(
         protocol_version = "HTTP/1.1"
 
         def do_GET(self) -> None:
-            self._send(application.handle("GET", self.path))
+            self._send(application.handle("GET", self.path, headers=dict(self.headers)))
 
         def do_POST(self) -> None:
-            self._send(application.handle("POST", self.path))
+            self.close_connection = True
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self._send(application._error(400, "invalid_length", "Invalid Content-Length."))
+                return
+            if length < 0 or length > MAX_ADMIN_BODY or self.headers.get("Transfer-Encoding"):
+                self._send(application._error(413, "request_too_large", "Request exceeds limit."))
+                return
+            self.connection.settimeout(5.0)
+            try:
+                body = self.rfile.read(length)
+            except (OSError, TimeoutError):
+                self._send(application._error(400, "incomplete_body", "Request body unavailable."))
+                return
+            if len(body) != length:
+                self._send(application._error(400, "incomplete_body", "Incomplete request body."))
+                return
+            self._send(application.handle("POST", self.path, headers=dict(self.headers), body=body))
 
         def _send(self, response: ForgeCallsignInfoHttpResponse) -> None:
             self.send_response(response.status_code)

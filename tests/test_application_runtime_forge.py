@@ -188,3 +188,28 @@ def test_real_gps_mode_composes_and_manages_location_publisher(tmp_path: Path) -
 
     assert publishing.is_running is False
     assert location_scheduler.poll.cancelled is True
+
+
+def test_runtime_owns_friend_polling_independently_of_overlay(tmp_path: Path) -> None:
+    from threading import Event
+
+    from rolling_thunder.http_home_platform import UrllibHttpResponse
+
+    called = Event()
+    class Transport:
+        def request(self, method, url, *, headers, body, timeout_s):
+            assert url.endswith("/api/v1/known-callsigns")
+            called.set()
+            return UrllibHttpResponse(200, b'{"entries":[{"callsign":"W1ABC","known":true,"relationship":"friend"}]}')
+
+    payload = config(tmp_path, forge_enabled=True).model_dump(mode="json")
+    payload["forge"]["known_callsigns"] = {"enabled": True, "api_url": "http://forge:8788"}
+    runtime = ApplicationRuntime.from_config(ApplicationConfig.model_validate(payload),
+        scheduler=ManualScheduler(), gps_scheduler=ManualScheduler(), forge_scheduler=ManualScheduler(),
+        forge_transport=Transport())
+    assert runtime.callsign_info is None
+    assert runtime.known_callsigns is not None
+    runtime.start()
+    assert called.wait(timeout=1)
+    runtime.stop()
+    assert runtime.known_callsigns.cache.friends == frozenset()
