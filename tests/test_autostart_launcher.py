@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from subprocess import run
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO_ROOT / "deploy" / "rolling-thunder-autostart"
 
