@@ -25,6 +25,10 @@ from rolling_thunder.forge_dxspider_provider import (
     DxSpiderSessionFactory,
     ForgeDxSpiderSpotProvider,
 )
+from rolling_thunder.forge_dxsummit_provider import (
+    DxSummitIrcSessionFactory,
+    ForgeDxSummitSpotProvider,
+)
 from rolling_thunder.forge_mobile_location import (
     ForgeMobileLocationService,
     ForgeMobileLocationStorageError,
@@ -135,6 +139,7 @@ class ForgeSpotRuntime:
         weather_alert_polling: ForgeWeatherAlertPollingService | None = None,
         radar: ForgeRadarService | None = None,
         radar_polling: ForgeRadarPollingService | None = None,
+        dxsummit: ForgeDxSummitSpotProvider | None = None,
         logger: logging.Logger,
     ) -> None:
         self.polling = polling
@@ -146,6 +151,7 @@ class ForgeSpotRuntime:
         self.weather_alert_polling = weather_alert_polling
         self.radar = radar
         self.radar_polling = radar_polling
+        self.dxsummit = dxsummit
         self._logger = logger
 
     def run(self) -> None:
@@ -160,6 +166,8 @@ class ForgeSpotRuntime:
         self._logger.info("Forge API listening on http://%s:%s", host, port)
 
         try:
+            if self.dxsummit is not None:
+                self.dxsummit.start()
             self.polling.start()
             if self.weather_polling is not None:
                 self.weather_polling.start()
@@ -177,6 +185,8 @@ class ForgeSpotRuntime:
             if self.weather_polling is not None:
                 self.weather_polling.stop()
             self.polling.stop()
+            if self.dxsummit is not None:
+                self.dxsummit.stop()
             self.server.close()
             server_thread.join(timeout=5.0)
 
@@ -236,6 +246,7 @@ def build_forge_runtime(
     server_factory: ForgeServerFactory | None = None,
     transport: HttpTransport | None = None,
     dxspider_session_factory: DxSpiderSessionFactory | None = None,
+    dxsummit_session_factory: DxSummitIrcSessionFactory | None = None,
     weather_executor_factory: WeatherExecutorFactory | None = None,
     weather_alert_executor_factory: WeatherAlertExecutorFactory | None = None,
     radar_executor_factory: RadarExecutorFactory | None = None,
@@ -254,6 +265,11 @@ def build_forge_runtime(
         )
         providers.append(ForgePotaSpotProvider(source))
 
+    if config.dxspider.enabled and config.dxsummit.enabled:
+        raise ForgeRuntimeConfigurationError(
+            "DXSpider and DX Summit cannot both be enabled."
+        )
+
     if config.dxspider.enabled:
         providers.append(
             ForgeDxSpiderSpotProvider(
@@ -262,9 +278,28 @@ def build_forge_runtime(
             )
         )
 
+    dxsummit: ForgeDxSummitSpotProvider | None = None
+    if config.dxsummit.enabled:
+        dxsummit = ForgeDxSummitSpotProvider(
+            host=config.dxsummit.host,
+            port=config.dxsummit.port,
+            channel=config.dxsummit.channel,
+            nickname=str(config.dxsummit.nickname),
+            connect_timeout_s=config.dxsummit.connect_timeout_s,
+            read_timeout_s=config.dxsummit.read_timeout_s,
+            inactivity_timeout_s=config.dxsummit.inactivity_timeout_s,
+            reconnect_initial_s=config.dxsummit.reconnect_initial_s,
+            reconnect_max_s=config.dxsummit.reconnect_max_s,
+            stable_connection_s=config.dxsummit.stable_connection_s,
+            max_spot_age_s=config.dxsummit.max_spot_age_s,
+            max_spots=config.dxsummit.max_spots,
+            session_factory=dxsummit_session_factory,
+        )
+        providers.append(dxsummit)
+
     if not providers:
         raise ForgeRuntimeConfigurationError(
-            "No Forge spot provider is enabled; enable POTA or DXSpider."
+            "No Forge spot provider is enabled; enable POTA, DXSpider, or DX Summit."
         )
 
     runtime_secrets = secrets or ApplicationSecrets()
@@ -418,6 +453,7 @@ def build_forge_runtime(
         weather_alert_polling=weather_alert_polling,
         radar=radar_service,
         radar_polling=radar_polling,
+        dxsummit=dxsummit,
         logger=process_logger,
     )
 
