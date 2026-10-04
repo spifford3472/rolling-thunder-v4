@@ -83,9 +83,10 @@ class ForgeStorageConfig(ForgeConfigurationModel):
 
 
 class ForgeAggregationConfig(ForgeConfigurationModel):
-    """Provider refresh lifecycle settings."""
+    """Provider refresh and local cache-publication lifecycle settings."""
 
     refresh_interval_s: float = Field(default=60.0, gt=0, le=86_400)
+    dx_cache_publish_interval_s: float = Field(default=5.0, gt=0, le=300)
     refresh_on_start: bool = True
 
 
