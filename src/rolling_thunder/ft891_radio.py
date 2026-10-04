@@ -24,6 +24,7 @@ from rolling_thunder.ft891_cat import (
     Ft891CatError,
     Ft891OperatingContext,
     Ft891SsbBfo,
+    Ft891SsbMicSelect,
     encode_cat_transmit_off,
     encode_cat_transmit_on,
     encode_memory_to_vfo_a,
@@ -41,6 +42,7 @@ from rolling_thunder.ft891_cat import (
     encode_read_preamp_enabled,
     encode_read_repeater_shift,
     encode_read_ssb_bfo,
+    encode_read_ssb_mic_select,
     encode_select_band_memory,
     encode_set_6m_repeater_offset,
     encode_set_ctcss_behavior,
@@ -53,6 +55,7 @@ from rolling_thunder.ft891_cat import (
     encode_set_preamp_enabled,
     encode_set_repeater_shift,
     encode_set_ssb_bfo,
+    encode_set_ssb_mic_select,
     memory_channel_for_band,
     parse_6m_repeater_offset_reply,
     parse_ctcss_behavior_reply,
@@ -68,6 +71,7 @@ from rolling_thunder.ft891_cat import (
     parse_preamp_enabled_reply,
     parse_repeater_shift_reply,
     parse_ssb_bfo_reply,
+    parse_ssb_mic_select_reply,
 )
 from rolling_thunder.radio import (
     BandChangeRequiredError,
@@ -366,6 +370,25 @@ class Ft891Radio:
                 raise RadioVerificationError(
                     "FT-891 power verification failed: requested "
                     f"{power_watts} W but read back {verified} W."
+                )
+            return verified
+
+    def read_ssb_mic_select(self) -> Ft891SsbMicSelect:
+        """Read documented FT-891 menu 11-05 SSB MIC SELECT."""
+        with self._operation_lock:
+            self._require_connected()
+            return parse_ssb_mic_select_reply(self._transport.query(encode_read_ssb_mic_select()))
+
+    def set_ssb_mic_select(self, value: Ft891SsbMicSelect) -> Ft891SsbMicSelect:
+        """Set and verify documented FT-891 menu 11-05 SSB MIC SELECT."""
+        with self._operation_lock:
+            self._require_connected()
+            self._transport.command(encode_set_ssb_mic_select(value))
+            verified = parse_ssb_mic_select_reply(self._transport.query(encode_read_ssb_mic_select()))
+            if verified is not value:
+                raise RadioVerificationError(
+                    "FT-891 SSB MIC SELECT verification failed: requested "
+                    f"{value.value.upper()} but read back {verified.value.upper()}."
                 )
             return verified
 

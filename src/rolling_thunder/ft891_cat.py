@@ -21,6 +21,7 @@ _CTCSS_TONE_REPLY_PATTERN: Final = re.compile(rb"CN00([0-9]{3});")
 _CTCSS_BEHAVIOR_REPLY_PATTERN: Final = re.compile(rb"CT0([0-3]);")
 _METER_REPLY_PATTERN: Final = re.compile(rb"RM([456])([0-9]{3});")
 _POWER_REPLY_PATTERN: Final = re.compile(rb"PC([0-9]{3});")
+_SSB_MIC_SELECT_REPLY_PATTERN: Final = re.compile(rb"EX1105([01]);")
 _SSB_BFO_REPLY_PATTERN: Final = re.compile(rb"EX1107([0-2]);")
 _PREAMP_REPLY_PATTERN: Final = re.compile(rb"PA0([01]);")
 _NARROW_REPLY_PATTERN: Final = re.compile(rb"NA0([01]);")
@@ -150,6 +151,22 @@ class Ft891OperatingContext(StrEnum):
 
 class Ft891CatError(RadioError):
     """Raised when an FT-891 CAT command or reply is invalid."""
+
+
+class Ft891SsbMicSelect(StrEnum):
+    """Documented menu 11-05 audio source: MIC = 0, REAR = 1."""
+
+    MIC = "mic"
+    REAR = "rear"
+
+
+_SSB_MIC_SELECT_TO_CAT: Final[dict[Ft891SsbMicSelect, bytes]] = {
+    Ft891SsbMicSelect.MIC: b"0",
+    Ft891SsbMicSelect.REAR: b"1",
+}
+_CAT_TO_SSB_MIC_SELECT: Final[dict[bytes, Ft891SsbMicSelect]] = {
+    value: key for key, value in _SSB_MIC_SELECT_TO_CAT.items()
+}
 
 
 class Ft891SsbBfo(StrEnum):
@@ -389,6 +406,30 @@ def parse_power_reply(reply: bytes) -> int:
             f"FT-891 power reply is outside the documented range: {power_watts} W."
         )
     return power_watts
+
+
+def encode_read_ssb_mic_select() -> bytes:
+    """Read documented menu 11-05 SSB MIC SELECT."""
+    return b"EX1105;"
+
+
+def encode_set_ssb_mic_select(value: Ft891SsbMicSelect) -> bytes:
+    """Set documented menu 11-05 SSB MIC SELECT."""
+    if not isinstance(value, Ft891SsbMicSelect):
+        raise TypeError("value must be an Ft891SsbMicSelect")
+    return b"EX1105" + _SSB_MIC_SELECT_TO_CAT[value] + b";"
+
+
+def parse_ssb_mic_select_reply(reply: bytes) -> Ft891SsbMicSelect:
+    """Parse one complete documented menu 11-05 reply."""
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    match = _SSB_MIC_SELECT_REPLY_PATTERN.fullmatch(reply)
+    if match is None:
+        raise Ft891CatError(
+            f"Malformed FT-891 SSB MIC SELECT reply: {reply!r}; expected EX1105x;."
+        )
+    return _CAT_TO_SSB_MIC_SELECT[match.group(1)]
 
 
 def encode_read_ssb_bfo() -> bytes:

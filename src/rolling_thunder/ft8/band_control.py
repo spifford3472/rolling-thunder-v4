@@ -92,6 +92,10 @@ class FT8BandController:
         ).start()
         return True
 
+    def restore_normal_settings_for_shutdown(self) -> None:
+        """Finish serialized normal-settings cleanup before CAT disconnect."""
+        self._restore_worker()
+
     def cycle_band(self) -> bool:
         with self._lock:
             if self._status.tuning:

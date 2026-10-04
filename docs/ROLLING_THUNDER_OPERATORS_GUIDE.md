@@ -935,3 +935,25 @@ For development/agent work, begin with:
 - `docs/engineering/index.md`
 - `docs/engineering/ownership-and-dependencies.md`
 - `docs/engineering/shared-component-contracts.md`
+
+
+## FT8 and voice microphone selection
+
+FT8 entry automatically sets and verifies menu **11-05 SSB MIC SELECT = REAR**
+(`MIC = 0`, `REAR = 1`). FT8 uses the rear DATA/RTTY audio path.
+Returning from FT8 to Browse, POTA, or DX sets **11-05 = MIC** so ordinary SSB
+voice uses the front microphone. The destination context is authoritative;
+the prior menu value is not restored.
+
+The existing typed FT-891 adapter owns CAT encoding and readback. FT8 receive
+entry/band changes and pre-QSO preparation require REAR. A failed write,
+malformed reply, or mismatched readback prevents QSO authorization; no PTT or
+transmit audio is permitted through the preparation path. Existing USB,
+11-07 SSB BFO, IPO/preamp, NAR, NB, power, and bounded transmit policy remain.
+
+Shared exit/rollback cleanup attempts MIC even if another restoration fails.
+Failed-QSO recovery that remains on the FT8 screen reapplies REAR; a requested
+context exit skips that recovery. CAT-safe shutdown performs serialized normal
+receive cleanup before disconnect. With CAT unavailable, restoration cannot be
+confirmed: check 11-05 manually before voice operation. Hardware acceptance of
+this change is still required.
