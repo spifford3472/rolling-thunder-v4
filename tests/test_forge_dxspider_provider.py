@@ -1,22 +1,39 @@
-"""Tests for the bounded Forge DXSpider snapshot provider."""
+"""Tests for the persistent Forge DXSpider stream provider."""
 
 from collections import deque
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 
 from rolling_thunder.forge_config import ForgeDxSpiderProviderConfig
 from rolling_thunder.forge_dxspider_provider import (
+    DxSpiderConnectionState,
     DxSpiderSession,
     ForgeDxSpiderSpotProvider,
     strip_telnet_negotiation,
 )
-from rolling_thunder.forge_spot_provider import (
-    ForgeSpotProviderConnectionError,
-    ForgeSpotProviderResponseError,
-)
+from rolling_thunder.forge_spot_provider import ForgeSpotProviderConnectionError
 from rolling_thunder.spot_domain import SpotProvider
+
+
+BASE_TIME = datetime(2026, 8, 6, 2, 5, tzinfo=UTC)
+
+
+class MutableClock:
+    def __init__(self, value: datetime = BASE_TIME) -> None:
+        self.value = value
+
+    def __call__(self) -> datetime:
+        return self.value
+
+
+class MutableMonotonic:
+    def __init__(self, value: float = 100.0) -> None:
+        self.value = value
+
+    def __call__(self) -> float:
+        return self.value
 
 
 class FakeDxSpiderSession:
@@ -24,12 +41,14 @@ class FakeDxSpiderSession:
 
     def __init__(
         self,
-        chunks: list[bytes | Exception],
+        chunks: list[bytes | None | Exception],
         *,
         send_error: Exception | None = None,
+        on_empty=None,
     ) -> None:
         self._chunks = deque(chunks)
         self._send_error = send_error
+        self._on_empty = on_empty
         self.sent_lines: list[str] = []
         self.read_limits: list[int] = []
         self.closed = False
@@ -39,26 +58,24 @@ class FakeDxSpiderSession:
         if self._send_error is not None:
             raise self._send_error
 
-    def read(self, max_bytes: int) -> bytes:
+    def read(self, max_bytes: int) -> bytes | None:
         self.read_limits.append(max_bytes)
         if not self._chunks:
-            return b""
+            if self._on_empty is not None:
+                self._on_empty()
+            return None
 
         item = self._chunks.popleft()
         if isinstance(item, Exception):
             raise item
-        if len(item) <= max_bytes:
-            return item
-
-        self._chunks.appendleft(item[max_bytes:])
-        return item[:max_bytes]
+        return item
 
     def close(self) -> None:
         self.closed = True
 
 
 class FakeDxSpiderSessionFactory:
-    """Factory recording connection settings for one deterministic session."""
+    """Factory recording connection settings for deterministic sessions."""
 
     def __init__(
         self,
@@ -94,7 +111,6 @@ class FakeDxSpiderSessionFactory:
 
 
 def dx_config(**updates: object) -> ForgeDxSpiderProviderConfig:
-    """Build one validated enabled DXSpider test configuration."""
     values: dict[str, object] = {
         "enabled": True,
         "host": "dx.example.invalid",
@@ -102,6 +118,10 @@ def dx_config(**updates: object) -> ForgeDxSpiderProviderConfig:
         "login_callsign": "KI5VNB",
         "connect_timeout_s": 3.0,
         "read_timeout_s": 4.0,
+        "inactivity_timeout_s": 600.0,
+        "reconnect_initial_s": 5.0,
+        "reconnect_max_s": 300.0,
+        "stable_connection_s": 300.0,
         "max_response_bytes": 4_096,
         "max_spots": 10,
         "max_spot_age_s": 3_600.0,
@@ -113,220 +133,207 @@ def dx_config(**updates: object) -> ForgeDxSpiderProviderConfig:
 def provider_for(
     session: FakeDxSpiderSession,
     *,
-    fetched_at: datetime | None = None,
+    clock: MutableClock | None = None,
+    monotonic_clock: MutableMonotonic | None = None,
     config: ForgeDxSpiderProviderConfig | None = None,
 ) -> tuple[ForgeDxSpiderSpotProvider, FakeDxSpiderSessionFactory]:
-    """Compose one provider with deterministic clock and session factory."""
     factory = FakeDxSpiderSessionFactory(session)
-    now = fetched_at or datetime(2026, 8, 6, 2, 5, tzinfo=UTC)
     provider = ForgeDxSpiderSpotProvider(
         config or dx_config(),
         session_factory=factory,
-        clock=lambda: now,
+        clock=clock or MutableClock(),
+        monotonic_clock=monotonic_clock or MutableMonotonic(),
     )
     return provider, factory
 
 
-def test_provider_executes_bounded_snapshot_session_and_closes() -> None:
+def test_fetch_slice_is_cache_only_and_rejects_non_live_state() -> None:
+    session = FakeDxSpiderSession([])
+    provider, factory = provider_for(session)
+
+    with pytest.raises(ForgeSpotProviderConnectionError, match="not live"):
+        provider.fetch_slice()
+
+    assert factory.open_calls == []
+    assert provider.connection_state is DxSpiderConnectionState.DISCONNECTED
+
+
+def test_initial_connection_seeds_once_and_never_sends_bye_during_live_session() -> None:
     session = FakeDxSpiderSession(
         [
-            (b"Welcome\r\n"
-            b"DX de K1ABC: 14074.0 W1AW FT8 FN31 0204Z\r\n"),
-            b"",
+            (
+                b"Welcome\r\n"
+                b"DX de K1ABC: 14074.0 W1AW FT8 FN31 0204Z\r\n"
+            )
+        ]
+    )
+    provider, _ = provider_for(session)
+
+    provider._send_initial_commands(session)
+    provider._set_state(DxSpiderConnectionState.LIVE)
+    provider._stop.set()
+    provider._consume_session(session)
+
+    assert session.sent_lines == ["KI5VNB", "set/page 0", "show/fdx"]
+    assert "bye" not in session.sent_lines
+
+
+def test_live_stream_populates_cache_and_fetch_uses_no_network() -> None:
+    session = FakeDxSpiderSession(
+        [
+            b"DX de K1ABC: 14074.0 W1AW FT8 FN31 0204Z\r\n",
         ]
     )
     provider, factory = provider_for(session)
 
+    provider._set_state(DxSpiderConnectionState.LIVE)
+    provider._stop.clear()
+
+    def stop_after_read() -> None:
+        provider._stop.set()
+
+    session._on_empty = stop_after_read
+    provider._consume_session(session)
+    provider._stop.clear()
+
+    before = list(factory.open_calls)
     provider_slice = provider.fetch_slice()
 
     assert provider_slice.provider is SpotProvider.DX
-    assert provider_slice.fetched_at == datetime(2026, 8, 6, 2, 5, tzinfo=UTC)
     assert [spot.stable_key for spot in provider_slice.spots] == ["dx:W1AW:14074000"]
-    assert session.sent_lines == ["KI5VNB", "set/page 0", "show/fdx", "bye"]
-    assert session.closed is True
-    assert factory.open_calls == [
-        {
-            "host": "dx.example.invalid",
-            "port": 7300,
-            "connect_timeout_s": 3.0,
-            "read_timeout_s": 4.0,
-        }
-    ]
+    assert factory.open_calls == before
 
 
 def test_telnet_negotiation_is_removed_before_parsing() -> None:
     negotiation = bytes([255, 251, 1, 255, 250, 24, 1, 255, 240])
-    payload = negotiation + b"DX de K1ABC: 7002.5 WI3W CW 0204Z\r\n"
-    session = FakeDxSpiderSession([payload, b""])
+    session = FakeDxSpiderSession(
+        [negotiation + b"DX de K1ABC: 7002.5 WI3W CW 0204Z\r\n"]
+    )
     provider, _ = provider_for(session)
 
-    provider_slice = provider.fetch_slice()
+    provider._set_state(DxSpiderConnectionState.LIVE)
+    provider._stop.clear()
+    session._on_empty = provider._stop.set
+    provider._consume_session(session)
+    provider._stop.clear()
 
-    assert [spot.stable_key for spot in provider_slice.spots] == ["dx:WI3W:7002500"]
+    assert [spot.stable_key for spot in provider.fetch_slice().spots] == [
+        "dx:WI3W:7002500"
+    ]
 
 
 def test_telnet_literal_iac_is_preserved() -> None:
     assert strip_telnet_negotiation(b"A\xff\xffB") == b"A\xffB"
 
 
-def test_clean_response_without_spot_lines_is_valid_empty_slice() -> None:
-    session = FakeDxSpiderSession([b"Welcome\r\nKI5VNB de NODE >\r\n", b""])
-    provider, _ = provider_for(session)
+def test_inactivity_timeout_detects_half_dead_connection() -> None:
+    monotonic_clock = MutableMonotonic()
+    session = FakeDxSpiderSession([None, None])
+    provider, _ = provider_for(
+        session,
+        monotonic_clock=monotonic_clock,
+        config=dx_config(inactivity_timeout_s=60),
+    )
 
-    provider_slice = provider.fetch_slice()
+    class AdvancingSession(FakeDxSpiderSession):
+        def read(self, max_bytes: int) -> bytes | None:
+            monotonic_clock.value += 31.0
+            return None
 
-    assert provider_slice.spots == ()
-    assert session.closed is True
-
-
-def test_empty_response_is_typed_failure_and_closes_session() -> None:
-    session = FakeDxSpiderSession([b""])
-    provider, _ = provider_for(session)
-
-    with pytest.raises(ForgeSpotProviderResponseError, match="empty response"):
-        provider.fetch_slice()
-
-    assert session.closed is True
+    with pytest.raises(ConnectionError, match="inactivity"):
+        provider._consume_session(AdvancingSession([]))
 
 
-def test_response_byte_limit_is_enforced() -> None:
-    session = FakeDxSpiderSession([b"x" * 4_097, b""])
-    provider, _ = provider_for(session)
+def test_cache_prunes_stale_spots_without_network_activity() -> None:
+    clock = MutableClock()
+    session = FakeDxSpiderSession(
+        [b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n"]
+    )
+    provider, factory = provider_for(
+        session,
+        clock=clock,
+        config=dx_config(max_spot_age_s=60),
+    )
+    provider._set_state(DxSpiderConnectionState.LIVE)
+    provider._stop.clear()
+    session._on_empty = provider._stop.set
+    provider._consume_session(session)
+    provider._stop.clear()
 
-    with pytest.raises(ForgeSpotProviderResponseError, match="byte limit"):
-        provider.fetch_slice()
+    assert provider.fetch_slice().spots
+    clock.value += timedelta(minutes=2)
 
-    assert session.closed is True
-
-
-def test_read_timeout_is_connection_failure_and_closes_session() -> None:
-    session = FakeDxSpiderSession([TimeoutError("read timed out")])
-    provider, _ = provider_for(session)
-
-    with pytest.raises(ForgeSpotProviderConnectionError, match="did not complete"):
-        provider.fetch_slice()
-
-    assert session.closed is True
-
-
-def test_send_failure_is_connection_failure_and_closes_session() -> None:
-    session = FakeDxSpiderSession([], send_error=OSError("send failed"))
-    provider, _ = provider_for(session)
-
-    with pytest.raises(ForgeSpotProviderConnectionError, match="did not complete"):
-        provider.fetch_slice()
-
-    assert session.closed is True
+    assert provider.fetch_slice().spots == ()
+    assert len(factory.open_calls) == 0
 
 
-def test_open_failure_is_mapped_without_creating_session() -> None:
+def test_cache_is_bounded_to_newest_spots() -> None:
+    session = FakeDxSpiderSession(
+        [
+            (
+                b"DX de A1AAA: 14250.0 W1AAA USB 0202Z\r\n"
+                b"DX de A2AAA: 14251.0 W2AAA USB 0203Z\r\n"
+                b"DX de A3AAA: 14252.0 W3AAA USB 0204Z\r\n"
+            )
+        ]
+    )
+    provider, _ = provider_for(
+        session,
+        config=dx_config(max_spots=2),
+    )
+    provider._set_state(DxSpiderConnectionState.LIVE)
+    provider._stop.clear()
+    session._on_empty = provider._stop.set
+    provider._consume_session(session)
+    provider._stop.clear()
+
+    assert {str(spot.callsign) for spot in provider.fetch_slice().spots} == {
+        "W2AAA",
+        "W3AAA",
+    }
+
+
+def test_connection_age_never_expires_live_source() -> None:
+    clock = MutableClock()
+    session = FakeDxSpiderSession(
+        [b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n"]
+    )
+    provider, _ = provider_for(session, clock=clock)
+    provider._set_state(DxSpiderConnectionState.LIVE)
+    provider._stop.clear()
+    session._on_empty = provider._stop.set
+    provider._consume_session(session)
+    provider._stop.clear()
+
+    clock.value += timedelta(days=90)
+
+    assert provider.connection_state is DxSpiderConnectionState.LIVE
+    assert provider.fetch_slice().spots == ()
+
+
+def test_open_failure_is_mapped_without_changing_fetch_contract() -> None:
     factory = FakeDxSpiderSessionFactory(error=OSError("connect failed"))
     provider = ForgeDxSpiderSpotProvider(
         dx_config(),
         session_factory=factory,
-        clock=lambda: datetime(2026, 8, 6, 2, 5, tzinfo=UTC),
+        clock=MutableClock(),
     )
 
     with pytest.raises(ForgeSpotProviderConnectionError, match="established"):
-        provider.fetch_slice()
+        provider._open_session()
 
 
-def test_spot_age_filter_retains_only_recent_records() -> None:
-    session = FakeDxSpiderSession(
-        [
-            (b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n"
-            b"DX de K1ABC: 14250.0 K2OLD SSB 0000Z\r\n"),
-            b"",
-        ]
-    )
-    provider, _ = provider_for(session)
-
-    provider_slice = provider.fetch_slice()
-
-    assert [spot.callsign for spot in provider_slice.spots] == ["W1AW"]
-
-
-def test_valid_but_expired_records_produce_valid_empty_slice() -> None:
-    session = FakeDxSpiderSession(
-        [b"DX de K1ABC: 14250.0 K2OLD SSB 0000Z\r\n", b""]
-    )
-    provider, _ = provider_for(session)
-
-    provider_slice = provider.fetch_slice()
-
-    assert provider_slice.spots == ()
-
-
-def test_all_malformed_spot_like_lines_are_typed_failure() -> None:
-    session = FakeDxSpiderSession(
-        [b"DX de K1ABC: 14074.0005 NOT-A-CALL FT8 0204Z\r\n", b""]
-    )
-    provider, _ = provider_for(session)
-
-    with pytest.raises(ForgeSpotProviderResponseError, match="no usable DX records"):
-        provider.fetch_slice()
-
-
-def test_malformed_line_does_not_discard_valid_records() -> None:
-    session = FakeDxSpiderSession(
-        [
-            (b"DX de K1ABC: 14074.0005 NOT-A-CALL FT8 0204Z\r\n"
-            b"DX de K1ABC: 14074.0 W1AW FT8 0204Z\r\n"),
-            b"",
-        ]
-    )
-    provider, _ = provider_for(session)
-
-    provider_slice = provider.fetch_slice()
-
-    assert [spot.callsign for spot in provider_slice.spots] == ["W1AW"]
-
-
-def test_maximum_spot_count_bounds_accepted_slice() -> None:
-    session = FakeDxSpiderSession(
-        [
-            (b"DX de K1ABC: 7002.0 W1AAA CW 0204Z\r\n"
-            b"DX de K1ABC: 7003.0 W1BBB CW 0204Z\r\n"),
-            b"",
-        ]
-    )
-    provider, _ = provider_for(session, config=dx_config(max_spots=1))
-
-    provider_slice = provider.fetch_slice()
-
-    assert len(provider_slice.spots) == 1
-
-
-def test_duplicate_identity_collapses_to_newest_record() -> None:
-    session = FakeDxSpiderSession(
-        [
-            (b"DX de K1ABC: 14074.0 W1AW FT8 first 0203Z\r\n"
-            b"DX de K2ABC: 14074.0 W1AW FT8 second 0204Z\r\n"),
-            b"",
-        ]
-    )
-    provider, _ = provider_for(session)
-
-    provider_slice = provider.fetch_slice()
-
-    assert len(provider_slice.spots) == 1
-    assert provider_slice.spots[0].spotted_at == datetime(2026, 8, 6, 2, 4, tzinfo=UTC)
-    assert {item.key: item.value for item in provider_slice.spots[0].source_metadata}[
-        "spotter"
-    ] == "K2ABC"
-
-
-def test_naive_clock_value_is_rejected_before_opening_session() -> None:
-    session = FakeDxSpiderSession([b"ignored"])
+def test_naive_clock_is_rejected_without_network_activity() -> None:
+    session = FakeDxSpiderSession([])
     factory = FakeDxSpiderSessionFactory(session)
     provider = ForgeDxSpiderSpotProvider(
         dx_config(),
         session_factory=factory,
         clock=lambda: datetime(2026, 8, 6, 2, 5),  # noqa: DTZ001
     )
+    provider._set_state(DxSpiderConnectionState.LIVE)
 
     with pytest.raises(ValueError, match="aware datetime"):
         provider.fetch_slice()
 
     assert factory.open_calls == []
-    assert session.closed is False
