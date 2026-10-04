@@ -28,6 +28,23 @@ dxspider:
   max_spots: 250
   max_spot_age_s: 3600.0
 
+dxsummit:
+  # Preferred DX source. Forge owns one long-lived read-only IRC session.
+  # Connection age alone never causes a reconnect.
+  enabled: false
+  host: irc.radiochat.org
+  port: 6667
+  channel: "#CQDX"
+  nickname: N0CALL
+  connect_timeout_s: 15.0
+  read_timeout_s: 5.0
+  inactivity_timeout_s: 600.0
+  reconnect_initial_s: 5.0
+  reconnect_max_s: 300.0
+  stable_connection_s: 300.0
+  max_spots: 500
+  max_spot_age_s: 3600.0
+
 qrz:
   # Credentials come only from ROLLING_THUNDER_QRZ_USERNAME and
   # ROLLING_THUNDER_QRZ_PASSWORD. They never belong in this file.
