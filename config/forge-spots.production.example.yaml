@@ -10,6 +10,8 @@ storage:
 
 aggregation:
   refresh_interval_s: 60.0
+  # Local cache publication only; does not increase upstream DX network traffic.
+  dx_cache_publish_interval_s: 5.0
   refresh_on_start: true
 
 pota:
