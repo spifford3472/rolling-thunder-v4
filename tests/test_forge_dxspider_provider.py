@@ -16,7 +16,6 @@ from rolling_thunder.forge_dxspider_provider import (
 from rolling_thunder.forge_spot_provider import ForgeSpotProviderConnectionError
 from rolling_thunder.spot_domain import SpotProvider
 
-
 BASE_TIME = datetime(2026, 8, 6, 2, 5, tzinfo=UTC)
 
 
