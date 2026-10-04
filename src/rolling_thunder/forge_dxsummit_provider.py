@@ -204,6 +204,7 @@ class ForgeDxSummitSpotProvider:
         self._reconnect_count = 0
         self._last_error: str | None = None
         self._active_nickname = self._nickname
+        self._live_started_monotonic: float | None = None
 
     @property
     def provider(self) -> SpotProvider:
@@ -250,7 +251,6 @@ class ForgeDxSummitSpotProvider:
         with self._lock:
             thread = self._thread
             session = self._session
-            self._thread = None
             self._stop.set()
 
         if session is not None:
@@ -267,6 +267,7 @@ class ForgeDxSummitSpotProvider:
             thread.join(timeout=max(5.0, self._read_timeout_s + 1.0))
 
         with self._lock:
+            self._thread = None
             self._session = None
             self._state = DxSummitConnectionState.STOPPED
             self._connected_since = None
@@ -293,7 +294,8 @@ class ForgeDxSummitSpotProvider:
         first_connection = True
 
         while not self._stop.is_set():
-            live_started_monotonic: float | None = None
+            with self._lock:
+                self._live_started_monotonic = None
             try:
                 self._set_state(DxSummitConnectionState.CONNECTING)
                 session = self._session_factory.open(
@@ -316,7 +318,7 @@ class ForgeDxSummitSpotProvider:
                     f"USER {self._nickname} 0 * :{self._nickname} Rolling Thunder Forge"
                 )
 
-                live_started_monotonic = self._consume_session(session)
+                self._consume_session(session)
                 first_connection = False
             except (ConnectionError, OSError, TimeoutError) as error:
                 first_connection = False
@@ -327,6 +329,8 @@ class ForgeDxSummitSpotProvider:
             if self._stop.is_set():
                 break
 
+            with self._lock:
+                live_started_monotonic = self._live_started_monotonic
             if (
                 live_started_monotonic is not None
                 and self._monotonic() - live_started_monotonic
@@ -386,6 +390,8 @@ class ForgeDxSummitSpotProvider:
             if numeric == "366":
                 self._set_state(DxSummitConnectionState.LIVE)
                 live_started_monotonic = self._monotonic()
+                with self._lock:
+                    self._live_started_monotonic = live_started_monotonic
                 continue
 
             spot = parse_dxsummit_irc_line(line, received_at=received_at)
