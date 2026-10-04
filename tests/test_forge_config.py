@@ -39,6 +39,10 @@ def test_direct_configuration_uses_loopback_safe_defaults() -> None:
     assert config.dxspider.login_callsign == "N0CALL"
     assert config.dxspider.connect_timeout_s == 5.0
     assert config.dxspider.read_timeout_s == 5.0
+    assert config.dxspider.inactivity_timeout_s == 600.0
+    assert config.dxspider.reconnect_initial_s == 5.0
+    assert config.dxspider.reconnect_max_s == 300.0
+    assert config.dxspider.stable_connection_s == 300.0
     assert config.dxspider.max_response_bytes == 262_144
     assert config.dxspider.max_spots == 250
     assert config.dxspider.max_spot_age_s == 3_600.0
@@ -90,6 +94,10 @@ dxspider:
   login_callsign: " ki5vnb "
   connect_timeout_s: 3
   read_timeout_s: 7
+  inactivity_timeout_s: 720
+  reconnect_initial_s: 6
+  reconnect_max_s: 180
+  stable_connection_s: 240
   max_response_bytes: 131072
   max_spots: 125
   max_spot_age_s: 1800
@@ -137,6 +145,10 @@ logging_level: warning
     assert config.dxspider.login_callsign == "KI5VNB"
     assert config.dxspider.connect_timeout_s == 3
     assert config.dxspider.read_timeout_s == 7
+    assert config.dxspider.inactivity_timeout_s == 720
+    assert config.dxspider.reconnect_initial_s == 6
+    assert config.dxspider.reconnect_max_s == 180
+    assert config.dxspider.stable_connection_s == 240
     assert config.dxspider.max_response_bytes == 131_072
     assert config.dxspider.max_spots == 125
     assert config.dxspider.max_spot_age_s == 1_800
@@ -193,6 +205,18 @@ logging_level: warning
         (
             "dxspider:\n  read_timeout_s: 61\n",
             "dxspider.read_timeout_s",
+        ),
+        (
+            "dxspider:\n  inactivity_timeout_s: 30\n",
+            "dxspider.inactivity_timeout_s",
+        ),
+        (
+            "dxspider:\n  reconnect_initial_s: 0\n",
+            "dxspider.reconnect_initial_s",
+        ),
+        (
+            "dxspider:\n  reconnect_initial_s: 30\n  reconnect_max_s: 10\n",
+            "dxspider",
         ),
         (
             "dxspider:\n  max_response_bytes: 1024\n",
