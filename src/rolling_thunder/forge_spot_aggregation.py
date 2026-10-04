@@ -18,6 +18,7 @@ from rolling_thunder.forge_snapshot_repository import (
 )
 from rolling_thunder.forge_spot_provider import (
     ForgeProviderSlice,
+    ForgeRetainedSliceConsumer,
     ForgeSpotProvider,
     ForgeSpotProviderError,
 )
@@ -271,6 +272,10 @@ class ForgeSpotAggregationService:
             provider_slice.provider: provider_slice
             for provider_slice in stored.provider_slices
         }
+        for provider, provider_slice in self._active_slices.items():
+            adapter = self._providers.get(provider)
+            if isinstance(adapter, ForgeRetainedSliceConsumer):
+                adapter.seed_retained_slice(provider_slice)
         for provider in set(self._providers) | set(self._active_slices):
             provider_slice = self._active_slices.get(provider)
             if provider_slice is None:
