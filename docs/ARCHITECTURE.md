@@ -1,5 +1,7 @@
 # Rolling Thunder v4 Architecture
 
+> **Current-state note:** This document contains valuable historical design context, but it predates the current v4.4 engineering baseline. For current ownership, dependencies, shared-component contracts, Forge service rules, source/test catalogs, and agent guardrails, start with `AGENTS.md` and `docs/engineering/index.md`. When this document conflicts with the current code/tests or engineering guide, the current implementation and engineering guide are authoritative.
+
 ## Purpose
 
 Rolling Thunder v4 is an in-vehicle amateur-radio operating and logging system.
