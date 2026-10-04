@@ -10,7 +10,12 @@ from rolling_thunder.forge_dxsummit_provider import (
     DxSummitConnectionState,
     ForgeDxSummitSpotProvider,
 )
-from rolling_thunder.forge_spot_provider import ForgeSpotProviderConnectionError
+from rolling_thunder.forge_spot_provider import (
+    ForgeProviderSlice,
+    ForgeSpotProviderConnectionError,
+)
+from rolling_thunder.spot_domain import DxSpotIdentity, SpotProvider, SpotRecord
+from rolling_thunder.domain import Frequency
 
 BASE_TIME = datetime(2026, 10, 4, 1, 31, 40, tzinfo=UTC)
 DXS_LINE = (
@@ -82,6 +87,36 @@ def provider(
         clock=clock,
         monotonic_clock=monotonic_clock or (lambda: 100.0),
     )
+
+
+def test_retained_slice_seeds_cache_before_live_spots_arrive() -> None:
+    clock = MutableClock()
+    source = provider(clock=clock)
+    retained_spot = SpotRecord(
+        identity=DxSpotIdentity(
+            callsign="W1AW",
+            frequency=Frequency(hz=14_074_000),
+        ),
+        callsign="W1AW",
+        frequency=Frequency(hz=14_074_000),
+        mode=RadioMode.DATA,
+        display_mode="FT8",
+        spotted_at=BASE_TIME,
+    )
+    retained = ForgeProviderSlice.from_spots(
+        provider=SpotProvider.DX,
+        fetched_at=BASE_TIME,
+        spots=(retained_spot,),
+    )
+
+    source.seed_retained_slice(retained)
+
+    assert source.status.cache_size == 1
+
+    source._set_state(DxSummitConnectionState.LIVE)
+    snapshot = source.fetch_slice()
+
+    assert [str(spot.callsign) for spot in snapshot.spots] == ["W1AW"]
 
 
 def test_fetch_slice_is_cache_only_and_rejects_non_live_state() -> None:
