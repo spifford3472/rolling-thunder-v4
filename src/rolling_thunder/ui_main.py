@@ -41,6 +41,7 @@ from rolling_thunder.dmr_dashboard_runtime import build_dmr_panel_runtime
 from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
 from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
+from rolling_thunder.domain import Contact
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
@@ -220,7 +221,15 @@ def run_dashboard(
         print(f"Rolling Thunder secret configuration error: {error}")
         return 2
 
-    runtime = ApplicationRuntime.from_config(config, secrets=secrets)
+    def ft8_contact_completed(_contact: Contact) -> None:
+        """Use the same nonblocking sync request as ordinary and DMR commits."""
+        log_panel.request_sync()
+
+    runtime = ApplicationRuntime.from_config(
+        config,
+        secrets=secrets,
+        ft8_completed_contact_handler=ft8_contact_completed,
+    )
     preference_repository = OperatorPreferenceRepository(
         config.storage.database_path
     )

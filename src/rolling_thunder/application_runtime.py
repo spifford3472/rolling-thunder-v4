@@ -25,7 +25,7 @@ from rolling_thunder.contact_qrz_enrichment import ContactQrzEnrichmentService
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
-from rolling_thunder.domain import RadioState
+from rolling_thunder.domain import Contact, RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.attempt_history import (
@@ -224,6 +224,7 @@ class ApplicationRuntime:
         home_platform_scheduler: PollScheduler | None = None,
         contact_qrz_enrichment_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
+        ft8_completed_contact_handler: Callable[[Contact], None] | None = None,
         ft8_performance_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
@@ -489,13 +490,17 @@ class ApplicationRuntime:
         ft8_worked_today = (
             FT8WorkedTodayService(repository) if config.ft8.enabled else None
         )
+
+        def ft8_contact_completed(contact: Contact) -> None:
+            """Publish durable FT8 completion to worked state and shared sync lifecycle."""
+            if ft8_worked_today is not None:
+                ft8_worked_today.record_completed(contact)
+            if ft8_completed_contact_handler is not None:
+                ft8_completed_contact_handler(contact)
+
         ft8_logging = FT8QsoLoggingService(
             contact_logging,
-            completed_contact_handler=(
-                None
-                if ft8_worked_today is None
-                else ft8_worked_today.record_completed
-            ),
+            completed_contact_handler=ft8_contact_completed,
         )
         ft8_performance_outbox = (
             FT8PerformanceOutboxRepository(config.storage.database_path)

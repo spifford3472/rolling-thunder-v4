@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 279.**
+**Cataloged Python test modules: 280.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -160,6 +160,9 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_spot_selection.py`
 
 ## FT8
+
+- `tests/test_ft8_contact_sync.py` — composed dashboard completion notification
+  and shared Pi/Forge/Wavelog Mobile path, including optional QRZ and replay.
 
 - `tests/test_forge_ft8_performance.py`
 - `tests/test_forge_ft8_performance_api.py`

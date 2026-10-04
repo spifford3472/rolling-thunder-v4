@@ -98,11 +98,18 @@ Depends on:
 - FT-891/CAT/audio adapters;
 - shared GPS/grid snapshot at QSO start;
 - shared local contact persistence;
+- shared QRZ enrichment eligibility and background contact synchronization;
 - dashboard context/control infrastructure;
 - global status presentation where used.
 
 Transmit authority is intentionally FT8-scoped and bounded. It must not become a
 general application PTT capability.
+
+Completed FT8 contacts use `ContactLoggingService.commit_completed`. Runtime
+composition records worked-today state and invokes the dashboard completion
+handler, which requests the same `LogPanelController` background sync used by
+ordinary and DMR commits. This callback runs only after durable persistence;
+it must not perform network work on the FT8 worker.
 
 ### Repeaters
 
