@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from json import loads
 
 from rolling_thunder.domain import Frequency, RadioMode
+from rolling_thunder.forge_dx_connection import ForgeDxConnectionStatus
 from rolling_thunder.forge_spot_aggregation import (
     ForgeAggregationState,
     ForgeProviderHealth,
@@ -23,6 +24,28 @@ from rolling_thunder.spot_domain import (
 )
 
 BASE_TIME = datetime(2026, 8, 5, 20, 0, tzinfo=UTC)
+
+
+class RecordingDxConnectionSource:
+    def __init__(self) -> None:
+        self.read_count = 0
+
+    @property
+    def connection_status(self) -> ForgeDxConnectionStatus:
+        self.read_count += 1
+        return ForgeDxConnectionStatus(
+            source="dxsummit",
+            state="live",
+            host="irc.radiochat.org",
+            port=6667,
+            channel="#CQDX",
+            nickname="KI5VNB",
+            connected_since=BASE_TIME,
+            last_message_at=BASE_TIME,
+            last_spot_at=BASE_TIME,
+            reconnect_count=2,
+            cache_size=42,
+        )
 
 
 class RecordingStateSource:
@@ -132,6 +155,34 @@ def test_health_endpoint_returns_starting_state_and_explicit_json_headers() -> N
     assert payload["active_spot_count"] == 0
     assert payload["providers"][0]["provider"] == "pota"
     assert source.get_count == 1
+
+
+def test_health_endpoint_exposes_dx_connection_without_network_work() -> None:
+    source = RecordingStateSource(state_with(ForgeProviderHealthStatus.HEALTHY, revision=1))
+    dx_connection = RecordingDxConnectionSource()
+
+    response = ForgeSpotApiApplication(
+        source,
+        dx_connection=dx_connection,
+    ).handle("GET", "/api/v1/health")
+    payload = loads(response.body)
+
+    assert response.status_code == 200
+    assert payload["dx_connection"] == {
+        "cache_size": 42,
+        "channel": "#CQDX",
+        "connected_since": "2026-08-05T20:00:00Z",
+        "host": "irc.radiochat.org",
+        "last_error": None,
+        "last_message_at": "2026-08-05T20:00:00Z",
+        "last_spot_at": "2026-08-05T20:00:00Z",
+        "nickname": "KI5VNB",
+        "port": 6667,
+        "reconnect_count": 2,
+        "source": "dxsummit",
+        "state": "live",
+    }
+    assert dx_connection.read_count == 1
 
 
 def test_successful_empty_snapshot_is_healthy() -> None:
