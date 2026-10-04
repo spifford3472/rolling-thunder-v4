@@ -95,6 +95,15 @@ class ReentrantProvider:
         return self._slice
 
 
+class RetainedAwareProvider(MockForgeSpotProvider):
+    def __init__(self, provider_slice: ForgeProviderSlice) -> None:
+        super().__init__(provider_slice)
+        self.seeded: ForgeProviderSlice | None = None
+
+    def seed_retained_slice(self, provider_slice: ForgeProviderSlice) -> None:
+        self.seeded = provider_slice
+
+
 class WrongFamilyProvider:
     def __init__(self, returned_slice: ForgeProviderSlice) -> None:
         self._returned_slice = returned_slice
@@ -329,6 +338,32 @@ def test_startup_load_publishes_retained_snapshot_as_degraded() -> None:
     assert health.status is ForgeProviderHealthStatus.DEGRADED
     assert health.last_success_at == slice_.fetched_at
     assert "retained" in (health.last_error or "").lower()
+
+
+def test_startup_retained_slice_seeds_persistent_provider_cache() -> None:
+    retained = provider_slice(SpotProvider.DX, (dx_spot(),))
+    snapshot = SpotSnapshot.from_spots(
+        generated_at=BASE_TIME,
+        spots=retained.spots,
+    )
+    repository = MemoryRepository(
+        ForgeStoredSnapshot(
+            revision=9,
+            snapshot=snapshot,
+            provider_slices=(retained,),
+        )
+    )
+    provider = RetainedAwareProvider(
+        provider_slice(SpotProvider.DX, ())
+    )
+
+    ForgeSpotAggregationService(
+        (provider,),
+        repository,
+        now=TickingClock(),
+    )
+
+    assert provider.seeded == retained
 
 
 def test_startup_storage_failure_is_visible_and_does_not_crash() -> None:
