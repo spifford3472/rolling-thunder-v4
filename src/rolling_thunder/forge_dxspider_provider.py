@@ -1,8 +1,13 @@
-"""Bounded DXSpider snapshot-session adapter for the independent Forge service."""
+"""Persistent DXSpider stream adapter for the independent Forge service."""
+
+from __future__ import annotations
 
 import socket
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from threading import Event, RLock, Thread
+from time import monotonic
 from typing import Protocol
 
 from rolling_thunder.forge_config import ForgeDxSpiderProviderConfig
@@ -15,7 +20,6 @@ from rolling_thunder.forge_spot_provider import (
     ForgeProviderSlice,
     ForgeSpotProviderConnectionError,
     ForgeSpotProviderError,
-    ForgeSpotProviderResponseError,
 )
 from rolling_thunder.spot_domain import SpotProvider, SpotRecord
 
@@ -29,16 +33,29 @@ _DONT = 254
 _NEGOTIATION_COMMANDS = frozenset({_WILL, _WONT, _DO, _DONT})
 _READ_CHUNK_BYTES = 4_096
 
+Clock = Callable[[], datetime]
+MonotonicClock = Callable[[], float]
+
+
+class DxSpiderConnectionState(StrEnum):
+    """Observable lifecycle states for the persistent DXSpider connection."""
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    LIVE = "live"
+    BACKING_OFF = "backing_off"
+    STOPPED = "stopped"
+
 
 class DxSpiderSession(Protocol):
-    """One bounded line-oriented connection to a DXSpider-compatible node."""
+    """One long-lived connection to a DXSpider-compatible node."""
 
     def send_line(self, line: str) -> None:
         """Send one ASCII command line terminated for a telnet-style service."""
         ...
 
-    def read(self, max_bytes: int) -> bytes:
-        """Read up to max_bytes, returning empty bytes after orderly closure."""
+    def read(self, max_bytes: int) -> bytes | None:
+        """Read bytes, returning None for a bounded read timeout."""
         ...
 
     def close(self) -> None:
@@ -57,31 +74,34 @@ class DxSpiderSessionFactory(Protocol):
         connect_timeout_s: float,
         read_timeout_s: float,
     ) -> DxSpiderSession:
-        """Open a bounded session or raise a connection-related exception."""
+        """Open one persistent session."""
         ...
 
 
 class SocketDxSpiderSession:
-    """Standard-library socket implementation of one DXSpider session."""
+    """Standard-library socket implementation of one persistent DXSpider session."""
 
     def __init__(self, connection: socket.socket) -> None:
         self._connection = connection
 
     def send_line(self, line: str) -> None:
-        """Send one ASCII command with CRLF termination."""
         self._connection.sendall(line.encode("ascii") + b"\r\n")
 
-    def read(self, max_bytes: int) -> bytes:
-        """Read one bounded response chunk."""
-        return self._connection.recv(max_bytes)
+    def read(self, max_bytes: int) -> bytes | None:
+        try:
+            chunk = self._connection.recv(max_bytes)
+        except TimeoutError:
+            return None
+        if not chunk:
+            raise ConnectionError("DXSpider server closed the connection.")
+        return chunk
 
     def close(self) -> None:
-        """Close the underlying socket."""
         self._connection.close()
 
 
 class SocketDxSpiderSessionFactory:
-    """Production factory using a bounded standard-library TCP connection."""
+    """Production factory using one persistent TCP connection."""
 
     def open(
         self,
@@ -91,13 +111,13 @@ class SocketDxSpiderSessionFactory:
         connect_timeout_s: float,
         read_timeout_s: float,
     ) -> DxSpiderSession:
-        """Open a TCP session and apply the configured read timeout."""
         try:
             connection = socket.create_connection(
                 (host, port),
                 timeout=connect_timeout_s,
             )
             connection.settimeout(read_timeout_s)
+            connection.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         except (TimeoutError, OSError) as error:
             raise ForgeSpotProviderConnectionError(
                 "DXSpider connection could not be established."
@@ -106,55 +126,144 @@ class SocketDxSpiderSessionFactory:
 
 
 class ForgeDxSpiderSpotProvider:
-    """Fetch one complete bounded DX slice through a short-lived cluster session."""
+    """Maintain one persistent DXSpider connection and expose a cached DX slice."""
 
     def __init__(
         self,
         config: ForgeDxSpiderProviderConfig,
         *,
         session_factory: DxSpiderSessionFactory | None = None,
-        clock: Callable[[], datetime] | None = None,
+        clock: Clock | None = None,
+        monotonic_clock: MonotonicClock = monotonic,
     ) -> None:
         self._config = config
         self._session_factory = session_factory or SocketDxSpiderSessionFactory()
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._monotonic = monotonic_clock
+
+        self._lock = RLock()
+        self._stop = Event()
+        self._thread: Thread | None = None
+        self._session: DxSpiderSession | None = None
+        self._cache: dict[str, SpotRecord] = {}
+        self._state = DxSpiderConnectionState.DISCONNECTED
+        self._last_error: str | None = None
+        self._live_started_monotonic: float | None = None
 
     @property
     def provider(self) -> SpotProvider:
-        """Return the shared DX provider family."""
         return SpotProvider.DX
 
-    def fetch_slice(self) -> ForgeProviderSlice:
-        """Fetch, normalize, age-filter, and canonicalize one complete DX slice."""
-        fetched_at = self._normalized_clock_value()
-        session = self._open_session()
-        try:
-            self._send_snapshot_commands(session)
-            response = self._read_bounded_response(session)
-        except ForgeSpotProviderError:
-            raise
-        except (TimeoutError, OSError) as error:
-            raise ForgeSpotProviderConnectionError(
-                "DXSpider snapshot session did not complete."
-            ) from error
-        finally:
+    @property
+    def is_running(self) -> bool:
+        with self._lock:
+            return self._thread is not None
+
+    @property
+    def connection_state(self) -> DxSpiderConnectionState:
+        with self._lock:
+            return self._state
+
+    def start(self) -> None:
+        """Start exactly one background DXSpider connection loop."""
+        with self._lock:
+            if self._thread is not None:
+                raise RuntimeError("DXSpider source is already running.")
+            self._stop.clear()
+            self._state = DxSpiderConnectionState.DISCONNECTED
+            self._thread = Thread(
+                target=self._run,
+                name="rolling-thunder-dxspider",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def stop(self) -> None:
+        """Stop the background connection and close the current socket."""
+        with self._lock:
+            thread = self._thread
+            session = self._session
+            self._stop.set()
+
+        if session is not None:
+            try:
+                session.send_line("bye")
+            except (OSError, ConnectionError):
+                pass
             try:
                 session.close()
             except OSError:
                 pass
 
-        spots = self._parse_response(response, fetched_at=fetched_at)
+        if thread is not None:
+            thread.join(timeout=max(5.0, self._config.read_timeout_s + 1.0))
+
+        with self._lock:
+            self._thread = None
+            self._session = None
+            self._state = DxSpiderConnectionState.STOPPED
+
+    def fetch_slice(self) -> ForgeProviderSlice:
+        """Return the current cache without opening or touching the network."""
+        fetched_at = self._normalized_clock_value()
+        with self._lock:
+            if self._state is not DxSpiderConnectionState.LIVE:
+                detail = f": {self._last_error}" if self._last_error else ""
+                raise ForgeSpotProviderConnectionError(
+                    f"DXSpider source is not live ({self._state.value}){detail}"
+                )
+            self._prune_cache_locked(fetched_at)
+            spots = tuple(self._cache.values())
+
         return ForgeProviderSlice.from_spots(
             provider=self.provider,
             fetched_at=fetched_at,
             spots=spots,
         )
 
-    def _normalized_clock_value(self) -> datetime:
-        fetched_at = self._clock()
-        if fetched_at.tzinfo is None or fetched_at.utcoffset() is None:
-            raise ValueError("DXSpider provider clock must return an aware datetime.")
-        return fetched_at.astimezone(UTC)
+    def _run(self) -> None:
+        delay = self._config.reconnect_initial_s
+
+        while not self._stop.is_set():
+            with self._lock:
+                self._live_started_monotonic = None
+
+            try:
+                self._set_state(DxSpiderConnectionState.CONNECTING)
+                session = self._open_session()
+                with self._lock:
+                    self._session = session
+                    self._last_error = None
+
+                self._send_initial_commands(session)
+                self._set_state(DxSpiderConnectionState.LIVE)
+                with self._lock:
+                    self._live_started_monotonic = self._monotonic()
+                self._consume_session(session)
+            except (ForgeSpotProviderError, ConnectionError, OSError, TimeoutError) as error:
+                self._record_disconnect(error)
+            finally:
+                self._close_current_session()
+
+            if self._stop.is_set():
+                break
+
+            with self._lock:
+                live_started = self._live_started_monotonic
+            if (
+                live_started is not None
+                and self._monotonic() - live_started >= self._config.stable_connection_s
+            ):
+                delay = self._config.reconnect_initial_s
+
+            self._set_state(DxSpiderConnectionState.BACKING_OFF)
+            if self._stop.wait(delay):
+                break
+            delay = min(delay * 2.0, self._config.reconnect_max_s)
+
+        with self._lock:
+            if self._state is not DxSpiderConnectionState.STOPPED:
+                self._state = DxSpiderConnectionState.STOPPED
 
     def _open_session(self) -> DxSpiderSession:
         try:
@@ -171,72 +280,109 @@ class ForgeDxSpiderSpotProvider:
                 "DXSpider connection could not be established."
             ) from error
 
-    def _send_snapshot_commands(self, session: DxSpiderSession) -> None:
+    def _send_initial_commands(self, session: DxSpiderSession) -> None:
+        """Login and seed once per real connection; never send bye here."""
         for line in (
             str(self._config.login_callsign),
             "set/page 0",
             "show/fdx",
-            "bye",
         ):
             session.send_line(line)
 
-    def _read_bounded_response(self, session: DxSpiderSession) -> bytes:
-        response = bytearray()
-        while True:
-            remaining = self._config.max_response_bytes - len(response)
-            requested = min(_READ_CHUNK_BYTES, remaining + 1)
-            chunk = session.read(requested)
-            if not chunk:
-                break
-            response.extend(chunk)
-            if len(response) > self._config.max_response_bytes:
-                raise ForgeSpotProviderResponseError(
-                    "DXSpider response exceeded the configured byte limit."
+    def _consume_session(self, session: DxSpiderSession) -> None:
+        last_rx_monotonic = self._monotonic()
+        buffer = bytearray()
+
+        while not self._stop.is_set():
+            chunk = session.read(_READ_CHUNK_BYTES)
+            now_monotonic = self._monotonic()
+
+            if chunk is None:
+                if (
+                    now_monotonic - last_rx_monotonic
+                    >= self._config.inactivity_timeout_s
+                ):
+                    raise ConnectionError(
+                        "DXSpider connection exceeded the inactivity timeout."
+                    )
+                continue
+
+            last_rx_monotonic = now_monotonic
+            buffer.extend(strip_telnet_negotiation(chunk))
+            if len(buffer) > self._config.max_response_bytes:
+                raise ConnectionError(
+                    "DXSpider buffered data exceeded the configured byte limit."
                 )
 
-        if not response:
-            raise ForgeSpotProviderResponseError(
-                "DXSpider snapshot session returned an empty response."
-            )
-        return bytes(response)
+            while b"\n" in buffer:
+                raw, _, remainder = buffer.partition(b"\n")
+                buffer = bytearray(remainder)
+                line = raw.rstrip(b"\r").decode("utf-8", errors="replace")
+                self._accept_line(line)
 
-    def _parse_response(
-        self,
-        response: bytes,
-        *,
-        fetched_at: datetime,
-    ) -> tuple[SpotRecord, ...]:
-        text = strip_telnet_negotiation(response).decode("utf-8", errors="replace")
-        spot_like_count = 0
-        parsed_count = 0
-        accepted: list[SpotRecord] = []
-        maximum_age = timedelta(seconds=self._config.max_spot_age_s)
+    def _accept_line(self, line: str) -> None:
+        if not is_dx_spot_line(line):
+            return
 
-        for line in text.splitlines():
-            if not is_dx_spot_line(line):
-                continue
-            spot_like_count += 1
+        received_at = self._normalized_clock_value()
+        try:
+            spot = parse_dx_spot_line(line, fetched_at=received_at)
+        except DxSpotLineError:
+            return
+
+        with self._lock:
+            if received_at - spot.spotted_at <= timedelta(
+                seconds=self._config.max_spot_age_s
+            ):
+                self._cache[spot.stable_key] = spot
+                self._prune_cache_locked(received_at)
+
+    def _prune_cache_locked(self, now: datetime) -> None:
+        cutoff = now - timedelta(seconds=self._config.max_spot_age_s)
+        self._cache = {
+            key: spot
+            for key, spot in self._cache.items()
+            if spot.spotted_at >= cutoff
+        }
+        if len(self._cache) <= self._config.max_spots:
+            return
+
+        newest = sorted(
+            self._cache.values(),
+            key=lambda spot: (spot.spotted_at, spot.stable_key),
+            reverse=True,
+        )[: self._config.max_spots]
+        self._cache = {spot.stable_key: spot for spot in newest}
+
+    def _record_disconnect(self, error: BaseException) -> None:
+        text = (str(error).strip() or error.__class__.__name__)[:500]
+        with self._lock:
+            self._last_error = text
+            self._state = DxSpiderConnectionState.DISCONNECTED
+
+    def _close_current_session(self) -> None:
+        with self._lock:
+            session = self._session
+            self._session = None
+        if session is not None:
             try:
-                spot = parse_dx_spot_line(line, fetched_at=fetched_at)
-            except DxSpotLineError:
-                continue
-            parsed_count += 1
+                session.close()
+            except OSError:
+                pass
 
-            if fetched_at - spot.spotted_at > maximum_age:
-                continue
-            accepted.append(spot)
-            if len(accepted) >= self._config.max_spots:
-                break
+    def _set_state(self, state: DxSpiderConnectionState) -> None:
+        with self._lock:
+            self._state = state
 
-        if spot_like_count > 0 and parsed_count == 0:
-            raise ForgeSpotProviderResponseError(
-                "DXSpider response contained spot-like lines but no usable DX records."
-            )
-        return tuple(accepted)
+    def _normalized_clock_value(self) -> datetime:
+        fetched_at = self._clock()
+        if fetched_at.tzinfo is None or fetched_at.utcoffset() is None:
+            raise ValueError("DXSpider provider clock must return an aware datetime.")
+        return fetched_at.astimezone(UTC)
 
 
 def strip_telnet_negotiation(data: bytes) -> bytes:
-    """Remove common telnet negotiation sequences from a complete response."""
+    """Remove common telnet negotiation sequences from one received chunk."""
     output = bytearray()
     index = 0
 
