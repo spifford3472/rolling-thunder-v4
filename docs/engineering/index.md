@@ -6,6 +6,17 @@ This directory is the current-code engineering map for Rolling Thunder v4. It ex
 
 This guide describes the implemented repository rather than an aspirational architecture. Existing subsystem documents remain authoritative for detailed protocols and acceptance history where linked below.
 
+## Engineering document set
+
+- `system-architecture.md` — deployed topology, process/lifecycle, local-first and recovery boundaries.
+- `ownership-and-dependencies.md` — feature ownership and dependency graph.
+- `shared-component-contracts.md` — cross-feature invariants that feature agents must not casually change.
+- `shared-component-consumers.md` — consumer matrix for high-risk shared components.
+- `forge-services.md` — reusable Forge backend/process/API rules.
+- `source-file-index.md` — exhaustive catalog of all Python source modules.
+- `test-index.md` — test ownership and validation/live-acceptance guidance.
+- `AGENTS.md` — maintenance rules for this documentation.
+
 ## How to use this guide
 
 Before editing code:
