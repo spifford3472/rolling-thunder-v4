@@ -11,6 +11,7 @@ from time import monotonic
 from typing import Protocol
 
 from rolling_thunder.forge_config import ForgeDxSpiderProviderConfig
+from rolling_thunder.forge_dx_connection import ForgeDxConnectionStatus
 from rolling_thunder.forge_dx_spot_parser import (
     DxSpotLineError,
     is_dx_spot_line,
@@ -147,12 +148,37 @@ class ForgeDxSpiderSpotProvider:
         self._session: DxSpiderSession | None = None
         self._cache: dict[str, SpotRecord] = {}
         self._state = DxSpiderConnectionState.DISCONNECTED
+        self._connected_since: datetime | None = None
+        self._last_message_at: datetime | None = None
+        self._last_spot_at: datetime | None = None
+        self._reconnect_count = 0
         self._last_error: str | None = None
         self._live_started_monotonic: float | None = None
 
     @property
     def provider(self) -> SpotProvider:
         return SpotProvider.DX
+
+    @property
+    def connection_status(self) -> ForgeDxConnectionStatus:
+        """Return provider-neutral connection status without network activity."""
+        now = self._normalized_clock_value()
+        with self._lock:
+            self._prune_cache_locked(now)
+            return ForgeDxConnectionStatus(
+                source="dxspider",
+                state=self._state.value,
+                host=self._config.host,
+                port=self._config.port,
+                channel=None,
+                nickname=str(self._config.login_callsign),
+                connected_since=self._connected_since,
+                last_message_at=self._last_message_at,
+                last_spot_at=self._last_spot_at,
+                reconnect_count=self._reconnect_count,
+                cache_size=len(self._cache),
+                last_error=self._last_error,
+            )
 
     @property
     def is_running(self) -> bool:
@@ -202,6 +228,7 @@ class ForgeDxSpiderSpotProvider:
             self._thread = None
             self._session = None
             self._state = DxSpiderConnectionState.STOPPED
+            self._connected_since = None
 
     def fetch_slice(self) -> ForgeProviderSlice:
         """Return the current cache without opening or touching the network."""
@@ -223,6 +250,7 @@ class ForgeDxSpiderSpotProvider:
 
     def _run(self) -> None:
         delay = self._config.reconnect_initial_s
+        first_connection = True
 
         while not self._stop.is_set():
             with self._lock:
@@ -233,14 +261,19 @@ class ForgeDxSpiderSpotProvider:
                 session = self._open_session()
                 with self._lock:
                     self._session = session
+                    self._connected_since = self._normalized_clock_value()
                     self._last_error = None
+                    if not first_connection:
+                        self._reconnect_count += 1
 
                 self._send_initial_commands(session)
                 self._set_state(DxSpiderConnectionState.LIVE)
                 with self._lock:
                     self._live_started_monotonic = self._monotonic()
                 self._consume_session(session)
+                first_connection = False
             except (ForgeSpotProviderError, ConnectionError, OSError, TimeoutError) as error:
+                first_connection = False
                 self._record_disconnect(error)
             finally:
                 self._close_current_session()
@@ -308,6 +341,8 @@ class ForgeDxSpiderSpotProvider:
                 continue
 
             last_rx_monotonic = now_monotonic
+            with self._lock:
+                self._last_message_at = self._normalized_clock_value()
             buffer.extend(strip_telnet_negotiation(chunk))
             if len(buffer) > self._config.max_response_bytes:
                 raise ConnectionError(
@@ -335,6 +370,7 @@ class ForgeDxSpiderSpotProvider:
                 seconds=self._config.max_spot_age_s
             ):
                 self._cache[spot.stable_key] = spot
+                self._last_spot_at = received_at
                 self._prune_cache_locked(received_at)
 
     def _prune_cache_locked(self, now: datetime) -> None:
@@ -359,6 +395,7 @@ class ForgeDxSpiderSpotProvider:
         with self._lock:
             self._last_error = text
             self._state = DxSpiderConnectionState.DISCONNECTED
+            self._connected_since = None
 
     def _close_current_session(self) -> None:
         with self._lock:
