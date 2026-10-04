@@ -6,7 +6,7 @@ The Forge spot aggregation service is the independent Rolling Thunder process th
 
 It is deliberately separate from the Raspberry Pi `ApplicationRuntime`. Forge performs no radio, CAT, receive tuning, contact logging, Tkinter, PTT, MOX, keying, tuner, power, or transmit-control work.
 
-The Pi remains local-first. Loss of Forge, WireGuard, cellular service, POTA, DXSpider, QRZ, or the public Internet must not prevent local contact logging or replacement of the Pi's last durable valid shared-spot snapshot with malformed/incomplete data.
+The Pi remains local-first. Loss of Forge, WireGuard, cellular service, POTA, DX Summit, DXSpider, QRZ, or the public Internet must not prevent local contact logging or replacement of the Pi's last durable valid shared-spot snapshot with malformed/incomplete data.
 
 Checkpoint 8 of GitHub issue #148 completes the production deployment boundary and the Pi-side two-press shared-spot workflow while preserving `ReceiveTuningService` as the sole radio tuning authority.
 
@@ -23,7 +23,7 @@ The composition root is `rolling_thunder.forge_spot_main`. It owns:
 1. Forge YAML loading and validation
 2. environment-backed QRZ secret loading
 3. Forge SQLite initialization and retained snapshot reconstruction
-4. enabled POTA and DXSpider provider composition
+4. enabled POTA and exactly one DX source (DX Summit preferred; DXSpider legacy)
 5. optional QRZ enrichment
 6. provider refresh scheduling
 7. transactional aggregate persistence
@@ -82,38 +82,23 @@ The mapping preserves normalized activator callsign, integer-hertz frequency, no
 
 A successful empty provider result is a valid complete empty slice. A nonempty public response that yields no usable typed records is a provider failure rather than silently replacing active data with an empty slice.
 
-### DXSpider provider
+### DX sources
 
-The `dxspider` section includes:
+Forge permits at most one DX source at a time.
 
-- `enabled`
-- `host`
-- `port`
-- `login_callsign`
-- `connect_timeout_s`
-- `read_timeout_s`
-- `max_response_bytes`
-- `max_spots`
-- `max_spot_age_s`
+#### DX Summit IRC
 
-`ForgeDxSpiderSpotProvider` uses one short-lived bounded TCP session per refresh. It does not maintain a second long-lived stream authority.
+The preferred source is the persistent read-only DX Summit IRC feed. Forge opens one connection, registers once, joins `#CQDX` once, answers IRC `PING` with `PONG`, and continuously ingests `dxs` spot messages into a bounded in-memory cache.
 
-The adapter:
+Normal Forge aggregation refreshes read that cache only. They never reconnect upstream or issue IRC commands. Connection age alone never causes recycling; a healthy socket may remain connected for the entire 30–90 day Forge process lifetime. Reconnection occurs only after a genuine connection failure or an extended no-traffic timeout, using bounded exponential backoff.
 
-1. opens a bounded TCP connection
-2. applies the configured read timeout
-3. sends the configured amateur callsign
-4. sends `set/page 0`
-5. sends `show/fdx`
-6. sends `bye`
-7. reads under the response-size bound
-8. strips common telnet negotiation sequences
-9. parses a complete bounded response
-10. closes on every success or failure path
+#### DXSpider fallback
 
-Complete cluster responses and credentials are not logged.
+DXSpider remains available only as a legacy fallback and is disabled in the production example. If explicitly enabled, it follows the same etiquette-safe lifecycle: Forge connects once, logs in once, sends `set/page 0` and one `show/fdx` seed per real connection, then remains connected and consumes live `DX de` lines.
 
-A clean response with no `DX de` lines is a valid empty slice. A response containing spot-like lines but no usable records is treated as a typed provider failure.
+Normal aggregation refreshes read the DXSpider cache only and perform no network I/O. Forge sends `bye` only during intentional service shutdown. A failed connection reconnects with bounded exponential backoff; connection age alone never triggers reconnect.
+
+DX Summit and DXSpider cannot be enabled simultaneously because both represent the single shared DX provider family.
 
 ## DX normalization and mode resolution
 
@@ -300,7 +285,7 @@ Unknown paths return 404. Unsupported methods return 405 with `Allow: GET`.
 
 Request handlers only read already-published immutable state. They never:
 
-- contact POTA, DXSpider, or QRZ
+- contact POTA, DX Summit, DXSpider, or QRZ
 - schedule a refresh
 - write SQLite
 - access radio/hardware
