@@ -84,7 +84,12 @@ def test_invalid_coordinate_pairs_are_rejected(latitude: object, longitude: obje
 
 def test_all_repository_paths_preserve_coordinates(tmp_path: Path) -> None:
     repository = ContactRepository(tmp_path / "contacts.db")
-    qso = contact(enrichment_state=ContactEnrichmentState.PENDING_QRZ)
+    qso = contact(
+        enrichment_state=ContactEnrichmentState.PENDING_QRZ,
+        my_state="OH",
+        my_cq_zone=4,
+        my_itu_zone=8,
+    )
     repository.add(qso)
     assert repository.get(qso.contact_id) == qso
     retries = ContactRetryRepository(tmp_path / "contacts.db")
@@ -102,6 +107,7 @@ def test_all_repository_paths_preserve_coordinates(tmp_path: Path) -> None:
         qso.contact_id, grid="FN31pr", grid_source=ContactGridSource.QRZ
     )
     assert (enriched.my_latitude, enriched.my_longitude) == (39.5309, -84.0866)
+    assert (enriched.my_state, enriched.my_cq_zone, enriched.my_itu_zone) == ("OH", 4, 8)
     assert repository.list_synchronization_eligible(SynchronizationState.PENDING) == [enriched]
     repository.update_synchronization_state(qso.contact_id, SynchronizationState.SYNCHRONIZED)
     replay = repository.add_idempotent(qso)
@@ -121,12 +127,12 @@ def test_all_repository_paths_preserve_coordinates(tmp_path: Path) -> None:
     assert repository.delete(qso.contact_id) == cleared
 
 
-def test_schema_15_migration_preserves_all_existing_data(
+def test_schema_16_migration_preserves_all_existing_data(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "legacy.db"
     with monkeypatch.context() as patch:
-        patch.setattr(storage, "CURRENT_SCHEMA_VERSION", 15)
+        patch.setattr(storage, "CURRENT_SCHEMA_VERSION", 16)
         storage.initialize_database(path)
     with sqlite3.connect(path) as db:
         db.execute(
@@ -142,15 +148,18 @@ def test_schema_15_migration_preserves_all_existing_data(
         before = db.execute("SELECT * FROM contacts").fetchall()
         retry = db.execute("SELECT * FROM contact_sync_retries").fetchall()
         telemetry = db.execute("SELECT * FROM ft8_performance_outbox").fetchall()
-    assert storage.initialize_database(path) == 16
-    assert storage.initialize_database(path) == 16
+    assert storage.initialize_database(path) == 17
+    assert storage.initialize_database(path) == 17
     historical = ContactRepository(path).list_all()[0]
     assert historical.my_latitude is None and historical.my_longitude is None
+    assert historical.my_state is None
+    assert historical.my_cq_zone is None
+    assert historical.my_itu_zone is None
     with sqlite3.connect(path) as db:
         assert db.execute(f"SELECT {', '.join(old_columns)} FROM contacts").fetchall() == before
-        assert db.execute("SELECT my_latitude, my_longitude FROM contacts").fetchall() == [
-            (None, None)
-        ]
+        assert db.execute(
+            "SELECT my_state, my_cq_zone, my_itu_zone FROM contacts"
+        ).fetchall() == [(None, None, None)]
         assert db.execute("SELECT * FROM contact_sync_retries").fetchall() == retry
         assert db.execute("SELECT * FROM ft8_performance_outbox").fetchall() == telemetry
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -162,11 +171,11 @@ def test_schema_15_migration_preserves_all_existing_data(
 
 def test_export_and_verified_backup_round_trip_coordinates(tmp_path: Path) -> None:
     repository = ContactRepository(tmp_path / "source.db")
-    qso = contact()
+    qso = contact(my_state="OH", my_cq_zone=4, my_itu_zone=8)
     repository.add(qso)
     export = tmp_path / "contacts.json"
     export_contacts_to_json(repository, export, exported_at=NOW)
-    assert json.loads(export.read_text())["format_version"] == 3
+    assert json.loads(export.read_text())["format_version"] == 4
     backup = create_contact_backup(
         repository, tmp_path / "backups", retention_count=2, created_at=NOW
     )
@@ -176,11 +185,15 @@ def test_export_and_verified_backup_round_trip_coordinates(tmp_path: Path) -> No
         assert target.get(qso.contact_id) == qso
 
 
-@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize("version", [1, 2, 3])
 def test_legacy_exports_have_no_fabricated_coordinates(tmp_path: Path, version: int) -> None:
     qso = contact().model_dump(mode="json")
-    del qso["my_latitude"]
-    del qso["my_longitude"]
+    del qso["my_state"]
+    del qso["my_cq_zone"]
+    del qso["my_itu_zone"]
+    if version in (1, 2):
+        del qso["my_latitude"]
+        del qso["my_longitude"]
     source = tmp_path / "legacy.json"
     source.write_text(
         json.dumps({"format_version": version, "exported_at": NOW.isoformat(), "contacts": [qso]})
@@ -188,13 +201,54 @@ def test_legacy_exports_have_no_fabricated_coordinates(tmp_path: Path, version: 
     target = ContactRepository(tmp_path / "target.db")
     import_contacts_from_json(target, source)
     restored = target.list_all()[0]
-    assert restored.my_latitude is None and restored.my_longitude is None
+    assert restored.my_state is None
+    assert restored.my_cq_zone is None
+    assert restored.my_itu_zone is None
 
 
 def test_coordinates_do_not_change_wavelog_payload_or_ledger_hash() -> None:
-    qso = contact()
-    legacy = contact(**{**qso.model_dump(), "my_latitude": None, "my_longitude": None})
+    qso = contact(my_state="OH", my_cq_zone=4, my_itu_zone=8)
+    legacy = contact(
+        **{
+            **qso.model_dump(),
+            "my_state": None,
+            "my_cq_zone": None,
+            "my_itu_zone": None,
+        }
+    )
     assert contact_to_adif(qso) == contact_to_adif(legacy)
     assert _remote_payload_sha256(qso, station_profile_id=42) == _remote_payload_sha256(
         legacy, station_profile_id=42
     )
+
+
+
+def test_jurisdiction_fields_are_normalized_frozen_and_validated() -> None:
+    qso = contact(my_state=" oh ", my_cq_zone=4, my_itu_zone=8)
+    assert (qso.my_state, qso.my_cq_zone, qso.my_itu_zone) == ("OH", 4, 8)
+    with pytest.raises(ValidationError, match="frozen"):
+        qso.my_state = "IN"
+
+
+@pytest.mark.parametrize(
+    ("state", "cq_zone", "itu_zone"),
+    [
+        ("", 4, 8),
+        ("OHIO", 4, 8),
+        ("OH", True, 8),
+        ("OH", 0, 8),
+        ("OH", 41, 8),
+        ("OH", 4, True),
+        ("OH", 4, 0),
+        ("OH", 4, 91),
+        ("OH", None, 8),
+        (None, 4, 8),
+    ],
+)
+def test_invalid_jurisdiction_is_rejected(
+    state: object,
+    cq_zone: object,
+    itu_zone: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        contact(my_state=state, my_cq_zone=cq_zone, my_itu_zone=itu_zone)
