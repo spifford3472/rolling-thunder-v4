@@ -37,6 +37,7 @@ development = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "pyshp>=2.3,<3",
 ]
 
 [tool.pytest.ini_options]
