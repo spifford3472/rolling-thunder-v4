@@ -210,7 +210,7 @@ def load_artifact_index(path: Path) -> tuple[_ArtifactState, ...]:
         member = raw_state.get("member")
         bbox = _parse_bbox(raw_state.get("bbox"))
         if not isinstance(state, str) or not isinstance(member, str):
-            raise ValueError("jurisdiction artifact state index is malformed")
+            raise TypeError("jurisdiction artifact state index is malformed")
         normalized = state.strip().upper()
         if len(normalized) != 2 or not normalized.isalpha():
             raise ValueError("jurisdiction artifact state code is invalid")
@@ -243,15 +243,21 @@ def _parse_state_boundary_json(raw: bytes, *, expected_state: str) -> StateBound
                 raise TypeError(f"jurisdiction state {expected_state} ring is malformed")
             points: list[Point] = []
             for raw_point in raw_ring:
+                if not isinstance(raw_point, list):
+                    raise TypeError(
+                        f"jurisdiction state {expected_state} point is malformed"
+                    )
+                if len(raw_point) != 2:
+                    raise ValueError(
+                        f"jurisdiction state {expected_state} point is malformed"
+                    )
                 if (
-                    not isinstance(raw_point, list)
-                    or len(raw_point) != 2
-                    or isinstance(raw_point[0], bool)
+                    isinstance(raw_point[0], bool)
                     or isinstance(raw_point[1], bool)
                     or not isinstance(raw_point[0], (int, float))
                     or not isinstance(raw_point[1], (int, float))
                 ):
-                    raise ValueError(
+                    raise TypeError(
                         f"jurisdiction state {expected_state} point is malformed"
                     )
                 longitude = float(raw_point[0])
@@ -269,7 +275,7 @@ def _parse_bbox(raw_bbox: object) -> BoundingBox:
     values: list[float] = []
     for value in raw_bbox:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise ValueError("jurisdiction artifact bbox is malformed")
+            raise TypeError("jurisdiction artifact bbox is malformed")
         number = float(value)
         if not math.isfinite(number):
             raise ValueError("jurisdiction artifact bbox is malformed")
