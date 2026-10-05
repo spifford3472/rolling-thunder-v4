@@ -42,6 +42,7 @@ from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
 from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.domain import Contact
+from rolling_thunder.dx_worked import DxWorkedRepository, DxWorkedTracker
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.distance import format_maidenhead_distance
@@ -290,9 +291,11 @@ def run_dashboard(
     pota_worked = PotaWorkedTracker(
         PotaWorkedRepository(config.storage.database_path)
     )
+    dx_worked = DxWorkedTracker(DxWorkedRepository(config.storage.database_path))
     shared_spot_panel = SharedSpotPanelController(
         runtime,
         pota_worked_status=pota_worked,
+        dx_worked_status=dx_worked,
     )
     shared_spot_tuning = SharedSpotTuneController(ReceiveTuningService(runtime.radio))
     shared_spot_tune_status = SharedSpotTuneStatusController(
@@ -404,6 +407,7 @@ def run_dashboard(
         pota_context_provider=lambda: (
             context_navigation.state.selected is ContextId.POTA
         ),
+        dx_context_provider=lambda: context_navigation.state.selected is ContextId.DX,
         browse_context_provider=lambda: (
             context_navigation.state.selected is ContextId.BROWSE
         ),
@@ -411,6 +415,7 @@ def run_dashboard(
             shared_spot_panel.visible_spots
         ),
         pota_worked_tracker=pota_worked,
+        dx_worked_tracker=dx_worked,
     )
     operator_commands = OperatorCommandController(
         capture,

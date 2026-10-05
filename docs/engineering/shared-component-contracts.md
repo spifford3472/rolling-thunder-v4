@@ -61,6 +61,12 @@ after refresh. Action-critical changes invalidate staging.
 POTA-specific behavior must not leak into DX and vice versa unless the shared
 contract is intentionally changed.
 
+Worked state remains provider-specific even though POTA and DX reuse the same
+card treatment. POTA keys worked state by callsign, amateur band, and displayed
+mode. DX keys it by callsign and amateur band only. Both markers are created
+only after successful local contact durability and expire from presentation at
+UTC-day rollover.
+
 ## Receive tuning
 
 `ReceiveTuningService` is the shared receive-tuning authority for applicable

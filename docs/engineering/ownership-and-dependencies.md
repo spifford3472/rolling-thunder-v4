@@ -62,13 +62,15 @@ general radio control, GPS, local contact durability, or Forge API.
 
 ### DX
 
-Owns DX-specific filtering/presentation semantics at the shared-panel boundary.
-Provider ingestion is owned by Forge.
+Owns DX-specific filtering/presentation semantics and callsign-plus-band
+UTC-day worked state at the shared-panel boundary. Provider ingestion is owned
+by Forge.
 
 Depends on:
 - shared spot domain/selection/UI/tuning;
 - radio state and `ReceiveTuningService`;
 - pending callsign/contact logging;
+- successful local contact-commit notification;
 - shared callsign-info overlay;
 - Forge DX snapshot and provider health.
 
