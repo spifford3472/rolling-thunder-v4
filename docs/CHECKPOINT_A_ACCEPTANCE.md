@@ -14,7 +14,6 @@ uses SQLite's backup API (including live WAL data). Contact-only JSON is not a
 complete rollback database. This block does not migrate or stop production.
 
 ```bash
-set -euo pipefail
 cd /home/geoff/projects/rolling-thunder-v4
 umask 077
 checkpoint_backup="$HOME/rolling-thunder-checkpoint-a-$(date -u +%Y%m%dT%H%M%SZ)"
