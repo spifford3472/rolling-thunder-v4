@@ -15,6 +15,7 @@ from rolling_thunder.domain import (
     RadioState,
 )
 from rolling_thunder.gps import GPSState
+from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
 from rolling_thunder.pota_spots import PotaSpot
 
 
@@ -56,10 +57,12 @@ class ContactLoggingService:
         clock: Clock | None = None,
         *,
         qrz_fallback_available: bool = False,
+        jurisdiction_resolver: LocalJurisdictionResolver | None = None,
     ) -> None:
         self._repository = repository
         self._clock = clock or SystemClock()
         self._qrz_fallback_available = qrz_fallback_available
+        self._jurisdiction_resolver = jurisdiction_resolver
 
     def commit(
         self,
@@ -96,6 +99,7 @@ class ContactLoggingService:
             pota_context_active=pota_context_active,
             pota_spots=pota_spots,
             qrz_fallback_available=self._qrz_fallback_available,
+            jurisdiction_resolver=self._jurisdiction_resolver,
         )
         contact = Contact(
             callsign=callsign,
@@ -108,6 +112,9 @@ class ContactLoggingService:
             my_grid=metadata.my_grid,
             my_latitude=metadata.my_latitude,
             my_longitude=metadata.my_longitude,
+            my_state=metadata.my_state,
+            my_cq_zone=metadata.my_cq_zone,
+            my_itu_zone=metadata.my_itu_zone,
             pota_reference=metadata.pota_reference,
             grid_source=metadata.grid_source,
             enrichment_state=metadata.enrichment_state,
@@ -129,6 +136,9 @@ class ContactLoggingService:
         my_grid: str | None,
         my_latitude: float | None = None,
         my_longitude: float | None = None,
+        my_state: str | None = None,
+        my_cq_zone: int | None = None,
+        my_itu_zone: int | None = None,
         grid: str | None = None,
         notes: str | None = None,
     ) -> Contact:
@@ -150,6 +160,9 @@ class ContactLoggingService:
             my_grid=my_grid,
             my_latitude=my_latitude,
             my_longitude=my_longitude,
+            my_state=my_state,
+            my_cq_zone=my_cq_zone,
+            my_itu_zone=my_itu_zone,
             enrichment_state=enrichment_state,
             notes=notes,
         )
