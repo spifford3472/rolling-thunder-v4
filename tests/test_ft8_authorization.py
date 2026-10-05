@@ -24,6 +24,7 @@ from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
+from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver, StateBoundary
 
 
 def _activity(*, period: int = 100, snr_db: int = -10) -> FT8CQActivity:
@@ -62,11 +63,27 @@ def _gps() -> GPSState:
     )
 
 
+def _resolver() -> LocalJurisdictionResolver:
+    return LocalJurisdictionResolver(
+        (
+            StateBoundary(
+                state="OH",
+                polygons=((((-85.0, 38.0), (-80.0, 38.0), (-80.0, 42.0), (-85.0, 42.0)),),),
+            ),
+            StateBoundary(
+                state="IN",
+                polygons=((((-90.0, 38.0), (-85.0, 38.0), (-85.0, 42.0), (-90.0, 42.0)),),),
+            ),
+        )
+    )
+
+
 def _service(period: int = 100) -> FT8QsoAuthorizationService:
     return FT8QsoAuthorizationService(
         local_callsign="KI5VNB",
         home_grid="EM79xm",
         clock=FakeFT8Clock(FT8Period(period).start_utc + timedelta(seconds=1)),
+        jurisdiction_resolver=_resolver(),
     )
 
 
@@ -86,6 +103,7 @@ def test_authorization_freezes_selected_cq_radio_and_gps() -> None:
     assert context.signal_report_db == -10
     assert context.latitude == pytest.approx(39.529)
     assert context.longitude == pytest.approx(-84.087)
+    assert (context.local_state, context.local_cq_zone, context.local_itu_zone) == ("OH", 4, 8)
     assert context.location_label == "GPS"
 
 
@@ -109,6 +127,9 @@ def test_authorization_explicitly_falls_back_to_configured_home_grid() -> None:
     assert context.local_grid == "EM79xm"
     assert context.latitude is None
     assert context.longitude is None
+    assert context.local_state is None
+    assert context.local_cq_zone is None
+    assert context.local_itu_zone is None
     assert context.location_label == "configured home grid"
 
 
@@ -186,7 +207,7 @@ def test_authorized_location_survives_movement_and_next_qso(tmp_path: Path) -> N
 
     current = gps(39.5309, -84.0866)
     first = service.authorize(_activity(), radio_state=_radio(), gps_state=current)
-    current = gps(39.9, -83.9)
+    current = gps(39.9, -86.0)
     second = service.authorize(_activity(), radio_state=_radio(), gps_state=current)
     repository = ContactRepository(tmp_path / "contacts.db")
     logger = FT8QsoLoggingService(ContactLoggingService(repository))
@@ -204,6 +225,11 @@ def test_authorized_location_survives_movement_and_next_qso(tmp_path: Path) -> N
         assert logged is not None
         assert logged.my_grid == context.local_grid
         assert (logged.my_latitude, logged.my_longitude) == (context.latitude, context.longitude)
+        assert (logged.my_state, logged.my_cq_zone, logged.my_itu_zone) == (
+            context.local_state,
+            context.local_cq_zone,
+            context.local_itu_zone,
+        )
     assert (
         repository.get(first.qso_id).my_latitude,
         repository.get(first.qso_id).my_longitude,
@@ -211,4 +237,14 @@ def test_authorized_location_survives_movement_and_next_qso(tmp_path: Path) -> N
     assert (
         repository.get(second.qso_id).my_latitude,
         repository.get(second.qso_id).my_longitude,
-    ) == (39.9, -83.9)
+    ) == (39.9, -86.0)
+    assert (
+        repository.get(first.qso_id).my_state,
+        repository.get(first.qso_id).my_cq_zone,
+        repository.get(first.qso_id).my_itu_zone,
+    ) == ("OH", 4, 8)
+    assert (
+        repository.get(second.qso_id).my_state,
+        repository.get(second.qso_id).my_cq_zone,
+        repository.get(second.qso_id).my_itu_zone,
+    ) == ("IN", 4, 8)
