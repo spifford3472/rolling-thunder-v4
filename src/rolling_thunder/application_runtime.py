@@ -79,8 +79,8 @@ from rolling_thunder.known_callsign_client import (
     KnownCallsignPollingService,
 )
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
-from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
+from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
 from rolling_thunder.map_solar import MapSolarStyleService
 from rolling_thunder.map_sources import (
     InstalledMapRegistry,
