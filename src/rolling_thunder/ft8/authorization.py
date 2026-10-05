@@ -9,6 +9,7 @@ from rolling_thunder.domain import GPSFixState, RadioConnectionState, RadioMode,
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity, FT8QsoContext
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
+from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
 from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
@@ -28,6 +29,7 @@ class FT8QsoAuthorizationService:
     local_callsign: BaseCallsign
     home_grid: MaidenheadGrid
     clock: FT8Clock
+    jurisdiction_resolver: LocalJurisdictionResolver | None = None
 
     def authorize(
         self,
@@ -76,6 +78,13 @@ class FT8QsoAuthorizationService:
             gps_state,
             self.home_grid,
         )
+        jurisdiction = (
+            self.jurisdiction_resolver.resolve(latitude, longitude)
+            if self.jurisdiction_resolver is not None
+            and latitude is not None
+            and longitude is not None
+            else None
+        )
         authorized_utc = self.clock.now_utc()
         if self.clock.current_period() != current_period:
             raise FT8QsoAuthorizationError("FT8 period changed during authorization")
@@ -94,6 +103,9 @@ class FT8QsoAuthorizationService:
             signal_report_db=activity.snr_db,
             latitude=latitude,
             longitude=longitude,
+            local_state=jurisdiction.state if jurisdiction is not None else None,
+            local_cq_zone=jurisdiction.cq_zone if jurisdiction is not None else None,
+            local_itu_zone=jurisdiction.itu_zone if jurisdiction is not None else None,
             location_label=location_label,
             remote_grid=activity.grid,
             pota_cq=activity.pota_cq,
