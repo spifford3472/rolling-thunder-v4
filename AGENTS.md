@@ -190,3 +190,44 @@ A task is complete only when:
 8. no secrets or machine-specific credentials are committed;
 9. required live acceptance has been completed; and
 10. the change remains limited to the approved scope.
+
+## Codex Approval and Deployment Boundaries
+
+Codex development may run from the persistent Forge development workspace:
+
+    /home/geoff/projects/rolling-thunder-codex
+
+Do not develop directly in Forge production runtime directories or in the
+anvilmobile production checkout.
+
+### Merge approval
+
+Never merge a pull request or feature branch without explicit repository-owner
+approval. Geoffrey normally expresses this as an explicit `merge` instruction.
+
+Approval to implement, commit, push, create a PR, continue testing, or deploy
+does not imply approval to merge.
+
+### Deployment approval
+
+Never deploy to Forge or anvilmobile without explicit deployment approval from
+Geoffrey.
+
+Approval to implement, commit, push, create a PR, or merge does not imply
+approval to deploy.
+
+The approved deployment paths and operational details are documented in:
+
+    docs/engineering/codex-deployment-workflow.md
+
+Do not modify sudoers, deployment wrappers, SSH deployment keys, or production
+systemd service definitions unless the assigned task explicitly requires that
+system-level change and Geoffrey approves it.
+
+Do not bypass the approved deployment wrappers by copying code into production
+trees or manually installing packages into production virtual environments.
+
+Live RF transmission is a separate safety boundary. Do not initiate an RF
+transmission for testing unless Geoffrey explicitly authorizes the live-radio
+test. Prefer unit tests, mocks, recorded data, receive-only validation, or a
+dummy load where applicable.
