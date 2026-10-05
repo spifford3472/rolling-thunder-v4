@@ -130,7 +130,16 @@ def test_malformed_or_oversized_contact_body_is_rejected_before_wavelog(tmp_path
 
 def test_coordinate_contact_is_accepted_and_preserved(tmp_path: Path) -> None:
     application, wavelog = app(tmp_path)
-    qso = contact().model_copy(update={"my_latitude": 39.5309, "my_longitude": -84.0866})
+    qso = Contact.model_validate(
+        {
+            **contact().model_dump(mode="python"),
+            "my_latitude": 39.5309,
+            "my_longitude": -84.0866,
+            "my_state": "OH",
+            "my_cq_zone": 4,
+            "my_itu_zone": 8,
+        }
+    )
     response = upload(application, qso, key=str(qso.contact_id))
     assert response.status_code == 200
     assert wavelog.contacts == [qso]
@@ -143,6 +152,9 @@ def test_legacy_contact_body_without_coordinates_is_accepted(tmp_path: Path) -> 
     payload = qso.model_dump(mode="json")
     del payload["my_latitude"]
     del payload["my_longitude"]
+    del payload["my_state"]
+    del payload["my_cq_zone"]
+    del payload["my_itu_zone"]
     response = application.handle(
         "POST",
         "/contacts",
@@ -151,3 +163,22 @@ def test_legacy_contact_body_without_coordinates_is_accepted(tmp_path: Path) -> 
     )
     assert response.status_code == 200
     assert wavelog.contacts == [qso]
+
+
+
+def test_jurisdiction_contact_does_not_change_legacy_mobile_target(tmp_path: Path) -> None:
+    application, wavelog = app(tmp_path)
+    qso = Contact.model_validate(
+        {
+            **contact().model_dump(mode="python"),
+            "my_latitude": 39.5309,
+            "my_longitude": -84.0866,
+            "my_state": "OH",
+            "my_cq_zone": 4,
+            "my_itu_zone": 8,
+        }
+    )
+    response = upload(application, qso, key=str(qso.contact_id))
+    assert response.status_code == 200
+    assert wavelog.contacts == [qso]
+    assert wavelog.resolve_station_location().name == "Mobile"
