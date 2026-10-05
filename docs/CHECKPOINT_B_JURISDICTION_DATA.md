@@ -24,7 +24,7 @@ Authoritative source:
 - Runtime code uses STUSPS as the canonical two-character subdivision code.
 
 tools/generate_us_state_jurisdiction.py accepts the pinned ZIP and produces
-the runtime JSON artifact. It records the exact input ZIP SHA-256, generation
+the runtime ZIP artifact. It records the exact input ZIP SHA-256, generation
 timestamp, coordinate precision, source URL, and supported scope in the
 artifact. Acceptance must also record the generated artifact SHA-256.
 
@@ -82,15 +82,11 @@ Invalid, non-finite, or out-of-range coordinates are rejected by the resolver.
 
 ## Runtime artifact contract
 
-Artifact format version: 1.
+Artifact format version: 2.
 
-The JSON document contains format_version, source provenance metadata, and
-states containing canonical state codes and Polygon/MultiPolygon rings as
-[longitude, latitude].
+The ZIP archive contains a compact index.json plus one compressed state JSON member per supported state/DC. The index stores format_version, source provenance, canonical state code, state bounding box, and member name. State members retain the exact generated Polygon/MultiPolygon rings as [longitude, latitude].
 
-Runtime loading is performed once through
-rolling_thunder.local_jurisdiction.load_state_boundaries. QSO lookup is pure
-in-process computation; no subprocess or network dependency is used.
+Runtime startup loads only index.json through LocalJurisdictionResolver.from_artifact. QSO lookup first filters candidate states by bounding box, then lazily decodes only the needed state geometry and keeps a small three-state LRU cache. Polygon bounding boxes further avoid scanning irrelevant components. QSO lookup remains pure in-process computation; no subprocess or network dependency is used.
 
 The generated national artifact is not yet committed at this stage. Before
 runtime composition is enabled, generate it from the exact Census ZIP, review
@@ -104,7 +100,7 @@ dependencies:
 
 python tools/generate_us_state_jurisdiction.py \
   /path/to/tl_2025_us_state.zip \
-  src/rolling_thunder/data/us_state_jurisdiction_v1.json
+  src/rolling_thunder/data/us_state_jurisdiction_v2.zip
 
 Do not substitute another TIGER vintage without explicit review. A regenerated
 artifact is a source-data change and requires boundary regression tests plus a
@@ -123,3 +119,20 @@ Before production cutover measure on anvilmobile:
 If the full unsimplified artifact is too expensive on the Pi, change the
 runtime representation only after measurements and review. Do not silently
 simplify or approximate authoritative boundaries to meet a guessed target.
+
+
+## Measured rejected v1 representation
+
+The first exact-geometry representation stored all 51 jurisdictions in one
+22,222,003-byte JSON document. On anvilmobile it produced correct answers but
+failed the performance gate:
+
+- startup load: 6.903058 seconds;
+- maximum RSS after load: 242,480 KiB (236.80 MiB);
+- RSS growth during load: 228,712 KiB;
+- repeated Waynesville lookup median: 1029.695 ms.
+
+That v1 runtime representation was rejected and must not be committed as the
+production artifact. Format v2 exists specifically to preserve the same source
+geometry while avoiding whole-country startup expansion and whole-country
+lookup scans.
