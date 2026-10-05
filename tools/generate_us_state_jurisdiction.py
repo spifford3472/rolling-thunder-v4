@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the compact Rolling Thunder U.S. state-boundary runtime artifact."""
+"""Generate the compact Rolling Thunder U.S. jurisdiction ZIP artifact."""
 
 from __future__ import annotations
 
@@ -14,9 +14,7 @@ from typing import Any
 
 import shapefile
 
-SOURCE_URL = (
-    "https://www2.census.gov/geo/tiger/TIGER2025/STATE/tl_2025_us_state.zip"
-)
+SOURCE_URL = "https://www2.census.gov/geo/tiger/TIGER2025/STATE/tl_2025_us_state.zip"
 SUPPORTED_CODES = frozenset(
     {
         "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI",
@@ -27,7 +25,7 @@ SUPPORTED_CODES = frozenset(
     }
 )
 COORDINATE_DECIMALS = 6
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,27 +62,57 @@ def main() -> None:
         extra = sorted(codes - SUPPORTED_CODES)
         raise SystemExit(f"unexpected state coverage: missing={missing} extra={extra}")
 
-    document = {
-        "format_version": FORMAT_VERSION,
-        "source": {
-            "agency": "U.S. Census Bureau, Geography Division",
-            "dataset": "2025 TIGER/Line State and Equivalent Entity National shapefile",
-            "source_url": SOURCE_URL,
-            "source_zip_sha256": source_sha256,
-            "generated_at_utc": args.generated_at,
-            "coordinate_decimals": COORDINATE_DECIMALS,
-            "supported_scope": "50 states plus District of Columbia",
-        },
-        "states": states,
-    }
     args.destination.parent.mkdir(parents=True, exist_ok=True)
-    encoded = (
-        json.dumps(document, separators=(",", ":"), sort_keys=True, ensure_ascii=False) + "\n"
-    ).encode("utf-8")
-    args.destination.write_bytes(encoded)
+    index_states: list[dict[str, Any]] = []
+    with zipfile.ZipFile(
+        args.destination,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
+    ) as archive:
+        for state in states:
+            code = state["state"]
+            member = f"states/{code}.json"
+            payload = {
+                "state": code,
+                "polygons": state["polygons"],
+            }
+            encoded = json.dumps(
+                payload, separators=(",", ":"), sort_keys=True, ensure_ascii=False
+            ).encode("utf-8")
+            archive.writestr(member, encoded)
+            index_states.append(
+                {
+                    "state": code,
+                    "bbox": state["bbox"],
+                    "member": member,
+                }
+            )
+
+        index = {
+            "format_version": FORMAT_VERSION,
+            "source": {
+                "agency": "U.S. Census Bureau, Geography Division",
+                "dataset": "2025 TIGER/Line State and Equivalent Entity National shapefile",
+                "source_url": SOURCE_URL,
+                "source_zip_sha256": source_sha256,
+                "generated_at_utc": args.generated_at,
+                "coordinate_decimals": COORDINATE_DECIMALS,
+                "supported_scope": "50 states plus District of Columbia",
+            },
+            "states": index_states,
+        }
+        archive.writestr(
+            "index.json",
+            json.dumps(
+                index, separators=(",", ":"), sort_keys=True, ensure_ascii=False
+            ).encode("utf-8"),
+        )
+
+    artifact_bytes = args.destination.read_bytes()
     print(f"source_sha256={source_sha256}")
-    print(f"artifact_sha256={hashlib.sha256(encoded).hexdigest()}")
-    print(f"artifact_bytes={len(encoded)}")
+    print(f"artifact_sha256={hashlib.sha256(artifact_bytes).hexdigest()}")
+    print(f"artifact_bytes={len(artifact_bytes)}")
     print(f"states={len(states)}")
 
 
@@ -105,7 +133,13 @@ def _read_states(shapefile_path: Path) -> list[dict[str, Any]]:
         polygons = _geometry_polygons(geometry)
         if not polygons:
             raise SystemExit(f"state {state} has no polygon geometry")
-        output.append({"state": state, "polygons": polygons})
+        output.append(
+            {
+                "state": state,
+                "bbox": _polygons_bbox(polygons),
+                "polygons": polygons,
+            }
+        )
     output.sort(key=lambda entry: entry["state"])
     return output
 
@@ -146,6 +180,21 @@ def _geometry_polygons(geometry: dict[str, Any]) -> list[list[list[list[float]]]
         if rings:
             polygons.append(rings)
     return polygons
+
+
+def _polygons_bbox(polygons: list[list[list[list[float]]]]) -> list[float]:
+    longitudes: list[float] = []
+    latitudes: list[float] = []
+    for polygon in polygons:
+        exterior = polygon[0]
+        longitudes.extend(point[0] for point in exterior)
+        latitudes.extend(point[1] for point in exterior)
+    return [
+        min(longitudes),
+        min(latitudes),
+        max(longitudes),
+        max(latitudes),
+    ]
 
 
 if __name__ == "__main__":
