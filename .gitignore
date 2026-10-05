@@ -226,6 +226,11 @@ data/
 logs/
 cache/
 
+# Checkpoint B generated package data is source-controlled; raw source ZIPs are not.
+!src/rolling_thunder/data/
+!src/rolling_thunder/data/us_state_jurisdiction_v1.json
+.checkpoint-b-source/
+
 # Local hardware information
 hardware-local/
 *.device-info
