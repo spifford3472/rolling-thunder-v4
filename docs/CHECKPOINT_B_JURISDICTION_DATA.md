@@ -136,3 +136,28 @@ That v1 runtime representation was rejected and must not be committed as the
 production artifact. Format v2 exists specifically to preserve the same source
 geometry while avoiding whole-country startup expansion and whole-country
 lookup scans.
+
+
+## Accepted v2 benchmark on anvilmobile
+
+Generated artifact provenance:
+
+- source ZIP SHA-256: `59a220888a8d9be8117c4fcd38f542bd02d81abf0d198c78113595ad540dd957`;
+- v2 artifact SHA-256: `aceb7cabf4b3c607fac83be5032241977f72ca2ef39628db04eb95770d64a935`;
+- artifact size: 6,303,603 bytes;
+- archive members: 52 total (index.json plus 51 state/DC members);
+- generated at: 2026-10-05T01:40:11Z.
+
+Measured on anvilmobile:
+
+- index startup load: 0.003525 seconds;
+- index RSS growth: 0 KiB;
+- peak RSS after mixed-state resolution: 37,220 KiB (36.35 MiB);
+- first Ohio lookup: 169.914 ms;
+- first Indiana lookup: 157.023 ms;
+- worst sampled cold lookup (Texas): 610.470 ms;
+- repeated Waynesville lookup median: 37.018 ms;
+- repeated Waynesville lookup mean: 41.343 ms;
+- 25 targeted resolver tests passed.
+
+The v2 indexed/lazy-loading representation is accepted for continued Checkpoint B integration. Cold-state decode cost is bounded to first use of a state member; normal local operation benefits from the three-state cache.
