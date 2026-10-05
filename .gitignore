@@ -230,6 +230,7 @@ cache/
 !src/rolling_thunder/data/
 !src/rolling_thunder/data/us_state_jurisdiction_v2.zip
 .checkpoint-b-source/
+.checkpoint-b-gate3/
 
 # Local hardware information
 hardware-local/
