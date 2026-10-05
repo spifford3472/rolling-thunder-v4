@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate the compact Rolling Thunder U.S. jurisdiction ZIP artifact."""
 
 from __future__ import annotations
