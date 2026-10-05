@@ -17,6 +17,7 @@ from rolling_thunder.domain import (
     SynchronizationState,
 )
 from rolling_thunder.gps import GPSConnectionState, GPSState
+from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver, StateBoundary
 from rolling_thunder.pota_spots import ParkReference, PotaSpot
 
 
@@ -45,6 +46,21 @@ class FailingRepository:
 
     def add(self, contact: Contact) -> None:
         raise RuntimeError(f"storage failed for {contact.callsign}")
+
+
+def jurisdiction_resolver() -> LocalJurisdictionResolver:
+    return LocalJurisdictionResolver(
+        (
+            StateBoundary(
+                state="OH",
+                polygons=((((-85.0, 38.0), (-80.0, 38.0), (-80.0, 42.0), (-85.0, 42.0)),),),
+            ),
+            StateBoundary(
+                state="IN",
+                polygons=((((-90.0, 38.0), (-85.0, 38.0), (-85.0, 42.0), (-90.0, 42.0)),),),
+            ),
+        )
+    )
 
 
 def connected_radio_state(*, transmitting: bool = False) -> RadioState:
@@ -84,7 +100,11 @@ def test_commit_persists_normalized_contact_with_radio_state() -> None:
 def test_commit_persists_gps_and_unique_pota_metadata() -> None:
     repository = RecordingRepository()
     started_at = datetime(2026, 7, 25, 14, 5, tzinfo=UTC)
-    service = ContactLoggingService(repository, FixedClock(started_at))
+    service = ContactLoggingService(
+        repository,
+        FixedClock(started_at),
+        jurisdiction_resolver=jurisdiction_resolver(),
+    )
     position = GPSPosition(
         fix_state=GPSFixState.THREE_DIMENSIONAL,
         latitude=39.5309,
@@ -120,6 +140,7 @@ def test_commit_persists_gps_and_unique_pota_metadata() -> None:
     assert contact.my_grid == "EM79wm"
     assert contact.my_latitude == 39.5309
     assert contact.my_longitude == -84.0866
+    assert (contact.my_state, contact.my_cq_zone, contact.my_itu_zone) == ("OH", 4, 8)
     assert contact.grid == "EN80ma"
     assert contact.pota_reference == "US-1234"
     assert contact.notes == "POTA US-1234"
@@ -232,3 +253,41 @@ def test_unusable_gps_never_prevents_local_commit(state: object) -> None:
     )
     assert repository.contacts == [qso]
     assert qso.my_latitude is None and qso.my_longitude is None
+
+
+
+def test_next_ordinary_contact_gets_fresh_jurisdiction_snapshot() -> None:
+    repository = RecordingRepository()
+    now = datetime(2026, 7, 25, 14, 5, tzinfo=UTC)
+    service = ContactLoggingService(
+        repository,
+        FixedClock(now),
+        jurisdiction_resolver=jurisdiction_resolver(),
+    )
+
+    def gps(longitude: float) -> GPSState:
+        return GPSState(
+            connection_state=GPSConnectionState.CONNECTED,
+            position=GPSPosition(
+                fix_state=GPSFixState.THREE_DIMENSIONAL,
+                latitude=39.5,
+                longitude=longitude,
+                updated_at=now,
+            ),
+            updated_at=now,
+        )
+
+    first = service.commit(
+        pending_callsign="K1ABC",
+        radio_state=connected_radio_state(),
+        gps_state=gps(-84.0),
+    )
+    second = service.commit(
+        pending_callsign="K2ABC",
+        radio_state=connected_radio_state(),
+        gps_state=gps(-86.0),
+    )
+
+    assert (first.my_state, first.my_cq_zone, first.my_itu_zone) == ("OH", 4, 8)
+    assert (second.my_state, second.my_cq_zone, second.my_itu_zone) == ("IN", 4, 8)
+    assert repository.contacts == [first, second]
