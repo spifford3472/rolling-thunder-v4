@@ -161,3 +161,36 @@ Measured on anvilmobile:
 - 25 targeted resolver tests passed.
 
 The v2 indexed/lazy-loading representation is accepted for continued Checkpoint B integration. Cold-state decode cost is bounded to first use of a state member; normal local operation benefits from the three-state cache.
+
+
+## Gate 3 real schema-16 migration acceptance
+
+Validated on anvilmobile against a fresh SQLite online-backup copy of the live
+production database. Production itself was opened read-only for verification and
+was not migrated.
+
+Baseline evidence:
+
+- production schema version before test: 16;
+- production contact count: 16;
+- baseline contact-column count: 18;
+- SQLite integrity_check: ok;
+- foreign-key errors: 0;
+- Checkpoint A contact `35507df2-179b-44ec-bd05-59b9746d2e82` present;
+- baseline SHA-256: `37c46f3a48e787ea1cac5a23d07c2b58ab92b8be9bfe65fdd6bd4d0d9b9f2c50`.
+
+Migration acceptance:
+
+- copied database migrated from schema 16 to 17;
+- contact count remained 16;
+- all pre-existing contact columns/rows were unchanged;
+- `my_state`, `my_cq_zone`, and `my_itu_zone` were added and remained NULL for every historical contact;
+- Checkpoint A coordinates remained `EM79xm / 39.52442 / -84.06249` and its new jurisdiction fields remained NULL;
+- migrated database integrity_check remained ok;
+- migrated database foreign-key errors remained 0;
+- post-migration verification SHA-256: `4549e27f372b81fc7a71f87c74536536d4c616e67d00c0b5fba93f1bb5b9e8c4`;
+- repository model successfully read all 16 migrated contacts;
+- production was rechecked after the test and remained schema 16 with no Checkpoint B columns.
+
+This satisfies the Checkpoint B requirement that schema 17 is additive and does
+not backfill or reinterpret historical contacts.
