@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import json
 import math
+import zipfile
+from collections import OrderedDict
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Final, Iterable
 
-JURISDICTION_ARTIFACT_FORMAT_VERSION: Final = 1
+JURISDICTION_ARTIFACT_FORMAT_VERSION: Final = 2
+_ARTIFACT_CACHE_SIZE: Final = 3
 
 Point = tuple[float, float]
 Ring = tuple[Point, ...]
 Polygon = tuple[Ring, ...]
+BoundingBox = tuple[float, float, float, float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +48,13 @@ class StateBoundary:
         object.__setattr__(self, "state", normalized)
 
 
+@dataclass(frozen=True, slots=True)
+class _ArtifactState:
+    state: str
+    bbox: BoundingBox
+    member: str
+
+
 class _PointRelation(StrEnum):
     OUTSIDE = "outside"
     INSIDE = "inside"
@@ -51,7 +62,7 @@ class _PointRelation(StrEnum):
 
 
 _CQ_ZONE_BY_STATE: Final[dict[str, int]] = {
-    **{state: 1 for state in ("AK",)},
+    "AK": 1,
     **{state: 3 for state in ("AZ", "CA", "ID", "NV", "OR", "UT", "WA")},
     **{
         state: 4
@@ -68,7 +79,7 @@ _CQ_ZONE_BY_STATE: Final[dict[str, int]] = {
             "NY", "PA", "RI", "SC", "VA", "VT", "WV",
         )
     },
-    **{state: 31 for state in ("HI",)},
+    "HI": 31,
 }
 
 _ITU_ZONE_6_WHOLE: Final[frozenset[str]] = frozenset({"CA", "ID", "NV", "OR", "WA"})
@@ -95,23 +106,42 @@ class LocalJurisdictionResolver:
         codes = [boundary.state for boundary in materialized]
         if len(set(codes)) != len(codes):
             raise ValueError("state boundaries must have unique state codes")
-        self._boundaries = materialized
+        self._boundaries: tuple[StateBoundary, ...] | None = materialized
+        self._artifact_path: Path | None = None
+        self._artifact_states: tuple[_ArtifactState, ...] = ()
+        self._state_cache: OrderedDict[str, StateBoundary] = OrderedDict()
 
     @classmethod
     def from_artifact(cls, path: Path) -> "LocalJurisdictionResolver":
-        """Load a versioned generated Census boundary artifact once."""
-        return cls(load_state_boundaries(path))
+        """Load only the compact index from a generated jurisdiction archive."""
+        artifact_states = load_artifact_index(path)
+        resolver = cls(())
+        resolver._boundaries = None
+        resolver._artifact_path = path
+        resolver._artifact_states = artifact_states
+        return resolver
 
     def resolve(self, latitude: float, longitude: float) -> LocalJurisdiction | None:
         """Return one unambiguous supported U.S. jurisdiction or fail closed."""
         _validate_coordinate(latitude, longitude)
         states: list[str] = []
-        for boundary in self._boundaries:
+
+        if self._boundaries is not None:
+            candidates = self._boundaries
+        else:
+            candidates = tuple(
+                self._load_artifact_state(entry)
+                for entry in self._artifact_states
+                if _bbox_contains(entry.bbox, longitude, latitude)
+            )
+
+        for boundary in candidates:
             relation = _boundary_relation(boundary, longitude, latitude)
             if relation is _PointRelation.BOUNDARY:
                 return None
             if relation is _PointRelation.INSIDE:
                 states.append(boundary.state)
+
         if len(states) != 1:
             return None
 
@@ -121,6 +151,143 @@ class LocalJurisdictionResolver:
         if cq_zone is None or itu_zone is None:
             return None
         return LocalJurisdiction(state=state, cq_zone=cq_zone, itu_zone=itu_zone)
+
+    def _load_artifact_state(self, entry: _ArtifactState) -> StateBoundary:
+        cached = self._state_cache.get(entry.state)
+        if cached is not None:
+            self._state_cache.move_to_end(entry.state)
+            return cached
+
+        artifact_path = self._artifact_path
+        if artifact_path is None:
+            raise ValueError("jurisdiction resolver has no artifact path")
+
+        try:
+            with zipfile.ZipFile(artifact_path) as archive:
+                raw = archive.read(entry.member)
+        except (OSError, KeyError, zipfile.BadZipFile) as error:
+            raise ValueError(
+                f"jurisdiction artifact state could not be read: {entry.state}"
+            ) from error
+
+        boundary = _parse_state_boundary_json(raw, expected_state=entry.state)
+        self._state_cache[entry.state] = boundary
+        self._state_cache.move_to_end(entry.state)
+        while len(self._state_cache) > _ARTIFACT_CACHE_SIZE:
+            self._state_cache.popitem(last=False)
+        return boundary
+
+
+def load_artifact_index(path: Path) -> tuple[_ArtifactState, ...]:
+    """Load and validate only the small index from a generated ZIP artifact."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            raw = archive.read("index.json")
+    except (OSError, KeyError, zipfile.BadZipFile) as error:
+        raise ValueError(f"jurisdiction artifact could not be read: {path}") from error
+
+    try:
+        document = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError("jurisdiction artifact index is not valid JSON") from error
+
+    if not isinstance(document, dict):
+        raise ValueError("jurisdiction artifact index must be a JSON object")
+    if document.get("format_version") != JURISDICTION_ARTIFACT_FORMAT_VERSION:
+        raise ValueError("unsupported jurisdiction artifact format")
+
+    raw_states = document.get("states")
+    if not isinstance(raw_states, list) or not raw_states:
+        raise ValueError("jurisdiction artifact requires indexed states")
+
+    entries: list[_ArtifactState] = []
+    seen: set[str] = set()
+    for raw_state in raw_states:
+        if not isinstance(raw_state, dict):
+            raise ValueError("jurisdiction artifact state index is malformed")
+        state = raw_state.get("state")
+        member = raw_state.get("member")
+        bbox = _parse_bbox(raw_state.get("bbox"))
+        if not isinstance(state, str) or not isinstance(member, str):
+            raise ValueError("jurisdiction artifact state index is malformed")
+        normalized = state.strip().upper()
+        if len(normalized) != 2 or not normalized.isalpha():
+            raise ValueError("jurisdiction artifact state code is invalid")
+        if normalized in seen:
+            raise ValueError("jurisdiction artifact state codes must be unique")
+        seen.add(normalized)
+        entries.append(_ArtifactState(normalized, bbox, member))
+    return tuple(entries)
+
+
+def _parse_state_boundary_json(raw: bytes, *, expected_state: str) -> StateBoundary:
+    try:
+        document = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"jurisdiction state {expected_state} is not valid JSON") from error
+    if not isinstance(document, dict):
+        raise ValueError(f"jurisdiction state {expected_state} must be an object")
+    state = document.get("state")
+    raw_polygons = document.get("polygons")
+    if state != expected_state or not isinstance(raw_polygons, list):
+        raise ValueError(f"jurisdiction state {expected_state} is malformed")
+
+    polygons: list[Polygon] = []
+    for raw_polygon in raw_polygons:
+        if not isinstance(raw_polygon, list):
+            raise ValueError(f"jurisdiction state {expected_state} polygon is malformed")
+        rings: list[Ring] = []
+        for raw_ring in raw_polygon:
+            if not isinstance(raw_ring, list):
+                raise ValueError(f"jurisdiction state {expected_state} ring is malformed")
+            points: list[Point] = []
+            for raw_point in raw_ring:
+                if (
+                    not isinstance(raw_point, list)
+                    or len(raw_point) != 2
+                    or isinstance(raw_point[0], bool)
+                    or isinstance(raw_point[1], bool)
+                    or not isinstance(raw_point[0], (int, float))
+                    or not isinstance(raw_point[1], (int, float))
+                ):
+                    raise ValueError(
+                        f"jurisdiction state {expected_state} point is malformed"
+                    )
+                longitude = float(raw_point[0])
+                latitude = float(raw_point[1])
+                _validate_coordinate(latitude, longitude)
+                points.append((longitude, latitude))
+            rings.append(tuple(points))
+        polygons.append(tuple(rings))
+    return StateBoundary(state=expected_state, polygons=tuple(polygons))
+
+
+def _parse_bbox(raw_bbox: object) -> BoundingBox:
+    if not isinstance(raw_bbox, list) or len(raw_bbox) != 4:
+        raise ValueError("jurisdiction artifact bbox is malformed")
+    values: list[float] = []
+    for value in raw_bbox:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("jurisdiction artifact bbox is malformed")
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("jurisdiction artifact bbox is malformed")
+        values.append(number)
+    west, south, east, north = values
+    if west > east or south > north:
+        raise ValueError("jurisdiction artifact bbox is malformed")
+    _validate_coordinate(south, west)
+    _validate_coordinate(north, east)
+    return west, south, east, north
+
+
+def _bbox_contains(
+    bbox: BoundingBox,
+    longitude: float,
+    latitude: float,
+) -> bool:
+    west, south, east, north = bbox
+    return west <= longitude <= east and south <= latitude <= north
 
 
 def _itu_zone(state: str, longitude: float) -> int | None:
@@ -165,12 +332,21 @@ def _boundary_relation(
 ) -> _PointRelation:
     found_inside = False
     for polygon in boundary.polygons:
+        if not _bbox_contains(_polygon_bbox(polygon), longitude, latitude):
+            continue
         relation = _polygon_relation(polygon, longitude, latitude)
         if relation is _PointRelation.BOUNDARY:
             return relation
         if relation is _PointRelation.INSIDE:
             found_inside = True
     return _PointRelation.INSIDE if found_inside else _PointRelation.OUTSIDE
+
+
+def _polygon_bbox(polygon: Polygon) -> BoundingBox:
+    exterior = polygon[0]
+    longitudes = [point[0] for point in exterior]
+    latitudes = [point[1] for point in exterior]
+    return min(longitudes), min(latitudes), max(longitudes), max(latitudes)
 
 
 def _polygon_relation(
@@ -224,55 +400,3 @@ def _point_on_segment(
         min(x1, x2) <= x <= max(x1, x2)
         and min(y1, y2) <= y <= max(y1, y2)
     )
-
-
-
-def load_state_boundaries(path: Path) -> tuple[StateBoundary, ...]:
-    """Load and strictly validate a generated state-boundary JSON artifact."""
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"jurisdiction artifact could not be read: {path}") from error
-    if not isinstance(document, dict):
-        raise ValueError("jurisdiction artifact must be a JSON object")
-    if document.get("format_version") != JURISDICTION_ARTIFACT_FORMAT_VERSION:
-        raise ValueError("unsupported jurisdiction artifact format")
-    raw_states = document.get("states")
-    if not isinstance(raw_states, list) or not raw_states:
-        raise ValueError("jurisdiction artifact requires states")
-
-    boundaries: list[StateBoundary] = []
-    for raw_state in raw_states:
-        if not isinstance(raw_state, dict):
-            raise ValueError("jurisdiction state entry must be an object")
-        state = raw_state.get("state")
-        raw_polygons = raw_state.get("polygons")
-        if not isinstance(state, str) or not isinstance(raw_polygons, list):
-            raise ValueError("jurisdiction state entry is malformed")
-        polygons: list[Polygon] = []
-        for raw_polygon in raw_polygons:
-            if not isinstance(raw_polygon, list):
-                raise ValueError("jurisdiction polygon must be an array")
-            rings: list[Ring] = []
-            for raw_ring in raw_polygon:
-                if not isinstance(raw_ring, list):
-                    raise ValueError("jurisdiction ring must be an array")
-                points: list[Point] = []
-                for raw_point in raw_ring:
-                    if (
-                        not isinstance(raw_point, list)
-                        or len(raw_point) != 2
-                        or isinstance(raw_point[0], bool)
-                        or isinstance(raw_point[1], bool)
-                        or not isinstance(raw_point[0], (int, float))
-                        or not isinstance(raw_point[1], (int, float))
-                    ):
-                        raise ValueError("jurisdiction point must be [longitude, latitude]")
-                    longitude = float(raw_point[0])
-                    latitude = float(raw_point[1])
-                    _validate_coordinate(latitude, longitude)
-                    points.append((longitude, latitude))
-                rings.append(tuple(points))
-            polygons.append(tuple(rings))
-        boundaries.append(StateBoundary(state=state, polygons=tuple(polygons)))
-    return tuple(boundaries)
