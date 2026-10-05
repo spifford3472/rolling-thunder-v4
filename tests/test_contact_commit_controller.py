@@ -194,7 +194,6 @@ def test_controller_records_worked_pota_only_after_durable_commit() -> None:
     assert spots == (pota_spot,)
 
 
-
 def test_controller_adds_browse_mobile_contact_note_from_current_gps() -> None:
     repository = BlockingRepository()
     succeeded = Event()
@@ -229,3 +228,58 @@ def test_controller_adds_browse_mobile_contact_note_from_current_gps() -> None:
     assert contact.notes == "Mobile Contact from 39.530900, -84.086600 (EM79wm)"
     assert contact.my_grid == "EM79wm"
     assert contact.pota_reference is None
+
+
+def test_worker_uses_snapshot_when_gps_provider_moves() -> None:
+    repository = BlockingRepository()
+    succeeded = Event()
+    now = FixedClock().now()
+    current = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=GPSPosition(
+            fix_state=GPSFixState.THREE_DIMENSIONAL,
+            latitude=39.5309,
+            longitude=-84.0866,
+            updated_at=now,
+        ),
+        updated_at=now,
+    )
+    calls = 0
+
+    def provider() -> GPSState:
+        nonlocal calls
+        calls += 1
+        return current
+
+    def move_before_worker(callsign: str) -> None:
+        nonlocal current
+        current = GPSState(
+            connection_state=GPSConnectionState.CONNECTED,
+            position=GPSPosition(
+                fix_state=GPSFixState.THREE_DIMENSIONAL,
+                latitude=40.0,
+                longitude=-83.0,
+                updated_at=now,
+            ),
+            updated_at=now,
+        )
+
+    controller = ContactCommitController(
+        ContactLoggingService(repository, FixedClock()),
+        on_started=move_before_worker,
+        on_succeeded=lambda callsign: succeeded.set(),
+        on_failed=lambda message: None,
+        gps_state_provider=provider,
+    )
+    try:
+        assert controller.start_commit("K1ABC", connected_radio())
+        assert repository.started.wait(timeout=2)
+    finally:
+        repository.release.set()
+    assert succeeded.wait(timeout=2)
+    assert calls == 1
+    assert current.position is not None and current.position.latitude == 40.0
+    assert (repository.contacts[0].my_latitude, repository.contacts[0].my_longitude) == (
+        39.5309,
+        -84.0866,
+    )

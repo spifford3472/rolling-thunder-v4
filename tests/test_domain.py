@@ -168,6 +168,8 @@ def test_contact_serialization_is_stable_and_json_compatible() -> None:
         "rst_received": "59",
         "grid": "EN80aa",
         "my_grid": "EM79xm",
+        "my_latitude": None,
+        "my_longitude": None,
         "pota_reference": "US-1234",
         "grid_source": "pota_park",
         "enrichment_state": "ready",

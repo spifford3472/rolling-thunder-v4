@@ -358,3 +358,18 @@ screen-owned.
 Existing callsign-info composition/router/configuration now wires this optional
 directory. ApplicationRuntime owns its Pi poller; existing remote-call
 presentation adapters consume its immutable classification only.
+
+### Checkpoint A coordinate persistence responsibilities
+
+- `domain.py`: immutable paired optional local QSO coordinates and numeric bounds.
+- `contact_metadata.py`: resolves paired coordinates with the existing local grid
+  usability/freshness policy from the passed snapshot.
+- `contact_logging.py`: copies ordinary resolved coordinates or explicit completed
+  QSO coordinates; never reads GPS at completed-QSO logging.
+- `ft8/logging.py`: transfers frozen authorization coordinates into Contact.
+- `contact_repository.py`: preserves coordinates in every persistence/read/recovery
+  path and includes them in local idempotent payload comparison.
+- `storage.py`: schema 16 nullable coordinate additions; no backfill/table rebuild.
+- `contact_export.py`: complete-contact format 3; imports retain formats 1/2.
+
+Consumers and ownership remain unchanged.

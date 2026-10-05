@@ -341,3 +341,38 @@ CI/mocks are necessary but not sufficient. Before merge, acceptance must use:
 8. repeated manual/retry verification that only one Wavelog QSO exists.
 
 The PR remains draft until this installed acceptance is complete.
+
+## Immutable QSO location (Checkpoint A)
+
+`Contact.my_latitude` and `Contact.my_longitude` are optional paired local-station
+coordinates, bounded to ±90 and ±180 degrees. Booleans, non-finite values and
+partial pairs are rejected. They describe this QSO, not the contacted station.
+Ordinary logging resolves coordinates and `my_grid` from the GPSState captured
+before the commit worker starts, using the existing connected/fixed/fresh
+(maximum age 10 seconds) rule. FT8 successful logging uses the latitude,
+longitude and grid frozen in FT8QsoContext at authorization; the next authorization
+captures its own location. Failed/aborted attempts create no Contact. No sync,
+retry or enrichment operation reads current GPS to fill historical coordinates.
+Missing GPS remains valid, and historical contacts retain NULL coordinates.
+
+Pi SQLite schema 16 adds two nullable REAL columns to schema 15 with ALTER TABLE;
+no historical backfill or table rebuild occurs. Complete-contact JSON exports and
+verified backups use format 3; imports retain formats 1 and 2 with absent
+coordinates defaulting to None. Older importers cannot read format 3.
+
+The existing Pi `/contacts` body serializes the complete Contact, including the
+new fields. Updated Forge validates that same shared model; old senders without
+coordinates remain accepted. **Upgrade and verify the actual Forge contact-sync
+venv before enabling the updated Pi sender:** older Forge models reject extra
+fields, including fields serialized as null. Inspect installed import paths and
+source, not just the checkout/version string. No Forge ledger migration is needed.
+Local idempotent replay includes coordinates and rejects changed-location UUIDs;
+synchronization/enrichment updates still permit identical terminal replay.
+Forge's existing hash remains based on station profile and Wavelog-bound ADIF,
+so coordinate-only differences do not change that hash.
+
+Legacy `Mobile` routing, grid PATCH, station-profile selection, duplicate handling,
+ADIF `MY_GRIDSQUARE` and FT8 immediate synchronization are unchanged. Coordinates
+are not added to ADIF. No state/CQ/ITU derivation, station creation, dynamic routing
+or new `Mobile QSO` comment rule is implemented. See
+[owner acceptance and rollback](CHECKPOINT_A_ACCEPTANCE.md).

@@ -261,6 +261,8 @@ class Contact(DomainModel):
     rst_received: str
     grid: MaidenheadGrid | None = None
     my_grid: MaidenheadGrid | None = None
+    my_latitude: float | None = Field(default=None, ge=-90, le=90, strict=True)
+    my_longitude: float | None = Field(default=None, ge=-180, le=180, strict=True)
     pota_reference: PotaReference | None = None
     grid_source: ContactGridSource | None = None
     enrichment_state: ContactEnrichmentState = ContactEnrichmentState.READY
@@ -317,6 +319,9 @@ class Contact(DomainModel):
     @model_validator(mode="after")
     def validate_contact_metadata(self) -> "Contact":
         """Reject contradictory contact-location metadata."""
+        if (self.my_latitude is None) != (self.my_longitude is None):
+            raise ValueError("my_latitude and my_longitude must be present together")
+
         if self.grid_source is not None and self.grid is None:
             raise ValueError("grid_source requires a contacted grid")
 

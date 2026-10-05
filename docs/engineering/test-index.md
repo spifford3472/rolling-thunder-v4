@@ -393,3 +393,11 @@ clearly distinguished from CI-safe tests.
 
 Owner service-package, state backup, private-network admin, restart persistence,
 and installed screen acceptance remains required; see `../KNOWN_CALLSIGNS.md`.
+
+### Immutable contact location
+
+`tests/test_contact_location.py` covers coordinate bounds/pairs/frozen models, all
+repository paths, retry/enrichment preservation, schema-15 migration integrity,
+complete-contact export/backup/import, legacy formats and unchanged ADIF/Forge
+hash. Existing contact-controller, logging, FT8 authorization/logging and HTTP/Forge
+API tests cover capture boundaries, movement and receiver compatibility.

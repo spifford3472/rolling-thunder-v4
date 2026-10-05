@@ -12,7 +12,7 @@ from uuid import UUID
 import pytest
 from pydantic import SecretStr
 
-from rolling_thunder import ui_main
+from rolling_thunder import application_runtime, ui_main
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.application_secrets import ApplicationSecrets, QrzCredentials
 from rolling_thunder.config import ApplicationConfig
@@ -22,6 +22,7 @@ from rolling_thunder.forge_contact_sync import ForgeContactSyncRepository, Forge
 from rolling_thunder.forge_contact_sync_api import ForgeContactSyncApiApplication
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.domain import FT8Period, FT8PeriodParity, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.worked_today import FT8WorkedTodayService
 from rolling_thunder.home_platform import ContactUploadDisposition, ContactUploadRequest
 from rolling_thunder.http_home_platform import UrllibHttpResponse
 from rolling_thunder.log_panel import ContactLogRepository, LogPanelController
@@ -144,6 +145,8 @@ def result(
             radio_band="20m",
             radio_mode="USB",
             local_grid="EM79xm",
+            latitude=39.5309,
+            longitude=-84.0866,
             remote_grid=remote_grid,
             tx_parity=FT8PeriodParity.ODD,
             authorized_period=period,
@@ -243,6 +246,8 @@ def test_completed_ft8_uses_shared_sync_and_configured_mobile(
         else:
             assert "<GRIDSQUARE:" not in imported["adif"]
         replay = runtime.ft8_logging.handle_terminal_result(completed)
+        assert persisted.my_latitude == 39.5309
+        assert persisted.my_longitude == -84.0866
         assert replay == persisted
         assert runtime.contact_sync.synchronize_now().attempted == 0
         assert len(repository.list_all()) == len(wavelog_transport.imports) == 1
@@ -262,6 +267,11 @@ def test_dashboard_ft8_completion_requests_same_background_sync(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Exercise dashboard/runtime wiring without starting Tk, timers, or hardware."""
+    monkeypatch.setattr(
+        application_runtime,
+        "FT8WorkedTodayService",
+        lambda repository: FT8WorkedTodayService(repository, clock=lambda: result().started_utc),
+    )
     executor = QueuedExecutor()
     original_from_config = ApplicationRuntime.from_config
     runtimes: list[ApplicationRuntime] = []

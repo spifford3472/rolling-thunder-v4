@@ -74,6 +74,8 @@ def test_commit_persists_normalized_contact_with_radio_state() -> None:
     assert contact.frequency_hz == 14_250_000
     assert contact.mode is RadioMode.USB
     assert contact.started_at == started_at
+    assert contact.my_latitude is None
+    assert contact.my_longitude is None
     assert contact.rst_sent == "59"
     assert contact.rst_received == "59"
     assert contact.synchronization_state is SynchronizationState.PENDING
@@ -116,6 +118,8 @@ def test_commit_persists_gps_and_unique_pota_metadata() -> None:
     )
 
     assert contact.my_grid == "EM79wm"
+    assert contact.my_latitude == 39.5309
+    assert contact.my_longitude == -84.0866
     assert contact.grid == "EN80ma"
     assert contact.pota_reference == "US-1234"
     assert contact.notes == "POTA US-1234"
@@ -195,3 +199,36 @@ def test_commit_marks_qrz_fallback_pending_before_durable_write() -> None:
     assert repository.contacts == [contact]
     assert contact.grid is None
     assert contact.enrichment_state is ContactEnrichmentState.PENDING_QRZ
+
+
+@pytest.mark.parametrize(
+    "state", [None, GPSConnectionState.DISCONNECTED, GPSFixState.NO_FIX, "stale"]
+)
+def test_unusable_gps_never_prevents_local_commit(state: object) -> None:
+    repository = RecordingRepository()
+    now = datetime(2026, 7, 25, 14, 5, tzinfo=UTC)
+    gps = None
+    if state is not None:
+        gps = GPSState(
+            connection_state=GPSConnectionState.DISCONNECTED
+            if state is GPSConnectionState.DISCONNECTED
+            else GPSConnectionState.CONNECTED,
+            position=None
+            if state is GPSConnectionState.DISCONNECTED
+            else GPSPosition(
+                fix_state=GPSFixState.NO_FIX
+                if state is GPSFixState.NO_FIX
+                else GPSFixState.THREE_DIMENSIONAL,
+                latitude=None if state is GPSFixState.NO_FIX else 39.5309,
+                longitude=None if state is GPSFixState.NO_FIX else -84.0866,
+                updated_at=datetime(2026, 7, 25, 14, 0, tzinfo=UTC) if state == "stale" else now,
+            ),
+            updated_at=now,
+        )
+    qso = ContactLoggingService(repository, FixedClock(now)).commit(
+        pending_callsign="K1ABC",
+        radio_state=connected_radio_state(),
+        gps_state=gps,
+    )
+    assert repository.contacts == [qso]
+    assert qso.my_latitude is None and qso.my_longitude is None

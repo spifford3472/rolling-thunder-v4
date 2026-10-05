@@ -10,9 +10,9 @@ from typing import Final
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.storage import StorageError
 
-CONTACT_EXPORT_FORMAT_VERSION: Final = 2
+CONTACT_EXPORT_FORMAT_VERSION: Final = 3
 SUPPORTED_CONTACT_EXPORT_FORMAT_VERSIONS: Final[frozenset[int]] = frozenset(
-    {1, CONTACT_EXPORT_FORMAT_VERSION}
+    {1, 2, CONTACT_EXPORT_FORMAT_VERSION}
 )
 
 

@@ -25,6 +25,8 @@ class ContactMetadata:
 
     grid: MaidenheadGrid | None = None
     my_grid: MaidenheadGrid | None = None
+    my_latitude: float | None = None
+    my_longitude: float | None = None
     pota_reference: PotaReference | None = None
     grid_source: ContactGridSource | None = None
     enrichment_state: ContactEnrichmentState = ContactEnrichmentState.READY
@@ -58,9 +60,15 @@ def resolve_contact_metadata(
         maximum_age=gps_maximum_age,
     )
 
+    position = gps_state.position if my_grid is not None and gps_state is not None else None
+    latitude = position.latitude if position is not None else None
+    longitude = position.longitude if position is not None else None
+
     if not pota_context_active:
         return ContactMetadata(
             my_grid=my_grid,
+            my_latitude=latitude,
+            my_longitude=longitude,
             enrichment_state=_enrichment_state(
                 grid=None,
                 qrz_fallback_available=qrz_fallback_available,
@@ -82,6 +90,8 @@ def resolve_contact_metadata(
     if len(matching_parks) != 1:
         return ContactMetadata(
             my_grid=my_grid,
+            my_latitude=latitude,
+            my_longitude=longitude,
             enrichment_state=_enrichment_state(
                 grid=None,
                 qrz_fallback_available=qrz_fallback_available,
@@ -103,6 +113,8 @@ def resolve_contact_metadata(
     return ContactMetadata(
         grid=grid,
         my_grid=my_grid,
+        my_latitude=latitude,
+        my_longitude=longitude,
         pota_reference=park_reference,
         grid_source=grid_source,
         enrichment_state=_enrichment_state(

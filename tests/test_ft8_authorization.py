@@ -1,9 +1,12 @@
 """Tests for freezing one selected CQ into one QSO authorization."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
+from rolling_thunder.contact_logging import ContactLoggingService
+from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.domain import (
     Frequency,
     GPSFixState,
@@ -16,7 +19,9 @@ from rolling_thunder.ft8.authorization import (
     FT8QsoAuthorizationError,
     FT8QsoAuthorizationService,
 )
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity
+from rolling_thunder.ft8.coordinator import FT8QsoResult
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity, FT8QsoState
+from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
 
@@ -161,3 +166,49 @@ def test_authorization_rejects_stale_selected_cq() -> None:
 def test_authorization_rejects_report_outside_protocol_range() -> None:
     with pytest.raises(FT8QsoAuthorizationError, match="report range"):
         _service().authorize(_activity(snr_db=-51), radio_state=_radio(), gps_state=None)
+
+
+def test_authorized_location_survives_movement_and_next_qso(tmp_path: Path) -> None:
+    service = _service()
+    now = datetime(2026, 9, 30, tzinfo=UTC)
+
+    def gps(latitude: float, longitude: float) -> GPSState:
+        return GPSState(
+            connection_state=GPSConnectionState.CONNECTED,
+            position=GPSPosition(
+                fix_state=GPSFixState.THREE_DIMENSIONAL,
+                latitude=latitude,
+                longitude=longitude,
+                updated_at=now,
+            ),
+            updated_at=now,
+        )
+
+    current = gps(39.5309, -84.0866)
+    first = service.authorize(_activity(), radio_state=_radio(), gps_state=current)
+    current = gps(39.9, -83.9)
+    second = service.authorize(_activity(), radio_state=_radio(), gps_state=current)
+    repository = ContactRepository(tmp_path / "contacts.db")
+    logger = FT8QsoLoggingService(ContactLoggingService(repository))
+    for context in (first, second):
+        result = FT8QsoResult(
+            status=FT8QsoState.COMPLETED,
+            context=context,
+            sent_report_db=14,
+            received_report_db=-10,
+            started_utc=now,
+            ended_utc=now + timedelta(seconds=75),
+            terminal_reason=None,
+        )
+        logged = logger.handle_terminal_result(result)
+        assert logged is not None
+        assert logged.my_grid == context.local_grid
+        assert (logged.my_latitude, logged.my_longitude) == (context.latitude, context.longitude)
+    assert (
+        repository.get(first.qso_id).my_latitude,
+        repository.get(first.qso_id).my_longitude,
+    ) == (39.5309, -84.0866)
+    assert (
+        repository.get(second.qso_id).my_latitude,
+        repository.get(second.qso_id).my_longitude,
+    ) == (39.9, -83.9)
