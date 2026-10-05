@@ -168,6 +168,9 @@ class FT8QsoContext:
     signal_report_db: int
     latitude: float | None = None
     longitude: float | None = None
+    local_state: str | None = None
+    local_cq_zone: int | None = None
+    local_itu_zone: int | None = None
     location_label: str | None = None
     remote_grid: str | None = None
     pota_cq: bool = False
@@ -211,6 +214,24 @@ class FT8QsoContext:
             raise ValueError("latitude must be between -90 and 90")
         if self.longitude is not None and not -180 <= self.longitude <= 180:
             raise ValueError("longitude must be between -180 and 180")
+        jurisdiction_values = (self.local_state, self.local_cq_zone, self.local_itu_zone)
+        if any(value is None for value in jurisdiction_values) and any(
+            value is not None for value in jurisdiction_values
+        ):
+            raise ValueError("FT8 local jurisdiction fields must be present together")
+        if self.local_state is not None:
+            normalized_state = self.local_state.strip().upper()
+            if len(normalized_state) != 2 or not normalized_state.isalpha():
+                raise ValueError("FT8 local_state must be a two-character code")
+            if self.latitude is None or self.longitude is None:
+                raise ValueError("FT8 local jurisdiction requires frozen coordinates")
+            object.__setattr__(self, "local_state", normalized_state)
+        if self.local_cq_zone is not None:
+            if isinstance(self.local_cq_zone, bool) or not 1 <= self.local_cq_zone <= 40:
+                raise ValueError("FT8 local_cq_zone must be between 1 and 40")
+        if self.local_itu_zone is not None:
+            if isinstance(self.local_itu_zone, bool) or not 1 <= self.local_itu_zone <= 90:
+                raise ValueError("FT8 local_itu_zone must be between 1 and 90")
         if self.location_label is not None:
             label = self.location_label.strip()
             object.__setattr__(self, "location_label", label or None)
