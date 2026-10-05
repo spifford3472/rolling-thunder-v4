@@ -263,6 +263,9 @@ class Contact(DomainModel):
     my_grid: MaidenheadGrid | None = None
     my_latitude: float | None = Field(default=None, ge=-90, le=90, strict=True)
     my_longitude: float | None = Field(default=None, ge=-180, le=180, strict=True)
+    my_state: str | None = None
+    my_cq_zone: int | None = Field(default=None, ge=1, le=40, strict=True)
+    my_itu_zone: int | None = Field(default=None, ge=1, le=90, strict=True)
     pota_reference: PotaReference | None = None
     grid_source: ContactGridSource | None = None
     enrichment_state: ContactEnrichmentState = ContactEnrichmentState.READY
@@ -298,6 +301,21 @@ class Contact(DomainModel):
 
         return normalized
 
+    @field_validator("my_state", mode="before")
+    @classmethod
+    def normalize_my_state(cls, value: object) -> object:
+        """Normalize optional local U.S. subdivision code."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("my_state must not be blank")
+        if len(normalized) != 2 or not normalized.isalpha():
+            raise ValueError("my_state must be a two-character code")
+        return normalized
+
     @field_validator("grid_source", "enrichment_state", mode="before")
     @classmethod
     def normalize_contact_enums(cls, value: object) -> object:
@@ -321,6 +339,14 @@ class Contact(DomainModel):
         """Reject contradictory contact-location metadata."""
         if (self.my_latitude is None) != (self.my_longitude is None):
             raise ValueError("my_latitude and my_longitude must be present together")
+
+        jurisdiction_values = (self.my_state, self.my_cq_zone, self.my_itu_zone)
+        if any(value is None for value in jurisdiction_values) and any(
+            value is not None for value in jurisdiction_values
+        ):
+            raise ValueError("local jurisdiction fields must be present together")
+        if self.my_state is not None and self.my_latitude is None:
+            raise ValueError("local jurisdiction requires frozen local coordinates")
 
         if self.grid_source is not None and self.grid is None:
             raise ValueError("grid_source requires a contacted grid")
