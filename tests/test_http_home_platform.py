@@ -70,6 +70,8 @@ def contact() -> Contact:
         rst_received="59",
         grid="EN80ma",
         my_grid="EM79wm",
+        my_latitude=39.5309,
+        my_longitude=-84.0866,
         pota_reference="US-1234",
         grid_source="pota_park",
         notes="POTA US-1234",
@@ -175,6 +177,8 @@ def test_contact_upload_sends_idempotency_header_and_typed_body() -> None:
     assert payload["started_at"] == "2026-07-26T20:00:00Z"
     assert payload["grid"] == "EN80ma"
     assert payload["my_grid"] == "EM79wm"
+    assert payload["my_latitude"] == 39.5309
+    assert payload["my_longitude"] == -84.0866
     assert payload["pota_reference"] == "US-1234"
     assert payload["grid_source"] == "pota_park"
     assert payload["enrichment_state"] == "ready"

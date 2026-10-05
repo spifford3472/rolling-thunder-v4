@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 15
+CURRENT_SCHEMA_VERSION: Final = 16
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -620,6 +620,10 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
             created_at
         )
         """,
+    ),
+    16: (
+        "ALTER TABLE contacts ADD COLUMN my_latitude REAL",
+        "ALTER TABLE contacts ADD COLUMN my_longitude REAL",
     ),
 }
 

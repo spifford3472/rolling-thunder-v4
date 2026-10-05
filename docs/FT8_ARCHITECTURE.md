@@ -1482,3 +1482,17 @@ context exit skips that recovery. CAT-safe shutdown performs serialized normal
 receive cleanup before disconnect. With CAT unavailable, restoration cannot be
 confirmed: check 11-05 manually before voice operation. Hardware acceptance of
 this change is still required.
+
+## Checkpoint A contact location persistence
+
+Successful FT8 terminal results now copy the authorized FT8QsoContext latitude
+and longitude into optional Contact.my_latitude/my_longitude alongside the frozen
+local_grid. These values survive Pi schema-16 persistence, complete-contact
+export/backup and the shared Pi–Forge Contact contract. No current GPS lookup
+occurs at completion or synchronization. Each new QSO authorizes a fresh snapshot;
+failed, aborted and retry-exhausted attempts remain outside the Contact path.
+Immediate post-commit synchronization and stable QSO UUID semantics are unchanged.
+Historical contacts and configured-home-grid fallback have no inferred coordinates.
+Wavelog still uses legacy Mobile routing and existing ADIF only. See
+[contact contract](FORGE_CONTACT_SYNC.md#immutable-qso-location-checkpoint-a) and
+[owner acceptance](CHECKPOINT_A_ACCEPTANCE.md).

@@ -56,6 +56,8 @@ class FT8QsoLoggingService:
                 rst_sent=_format_db_report(result.sent_report_db),
                 rst_received=_format_db_report(result.received_report_db),
                 my_grid=result.context.local_grid,
+                my_latitude=result.context.latitude,
+                my_longitude=result.context.longitude,
                 grid=result.context.remote_grid,
             )
         except (StorageError, ValueError) as error:

@@ -172,6 +172,8 @@ def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
         "rst_received",
         "grid",
         "my_grid",
+        "my_latitude",
+        "my_longitude",
         "pota_reference",
         "grid_source",
         "enrichment_state",

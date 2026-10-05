@@ -106,6 +106,8 @@ class ContactLoggingService:
             rst_received=rst_received,
             grid=metadata.grid,
             my_grid=metadata.my_grid,
+            my_latitude=metadata.my_latitude,
+            my_longitude=metadata.my_longitude,
             pota_reference=metadata.pota_reference,
             grid_source=metadata.grid_source,
             enrichment_state=metadata.enrichment_state,
@@ -125,6 +127,8 @@ class ContactLoggingService:
         rst_sent: str,
         rst_received: str,
         my_grid: str | None,
+        my_latitude: float | None = None,
+        my_longitude: float | None = None,
         grid: str | None = None,
         notes: str | None = None,
     ) -> Contact:
@@ -144,6 +148,8 @@ class ContactLoggingService:
             rst_received=rst_received,
             grid=grid,
             my_grid=my_grid,
+            my_latitude=my_latitude,
+            my_longitude=my_longitude,
             enrichment_state=enrichment_state,
             notes=notes,
         )

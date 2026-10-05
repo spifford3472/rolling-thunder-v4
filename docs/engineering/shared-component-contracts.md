@@ -168,3 +168,14 @@ FT8 eligibility/retry/authorization, radio/tuning, logging or synchronization.
 Admin comments are Forge-only. Rendering uses an already-published bounded set;
 failed/stale Forge classification removes decoration without disabling local
 operations. See `../KNOWN_CALLSIGNS.md`.
+
+## QSO-local coordinate contract
+
+Contact owns paired optional frozen my_latitude/my_longitude. Ordinary logging
+uses the controller's captured GPSState and existing freshness policy; FT8 uses
+authorized FT8QsoContext. Repository/recovery and complete-contact JSON format 3
+preserve both values; old formats 1/2 and old contacts default to None. Sync and
+QRZ enrichment never derive historical coordinates from current GPS. Local UUID
+replay compares coordinates; Forge retains its existing ADIF/profile hash. Upgrade
+the receiving Forge package before the expanded Pi sender. See
+[contact synchronization](../FORGE_CONTACT_SYNC.md#immutable-qso-location-checkpoint-a).

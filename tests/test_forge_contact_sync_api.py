@@ -15,13 +15,14 @@ from rolling_thunder.wavelog import WavelogStationLocation, WavelogUploadDisposi
 class FakeWavelog:
     def __init__(self) -> None:
         self.upload_count = 0
+        self.contacts: list[Contact] = []
 
     def resolve_station_location(self, *, refresh: bool = False) -> WavelogStationLocation:
         del refresh
         return WavelogStationLocation(42, "Mobile", "mobile")
 
     def upload_contact(self, contact: Contact) -> WavelogUploadDisposition:
-        del contact
+        self.contacts.append(contact)
         self.upload_count += 1
         return WavelogUploadDisposition.IMPORTED
 
@@ -125,3 +126,28 @@ def test_malformed_or_oversized_contact_body_is_rejected_before_wavelog(tmp_path
     assert malformed.status_code == 400
     assert oversized.status_code == 413
     assert wavelog.upload_count == 0
+
+
+def test_coordinate_contact_is_accepted_and_preserved(tmp_path: Path) -> None:
+    application, wavelog = app(tmp_path)
+    qso = contact().model_copy(update={"my_latitude": 39.5309, "my_longitude": -84.0866})
+    response = upload(application, qso, key=str(qso.contact_id))
+    assert response.status_code == 200
+    assert wavelog.contacts == [qso]
+    assert wavelog.resolve_station_location().name == "Mobile"
+
+
+def test_legacy_contact_body_without_coordinates_is_accepted(tmp_path: Path) -> None:
+    application, wavelog = app(tmp_path)
+    qso = contact()
+    payload = qso.model_dump(mode="json")
+    del payload["my_latitude"]
+    del payload["my_longitude"]
+    response = application.handle(
+        "POST",
+        "/contacts",
+        headers={"Content-Type": "application/json", "Idempotency-Key": str(qso.contact_id)},
+        body=dumps(payload).encode(),
+    )
+    assert response.status_code == 200
+    assert wavelog.contacts == [qso]
