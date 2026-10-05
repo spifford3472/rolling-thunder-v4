@@ -340,6 +340,28 @@ def _ft8_runtime_config(*, transmit_enabled: bool) -> ApplicationConfig:
     )
 
 
+def test_runtime_shares_packaged_jurisdiction_resolver_with_ft8() -> None:
+    runtime = ApplicationRuntime.from_config(
+        _ft8_runtime_config(transmit_enabled=False),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_decoder=_UnusedFT8Decoder(),
+    )
+
+    resolver = runtime.contact_logging._jurisdiction_resolver
+    assert resolver is not None
+    assert runtime.ft8_authorization is not None
+    assert runtime.ft8_authorization.jurisdiction_resolver is resolver
+    jurisdiction = resolver.resolve(39.5290, -84.0870)
+    assert jurisdiction is not None
+    assert (jurisdiction.state, jurisdiction.cq_zone, jurisdiction.itu_zone) == (
+        "OH",
+        4,
+        8,
+    )
+
+
 def test_runtime_ft8_receive_only_creates_no_transmit_authority() -> None:
     runtime = ApplicationRuntime.from_config(
         _ft8_runtime_config(transmit_enabled=False),

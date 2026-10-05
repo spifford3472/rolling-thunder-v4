@@ -58,6 +58,9 @@ class FT8QsoLoggingService:
                 my_grid=result.context.local_grid,
                 my_latitude=result.context.latitude,
                 my_longitude=result.context.longitude,
+                my_state=result.context.local_state,
+                my_cq_zone=result.context.local_cq_zone,
+                my_itu_zone=result.context.local_itu_zone,
                 grid=result.context.remote_grid,
             )
         except (StorageError, ValueError) as error:

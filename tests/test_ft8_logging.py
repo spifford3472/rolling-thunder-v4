@@ -30,7 +30,10 @@ def _context(
         radio_mode=radio_mode,
         local_grid=local_grid,
         latitude=39.5309 if local_grid == "EM79xm" else 39.9,
-        longitude=-84.0866 if local_grid == "EM79xm" else -83.9,
+        longitude=-84.0866 if local_grid == "EM79xm" else -86.0,
+        local_state="OH" if local_grid == "EM79xm" else "IN",
+        local_cq_zone=4,
+        local_itu_zone=8,
         tx_parity=FT8PeriodParity.ODD,
         authorized_period=period,
         authorized_utc=period.start_utc + timedelta(seconds=1),
@@ -85,6 +88,7 @@ def test_completed_ft8_result_logs_exact_frozen_snapshot_once(tmp_path: Path) ->
     assert first.grid == "FN31pr"
     assert first.my_grid == "EM79xm"
     assert (first.my_latitude, first.my_longitude) == (39.5309, -84.0866)
+    assert (first.my_state, first.my_cq_zone, first.my_itu_zone) == ("OH", 4, 8)
     assert first.synchronization_state is SynchronizationState.PENDING
 
 
@@ -156,7 +160,12 @@ def test_frozen_grid_is_used_even_if_next_qso_starts_elsewhere(tmp_path: Path) -
     next_contact = service.handle_terminal_result(_result(context=next_context))
     assert next_contact is not None
     assert next_contact.my_grid == "EM89aa"
-    assert (next_contact.my_latitude, next_contact.my_longitude) == (39.9, -83.9)
+    assert (next_contact.my_latitude, next_contact.my_longitude) == (39.9, -86.0)
+    assert (next_contact.my_state, next_contact.my_cq_zone, next_contact.my_itu_zone) == (
+        "IN",
+        4,
+        8,
+    )
 
     stored = {contact.contact_id: contact for contact in repository.list_all()}
     assert stored[first_context.qso_id].my_grid == "EM79xm"

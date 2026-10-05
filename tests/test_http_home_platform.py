@@ -179,6 +179,9 @@ def test_contact_upload_sends_idempotency_header_and_typed_body() -> None:
     assert payload["my_grid"] == "EM79wm"
     assert payload["my_latitude"] == 39.5309
     assert payload["my_longitude"] == -84.0866
+    assert payload["my_state"] is None
+    assert payload["my_cq_zone"] is None
+    assert payload["my_itu_zone"] is None
     assert payload["pota_reference"] == "US-1234"
     assert payload["grid_source"] == "pota_park"
     assert payload["enrichment_state"] == "ready"
