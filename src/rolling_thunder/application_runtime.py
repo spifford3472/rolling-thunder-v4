@@ -79,6 +79,7 @@ from rolling_thunder.known_callsign_client import (
     KnownCallsignPollingService,
 )
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
+from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
 from rolling_thunder.map_solar import MapSolarStyleService
 from rolling_thunder.map_sources import (
@@ -327,6 +328,14 @@ class ApplicationRuntime:
             )
 
         repository = ContactRepository(config.storage.database_path)
+        jurisdiction_artifact = (
+            Path(__file__).resolve().parent
+            / "data"
+            / "us_state_jurisdiction_v2.zip"
+        )
+        jurisdiction_resolver = LocalJurisdictionResolver.from_artifact(
+            jurisdiction_artifact
+        )
         preference_repository = OperatorPreferenceRepository(config.storage.database_path)
         operator_preferences = OperatorPreferenceService(preference_repository)
 
@@ -505,6 +514,7 @@ class ApplicationRuntime:
         contact_logging = ContactLoggingService(
             repository,
             qrz_fallback_available=qrz_provider is not None,
+            jurisdiction_resolver=jurisdiction_resolver,
         )
         ft8_worked_today = (
             FT8WorkedTodayService(repository) if config.ft8.enabled else None
@@ -615,6 +625,7 @@ class ApplicationRuntime:
                 local_callsign=config.operator.callsign,
                 home_grid=config.operator.home_grid,
                 clock=resolved_ft8_clock,
+                jurisdiction_resolver=jurisdiction_resolver,
             )
         if config.ft8.transmit.enabled:
             if ft8_receive is None or resolved_ft8_clock is None:
