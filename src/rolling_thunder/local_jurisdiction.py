@@ -6,10 +6,11 @@ import json
 import math
 import zipfile
 from collections import OrderedDict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final, Iterable
+from typing import Final
 
 JURISDICTION_ARTIFACT_FORMAT_VERSION: Final = 2
 _ARTIFACT_CACHE_SIZE: Final = 3
@@ -112,7 +113,7 @@ class LocalJurisdictionResolver:
         self._state_cache: OrderedDict[str, StateBoundary] = OrderedDict()
 
     @classmethod
-    def from_artifact(cls, path: Path) -> "LocalJurisdictionResolver":
+    def from_artifact(cls, path: Path) -> LocalJurisdictionResolver:
         """Load only the compact index from a generated jurisdiction archive."""
         artifact_states = load_artifact_index(path)
         resolver = cls(())
@@ -192,7 +193,7 @@ def load_artifact_index(path: Path) -> tuple[_ArtifactState, ...]:
         raise ValueError("jurisdiction artifact index is not valid JSON") from error
 
     if not isinstance(document, dict):
-        raise ValueError("jurisdiction artifact index must be a JSON object")
+        raise TypeError("jurisdiction artifact index must be a JSON object")
     if document.get("format_version") != JURISDICTION_ARTIFACT_FORMAT_VERSION:
         raise ValueError("unsupported jurisdiction artifact format")
 
@@ -204,7 +205,7 @@ def load_artifact_index(path: Path) -> tuple[_ArtifactState, ...]:
     seen: set[str] = set()
     for raw_state in raw_states:
         if not isinstance(raw_state, dict):
-            raise ValueError("jurisdiction artifact state index is malformed")
+            raise TypeError("jurisdiction artifact state index is malformed")
         state = raw_state.get("state")
         member = raw_state.get("member")
         bbox = _parse_bbox(raw_state.get("bbox"))
@@ -226,7 +227,7 @@ def _parse_state_boundary_json(raw: bytes, *, expected_state: str) -> StateBound
     except json.JSONDecodeError as error:
         raise ValueError(f"jurisdiction state {expected_state} is not valid JSON") from error
     if not isinstance(document, dict):
-        raise ValueError(f"jurisdiction state {expected_state} must be an object")
+        raise TypeError(f"jurisdiction state {expected_state} must be an object")
     state = document.get("state")
     raw_polygons = document.get("polygons")
     if state != expected_state or not isinstance(raw_polygons, list):
@@ -235,11 +236,11 @@ def _parse_state_boundary_json(raw: bytes, *, expected_state: str) -> StateBound
     polygons: list[Polygon] = []
     for raw_polygon in raw_polygons:
         if not isinstance(raw_polygon, list):
-            raise ValueError(f"jurisdiction state {expected_state} polygon is malformed")
+            raise TypeError(f"jurisdiction state {expected_state} polygon is malformed")
         rings: list[Ring] = []
         for raw_ring in raw_polygon:
             if not isinstance(raw_ring, list):
-                raise ValueError(f"jurisdiction state {expected_state} ring is malformed")
+                raise TypeError(f"jurisdiction state {expected_state} ring is malformed")
             points: list[Point] = []
             for raw_point in raw_ring:
                 if (
@@ -264,7 +265,7 @@ def _parse_state_boundary_json(raw: bytes, *, expected_state: str) -> StateBound
 
 def _parse_bbox(raw_bbox: object) -> BoundingBox:
     if not isinstance(raw_bbox, list) or len(raw_bbox) != 4:
-        raise ValueError("jurisdiction artifact bbox is malformed")
+        raise TypeError("jurisdiction artifact bbox is malformed")
     values: list[float] = []
     for value in raw_bbox:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
