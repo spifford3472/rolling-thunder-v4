@@ -1,11 +1,15 @@
 """Deterministic offline state/CQ/ITU jurisdiction resolution."""
 
+import json
+from pathlib import Path
+
 import pytest
 
 from rolling_thunder.local_jurisdiction import (
     LocalJurisdiction,
     LocalJurisdictionResolver,
     StateBoundary,
+    load_state_boundaries,
 )
 
 
@@ -158,3 +162,44 @@ def test_state_code_is_normalized_and_boundaries_are_unique() -> None:
     assert boundary.state == "OH"
     with pytest.raises(ValueError, match="unique"):
         LocalJurisdictionResolver((boundary, boundary))
+
+
+
+def test_versioned_artifact_loader_round_trips_boundaries(tmp_path: Path) -> None:
+    artifact = tmp_path / "jurisdiction.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "format_version": 1,
+                "source": {"dataset": "test"},
+                "states": [
+                    {
+                        "state": "OH",
+                        "polygons": [
+                            [
+                                [
+                                    [-85.0, 38.0],
+                                    [-80.0, 38.0],
+                                    [-80.0, 42.0],
+                                    [-85.0, 42.0],
+                                    [-85.0, 38.0],
+                                ]
+                            ]
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+
+    boundaries = load_state_boundaries(artifact)
+    resolver = LocalJurisdictionResolver(boundaries)
+
+    assert resolver.resolve(39.5, -84.0) == LocalJurisdiction("OH", 4, 8)
+
+
+def test_artifact_loader_rejects_unknown_format(tmp_path: Path) -> None:
+    artifact = tmp_path / "jurisdiction.json"
+    artifact.write_text(json.dumps({"format_version": 99, "states": []}))
+    with pytest.raises(ValueError, match="unsupported"):
+        load_state_boundaries(artifact)
