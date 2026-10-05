@@ -122,7 +122,16 @@ def test_all_repository_paths_preserve_coordinates(tmp_path: Path) -> None:
     restored = ContactRepository(tmp_path / "restored.db")
     restored.recover_contacts([changed])
     assert restored.get(qso.contact_id) == changed
-    cleared = contact(**{**changed.model_dump(), "my_latitude": None, "my_longitude": None})
+    cleared = contact(
+        **{
+            **changed.model_dump(),
+            "my_latitude": None,
+            "my_longitude": None,
+            "my_state": None,
+            "my_cq_zone": None,
+            "my_itu_zone": None,
+        }
+    )
     repository.update(cleared)
     assert repository.delete(qso.contact_id) == cleared
 
