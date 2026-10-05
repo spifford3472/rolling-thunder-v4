@@ -10,6 +10,7 @@ from rolling_thunder.domain import (
     RadioMode,
 )
 from rolling_thunder.gps import GPSConnectionState, GPSState
+from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
 from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.pota_spots import PotaSpot
 from rolling_thunder.value_types import MaidenheadGrid, PotaReference
@@ -27,6 +28,9 @@ class ContactMetadata:
     my_grid: MaidenheadGrid | None = None
     my_latitude: float | None = None
     my_longitude: float | None = None
+    my_state: str | None = None
+    my_cq_zone: int | None = None
+    my_itu_zone: int | None = None
     pota_reference: PotaReference | None = None
     grid_source: ContactGridSource | None = None
     enrichment_state: ContactEnrichmentState = ContactEnrichmentState.READY
@@ -45,6 +49,7 @@ def resolve_contact_metadata(
     qrz_fallback_available: bool = False,
     gps_maximum_age: timedelta = DEFAULT_GPS_MAXIMUM_AGE,
     frequency_tolerance_hz: int = POTA_FREQUENCY_TOLERANCE_HZ,
+    jurisdiction_resolver: LocalJurisdictionResolver | None = None,
 ) -> ContactMetadata:
     """Resolve local GPS and unique POTA metadata without performing I/O."""
     if reference_time.tzinfo is None or reference_time.utcoffset() is None:
@@ -63,12 +68,23 @@ def resolve_contact_metadata(
     position = gps_state.position if my_grid is not None and gps_state is not None else None
     latitude = position.latitude if position is not None else None
     longitude = position.longitude if position is not None else None
+    jurisdiction = (
+        jurisdiction_resolver.resolve(latitude, longitude)
+        if jurisdiction_resolver is not None and latitude is not None and longitude is not None
+        else None
+    )
+    my_state = jurisdiction.state if jurisdiction is not None else None
+    my_cq_zone = jurisdiction.cq_zone if jurisdiction is not None else None
+    my_itu_zone = jurisdiction.itu_zone if jurisdiction is not None else None
 
     if not pota_context_active:
         return ContactMetadata(
             my_grid=my_grid,
             my_latitude=latitude,
             my_longitude=longitude,
+            my_state=my_state,
+            my_cq_zone=my_cq_zone,
+            my_itu_zone=my_itu_zone,
             enrichment_state=_enrichment_state(
                 grid=None,
                 qrz_fallback_available=qrz_fallback_available,
@@ -92,6 +108,9 @@ def resolve_contact_metadata(
             my_grid=my_grid,
             my_latitude=latitude,
             my_longitude=longitude,
+            my_state=my_state,
+            my_cq_zone=my_cq_zone,
+            my_itu_zone=my_itu_zone,
             enrichment_state=_enrichment_state(
                 grid=None,
                 qrz_fallback_available=qrz_fallback_available,
@@ -115,6 +134,9 @@ def resolve_contact_metadata(
         my_grid=my_grid,
         my_latitude=latitude,
         my_longitude=longitude,
+        my_state=my_state,
+        my_cq_zone=my_cq_zone,
+        my_itu_zone=my_itu_zone,
         pota_reference=park_reference,
         grid_source=grid_source,
         enrichment_state=_enrichment_state(
