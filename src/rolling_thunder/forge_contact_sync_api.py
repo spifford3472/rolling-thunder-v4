@@ -219,10 +219,12 @@ class ForgeContactSyncApiApplication:
         except ValidationError as error:
             first = error.errors(include_url=False)[0]
             location = ".".join(str(part) for part in first["loc"]) or "payload"
+            message = f"Invalid FT8 performance field {location}: {first['msg']}"[:500]
+            _LOGGER.warning("Rejected FT8 performance upload: %s", message)
             return self._error(
                 422,
                 "invalid_ft8_performance",
-                f"Invalid FT8 performance field {location}: {first['msg']}"[:500],
+                message,
             )
 
         idempotency_header = self._header_value(headers, "Idempotency-Key")

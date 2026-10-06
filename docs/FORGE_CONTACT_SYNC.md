@@ -400,6 +400,7 @@ failure never makes local logging fail.
 - **hidden ID-less station conflict without a prior binding:** Forge fails closed because Wavelog supplies no safe ID; it does not scan IDs.
 - **changed/missing/incompatible bound station:** Forge fails closed and preserves the binding for investigation rather than overwriting it.
 - **malformed Wavelog response:** fail safely; local QSO remains.
+- **invalid FT8 performance payload:** Forge returns HTTP 422 and logs the rejected field and validation reason without logging the request payload, so a blocking outbox record can be diagnosed from the service journal.
 - **timeout after possible remote success:** deterministic retry + Wavelog duplicate detection resolves uncertainty.
 - **Forge restart:** durable UUID ledger and verified station bindings survive.
 - **Pi restart:** local pending/failed contacts and retry metadata survive.
