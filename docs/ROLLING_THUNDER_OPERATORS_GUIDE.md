@@ -415,8 +415,10 @@ rest of the UTC date.
 While the CQ browser is idle, a valid decode addressed to the configured local
 callsign opens a prominent incoming-call alert showing the caller, received SNR,
 and grid when known. **Context Button #2** explicitly answers that exact caller
-through the normal bounded one-QSO workflow. **Context Button #3** ignores the
-caller. The alert never interrupts an active or terminal QSO and never grants
+through the bounded responder workflow. A grid-bearing inbound starts with our
+signal report; an inbound signal report starts with our acknowledged report.
+Both continue to the normal final 73. **Context Button #3** ignores the caller.
+The alert never interrupts an active or terminal QSO, and a decode never grants
 transmit authority by itself.
 
 ## One authorization means one QSO

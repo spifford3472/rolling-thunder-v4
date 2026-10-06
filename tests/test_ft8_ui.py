@@ -9,7 +9,12 @@ from rolling_thunder.ft8.diagnostics import (
     FT8AudioQuality,
     FT8DiagnosticSessionState,
 )
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8IncomingCall, FT8Period
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8MessageKind,
+    FT8Period,
+)
 from rolling_thunder.ft8.receive import FT8ReceiveState
 from rolling_thunder.ft8_ui import (
     FT8_BROWSER_HEADERS,
@@ -60,7 +65,9 @@ def test_incoming_call_presentation_has_large_alert_content_and_explicit_control
             snr_db=-7,
             dt_seconds=0.2,
             audio_frequency_hz=1600,
+            kind=FT8MessageKind.REPORT,
             grid="FN42",
+            report_db=-7,
         )
     )
 

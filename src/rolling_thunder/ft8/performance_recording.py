@@ -11,7 +11,12 @@ from rolling_thunder.ft8.authorization import freeze_ft8_location
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.distance import initial_ft8_power_watts, maidenhead_distance_km
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8Period,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.performance import (
     FT8AttemptOutcome,
     FT8AttemptSeed,
@@ -74,6 +79,35 @@ def build_ft8_attempt_seed(
     )
 
 
+def build_ft8_responder_attempt_seed(
+    incoming: FT8IncomingCall,
+    *,
+    radio_state: RadioState,
+    gps_state: GPSState | None,
+    home_grid: MaidenheadGrid,
+    started_at_utc: datetime,
+    attempt_id: UUID | None = None,
+) -> FT8AttemptSeed:
+    """Freeze an accepted inbound decode before responder radio preparation."""
+    activity = FT8CQActivity(
+        callsign=incoming.callsign,
+        last_period=incoming.period,
+        snr_db=incoming.snr_db,
+        dt_seconds=incoming.dt_seconds,
+        audio_frequency_hz=incoming.audio_frequency_hz,
+        grid=incoming.grid,
+    )
+    seed = build_ft8_attempt_seed(
+        activity,
+        radio_state=radio_state,
+        gps_state=gps_state,
+        home_grid=home_grid,
+        started_at_utc=started_at_utc,
+        attempt_id=attempt_id,
+    )
+    return seed.model_copy(update={"received_report_db": incoming.report_db})
+
+
 class FT8PerformanceRecorder:
     """Persist terminal attempt telemetry before asynchronous Forge delivery."""
 
@@ -115,7 +149,7 @@ class FT8PerformanceRecorder:
             swr_meter_raw=None,
             alc_meter_raw=None,
             sent_report_db=seed.selected_snr_db,
-            received_report_db=None,
+            received_report_db=seed.received_report_db,
             local_grid=seed.local_grid,
             remote_grid=seed.remote_grid,
             distance_km=_distance_km(seed.local_grid, seed.remote_grid),

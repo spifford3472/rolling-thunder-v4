@@ -55,7 +55,13 @@ from rolling_thunder.ft8.diagnostics import (
     FT8MorningDiagnosticSession,
     NTPClockStatus,
 )
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8Period,
+    FT8QsoContext,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
 from rolling_thunder.ft8.hardware_transmit import (
     BoundedFT8HardwareTransmitExecutor,
@@ -69,6 +75,7 @@ from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepositor
 from rolling_thunder.ft8.performance_recording import (
     FT8PerformanceRecorder,
     build_ft8_attempt_seed,
+    build_ft8_responder_attempt_seed,
 )
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
 from rolling_thunder.ft8.radio_preparation import (
@@ -937,21 +944,32 @@ class ApplicationRuntime:
             preparation = FT8RadioPreparationService(radio)
 
             def start_prepared_ft8_qso(
-                activity: FT8CQActivity,
+                candidate: FT8CQActivity | FT8IncomingCall,
                 prepared_radio_state: RadioState,
                 attempt_seed: FT8AttemptSeed,
             ) -> None:
                 assert runtime.ft8_authorization is not None
                 assert runtime.ft8_qso is not None
-                context = runtime.ft8_authorization.authorize(
-                    activity,
-                    radio_state=prepared_radio_state,
-                    gps_state=runtime.latest_gps_state,
-                    qso_id=attempt_seed.attempt_id,
-                    selection_freshness_validated=True,
-                    tx_power_target_watts=attempt_seed.tx_power_target_watts,
-                    tx_power_start_watts=attempt_seed.tx_power_target_watts,
-                )
+                if isinstance(candidate, FT8IncomingCall):
+                    context = runtime.ft8_authorization.authorize_incoming(
+                        candidate,
+                        radio_state=prepared_radio_state,
+                        gps_state=runtime.latest_gps_state,
+                        qso_id=attempt_seed.attempt_id,
+                        selection_freshness_validated=True,
+                        tx_power_target_watts=attempt_seed.tx_power_target_watts,
+                        tx_power_start_watts=attempt_seed.tx_power_target_watts,
+                    )
+                else:
+                    context = runtime.ft8_authorization.authorize(
+                        candidate,
+                        radio_state=prepared_radio_state,
+                        gps_state=runtime.latest_gps_state,
+                        qso_id=attempt_seed.attempt_id,
+                        selection_freshness_validated=True,
+                        tx_power_target_watts=attempt_seed.tx_power_target_watts,
+                        tx_power_start_watts=attempt_seed.tx_power_target_watts,
+                    )
                 runtime.ft8_qso.authorize_and_start(context)
 
             runtime.ft8_qso_start = FT8QsoStartController(
@@ -993,6 +1011,7 @@ class ApplicationRuntime:
                 ),
                 authorization_enabled=lambda: runtime.ft8_qso is not None,
                 activity_filter=ft8_activity_visible,
+                respond=runtime.request_ft8_response,
             )
         return runtime
 
@@ -1026,6 +1045,31 @@ class ApplicationRuntime:
             )
             return self.ft8_qso_start.start(activity, attempt_seed=seed)
         self.authorize_ft8_qso(activity)
+        return True
+
+    def request_ft8_response(self, incoming: FT8IncomingCall) -> bool:
+        """Accept one exact addressed decode after explicit Button 2 authorization."""
+        if self.ft8_authorization is None or self.ft8_qso is None:
+            return False
+        if self.ft8_qso_start is not None:
+            selected_at_utc = self.ft8_authorization.clock.now_utc()
+            selection_period = FT8Period.from_utc(selected_at_utc)
+            try:
+                self.ft8_authorization.validate_incoming_freshness(
+                    incoming,
+                    selection_period=selection_period,
+                )
+            except FT8QsoAuthorizationError:
+                return False
+            seed = build_ft8_responder_attempt_seed(
+                incoming,
+                radio_state=self.latest_radio_state,
+                gps_state=self.latest_gps_state,
+                home_grid=self.ft8_authorization.home_grid,
+                started_at_utc=selected_at_utc,
+            )
+            return self.ft8_qso_start.start_incoming(incoming, attempt_seed=seed)
+        self.authorize_ft8_response(incoming)
         return True
 
     @property
@@ -1080,6 +1124,18 @@ class ApplicationRuntime:
             raise RuntimeError("FT8 QSO transmit execution is disabled")
         context = self.ft8_authorization.authorize(
             activity,
+            radio_state=self.latest_radio_state,
+            gps_state=self.latest_gps_state,
+        )
+        self.ft8_qso.authorize_and_start(context)
+        return context
+
+    def authorize_ft8_response(self, incoming: FT8IncomingCall) -> FT8QsoContext:
+        """Freeze and start one explicitly accepted inbound FT8 call."""
+        if self.ft8_authorization is None or self.ft8_qso is None:
+            raise RuntimeError("FT8 QSO transmit execution is disabled")
+        context = self.ft8_authorization.authorize_incoming(
+            incoming,
             radio_state=self.latest_radio_state,
             gps_state=self.latest_gps_state,
         )

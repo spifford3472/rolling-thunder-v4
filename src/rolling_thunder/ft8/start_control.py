@@ -8,7 +8,7 @@ from enum import StrEnum
 from threading import Lock, Thread
 
 from rolling_thunder.domain import RadioState
-from rolling_thunder.ft8.domain import FT8CQActivity
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8IncomingCall
 from rolling_thunder.ft8.performance import FT8AttemptSeed
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationError,
@@ -27,7 +27,8 @@ def _launch_daemon(worker: Callable[[], None]) -> None:
     ).start()
 
 
-FT8PreparedQsoStarter = Callable[[FT8CQActivity, RadioState, FT8AttemptSeed], None]
+FT8QsoCandidate = FT8CQActivity | FT8IncomingCall
+FT8PreparedQsoStarter = Callable[[FT8QsoCandidate, RadioState, FT8AttemptSeed], None]
 FT8PreparationFailureHandler = Callable[[FT8AttemptSeed, str], object]
 FT8FailureRecovery = Callable[[], object]
 
@@ -46,6 +47,7 @@ class FT8QsoStartState(StrEnum):
 class FT8QsoStartStatus:
     state: FT8QsoStartState = FT8QsoStartState.IDLE
     activity: FT8CQActivity | None = None
+    incoming_call: FT8IncomingCall | None = None
     error: str | None = None
     attempt_seed: FT8AttemptSeed | None = None
 
@@ -119,6 +121,31 @@ class FT8QsoStartController:
         )
         return True
 
+    def start_incoming(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        attempt_seed: FT8AttemptSeed,
+    ) -> bool:
+        """Accept one exact inbound decode for fail-closed responder preparation."""
+        if not isinstance(incoming, FT8IncomingCall):
+            raise TypeError("incoming must be an FT8IncomingCall")
+        if not isinstance(attempt_seed, FT8AttemptSeed):
+            raise TypeError("attempt_seed must be an FT8AttemptSeed")
+
+        with self._lock:
+            if self._status.busy:
+                return False
+            self._exit_requested = False
+            self._status = FT8QsoStartStatus(
+                state=FT8QsoStartState.PREPARING,
+                incoming_call=incoming,
+                attempt_seed=attempt_seed,
+            )
+
+        self._worker_launcher(lambda: self._prepare_worker(incoming, attempt_seed))
+        return True
+
     def request_restore(self) -> bool:
         """Cancel a pending start and restore 100 W/AUTO without blocking caller."""
         with self._lock:
@@ -128,16 +155,19 @@ class FT8QsoStartController:
             if self._status.state is FT8QsoStartState.PREPARING:
                 return True
             current_activity = self._status.activity
+            current_incoming = self._status.incoming_call
             current_seed = self._status.attempt_seed
             self._status = FT8QsoStartStatus(
                 state=FT8QsoStartState.RESTORING,
                 activity=current_activity,
+                incoming_call=current_incoming,
                 attempt_seed=current_seed,
             )
 
         self._worker_launcher(
             lambda: self._restore_worker(
                 activity=current_activity,
+                incoming_call=current_incoming,
                 attempt_seed=current_seed,
             )
         )
@@ -145,7 +175,7 @@ class FT8QsoStartController:
 
     def _prepare_worker(
         self,
-        activity: FT8CQActivity,
+        candidate: FT8QsoCandidate,
         attempt_seed: FT8AttemptSeed,
     ) -> None:
         try:
@@ -153,7 +183,7 @@ class FT8QsoStartController:
                 attempt_seed.tx_power_target_watts
             )
         except FT8RadioPreparationError as error:
-            self._handle_prepare_failure(activity, attempt_seed, error)
+            self._handle_prepare_failure(candidate, attempt_seed, error)
             return
 
         with self._lock:
@@ -161,26 +191,32 @@ class FT8QsoStartController:
             if exit_requested:
                 self._status = FT8QsoStartStatus(
                     state=FT8QsoStartState.RESTORING,
-                    activity=activity,
+                    activity=candidate if isinstance(candidate, FT8CQActivity) else None,
+                    incoming_call=(
+                        candidate if isinstance(candidate, FT8IncomingCall) else None
+                    ),
                     attempt_seed=attempt_seed,
                 )
 
         if exit_requested:
             self._restore_worker(
-                activity=activity,
+                activity=candidate if isinstance(candidate, FT8CQActivity) else None,
+                incoming_call=(
+                    candidate if isinstance(candidate, FT8IncomingCall) else None
+                ),
                 attempt_seed=attempt_seed,
             )
             return
 
         try:
             self._start_prepared_qso(
-                activity,
+                candidate,
                 prepared.radio_state,
                 attempt_seed,
             )
         except (RuntimeError, ValueError) as error:
             self._handle_post_prepare_failure(
-                activity,
+                candidate,
                 attempt_seed,
                 f"FT8 QSO start failed after radio preparation: {error}",
             )
@@ -189,13 +225,16 @@ class FT8QsoStartController:
         with self._lock:
             self._status = FT8QsoStartStatus(
                 state=FT8QsoStartState.STARTED,
-                activity=activity,
+                activity=candidate if isinstance(candidate, FT8CQActivity) else None,
+                incoming_call=(
+                    candidate if isinstance(candidate, FT8IncomingCall) else None
+                ),
                 attempt_seed=attempt_seed,
             )
 
     def _handle_post_prepare_failure(
         self,
-        activity: FT8CQActivity,
+        candidate: FT8QsoCandidate,
         attempt_seed: FT8AttemptSeed,
         reason: str,
     ) -> None:
@@ -213,14 +252,17 @@ class FT8QsoStartController:
         with self._lock:
             self._status = FT8QsoStartStatus(
                 state=FT8QsoStartState.FAILED,
-                activity=activity,
+                activity=candidate if isinstance(candidate, FT8CQActivity) else None,
+                incoming_call=(
+                    candidate if isinstance(candidate, FT8IncomingCall) else None
+                ),
                 error=failure_reason,
                 attempt_seed=attempt_seed,
             )
 
     def _handle_prepare_failure(
         self,
-        activity: FT8CQActivity,
+        candidate: FT8QsoCandidate,
         attempt_seed: FT8AttemptSeed,
         error: FT8RadioPreparationError,
     ) -> None:
@@ -241,7 +283,10 @@ class FT8QsoStartController:
         with self._lock:
             self._status = FT8QsoStartStatus(
                 state=FT8QsoStartState.FAILED,
-                activity=activity,
+                activity=candidate if isinstance(candidate, FT8CQActivity) else None,
+                incoming_call=(
+                    candidate if isinstance(candidate, FT8IncomingCall) else None
+                ),
                 error=preparation_error,
                 attempt_seed=attempt_seed,
             )
@@ -263,6 +308,7 @@ class FT8QsoStartController:
         self,
         *,
         activity: FT8CQActivity | None = None,
+        incoming_call: FT8IncomingCall | None = None,
         attempt_seed: FT8AttemptSeed | None = None,
     ) -> None:
         try:
@@ -272,6 +318,7 @@ class FT8QsoStartController:
                 self._status = FT8QsoStartStatus(
                     state=FT8QsoStartState.RESTORE_FAILED,
                     activity=activity,
+                    incoming_call=incoming_call,
                     error=str(error),
                     attempt_seed=attempt_seed,
                 )
@@ -281,5 +328,6 @@ class FT8QsoStartController:
             self._status = FT8QsoStartStatus(
                 state=FT8QsoStartState.RESTORED,
                 activity=activity,
+                incoming_call=incoming_call,
                 attempt_seed=attempt_seed,
             )

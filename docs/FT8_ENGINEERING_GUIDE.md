@@ -162,12 +162,17 @@ does not implicitly authorize a subsequent station.
 
 ## October 6 drive-home behavior
 
-The receive pipeline retains the newest valid decode whose destination is the
-configured local callsign and whose source callsign is present. It publishes an
-immutable presentation record only; the panel shows it only in BROWSE. Button 2
-adapts that exact caller to the existing QSO start contract, while Button 3
-dismisses the caller. Acceptance is single-use and repeated decodes from the
-same dismissed/accepted caller remain suppressed until another caller arrives.
+The receive pipeline retains the newest supported addressed-grid or signal-
+report decode whose destination is the configured local callsign and whose
+source callsign is present. Its immutable incoming-call record preserves the
+message kind, report, grid, timing, audio frequency, and raw message. The panel
+shows it only in BROWSE. Button 2 explicitly accepts that exact decode into the
+responder path, while Button 3 dismisses it; decoding alone never authorizes RF.
+An accepted grid message starts with REPORT and waits for R_REPORT. An accepted
+REPORT starts with R_REPORT, retaining the received report for telemetry, and
+waits for ACK_73. Both then send 73 and finish under the existing bounded retry,
+parity, CAT/PTT, abort, and fail-closed rules. The CQ-selected initiator path is
+unchanged.
 
 Initial QSO power is derived only from frozen local/remote Maidenhead grids:
 20 W through 3,000 km, then 25/30/35/40/45 W through 4,500/6,000/7,500/9,000/

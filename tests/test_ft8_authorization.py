@@ -23,6 +23,8 @@ from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.domain import (
     FT8_PERIOD_SECONDS,
     FT8CQActivity,
+    FT8IncomingCall,
+    FT8MessageKind,
     FT8Period,
     FT8PeriodParity,
     FT8QsoState,
@@ -123,6 +125,66 @@ def test_authorization_accepts_usb_and_freezes_mode() -> None:
     )
 
     assert context.radio_mode == "USB"
+
+
+@pytest.mark.parametrize(
+    "incoming",
+    [
+        FT8IncomingCall(
+            callsign="W4YRL",
+            period=FT8Period(100),
+            snr_db=-9,
+            dt_seconds=0.1,
+            audio_frequency_hz=1500,
+            kind=FT8MessageKind.ADDRESSED_GRID,
+            grid="EL99",
+            raw_message="KI5VNB W4YRL EL99",
+        ),
+        FT8IncomingCall(
+            callsign="K0BQB",
+            period=FT8Period(100),
+            snr_db=-3,
+            dt_seconds=0.1,
+            audio_frequency_hz=1600,
+            kind=FT8MessageKind.REPORT,
+            report_db=-3,
+            raw_message="KI5VNB K0BQB -03",
+        ),
+    ],
+)
+def test_responder_authorization_freezes_exact_inbound_and_opposite_parity(
+    incoming: FT8IncomingCall,
+) -> None:
+    context = _service(100).authorize_incoming(
+        incoming,
+        radio_state=_radio(),
+        gps_state=None,
+    )
+
+    assert context.remote_callsign == incoming.callsign
+    assert context.remote_grid == incoming.grid
+    assert context.responder_inbound is incoming
+    assert context.tx_parity is FT8PeriodParity.ODD
+
+
+def test_responder_authorization_rejects_stale_inbound_call() -> None:
+    incoming = FT8IncomingCall(
+        callsign="W4YRL",
+        period=FT8Period(100),
+        snr_db=-9,
+        dt_seconds=0.1,
+        audio_frequency_hz=1500,
+        kind=FT8MessageKind.ADDRESSED_GRID,
+        grid="EL99",
+        raw_message="KI5VNB W4YRL EL99",
+    )
+
+    with pytest.raises(FT8QsoAuthorizationError, match="stale"):
+        _service(106).authorize_incoming(
+            incoming,
+            radio_state=_radio(),
+            gps_state=None,
+        )
 
 
 def test_authorization_explicitly_falls_back_to_configured_home_grid() -> None:

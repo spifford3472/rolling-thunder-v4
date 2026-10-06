@@ -32,6 +32,15 @@ def _pcm() -> FT8PcmPeriod:
     [
         ("CQ K1ABC EM79", FT8MessageKind.CQ, "K1ABC", None, "EM79", None, None),
         ("CQ DX K1ABC EM79", FT8MessageKind.CQ, "K1ABC", None, "EM79", None, "DX"),
+        (
+            "KI5VNB W4YRL EL99",
+            FT8MessageKind.ADDRESSED_GRID,
+            "W4YRL",
+            "KI5VNB",
+            "EL99",
+            None,
+            None,
+        ),
         ("W1AW K1ABC -10", FT8MessageKind.REPORT, "K1ABC", "W1AW", None, -10, None),
         ("W1AW K1ABC R-07", FT8MessageKind.R_REPORT, "K1ABC", "W1AW", None, -7, None),
         ("W1AW K1ABC RR73", FT8MessageKind.ACK_73, "K1ABC", "W1AW", None, None, None),

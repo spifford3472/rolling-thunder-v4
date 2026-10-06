@@ -5,6 +5,7 @@ import pytest
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
     FT8IncomingCall,
+    FT8MessageKind,
     FT8Period,
     FT8QsoState,
 )
@@ -30,12 +31,14 @@ def _incoming(callsign: str = "W1XYZ", *, period: int = 105) -> FT8IncomingCall:
         snr_db=-6,
         dt_seconds=0.2,
         audio_frequency_hz=1700,
+        kind=FT8MessageKind.ADDRESSED_GRID,
         grid="FN42",
+        raw_message=f"KI5VNB {callsign} FN42",
     )
 
 
-def test_incoming_call_requires_explicit_answer_and_uses_exact_caller() -> None:
-    authorized: list[FT8CQActivity] = []
+def test_incoming_call_requires_explicit_answer_and_uses_exact_decode() -> None:
+    authorized: list[FT8IncomingCall] = []
     receive = FT8ReceiveState(
         last_period=FT8Period(105),
         incoming_call=_incoming(),
@@ -48,15 +51,48 @@ def test_incoming_call_requires_explicit_answer_and_uses_exact_caller() -> None:
         authorize=lambda activity: authorized.append(activity) is None,
         abort=lambda: None,
         return_to_browser=lambda: None,
+        respond=lambda incoming: authorized.append(incoming) is None,
     )
 
     assert panel.snapshot().incoming_call == _incoming()
     assert authorized == []
     assert panel.answer_incoming_call() is True
     assert [item.callsign for item in authorized] == ["W1XYZ"]
+    assert authorized == [_incoming()]
     assert panel.snapshot().incoming_call is None
     assert panel.answer_incoming_call() is False
     assert len(authorized) == 1
+
+
+def test_report_incoming_call_preserves_report_for_responder_callback() -> None:
+    incoming = FT8IncomingCall(
+        callsign="K0BQB",
+        period=FT8Period(105),
+        snr_db=-3,
+        dt_seconds=0.2,
+        audio_frequency_hz=1700,
+        kind=FT8MessageKind.REPORT,
+        report_db=-3,
+        raw_message="KI5VNB K0BQB -03",
+    )
+    accepted: list[FT8IncomingCall] = []
+    panel = FT8PanelController(
+        receive_state=lambda: FT8ReceiveState(
+            last_period=FT8Period(105), incoming_call=incoming
+        ),
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda _activity: True,
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+        respond=lambda call: accepted.append(call) is None,
+    )
+
+    assert accepted == []
+    assert panel.answer_incoming_call() is True
+    assert accepted == [incoming]
+    assert accepted[0].report_db == -3
 
 
 def test_incoming_call_ignore_suppresses_repeats_and_alert_never_interrupts_qso() -> None:

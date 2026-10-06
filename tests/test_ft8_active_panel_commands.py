@@ -1,7 +1,12 @@
 """Tests for FT8-aware active-panel command routing."""
 
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.ft8.domain import FT8IncomingCall, FT8Period, FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8IncomingCall,
+    FT8MessageKind,
+    FT8Period,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.panel import FT8PanelMode, FT8PanelSnapshot
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 
@@ -179,7 +184,9 @@ def test_ft8_incoming_call_uses_button_2_answer_and_button_3_ignore() -> None:
         snr_db=-8,
         dt_seconds=0.1,
         audio_frequency_hz=1500,
+        kind=FT8MessageKind.REPORT,
         grid="FN31",
+        report_db=-8,
     )
     commands = FT8AwareActivePanelCommands(navigation, Delegate(), panel)
 

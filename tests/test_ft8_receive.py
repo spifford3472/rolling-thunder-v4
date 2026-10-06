@@ -90,7 +90,7 @@ class AddressedCallDecoder:
                 dt_seconds=0.2,
                 audio_frequency_hz=1600,
                 raw_message="KI5VNB W1NEW FN42",
-                kind=FT8MessageKind.OTHER,
+                kind=FT8MessageKind.ADDRESSED_GRID,
                 source_callsign="W1NEW",
                 destination_callsign="KI5VNB",
                 grid="FN42",
@@ -201,6 +201,45 @@ def test_receive_service_publishes_most_recent_call_to_configured_local_callsign
     assert state.incoming_call.callsign == "W1NEW"
     assert state.incoming_call.snr_db == -7
     assert state.incoming_call.grid == "FN42"
+    assert state.incoming_call.kind is FT8MessageKind.ADDRESSED_GRID
+
+
+def test_receive_service_preserves_exact_observed_addressed_grid_call() -> None:
+    class ObservedDecoder:
+        def decode(self, pcm: FT8PcmPeriod) -> tuple[FT8Decode, ...]:
+            return (
+                FT8Decode(
+                    period=pcm.period,
+                    snr_db=-9,
+                    dt_seconds=0.15,
+                    audio_frequency_hz=1550,
+                    raw_message="KI5VNB W4YRL EL99",
+                    kind=FT8MessageKind.ADDRESSED_GRID,
+                    source_callsign="W4YRL",
+                    destination_callsign="KI5VNB",
+                    grid="EL99",
+                ),
+            )
+
+    service = FT8ReceiveService(
+        FakeAudioInput([_period(112)]),
+        ObservedDecoder(),
+        FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+        local_callsign="KI5VNB",
+    )
+
+    service.start()
+    _wait_until(lambda: service.latest_state.decode_count == 1)
+    incoming = service.latest_state.incoming_call
+    service.stop()
+
+    assert incoming is not None
+    assert incoming.callsign == "W4YRL"
+    assert incoming.kind is FT8MessageKind.ADDRESSED_GRID
+    assert incoming.grid == "EL99"
+    assert incoming.report_db is None
+    assert incoming.raw_message == "KI5VNB W4YRL EL99"
 
 
 def test_receive_service_clear_cq_activity_removes_old_band_rows() -> None:

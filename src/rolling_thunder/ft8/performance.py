@@ -42,6 +42,7 @@ class FT8AttemptSeed(DomainModel):
     remote_grid: MaidenheadGrid | None = None
     audio_frequency_hz: int = Field(gt=0)
     selected_snr_db: int = Field(ge=-50, le=49)
+    received_report_db: int | None = Field(default=None, ge=-50, le=49)
     pota_cq: bool = False
     tx_power_target_watts: int = Field(default=20, ge=20, le=70, multiple_of=5)
 

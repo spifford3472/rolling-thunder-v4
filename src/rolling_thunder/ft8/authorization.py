@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from uuid import UUID
+from dataclasses import dataclass, replace
+from uuid import UUID, uuid4
 
 from rolling_thunder.domain import GPSFixState, RadioConnectionState, RadioMode, RadioState
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity, FT8QsoContext
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8Period,
+    FT8PeriodParity,
+    FT8QsoContext,
+)
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
@@ -114,8 +120,47 @@ class FT8QsoAuthorizationService:
             pota_cq=activity.pota_cq,
             tx_power_target_watts=tx_power_target_watts,
             tx_power_start_watts=tx_power_start_watts,
-            **({} if qso_id is None else {"qso_id": qso_id}),
+            qso_id=qso_id or uuid4(),
         )
+
+    def authorize_incoming(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        radio_state: RadioState,
+        gps_state: GPSState | None,
+        qso_id: UUID | None = None,
+        freshness_reference_period: FT8Period | None = None,
+        selection_freshness_validated: bool = False,
+        tx_power_target_watts: int = 20,
+        tx_power_start_watts: int | None = None,
+    ) -> FT8QsoContext:
+        """Freeze an explicitly accepted addressed decode as a responder QSO."""
+        current_period = self.clock.current_period()
+        if not selection_freshness_validated:
+            self.validate_incoming_freshness(
+                incoming,
+                selection_period=freshness_reference_period or current_period,
+                current_period=current_period,
+            )
+        activity = FT8CQActivity(
+            callsign=incoming.callsign,
+            last_period=incoming.period,
+            snr_db=incoming.snr_db,
+            dt_seconds=incoming.dt_seconds,
+            audio_frequency_hz=incoming.audio_frequency_hz,
+            grid=incoming.grid,
+        )
+        context = self.authorize(
+            activity,
+            radio_state=radio_state,
+            gps_state=gps_state,
+            qso_id=qso_id,
+            selection_freshness_validated=True,
+            tx_power_target_watts=tx_power_target_watts,
+            tx_power_start_watts=tx_power_start_watts,
+        )
+        return replace(context, responder_inbound=incoming)
 
     def validate_selection_freshness(
         self,
@@ -135,6 +180,28 @@ class FT8QsoAuthorizationService:
             raise FT8QsoAuthorizationError("selected FT8 CQ is from a future period")
         if age_periods > FT8_CQ_MAX_AGE_PERIODS:
             raise FT8QsoAuthorizationError("selected FT8 CQ is stale")
+
+    def validate_incoming_freshness(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        selection_period: FT8Period,
+        current_period: FT8Period | None = None,
+    ) -> None:
+        """Apply the existing bounded freshness policy to an accepted caller."""
+        activity = FT8CQActivity(
+            callsign=incoming.callsign,
+            last_period=incoming.period,
+            snr_db=incoming.snr_db,
+            dt_seconds=incoming.dt_seconds,
+            audio_frequency_hz=incoming.audio_frequency_hz,
+            grid=incoming.grid,
+        )
+        self.validate_selection_freshness(
+            activity,
+            selection_period=selection_period,
+            current_period=current_period,
+        )
 
 def freeze_ft8_location(
     gps_state: GPSState | None,

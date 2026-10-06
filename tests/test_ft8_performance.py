@@ -10,6 +10,8 @@ from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, R
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
+    FT8IncomingCall,
+    FT8MessageKind,
     FT8Period,
     FT8PeriodParity,
     FT8QsoContext,
@@ -20,6 +22,7 @@ from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepositor
 from rolling_thunder.ft8.performance_recording import (
     FT8PerformanceRecorder,
     build_ft8_attempt_seed,
+    build_ft8_responder_attempt_seed,
 )
 
 
@@ -159,6 +162,42 @@ def test_attempt_seed_freezes_extreme_grid_power_before_preparation() -> None:
     assert seed.local_grid == "EM79xm"
     assert seed.remote_grid == "QF56"
     assert seed.tx_power_target_watts == 70
+
+
+def test_responder_seed_and_preparation_failure_preserve_initial_report(
+    tmp_path: Path,
+) -> None:
+    started = FT8Period(100).start_utc
+    seed = build_ft8_responder_attempt_seed(
+        FT8IncomingCall(
+            callsign="K0BQB",
+            period=FT8Period(100),
+            snr_db=-3,
+            dt_seconds=0.1,
+            audio_frequency_hz=1600,
+            kind=FT8MessageKind.REPORT,
+            report_db=-3,
+            raw_message="KI5VNB K0BQB -03",
+        ),
+        radio_state=RadioState(
+            connection_state=RadioConnectionState.CONNECTED,
+            frequency=Frequency(hz=14_074_000),
+            mode=RadioMode.USB,
+            updated_at=started,
+        ),
+        gps_state=None,
+        home_grid="EM79xm",
+        started_at_utc=started,
+    )
+    recorder = FT8PerformanceRecorder(
+        FT8PerformanceOutboxRepository(tmp_path / "contacts.db"),
+        clock=lambda: started + timedelta(seconds=1),
+    )
+
+    attempt = recorder.record_preparation_failure(seed, "CAT unavailable")
+
+    assert seed.received_report_db == -3
+    assert attempt.received_report_db == -3
 
 
 def test_recorder_preserves_requested_start_end_and_max_configured_power(

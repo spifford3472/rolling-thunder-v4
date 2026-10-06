@@ -103,6 +103,14 @@ that caller; Button 3 ignores it. Repeated messages from an ignored or already
 accepted caller do not repeatedly authorize a QSO. Incoming messages do not
 interrupt active or terminal QSO screens.
 
+Button 2 starts a responder exchange, not a new CQ call. If the accepted message
+contains the caller's grid, Rolling Thunder's first transmission in the opposite
+slot is a signal report. If the accepted message already contains a signal
+report (for example `KI5VNB K0BQB -03`), Rolling Thunder retains that report and
+its first transmission is the acknowledged `R_REPORT`. The normal final 73 and
+bounded retry/safety checks still apply. Merely decoding either message never
+transmits.
+
 ## Radio Preparation
 
 Before an authorized FT8 QSO can transmit, Rolling Thunder prepares and verifies the FT-891:

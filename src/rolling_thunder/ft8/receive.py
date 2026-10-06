@@ -353,6 +353,10 @@ class FT8ReceiveService:
             if (
                 decode.destination_callsign != local_callsign
                 or decode.source_callsign is None
+                or decode.kind not in {
+                    FT8MessageKind.ADDRESSED_GRID,
+                    FT8MessageKind.REPORT,
+                }
             ):
                 continue
             if existing is not None and decode.period < existing.period:
@@ -363,7 +367,10 @@ class FT8ReceiveService:
                 snr_db=decode.snr_db,
                 dt_seconds=decode.dt_seconds,
                 audio_frequency_hz=decode.audio_frequency_hz,
+                kind=decode.kind,
                 grid=decode.grid or known_grids.get(decode.source_callsign),
+                report_db=decode.report_db,
+                raw_message=decode.raw_message,
             )
         return existing
 

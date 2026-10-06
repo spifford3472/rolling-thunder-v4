@@ -86,6 +86,10 @@ General UI/controller code does not have blanket transmit authority.
 
 FT8 has a deliberately bounded transmit path requiring explicit operator
 authorization for one QSO target and fail-closed preparation/session checks.
+An addressed decode remains receive-only until Button 2 explicitly accepts its
+exact immutable inbound record. Responder start phase is protocol-derived from
+that record (grid to REPORT; report to R_REPORT) and must not reuse the
+CQ-selected initiator start phase.
 
 Do not reuse that implementation as implicit permission for unrelated PTT,
 MOX, keying, tuner, or unattended transmission.

@@ -163,6 +163,13 @@ def parse_ft8_message(message: str) -> ParsedFT8Message:
                 source_callsign=source,
                 destination_callsign=destination,
             )
+        if len(tokens) == 3 and _looks_like_grid(payload):
+            return ParsedFT8Message(
+                kind=FT8MessageKind.ADDRESSED_GRID,
+                source_callsign=source,
+                destination_callsign=destination,
+                grid=payload,
+            )
 
     return ParsedFT8Message(kind=FT8MessageKind.OTHER)
 

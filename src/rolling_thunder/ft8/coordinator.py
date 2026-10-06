@@ -106,7 +106,10 @@ class FT8QsoCoordinator:
             self._terminal_reason = None
             self._session_cancelled = False
             self._started_utc = None
-            self._received_report_db = None
+            inbound = context.responder_inbound
+            self._received_report_db = (
+                None if inbound is None else inbound.report_db
+            )
             self._result = None
 
     def start_qso(self) -> None:
@@ -162,9 +165,16 @@ class FT8QsoCoordinator:
                 self._controller.on_decode(decode)
                 after = self._controller.state
                 if (
-                    before is FT8QsoState.WAIT_REPORT
-                    and after is FT8QsoState.TX_R_REPORT
-                    and decode.kind is FT8MessageKind.REPORT
+                    (
+                        before is FT8QsoState.WAIT_REPORT
+                        and after is FT8QsoState.TX_R_REPORT
+                        and decode.kind is FT8MessageKind.REPORT
+                    )
+                    or (
+                        before is FT8QsoState.WAIT_R_REPORT
+                        and after is FT8QsoState.TX_73
+                        and decode.kind is FT8MessageKind.R_REPORT
+                    )
                 ):
                     self._received_report_db = decode.report_db
             self._capture_terminal_result_locked()

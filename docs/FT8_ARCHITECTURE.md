@@ -285,9 +285,10 @@ CQ activity is presentation/discovery state only. It has no transmit authority.
 
 ### `FT8IncomingCall`
 
-The receive service publishes the most recent valid decode addressed to the
-configured local callsign when a source callsign exists. The immutable record
-contains caller, period, SNR, audio frequency, and optional grid. It is
+The receive service publishes the most recent supported addressed-grid or
+signal-report decode addressed to the configured local callsign when a source
+callsign exists. The immutable record contains caller, message kind, period,
+SNR, DT, audio frequency, raw message, optional grid, and optional report. It is
 presentation state only: BROWSE may offer explicit Button 2 answer/Button 3
 ignore actions, while ACTIVE and TERMINAL never expose the alert.
 
@@ -304,6 +305,7 @@ Created once when the operator authorizes one QSO. It freezes:
 - selected TX period parity
 - authorization timestamp/period
 - requested initial configured power and actual configured power at start
+- the exact accepted inbound record when the QSO uses responder semantics
 
 GPS movement after creation must not change the transmitted grid during that
 QSO.
@@ -1179,6 +1181,13 @@ and advances only on fresh expected normalized decodes from the authorized
 remote callsign. Traffic from another station, stale periods, duplicate periods,
 wrong receive parity, or unexpected message kinds cannot redirect or advance
 the QSO.
+
+CQ selection uses the unchanged initiator sequence: CALL, wait for REPORT,
+R_REPORT, wait for ACK_73, then 73. Explicit Button 2 acceptance uses responder
+semantics. An addressed-grid inbound starts at TX_REPORT and waits for R_REPORT;
+an inbound REPORT starts at TX_R_REPORT and waits for ACK_73. The accepted
+inbound report, when present, initializes result/performance telemetry. Neither
+responder sequence exists until the operator accepts the exact inbound decode.
 
 The six-attempt rule applies independently to each unchanged outbound
 state/message. A valid response resets the counter for the newly advanced
