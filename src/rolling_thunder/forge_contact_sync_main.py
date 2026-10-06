@@ -94,6 +94,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             station_location_name=config.wavelog.station_location_name,
             station_logbook_name=config.wavelog.station_logbook_name,
             timeout_s=config.wavelog.request_timeout_s,
+            station_binding_store=repository,
         )
         service = ForgeContactSyncService(repository, wavelog)
         ft8_performance_repository = ForgeFT8PerformanceRepository(

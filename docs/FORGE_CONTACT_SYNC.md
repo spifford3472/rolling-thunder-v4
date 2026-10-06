@@ -54,10 +54,12 @@ Configured safety anchors:
 - legacy Station Location/template: `Mobile`
 
 Wavelog API v2 writes a QSO to a Station Location using `station_profile_id`.
-Rolling Thunder never stores or assumes numeric station or logbook IDs. Before the
+Rolling Thunder never assumes or scans numeric station or logbook IDs. Before the
 Forge UUID ledger claim, Forge reads the owner-scoped station list, resolves exact
 names without guessing IDs, resolves exactly one configured logbook by exact name,
-and selects the final station target from immutable `Contact` fields.
+and selects the final station target from immutable `Contact` fields. Forge does
+durably retain an exact dynamic station name -> verified station ID and UUID recovery
+binding in the contact-sync SQLite database after Wavelog has supplied that identity.
 
 When `my_grid`, `my_state`, `my_cq_zone`, and `my_itu_zone` are all frozen and
 usable, the station name is exactly `Mobile - XXXX - YY`. `XXXX` is the uppercase
@@ -67,19 +69,43 @@ frozen `MY_GRIDSQUARE`. Existing exact-name stations are reused only when UUID,
 callsign, DXCC, grid, state, CQ zone, and ITU zone are compatible with the requested
 identity and validated legacy template.
 
+Wavelog's `GET /index.php/api/v2/station` list may include only locations linked to
+the owner's active logbook when the account's `active_log_only` option is enabled.
+Its direct `GET /index.php/api/v2/station/{id}` lookup is ownership-checked but does
+not apply that list filter. New stations are initially unlinked, so Forge must not
+depend on list visibility after creation or during recovery.
+
 If the exact dynamic station is absent, Forge creates it with `POST
-/index.php/api/v2/station`, re-reads and verifies the canonical result, and handles a
-`409` create race by re-reading and resolving again. Callsign and DXCC come from the
-validated configured legacy `Mobile` profile; grid/state/CQ/ITU come only from the
-immutable contact. Forge never deletes, renames, or mutates unrelated profiles.
+/index.php/api/v2/station`, verifies the complete `201` station object, and
+transactionally persists its exact name, positive ID, and UUID before attempting the
+logbook link. Callsign and DXCC come from the validated configured legacy `Mobile`
+profile; grid/state/CQ/ITU come only from the immutable contact. Forge never deletes,
+renames, or mutates unrelated profiles.
+
+On a later resolution where the list hides that exact name, Forge uses only its
+durable verified binding to direct-fetch the known ID. It requires successful owned
+API access, the same exact name and UUID, and full compatibility with the frozen
+grid/state/CQ/ITU plus the current validated legacy template callsign/DXCC. A missing,
+changed, or incompatible bound station fails closed; the binding is not silently
+overwritten. A compatible visible exact-name station can establish or refresh the
+binding.
+
+Wavelog returns only a generic `409` for an identical station create and supplies no
+existing ID. Forge first accepts a visible, fully verified exact match. If none is
+visible, it can recover only through a pre-existing verified binding and direct GET.
+An arbitrary external hidden-station race without such a binding fails closed with a
+clear error. Forge never scans or guesses numeric IDs.
 
 Forge reads `GET /index.php/api/v2/logbook`, requires exactly one configured
 logbook name, and links a dynamic station with `PATCH` only when needed. Because
 `station_ids` has replacement semantics, Forge preserves every prior ID, adds the
-new ID, and verifies the result with another read. A created-but-unlinked station is
-safe to reuse on retry. If frozen routing data is insufficient, Forge uses the
-configured legacy `Mobile` profile and preserves its existing per-QSO grid PATCH.
-Dynamic profiles are never patched to a six-character QSO grid.
+new ID, and verifies the result with another read. A station created by Rolling
+Thunder is safe to reuse after a failed link or Forge restart because its verified
+binding was committed before the link attempt. This guarantee does not extend to an
+arbitrary hidden external station that produced an ID-less `409`. If frozen routing
+data is insufficient, Forge uses the configured legacy `Mobile` profile and preserves
+its existing per-QSO grid PATCH. Dynamic profiles are never patched to a six-character
+QSO grid.
 
 Absent/ambiguous legacy or dynamic names, incompatible metadata, an unlinked legacy
 profile, malformed responses, unverifiable identity, failed creation, or failed
@@ -287,7 +313,9 @@ The database may therefore remain above 5,000 if preservation requires it. Lates
 
 ## Backup and recovery
 
-The Pi SQLite database remains the local operational record. The Forge idempotency ledger is separate durable state and must be included in Forge backup coverage.
+The Pi SQLite database remains the local operational record. The Forge UUID ledger
+and verified dynamic-station binding table are separate durable state in the same
+contact-sync SQLite database and must be included in Forge backup coverage.
 
 Recovery rules:
 
@@ -368,10 +396,12 @@ failure never makes local logging fail.
 - **Wavelog unreachable/timeout:** Forge leaves its ledger pending; Pi retries later.
 - **401/403:** token invalid/expired or required scope unavailable; local QSO remains unsynchronized.
 - **missing/duplicate/incompatible station:** Forge refuses to choose or mutate another location.
-- **missing/duplicate logbook or failed link:** Forge leaves the contact unsynchronized; a later retry can reuse a station that was already created.
+- **missing/duplicate logbook or failed link:** Forge leaves the contact unsynchronized; a later retry can direct-fetch and reuse a station that Rolling Thunder already created and bound.
+- **hidden ID-less station conflict without a prior binding:** Forge fails closed because Wavelog supplies no safe ID; it does not scan IDs.
+- **changed/missing/incompatible bound station:** Forge fails closed and preserves the binding for investigation rather than overwriting it.
 - **malformed Wavelog response:** fail safely; local QSO remains.
 - **timeout after possible remote success:** deterministic retry + Wavelog duplicate detection resolves uncertainty.
-- **Forge restart:** durable ledger survives.
+- **Forge restart:** durable UUID ledger and verified station bindings survive.
 - **Pi restart:** local pending/failed contacts and retry metadata survive.
 - **repeated manual Sync:** Pi single-flight plus Forge UUID ledger prevent overlapping/replayed writes.
 - **database error:** report failure; never pretend synchronization succeeded.

@@ -209,15 +209,17 @@ def test_completed_ft8_uses_shared_sync_and_configured_mobile(
     qrz_enabled: bool,
 ) -> None:
     wavelog_transport = WavelogTransport()
+    forge_repository = ForgeContactSyncRepository(tmp_path / "forge.db")
     forge = ForgeContactSyncApiApplication(
         ForgeContactSyncService(
-            ForgeContactSyncRepository(tmp_path / "forge.db"),
+            forge_repository,
             WavelogClient(
                 "https://wavelog.invalid",
                 SecretStr("test-only"),
                 station_location_name="Mobile",
                 station_logbook_name="KI5VNB Main",
                 transport=wavelog_transport,
+                station_binding_store=forge_repository,
             ),
         )
     )

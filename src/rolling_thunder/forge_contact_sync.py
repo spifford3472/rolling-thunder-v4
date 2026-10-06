@@ -21,6 +21,7 @@ from rolling_thunder.home_platform import (
 )
 from rolling_thunder.wavelog import (
     WavelogError,
+    WavelogStationBinding,
     WavelogStationTarget,
     WavelogUploadDisposition,
     contact_to_adif,
@@ -98,10 +99,90 @@ class ForgeContactSyncRepository:
                     ON forge_contact_sync_ledger (state, updated_at)
                     """
                 )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS forge_wavelog_station_bindings (
+                        station_name TEXT PRIMARY KEY CHECK(length(station_name) > 0),
+                        station_id INTEGER NOT NULL CHECK(station_id > 0),
+                        station_uuid TEXT NOT NULL CHECK(length(station_uuid) > 0),
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        verified_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
                 connection.commit()
         except (OSError, sqlite3.Error) as error:
             raise ForgeContactSyncStorageError(
                 f"Forge contact synchronization ledger could not be initialized: {database_path}"
+            ) from error
+
+    def get_station_binding(self, name: str) -> WavelogStationBinding | None:
+        """Return the durable recovery identity for one exact dynamic name."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                row = connection.execute(
+                    """
+                    SELECT station_name, station_id, station_uuid
+                    FROM forge_wavelog_station_bindings
+                    WHERE station_name = ?
+                    """,
+                    (name,),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise ForgeContactSyncStorageError(
+                f"Forge Wavelog station binding lookup failed: {name!r}"
+            ) from error
+        if row is None:
+            return None
+        station_name, station_id, station_uuid = row
+        if (
+            not isinstance(station_name, str)
+            or not isinstance(station_id, int)
+            or isinstance(station_id, bool)
+            or station_id <= 0
+            or not isinstance(station_uuid, str)
+            or not station_uuid
+        ):
+            raise ForgeContactSyncStorageError(
+                f"Forge Wavelog station binding is invalid: {name!r}"
+            )
+        return WavelogStationBinding(station_name, station_id, station_uuid)
+
+    def bind_station(self, binding: WavelogStationBinding) -> None:
+        """Transactionally establish or refresh one verified provider identity."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    """
+                    SELECT station_id, station_uuid
+                    FROM forge_wavelog_station_bindings
+                    WHERE station_name = ?
+                    """,
+                    (binding.name,),
+                ).fetchone()
+                if row is not None and row != (binding.station_id, binding.uuid):
+                    connection.rollback()
+                    raise ForgeContactSyncStorageError(
+                        "Verified Wavelog station identity conflicts with the durable "
+                        f"Forge binding: {binding.name!r}"
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO forge_wavelog_station_bindings (
+                        station_name, station_id, station_uuid
+                    ) VALUES (?, ?, ?)
+                    ON CONFLICT(station_name) DO UPDATE SET
+                        verified_at = CURRENT_TIMESTAMP
+                    """,
+                    (binding.name, binding.station_id, binding.uuid),
+                )
+                connection.commit()
+        except ForgeContactSyncStorageError:
+            raise
+        except sqlite3.Error as error:
+            raise ForgeContactSyncStorageError(
+                f"Forge Wavelog station binding update failed: {binding.name!r}"
             ) from error
 
     def claim(

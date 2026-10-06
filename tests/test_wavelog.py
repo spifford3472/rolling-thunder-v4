@@ -5,18 +5,24 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from json import dumps, loads
+from pathlib import Path
 from typing import Final
 
 import pytest
 from pydantic import SecretStr
 
 from rolling_thunder.domain import Contact, RadioMode
+from rolling_thunder.forge_contact_sync import (
+    ForgeContactSyncRepository,
+    ForgeContactSyncService,
+)
 from rolling_thunder.http_home_platform import UrllibHttpResponse
 from rolling_thunder.wavelog import (
     WavelogAuthenticationError,
     WavelogClient,
     WavelogLogbookError,
     WavelogResponseError,
+    WavelogStationBinding,
     WavelogStationLocation,
     WavelogStationLocationError,
     WavelogStationTarget,
@@ -42,6 +48,22 @@ class ScriptedTransport:
         self.requests.append((method, url, headers, body, timeout_s))
         assert self.responses
         return self.responses.pop(0)
+
+
+class MemoryStationBindings:
+    def __init__(self) -> None:
+        self.bindings: dict[str, WavelogStationBinding] = {}
+        self.write_count = 0
+
+    def get_station_binding(self, name: str) -> WavelogStationBinding | None:
+        return self.bindings.get(name)
+
+    def bind_station(self, binding: WavelogStationBinding) -> None:
+        existing = self.bindings.get(binding.name)
+        if existing is not None and existing != binding:
+            raise AssertionError("test binding changed identity")
+        self.bindings[binding.name] = binding
+        self.write_count += 1
 
 
 CONTACT_ID: Final = "11111111-2222-3333-4444-555555555555"
@@ -151,13 +173,18 @@ def dynamic_contact(*, grid: str = "EM79xm", state: str = "OH") -> Contact:
     )
 
 
-def managed_client(transport: ScriptedTransport) -> WavelogClient:
+def managed_client(
+    transport: ScriptedTransport,
+    *,
+    bindings: MemoryStationBindings | ForgeContactSyncRepository | None = None,
+) -> WavelogClient:
     return WavelogClient(
         "http://wavelog:8086",
         SecretStr("secret"),
         station_location_name="Mobile",
         station_logbook_name="KI5VNB Main",
         transport=transport,
+        station_binding_store=bindings or MemoryStationBindings(),
     )
 
 
@@ -347,7 +374,7 @@ def test_different_frozen_grid_or_state_selects_different_dynamic_station() -> N
     assert indiana.location.station_id == 99
 
 
-def test_absent_dynamic_station_is_created_reread_verified_and_linked() -> None:
+def test_active_log_only_hidden_created_station_is_bound_and_linked() -> None:
     legacy = station(42, "Mobile", "EM79XM")
     dynamic = station(99, "Mobile - EM79 - OH", "EM79")
     transport = ScriptedTransport(
@@ -355,7 +382,6 @@ def test_absent_dynamic_station_is_created_reread_verified_and_linked() -> None:
             station_response(legacy),
             logbook_response(1, 42),
             UrllibHttpResponse(201, dumps({"data": dynamic}).encode()),
-            station_response(legacy, dynamic),
             logbook_update_response(1, 42, 99),
             logbook_response(1, 42, 99),
         ]
@@ -366,7 +392,7 @@ def test_absent_dynamic_station_is_created_reread_verified_and_linked() -> None:
     assert target.location.station_id == 99
     assert target.dynamic
     methods = [request[0] for request in transport.requests]
-    assert methods == ["GET", "GET", "POST", "GET", "PATCH", "GET"]
+    assert methods == ["GET", "GET", "POST", "PATCH", "GET"]
     create_payload = loads(transport.requests[2][3] or b"{}")
     assert create_payload == {
         "name": "Mobile - EM79 - OH",
@@ -377,7 +403,7 @@ def test_absent_dynamic_station_is_created_reread_verified_and_linked() -> None:
         "gridsquare": "EM79",
         "state": "OH",
     }
-    link_payload = loads(transport.requests[4][3] or b"{}")
+    link_payload = loads(transport.requests[3][3] or b"{}")
     assert link_payload == {"station_ids": [1, 42, 99]}
 
 
@@ -399,31 +425,190 @@ def test_dynamic_station_create_race_is_reread_and_reused() -> None:
     assert [request[0] for request in transport.requests] == ["GET", "GET", "POST", "GET"]
 
 
-def test_created_station_is_reused_and_linked_after_failed_link_retry() -> None:
+def test_hidden_created_station_is_recovered_after_restart_and_linked(
+    tmp_path: Path,
+) -> None:
     legacy = station(42, "Mobile", "EM79XM")
     dynamic = station(99, "Mobile - EM79 - OH", "EM79")
-    transport = ScriptedTransport(
+    database = tmp_path / "forge.db"
+    first_transport = ScriptedTransport(
         [
             station_response(legacy),
             logbook_response(42),
             UrllibHttpResponse(201, dumps({"data": dynamic}).encode()),
-            station_response(legacy, dynamic),
             UrllibHttpResponse(500, b'{"error":"failed"}'),
-            station_response(legacy, dynamic),
+        ]
+    )
+    first_repository = ForgeContactSyncRepository(database)
+    first_client = managed_client(
+        first_transport,
+        bindings=first_repository,
+    )
+    first_service = ForgeContactSyncService(first_repository, first_client)
+
+    with pytest.raises(WavelogResponseError, match="HTTP 500"):
+        first_service.synchronize(dynamic_contact())
+
+    restarted_transport = ScriptedTransport(
+        [
+            station_response(legacy),
             logbook_response(42),
+            UrllibHttpResponse(200, dumps({"data": dynamic}).encode()),
             logbook_update_response(42, 99),
+            logbook_response(42, 99),
+            qso_import_response(imported=1, skipped=0),
+        ]
+    )
+    restarted_repository = ForgeContactSyncRepository(database)
+    restarted_client = managed_client(
+        restarted_transport,
+        bindings=restarted_repository,
+    )
+    restarted_service = ForgeContactSyncService(
+        restarted_repository,
+        restarted_client,
+    )
+    result = restarted_service.synchronize(dynamic_contact())
+
+    assert result.contact_id == dynamic_contact().contact_id
+    assert [request[0] for request in first_transport.requests] == [
+        "GET",
+        "GET",
+        "POST",
+        "PATCH",
+    ]
+    assert [request[0] for request in restarted_transport.requests] == [
+        "GET",
+        "GET",
+        "GET",
+        "PATCH",
+        "GET",
+        "POST",
+    ]
+
+
+def test_hidden_durable_binding_with_changed_uuid_fails_closed() -> None:
+    legacy = station(42, "Mobile", "EM79XM")
+    changed = station(99, "Mobile - EM79 - OH", "EM79", uuid="changed-uuid")
+    bindings = MemoryStationBindings()
+    bindings.bindings[changed["name"]] = WavelogStationBinding(
+        str(changed["name"]), 99, "original-uuid"
+    )
+    transport = ScriptedTransport(
+        [
+            station_response(legacy),
+            logbook_response(42),
+            UrllibHttpResponse(200, dumps({"data": changed}).encode()),
+        ]
+    )
+
+    with pytest.raises(WavelogStationLocationError, match="no longer matches"):
+        managed_client(transport, bindings=bindings).resolve_station_target(
+            dynamic_contact()
+        )
+
+
+def test_hidden_durable_binding_with_incompatible_metadata_fails_closed() -> None:
+    legacy = station(42, "Mobile", "EM79XM")
+    incompatible = station(99, "Mobile - EM79 - OH", "EM89")
+    bindings = MemoryStationBindings()
+    bindings.bindings[str(incompatible["name"])] = WavelogStationBinding(
+        str(incompatible["name"]), 99, str(incompatible["uuid"])
+    )
+    transport = ScriptedTransport(
+        [
+            station_response(legacy),
+            logbook_response(42),
+            UrllibHttpResponse(200, dumps({"data": incompatible}).encode()),
+        ]
+    )
+
+    with pytest.raises(WavelogStationLocationError, match="incompatible"):
+        managed_client(transport, bindings=bindings).resolve_station_target(
+            dynamic_contact()
+        )
+
+
+def test_hidden_409_without_binding_fails_closed_without_id_guessing() -> None:
+    legacy = station(42, "Mobile", "EM79XM")
+    transport = ScriptedTransport(
+        [
+            station_response(legacy),
+            logbook_response(42),
+            UrllibHttpResponse(409, b'{"error":"conflict"}'),
+            station_response(legacy),
+        ]
+    )
+
+    with pytest.raises(WavelogStationLocationError, match="refusing to guess an ID"):
+        managed_client(transport).resolve_station_target(dynamic_contact())
+
+    assert [request[0] for request in transport.requests] == ["GET", "GET", "POST", "GET"]
+    assert not any(url.endswith("/station/99") for _, url, _, _, _ in transport.requests)
+
+
+def test_hidden_409_can_recover_with_preexisting_valid_binding() -> None:
+    legacy = station(42, "Mobile", "EM79XM")
+    dynamic = station(99, "Mobile - EM79 - OH", "EM79")
+    binding = WavelogStationBinding("Mobile - EM79 - OH", 99, "station-99")
+    bindings = MemoryStationBindings()
+    bindings.bindings[binding.name] = binding
+    transport = ScriptedTransport(
+        [
+            UrllibHttpResponse(409, b'{"error":"conflict"}'),
+            station_response(legacy),
+            UrllibHttpResponse(200, dumps({"data": dynamic}).encode()),
+        ]
+    )
+    client = managed_client(transport, bindings=bindings)
+    template = WavelogStationLocation(
+        42,
+        "Mobile",
+        "EM79XM",
+        "station-42",
+        "KI5VNB",
+        291,
+        4,
+        8,
+        "OH",
+    )
+
+    recovered = client._create_dynamic_station(
+        name=binding.name,
+        grid="EM79",
+        state="OH",
+        cq=4,
+        itu=8,
+        template=template,
+        prior_binding=binding,
+    )
+
+    assert recovered.station_id == 99
+    assert [request[0] for request in transport.requests] == ["POST", "GET", "GET"]
+
+
+def test_visible_exact_station_establishes_and_refreshes_binding() -> None:
+    legacy = station(42, "Mobile", "EM79XM")
+    dynamic = station(99, "Mobile - EM79 - OH", "EM79")
+    bindings = MemoryStationBindings()
+    transport = ScriptedTransport(
+        [
+            station_response(legacy, dynamic),
+            logbook_response(42, 99),
+            station_response(legacy, dynamic),
             logbook_response(42, 99),
         ]
     )
-    client = managed_client(transport)
+    client = managed_client(transport, bindings=bindings)
 
-    with pytest.raises(WavelogResponseError, match="HTTP 500"):
-        client.resolve_station_target(dynamic_contact())
     target = client.resolve_station_target(dynamic_contact())
+    repeated = client.resolve_station_target(dynamic_contact())
 
-    assert target.location.station_id == 99
-    assert [request[0] for request in transport.requests].count("POST") == 1
-    assert [request[0] for request in transport.requests].count("PATCH") == 2
+    assert target.location.station_id == repeated.location.station_id == 99
+    assert bindings.bindings["Mobile - EM79 - OH"] == WavelogStationBinding(
+        "Mobile - EM79 - OH", 99, "station-99"
+    )
+    assert bindings.write_count == 2
 
 
 def test_ambiguous_dynamic_station_name_fails_closed() -> None:
@@ -541,9 +726,11 @@ def test_health_validation_is_read_only_and_never_creates_or_links() -> None:
         [station_response(station(42, "Mobile", "EM79XM")), logbook_response(42)]
     )
 
-    managed_client(transport).verify_health_target()
+    bindings = MemoryStationBindings()
+    managed_client(transport, bindings=bindings).verify_health_target()
 
     assert [request[0] for request in transport.requests] == ["GET", "GET"]
+    assert bindings.write_count == 0
 
 
 def test_qso_import_aligns_mobile_grid_then_targets_resolved_profile() -> None:

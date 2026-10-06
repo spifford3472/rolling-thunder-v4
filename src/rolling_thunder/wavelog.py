@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from json import JSONDecodeError, dumps, loads
-from typing import Any
+from typing import Any, Protocol
 from urllib.error import URLError
 from urllib.parse import urlencode, urlparse
 
@@ -87,6 +87,23 @@ class WavelogStationTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class WavelogStationBinding:
+    """Durable Forge recovery identity for one verified dynamic station."""
+
+    name: str
+    station_id: int
+    uuid: str
+
+
+class WavelogStationBindingStore(Protocol):
+    """Narrow durable recovery boundary used by dynamic station routing."""
+
+    def get_station_binding(self, name: str) -> WavelogStationBinding | None: ...
+
+    def bind_station(self, binding: WavelogStationBinding) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
 class WavelogQsoSummary:
     """Compact historical QSO data needed by callsign information."""
 
@@ -114,6 +131,7 @@ class WavelogClient:
         station_logbook_name: str | None = None,
         timeout_s: float = 5.0,
         transport: HttpTransport | None = None,
+        station_binding_store: WavelogStationBindingStore | None = None,
     ) -> None:
         self._base_url = self._validate_base_url(base_url)
         if not token.get_secret_value():
@@ -132,6 +150,7 @@ class WavelogClient:
             raise ValueError("Wavelog station logbook name must not be blank.")
         self._timeout_s = timeout_s
         self._transport = transport or UrllibHttpTransport()
+        self._station_binding_store = station_binding_store
         self._resolved_location: WavelogStationLocation | None = None
 
     def resolve_station_location(self, *, refresh: bool = False) -> WavelogStationLocation:
@@ -232,8 +251,37 @@ class WavelogClient:
             return WavelogStationTarget(location=legacy, dynamic=False)
 
         name, grid, state, cq, itu = dynamic_identity
+        binding = self._get_station_binding(name)
         dynamic = self.resolve_exact_station_location(name, locations)
-        if dynamic is None:
+        if dynamic is not None:
+            self._verify_dynamic_station(
+                dynamic,
+                name=name,
+                grid=grid,
+                state=state,
+                cq=cq,
+                itu=itu,
+                template=legacy,
+            )
+            if binding is not None and (
+                dynamic.station_id != binding.station_id
+                or dynamic.uuid != binding.uuid
+            ):
+                raise WavelogStationLocationError(
+                    "Visible exact-name Wavelog station conflicts with the durable "
+                    "Forge binding; refusing to overwrite or guess."
+                )
+            self._bind_verified_station(dynamic)
+        elif binding is not None:
+            dynamic = self._resolve_bound_station(
+                binding,
+                grid=grid,
+                state=state,
+                cq=cq,
+                itu=itu,
+                template=legacy,
+            )
+        else:
             dynamic = self._create_dynamic_station(
                 name=name,
                 grid=grid,
@@ -241,6 +289,7 @@ class WavelogClient:
                 cq=cq,
                 itu=itu,
                 template=legacy,
+                prior_binding=binding,
             )
         self._verify_dynamic_station(
             dynamic,
@@ -275,6 +324,7 @@ class WavelogClient:
         cq: int,
         itu: int,
         template: WavelogStationLocation,
+        prior_binding: WavelogStationBinding | None,
     ) -> WavelogStationLocation:
         body = dumps(
             {
@@ -292,12 +342,34 @@ class WavelogClient:
         if response.status_code == 409:
             locations = self.list_station_locations()
             raced = self.resolve_exact_station_location(name, locations)
-            if raced is None:
-                raise WavelogStationLocationError(
-                    "Wavelog reported a station creation conflict, but the exact station "
-                    "could not be resolved after re-reading owned locations."
+            if raced is not None:
+                self._verify_dynamic_station(
+                    raced,
+                    name=name,
+                    grid=grid,
+                    state=state,
+                    cq=cq,
+                    itu=itu,
+                    template=template,
                 )
-            return raced
+                self._bind_verified_station(raced)
+                return raced
+            recovery_binding = prior_binding or self._get_station_binding(name)
+            if recovery_binding is not None:
+                return self._resolve_bound_station(
+                    recovery_binding,
+                    grid=grid,
+                    state=state,
+                    cq=cq,
+                    itu=itu,
+                    template=template,
+                )
+            else:
+                raise WavelogStationLocationError(
+                    "Wavelog reported a station creation conflict, but its response did "
+                    "not identify the station and no visible exact match or prior verified "
+                    "Forge binding can resolve it safely; refusing to guess an ID."
+                )
         if response.status_code != 201:
             self._raise_http_error(response.status_code, "station-location creation")
         payload = self._decode_json(response.body, operation="station-location creation")
@@ -315,19 +387,81 @@ class WavelogClient:
             itu=itu,
             template=template,
         )
+        self._bind_verified_station(created)
+        return created
 
-        locations = self.list_station_locations()
-        canonical = self.resolve_exact_station_location(name, locations)
-        if canonical is None or canonical.station_id != created.station_id:
+    def _get_station_binding(self, name: str) -> WavelogStationBinding | None:
+        store = self._station_binding_store
+        return None if store is None else store.get_station_binding(name)
+
+    def _bind_verified_station(self, location: WavelogStationLocation) -> None:
+        store = self._station_binding_store
+        if store is None:
             raise WavelogStationLocationError(
-                "Created Wavelog station location could not be re-resolved to its exact "
-                "canonical identity."
+                "Durable Forge station binding storage is required for dynamic routing."
             )
-        if canonical.uuid != created.uuid:
+        if location.uuid is None:
             raise WavelogStationLocationError(
-                "Created Wavelog station location changed identity during verification."
+                "Verified dynamic Wavelog station location lacks a UUID."
             )
-        return canonical
+        store.bind_station(
+            WavelogStationBinding(location.name, location.station_id, location.uuid)
+        )
+
+    def _resolve_bound_station(
+        self,
+        binding: WavelogStationBinding,
+        *,
+        grid: str,
+        state: str,
+        cq: int,
+        itu: int,
+        template: WavelogStationLocation,
+    ) -> WavelogStationLocation:
+        bound = self.get_station_location(binding.station_id)
+        if bound.name != binding.name or bound.uuid != binding.uuid:
+            raise WavelogStationLocationError(
+                "Durable Forge station binding no longer matches the Wavelog station "
+                "identity; refusing to overwrite or guess."
+            )
+        self._verify_dynamic_station(
+            bound,
+            name=binding.name,
+            grid=grid,
+            state=state,
+            cq=cq,
+            itu=itu,
+            template=template,
+        )
+        self._bind_verified_station(bound)
+        return bound
+
+    def get_station_location(self, station_id: int) -> WavelogStationLocation:
+        """Fetch one known owned station directly, bypassing the filtered list."""
+        response = self._request(
+            "GET",
+            f"/index.php/api/v2/station/{station_id}",
+            body=None,
+        )
+        if not 200 <= response.status_code < 300:
+            self._raise_http_error(response.status_code, "direct station-location lookup")
+        payload = self._decode_json(
+            response.body,
+            operation="direct station-location lookup",
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+            raise WavelogResponseError(
+                "Wavelog direct station-location lookup returned an unexpected response schema."
+            )
+        location = self._parse_station(
+            payload["data"],
+            operation="direct station-location lookup",
+        )
+        if location.station_id != station_id:
+            raise WavelogResponseError(
+                "Wavelog direct station-location lookup returned a different station ID."
+            )
+        return location
 
     def _link_station_to_logbook(
         self,

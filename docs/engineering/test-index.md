@@ -113,9 +113,11 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_logging_setup.py`
 - `tests/test_wavelog.py`
 - `tests/test_wavelog.py` owns Wavelog station/logbook routing coverage: exact
-  dynamic reuse, create/re-read, 409 races, ambiguity/incompatibility rejection,
-  membership preservation/verification, legacy fallback/grid PATCH, dynamic
-  no-PATCH behavior, and blank-only ADIF `NOTES` defaulting.
+  dynamic reuse, active-log-only hidden creation and restart recovery, durable
+  binding identity/metadata rejection, recoverable and unrecoverable 409 cases,
+  ambiguity/incompatibility rejection, membership preservation/verification,
+  read-only health, legacy fallback/grid PATCH, dynamic no-PATCH behavior, and
+  blank-only ADIF `NOTES` defaulting.
 - `tests/test_wavelog_history.py`
 - `tests/test_wavelog_http_errors.py`
 

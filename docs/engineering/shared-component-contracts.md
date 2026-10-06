@@ -50,6 +50,14 @@ fallback receives the existing per-QSO profile-grid PATCH. Wavelog-bound ADIF
 always carries full frozen `MY_GRIDSQUARE` when present and carries ADIF `NOTES`
 equal to exact nonblank `Contact.notes` or exactly `Mobile QSO` when blank.
 
+Forge persists each Rolling-Thunder-created dynamic station's verified exact name,
+ID, and UUID before its first logbook link attempt. If Wavelog's `active_log_only`
+list hides that unlinked station, retry may direct-fetch only the bound ID and must
+reverify name, UUID, frozen routing metadata, and legacy-template callsign/DXCC.
+Missing or changed bindings fail closed. A generic hidden-station 409 without a prior
+verified binding is not recoverable by guessing or scanning IDs. Health remains
+strictly read-only and never creates, links, or binds stations.
+
 ## Current location and QSO grid
 
 GPS/location is shared infrastructure.
