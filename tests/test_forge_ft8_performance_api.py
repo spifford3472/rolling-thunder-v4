@@ -13,19 +13,35 @@ from rolling_thunder.forge_ft8_performance import (
     ForgeFT8PerformanceService,
 )
 from rolling_thunder.ft8.performance import FT8AttemptOutcome, FT8PerformanceAttempt
-from rolling_thunder.wavelog import WavelogStationLocation, WavelogUploadDisposition
+from rolling_thunder.wavelog import (
+    WavelogStationLocation,
+    WavelogStationTarget,
+    WavelogUploadDisposition,
+)
 
 
 class FakeWavelog:
     def __init__(self) -> None:
         self.upload_count = 0
 
-    def resolve_station_location(self, *, refresh: bool = False) -> WavelogStationLocation:
-        del refresh
-        return WavelogStationLocation(42, "Mobile", "mobile")
+    def verify_health_target(self) -> None:
+        return None
 
-    def upload_contact(self, contact: Contact) -> WavelogUploadDisposition:
+    def resolve_station_target(self, contact: Contact) -> WavelogStationTarget:
         del contact
+        return WavelogStationTarget(
+            WavelogStationLocation(42, "Mobile", "mobile"),
+            dynamic=False,
+        )
+
+    def upload_contact(
+        self,
+        contact: Contact,
+        *,
+        target: WavelogStationTarget,
+    ) -> WavelogUploadDisposition:
+        del contact
+        del target
         self.upload_count += 1
         return WavelogUploadDisposition.IMPORTED
 

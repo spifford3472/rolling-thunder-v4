@@ -80,7 +80,7 @@ originates from one screen.
 - `src/rolling_thunder/log_panel.py` — Local contact-log panel repository/controller.
 - `src/rolling_thunder/log_panel_commands.py` — Module providing log panel commands behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/log_ui.py` — Tk presentation for recent local contacts.
-- `src/rolling_thunder/wavelog.py` — Module providing wavelog behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/wavelog.py` — Forge-only typed Wavelog v2 adapter for strict owner-scoped station/logbook management, direct-ID recovery through durable verified bindings, deterministic ADIF conversion, legacy grid alignment, QSO import, and history reads.
 
 ## Callsign capture/intelligence
 
@@ -254,7 +254,7 @@ originates from one screen.
 - `src/rolling_thunder/forge_callsign_info_main.py` — Independent Forge callsign-intelligence process entry/composition.
 - `src/rolling_thunder/forge_client.py` — Forge backend module for client; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_config.py` — Forge backend module for config; keep provider/backend contracts reusable by non-UI clients.
-- `src/rolling_thunder/forge_contact_sync.py` — Forge contact-sync application service and Wavelog handoff.
+- `src/rolling_thunder/forge_contact_sync.py` — Forge contact-sync application service and SQLite repository for exact target selection, durable UUID claims, and verified dynamic-station recovery bindings.
 - `src/rolling_thunder/forge_contact_sync_api.py` — HTTP API contract for idempotent contact synchronization.
 - `src/rolling_thunder/forge_contact_sync_config.py` — Forge backend module for contact sync config; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_contact_sync_main.py` — Independent Forge contact-sync process entry/composition.

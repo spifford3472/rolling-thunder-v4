@@ -36,6 +36,28 @@ shared enrichment worker completes, including lookup failure without a grid.
 Only `ready` contacts are upload-eligible. Completion notifications request
 background work; they do not select a Wavelog station or perform remote I/O.
 
+Forge selects the exact Wavelog station target for every upload through one shared
+boundary after receiving the immutable `Contact` and before claiming its UUID in
+the Forge ledger. Dynamic mobile identity uses only frozen `my_grid`, `my_state`,
+`my_cq_zone`, and `my_itu_zone`; retry/synchronization must never consult current
+GPS. The ledger hash binds the actual ADIF payload and exact selected station ID, so
+one UUID cannot move between stations. Browse, POTA, DX, FT8, and DMR must not add
+feature-specific station-routing forks.
+
+Verified dynamic stations use `Mobile - XXXX - YY`, retain a four-character
+profile grid, and belong to the exact configured logbook. Only legacy `Mobile`
+fallback receives the existing per-QSO profile-grid PATCH. Wavelog-bound ADIF
+always carries full frozen `MY_GRIDSQUARE` when present and carries ADIF `NOTES`
+equal to exact nonblank `Contact.notes` or exactly `Mobile QSO` when blank.
+
+Forge persists each Rolling-Thunder-created dynamic station's verified exact name,
+ID, and UUID before its first logbook link attempt. If Wavelog's `active_log_only`
+list hides that unlinked station, retry may direct-fetch only the bound ID and must
+reverify name, UUID, frozen routing metadata, and legacy-template callsign/DXCC.
+Missing or changed bindings fail closed. A generic hidden-station 409 without a prior
+verified binding is not recoverable by guessing or scanning IDs. Health remains
+strictly read-only and never creates, links, or binds stations.
+
 ## Current location and QSO grid
 
 GPS/location is shared infrastructure.

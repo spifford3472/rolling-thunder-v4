@@ -112,6 +112,12 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_log_ui.py`
 - `tests/test_logging_setup.py`
 - `tests/test_wavelog.py`
+- `tests/test_wavelog.py` owns Wavelog station/logbook routing coverage: exact
+  dynamic reuse, active-log-only hidden creation and restart recovery, durable
+  binding identity/metadata rejection, recoverable and unrecoverable 409 cases,
+  ambiguity/incompatibility rejection, membership preservation/verification,
+  read-only health, legacy fallback/grid PATCH, dynamic no-PATCH behavior, and
+  blank-only ADIF `NOTES` defaulting.
 - `tests/test_wavelog_history.py`
 - `tests/test_wavelog_http_errors.py`
 
@@ -400,6 +406,19 @@ and installed screen acceptance remains required; see `../KNOWN_CALLSIGNS.md`.
 
 `tests/test_contact_location.py` covers coordinate bounds/pairs/frozen models, all
 repository paths, retry/enrichment preservation, schema-15 migration integrity,
-complete-contact export/backup/import, legacy formats and unchanged ADIF/Forge
-hash. Existing contact-controller, logging, FT8 authorization/logging and HTTP/Forge
-API tests cover capture boundaries, movement and receiver compatibility.
+complete-contact export/backup/import, legacy formats, and the historical
+coordinate-independent ADIF baseline. Current Forge hash coverage additionally
+binds the exact selected station ID and Wavelog-bound ADIF. Existing
+contact-controller, logging, FT8 authorization/logging and HTTP/Forge API tests
+cover capture boundaries, movement and receiver compatibility.
+
+### Dynamic mobile Wavelog routing
+
+`tests/test_forge_contact_sync.py` owns ledger binding, uncertain duplicate replay,
+and changed-payload/changed-station conflict behavior after exact target selection.
+`tests/test_wavelog.py` owns provider-adapter station creation and configured-logbook
+membership semantics. `tests/test_forge_contact_sync_api.py`,
+`tests/test_ft8_contact_sync.py`, and DMR/ADIF tests protect the one shared
+presentation-neutral sync boundary used by ordinary, POTA/DX, FT8, and DMR
+contacts. All provider writes are scripted fakes; installed Wavelog acceptance is
+still required.

@@ -98,13 +98,23 @@ def test_station_locations_return_names_for_historical_station_ids() -> None:
                             "id": 1,
                             "uuid": "home",
                             "name": "Home",
+                            "callsign": "KI5VNB",
                             "gridsquare": "EM79XM",
+                            "dxcc": 291,
+                            "cq": 4,
+                            "itu": 8,
+                            "state": "OH",
                         },
                         {
                             "id": 42,
                             "uuid": "mobile",
                             "name": "Mobile",
+                            "callsign": "KI5VNB",
                             "gridsquare": "EM89LX",
+                            "dxcc": 291,
+                            "cq": 4,
+                            "itu": 8,
+                            "state": "OH",
                         },
                     ]
                 }

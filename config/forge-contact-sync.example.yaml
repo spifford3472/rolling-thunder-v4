@@ -13,10 +13,14 @@ storage:
 wavelog:
   base_url: "http://192.168.9.170:8086"
   # These names are explicit safety constraints. The numeric station profile ID
-  # is resolved dynamically from Wavelog and is never configured by assumption.
+  # and logbook ID are resolved dynamically from Wavelog and are never configured
+  # by assumption. Mobile supplies the verified callsign/DXCC template and remains
+  # the fallback for contacts without complete frozen dynamic-routing context.
   station_logbook_name: "KI5VNB Main"
   station_location_name: "Mobile"
   request_timeout_s: 5.0
 
-# Required secret, supplied to the process environment (never this YAML):
+# Required secret, supplied to the process environment (never this YAML). Its
+# Wavelog v2 token needs station:read/write, logbook:read/write, and qso:write;
+# controlled live acceptance also uses qso:read.
 #   ROLLING_THUNDER_WAVELOG_V2_TOKEN=<Wavelog v2 bearer token>

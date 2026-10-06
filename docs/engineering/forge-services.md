@@ -77,7 +77,9 @@ Responsibilities:
 
 - accept local contact synchronization requests over a private API;
 - enforce idempotency keyed by stable contact UUID;
-- resolve the exact approved Wavelog station location;
+- resolve, verify, and when necessary safely create the exact approved Wavelog
+  dynamic mobile station from immutable QSO-local routing fields;
+- preserve legacy `Mobile` fallback and verified configured-logbook membership;
 - convert the normalized contact into deterministic Wavelog-bound data;
 - preserve uncertain outcomes safely;
 - publish health independently of Pi local logging success.
@@ -85,6 +87,18 @@ Responsibilities:
 The service contract is useful to any authorized client capable of providing the normalized contact payload and idempotency key. It must not depend on Rolling Thunder UI state.
 
 Read `docs/FORGE_CONTACT_SYNC.md`.
+
+Station/logbook management remains provider-adapter behavior on Forge. The adapter
+uses owner-scoped Wavelog v2 station/logbook resources, treats names as exact
+identities, never guesses numeric IDs, verifies canonical create/link results, and
+does no writes during health checks. Because Wavelog's station list can hide unlinked
+locations under `active_log_only`, the adapter uses a minimal durable name -> verified
+ID/UUID recovery binding in the contact-sync SQLite repository. A 201 result is bound
+before linking; hidden retries direct-fetch only that known ID and fail closed on any
+identity or metadata change. A hidden generic 409 without a prior binding is not
+recoverable and never triggers numeric-ID scanning. The application service resolves
+this exact target before its durable UUID claim and binds the target ID into the
+payload hash.
 
 ## Reusable service design rules
 

@@ -210,6 +210,14 @@ Contact persistence
   +--> LOG screen
   +--> background Forge/Wavelog synchronization
 
+Forge contact synchronization owns Wavelog-specific station management. It derives
+dynamic routing only from the immutable contact's frozen grid/state/CQ/ITU fields,
+selects the exact station before the UUID-ledger claim, and preserves legacy
+`Mobile` fallback for insufficient historical/location context. Its Forge SQLite
+repository also owns the durable verified dynamic-name -> Wavelog ID/UUID recovery
+binding needed when `active_log_only` hides an unlinked created station. Browse,
+POTA, DX, FT8, and DMR do not own or fork station-selection policy.
+
 Pending callsign
   +--> ordinary contact workflow
   +--> shared callsign-info overlay
