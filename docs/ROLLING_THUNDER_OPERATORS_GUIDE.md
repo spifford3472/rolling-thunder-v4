@@ -319,6 +319,12 @@ serve the same backend data to other authorized applications in the future.
 DX uses the same supported mobile HF bands as POTA. DX starts with ALL mode
 filtering.
 
+After a DX contact is successfully committed to local storage, every DX spot
+for that callsign on the same amateur band is marked with the light-blue worked
+treatment and `— WORKED` for the rest of the current UTC day. Exact frequency
+and mode do not change the DX worked marker; a spot for the callsign on another
+band remains unworked. A failed or discarded contact is not marked worked.
+
 ## Health and freshness
 
 Forge exposes provider health separately from spot data. A healthy DX service

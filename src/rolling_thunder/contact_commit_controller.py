@@ -38,6 +38,14 @@ class PotaWorkedRecorder(Protocol):
         ...
 
 
+class DxWorkedRecorder(Protocol):
+    """Record an already-durable DX contact without UI-thread I/O."""
+
+    def record_contact(self, contact: Contact) -> object:
+        """Record the DX callsign-and-band combination represented by the contact."""
+        ...
+
+
 class ContactCommitController:
     """Persist one contact at a time without blocking the UI thread."""
 
@@ -50,9 +58,11 @@ class ContactCommitController:
         on_failed: Callable[[str], None],
         gps_state_provider: Callable[[], GPSState | None] | None = None,
         pota_context_provider: Callable[[], bool] | None = None,
+        dx_context_provider: Callable[[], bool] | None = None,
         browse_context_provider: Callable[[], bool] | None = None,
         pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
         pota_worked_tracker: PotaWorkedRecorder | None = None,
+        dx_worked_tracker: DxWorkedRecorder | None = None,
     ) -> None:
         self._service = service
         self._on_started = on_started
@@ -60,9 +70,11 @@ class ContactCommitController:
         self._on_failed = on_failed
         self._gps_state_provider = gps_state_provider or (lambda: None)
         self._pota_context_provider = pota_context_provider or (lambda: False)
+        self._dx_context_provider = dx_context_provider or (lambda: False)
         self._browse_context_provider = browse_context_provider or (lambda: False)
         self._pota_spots_provider = pota_spots_provider or (lambda: ())
         self._pota_worked_tracker = pota_worked_tracker
+        self._dx_worked_tracker = dx_worked_tracker
         self._lock = Lock()
         self._status = ContactCommitStatus()
 
@@ -82,6 +94,7 @@ class ContactCommitController:
 
         gps_state = self._gps_state_provider()
         pota_context_active = self._pota_context_provider()
+        dx_context_active = self._dx_context_provider()
         browse_context_active = self._browse_context_provider()
         pota_spots = self._pota_spots_provider() if pota_context_active else ()
 
@@ -93,6 +106,7 @@ class ContactCommitController:
                 radio_state,
                 gps_state,
                 pota_context_active,
+                dx_context_active,
                 browse_context_active,
                 pota_spots,
             ),
@@ -106,6 +120,7 @@ class ContactCommitController:
         radio_state: RadioState,
         gps_state: GPSState | None,
         pota_context_active: bool,
+        dx_context_active: bool,
         browse_context_active: bool,
         pota_spots: tuple[PotaSpot, ...],
     ) -> None:
@@ -132,6 +147,8 @@ class ContactCommitController:
 
         if pota_context_active and self._pota_worked_tracker is not None:
             self._pota_worked_tracker.record_contact(contact, pota_spots)
+        if dx_context_active and self._dx_worked_tracker is not None:
+            self._dx_worked_tracker.record_contact(contact)
 
         self._on_succeeded(contact.callsign)
         with self._lock:

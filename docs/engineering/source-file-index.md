@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 264.**
+**Cataloged Python modules: 265.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -103,6 +103,10 @@ originates from one screen.
 - `src/rolling_thunder/shared_spot_ui.py` — Tk presentation for the shared POTA/DX panel.
 - `src/rolling_thunder/spot_domain.py` — Provider-neutral POTA/DX spot records, identity, metadata, snapshots, and validation.
 - `src/rolling_thunder/spot_selection.py` — Stable spot-selection state independent of row position.
+
+## DX
+
+- `src/rolling_thunder/dx_worked.py` — Durable UTC-day DX callsign-and-band worked markers and no-I/O panel lookup state.
 
 ## POTA
 

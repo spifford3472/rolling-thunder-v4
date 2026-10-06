@@ -158,6 +158,14 @@ class RecordingPotaWorkedTracker:
         self.records.append((contact, pota_spots))
 
 
+class RecordingDxWorkedTracker:
+    def __init__(self) -> None:
+        self.records: list[Contact] = []
+
+    def record_contact(self, contact: Contact) -> None:
+        self.records.append(contact)
+
+
 def test_controller_records_worked_pota_only_after_durable_commit() -> None:
     repository = BlockingRepository()
     succeeded = Event()
@@ -192,6 +200,47 @@ def test_controller_records_worked_pota_only_after_durable_commit() -> None:
     committed, spots = tracker.records[0]
     assert committed.pota_reference == "US-1234"
     assert spots == (pota_spot,)
+
+
+def test_controller_records_worked_dx_only_after_durable_commit() -> None:
+    repository = BlockingRepository()
+    succeeded = Event()
+    tracker = RecordingDxWorkedTracker()
+    controller = ContactCommitController(
+        ContactLoggingService(repository, FixedClock()),
+        on_started=lambda callsign: None,
+        on_succeeded=lambda callsign: succeeded.set(),
+        on_failed=lambda message: None,
+        dx_context_provider=lambda: True,
+        dx_worked_tracker=tracker,
+    )
+
+    assert controller.start_commit("KI5VNB", connected_radio()) is True
+    assert repository.started.wait(timeout=2)
+    assert tracker.records == []
+
+    repository.release.set()
+    assert succeeded.wait(timeout=2)
+
+    assert [str(contact.callsign) for contact in tracker.records] == ["KI5VNB"]
+
+
+def test_controller_does_not_record_worked_dx_after_failed_commit() -> None:
+    failed = Event()
+    tracker = RecordingDxWorkedTracker()
+    controller = ContactCommitController(
+        ContactLoggingService(FailingRepository(), FixedClock()),
+        on_started=lambda callsign: None,
+        on_succeeded=lambda callsign: None,
+        on_failed=lambda message: failed.set(),
+        dx_context_provider=lambda: True,
+        dx_worked_tracker=tracker,
+    )
+
+    assert controller.start_commit("KI5VNB", connected_radio()) is True
+    assert failed.wait(timeout=2)
+
+    assert tracker.records == []
 
 
 def test_controller_adds_browse_mobile_contact_note_from_current_gps() -> None:

@@ -588,3 +588,31 @@ def test_pota_rows_expose_worked_status_without_affecting_dx() -> None:
         current_frequency=Frequency(hz=14_200_000),
     )
     assert dx_state.rows[0].worked is False
+
+
+def test_dx_rows_use_callsign_and_band_worked_status() -> None:
+    class WorkedStatus:
+        def is_worked(
+            self,
+            *,
+            callsign: str,
+            frequency: Frequency,
+            reference_time: datetime | None = None,
+        ) -> bool:
+            del reference_time
+            return callsign == "K1DX" and frequency.hz >= 14_000_000
+
+    dx = dx_spot("K1DX", 14_020_000)
+    source = FakeSharedSource(published_state((dx,)))
+    controller = SharedSpotPanelController(
+        source,
+        clock=lambda: NOW,
+        dx_worked_status=WorkedStatus(),
+    )
+
+    state = controller.activate(
+        SpotProvider.DX,
+        current_frequency=Frequency(hz=14_200_000),
+    )
+
+    assert state.rows[0].worked is True

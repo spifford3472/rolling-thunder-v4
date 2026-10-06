@@ -157,8 +157,8 @@ def test_schema_16_migration_preserves_all_existing_data(
         before = db.execute("SELECT * FROM contacts").fetchall()
         retry = db.execute("SELECT * FROM contact_sync_retries").fetchall()
         telemetry = db.execute("SELECT * FROM ft8_performance_outbox").fetchall()
-    assert storage.initialize_database(path) == 17
-    assert storage.initialize_database(path) == 17
+    assert storage.initialize_database(path) == 18
+    assert storage.initialize_database(path) == 18
     historical = ContactRepository(path).list_all()[0]
     assert historical.my_latitude is None and historical.my_longitude is None
     assert historical.my_state is None

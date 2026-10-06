@@ -162,7 +162,9 @@ POTA starts from SSB mode filtering. DX starts from ALL mode filtering.
 Every band or mode filter change cancels staging. If filtering removes the
 selected identity, selection clears; no neighboring-row fallback is permitted.
 
-## Daily POTA Worked Markers
+## Daily Worked Markers
+
+### POTA
 
 The mobile POTA panel maintains a local worked marker for a successfully logged
 active POTA station. A marker is created only after the contact has been durably
@@ -197,6 +199,27 @@ Presentation behavior is POTA-only:
 - if a worked card is selected, the worked background remains and the existing
   selected border continues to indicate selection
 - DX rows never inherit POTA worked state
+
+### DX
+
+The mobile DX panel maintains a separate local worked marker after a DX contact
+has been durably written to the local contact database. Its operator-facing key
+is intentionally simpler than POTA:
+
+```text
+normalized callsign + amateur band
+```
+
+Exact frequency and displayed mode are not part of the DX key. Every current DX
+spot for that callsign on the same amateur band therefore shows worked, while a
+spot on another band remains unworked. DX markers are persisted in the Pi SQLite
+database for same-day restart recovery and expire from presentation at the next
+UTC date rollover.
+
+DX uses the same light-blue worked background and visible `WORKED` card label as
+POTA. The DX tracker remains separate so it cannot change POTA's
+callsign/band/display-mode semantics. Failed or discarded contact workflows do
+not create either kind of marker.
 
 ## Stable Selection
 

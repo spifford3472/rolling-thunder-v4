@@ -126,6 +126,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 
 ## POTA / DX / shared spots
 
+- `tests/test_dx_worked.py`
 - `tests/test_http_pota_spot_source.py`
 - `tests/test_pota_catalog.py`
 - `tests/test_pota_config.py`
