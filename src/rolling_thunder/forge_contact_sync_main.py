@@ -92,6 +92,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             str(config.wavelog.base_url).rstrip("/"),
             secrets.wavelog.token,
             station_location_name=config.wavelog.station_location_name,
+            station_logbook_name=config.wavelog.station_logbook_name,
             timeout_s=config.wavelog.request_timeout_s,
         )
         service = ForgeContactSyncService(repository, wavelog)

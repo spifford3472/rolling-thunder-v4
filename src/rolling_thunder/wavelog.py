@@ -43,6 +43,10 @@ class WavelogStationLocationError(WavelogError):
     """Raised when the configured station location is absent or ambiguous."""
 
 
+class WavelogLogbookError(WavelogError):
+    """Raised when the configured station logbook cannot be verified safely."""
+
+
 class WavelogUploadDisposition(StrEnum):
     """Outcome of one Wavelog ADIF import."""
 
@@ -58,6 +62,28 @@ class WavelogStationLocation:
     name: str
     gridsquare: str
     uuid: str | None = None
+    callsign: str | None = None
+    dxcc: int | None = None
+    cq: int | None = None
+    itu: int | None = None
+    state: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class WavelogLogbook:
+    """One owner-scoped Wavelog logbook and its complete station membership."""
+
+    logbook_id: int
+    name: str
+    station_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class WavelogStationTarget:
+    """Verified exact QSO target selected before the idempotency claim."""
+
+    location: WavelogStationLocation
+    dynamic: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +111,7 @@ class WavelogClient:
         token: SecretStr,
         *,
         station_location_name: str,
+        station_logbook_name: str | None = None,
         timeout_s: float = 5.0,
         transport: HttpTransport | None = None,
     ) -> None:
@@ -98,6 +125,11 @@ class WavelogClient:
             raise ValueError("Wavelog HTTP timeout must be positive.")
         self._token = token
         self._station_location_name = location_name
+        self._station_logbook_name = (
+            station_logbook_name.strip() if station_logbook_name is not None else None
+        )
+        if station_logbook_name is not None and not self._station_logbook_name:
+            raise ValueError("Wavelog station logbook name must not be blank.")
         self._timeout_s = timeout_s
         self._transport = transport or UrllibHttpTransport()
         self._resolved_location: WavelogStationLocation | None = None
@@ -106,56 +138,20 @@ class WavelogClient:
         """Resolve exactly one configured station location without guessing its numeric ID."""
         if self._resolved_location is not None and not refresh:
             return self._resolved_location
-
-        response = self._request("GET", "/index.php/api/v2/station", body=None)
-        if not 200 <= response.status_code < 300:
-            self._raise_http_error(response.status_code, "station-location lookup")
-        payload = self._decode_json(response.body, operation="station-location lookup")
-        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-            raise WavelogResponseError(
-                "Wavelog station-location lookup returned an unexpected response schema."
-            )
-
-        matches: list[WavelogStationLocation] = []
-        for item in payload["data"]:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name")
-            station_id = item.get("id")
-            if name != self._station_location_name:
-                continue
-            if isinstance(station_id, bool) or not isinstance(station_id, int):
-                raise WavelogResponseError(
-                    "Wavelog station-location lookup returned a non-numeric station ID."
-                )
-            station_grid = item.get("gridsquare", "")
-            if station_grid is None:
-                station_grid = ""
-            if not isinstance(station_grid, str):
-                raise WavelogResponseError(
-                    "Wavelog station-location lookup returned a non-text gridsquare."
-                )
-            station_uuid = item.get("uuid")
-            matches.append(
-                WavelogStationLocation(
-                    station_id=station_id,
-                    name=name,
-                    gridsquare=station_grid.strip().upper(),
-                    uuid=station_uuid if isinstance(station_uuid, str) else None,
-                )
-            )
-
-        if len(matches) != 1:
+        location = self.resolve_exact_station_location(
+            self._station_location_name,
+            self.list_station_locations(),
+        )
+        if location is None:
             raise WavelogStationLocationError(
-                "Configured Wavelog station location must resolve to exactly one owned "
-                f"profile named {self._station_location_name!r}; found {len(matches)}."
+                "Configured Wavelog station location does not exist: "
+                f"{self._station_location_name!r}."
             )
-        self._resolved_location = matches[0]
-        return matches[0]
-
+        self._resolved_location = location
+        return location
 
     def list_station_locations(self) -> tuple[WavelogStationLocation, ...]:
-        """Return normalized station profiles for historical-QSO presentation."""
+        """Return normalized owner-scoped station profiles."""
         response = self._request("GET", "/index.php/api/v2/station", body=None)
         if not 200 <= response.status_code < 300:
             self._raise_http_error(response.status_code, "station-location lookup")
@@ -165,32 +161,343 @@ class WavelogClient:
                 "Wavelog station-location lookup returned an unexpected response schema."
             )
 
-        locations: list[WavelogStationLocation] = []
-        for item in payload["data"]:
-            if not isinstance(item, dict):
-                continue
-            station_id = item.get("id")
-            name = item.get("name")
-            if (
-                isinstance(station_id, bool)
-                or not isinstance(station_id, int)
-                or not isinstance(name, str)
-                or not name.strip()
-            ):
-                continue
-            gridsquare = item.get("gridsquare")
-            uuid = item.get("uuid")
-            locations.append(
-                WavelogStationLocation(
-                    station_id=station_id,
-                    name=name.strip(),
-                    gridsquare=gridsquare.strip().upper()
-                    if isinstance(gridsquare, str)
-                    else "",
-                    uuid=uuid if isinstance(uuid, str) else None,
-                )
+        return tuple(
+            self._parse_station(item, operation="station-location lookup")
+            for item in payload["data"]
+        )
+
+    @staticmethod
+    def resolve_exact_station_location(
+        name: str,
+        locations: tuple[WavelogStationLocation, ...],
+    ) -> WavelogStationLocation | None:
+        """Return an exact unique name match, distinguishing absence from ambiguity."""
+        matches = tuple(location for location in locations if location.name == name)
+        if len(matches) > 1:
+            raise WavelogStationLocationError(
+                "Wavelog station location name is ambiguous; refusing to guess an ID: "
+                f"{name!r}."
             )
-        return tuple(locations)
+        return matches[0] if matches else None
+
+    def list_logbooks(self) -> tuple[WavelogLogbook, ...]:
+        """Return normalized owner-scoped station logbooks."""
+        response = self._request("GET", "/index.php/api/v2/logbook", body=None)
+        if not 200 <= response.status_code < 300:
+            self._raise_http_error(response.status_code, "station-logbook lookup")
+        payload = self._decode_json(response.body, operation="station-logbook lookup")
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            raise WavelogResponseError(
+                "Wavelog station-logbook lookup returned an unexpected response schema."
+            )
+        return tuple(
+            self._parse_logbook(item, operation="station-logbook lookup")
+            for item in payload["data"]
+        )
+
+    def resolve_station_logbook(self) -> WavelogLogbook:
+        """Resolve the one configured logbook by exact name."""
+        if self._station_logbook_name is None:
+            raise WavelogLogbookError("Wavelog station logbook name is not configured.")
+        matches = tuple(
+            item for item in self.list_logbooks() if item.name == self._station_logbook_name
+        )
+        if len(matches) != 1:
+            raise WavelogLogbookError(
+                "Configured Wavelog station logbook must resolve to exactly one owned "
+                f"logbook named {self._station_logbook_name!r}; found {len(matches)}."
+            )
+        return matches[0]
+
+    def resolve_station_target(self, contact: Contact) -> WavelogStationTarget:
+        """Resolve/create/link the exact station target using only frozen Contact data."""
+        locations = self.list_station_locations()
+        legacy = self.resolve_exact_station_location(self._station_location_name, locations)
+        if legacy is None:
+            raise WavelogStationLocationError(
+                "Configured legacy Wavelog station location does not exist: "
+                f"{self._station_location_name!r}."
+            )
+        self._verify_template_station(legacy)
+        self._resolved_location = legacy
+        logbook = self.resolve_station_logbook()
+
+        dynamic_identity = _dynamic_station_identity(contact)
+        if dynamic_identity is None:
+            if legacy.station_id not in logbook.station_ids:
+                raise WavelogLogbookError(
+                    "Configured legacy Wavelog station location is not linked to the "
+                    f"configured logbook {logbook.name!r}."
+                )
+            return WavelogStationTarget(location=legacy, dynamic=False)
+
+        name, grid, state, cq, itu = dynamic_identity
+        dynamic = self.resolve_exact_station_location(name, locations)
+        if dynamic is None:
+            dynamic = self._create_dynamic_station(
+                name=name,
+                grid=grid,
+                state=state,
+                cq=cq,
+                itu=itu,
+                template=legacy,
+            )
+        self._verify_dynamic_station(
+            dynamic,
+            name=name,
+            grid=grid,
+            state=state,
+            cq=cq,
+            itu=itu,
+            template=legacy,
+        )
+        if dynamic.station_id not in logbook.station_ids:
+            self._link_station_to_logbook(dynamic.station_id, logbook)
+        return WavelogStationTarget(location=dynamic, dynamic=True)
+
+    def verify_health_target(self) -> None:
+        """Read-only validation of the configured legacy target and logbook membership."""
+        legacy = self.resolve_station_location(refresh=True)
+        self._verify_template_station(legacy)
+        logbook = self.resolve_station_logbook()
+        if legacy.station_id not in logbook.station_ids:
+            raise WavelogLogbookError(
+                "Configured legacy Wavelog station location is not linked to the "
+                f"configured logbook {logbook.name!r}."
+            )
+
+    def _create_dynamic_station(
+        self,
+        *,
+        name: str,
+        grid: str,
+        state: str,
+        cq: int,
+        itu: int,
+        template: WavelogStationLocation,
+    ) -> WavelogStationLocation:
+        body = dumps(
+            {
+                "name": name,
+                "callsign": template.callsign,
+                "dxcc": template.dxcc,
+                "cq": cq,
+                "itu": itu,
+                "gridsquare": grid,
+                "state": state,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+        response = self._request("POST", "/index.php/api/v2/station", body=body)
+        if response.status_code == 409:
+            locations = self.list_station_locations()
+            raced = self.resolve_exact_station_location(name, locations)
+            if raced is None:
+                raise WavelogStationLocationError(
+                    "Wavelog reported a station creation conflict, but the exact station "
+                    "could not be resolved after re-reading owned locations."
+                )
+            return raced
+        if response.status_code != 201:
+            self._raise_http_error(response.status_code, "station-location creation")
+        payload = self._decode_json(response.body, operation="station-location creation")
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+            raise WavelogResponseError(
+                "Wavelog station-location creation returned an unexpected response schema."
+            )
+        created = self._parse_station(payload["data"], operation="station-location creation")
+        self._verify_dynamic_station(
+            created,
+            name=name,
+            grid=grid,
+            state=state,
+            cq=cq,
+            itu=itu,
+            template=template,
+        )
+
+        locations = self.list_station_locations()
+        canonical = self.resolve_exact_station_location(name, locations)
+        if canonical is None or canonical.station_id != created.station_id:
+            raise WavelogStationLocationError(
+                "Created Wavelog station location could not be re-resolved to its exact "
+                "canonical identity."
+            )
+        if canonical.uuid != created.uuid:
+            raise WavelogStationLocationError(
+                "Created Wavelog station location changed identity during verification."
+            )
+        return canonical
+
+    def _link_station_to_logbook(
+        self,
+        station_id: int,
+        logbook: WavelogLogbook,
+    ) -> None:
+        prior_ids = logbook.station_ids
+        replacement_ids = (*prior_ids, station_id)
+        body = dumps(
+            {"station_ids": list(replacement_ids)},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        response = self._request(
+            "PATCH",
+            f"/index.php/api/v2/logbook/{logbook.logbook_id}",
+            body=body,
+        )
+        if not 200 <= response.status_code < 300:
+            self._raise_http_error(response.status_code, "station-logbook membership update")
+        payload = self._decode_json(
+            response.body,
+            operation="station-logbook membership update",
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+            raise WavelogResponseError(
+                "Wavelog station-logbook membership update returned an unexpected "
+                "response schema."
+            )
+        patched = self._parse_logbook(
+            payload["data"],
+            operation="station-logbook membership update",
+        )
+        self._verify_logbook_membership(patched, logbook, station_id)
+
+        verified = self.resolve_station_logbook()
+        self._verify_logbook_membership(verified, logbook, station_id)
+
+    @staticmethod
+    def _verify_logbook_membership(
+        candidate: WavelogLogbook,
+        original: WavelogLogbook,
+        station_id: int,
+    ) -> None:
+        if candidate.logbook_id != original.logbook_id or candidate.name != original.name:
+            raise WavelogLogbookError(
+                "Wavelog station-logbook membership update changed the target identity."
+            )
+        if station_id not in candidate.station_ids or not set(original.station_ids).issubset(
+            candidate.station_ids
+        ):
+            raise WavelogLogbookError(
+                "Wavelog station-logbook membership verification did not preserve all "
+                "existing station IDs and add the requested station."
+            )
+
+    @staticmethod
+    def _verify_template_station(location: WavelogStationLocation) -> None:
+        if (
+            not location.uuid
+            or not location.callsign
+            or location.dxcc is None
+            or location.cq is None
+            or location.itu is None
+        ):
+            raise WavelogStationLocationError(
+                "Configured legacy Wavelog station location lacks verified template "
+                "identity metadata."
+            )
+
+    @classmethod
+    def _verify_dynamic_station(
+        cls,
+        location: WavelogStationLocation,
+        *,
+        name: str,
+        grid: str,
+        state: str,
+        cq: int,
+        itu: int,
+        template: WavelogStationLocation,
+    ) -> None:
+        cls._verify_template_station(location)
+        if (
+            location.name != name
+            or location.gridsquare != grid
+            or location.state != state
+            or location.cq != cq
+            or location.itu != itu
+            or location.callsign != template.callsign
+            or location.dxcc != template.dxcc
+        ):
+            raise WavelogStationLocationError(
+                "Exact-name Wavelog dynamic station location has incompatible metadata; "
+                "refusing to reuse or mutate it."
+            )
+
+    @classmethod
+    def _parse_station(cls, item: object, *, operation: str) -> WavelogStationLocation:
+        if not isinstance(item, dict):
+            raise WavelogResponseError(f"Wavelog {operation} returned an invalid station.")
+        station_id = cls._positive_int(item.get("id"))
+        name = cls._required_text(item.get("name"))
+        callsign = cls._required_text(item.get("callsign"), uppercase=True)
+        gridsquare = cls._optional_text(item.get("gridsquare")) or ""
+        station_uuid = cls._required_text(item.get("uuid"))
+        dxcc = cls._positive_int(item.get("dxcc"))
+        cq = cls._positive_int(item.get("cq"))
+        itu = cls._positive_int(item.get("itu"))
+        state_raw = item.get("state", "")
+        if not isinstance(state_raw, str):
+            raise WavelogResponseError(
+                f"Wavelog {operation} returned invalid station metadata."
+            )
+        if (
+            station_id is None
+            or name is None
+            or callsign is None
+            or station_uuid is None
+            or dxcc is None
+            or cq is None
+            or itu is None
+        ):
+            raise WavelogResponseError(
+                f"Wavelog {operation} returned incomplete station identity metadata."
+            )
+        return WavelogStationLocation(
+            station_id=station_id,
+            name=name,
+            gridsquare=gridsquare.upper(),
+            uuid=station_uuid,
+            callsign=callsign,
+            dxcc=dxcc,
+            cq=cq,
+            itu=itu,
+            state=state_raw.strip().upper(),
+        )
+
+    @classmethod
+    def _parse_logbook(cls, item: object, *, operation: str) -> WavelogLogbook:
+        if not isinstance(item, dict):
+            raise WavelogResponseError(f"Wavelog {operation} returned an invalid logbook.")
+        logbook_id = cls._positive_int(item.get("id"))
+        name = cls._required_text(item.get("name"))
+        raw_station_ids = item.get("station_ids")
+        if logbook_id is None or name is None or not isinstance(raw_station_ids, list):
+            raise WavelogResponseError(
+                f"Wavelog {operation} returned incomplete logbook identity metadata."
+            )
+        station_ids: list[int] = []
+        for raw_station_id in raw_station_ids:
+            station_id = cls._positive_int(raw_station_id)
+            if station_id is None or station_id in station_ids:
+                raise WavelogResponseError(
+                    f"Wavelog {operation} returned invalid logbook station IDs."
+                )
+            station_ids.append(station_id)
+        return WavelogLogbook(logbook_id, name, tuple(station_ids))
+
+    @staticmethod
+    def _positive_int(value: object) -> int | None:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            return None
+        return value
+
+    @staticmethod
+    def _required_text(value: object, *, uppercase: bool = False) -> str | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        normalized = value.strip()
+        return normalized.upper() if uppercase else normalized
 
     def latest_qso(self, callsign: str) -> WavelogQsoSummary | None:
         """Return the newest exact-callsign QSO, or none when never worked."""
@@ -247,12 +554,16 @@ class WavelogClient:
             my_pota_reference=self._optional_text(item.get("my_pota_ref")),
         )
 
-    def upload_contact(self, contact: Contact) -> WavelogUploadDisposition:
-        """Import one contact into the resolved station location with Wavelog dupe checking."""
-        location = self._align_station_location_grid(
-            self.resolve_station_location(),
-            contact,
-        )
+    def upload_contact(
+        self,
+        contact: Contact,
+        *,
+        target: WavelogStationTarget,
+    ) -> WavelogUploadDisposition:
+        """Import one contact into its preselected exact station target."""
+        location = target.location
+        if not target.dynamic:
+            location = self._align_station_location_grid(location, contact)
         adif = contact_to_adif(contact)
         body = dumps(
             {
@@ -320,11 +631,14 @@ class WavelogClient:
         station_id = data.get("id")
         name = data.get("name")
         station_grid = data.get("gridsquare", "")
+        station_uuid = data.get("uuid")
         if station_grid is None:
             station_grid = ""
         if (
             station_id != location.station_id
             or name != location.name
+            or not isinstance(station_uuid, str)
+            or station_uuid.strip() != location.uuid
             or not isinstance(station_grid, str)
             or station_grid.strip().upper() != desired_grid
         ):
@@ -332,12 +646,16 @@ class WavelogClient:
                 "Wavelog station-location grid update did not confirm the requested target."
             )
 
-        station_uuid = data.get("uuid")
         updated_location = WavelogStationLocation(
             station_id=location.station_id,
             name=location.name,
             gridsquare=desired_grid,
-            uuid=station_uuid if isinstance(station_uuid, str) else location.uuid,
+            uuid=location.uuid,
+            callsign=location.callsign,
+            dxcc=location.dxcc,
+            cq=location.cq,
+            itu=location.itu,
+            state=location.state,
         )
         self._resolved_location = updated_location
         return updated_location
@@ -473,8 +791,8 @@ def contact_to_adif(contact: Contact) -> str:
         fields.append(("MY_GRIDSQUARE", str(contact.my_grid)))
     if contact.pota_reference is not None:
         fields.append(("POTA_REF", str(contact.pota_reference)))
-    if contact.notes is not None:
-        fields.append(("NOTES", contact.notes))
+    notes = contact.notes
+    fields.append(("NOTES", "Mobile QSO" if notes is None or not notes.strip() else notes))
 
     return "".join(_adif_field(name, value) for name, value in fields) + "<EOR>"
 
@@ -493,3 +811,27 @@ def _adif_mode(mode: RadioMode) -> tuple[str, str | None]:
 
 def _adif_field(name: str, value: str) -> str:
     return f"<{name}:{len(value)}>{value}"
+
+
+def _dynamic_station_identity(
+    contact: Contact,
+) -> tuple[str, str, str, int, int] | None:
+    """Return a deterministic identity only when all frozen routing data is usable."""
+    if (
+        contact.my_grid is None
+        or contact.my_state is None
+        or contact.my_cq_zone is None
+        or contact.my_itu_zone is None
+    ):
+        return None
+    grid = str(contact.my_grid).strip().upper()[:4]
+    state = contact.my_state.strip().upper()
+    if len(grid) != 4 or len(state) != 2:
+        return None
+    return (
+        f"Mobile - {grid} - {state}",
+        grid,
+        state,
+        contact.my_cq_zone,
+        contact.my_itu_zone,
+    )

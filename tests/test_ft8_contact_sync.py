@@ -59,11 +59,42 @@ class WavelogTransport:
         body: bytes | None,
         timeout_s: float,
     ) -> UrllibHttpResponse:
-        if method == "GET":
+        if method == "GET" and url.endswith("/api/v2/station"):
             payload = {
                 "data": [
-                    {"id": 7, "name": "Home", "gridsquare": "EM00aa"},
-                    {"id": 93, "name": "Mobile", "gridsquare": "EM79xm"},
+                    {
+                        "id": 7,
+                        "uuid": "home",
+                        "name": "Home",
+                        "callsign": "KI5VNB",
+                        "gridsquare": "EM00aa",
+                        "dxcc": 291,
+                        "cq": 4,
+                        "itu": 8,
+                        "state": "OH",
+                    },
+                    {
+                        "id": 93,
+                        "uuid": "mobile",
+                        "name": "Mobile",
+                        "callsign": "KI5VNB",
+                        "gridsquare": "EM79xm",
+                        "dxcc": 291,
+                        "cq": 4,
+                        "itu": 8,
+                        "state": "OH",
+                    },
+                ]
+            }
+        elif method == "GET" and url.endswith("/api/v2/logbook"):
+            payload = {
+                "data": [
+                    {
+                        "id": 5,
+                        "name": "KI5VNB Main",
+                        "active": True,
+                        "station_ids": [7, 93],
+                    }
                 ]
             }
         else:
@@ -185,6 +216,7 @@ def test_completed_ft8_uses_shared_sync_and_configured_mobile(
                 "https://wavelog.invalid",
                 SecretStr("test-only"),
                 station_location_name="Mobile",
+                station_logbook_name="KI5VNB Main",
                 transport=wavelog_transport,
             ),
         )

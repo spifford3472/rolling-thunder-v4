@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from threading import Lock
+from typing import Protocol
 from uuid import UUID
 
 from rolling_thunder.domain import Contact
@@ -19,13 +20,28 @@ from rolling_thunder.home_platform import (
     HomePlatformState,
 )
 from rolling_thunder.wavelog import (
-    WavelogClient,
     WavelogError,
+    WavelogStationTarget,
     WavelogUploadDisposition,
     contact_to_adif,
 )
 
 Clock = Callable[[], datetime]
+
+
+class WavelogContactSync(Protocol):
+    """Narrow Forge station-routing and QSO-write boundary."""
+
+    def verify_health_target(self) -> None: ...
+
+    def resolve_station_target(self, contact: Contact) -> WavelogStationTarget: ...
+
+    def upload_contact(
+        self,
+        contact: Contact,
+        *,
+        target: WavelogStationTarget,
+    ) -> WavelogUploadDisposition: ...
 
 
 def _utc_now() -> datetime:
@@ -192,7 +208,7 @@ class ForgeContactSyncService:
     def __init__(
         self,
         repository: ForgeContactSyncRepository,
-        wavelog: WavelogClient,
+        wavelog: WavelogContactSync,
         *,
         clock: Clock = _utc_now,
     ) -> None:
@@ -205,7 +221,7 @@ class ForgeContactSyncService:
         """Return a typed availability snapshot after verifying the configured location."""
         checked_at = self._timestamp()
         try:
-            self._wavelog.resolve_station_location(refresh=True)
+            self._wavelog.verify_health_target()
         except WavelogError as error:
             return HomePlatformState(
                 availability=HomePlatformAvailability.UNAVAILABLE,
@@ -220,15 +236,15 @@ class ForgeContactSyncService:
     def synchronize(self, contact: Contact) -> ContactUploadResult:
         """Synchronize one contact idempotently, retrying uncertain remote outcomes safely."""
         with self._lock:
-            location = self._wavelog.resolve_station_location()
+            target = self._wavelog.resolve_station_target(contact)
             payload_sha256 = _remote_payload_sha256(
                 contact,
-                station_profile_id=location.station_id,
+                station_profile_id=target.location.station_id,
             )
             claim = self._repository.claim(
                 contact.contact_id,
                 payload_sha256=payload_sha256,
-                station_profile_id=location.station_id,
+                station_profile_id=target.location.station_id,
             )
             received_at = self._timestamp()
             if claim is ForgeContactClaimDisposition.ALREADY_SYNCHRONIZED:
@@ -238,7 +254,7 @@ class ForgeContactSyncService:
                     received_at=received_at,
                 )
 
-            remote_disposition = self._wavelog.upload_contact(contact)
+            remote_disposition = self._wavelog.upload_contact(contact, target=target)
             self._repository.mark_synchronized(
                 contact.contact_id,
                 synchronized_at=received_at,

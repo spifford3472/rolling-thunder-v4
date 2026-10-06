@@ -12,7 +12,11 @@ from rolling_thunder.forge_contact_sync import (
     ForgeContactSyncService,
 )
 from rolling_thunder.home_platform import ContactUploadDisposition
-from rolling_thunder.wavelog import WavelogStationLocation, WavelogUploadDisposition
+from rolling_thunder.wavelog import (
+    WavelogStationLocation,
+    WavelogStationTarget,
+    WavelogUploadDisposition,
+)
 
 
 class FakeWavelog:
@@ -20,13 +24,23 @@ class FakeWavelog:
         self.location = WavelogStationLocation(42, "Mobile", "mobile-uuid")
         self.dispositions: list[WavelogUploadDisposition] = []
         self.upload_count = 0
+        self.targets: list[WavelogStationTarget] = []
 
-    def resolve_station_location(self, *, refresh: bool = False) -> WavelogStationLocation:
-        del refresh
-        return self.location
+    def verify_health_target(self) -> None:
+        return None
 
-    def upload_contact(self, contact: Contact) -> WavelogUploadDisposition:
+    def resolve_station_target(self, contact: Contact) -> WavelogStationTarget:
         del contact
+        return WavelogStationTarget(self.location, dynamic=False)
+
+    def upload_contact(
+        self,
+        contact: Contact,
+        *,
+        target: WavelogStationTarget,
+    ) -> WavelogUploadDisposition:
+        del contact
+        self.targets.append(target)
         self.upload_count += 1
         if self.dispositions:
             return self.dispositions.pop(0)
@@ -47,7 +61,7 @@ def contact(*, notes: str | None = None) -> Contact:
 
 
 def build_service(path: Path, wavelog: FakeWavelog) -> ForgeContactSyncService:
-    return ForgeContactSyncService(ForgeContactSyncRepository(path), wavelog)  # type: ignore[arg-type]
+    return ForgeContactSyncService(ForgeContactSyncRepository(path), wavelog)
 
 
 def test_successful_contact_is_not_replayed_after_forge_restart(tmp_path: Path) -> None:
@@ -82,7 +96,7 @@ def test_remote_duplicate_after_uncertain_prior_result_is_marked_synchronized(
         payload_sha256=_remote_payload_sha256(qso, station_profile_id=42),
         station_profile_id=42,
     )
-    service = ForgeContactSyncService(repository, wavelog)  # type: ignore[arg-type]
+    service = ForgeContactSyncService(repository, wavelog)
 
     result = service.synchronize(qso)
     repeated = service.synchronize(qso)
@@ -90,6 +104,7 @@ def test_remote_duplicate_after_uncertain_prior_result_is_marked_synchronized(
     assert result.disposition is ContactUploadDisposition.ALREADY_EXISTS
     assert repeated.disposition is ContactUploadDisposition.ALREADY_EXISTS
     assert wavelog.upload_count == 1
+    assert [target.location.station_id for target in wavelog.targets] == [42]
 
 
 def test_same_uuid_with_changed_qso_payload_is_rejected(tmp_path: Path) -> None:
@@ -115,3 +130,35 @@ def test_station_location_change_for_existing_uuid_is_rejected(tmp_path: Path) -
         service.synchronize(contact())
 
     assert wavelog.upload_count == 1
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {},
+        {"callsign": "ZS6BKW"},
+        {"pota_reference": "US-0732"},
+        {"mode": RadioMode.FT8, "frequency_hz": 14_074_000, "rst_sent": "-10"},
+        {"mode": RadioMode.DMR, "frequency_hz": 446_500_000},
+    ],
+    ids=["ordinary", "dx", "pota", "ft8", "dmr"],
+)
+def test_contact_kinds_share_one_station_routing_and_upload_boundary(
+    tmp_path: Path,
+    updates: dict[str, object],
+) -> None:
+    wavelog = FakeWavelog()
+    service = build_service(tmp_path / "ledger.db", wavelog)
+    qso = Contact.model_validate(
+        {
+            **contact().model_dump(mode="python"),
+            "contact_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            **updates,
+        }
+    )
+
+    result = service.synchronize(qso)
+
+    assert result.disposition is ContactUploadDisposition.ACCEPTED
+    assert wavelog.upload_count == 1
+    assert [target.location.station_id for target in wavelog.targets] == [42]

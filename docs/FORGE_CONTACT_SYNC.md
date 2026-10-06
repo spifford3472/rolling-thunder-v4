@@ -27,7 +27,7 @@ Wavelog API v2
         |
         | dynamically resolved station_profile_id
         v
-Station Location: Mobile
+Station Location: Mobile - XXXX - YY (verified dynamic), or legacy Mobile fallback
 ```
 
 The UI never talks to Wavelog and never performs synchronization HTTP, DNS waits, retry sleeps, or Wavelog authentication on the Tk event thread. A failed or uncertain remote operation never deletes or rolls back the local QSO.
@@ -48,22 +48,58 @@ The service is private/VPN-only and must not be exposed to the Internet.
 
 ## Wavelog target safety
 
-Required target:
+Configured safety anchors:
 
 - Station Logbook: `KI5VNB Main`
-- Station Location: `Mobile`
+- legacy Station Location/template: `Mobile`
 
-Wavelog API v2 writes a QSO to a Station Location using `station_profile_id`. Rolling Thunder never stores or assumes that numeric ID. Forge calls the station-list endpoint and requires exactly one owned station location named `Mobile`; only that returned numeric ID can be used for QSO import.
+Wavelog API v2 writes a QSO to a Station Location using `station_profile_id`.
+Rolling Thunder never stores or assumes numeric station or logbook IDs. Before the
+Forge UUID ledger claim, Forge reads the owner-scoped station list, resolves exact
+names without guessing IDs, resolves exactly one configured logbook by exact name,
+and selects the final station target from immutable `Contact` fields.
 
-If `Mobile` is absent or ambiguous, authentication fails, the response is malformed, or Wavelog is unavailable, Forge rejects the synchronization attempt. It never falls back to Home or any other station location. The local QSO remains unsynchronized and is retried later.
+When `my_grid`, `my_state`, `my_cq_zone`, and `my_itu_zone` are all frozen and
+usable, the station name is exactly `Mobile - XXXX - YY`. `XXXX` is the uppercase
+four-character Maidenhead prefix and `YY` is the normalized two-letter state. The
+station profile grid is the four-character prefix, while QSO ADIF retains the full
+frozen `MY_GRIDSQUARE`. Existing exact-name stations are reused only when UUID,
+callsign, DXCC, grid, state, CQ zone, and ITU zone are compatible with the requested
+identity and validated legacy template.
 
-Wavelog's v2 station resource does not expose the enclosing Station Logbook name/link. Forge can therefore enforce `Mobile` programmatically, while `Mobile` -> `KI5VNB Main` remains a Wavelog server-side configuration invariant. `station_logbook_name` records the expected target in Forge configuration, and real acceptance must verify in Wavelog that `Mobile` belongs to and displays inside `KI5VNB Main` before merge.
+If the exact dynamic station is absent, Forge creates it with `POST
+/index.php/api/v2/station`, re-reads and verifies the canonical result, and handles a
+`409` create race by re-reading and resolving again. Callsign and DXCC come from the
+validated configured legacy `Mobile` profile; grid/state/CQ/ITU come only from the
+immutable contact. Forge never deletes, renames, or mutates unrelated profiles.
+
+Forge reads `GET /index.php/api/v2/logbook`, requires exactly one configured
+logbook name, and links a dynamic station with `PATCH` only when needed. Because
+`station_ids` has replacement semantics, Forge preserves every prior ID, adds the
+new ID, and verifies the result with another read. A created-but-unlinked station is
+safe to reuse on retry. If frozen routing data is insufficient, Forge uses the
+configured legacy `Mobile` profile and preserves its existing per-QSO grid PATCH.
+Dynamic profiles are never patched to a six-character QSO grid.
+
+Absent/ambiguous legacy or dynamic names, incompatible metadata, an unlinked legacy
+profile, malformed responses, unverifiable identity, failed creation, or failed
+membership verification all fail closed. Forge never falls back to Home or another
+station. The local QSO remains unsynchronized and is retried later. `/health` only
+reads and validates the configured legacy profile/logbook membership; it never
+creates or links a dynamic station.
 
 ## Wavelog API and token
 
 Forge uses Wavelog API v2 bearer-token authentication. Production acceptance uses these token scopes:
 
-- `station:read` — resolve `Mobile`;
+Dynamic routing requires Wavelog 3.2.0 or newer: station management was introduced
+in 3.1.0 and the v2 logbook membership API in 3.2.0. Confirm the installed Wavelog
+version before test deployment.
+
+- `station:read` — list/re-read exact legacy and dynamic station locations;
+- `station:write` — create dynamic mobile station locations and retain legacy grid alignment;
+- `logbook:read` — resolve `KI5VNB Main` and verify complete membership;
+- `logbook:write` — link verified dynamic station locations while preserving existing IDs;
 - `qso:write` — import the QSO;
 - `qso:read` — verify the controlled acceptance QSO and duplicate behavior.
 
@@ -91,7 +127,11 @@ Forge maps each immutable local `Contact` to one deterministic ADIF record and s
 | `grid` | `GRIDSQUARE` when known |
 | `my_grid` | `MY_GRIDSQUARE` when known |
 | `pota_reference` | `POTA_REF` when present |
-| `notes` | `NOTES` when present |
+| `notes` | ADIF `NOTES`; exact existing text, otherwise exactly `Mobile QSO` |
+
+The notes default is applied only during Wavelog-bound ADIF conversion; immutable
+local `Contact` rows are not changed. Nonblank `Contact.notes` text is emitted
+exactly, without prepending/appending/replacing text or duplicating the phrase.
 
 Missing optional metadata never makes local logging fail. Existing QRZ enrichment marks an optional lookup failure complete without a grid, so QRZ unavailability cannot indefinitely block Wavelog synchronization.
 
@@ -105,7 +145,11 @@ The local `contact_id` UUID is stable from QSO creation through Wavelog synchron
 Idempotency-Key: <contact_id UUID>
 ```
 
-Forge requires the header UUID to match the body `contact_id`. Before calling Wavelog, Forge transactionally records a ledger row containing the UUID, a SHA-256 of the stable Wavelog-bound payload plus target profile ID, the resolved profile ID, certainty state, and timestamps.
+Forge requires the header UUID to match the body `contact_id`. Forge first selects
+and verifies the exact station target. Before the QSO write, it transactionally
+records a ledger row containing the UUID, a SHA-256 of the actual stable
+Wavelog-bound ADIF plus that exact target profile ID, the resolved profile ID,
+certainty state, and timestamps.
 
 A repeated UUID with changed QSO data or a different target station profile is rejected rather than silently replayed or mutated.
 
@@ -146,8 +190,8 @@ the fallback. No FT8-specific station selection or Wavelog uploader exists.
 
 Cloud regression reproduced a missing immediate FT8 post-commit sync request:
 the completion handler updated worked-today state only. Cloud tests also showed
-that healthy shared sync uploads completed FT8 contacts to the dynamically
-resolved Mobile profile, including after QRZ lookup failure. The notification
+that healthy shared sync uploads completed FT8 contacts through the shared
+Wavelog station-routing boundary, including after QRZ lookup failure. The notification
 fix removes reliance on later LOG observation for the initial request; it does
 not by itself explain permanently missing contacts or repair stalled enrichment
 after a credential/configuration change. Production evidence is required.
@@ -190,7 +234,7 @@ Collect Pi application/service logs and
 `rolling-thunder-forge-contact-sync.service` journal entries for the QSO time and
 subsequent sync attempts. Keep credentials out of collected output. Inspect the
 non-secret Home Platform enabled/base URL settings, QRZ worker availability,
-Forge `/health` result, and Wavelog's current Mobile location/logbook mapping.
+Forge `/health` result, and Wavelog's exact selected station/logbook mapping.
 Do not rewrite states, re-log the QSO, delete the ledger, or replay RF as an
 investigation shortcut. A performance-attempt record is not a contact receipt.
 
@@ -198,8 +242,9 @@ Keep the PR draft until installed acceptance. Preserve exact rollback SHAs,
 configuration, and SQLite-safe Pi/Forge backups. On the approved fixed Pi build,
 complete one explicitly authorized FT8 QSO and verify one local UUID, FT8 mode,
 actual reports, original start time/frequency, frozen local grid and known remote
-grid. Verify its LOG row becomes SYNC and exactly one Wavelog QSO appears in
-Mobile under KI5VNB Main with the same fields. Confirm failed/aborted/unanswered
+grid. Verify its LOG row becomes SYNC and exactly one Wavelog QSO appears in the
+expected dynamic station (or documented legacy fallback) under `KI5VNB Main` with
+the same fields. Confirm failed/aborted/unanswered
 attempts produce no contacts. During a safe approved offline/retry test, confirm
 local durability and eventual upload, then repeated Sync/restart without a
 second Wavelog QSO. Verify an ordinary contact still follows the same path.
@@ -314,12 +359,16 @@ There is intentionally no Wavelog URL/token in Pi configuration. Retry/backoff r
 
 ## Failure interpretation
 
-`GET /health` verifies that Forge can authenticate to Wavelog and resolve exactly one `Mobile` location. Health failure never makes local logging fail.
+`GET /health` verifies, read-only, that Forge can authenticate to Wavelog, resolve
+exactly one configured legacy `Mobile`, resolve exactly one configured logbook, and
+confirm legacy membership. It never creates or links a dynamic station. Health
+failure never makes local logging fail.
 
 - **Forge/WireGuard unreachable:** local QSO remains; Pi records failed sync/retry state.
 - **Wavelog unreachable/timeout:** Forge leaves its ledger pending; Pi retries later.
 - **401/403:** token invalid/expired or required scope unavailable; local QSO remains unsynchronized.
-- **missing/duplicate `Mobile`:** Forge refuses to choose another location.
+- **missing/duplicate/incompatible station:** Forge refuses to choose or mutate another location.
+- **missing/duplicate logbook or failed link:** Forge leaves the contact unsynchronized; a later retry can reuse a station that was already created.
 - **malformed Wavelog response:** fail safely; local QSO remains.
 - **timeout after possible remote success:** deterministic retry + Wavelog duplicate detection resolves uncertainty.
 - **Forge restart:** durable ledger survives.
@@ -335,10 +384,16 @@ CI/mocks are necessary but not sufficient. Before merge, acceptance must use:
 2. production Forge;
 3. real Wavelog at `http://192.168.9.170:8086`;
 4. one controlled test QSO/contact;
-5. Wavelog verification that it is under Station Location `Mobile` and visible in Station Logbook `KI5VNB Main`;
+5. Wavelog verification that a location-complete contact is under the exact dynamic
+   station name and visible in Station Logbook `KI5VNB Main`;
 6. LOG panel verification of unsynchronized -> synchronized;
 7. one safe offline/retry case;
-8. repeated manual/retry verification that only one Wavelog QSO exists.
+8. repeated manual/retry verification that only one Wavelog QSO exists;
+9. one locationless/historical contact confirming legacy `Mobile` fallback and grid
+   alignment;
+10. Wavelog confirmation that the dynamic profile retains a four-character grid
+    while the QSO carries its full frozen `MY_GRIDSQUARE` and the expected ADIF
+    `NOTES` value.
 
 The PR remains draft until this installed acceptance is complete.
 
@@ -371,8 +426,10 @@ synchronization/enrichment updates still permit identical terminal replay.
 Forge's existing hash remains based on station profile and Wavelog-bound ADIF,
 so coordinate-only differences do not change that hash.
 
-Legacy `Mobile` routing, grid PATCH, station-profile selection, duplicate handling,
-ADIF `MY_GRIDSQUARE` and FT8 immediate synchronization are unchanged. Coordinates
-are not added to ADIF. No state/CQ/ITU derivation, station creation, dynamic routing
-or new `Mobile QSO` comment rule is implemented. See
-[owner acceptance and rollback](CHECKPOINT_A_ACCEPTANCE.md).
+Coordinates are not added to ADIF and synchronization never reads current GPS.
+Checkpoints C/D/E now use the frozen Checkpoint A/B fields to select, safely create,
+verify, and link dynamic mobile station locations. Locationless/historical contacts
+retain legacy `Mobile` routing and per-QSO grid alignment. The blank-only Wavelog
+default is implemented in ADIF `NOTES` (not a separate comments field). See
+[owner acceptance and rollback](CHECKPOINT_A_ACCEPTANCE.md) for the earlier schema
+checkpoint; the current routing contract is this document.

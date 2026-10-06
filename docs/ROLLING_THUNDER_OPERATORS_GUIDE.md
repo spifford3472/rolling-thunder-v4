@@ -851,6 +851,19 @@ Keeping this separate also keeps provider credentials off the Pi.
 A separate Forge process accepts normalized contact synchronization requests and
 performs controlled Wavelog integration with idempotency safeguards.
 
+For a contact with complete frozen mobile grid/state/zone context, Forge routes the
+QSO to a verified Wavelog Station Location named `Mobile - XXXX - YY` (for example,
+`Mobile - EM79 - OH`) inside the configured station logbook. A locationless or
+historical contact continues to use the legacy `Mobile` location. This routing uses
+the location captured with the contact; a later vehicle position cannot redirect a
+retry. The dynamic Station Location keeps a four-character grid, while the QSO keeps
+its full captured grid when available.
+
+If the contact has no operator notes, its Wavelog ADIF `NOTES` value is `Mobile QSO`.
+Existing notes are kept exactly and are not prefixed, appended, or replaced. Station
+creation/linking or Wavelog failures do not undo the local contact; the LOG retry
+path remains available.
+
 ## Forge is reusable
 
 Forge is intentionally not a private helper for one Rolling Thunder screen.
