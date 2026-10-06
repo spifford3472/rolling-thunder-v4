@@ -9,6 +9,7 @@ from rolling_thunder.ft8_ui import (
     FT8_POTA_TREE_GLYPH,
     FT8BrowserViewport,
     FT8CallPresentation,
+    FT8IncomingCallPresentation,
 )
 
 _BACKGROUND = "#151515"
@@ -150,6 +151,46 @@ class FT8Widgets:
             justify="center",
         ).grid(row=4, column=0, sticky="ew", pady=(4, 0))
 
+        self.incoming_frame = tk.Frame(
+            self.frame,
+            bg="#421515",
+            highlightthickness=5,
+            highlightbackground=_RED,
+        )
+        self.incoming_frame.grid_columnconfigure(0, weight=1)
+        self.incoming_frame.grid_rowconfigure(1, weight=1)
+        tk.Label(
+            self.incoming_frame,
+            text="INCOMING FT8 CALL",
+            bg="#421515",
+            fg=_YELLOW,
+            font=("DejaVu Sans", 28, "bold"),
+        ).grid(row=0, column=0, sticky="ew", pady=(18, 4))
+        self.incoming_callsign = tk.StringVar(value="")
+        tk.Label(
+            self.incoming_frame,
+            textvariable=self.incoming_callsign,
+            bg="#421515",
+            fg=_WHITE,
+            font=("DejaVu Sans", 58, "bold"),
+        ).grid(row=1, column=0, sticky="nsew", pady=4)
+        self.incoming_detail = tk.StringVar(value="")
+        tk.Label(
+            self.incoming_frame,
+            textvariable=self.incoming_detail,
+            bg="#421515",
+            fg=_WHITE,
+            font=("DejaVu Sans", 28, "bold"),
+        ).grid(row=2, column=0, sticky="ew", pady=4)
+        tk.Label(
+            self.incoming_frame,
+            text="BUTTON 2 ANSWER   •   BUTTON 3 IGNORE",
+            bg="#421515",
+            fg=_YELLOW,
+            font=("DejaVu Sans", 24, "bold"),
+        ).grid(row=3, column=0, sticky="ew", pady=(8, 20))
+        self.incoming_frame.grid_remove()
+
         self.frame.grid_remove()
 
     def show(self) -> None:
@@ -165,7 +206,24 @@ class FT8Widgets:
         transmit_enabled: bool,
         distance_text: str | None = None,
         diagnostic_text: str | None = None,
+        incoming_call: FT8IncomingCallPresentation | None = None,
     ) -> None:
+        if incoming_call is not None:
+            self.incoming_callsign.set(incoming_call.callsign)
+            self.incoming_detail.set(
+                f"{incoming_call.snr_text}   •   {incoming_call.grid_text}"
+            )
+            self.incoming_frame.grid(
+                row=0,
+                column=0,
+                rowspan=5,
+                sticky="nsew",
+                padx=3,
+                pady=3,
+            )
+            self.incoming_frame.tkraise()
+            return
+        self.incoming_frame.grid_remove()
         self.more_above.set("▲ MORE ▲" if viewport.hidden_above else "")
         self.more_below.set("▼ MORE ▼" if viewport.hidden_below else "")
 

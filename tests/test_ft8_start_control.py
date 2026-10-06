@@ -25,7 +25,7 @@ def _activity() -> FT8CQActivity:
     )
 
 
-def _seed() -> FT8AttemptSeed:
+def _seed(*, power_watts: int = 20) -> FT8AttemptSeed:
     return FT8AttemptSeed(
         attempt_id=UUID("00000000-0000-0000-0000-000000000901"),
         callsign="K1ABC",
@@ -38,6 +38,7 @@ def _seed() -> FT8AttemptSeed:
         audio_frequency_hz=1500,
         selected_snr_db=-8,
         pota_cq=False,
+        tx_power_target_watts=power_watts,
     )
 
 
@@ -123,6 +124,21 @@ def test_successful_prepare_starts_existing_qso_path_only_after_verification() -
     assert controller.status.state is FT8QsoStartState.STARTED
     assert radio.power_watts == 20
     assert radio.ssb_bfo is Ft891SsbBfo.USB
+
+
+def test_start_controller_applies_seed_power_once_before_qso_start() -> None:
+    radio = Radio()
+    observed_power: list[int] = []
+    controller = FT8QsoStartController(
+        FT8RadioPreparationService(radio),
+        lambda _activity, _state, _seed: observed_power.append(radio.power_watts),
+        worker_launcher=_run_now,
+    )
+
+    assert controller.start(_activity(), attempt_seed=_seed(power_watts=65)) is True
+
+    assert observed_power == [65]
+    assert radio.calls.count("power:65") == 1
 
 
 def test_prepare_failure_never_calls_qso_starter_and_rolls_back() -> None:

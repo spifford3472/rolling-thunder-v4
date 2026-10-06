@@ -86,6 +86,13 @@ The service contract is useful to any authorized client capable of providing the
 
 Read `docs/FORGE_CONTACT_SYNC.md`.
 
+The same private process can expose the presentation-neutral FT8 performance
+endpoint. Its additive API accepts old payloads without configured-power
+readbacks and new payloads with nullable `tx_power_start_watts`,
+`tx_power_end_watts`, and `tx_power_max_watts`. Forge's dedicated FT8 SQLite
+schema migrates v1 to v2 without rebuilding or discarding attempts; legacy
+payload hashes remain valid for idempotent replay.
+
 ## Reusable service design rules
 
 All Forge additions and modifications must follow these rules:

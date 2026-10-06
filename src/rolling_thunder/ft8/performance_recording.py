@@ -10,7 +10,7 @@ from rolling_thunder.domain import RadioState
 from rolling_thunder.ft8.authorization import freeze_ft8_location
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
 from rolling_thunder.ft8.coordinator import FT8QsoResult
-from rolling_thunder.ft8.distance import maidenhead_distance_km
+from rolling_thunder.ft8.distance import initial_ft8_power_watts, maidenhead_distance_km
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoState
 from rolling_thunder.ft8.performance import (
     FT8AttemptOutcome,
@@ -70,6 +70,7 @@ def build_ft8_attempt_seed(
         audio_frequency_hz=activity.audio_frequency_hz,
         selected_snr_db=activity.snr_db,
         pota_cq=activity.pota_cq,
+        tx_power_target_watts=initial_ft8_power_watts(local_grid, activity.grid),
     )
 
 
@@ -106,7 +107,10 @@ class FT8PerformanceRecorder:
             utc_date=seed.started_at_utc.date(),
             band=seed.band,
             dial_frequency_hz=seed.dial_frequency_hz,
-            tx_power_target_watts=20,
+            tx_power_target_watts=seed.tx_power_target_watts,
+            tx_power_start_watts=None,
+            tx_power_end_watts=None,
+            tx_power_max_watts=None,
             power_meter_raw=None,
             swr_meter_raw=None,
             alc_meter_raw=None,
@@ -132,6 +136,7 @@ class FT8PerformanceRecorder:
         power_meter_raw: int | None = None,
         swr_meter_raw: int | None = None,
         alc_meter_raw: int | None = None,
+        tx_power_end_watts: int | None = None,
     ) -> FT8PerformanceAttempt:
         """Persist terminal QSO telemetry with optional peak transmit-meter values."""
         outcome = {
@@ -161,7 +166,13 @@ class FT8PerformanceRecorder:
             utc_date=result.started_utc.astimezone(UTC).date(),
             band=context.radio_band,
             dial_frequency_hz=context.radio_frequency_hz,
-            tx_power_target_watts=20,
+            tx_power_target_watts=context.tx_power_target_watts,
+            tx_power_start_watts=context.tx_power_start_watts,
+            tx_power_end_watts=tx_power_end_watts,
+            tx_power_max_watts=_maximum_configured_power(
+                context.tx_power_start_watts,
+                tx_power_end_watts,
+            ),
             power_meter_raw=power_meter_raw,
             swr_meter_raw=swr_meter_raw,
             alc_meter_raw=alc_meter_raw,
@@ -194,3 +205,8 @@ def _distance_km(local_grid: str | None, remote_grid: str | None) -> float | Non
         return maidenhead_distance_km(local_grid, remote_grid)
     except ValueError:
         return None
+
+
+def _maximum_configured_power(*values: int | None) -> int | None:
+    observed = tuple(value for value in values if value is not None)
+    return max(observed) if observed else None

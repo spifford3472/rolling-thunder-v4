@@ -9,7 +9,7 @@ from rolling_thunder.ft8.diagnostics import (
     FT8AudioQuality,
     FT8DiagnosticSessionState,
 )
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8IncomingCall, FT8Period
 from rolling_thunder.ft8.receive import FT8ReceiveState
 from rolling_thunder.ft8_ui import (
     FT8_BROWSER_HEADERS,
@@ -17,6 +17,7 @@ from rolling_thunder.ft8_ui import (
     FT8CallPresentation,
     build_ft8_browser_viewport,
     format_ft8_receive_diagnostic,
+    present_ft8_incoming_call,
 )
 
 
@@ -49,6 +50,24 @@ def test_headers_are_explicit_and_mobile_columns_are_stable() -> None:
 
     assert viewport.headers == FT8_BROWSER_HEADERS
     assert viewport.headers == ("CALL", "SNR", "AUDIO", "GRID")
+
+
+def test_incoming_call_presentation_has_large_alert_content_and_explicit_controls() -> None:
+    presentation = present_ft8_incoming_call(
+        FT8IncomingCall(
+            callsign="W1XYZ",
+            period=FT8Period(105),
+            snr_db=-7,
+            dt_seconds=0.2,
+            audio_frequency_hz=1600,
+            grid="FN42",
+        )
+    )
+
+    assert presentation is not None
+    assert presentation.callsign == "W1XYZ"
+    assert presentation.snr_text == "SNR -7 dB"
+    assert presentation.grid_text == "GRID FN42"
 
 
 def test_cq_lifecycle_maps_white_gray_yellow() -> None:

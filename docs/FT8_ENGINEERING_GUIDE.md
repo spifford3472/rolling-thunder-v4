@@ -112,6 +112,13 @@ Successful, failed, aborted, retry-exhausted, and preparation-failed attempts ar
 
 The telemetry model includes structured UTC timing, callsign, band/frequency, local/remote Maidenhead grids, distance, signal reports/SNR, target power, available radio meter values (power/SWR/ALC), outcome, state, and terminal reason.
 
+`tx_power_target_watts` is the requested initial configured-power target and is
+retained for API compatibility. Nullable `tx_power_start_watts`,
+`tx_power_end_watts`, and `tx_power_max_watts` record actual FT-891 configured
+power readback; they are distinct from the raw RF power meter. End readback is
+best-effort in terminal/receive handling and can never change the QSO result.
+Old Pi payloads remain valid, and Forge schema v1 migrates additively to v2.
+
 Successful QSO:
 - normal contact exactly once;
 - telemetry exactly once.
@@ -152,6 +159,26 @@ does not implicitly authorize a subsequent station.
 - Receive-only configuration creates no physical transmit authority.
 - Local Maidenhead grid is frozen for the duration of one authorized QSO.
 - Persistent continuous receive architecture remains independent of transmit execution.
+
+## October 6 drive-home behavior
+
+The receive pipeline retains the newest valid decode whose destination is the
+configured local callsign and whose source callsign is present. It publishes an
+immutable presentation record only; the panel shows it only in BROWSE. Button 2
+adapts that exact caller to the existing QSO start contract, while Button 3
+dismisses the caller. Acceptance is single-use and repeated decodes from the
+same dismissed/accepted caller remain suppressed until another caller arrives.
+
+Initial QSO power is derived only from frozen local/remote Maidenhead grids:
+20 W through 3,000 km, then 25/30/35/40/45 W through 4,500/6,000/7,500/9,000/
+10,500 km, 50/55/60/65 W through 11,500/12,500/13,500/14,500 km, and 70 W
+beyond. Unknown/invalid distance uses 20 W. The target is applied once during
+preparation and is never continuously reasserted during the active QSO.
+
+CQ freshness is validated synchronously at the explicit operator selection.
+The accepted selection remains valid across bounded CAT preparation delay;
+post-preparation authorization still checks all radio, mode, location, identity,
+and transmit-session gates without aging the already accepted selection again.
 
 
 ## CP9.1 Final Acceptance Record — 2026-10-03

@@ -880,8 +880,9 @@ The native FT8 path now includes:
 - Context Button 3 as the visible one-shot active-QSO abort control;
 - one explicitly operator-authorized bounded QSO at a time;
 - a narrow FT-891/DigiRig transmit executor using serialized Enhanced CAT ownership;
-- verified FT-891 CAT preparation before each QSO: 20 W, the selected band's
-  standard FT8 dial frequency, and menu 11-07 SSB-BFO = USB;
+- verified FT-891 CAT preparation before each QSO: one frozen-grid-distance
+  initial target hard-clamped to 20–70 W, the selected band's standard FT8 dial
+  frequency, and menu 11-07 SSB-BFO = USB;
 - verified FT8-screen exit restoration: 100 W and menu 11-07 SSB-BFO = AUTO;
 - frozen QSO context, including local Maidenhead grid, frequency, parity,
   audio frequency, callsign, remote grid when known, POTA metadata, and stable

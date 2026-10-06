@@ -95,6 +95,12 @@ SSB MIC SELECT = REAR. Shared exit to Browse/POTA/DX normalizes it to MIC,
 regardless of its prior value. Failed preparation grants no transmit authority.
 See `../FT8_ENGINEERING_GUIDE.md` for cleanup and hardware acceptance.
 
+FT8 initial power is a single preparation-time request derived from the frozen
+local/remote grids and hard-clamped to 20–70 W. Active-QSO code must not
+continually reset configured power because operator manual override is
+authoritative. Configured-power CAT readback is not the raw RF meter and failure
+to read it must not alter or fail a QSO.
+
 ## Physical controls
 
 Physical controls are normalized into typed actions and dispatched through

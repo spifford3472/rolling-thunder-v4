@@ -11,6 +11,7 @@ from rolling_thunder.ft8.decoder import (
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
     FT8Decode,
+    FT8IncomingCall,
     FT8MessageKind,
     FT8Period,
     FT8PeriodParity,
@@ -58,6 +59,7 @@ __all__ = [
     "FT8EncodedMessage",
     "FT8Encoder",
     "FT8EncoderError",
+    "FT8IncomingCall",
     "FT8MessageKind",
     "FT8PcmPeriod",
     "FT8Period",

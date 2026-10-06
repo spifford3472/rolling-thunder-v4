@@ -39,19 +39,22 @@ class FT8QsoAuthorizationService:
         gps_state: GPSState | None,
         qso_id: UUID | None = None,
         freshness_reference_period: FT8Period | None = None,
+        selection_freshness_validated: bool = False,
+        tx_power_target_watts: int = 20,
+        tx_power_start_watts: int | None = None,
     ) -> FT8QsoContext:
         """Freeze one selected CQ without tuning, keying, or starting a QSO."""
         current_period = self.clock.current_period()
-        freshness_period = freshness_reference_period or current_period
-        if freshness_period.index > current_period.index:
-            raise FT8QsoAuthorizationError(
-                "FT8 freshness reference period cannot be in the future"
+        if not selection_freshness_validated:
+            self.validate_selection_freshness(
+                activity,
+                selection_period=freshness_reference_period or current_period,
+                current_period=current_period,
             )
-        age_periods = freshness_period.index - activity.last_period.index
-        if age_periods < 0:
-            raise FT8QsoAuthorizationError("selected FT8 CQ is from a future period")
-        if age_periods > FT8_CQ_MAX_AGE_PERIODS:
-            raise FT8QsoAuthorizationError("selected FT8 CQ is stale")
+        if not 20 <= tx_power_target_watts <= 70 or tx_power_target_watts % 5:
+            raise FT8QsoAuthorizationError(
+                "FT8 initial power target must be a 5 W step between 20 and 70 W"
+            )
 
         if radio_state.connection_state is not RadioConnectionState.CONNECTED:
             raise FT8QsoAuthorizationError("FT8 QSO authorization requires a connected radio")
@@ -109,8 +112,29 @@ class FT8QsoAuthorizationService:
             location_label=location_label,
             remote_grid=activity.grid,
             pota_cq=activity.pota_cq,
+            tx_power_target_watts=tx_power_target_watts,
+            tx_power_start_watts=tx_power_start_watts,
             **({} if qso_id is None else {"qso_id": qso_id}),
         )
+
+    def validate_selection_freshness(
+        self,
+        activity: FT8CQActivity,
+        *,
+        selection_period: FT8Period,
+        current_period: FT8Period | None = None,
+    ) -> None:
+        """Fail closed at operator selection, before any CAT preparation delay."""
+        observed_current = current_period or self.clock.current_period()
+        if selection_period.index > observed_current.index:
+            raise FT8QsoAuthorizationError(
+                "FT8 freshness reference period cannot be in the future"
+            )
+        age_periods = selection_period.index - activity.last_period.index
+        if age_periods < 0:
+            raise FT8QsoAuthorizationError("selected FT8 CQ is from a future period")
+        if age_periods > FT8_CQ_MAX_AGE_PERIODS:
+            raise FT8QsoAuthorizationError("selected FT8 CQ is stale")
 
 def freeze_ft8_location(
     gps_state: GPSState | None,

@@ -63,7 +63,7 @@ class FT8PerformanceOutboxRepository:
                     )
                     connection.commit()
                     return attempt
-                if row[0] != payload:
+                if row[0] != payload and self._decode(row[0]) != attempt:
                     raise FT8PerformanceConflictError(
                         "FT8 attempt idempotency key was reused with different telemetry: "
                         f"{attempt.attempt_id}"

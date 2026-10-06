@@ -1,11 +1,26 @@
 """Tests for structured FT8 machine-analysis telemetry."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from uuid import UUID
 
 import pytest
 
+from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
+from rolling_thunder.ft8.coordinator import FT8QsoResult
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8Period,
+    FT8PeriodParity,
+    FT8QsoContext,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.performance import FT8AttemptOutcome, FT8PerformanceAttempt
+from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
+from rolling_thunder.ft8.performance_recording import (
+    FT8PerformanceRecorder,
+    build_ft8_attempt_seed,
+)
 
 
 def _attempt(**updates: object) -> FT8PerformanceAttempt:
@@ -101,3 +116,93 @@ def test_meter_fields_are_explicitly_nullable_before_rf() -> None:
     assert attempt.power_meter_raw is None
     assert attempt.swr_meter_raw is None
     assert attempt.alc_meter_raw is None
+
+
+def test_configured_power_telemetry_is_distinct_from_raw_rf_meter() -> None:
+    attempt = _attempt(
+        tx_power_target_watts=55,
+        tx_power_start_watts=55,
+        tx_power_end_watts=60,
+        tx_power_max_watts=60,
+        power_meter_raw=173,
+    )
+
+    assert attempt.tx_power_target_watts == 55
+    assert attempt.tx_power_start_watts == 55
+    assert attempt.tx_power_end_watts == 60
+    assert attempt.tx_power_max_watts == 60
+    assert attempt.power_meter_raw == 173
+
+
+def test_attempt_seed_freezes_extreme_grid_power_before_preparation() -> None:
+    started = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
+    seed = build_ft8_attempt_seed(
+        FT8CQActivity(
+            callsign="VK2ABC",
+            last_period=FT8Period.from_utc(started),
+            snr_db=-10,
+            dt_seconds=0.1,
+            audio_frequency_hz=1500,
+            grid="QF56",
+        ),
+        radio_state=RadioState(
+            connection_state=RadioConnectionState.CONNECTED,
+            frequency=Frequency(hz=14_074_000),
+            mode=RadioMode.USB,
+            updated_at=started,
+        ),
+        gps_state=None,
+        home_grid="EM79xm",
+        started_at_utc=started,
+    )
+
+    assert seed.local_grid == "EM79xm"
+    assert seed.remote_grid == "QF56"
+    assert seed.tx_power_target_watts == 70
+
+
+def test_recorder_preserves_requested_start_end_and_max_configured_power(
+    tmp_path: Path,
+) -> None:
+    started = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
+    context = FT8QsoContext(
+        local_callsign="KI5VNB",
+        remote_callsign="VK2ABC",
+        target_audio_frequency_hz=1500,
+        radio_frequency_hz=14_074_000,
+        radio_band="20m",
+        radio_mode="USB",
+        local_grid="EM79xm",
+        remote_grid="QF56",
+        tx_parity=FT8PeriodParity.EVEN,
+        authorized_period=FT8Period.from_utc(started),
+        authorized_utc=started,
+        signal_report_db=-10,
+        tx_power_target_watts=70,
+        tx_power_start_watts=70,
+    )
+    result = FT8QsoResult(
+        status=FT8QsoState.ABORTED,
+        context=context,
+        sent_report_db=-10,
+        received_report_db=None,
+        started_utc=started,
+        ended_utc=started + timedelta(seconds=30),
+        terminal_reason="operator abort",
+    )
+    recorder = FT8PerformanceRecorder(
+        FT8PerformanceOutboxRepository(tmp_path / "contacts.db"),
+        clock=lambda: result.ended_utc,
+    )
+
+    attempt = recorder.record_qso_result(
+        result,
+        power_meter_raw=173,
+        tx_power_end_watts=60,
+    )
+
+    assert attempt.tx_power_target_watts == 70
+    assert attempt.tx_power_start_watts == 70
+    assert attempt.tx_power_end_watts == 60
+    assert attempt.tx_power_max_watts == 70
+    assert attempt.power_meter_raw == 173

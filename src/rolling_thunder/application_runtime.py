@@ -38,7 +38,10 @@ from rolling_thunder.ft8.attempt_history import (
 )
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
-from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
+from rolling_thunder.ft8.authorization import (
+    FT8QsoAuthorizationError,
+    FT8QsoAuthorizationService,
+)
 from rolling_thunder.ft8.band_control import FT8BandController
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.decoder import (
@@ -156,7 +159,7 @@ from rolling_thunder.pota_spot_service import PotaSpotServiceState
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
 from rolling_thunder.qrz_profile_image import QrzProfileImageProvider
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
-from rolling_thunder.radio import Radio
+from rolling_thunder.radio import Radio, RadioError
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.receive_tuning import ReceiveTuningService
@@ -660,6 +663,7 @@ class ApplicationRuntime:
                 diagnostic_snapshot_path=(
                     config.ft8.receive.diagnostic_snapshot_path
                 ),
+                local_callsign=config.operator.callsign,
             )
 
         ft8_band_control: FT8BandController | None = None
@@ -743,6 +747,13 @@ class ApplicationRuntime:
             def handle_ft8_terminal_result(result: FT8QsoResult) -> object:
                 contact = ft8_logging.handle_terminal_result(result)
                 if ft8_performance_recorder is not None:
+                    tx_power_end_watts = None
+                    power_reader = getattr(radio, "read_power_watts", None)
+                    if callable(power_reader):
+                        try:
+                            tx_power_end_watts = power_reader()
+                        except (RadioError, RuntimeError, ValueError):
+                            tx_power_end_watts = None
                     meter_summary = None
                     meter_reader = getattr(resolved_ft8_executor, "meter_summary", None)
                     if callable(meter_reader):
@@ -758,6 +769,7 @@ class ApplicationRuntime:
                         alc_meter_raw=(
                             None if meter_summary is None else meter_summary.alc_peak_raw
                         ),
+                        tx_power_end_watts=tx_power_end_watts,
                     )
                 return contact
 
@@ -936,9 +948,9 @@ class ApplicationRuntime:
                     radio_state=prepared_radio_state,
                     gps_state=runtime.latest_gps_state,
                     qso_id=attempt_seed.attempt_id,
-                    freshness_reference_period=FT8Period(
-                        attempt_seed.selection_period_index
-                    ),
+                    selection_freshness_validated=True,
+                    tx_power_target_watts=attempt_seed.tx_power_target_watts,
+                    tx_power_start_watts=attempt_seed.tx_power_target_watts,
                 )
                 runtime.ft8_qso.authorize_and_start(context)
 
@@ -996,12 +1008,21 @@ class ApplicationRuntime:
         if self.ft8_authorization is None or self.ft8_qso is None:
             return False
         if self.ft8_qso_start is not None:
+            selected_at_utc = self.ft8_authorization.clock.now_utc()
+            selection_period = FT8Period.from_utc(selected_at_utc)
+            try:
+                self.ft8_authorization.validate_selection_freshness(
+                    activity,
+                    selection_period=selection_period,
+                )
+            except FT8QsoAuthorizationError:
+                return False
             seed = build_ft8_attempt_seed(
                 activity,
                 radio_state=self.latest_radio_state,
                 gps_state=self.latest_gps_state,
                 home_grid=self.ft8_authorization.home_grid,
-                started_at_utc=self.ft8_authorization.clock.now_utc(),
+                started_at_utc=selected_at_utc,
             )
             return self.ft8_qso_start.start(activity, attempt_seed=seed)
         self.authorize_ft8_qso(activity)

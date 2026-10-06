@@ -7,7 +7,7 @@ Date: 2026-10-02
 
 Implementation state: native FT8 is end-to-end and remains protected by explicit
 configuration and operator-authorization gates. CP9.1 provides the mobile-readable
-browser and physical-control workflow, verified 20 W / FT8-frequency / SSB-BFO USB
+browser and physical-control workflow, verified adaptive 20–70 W / FT8-frequency / SSB-BFO USB
 preparation before a QSO, 100 W / SSB-BFO AUTO restoration when leaving FT8,
 Context Button 3 active-QSO abort, same-day per-band worked suppression, live-map
 FT8 state, and a separate schema-15 machine-analysis telemetry pipeline to Forge
@@ -283,6 +283,14 @@ A browser-oriented immutable record derived from decodes:
 
 CQ activity is presentation/discovery state only. It has no transmit authority.
 
+### `FT8IncomingCall`
+
+The receive service publishes the most recent valid decode addressed to the
+configured local callsign when a source callsign exists. The immutable record
+contains caller, period, SNR, audio frequency, and optional grid. It is
+presentation state only: BROWSE may offer explicit Button 2 answer/Button 3
+ignore actions, while ACTIVE and TERMINAL never expose the alert.
+
 ### `FT8QsoContext`
 
 Created once when the operator authorizes one QSO. It freezes:
@@ -295,6 +303,7 @@ Created once when the operator authorizes one QSO. It freezes:
 - location metadata needed by logging
 - selected TX period parity
 - authorization timestamp/period
+- requested initial configured power and actual configured power at start
 
 GPS movement after creation must not change the transmitted grid during that
 QSO.

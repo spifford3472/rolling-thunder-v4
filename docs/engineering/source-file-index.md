@@ -148,20 +148,20 @@ originates from one screen.
 - `src/rolling_thunder/ft8/coordinator.py` — FT8 subsystem module for coordinator; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/decoder.py` — FT8 subsystem module for decoder; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/diagnostics.py` — Bounded FT8 audio/clock/decoder diagnostics, NTP-primary readiness, and morning comparison-session accounting.
-- `src/rolling_thunder/ft8/distance.py` — FT8 subsystem module for distance; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/distance.py` — Maidenhead distance plus deterministic 20–70 W initial-power thresholds.
 - `src/rolling_thunder/ft8/domain.py` — Core shared domain models used across application services.
 - `src/rolling_thunder/ft8/encoder.py` — FT8 subsystem module for encoder; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/hardware_transmit.py` — FT8 subsystem module for hardware transmit; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/logging.py` — FT8 subsystem module for logging; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/operator_qso.py` — FT8 subsystem module for operator qso; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/panel.py` — FT8 subsystem module for panel; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/performance.py` — FT8 subsystem module for performance; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/panel.py` — Presentation-safe CQ selection plus incoming-call answer/ignore state.
+- `src/rolling_thunder/ft8/performance.py` — Backward-compatible FT8 attempt telemetry including requested and configured-power readbacks.
 - `src/rolling_thunder/ft8/performance_outbox.py` — FT8 subsystem module for performance outbox; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/performance_recording.py` — FT8 subsystem module for performance recording; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/performance_sync.py` — FT8 subsystem module for performance sync; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/qso.py` — FT8 subsystem module for qso; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/radio_preparation.py` — FT8 subsystem module for radio preparation; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/receive.py` — FT8 subsystem module for receive; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/receive.py` — Continuous receive/diagnostics plus configured-local-callsign addressed-decode publication.
 - `src/rolling_thunder/ft8/session.py` — FT8 subsystem module for session; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/start_control.py` — FT8 subsystem module for start control; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/status.py` — FT8 subsystem module for status; see FT8 engineering documents before modifying its contract.

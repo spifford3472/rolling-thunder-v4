@@ -202,6 +202,16 @@ def test_prepare_refuses_transmitting_radio_before_changes() -> None:
     assert radio.calls == ["refresh"]
 
 
+def test_prepare_applies_one_frozen_adaptive_power_target() -> None:
+    radio = FakePreparedRadio()
+
+    prepared = FT8RadioPreparationService(radio).prepare_for_qso(65)
+
+    assert prepared.power_watts == 65
+    assert radio.power_watts == 65
+    assert radio.calls.count("power:65") == 1
+
+
 def test_restore_forces_100w_and_auto() -> None:
     radio = FakePreparedRadio()
     radio.power_watts = 20

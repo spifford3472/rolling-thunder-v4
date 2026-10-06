@@ -109,6 +109,12 @@ The typed FT-891 adapter owns menu 11-05 encoding/readback. Existing FT8
 receive/preparation services own REAR entry and MIC normal-context cleanup;
 UI contexts do not issue CAT writes.
 
+The receive service also owns configured-local-callsign addressed-decode capture;
+the FT8 panel owns answer/ignore presentation state. Adaptive initial power is
+computed from the QSO-frozen Maidenhead grids and applied once by the existing
+preparation service. Configured-power telemetry uses typed FT-891 CAT readback
+and remains distinct from raw transmit-meter values.
+
 Transmit authority is intentionally FT8-scoped and bounded. It must not become a
 general application PTT capability.
 

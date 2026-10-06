@@ -165,7 +165,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_contact_sync.py` — composed dashboard completion notification
   and shared Pi/Forge/Wavelog Mobile path, including optional QRZ and replay.
 
-- `tests/test_forge_ft8_performance.py`
+- `tests/test_forge_ft8_performance.py` — structured configured-power fields, legacy replay, and additive Forge schema migration.
 - `tests/test_forge_ft8_performance_api.py`
 - `tests/test_ft891_cat.py`
 - `tests/test_ft891_fm_repeater_cat.py`
@@ -178,19 +178,19 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_audio.py`
 - `tests/test_ft8_audio_buffer.py`
 - `tests/test_ft8_audio_output.py`
-- `tests/test_ft8_authorization.py`
+- `tests/test_ft8_authorization.py` — fail-closed selection freshness and preparation-delay regression coverage.
 - `tests/test_ft8_band_control.py`
 - `tests/test_ft8_bands.py`
 - `tests/test_ft8_config.py`
 - `tests/test_ft8_coordinator.py`
 - `tests/test_ft8_decoder.py`
-- `tests/test_ft8_distance.py`
+- `tests/test_ft8_distance.py` — Maidenhead distance and conservative adaptive initial-power thresholds.
 - `tests/test_ft8_domain.py`
 - `tests/test_ft8_encoder.py`
 - `tests/test_ft8_hardware_transmit.py`
 - `tests/test_ft8_logging.py`
 - `tests/test_ft8_operator_qso.py`
-- `tests/test_ft8_panel.py`
+- `tests/test_ft8_panel.py` — CQ selection plus explicit incoming-call answer/ignore/staleness behavior.
 - `tests/test_ft8_performance.py`
 - `tests/test_ft8_performance_http.py`
 - `tests/test_ft8_performance_outbox.py`
@@ -198,7 +198,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_physical_controls.py`
 - `tests/test_ft8_qso.py`
 - `tests/test_ft8_radio_preparation.py`
-- `tests/test_ft8_receive.py`
+- `tests/test_ft8_receive.py` — continuous capture plus addressed-call publication without changing diagnostics.
 - `tests/test_ft8_diagnostics.py` — NTP-primary/GPS-fallback readiness, audio health, and bounded 05:15 New York comparison-session accounting.
 - `tests/test_ft8_schema_migration.py`
 - `tests/test_ft8_session.py`

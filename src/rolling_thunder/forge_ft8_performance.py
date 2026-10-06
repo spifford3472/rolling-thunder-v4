@@ -17,7 +17,7 @@ from rolling_thunder.ft8.performance import (
 )
 
 Clock = Callable[[], datetime]
-_FORGE_FT8_SCHEMA_VERSION = 1
+_FORGE_FT8_SCHEMA_VERSION = 2
 
 
 def _utc_now() -> datetime:
@@ -64,7 +64,10 @@ class ForgeFT8PerformanceRepository:
                     (str(attempt.attempt_id),),
                 ).fetchone()
                 if row is not None:
-                    if row[0] != payload_sha256:
+                    if row[0] not in {
+                        payload_sha256,
+                        _legacy_payload_sha256(attempt),
+                    }:
                         connection.rollback()
                         raise ForgeFT8PerformanceConflictError(
                             "FT8 performance attempt UUID was replayed with different data: "
@@ -90,6 +93,9 @@ class ForgeFT8PerformanceRepository:
                         dial_frequency_hz,
                         mode,
                         tx_power_target_watts,
+                        tx_power_start_watts,
+                        tx_power_end_watts,
+                        tx_power_max_watts,
                         power_meter_raw,
                         swr_meter_raw,
                         alc_meter_raw,
@@ -122,6 +128,9 @@ class ForgeFT8PerformanceRepository:
                         :dial_frequency_hz,
                         :mode,
                         :tx_power_target_watts,
+                        :tx_power_start_watts,
+                        :tx_power_end_watts,
+                        :tx_power_max_watts,
                         :power_meter_raw,
                         :swr_meter_raw,
                         :alc_meter_raw,
@@ -159,6 +168,9 @@ class ForgeFT8PerformanceRepository:
                         "dial_frequency_hz": attempt.dial_frequency_hz,
                         "mode": attempt.mode,
                         "tx_power_target_watts": attempt.tx_power_target_watts,
+                        "tx_power_start_watts": attempt.tx_power_start_watts,
+                        "tx_power_end_watts": attempt.tx_power_end_watts,
+                        "tx_power_max_watts": attempt.tx_power_max_watts,
                         "power_meter_raw": attempt.power_meter_raw,
                         "swr_meter_raw": attempt.swr_meter_raw,
                         "alc_meter_raw": attempt.alc_meter_raw,
@@ -324,6 +336,29 @@ class ForgeFT8PerformanceRepository:
                     WHERE singleton_id = 1
                     """
                 )
+                current_version = 1
+
+            if current_version < 2:
+                for column_name in (
+                    "tx_power_start_watts",
+                    "tx_power_end_watts",
+                    "tx_power_max_watts",
+                ):
+                    connection.execute(
+                        f"""
+                        ALTER TABLE ft8_performance_attempts
+                        ADD COLUMN {column_name} INTEGER
+                        CHECK({column_name} IS NULL OR {column_name} BETWEEN 5 AND 100)
+                        """
+                    )
+                connection.execute(
+                    """
+                    UPDATE forge_ft8_performance_schema
+                    SET schema_version = 2,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE singleton_id = 1
+                    """
+                )
 
             connection.commit()
         except sqlite3.Error:
@@ -358,6 +393,23 @@ class ForgeFT8PerformanceService:
 def _payload_sha256(attempt: FT8PerformanceAttempt) -> str:
     payload = dumps(
         attempt.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _legacy_payload_sha256(attempt: FT8PerformanceAttempt) -> str:
+    """Hash the pre-power-telemetry API shape for idempotent old-row replay."""
+    payload_value = attempt.model_dump(mode="json")
+    for field_name in (
+        "tx_power_start_watts",
+        "tx_power_end_watts",
+        "tx_power_max_watts",
+    ):
+        payload_value.pop(field_name, None)
+    payload = dumps(
+        payload_value,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")

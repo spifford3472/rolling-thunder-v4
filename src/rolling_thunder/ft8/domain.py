@@ -152,6 +152,40 @@ class FT8CQActivity:
 
 
 @dataclass(frozen=True, slots=True)
+class FT8IncomingCall:
+    """Most recent valid decode explicitly addressed to the local station."""
+
+    callsign: str
+    period: FT8Period
+    snr_db: int
+    dt_seconds: float
+    audio_frequency_hz: int
+    grid: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "callsign",
+            _CALLSIGN_ADAPTER.validate_python(self.callsign),
+        )
+        if self.grid is not None:
+            object.__setattr__(self, "grid", _GRID_ADAPTER.validate_python(self.grid))
+        if self.audio_frequency_hz <= 0:
+            raise ValueError("FT8 incoming-call audio_frequency_hz must be positive")
+
+    def as_qso_activity(self) -> FT8CQActivity:
+        """Adapt the exact caller to the existing bounded QSO start contract."""
+        return FT8CQActivity(
+            callsign=self.callsign,
+            last_period=self.period,
+            snr_db=self.snr_db,
+            dt_seconds=self.dt_seconds,
+            audio_frequency_hz=self.audio_frequency_hz,
+            grid=self.grid,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class FT8QsoContext:
     """Frozen authorization snapshot for exactly one operator-selected QSO."""
 
@@ -174,6 +208,8 @@ class FT8QsoContext:
     location_label: str | None = None
     remote_grid: str | None = None
     pota_cq: bool = False
+    tx_power_target_watts: int = 20
+    tx_power_start_watts: int | None = None
     qso_id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
@@ -237,6 +273,10 @@ class FT8QsoContext:
         if self.location_label is not None:
             label = self.location_label.strip()
             object.__setattr__(self, "location_label", label or None)
+        if not 20 <= self.tx_power_target_watts <= 70:
+            raise ValueError("tx_power_target_watts must be between 20 and 70")
+        if self.tx_power_start_watts is not None and not 5 <= self.tx_power_start_watts <= 100:
+            raise ValueError("tx_power_start_watts must be between 5 and 100")
 
 
 class FT8QsoState(StrEnum):

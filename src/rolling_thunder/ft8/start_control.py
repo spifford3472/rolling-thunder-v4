@@ -149,7 +149,9 @@ class FT8QsoStartController:
         attempt_seed: FT8AttemptSeed,
     ) -> None:
         try:
-            prepared = self._preparation.prepare_for_qso()
+            prepared = self._preparation.prepare_for_qso(
+                attempt_seed.tx_power_target_watts
+            )
         except FT8RadioPreparationError as error:
             self._handle_prepare_failure(activity, attempt_seed, error)
             return
