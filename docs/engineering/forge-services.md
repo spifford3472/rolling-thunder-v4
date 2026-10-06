@@ -100,6 +100,13 @@ recoverable and never triggers numeric-ID scanning. The application service reso
 this exact target before its durable UUID claim and binds the target ID into the
 payload hash.
 
+The same private process can expose the presentation-neutral FT8 performance
+endpoint. Its additive API accepts old payloads without configured-power
+readbacks and new payloads with nullable `tx_power_start_watts`,
+`tx_power_end_watts`, and `tx_power_max_watts`. Forge's dedicated FT8 SQLite
+schema migrates v1 to v2 without rebuilding or discarding attempts; legacy
+payload hashes remain valid for idempotent replay.
+
 ## Reusable service design rules
 
 All Forge additions and modifications must follow these rules:

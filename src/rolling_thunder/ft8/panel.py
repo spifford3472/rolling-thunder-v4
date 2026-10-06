@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from rolling_thunder.ft8.coordinator import FT8QsoResult
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8QsoContext, FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8QsoContext,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.receive import FT8ReceiveState
 
 
@@ -31,6 +36,7 @@ class FT8PanelSnapshot:
     attempt_count: int = 0
     attempts_per_state: int = 0
     authorization_enabled: bool = False
+    incoming_call: FT8IncomingCall | None = None
 
 
 class FT8PanelController:
@@ -49,6 +55,7 @@ class FT8PanelController:
         attempts_per_state: Callable[[], int] | None = None,
         authorization_enabled: Callable[[], bool] | None = None,
         activity_filter: Callable[[FT8CQActivity], bool] | None = None,
+        respond: Callable[[FT8IncomingCall], bool] | None = None,
     ) -> None:
         self._receive_state = receive_state
         self._qso_state = qso_state
@@ -61,7 +68,9 @@ class FT8PanelController:
         self._attempts_per_state = attempts_per_state or (lambda: 0)
         self._authorization_enabled = authorization_enabled or (lambda: True)
         self._activity_filter = activity_filter or (lambda _activity: True)
+        self._respond = respond
         self._selected_callsign: str | None = None
+        self._dismissed_incoming_callsign: str | None = None
 
     def snapshot(self) -> FT8PanelSnapshot:
         """Return current CQ browser/QSO presentation state without I/O."""
@@ -93,6 +102,18 @@ class FT8PanelController:
         else:
             self._selected_callsign = None
 
+        incoming_call = None
+        if mode is FT8PanelMode.BROWSE and receive is not None:
+            candidate = receive.incoming_call
+            if (
+                candidate is not None
+                and receive.last_period is not None
+                and receive.last_period.index - candidate.period.index < 6
+                and candidate.callsign != self._dismissed_incoming_callsign
+            ):
+                self._dismissed_incoming_callsign = None
+                incoming_call = candidate
+
         return FT8PanelSnapshot(
             mode=mode,
             cq_activity=cq_activity,
@@ -102,6 +123,7 @@ class FT8PanelController:
             attempt_count=self._attempt_count(),
             attempts_per_state=self._attempts_per_state(),
             authorization_enabled=self._authorization_enabled(),
+            incoming_call=incoming_call,
         )
 
     def visible_cq_activity(self, *, limit: int = 8) -> tuple[FT8CQActivity, ...]:
@@ -156,6 +178,25 @@ class FT8PanelController:
         if callsign is None:
             return False
         return self.select_callsign(callsign)
+
+    def answer_incoming_call(self) -> bool:
+        """Explicitly accept the exact current caller through the normal QSO path."""
+        snapshot = self.snapshot()
+        incoming_call = snapshot.incoming_call
+        if incoming_call is None or not snapshot.authorization_enabled:
+            return False
+        self._dismissed_incoming_callsign = incoming_call.callsign
+        if self._respond is None:
+            return False
+        return self._respond(incoming_call)
+
+    def dismiss_incoming_call(self) -> bool:
+        """Suppress the current caller until a different addressed caller arrives."""
+        incoming_call = self.snapshot().incoming_call
+        if incoming_call is None:
+            return False
+        self._dismissed_incoming_callsign = incoming_call.callsign
+        return True
 
     def select_callsign(self, callsign: str) -> bool:
         """Request exactly one currently visible CQ station."""

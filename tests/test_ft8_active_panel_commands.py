@@ -1,7 +1,12 @@
 """Tests for FT8-aware active-panel command routing."""
 
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
-from rolling_thunder.ft8.domain import FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8IncomingCall,
+    FT8MessageKind,
+    FT8Period,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.panel import FT8PanelMode, FT8PanelSnapshot
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 
@@ -55,12 +60,18 @@ class Panel:
         self.mode = FT8PanelMode.BROWSE
         self.selected_callsign: str | None = None
         self.calls: list[str] = []
+        self.incoming_call: FT8IncomingCall | None = None
 
     def snapshot(self) -> FT8PanelSnapshot:
         state = FT8QsoState.IDLE if self.mode is FT8PanelMode.BROWSE else FT8QsoState.WAIT_REPORT
         if self.mode is FT8PanelMode.TERMINAL:
             state = FT8QsoState.ABORTED
-        return FT8PanelSnapshot(mode=self.mode, cq_activity=(), qso_state=state)
+        return FT8PanelSnapshot(
+            mode=self.mode,
+            cq_activity=(),
+            qso_state=state,
+            incoming_call=self.incoming_call,
+        )
 
     def select_previous(self) -> str | None:
         self.calls.append("previous")
@@ -81,6 +92,14 @@ class Panel:
     def activate_selection(self) -> bool:
         self.calls.append("activate")
         return self.selected_callsign is not None
+
+    def answer_incoming_call(self) -> bool:
+        self.calls.append("answer")
+        return self.incoming_call is not None
+
+    def dismiss_incoming_call(self) -> bool:
+        self.calls.append("ignore")
+        return self.incoming_call is not None
 
     def abort(self) -> None:
         self.calls.append("abort")
@@ -154,6 +173,26 @@ def test_ft8_context_button_1_cycles_band_only_in_browser() -> None:
     assert commands.primary() is False
     assert band_calls == ["cycle"]
     assert delegate.calls == []
+
+
+def test_ft8_incoming_call_uses_button_2_answer_and_button_3_ignore() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    panel = Panel()
+    panel.incoming_call = FT8IncomingCall(
+        callsign="K1ABC",
+        period=FT8Period(100),
+        snr_db=-8,
+        dt_seconds=0.1,
+        audio_frequency_hz=1500,
+        kind=FT8MessageKind.REPORT,
+        grid="FN31",
+        report_db=-8,
+    )
+    commands = FT8AwareActivePanelCommands(navigation, Delegate(), panel)
+
+    assert commands.secondary() is True
+    assert commands.tertiary() is True
+    assert panel.calls == ["answer", "ignore"]
 
 
 def test_ft8_band_change_clears_selection_and_dashboard_callsign() -> None:

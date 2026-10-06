@@ -96,12 +96,33 @@ a new explicit operator action.
 - Context Button 3 during an active QSO — immediately abort the current FT8 QSO.
 - Leaving the FT8 context aborts any active FT8 work before radio restoration.
 
+When a decoded FT8 message is addressed to the configured local callsign while
+the screen is in the browser, a large incoming-call alert replaces the CQ table.
+It shows the caller, received SNR, and grid when known. Button 2 answers exactly
+that caller; Button 3 ignores it. Repeated messages from an ignored or already
+accepted caller do not repeatedly authorize a QSO. Incoming messages do not
+interrupt active or terminal QSO screens.
+
+Button 2 starts a responder exchange, not a new CQ call. If the accepted message
+contains the caller's grid, Rolling Thunder's first transmission in the opposite
+slot is a signal report. If the accepted message already contains a signal
+report (for example `KI5VNB K0BQB -03`), Rolling Thunder retains that report and
+its first transmission is the acknowledged `R_REPORT`. The normal final 73 and
+bounded retry/safety checks still apply. Merely decoding either message never
+transmits.
+
 ## Radio Preparation
 
 Before an authorized FT8 QSO can transmit, Rolling Thunder prepares and verifies the FT-891:
 - FT8 dial frequency for the selected band;
-- 20 W output power;
+- one initial 20–70 W configured-power target derived from frozen local/remote
+  Maidenhead-grid distance;
 - SSB-BFO USB.
+
+Unknown distance and paths through 3,000 km use 20 W. The thresholds then use
+5 W steps at 4,500, 6,000, 7,500, 9,000, 10,500, 11,500, 12,500, 13,500, and
+14,500 km; longer paths use 70 W. Power is prepared once. The QSO controller
+does not continually overwrite an operator's later manual adjustment.
 
 A preparation failure is fail-closed: no PTT and no FT8 transmit audio.
 

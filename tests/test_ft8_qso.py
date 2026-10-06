@@ -1,11 +1,13 @@
 """Tests for the hardware-free FT8 QSO state machine."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
 from rolling_thunder.ft8.domain import (
     FT8Decode,
+    FT8IncomingCall,
     FT8MessageKind,
     FT8Period,
     FT8PeriodParity,
@@ -62,6 +64,68 @@ def _started() -> tuple[FT8QsoController, RecordingDigitalTransmitSession]:
     assert controller.state is FT8QsoState.AUTHORIZED
     controller.start()
     return controller, session
+
+
+def _responder_context(kind: FT8MessageKind) -> FT8QsoContext:
+    report_db = -3 if kind is FT8MessageKind.REPORT else None
+    callsign = "K0BQB" if report_db is not None else "W4YRL"
+    grid = None if report_db is not None else "EL99"
+    raw_payload = "-03" if report_db is not None else "EL99"
+    return replace(
+        _context(),
+        remote_callsign=callsign,
+        signal_report_db=-7,
+        remote_grid=grid,
+        responder_inbound=FT8IncomingCall(
+            callsign=callsign,
+            period=FT8Period(100),
+            snr_db=-7,
+            dt_seconds=0.1,
+            audio_frequency_hz=1500,
+            kind=kind,
+            grid=grid,
+            report_db=report_db,
+            raw_message=f"KI5VNB {callsign} {raw_payload}",
+        ),
+    )
+
+
+def test_grid_initiated_responder_sends_report_then_waits_for_r_report() -> None:
+    session = RecordingDigitalTransmitSession()
+    controller = FT8QsoController(session)
+    controller.authorize(_responder_context(FT8MessageKind.ADDRESSED_GRID))
+    controller.start()
+
+    assert controller.state is FT8QsoState.TX_REPORT
+    assert session.requests == []
+
+    controller.on_period(FT8Period(101))
+
+    assert session.requests[-1].kind is FT8TransmitKind.REPORT
+    assert controller.state is FT8QsoState.WAIT_R_REPORT
+    controller.on_decode(_decode(102, FT8MessageKind.R_REPORT, source="W4YRL"))
+    controller.on_period(FT8Period(103))
+    assert session.requests[-1].kind is FT8TransmitKind.SEVENTY_THREE
+    assert controller.state is FT8QsoState.COMPLETED
+
+
+def test_report_initiated_responder_sends_r_report_then_waits_for_ack() -> None:
+    session = RecordingDigitalTransmitSession()
+    controller = FT8QsoController(session)
+    controller.authorize(_responder_context(FT8MessageKind.REPORT))
+    controller.start()
+
+    assert controller.state is FT8QsoState.TX_R_REPORT
+    assert session.requests == []
+
+    controller.on_period(FT8Period(101))
+
+    assert session.requests[-1].kind is FT8TransmitKind.R_REPORT
+    assert controller.state is FT8QsoState.WAIT_73
+    controller.on_decode(_decode(102, FT8MessageKind.ACK_73, source="K0BQB"))
+    controller.on_period(FT8Period(103))
+    assert session.requests[-1].kind is FT8TransmitKind.SEVENTY_THREE
+    assert controller.state is FT8QsoState.COMPLETED
 
 
 def test_synthetic_exchange_completes_without_starting_second_qso() -> None:

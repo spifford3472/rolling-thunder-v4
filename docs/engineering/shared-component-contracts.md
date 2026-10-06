@@ -108,6 +108,10 @@ General UI/controller code does not have blanket transmit authority.
 
 FT8 has a deliberately bounded transmit path requiring explicit operator
 authorization for one QSO target and fail-closed preparation/session checks.
+An addressed decode remains receive-only until Button 2 explicitly accepts its
+exact immutable inbound record. Responder start phase is protocol-derived from
+that record (grid to REPORT; report to R_REPORT) and must not reuse the
+CQ-selected initiator start phase.
 
 Do not reuse that implementation as implicit permission for unrelated PTT,
 MOX, keying, tuner, or unattended transmission.
@@ -116,6 +120,12 @@ FT-891 FT8 context entry and pre-QSO preparation require verified menu 11-05
 SSB MIC SELECT = REAR. Shared exit to Browse/POTA/DX normalizes it to MIC,
 regardless of its prior value. Failed preparation grants no transmit authority.
 See `../FT8_ENGINEERING_GUIDE.md` for cleanup and hardware acceptance.
+
+FT8 initial power is a single preparation-time request derived from the frozen
+local/remote grids and hard-clamped to 20–70 W. Active-QSO code must not
+continually reset configured power because operator manual override is
+authoritative. Configured-power CAT readback is not the raw RF meter and failure
+to read it must not alter or fail a QSO.
 
 ## Physical controls
 

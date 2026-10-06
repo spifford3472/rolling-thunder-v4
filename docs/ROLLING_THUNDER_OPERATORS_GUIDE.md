@@ -412,6 +412,15 @@ rest of the UTC date.
   depending on current FT8 state.
 - Leaving the FT8 context aborts active FT8 work before restoration.
 
+While the CQ browser is idle, a valid decode addressed to the configured local
+callsign opens a prominent incoming-call alert showing the caller, received SNR,
+and grid when known. **Context Button #2** explicitly answers that exact caller
+through the bounded responder workflow. A grid-bearing inbound starts with our
+signal report; an inbound signal report starts with our acknowledged report.
+Both continue to the normal final 73. **Context Button #3** ignores the caller.
+The alert never interrupts an active or terminal QSO, and a decode never grants
+transmit authority by itself.
+
 ## One authorization means one QSO
 
 Rolling Thunder never automatically moves from a completed/failed station to a
@@ -423,8 +432,12 @@ Each QSO requires a new explicit operator authorization for one selected target.
 
 Before transmit, Rolling Thunder prepares and verifies the approved FT-891 FT8
 state. The current operating design uses the documented FT8 dial frequency,
-20-watt output, and SSB-BFO USB preparation. Failure is fail-closed: no PTT and
-no transmit audio.
+SSB-BFO USB, and a one-time initial power target calculated from the frozen local
+and remote Maidenhead grids. Unknown distance and paths through 3,000 km start at
+20 W; increasingly long paths use documented 5 W steps and paths beyond 14,500
+km start at the hard 70 W maximum. Failure is fail-closed: no PTT and no
+transmit audio. Rolling Thunder does not continually reset power after QSO start,
+so a manual operator adjustment remains authoritative.
 
 Leaving FT8 restores the documented normal radio values.
 
@@ -927,7 +940,7 @@ Rolling Thunder reduces workload but does not replace operator judgment.
 | POTA | Find/tune park activators | Encoder select; press tune; Button 1 band; Button 2 mode |
 | DX | Find/tune DX spots | Encoder select; press tune; Button 1 band; Button 2 mode |
 | Browse | Free-form receive/contact workflow | Encoder frequency; Button 2 step; Button 3 mode |
-| FT8 | Native CQ browser and bounded QSO | Encoder select; press start; Button 1 band; Button 3 abort/ack |
+| FT8 | Native CQ browser and bounded QSO | Encoder select; press start; Button 1 band; incoming Button 2 answer / Button 3 ignore; active Button 3 abort/ack |
 | Repeaters | Nearby 6 m repeater selection | Encoder select; press configure; Button 1 filter; Button 2 active toggle |
 | Weather | Conditions/forecast/alerts | Encoder scrolls long alert text |
 | Settings | Runtime display/preferences | Encoder zoom; Buttons 1 radar, 2 style, 3 callsign info |

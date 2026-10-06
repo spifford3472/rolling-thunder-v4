@@ -10,8 +10,13 @@ from rolling_thunder.domain import RadioState
 from rolling_thunder.ft8.authorization import freeze_ft8_location
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
 from rolling_thunder.ft8.coordinator import FT8QsoResult
-from rolling_thunder.ft8.distance import maidenhead_distance_km
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoState
+from rolling_thunder.ft8.distance import initial_ft8_power_watts, maidenhead_distance_km
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8Period,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.performance import (
     FT8AttemptOutcome,
     FT8AttemptSeed,
@@ -70,7 +75,37 @@ def build_ft8_attempt_seed(
         audio_frequency_hz=activity.audio_frequency_hz,
         selected_snr_db=activity.snr_db,
         pota_cq=activity.pota_cq,
+        tx_power_target_watts=initial_ft8_power_watts(local_grid, activity.grid),
     )
+
+
+def build_ft8_responder_attempt_seed(
+    incoming: FT8IncomingCall,
+    *,
+    radio_state: RadioState,
+    gps_state: GPSState | None,
+    home_grid: MaidenheadGrid,
+    started_at_utc: datetime,
+    attempt_id: UUID | None = None,
+) -> FT8AttemptSeed:
+    """Freeze an accepted inbound decode before responder radio preparation."""
+    activity = FT8CQActivity(
+        callsign=incoming.callsign,
+        last_period=incoming.period,
+        snr_db=incoming.snr_db,
+        dt_seconds=incoming.dt_seconds,
+        audio_frequency_hz=incoming.audio_frequency_hz,
+        grid=incoming.grid,
+    )
+    seed = build_ft8_attempt_seed(
+        activity,
+        radio_state=radio_state,
+        gps_state=gps_state,
+        home_grid=home_grid,
+        started_at_utc=started_at_utc,
+        attempt_id=attempt_id,
+    )
+    return seed.model_copy(update={"received_report_db": incoming.report_db})
 
 
 class FT8PerformanceRecorder:
@@ -106,12 +141,15 @@ class FT8PerformanceRecorder:
             utc_date=seed.started_at_utc.date(),
             band=seed.band,
             dial_frequency_hz=seed.dial_frequency_hz,
-            tx_power_target_watts=20,
+            tx_power_target_watts=seed.tx_power_target_watts,
+            tx_power_start_watts=None,
+            tx_power_end_watts=None,
+            tx_power_max_watts=None,
             power_meter_raw=None,
             swr_meter_raw=None,
             alc_meter_raw=None,
             sent_report_db=seed.selected_snr_db,
-            received_report_db=None,
+            received_report_db=seed.received_report_db,
             local_grid=seed.local_grid,
             remote_grid=seed.remote_grid,
             distance_km=_distance_km(seed.local_grid, seed.remote_grid),
@@ -132,6 +170,7 @@ class FT8PerformanceRecorder:
         power_meter_raw: int | None = None,
         swr_meter_raw: int | None = None,
         alc_meter_raw: int | None = None,
+        tx_power_end_watts: int | None = None,
     ) -> FT8PerformanceAttempt:
         """Persist terminal QSO telemetry with optional peak transmit-meter values."""
         outcome = {
@@ -161,7 +200,13 @@ class FT8PerformanceRecorder:
             utc_date=result.started_utc.astimezone(UTC).date(),
             band=context.radio_band,
             dial_frequency_hz=context.radio_frequency_hz,
-            tx_power_target_watts=20,
+            tx_power_target_watts=context.tx_power_target_watts,
+            tx_power_start_watts=context.tx_power_start_watts,
+            tx_power_end_watts=tx_power_end_watts,
+            tx_power_max_watts=_maximum_configured_power(
+                context.tx_power_start_watts,
+                tx_power_end_watts,
+            ),
             power_meter_raw=power_meter_raw,
             swr_meter_raw=swr_meter_raw,
             alc_meter_raw=alc_meter_raw,
@@ -194,3 +239,8 @@ def _distance_km(local_grid: str | None, remote_grid: str | None) -> float | Non
         return maidenhead_distance_km(local_grid, remote_grid)
     except ValueError:
         return None
+
+
+def _maximum_configured_power(*values: int | None) -> int | None:
+    observed = tuple(value for value in values if value is not None)
+    return max(observed) if observed else None

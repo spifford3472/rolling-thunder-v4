@@ -4,6 +4,8 @@ import pytest
 
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
+    FT8IncomingCall,
+    FT8MessageKind,
     FT8Period,
     FT8QsoState,
 )
@@ -20,6 +22,132 @@ def _activity(callsign: str = "K1ABC") -> FT8CQActivity:
         audio_frequency_hz=1500,
         grid="FN31",
     )
+
+
+def _incoming(callsign: str = "W1XYZ", *, period: int = 105) -> FT8IncomingCall:
+    return FT8IncomingCall(
+        callsign=callsign,
+        period=FT8Period(period),
+        snr_db=-6,
+        dt_seconds=0.2,
+        audio_frequency_hz=1700,
+        kind=FT8MessageKind.ADDRESSED_GRID,
+        grid="FN42",
+        raw_message=f"KI5VNB {callsign} FN42",
+    )
+
+
+def test_incoming_call_requires_explicit_answer_and_uses_exact_decode() -> None:
+    authorized: list[FT8IncomingCall] = []
+    receive = FT8ReceiveState(
+        last_period=FT8Period(105),
+        incoming_call=_incoming(),
+    )
+    panel = FT8PanelController(
+        receive_state=lambda: receive,
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda activity: authorized.append(activity) is None,
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+        respond=lambda incoming: authorized.append(incoming) is None,
+    )
+
+    assert panel.snapshot().incoming_call == _incoming()
+    assert authorized == []
+    assert panel.answer_incoming_call() is True
+    assert [item.callsign for item in authorized] == ["W1XYZ"]
+    assert authorized == [_incoming()]
+    assert panel.snapshot().incoming_call is None
+    assert panel.answer_incoming_call() is False
+    assert len(authorized) == 1
+
+
+def test_report_incoming_call_preserves_report_for_responder_callback() -> None:
+    incoming = FT8IncomingCall(
+        callsign="K0BQB",
+        period=FT8Period(105),
+        snr_db=-3,
+        dt_seconds=0.2,
+        audio_frequency_hz=1700,
+        kind=FT8MessageKind.REPORT,
+        report_db=-3,
+        raw_message="KI5VNB K0BQB -03",
+    )
+    accepted: list[FT8IncomingCall] = []
+    panel = FT8PanelController(
+        receive_state=lambda: FT8ReceiveState(
+            last_period=FT8Period(105), incoming_call=incoming
+        ),
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda _activity: True,
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+        respond=lambda call: accepted.append(call) is None,
+    )
+
+    assert accepted == []
+    assert panel.answer_incoming_call() is True
+    assert accepted == [incoming]
+    assert accepted[0].report_db == -3
+
+
+def test_incoming_call_ignore_suppresses_repeats_and_alert_never_interrupts_qso() -> None:
+    current = {
+        "receive": FT8ReceiveState(
+            last_period=FT8Period(105),
+            incoming_call=_incoming(),
+        ),
+        "qso": FT8QsoState.IDLE,
+    }
+    panel = FT8PanelController(
+        receive_state=lambda: current["receive"],
+        qso_state=lambda: current["qso"],
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda _activity: True,
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+    )
+
+    assert panel.dismiss_incoming_call() is True
+    current["receive"] = FT8ReceiveState(
+        last_period=FT8Period(106),
+        incoming_call=_incoming(period=106),
+    )
+    assert panel.snapshot().incoming_call is None
+
+    current["receive"] = FT8ReceiveState(
+        last_period=FT8Period(107),
+        incoming_call=_incoming("K2ABC", period=107),
+    )
+    assert panel.snapshot().incoming_call == _incoming("K2ABC", period=107)
+    current["qso"] = FT8QsoState.WAIT_REPORT
+    assert panel.snapshot().mode is FT8PanelMode.ACTIVE
+    assert panel.snapshot().incoming_call is None
+    current["qso"] = FT8QsoState.ABORTED
+    assert panel.snapshot().mode is FT8PanelMode.TERMINAL
+    assert panel.snapshot().incoming_call is None
+
+
+def test_stale_incoming_call_is_not_presented() -> None:
+    panel = FT8PanelController(
+        receive_state=lambda: FT8ReceiveState(
+            last_period=FT8Period(111),
+            incoming_call=_incoming(period=105),
+        ),
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda _activity: True,
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+    )
+
+    assert panel.snapshot().incoming_call is None
 
 
 def test_panel_selects_only_visible_cq_and_never_auto_selects_next() -> None:

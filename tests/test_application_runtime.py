@@ -9,9 +9,15 @@ from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
 from rolling_thunder.ft8.decoder import ComparingFT8Decoder, FT8PcmPeriod
-from rolling_thunder.ft8.domain import FT8Decode, FT8Period
+from rolling_thunder.ft8.domain import (
+    FT8Decode,
+    FT8IncomingCall,
+    FT8MessageKind,
+    FT8Period,
+)
 from rolling_thunder.ft8.encoder import FT8Waveform
 from rolling_thunder.ft8.hardware_transmit import RecordingFT8HardwareTransmitExecutor
+from rolling_thunder.ft8.performance import FT8AttemptSeed
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.gps import (
     GPSConnectionError,
@@ -527,3 +533,91 @@ def test_return_ft8_to_browser_clears_stale_start_status() -> None:
     assert result is not None
     assert qso.return_count == 1
     assert starter.reset_count == 1
+
+
+class _ResponderAuthorization:
+    def __init__(self, clock: FakeFT8Clock) -> None:
+        self.clock = clock
+        self.home_grid = "EM79xm"
+        self.validated: list[FT8IncomingCall] = []
+
+    def validate_incoming_freshness(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        selection_period: FT8Period,
+    ) -> None:
+        assert selection_period == self.clock.current_period()
+        self.validated.append(incoming)
+
+
+class _IncomingStartRecorder:
+    def __init__(self) -> None:
+        self.started: list[tuple[FT8IncomingCall, FT8AttemptSeed]] = []
+
+    def start_incoming(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        attempt_seed: FT8AttemptSeed,
+    ) -> bool:
+        self.started.append((incoming, attempt_seed))
+        return True
+
+
+@pytest.mark.parametrize(
+    ("incoming", "expected_report"),
+    [
+        (
+            FT8IncomingCall(
+                callsign="W4YRL",
+                period=FT8Period(100),
+                snr_db=-9,
+                dt_seconds=0.1,
+                audio_frequency_hz=1500,
+                kind=FT8MessageKind.ADDRESSED_GRID,
+                grid="EL99",
+                raw_message="KI5VNB W4YRL EL99",
+            ),
+            None,
+        ),
+        (
+            FT8IncomingCall(
+                callsign="K0BQB",
+                period=FT8Period(100),
+                snr_db=-3,
+                dt_seconds=0.1,
+                audio_frequency_hz=1600,
+                kind=FT8MessageKind.REPORT,
+                report_db=-3,
+                raw_message="KI5VNB K0BQB -03",
+            ),
+            -3,
+        ),
+    ],
+)
+def test_runtime_routes_explicit_incoming_acceptance_to_responder_start(
+    incoming: FT8IncomingCall,
+    expected_report: int | None,
+) -> None:
+    clock = FakeFT8Clock(incoming.period.start_utc)
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    authorization = _ResponderAuthorization(clock)
+    starter = _IncomingStartRecorder()
+    runtime.ft8_authorization = authorization  # type: ignore[assignment]
+    runtime.ft8_qso = object()  # type: ignore[assignment]
+    runtime.ft8_qso_start = starter  # type: ignore[assignment]
+
+    assert runtime.request_ft8_response(incoming) is True
+
+    assert authorization.validated == [incoming]
+    assert len(starter.started) == 1
+    started_call, seed = starter.started[0]
+    assert started_call is incoming
+    assert seed.callsign == incoming.callsign
+    assert seed.remote_grid == incoming.grid
+    assert seed.received_report_db == expected_report

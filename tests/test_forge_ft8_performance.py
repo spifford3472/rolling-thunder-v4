@@ -41,6 +41,9 @@ def _attempt(
         band="20m",
         dial_frequency_hz=14_074_000,
         tx_power_target_watts=20,
+        tx_power_start_watts=20,
+        tx_power_end_watts=25,
+        tx_power_max_watts=25,
         power_meter_raw=1,
         swr_meter_raw=2,
         alc_meter_raw=3,
@@ -75,7 +78,7 @@ def test_forge_schema_creation_preserves_existing_database_data(tmp_path: Path) 
             WHERE singleton_id = 1
             """
         ).fetchone()
-    assert version == (1,)
+    assert version == (2,)
 
 def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None:
     repository = ForgeFT8PerformanceRepository(tmp_path / "forge.db")
@@ -91,6 +94,9 @@ def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None
     assert row["success"] == 1
     assert row["dial_frequency_hz"] == 14_074_000
     assert row["tx_power_target_watts"] == 20
+    assert row["tx_power_start_watts"] == 20
+    assert row["tx_power_end_watts"] == 25
+    assert row["tx_power_max_watts"] == 25
     assert row["power_meter_raw"] == 1
     assert row["swr_meter_raw"] == 2
     assert row["alc_meter_raw"] == 3
@@ -100,6 +106,36 @@ def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None
     assert row["voacap_probability"] is None
     assert row["voacap_predicted_snr_db"] is None
     assert row["voacap_path"] is None
+
+
+def test_v1_schema_migrates_power_columns_without_losing_attempts(tmp_path: Path) -> None:
+    database = tmp_path / "forge.db"
+    repository = ForgeFT8PerformanceRepository(database)
+    attempt = _attempt()
+    repository.persist(attempt)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE forge_ft8_performance_schema SET schema_version = 1"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN tx_power_start_watts"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN tx_power_end_watts"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN tx_power_max_watts"
+        )
+        connection.commit()
+
+    migrated = ForgeFT8PerformanceRepository(database)
+    row = migrated.get_row(str(attempt.attempt_id))
+
+    assert row is not None
+    assert row["callsign"] == "K1ABC"
+    assert row["tx_power_start_watts"] is None
+    assert row["tx_power_end_watts"] is None
+    assert row["tx_power_max_watts"] is None
 
 
 def test_preparation_failure_persists_with_unknown_radio_context(

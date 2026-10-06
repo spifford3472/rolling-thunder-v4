@@ -52,6 +52,7 @@ from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommand
 from rolling_thunder.ft8_ui import (
     build_ft8_browser_viewport,
     format_ft8_receive_diagnostic,
+    present_ft8_incoming_call,
 )
 from rolling_thunder.ft8_widgets import FT8Widgets
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
@@ -1598,6 +1599,9 @@ def run_dashboard(
                         ),
                         diagnostic_text=format_ft8_receive_diagnostic(
                             receive_state
+                        ),
+                        incoming_call=present_ft8_incoming_call(
+                            ft8_snapshot.incoming_call
                         ),
                     )
                 else:

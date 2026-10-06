@@ -8,7 +8,7 @@ from enum import StrEnum
 from rolling_thunder.friend_presentation import friend_marker
 from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
 from rolling_thunder.ft8.diagnostics import FT8ClockQuality
-from rolling_thunder.ft8.domain import FT8CQActivity
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8IncomingCall
 from rolling_thunder.ft8.receive import FT8ReceiveState
 
 FT8_BROWSER_HEADERS = ("CALL", "SNR", "AUDIO", "GRID")
@@ -85,6 +85,26 @@ class FT8BrowserViewport:
     rows: tuple[FT8BrowserRow, ...]
     hidden_above: int = 0
     hidden_below: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class FT8IncomingCallPresentation:
+    callsign: str
+    snr_text: str
+    grid_text: str
+
+
+def present_ft8_incoming_call(
+    incoming_call: FT8IncomingCall | None,
+) -> FT8IncomingCallPresentation | None:
+    """Build the hardware-free, glance-readable incoming-call alert."""
+    if incoming_call is None:
+        return None
+    return FT8IncomingCallPresentation(
+        callsign=incoming_call.callsign,
+        snr_text=f"SNR {incoming_call.snr_db:+d} dB",
+        grid_text=f"GRID {incoming_call.grid or '------'}",
+    )
 
 
 def build_ft8_browser_viewport(

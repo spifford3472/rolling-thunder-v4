@@ -70,6 +70,45 @@ class RecordingDecoder:
         )
 
 
+class AddressedCallDecoder:
+    def decode(self, pcm: FT8PcmPeriod) -> tuple[FT8Decode, ...]:
+        return (
+            FT8Decode(
+                period=pcm.period,
+                snr_db=-12,
+                dt_seconds=0.1,
+                audio_frequency_hz=1400,
+                raw_message="KI5VNB K1OLD -10",
+                kind=FT8MessageKind.REPORT,
+                source_callsign="K1OLD",
+                destination_callsign="KI5VNB",
+                report_db=-10,
+            ),
+            FT8Decode(
+                period=pcm.period,
+                snr_db=-7,
+                dt_seconds=0.2,
+                audio_frequency_hz=1600,
+                raw_message="KI5VNB W1NEW FN42",
+                kind=FT8MessageKind.ADDRESSED_GRID,
+                source_callsign="W1NEW",
+                destination_callsign="KI5VNB",
+                grid="FN42",
+            ),
+            FT8Decode(
+                period=pcm.period,
+                snr_db=-3,
+                dt_seconds=0.3,
+                audio_frequency_hz=1800,
+                raw_message="N0XYZ K2NOPE -02",
+                kind=FT8MessageKind.REPORT,
+                source_callsign="K2NOPE",
+                destination_callsign="N0XYZ",
+                report_db=-2,
+            ),
+        )
+
+
 class FailOnceDecoder:
     def __init__(self) -> None:
         self.calls = 0
@@ -142,6 +181,65 @@ def test_receive_service_invokes_decoder_and_publishes_cq_activity() -> None:
     assert len(state.cq_activity) == 1
     assert state.cq_activity[0].callsign == "K1ABC"
     assert audio.stopped >= 1
+
+
+def test_receive_service_publishes_most_recent_call_to_configured_local_callsign() -> None:
+    service = FT8ReceiveService(
+        FakeAudioInput([_period(110)]),
+        AddressedCallDecoder(),
+        FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+        local_callsign="KI5VNB",
+    )
+
+    service.start()
+    _wait_until(lambda: service.latest_state.decode_count == 3)
+    state = service.latest_state
+    service.stop()
+
+    assert state.incoming_call is not None
+    assert state.incoming_call.callsign == "W1NEW"
+    assert state.incoming_call.snr_db == -7
+    assert state.incoming_call.grid == "FN42"
+    assert state.incoming_call.kind is FT8MessageKind.ADDRESSED_GRID
+
+
+def test_receive_service_preserves_exact_observed_addressed_grid_call() -> None:
+    class ObservedDecoder:
+        def decode(self, pcm: FT8PcmPeriod) -> tuple[FT8Decode, ...]:
+            return (
+                FT8Decode(
+                    period=pcm.period,
+                    snr_db=-9,
+                    dt_seconds=0.15,
+                    audio_frequency_hz=1550,
+                    raw_message="KI5VNB W4YRL EL99",
+                    kind=FT8MessageKind.ADDRESSED_GRID,
+                    source_callsign="W4YRL",
+                    destination_callsign="KI5VNB",
+                    grid="EL99",
+                ),
+            )
+
+    service = FT8ReceiveService(
+        FakeAudioInput([_period(112)]),
+        ObservedDecoder(),
+        FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+        local_callsign="KI5VNB",
+    )
+
+    service.start()
+    _wait_until(lambda: service.latest_state.decode_count == 1)
+    incoming = service.latest_state.incoming_call
+    service.stop()
+
+    assert incoming is not None
+    assert incoming.callsign == "W4YRL"
+    assert incoming.kind is FT8MessageKind.ADDRESSED_GRID
+    assert incoming.grid == "EL99"
+    assert incoming.report_db is None
+    assert incoming.raw_message == "KI5VNB W4YRL EL99"
 
 
 def test_receive_service_clear_cq_activity_removes_old_band_rows() -> None:

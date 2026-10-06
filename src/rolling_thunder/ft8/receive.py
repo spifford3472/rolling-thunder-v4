@@ -37,11 +37,13 @@ from rolling_thunder.ft8.diagnostics import (
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
     FT8Decode,
+    FT8IncomingCall,
     FT8MessageKind,
     FT8Period,
 )
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 from rolling_thunder.gps import GPSUTCObservation
+from rolling_thunder.value_types import BaseCallsign
 
 
 class FT8ReceiveStatus(StrEnum):
@@ -88,6 +90,7 @@ class FT8ReceiveState:
     saved_periods: int = 0
     diagnostic_session: FT8DiagnosticSessionState | None = None
     last_diagnostic_error: str | None = None
+    incoming_call: FT8IncomingCall | None = None
 
 
 class BoundedFT8PeriodRecorder:
@@ -138,6 +141,7 @@ class FT8ReceiveService:
         recorder: BoundedFT8PeriodRecorder | None = None,
         diagnostic_session: FT8MorningDiagnosticSession | None = None,
         diagnostic_snapshot_path: Path | None = None,
+        local_callsign: BaseCallsign | None = None,
     ) -> None:
         if reconnect_delay_s <= 0:
             raise ValueError("reconnect_delay_s must be positive")
@@ -152,6 +156,7 @@ class FT8ReceiveService:
         self._recorder = recorder
         self._diagnostic_session = diagnostic_session
         self._diagnostic_snapshot_path = diagnostic_snapshot_path
+        self._local_callsign = None if local_callsign is None else str(local_callsign)
         self._observer_lock = threading.Lock()
         self._snapshot_lock = threading.Lock()
         self._periods: queue.Queue[FT8PcmPeriod] = queue.Queue(maxsize=1)
@@ -189,7 +194,7 @@ class FT8ReceiveService:
         self._activity_manager.clear()
         with self._state_lock:
             state = self._state
-            self._state = replace(state, cq_activity=())
+            self._state = replace(state, cq_activity=(), incoming_call=None)
 
     def start(self) -> None:
         if self._capture_thread is not None:
@@ -284,6 +289,11 @@ class FT8ReceiveService:
                 self._activity_manager.ingest(decode)
             self._notify_decodes(decodes)
             snapshot = self._activity_manager.snapshot(current_period=period.period)
+            incoming_call = self._latest_incoming_call(
+                decodes,
+                snapshot,
+                current_period=period.period,
+            )
             session_state = None
             if self._diagnostic_session is not None:
                 session_state = self._diagnostic_session.record(
@@ -320,8 +330,49 @@ class FT8ReceiveService:
                         + result.primary.malformed_line_count
                     ),
                     diagnostic_session=session_state,
+                    incoming_call=incoming_call,
                 )
             self._write_diagnostic_snapshot()
+
+    def _latest_incoming_call(
+        self,
+        decodes: tuple[FT8Decode, ...],
+        activity: tuple[FT8CQActivity, ...],
+        *,
+        current_period: FT8Period,
+    ) -> FT8IncomingCall | None:
+        with self._state_lock:
+            existing = self._state.incoming_call
+        if existing is not None and current_period.index - existing.period.index >= 6:
+            existing = None
+        local_callsign = self._local_callsign
+        if local_callsign is None:
+            return existing
+        known_grids = {item.callsign: item.grid for item in activity}
+        for decode in decodes:
+            if (
+                decode.destination_callsign != local_callsign
+                or decode.source_callsign is None
+                or decode.kind not in {
+                    FT8MessageKind.ADDRESSED_GRID,
+                    FT8MessageKind.REPORT,
+                }
+            ):
+                continue
+            if existing is not None and decode.period < existing.period:
+                continue
+            existing = FT8IncomingCall(
+                callsign=decode.source_callsign,
+                period=decode.period,
+                snr_db=decode.snr_db,
+                dt_seconds=decode.dt_seconds,
+                audio_frequency_hz=decode.audio_frequency_hz,
+                kind=decode.kind,
+                grid=decode.grid or known_grids.get(decode.source_callsign),
+                report_db=decode.report_db,
+                raw_message=decode.raw_message,
+            )
+        return existing
 
     def _notify_decodes(self, decodes: tuple[FT8Decode, ...]) -> None:
         with self._observer_lock:

@@ -209,6 +209,9 @@ ft8:
   transmit:
     # Independent RF gate. Keep false for receive-only FT8.
     enabled: false
+    # Initial configured power is not a setting: it is calculated once from the
+    # frozen local/remote Maidenhead grids, defaults to 20 W when unknown, and is
+    # hard-clamped to 20..70 W. Active QSOs do not overwrite manual adjustment.
     # Required only when ft8.transmit.enabled is true.
     encoder_executable: null
     # DigiRig DR-891 playback device; payload is left channel, right is silence.
