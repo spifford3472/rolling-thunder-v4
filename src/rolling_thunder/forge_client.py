@@ -107,6 +107,7 @@ class ForgeRemoteProviderHealth(DomainModel):
 
 class _ForgeWirePotaIdentity(DomainModel):
     provider: Literal["pota"]
+    callsign: Callsign | None = None
     park_reference: PotaReference
     frequency: int = Field(gt=0, le=_MAX_FREQUENCY_HZ, strict=True)
 
@@ -143,6 +144,7 @@ class _ForgeWireSpotRecord(DomainModel):
         identity: PotaSpotIdentity | DxSpotIdentity
         if isinstance(self.identity, _ForgeWirePotaIdentity):
             identity = PotaSpotIdentity(
+                callsign=self.identity.callsign or self.callsign,
                 park_reference=self.identity.park_reference,
                 frequency=Frequency(hz=self.identity.frequency),
             )

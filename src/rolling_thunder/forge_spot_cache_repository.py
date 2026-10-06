@@ -305,7 +305,9 @@ class ForgeSpotCacheRepository:
             park_reference = row["pota_park_reference"]
             if not isinstance(park_reference, str):
                 raise TypeError("POTA cache row is missing its park reference")
+            legacy_key = f"pota:{park_reference}:{frequency.hz}"
             identity = PotaSpotIdentity(
+                callsign=None if row["stable_key"] == legacy_key else callsign,
                 park_reference=park_reference,
                 frequency=frequency,
             )
@@ -332,7 +334,12 @@ class ForgeSpotCacheRepository:
             source_metadata=source_metadata,
             pota=pota,
         )
-        if row["stable_key"] != spot.stable_key:
+        legacy_stable_key = (
+            f"pota:{spot.pota.park_reference}:{spot.frequency.hz}"
+            if spot.provider is SpotProvider.POTA and spot.pota is not None
+            else None
+        )
+        if row["stable_key"] not in {spot.stable_key, legacy_stable_key}:
             raise ValueError("cached stable spot identity does not match reconstructed spot")
         return spot
 

@@ -1512,7 +1512,8 @@ failed, aborted and retry-exhausted attempts remain outside the Contact path.
 Immediate post-commit synchronization and stable QSO UUID semantics are unchanged.
 Historical contacts and configured-home-grid fallback have no inferred coordinates.
 The shared Forge sync boundary now uses complete frozen grid/state/CQ/ITU context
-for verified dynamic mobile routing and otherwise retains legacy `Mobile` fallback;
-FT8 has no special routing path. See
+for verified dynamic mobile routing and otherwise uses the verified `Mobile - Unknown
+Location` profile without inventing coordinates or jurisdiction; FT8 has no special
+routing path. See
 [contact contract](FORGE_CONTACT_SYNC.md#immutable-qso-location-checkpoint-a) and
 [owner acceptance](CHECKPOINT_A_ACCEPTANCE.md).

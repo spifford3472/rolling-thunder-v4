@@ -124,7 +124,7 @@ def test_provider_returns_canonical_complete_slice() -> None:
     assert provider.provider is SpotProvider.POTA
     assert provider_slice.provider is SpotProvider.POTA
     assert provider_slice.fetched_at == BASE_TIME + timedelta(seconds=10)
-    assert [str(spot.callsign) for spot in provider_slice.spots] == ["K1LOW", "W8NEW"]
+    assert [str(spot.callsign) for spot in provider_slice.spots] == ["K1LOW", "KI5VNB", "W8NEW"]
     assert source.fetch_count == 1
 
 

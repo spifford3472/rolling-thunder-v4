@@ -21,6 +21,7 @@ from rolling_thunder.http_home_platform import (
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 
 _JSON_CONTENT_TYPE = "application/json"
+_UNKNOWN_MOBILE_STATION_NAME = "Mobile - Unknown Location"
 
 
 class WavelogError(Exception):
@@ -243,12 +244,11 @@ class WavelogClient:
 
         dynamic_identity = _dynamic_station_identity(contact)
         if dynamic_identity is None:
-            if legacy.station_id not in logbook.station_ids:
-                raise WavelogLogbookError(
-                    "Configured legacy Wavelog station location is not linked to the "
-                    f"configured logbook {logbook.name!r}."
-                )
-            return WavelogStationTarget(location=legacy, dynamic=False)
+            return self._resolve_unknown_station(
+                locations=locations,
+                template=legacy,
+                logbook=logbook,
+            )
 
         name, grid, state, cq, itu = dynamic_identity
         binding = self._get_station_binding(name)
@@ -314,6 +314,96 @@ class WavelogClient:
                 "Configured legacy Wavelog station location is not linked to the "
                 f"configured logbook {logbook.name!r}."
             )
+
+    def _resolve_unknown_station(
+        self,
+        *,
+        locations: tuple[WavelogStationLocation, ...],
+        template: WavelogStationLocation,
+        logbook: WavelogLogbook,
+    ) -> WavelogStationTarget:
+        """Resolve/create/link the location-neutral mobile fallback station."""
+        name = _UNKNOWN_MOBILE_STATION_NAME
+        binding = self._get_station_binding(name)
+        unknown = self.resolve_exact_station_location(name, locations)
+        if unknown is not None:
+            self._verify_unknown_station(unknown, template=template)
+            if binding is not None and (
+                unknown.station_id != binding.station_id or unknown.uuid != binding.uuid
+            ):
+                raise WavelogStationLocationError(
+                    "Visible unknown-location station conflicts with the durable Forge binding."
+                )
+            self._bind_verified_station(unknown)
+        elif binding is not None:
+            unknown = self._resolve_bound_unknown_station(binding, template=template)
+        else:
+            unknown = self._create_unknown_station(template=template)
+        self._verify_unknown_station(unknown, template=template)
+        if unknown.station_id not in logbook.station_ids:
+            self._link_station_to_logbook(unknown.station_id, logbook)
+        return WavelogStationTarget(location=unknown, dynamic=True)
+
+    def _create_unknown_station(
+        self,
+        *,
+        template: WavelogStationLocation,
+    ) -> WavelogStationLocation:
+        body = dumps(
+            {
+                "name": _UNKNOWN_MOBILE_STATION_NAME,
+                "callsign": template.callsign,
+                "dxcc": template.dxcc,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+        response = self._request("POST", "/index.php/api/v2/station", body=body)
+        if response.status_code == 409:
+            locations = self.list_station_locations()
+            raced = self.resolve_exact_station_location(
+                _UNKNOWN_MOBILE_STATION_NAME, locations
+            )
+            if raced is not None:
+                self._verify_unknown_station(raced, template=template)
+                self._bind_verified_station(raced)
+                return raced
+            binding = self._get_station_binding(_UNKNOWN_MOBILE_STATION_NAME)
+            if binding is not None:
+                return self._resolve_bound_unknown_station(binding, template=template)
+            raise WavelogStationLocationError(
+                "Wavelog reported an unknown-location station creation conflict, but "
+                "no visible exact match or durable binding can resolve it safely."
+            )
+        if response.status_code != 201:
+            self._raise_http_error(response.status_code, "unknown station-location creation")
+        payload = self._decode_json(
+            response.body, operation="unknown station-location creation"
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+            raise WavelogResponseError(
+                "Wavelog unknown station-location creation returned an unexpected response schema."
+            )
+        created = self._parse_station(
+            payload["data"], operation="unknown station-location creation"
+        )
+        self._verify_unknown_station(created, template=template)
+        self._bind_verified_station(created)
+        return created
+
+    def _resolve_bound_unknown_station(
+        self,
+        binding: WavelogStationBinding,
+        *,
+        template: WavelogStationLocation,
+    ) -> WavelogStationLocation:
+        bound = self.get_station_location(binding.station_id)
+        if bound.name != binding.name or bound.uuid != binding.uuid:
+            raise WavelogStationLocationError(
+                "Durable unknown-location station binding no longer matches Wavelog."
+            )
+        self._verify_unknown_station(bound, template=template)
+        self._bind_verified_station(bound)
+        return bound
 
     def _create_dynamic_station(
         self,
@@ -532,6 +622,29 @@ class WavelogClient:
             )
 
     @classmethod
+    def _verify_unknown_station(
+        cls,
+        location: WavelogStationLocation,
+        *,
+        template: WavelogStationLocation,
+    ) -> None:
+        if (
+            not location.uuid
+            or not location.callsign
+            or location.dxcc is None
+            or location.name != _UNKNOWN_MOBILE_STATION_NAME
+            or location.gridsquare
+            or location.state
+            or location.cq is not None
+            or location.itu is not None
+            or location.callsign != template.callsign
+            or location.dxcc != template.dxcc
+        ):
+            raise WavelogStationLocationError(
+                "Unknown-location Wavelog station has incompatible metadata."
+            )
+
+    @classmethod
     def _verify_dynamic_station(
         cls,
         location: WavelogStationLocation,
@@ -570,7 +683,7 @@ class WavelogClient:
         dxcc = cls._positive_int(item.get("dxcc"))
         cq = cls._positive_int(item.get("cq"))
         itu = cls._positive_int(item.get("itu"))
-        state_raw = item.get("state", "")
+        state_raw = item.get("state") or ""
         if not isinstance(state_raw, str):
             raise WavelogResponseError(
                 f"Wavelog {operation} returned invalid station metadata."
@@ -581,8 +694,6 @@ class WavelogClient:
             or callsign is None
             or station_uuid is None
             or dxcc is None
-            or cq is None
-            or itu is None
         ):
             raise WavelogResponseError(
                 f"Wavelog {operation} returned incomplete station identity metadata."

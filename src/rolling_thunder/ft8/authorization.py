@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 from rolling_thunder.domain import GPSFixState, RadioConnectionState, RadioMode, RadioState
@@ -21,6 +22,7 @@ from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_b
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
 
 FT8_CQ_MAX_AGE_PERIODS = 5
+FT8_GPS_MAXIMUM_AGE = timedelta(seconds=120)
 FT8_QSO_ALLOWED_RADIO_MODES = frozenset({RadioMode.DATA, RadioMode.USB})
 
 
@@ -83,9 +85,11 @@ class FT8QsoAuthorizationService:
                 "selected CQ signal report is outside the FT8 report range"
             )
 
-        local_grid, latitude, longitude, location_label = freeze_ft8_location(
+        authorized_utc = self.clock.now_utc()
+        local_grid, logging_grid, latitude, longitude, location_label = freeze_ft8_location(
             gps_state,
             self.home_grid,
+            reference_time=authorized_utc,
         )
         jurisdiction = (
             self.jurisdiction_resolver.resolve(latitude, longitude)
@@ -94,7 +98,6 @@ class FT8QsoAuthorizationService:
             and longitude is not None
             else None
         )
-        authorized_utc = self.clock.now_utc()
         if self.clock.current_period() != current_period:
             raise FT8QsoAuthorizationError("FT8 period changed during authorization")
 
@@ -106,6 +109,7 @@ class FT8QsoAuthorizationService:
             radio_band=band.value,
             radio_mode=radio_state.mode.value,
             local_grid=local_grid,
+            logging_grid=logging_grid,
             tx_parity=_opposite_parity(activity.last_period.parity),
             authorized_period=current_period,
             authorized_utc=authorized_utc,
@@ -206,8 +210,15 @@ class FT8QsoAuthorizationService:
 def freeze_ft8_location(
     gps_state: GPSState | None,
     home_grid: MaidenheadGrid,
-) -> tuple[str, float | None, float | None, str]:
-    """Freeze the current mobile grid or configured home-grid fallback."""
+    *,
+    reference_time: datetime,
+    maximum_age: timedelta = FT8_GPS_MAXIMUM_AGE,
+) -> tuple[str, str | None, float | None, float | None, str]:
+    """Freeze fresh GPS for logging while retaining a valid on-air grid fallback."""
+    if reference_time.tzinfo is None or reference_time.utcoffset() is None:
+        raise ValueError("FT8 location reference time must be timezone-aware")
+    if maximum_age < timedelta(0):
+        raise ValueError("FT8 GPS maximum age must not be negative")
     if (
         gps_state is not None
         and gps_state.connection_state is GPSConnectionState.CONNECTED
@@ -216,15 +227,13 @@ def freeze_ft8_location(
         and gps_state.position.latitude is not None
         and gps_state.position.longitude is not None
     ):
-        latitude = gps_state.position.latitude
-        longitude = gps_state.position.longitude
-        return (
-            str(maidenhead_grid(latitude, longitude)),
-            latitude,
-            longitude,
-            "GPS",
-        )
-    return str(home_grid), None, None, "configured home grid"
+        age = max(timedelta(0), reference_time - gps_state.position.updated_at)
+        if age <= maximum_age:
+            latitude = gps_state.position.latitude
+            longitude = gps_state.position.longitude
+            grid = str(maidenhead_grid(latitude, longitude))
+            return grid, grid, latitude, longitude, "GPS"
+    return str(home_grid), None, None, None, "unknown location"
 
 
 def _opposite_parity(parity: FT8PeriodParity) -> FT8PeriodParity:

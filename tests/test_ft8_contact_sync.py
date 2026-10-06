@@ -84,6 +84,17 @@ class WavelogTransport:
                         "itu": 8,
                         "state": "OH",
                     },
+                    {
+                        "id": 94,
+                        "uuid": "mobile-em79-oh",
+                        "name": "Mobile - EM79 - OH",
+                        "callsign": "KI5VNB",
+                        "gridsquare": "EM79",
+                        "dxcc": 291,
+                        "cq": 4,
+                        "itu": 8,
+                        "state": "OH",
+                    },
                 ]
             }
         elif method == "GET" and url.endswith("/api/v2/logbook"):
@@ -93,7 +104,7 @@ class WavelogTransport:
                         "id": 5,
                         "name": "KI5VNB Main",
                         "active": True,
-                        "station_ids": [7, 93],
+                        "station_ids": [7, 93, 94],
                     }
                 ]
             }
@@ -178,6 +189,9 @@ def result(
             local_grid="EM79xm",
             latitude=39.5309,
             longitude=-84.0866,
+            local_state="OH",
+            local_cq_zone=4,
+            local_itu_zone=8,
             remote_grid=remote_grid,
             tx_parity=FT8PeriodParity.ODD,
             authorized_period=period,
@@ -267,7 +281,7 @@ def test_completed_ft8_uses_shared_sync_and_configured_mobile(
         assert transport.keys == [str(contact.contact_id)]
         assert len(wavelog_transport.imports) == 1
         imported = wavelog_transport.imports[0]
-        assert imported["station_profile_id"] == 93
+        assert imported["station_profile_id"] == 94
         assert "<MODE:3>FT8" in imported["adif"]
         assert "<MY_GRIDSQUARE:6>EM79xm" in imported["adif"]
         assert "<RST_SENT:3>+14" in imported["adif"]

@@ -140,6 +140,7 @@ class ContactLoggingService:
         my_cq_zone: int | None = None,
         my_itu_zone: int | None = None,
         grid: str | None = None,
+        pota_reference: str | None = None,
         notes: str | None = None,
     ) -> Contact:
         """Persist an immutable completed-QSO snapshot without mutable radio/GPS state."""
@@ -163,6 +164,7 @@ class ContactLoggingService:
             my_state=my_state,
             my_cq_zone=my_cq_zone,
             my_itu_zone=my_itu_zone,
+            pota_reference=pota_reference,
             enrichment_state=enrichment_state,
             notes=notes,
         )

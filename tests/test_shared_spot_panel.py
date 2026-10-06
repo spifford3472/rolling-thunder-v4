@@ -53,6 +53,7 @@ def pota_spot(
     frequency = Frequency(hz=frequency_hz)
     return SpotRecord(
         identity=PotaSpotIdentity(
+            callsign=callsign,
             park_reference=park,
             frequency=frequency,
         ),
@@ -215,8 +216,8 @@ def test_default_pota_view_preserves_mobile_band_mode_and_age_policy() -> None:
 
     state = controller.state
 
-    assert [row.park_reference for row in state.rows] == ["US-1001"]
-    assert state.filter_label == "POTA    BAND: 20    MODE: SSB"
+    assert [row.park_reference for row in state.rows] == ["US-1002", "US-1001"]
+    assert state.filter_label == "POTA    BAND: 20    MODE: ALL"
     assert source_state.snapshot == original_snapshot
     assert source_state.snapshot is not None
     assert len(source_state.snapshot.spots) == 5
@@ -247,6 +248,7 @@ def test_pota_filter_controls_preserve_existing_mobile_sequence() -> None:
     _, controller = controller_for(published_state((seventeen, cw)))
 
     band_state = controller.next_pota_band()
+    controller.next_pota_mode()
     mode_state = controller.next_pota_mode()
 
     assert band_state.pota_band is RadioBand.BAND_17M
@@ -267,6 +269,7 @@ def test_dx_uses_same_controller_with_independent_dx_filters() -> None:
         published_state((pota, dx_twenty, dx_forty))
     )
 
+    controller.next_pota_mode()
     controller.next_pota_mode()
     state = controller.activate(
         SpotProvider.DX,
@@ -290,6 +293,17 @@ def test_dx_uses_same_controller_with_independent_dx_filters() -> None:
     assert forty.rows[0].grid is None
     assert forty.rows[0].operator_name_text == "<UNKNOWN>"
     assert forty.rows[0].grid_text == "<UNKNOWN>"
+
+def test_same_park_same_frequency_keeps_each_activator_visible() -> None:
+    first = pota_spot("US-4242", 14_244_000, callsign="K1AAA")
+    second = pota_spot("US-4242", 14_244_000, callsign="W8BBB")
+    _, controller = controller_for(published_state((first, second)))
+
+    state = controller.state
+
+    assert [row.callsign for row in state.rows] == ["K1AAA", "W8BBB"]
+    assert state.rows[0].identity != state.rows[1].identity
+
 
 def test_selection_survives_snapshot_replacement_by_stable_identity() -> None:
     selected = pota_spot("US-5001", 14_250_000)
@@ -334,7 +348,7 @@ def test_provider_change_clears_selection_without_neighbor_fallback() -> None:
     assert [row.callsign for row in dx_state.rows] == ["K7DX"]
 
 
-def test_same_identity_refresh_is_used_by_next_single_press_action() -> None:
+def test_new_activator_same_park_frequency_clears_old_selection() -> None:
     original = pota_spot("US-8001", 14_250_000, callsign="K1AAA")
     source, controller = controller_for(published_state((original,)))
     controller.select_next()
@@ -344,9 +358,8 @@ def test_same_identity_refresh_is_used_by_next_single_press_action() -> None:
 
     action = controller.selected_tune_action()
 
-    assert controller.selected_identity == original.identity
-    assert action is not None
-    assert str(action.callsign) == "K1BBB"
+    assert controller.selected_identity is None
+    assert action is None
 
 
 
@@ -476,6 +489,7 @@ def test_pota_and_dx_mode_filter_state_are_independent() -> None:
     )
     _, controller = controller_for(published_state((pota_cw, dx_ssb)))
 
+    controller.next_pota_mode()
     pota_state = controller.next_pota_mode()
     assert pota_state.pota_mode_filter is SharedSpotModeFilter.CW
 

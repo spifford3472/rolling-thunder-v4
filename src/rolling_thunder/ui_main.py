@@ -1600,6 +1600,11 @@ def run_dashboard(
                         diagnostic_text=format_ft8_receive_diagnostic(
                             receive_state
                         ),
+                        last_decode_count=(
+                            None
+                            if receive_state is None or receive_state.last_decoder is None
+                            else receive_state.last_decoder.parsed_decode_count
+                        ),
                         incoming_call=present_ft8_incoming_call(
                             ft8_snapshot.incoming_call
                         ),

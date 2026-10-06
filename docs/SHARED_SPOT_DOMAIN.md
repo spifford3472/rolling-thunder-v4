@@ -157,7 +157,8 @@ On POTA or DX context activation, the band filter defaults to the current FT-891
 band when the current frequency resolves to a supported shared-panel band.
 Otherwise the safe fallback is 20 meters.
 
-POTA starts from SSB mode filtering. DX starts from ALL mode filtering.
+POTA and DX start from ALL filtering, where ALL is intentionally restricted to
+Phone/SSB/CW. The only selectable mode filters are ALL, SSB/PHONE, and CW.
 
 Every band or mode filter change cancels staging. If filtering removes the
 selected identity, selection clears; no neighboring-row fallback is permitted.

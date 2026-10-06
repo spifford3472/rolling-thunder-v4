@@ -204,6 +204,7 @@ class FT8QsoContext:
     authorized_period: FT8Period
     authorized_utc: datetime
     signal_report_db: int
+    logging_grid: str | None = None
     latitude: float | None = None
     longitude: float | None = None
     local_state: str | None = None
@@ -229,6 +230,12 @@ class FT8QsoContext:
             _CALLSIGN_ADAPTER.validate_python(self.remote_callsign),
         )
         object.__setattr__(self, "local_grid", _GRID_ADAPTER.validate_python(self.local_grid))
+        if self.logging_grid is None and self.latitude is not None and self.longitude is not None:
+            object.__setattr__(self, "logging_grid", self.local_grid)
+        if self.logging_grid is not None:
+            object.__setattr__(
+                self, "logging_grid", _GRID_ADAPTER.validate_python(self.logging_grid)
+            )
         if self.remote_grid is not None:
             object.__setattr__(
                 self,

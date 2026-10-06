@@ -388,7 +388,10 @@ POTA and DX use the same shared selection/staging architecture with independent 
 
 Supported mobile band filters include 80, 40, 20, 17, 15, 12, and 10 meters. Entering a provider context prefers the current supported FT-891 band and otherwise falls back safely to 20 meters.
 
-Supported mode groups are SSB, CW, FT4, FT8, DATA, and ALL. DX initially uses ALL mode while preserving its own filter state independently from POTA.
+The mobile POTA and DX panels expose only ALL, SSB/PHONE, and CW filters. ALL is
+limited to Phone/SSB/CW and never admits digital modes. Distinct POTA activators are
+kept separate even when park and exact frequency match. DX preserves its own filter
+state independently from POTA.
 
 Every action-critical context/filter/selection mutation clears staging when the staged exact target is no longer valid. A neighboring row is never substituted automatically.
 

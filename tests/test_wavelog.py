@@ -681,17 +681,53 @@ def test_incompatible_exact_dynamic_station_fails_closed(
         managed_client(transport).resolve_station_target(dynamic_contact())
 
 
-def test_insufficient_frozen_context_uses_linked_legacy_mobile_without_writes() -> None:
+def test_insufficient_frozen_context_routes_to_unknown_mobile_station() -> None:
+    unknown = {
+        "id": 99,
+        "uuid": "station-99",
+        "name": "Mobile - Unknown Location",
+        "callsign": "KI5VNB",
+        "gridsquare": "",
+        "dxcc": 291,
+        "cq": None,
+        "itu": None,
+        "state": "",
+    }
     transport = ScriptedTransport(
-        [station_response(station(42, "Mobile", "EM79XM")), logbook_response(1, 42)]
+        [
+            station_response(station(42, "Mobile", "EM79XM")),
+            logbook_response(1, 42),
+            UrllibHttpResponse(201, dumps({"data": unknown}).encode()),
+            logbook_update_response(1, 42, 99),
+            logbook_response(1, 42, 99),
+        ]
     )
-    qso = dynamic_contact().model_copy(update={"my_state": None, "my_cq_zone": None, "my_itu_zone": None})
+    qso = dynamic_contact().model_copy(
+        update={
+            "my_grid": None,
+            "my_latitude": None,
+            "my_longitude": None,
+            "my_state": None,
+            "my_cq_zone": None,
+            "my_itu_zone": None,
+        }
+    )
 
     target = managed_client(transport).resolve_station_target(qso)
 
-    assert target.location.station_id == 42
-    assert not target.dynamic
-    assert [request[0] for request in transport.requests] == ["GET", "GET"]
+    assert target.location.station_id == 99
+    assert target.location.name == "Mobile - Unknown Location"
+    assert target.location.gridsquare == ""
+    assert target.location.state == ""
+    assert target.location.cq is None and target.location.itu is None
+    assert target.dynamic
+    assert [request[0] for request in transport.requests] == ["GET", "GET", "POST", "PATCH", "GET"]
+    create_payload = loads(transport.requests[2][3] or b"{}")
+    assert create_payload == {
+        "name": "Mobile - Unknown Location",
+        "callsign": "KI5VNB",
+        "dxcc": 291,
+    }
 
 
 def test_dynamic_target_is_not_patched_to_six_character_qso_grid() -> None:

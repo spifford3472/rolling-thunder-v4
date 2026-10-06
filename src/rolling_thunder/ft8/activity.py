@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from time import monotonic
 
+from rolling_thunder.callsign_country import callsign_country_abbreviation
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Decode, FT8MessageKind, FT8Period
 
 DEFAULT_CQ_EXPIRY_PERIODS = 6
@@ -137,3 +138,9 @@ def _decode_is_pota_cq(decode: FT8Decode) -> bool:
     if decode.cq_qualifier is not None and decode.cq_qualifier.strip().upper() == "POTA":
         return True
     return "POTA" in {token.upper() for token in decode.raw_message.split()}
+
+
+def is_us_cq_dx(activity: FT8CQActivity) -> bool:
+    """Return whether a U.S. station explicitly called CQ DX."""
+    qualifier = (activity.cq_qualifier or "").strip().upper()
+    return qualifier == "DX" and callsign_country_abbreviation(activity.callsign) == "USA"

@@ -31,7 +31,7 @@ from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.domain import Contact, RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
-from rolling_thunder.ft8.activity import FT8CQActivityManager
+from rolling_thunder.ft8.activity import FT8CQActivityManager, is_us_cq_dx
 from rolling_thunder.ft8.attempt_history import (
     FT8AttemptHistoryService,
     FT8AttemptVisualState,
@@ -163,6 +163,7 @@ from rolling_thunder.pota_receive_tune_executor import PotaReceiveTuneExecutor
 from rolling_thunder.pota_runtime import build_pota_spot_polling
 from rolling_thunder.pota_spot_polling import PotaSpotPollingService
 from rolling_thunder.pota_spot_service import PotaSpotServiceState
+from rolling_thunder.pota_spots import PotaSpot
 from rolling_thunder.pyserial_cat_transport import PySerialCatTransport
 from rolling_thunder.qrz_profile_image import QrzProfileImageProvider
 from rolling_thunder.qrz_xml import QrzXmlCallsignNameProvider
@@ -171,6 +172,7 @@ from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_b
 from rolling_thunder.radio_polling import PollScheduler, RadioPollingService
 from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.serial_gps import SerialGPSReceiver
+from rolling_thunder.shared_pota_contact import shared_pota_spots_for_contact
 from rolling_thunder.status_messages import StatusMessageService
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
@@ -556,9 +558,20 @@ class ApplicationRuntime:
             if ft8_completed_contact_handler is not None:
                 ft8_completed_contact_handler(contact)
 
+        def ft8_pota_spots() -> tuple[PotaSpot, ...]:
+            if pi_forge_spot_polling is not None:
+                forge_state = pi_forge_spot_polling.latest_state
+                if forge_state.snapshot is not None:
+                    return shared_pota_spots_for_contact(forge_state.snapshot.spots)
+            if pota_spot_polling is not None:
+                pota_state = pota_spot_polling.latest_state
+                return pota_state.spots
+            return ()
+
         ft8_logging = FT8QsoLoggingService(
             contact_logging,
             completed_contact_handler=ft8_contact_completed,
+            pota_spots_provider=ft8_pota_spots,
         )
         ft8_performance_outbox = (
             FT8PerformanceOutboxRepository(config.storage.database_path)
@@ -984,6 +997,8 @@ class ApplicationRuntime:
             )
 
         def ft8_activity_visible(activity: FT8CQActivity) -> bool:
+            if is_us_cq_dx(activity):
+                return False
             worked = runtime.ft8_worked_today
             state = runtime.latest_radio_state
             if worked is None or state.frequency is None:

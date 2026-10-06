@@ -27,7 +27,7 @@ Wavelog API v2
         |
         | dynamically resolved station_profile_id
         v
-Station Location: Mobile - XXXX - YY (verified dynamic), or legacy Mobile fallback
+Station Location: Mobile - XXXX - YY (verified dynamic), or Mobile - Unknown Location
 ```
 
 The UI never talks to Wavelog and never performs synchronization HTTP, DNS waits, retry sleeps, or Wavelog authentication on the Tk event thread. A failed or uncertain remote operation never deletes or rolls back the local QSO.
@@ -103,9 +103,11 @@ new ID, and verifies the result with another read. A station created by Rolling
 Thunder is safe to reuse after a failed link or Forge restart because its verified
 binding was committed before the link attempt. This guarantee does not extend to an
 arbitrary hidden external station that produced an ID-less `409`. If frozen routing
-data is insufficient, Forge uses the configured legacy `Mobile` profile and preserves
-its existing per-QSO grid PATCH. Dynamic profiles are never patched to a six-character
-QSO grid.
+data is insufficient, Forge resolves or creates the exact `Mobile - Unknown Location`
+profile, verifies that it carries no grid/state/CQ/ITU metadata, binds it durably, and
+links it to the configured logbook. The legacy `Mobile` profile remains the verified
+template for callsign/DXCC and health checks, not the locationless QSO target. Dynamic
+profiles are never patched to a six-character QSO grid.
 
 Absent/ambiguous legacy or dynamic names, incompatible metadata, an unlinked legacy
 profile, malformed responses, unverifiable identity, failed creation, or failed
@@ -269,7 +271,7 @@ configuration, and SQLite-safe Pi/Forge backups. On the approved fixed Pi build,
 complete one explicitly authorized FT8 QSO and verify one local UUID, FT8 mode,
 actual reports, original start time/frequency, frozen local grid and known remote
 grid. Verify its LOG row becomes SYNC and exactly one Wavelog QSO appears in the
-expected dynamic station (or documented legacy fallback) under `KI5VNB Main` with
+expected dynamic station (including `Mobile - Unknown Location` when appropriate) under `KI5VNB Main` with
 the same fields. Confirm failed/aborted/unanswered
 attempts produce no contacts. During a safe approved offline/retry test, confirm
 local durability and eventual upload, then repeated Sync/restart without a
@@ -420,8 +422,8 @@ CI/mocks are necessary but not sufficient. Before merge, acceptance must use:
 6. LOG panel verification of unsynchronized -> synchronized;
 7. one safe offline/retry case;
 8. repeated manual/retry verification that only one Wavelog QSO exists;
-9. one locationless/historical contact confirming legacy `Mobile` fallback and grid
-   alignment;
+9. one locationless/historical contact confirming `Mobile - Unknown Location`
+   routing with no fabricated grid/state/CQ/ITU metadata;
 10. Wavelog confirmation that the dynamic profile retains a four-character grid
     while the QSO carries its full frozen `MY_GRIDSQUARE` and the expected ADIF
     `NOTES` value.

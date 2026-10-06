@@ -59,9 +59,10 @@ def build_ft8_attempt_seed(
             band_text = band.value
             frequency_hz = ft8_frequency_for_band(band).hz
 
-    local_grid, _latitude, _longitude, _label = freeze_ft8_location(
+    local_grid, _logging_grid, _latitude, _longitude, _label = freeze_ft8_location(
         gps_state,
         home_grid,
+        reference_time=started_at_utc,
     )
     return FT8AttemptSeed(
         attempt_id=attempt_id or uuid4(),

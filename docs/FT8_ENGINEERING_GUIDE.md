@@ -66,7 +66,13 @@ Persistent same-day attempt history has higher presentation precedence:
 
 The selected row retains this callsign color and adds an independent high-contrast selection border/background.
 
-POTA is independent metadata: an explicit POTA CQ token adds the tree indicator and does not change eligibility or attempt outcome.
+POTA is independent metadata: an explicit POTA CQ token adds the green tree indicator
+and remains eligible. On successful logging, the current cached POTA records are
+consulted with the same callsign/frequency/mode ambiguity rules as ordinary POTA
+logging; exactly one matching park adds `POTA_REF`, while zero or multiple parks add
+nothing. A U.S. station explicitly calling `CQ DX` is filtered from the selectable CQ
+browser. The status area also shows the parsed decode count for the most recently
+completed cycle at the far right.
 
 ## Attempt History
 

@@ -70,12 +70,9 @@ class SharedSpotModeFilter(StrEnum):
 
 
 _POTA_MODES: tuple[SharedSpotModeFilter, ...] = (
+    SharedSpotModeFilter.ALL,
     SharedSpotModeFilter.SSB,
     SharedSpotModeFilter.CW,
-    SharedSpotModeFilter.FT4,
-    SharedSpotModeFilter.FT8,
-    SharedSpotModeFilter.DATA,
-    SharedSpotModeFilter.ALL,
 )
 
 
@@ -234,7 +231,7 @@ class SharedSpotPanelController:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._provider = SpotProvider.POTA
         self._pota_band = _DEFAULT_POTA_BAND
-        self._pota_mode_filter = SharedSpotModeFilter.SSB
+        self._pota_mode_filter = SharedSpotModeFilter.ALL
         self._pota_maximum_age = maximum_pota_age
         self._pota_worked_status = pota_worked_status
         self._dx_worked_status = dx_worked_status
@@ -387,7 +384,7 @@ class SharedSpotPanelController:
     def reset_pota_filters(self) -> SharedSpotPanelState:
         """Restore the current mobile 20-meter SSB POTA defaults."""
         self._pota_band = _DEFAULT_POTA_BAND
-        self._pota_mode_filter = SharedSpotModeFilter.SSB
+        self._pota_mode_filter = SharedSpotModeFilter.ALL
         return self.state
 
     def reset_dx_filters(self) -> SharedSpotPanelState:
@@ -444,9 +441,13 @@ class SharedSpotPanelController:
         spot: SpotRecord,
         mode_filter: SharedSpotModeFilter,
     ) -> bool:
-        if mode_filter is SharedSpotModeFilter.ALL:
-            return True
         display_mode = spot.display_mode
+        if mode_filter is SharedSpotModeFilter.ALL:
+            return display_mode in {"SSB", "PHONE", "LSB", "USB", "CW"} or spot.mode in {
+                RadioMode.LSB,
+                RadioMode.USB,
+                RadioMode.CW,
+            }
         if mode_filter is SharedSpotModeFilter.SSB:
             return display_mode in {"SSB", "PHONE", "LSB", "USB"} or spot.mode in {
                 RadioMode.LSB,

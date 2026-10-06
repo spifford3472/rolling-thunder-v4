@@ -249,8 +249,10 @@ or park changes.
 - **Back** — clear the current selection.
 
 The supported shared mobile HF band cycle is 80, 40, 20, 17, 15, 12, and 10
-meters. POTA begins with SSB filtering and also supports CW, FT4, FT8, DATA, and
-ALL mode-group filtering.
+meters. POTA shows only Phone/SSB and CW spots. The mode cycle is ALL, SSB/PHONE,
+and CW; ALL means all of those allowed voice/CW modes and never includes digital
+spots. Distinct activators remain separate rows even when they share the same park
+and exact frequency, such as operators handing one microphone between contacts.
 
 ## Selection safety
 
@@ -316,8 +318,9 @@ serve the same backend data to other authorized applications in the future.
 - **Context Button #2** — cycle DX mode filter.
 - **Back** — clear selection.
 
-DX uses the same supported mobile HF bands as POTA. DX starts with ALL mode
-filtering.
+DX uses the same supported mobile HF bands as POTA. DX shows only Phone/SSB and
+CW spots. Its mode cycle is ALL, SSB/PHONE, and CW, with ALL limited to those
+allowed modes.
 
 After a DX contact is successfully committed to local storage, every DX spot
 for that callsign on the same amateur band is marked with the light-blue worked
@@ -397,7 +400,10 @@ Typical states include:
 - **tree/POTA marker** — CQ explicitly included a POTA indication.
 
 A successful callsign/band contact is removed from the eligible list for the
-rest of the UTC date.
+rest of the UTC date. A U.S. callsign explicitly calling `CQ DX` is not listed as
+an eligible FT8 target. An explicit `CQ POTA` remains eligible and carries the
+green tree marker. The far-right side of the FT8 status area shows the parsed
+decode count from the most recently completed decode cycle.
 
 ## Controls
 
@@ -443,12 +449,17 @@ Leaving FT8 restores the documented normal radio values.
 
 ## QSO grid behavior
 
-At the start of a QSO attempt, Rolling Thunder captures the current shared
-Maidenhead grid for that attempt. That grid remains fixed until that QSO
-succeeds, fails, is aborted, or otherwise ends.
+At the start of a QSO attempt, Rolling Thunder accepts GPS location for logging
+only when the latest position is no more than 120 seconds old. A trusted position
+freezes the full six-character Maidenhead grid plus coordinates and jurisdiction
+for that QSO; those values remain fixed until that QSO succeeds, fails, is aborted,
+or otherwise ends.
 
-The next QSO obtains the then-current grid. This prevents vehicle movement
-during one QSO sequence from changing the station location mid-contact.
+If GPS is missing or older than 120 seconds, FT8 may still use the configured home
+grid for the on-air protocol exchange, but the completed contact does not claim that
+grid as its mobile logging location. Forge routes that contact to `Mobile - Unknown
+Location`. The next QSO evaluates GPS freshness again and obtains the then-current
+location.
 
 ## Logging
 
@@ -457,9 +468,13 @@ Failed/aborted attempts are not logged as ordinary QSOs, but may be retained as
 performance/analysis telemetry.
 
 After local persistence, successful FT8 contacts request the same background
-Forge/Wavelog synchronization as ordinary contacts. Forge uses its configured
-Mobile station location. A local success or performance record does not prove
-remote upload: check the LOG row for SYNC. WAIT can include optional QRZ
+Forge/Wavelog synchronization as ordinary contacts. A trusted mobile grid routes to
+`Mobile - XXXX - YY`; an untrusted/missing mobile location routes to `Mobile - Unknown
+Location`. For an explicit `CQ POTA`, Rolling Thunder also checks the current cached
+POTA spots and records the park reference only when callsign/frequency/mode identify
+exactly one park; ambiguous matches are left blank rather than guessed. A local
+success or performance record does not prove remote upload: check the LOG row for
+SYNC. WAIT can include optional QRZ
 enrichment; Sync Now does not bypass that readiness gate. A failed optional QRZ
 lookup releases the contact without a remote grid. If WAIT persists, collect
 the contact/enrichment and sync evidence described in `FORGE_CONTACT_SYNC.md`.
@@ -866,11 +881,12 @@ performs controlled Wavelog integration with idempotency safeguards.
 
 For a contact with complete frozen mobile grid/state/zone context, Forge routes the
 QSO to a verified Wavelog Station Location named `Mobile - XXXX - YY` (for example,
-`Mobile - EM79 - OH`) inside the configured station logbook. A locationless or
-historical contact continues to use the legacy `Mobile` location. This routing uses
-the location captured with the contact; a later vehicle position cannot redirect a
-retry. The dynamic Station Location keeps a four-character grid, while the QSO keeps
-its full captured grid when available.
+`Mobile - EM79 - OH`) inside the configured station logbook. A contact without a
+trusted frozen mobile location is routed to `Mobile - Unknown Location`, which has
+no fabricated grid/state/CQ/ITU metadata. This routing uses the location captured
+with the contact; a later vehicle position cannot redirect a retry. Grid-based
+dynamic Station Locations keep a four-character grid, while the QSO keeps its full
+captured grid when available.
 
 If the contact has no operator notes, its Wavelog ADIF `NOTES` value is `Mobile QSO`.
 Existing notes are kept exactly and are not prefixed, appended, or replaced. Station
