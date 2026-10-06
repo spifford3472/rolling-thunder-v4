@@ -884,6 +884,10 @@ Examples:
   enrichment overlay simply does not become a prerequisite.
 - **FT8 preparation/transmit failure:** the FT8 attempt fails closed; unrelated
   dashboard functions continue.
+- **FT8 receive degraded:** the FT8 footer identifies clock, audio, dropped-slot,
+  decoder, or diagnostic-storage trouble. NTP is the primary readiness source;
+  trusted GPS verifies UTC when NTP is unavailable. Receive diagnostics never
+  authorize transmission.
 
 ---
 

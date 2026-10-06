@@ -49,7 +49,10 @@ from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
 from rolling_thunder.ft8.status import operator_ft8_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
-from rolling_thunder.ft8_ui import build_ft8_browser_viewport
+from rolling_thunder.ft8_ui import (
+    build_ft8_browser_viewport,
+    format_ft8_receive_diagnostic,
+)
 from rolling_thunder.ft8_widgets import FT8Widgets
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
@@ -1592,6 +1595,9 @@ def run_dashboard(
                                 current_grid,
                                 selected_activity.grid,
                             )
+                        ),
+                        diagnostic_text=format_ft8_receive_diagnostic(
+                            receive_state
                         ),
                     )
                 else:

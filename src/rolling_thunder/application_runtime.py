@@ -19,7 +19,11 @@ from rolling_thunder.clock_sync import (
     ClockSyncState,
     SystemClockSetter,
 )
-from rolling_thunder.config import ApplicationConfig, HardwareAdapterMode
+from rolling_thunder.config import (
+    ApplicationConfig,
+    FT8DecoderBackend,
+    HardwareAdapterMode,
+)
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_qrz_enrichment import ContactQrzEnrichmentService
 from rolling_thunder.contact_repository import ContactRepository
@@ -37,7 +41,17 @@ from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOu
 from rolling_thunder.ft8.authorization import FT8QsoAuthorizationService
 from rolling_thunder.ft8.band_control import FT8BandController
 from rolling_thunder.ft8.coordinator import FT8QsoResult
-from rolling_thunder.ft8.decoder import FT8Decoder, Ft8LibDecoder
+from rolling_thunder.ft8.decoder import (
+    ComparingFT8Decoder,
+    FT8Decoder,
+    Ft8LibDecoder,
+    Ft8monDecoder,
+)
+from rolling_thunder.ft8.diagnostics import (
+    ChronyNTPClockProbe,
+    FT8MorningDiagnosticSession,
+    NTPClockStatus,
+)
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.encoder import FT8Encoder, Ft8LibEncoder
 from rolling_thunder.ft8.hardware_transmit import (
@@ -59,7 +73,11 @@ from rolling_thunder.ft8.radio_preparation import (
     configure_ft8_receive_settings,
     restore_ft8_normal_receive_settings,
 )
-from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveState
+from rolling_thunder.ft8.receive import (
+    BoundedFT8PeriodRecorder,
+    FT8ReceiveService,
+    FT8ReceiveState,
+)
 from rolling_thunder.ft8.session import (
     FT8QsoSessionAuthorization,
     HardwareDigitalTransmitSession,
@@ -271,6 +289,7 @@ class ApplicationRuntime:
         callsign_map_executor: Executor | None = None,
         ft8_audio_input: FT8AudioInput | None = None,
         ft8_decoder: FT8Decoder | None = None,
+        ft8_ntp_status: Callable[[], NTPClockStatus] | None = None,
         ft8_audio_output: FT8AudioOutput | None = None,
         ft8_encoder: FT8Encoder | None = None,
         ft8_clock: FT8Clock | None = None,
@@ -567,24 +586,80 @@ class ApplicationRuntime:
             )
 
         ft8_receive: FT8ReceiveService | None = None
+        resolved_ft8_clock: FT8Clock | None = None
         if config.ft8.enabled:
+            resolved_ft8_clock = ft8_clock or SystemFT8Clock()
+            diagnostic_session = None
+            diagnostic_end = config.ft8.receive.diagnostic_session_end_local
+            if diagnostic_end is not None:
+                diagnostic_session = FT8MorningDiagnosticSession(
+                    now_utc=resolved_ft8_clock.now_utc,
+                    end_local=diagnostic_end,
+                )
             decoder_executable = config.ft8.receive.decoder_executable
             if decoder_executable is None:
                 raise ValueError(
                     "FT8 decoder executable is required when FT8 is enabled."
                 )
             resolved_audio_input = ft8_audio_input or AlsaArecordFT8AudioInput(
-                config.ft8.receive.audio_device
+                config.ft8.receive.audio_device,
+                clock=resolved_ft8_clock,
             )
-            resolved_decoder = ft8_decoder or Ft8LibDecoder(
-                str(decoder_executable),
-                timeout_s=config.ft8.receive.decoder_timeout_s,
-            )
+            if ft8_decoder is not None:
+                resolved_decoder = ft8_decoder
+            else:
+                decoder_type = (
+                    Ft8LibDecoder
+                    if config.ft8.receive.decoder_backend is FT8DecoderBackend.FT8_LIB
+                    else Ft8monDecoder
+                )
+                resolved_decoder = decoder_type(
+                    str(decoder_executable),
+                    timeout_s=config.ft8.receive.decoder_timeout_s,
+                )
+                comparison_executable = (
+                    config.ft8.receive.comparison_decoder_executable
+                )
+                comparison_backend = config.ft8.receive.comparison_backend
+                if comparison_executable is not None and comparison_backend is not None:
+                    comparison_type = (
+                        Ft8LibDecoder
+                        if comparison_backend is FT8DecoderBackend.FT8_LIB
+                        else Ft8monDecoder
+                    )
+                    resolved_decoder = ComparingFT8Decoder(
+                        resolved_decoder,
+                        comparison_type(
+                            str(comparison_executable),
+                            timeout_s=config.ft8.receive.decoder_timeout_s,
+                        ),
+                        comparison_enabled=(
+                            None
+                            if diagnostic_session is None
+                            else lambda: diagnostic_session.is_active
+                        ),
+                    )
+            recorder = None
+            if config.ft8.receive.saved_pcm_periods:
+                saved_pcm_directory = config.ft8.receive.saved_pcm_directory
+                assert saved_pcm_directory is not None
+                recorder = BoundedFT8PeriodRecorder(
+                    saved_pcm_directory,
+                    maximum_periods=config.ft8.receive.saved_pcm_periods,
+                )
             ft8_receive = FT8ReceiveService(
                 resolved_audio_input,
                 resolved_decoder,
                 FT8CQActivityManager(),
                 reconnect_delay_s=config.ft8.receive.reconnect_delay_s,
+                clock=resolved_ft8_clock,
+                gps_utc=lambda: gps_polling.latest_state.utc,
+                ntp_status=ft8_ntp_status or ChronyNTPClockProbe(),
+                recorder=recorder,
+                diagnostic_session=diagnostic_session,
+                diagnostic_snapshot_path=(
+                    config.ft8.receive.diagnostic_snapshot_path
+                ),
             )
 
         ft8_band_control: FT8BandController | None = None
@@ -618,9 +693,8 @@ class ApplicationRuntime:
         ft8_authorization: FT8QsoAuthorizationService | None = None
         ft8_qso: FT8OperatorQsoService | None = None
         resolved_ft8_executor: FT8QsoHardwareTransmitExecutor | None = None
-        resolved_ft8_clock: FT8Clock | None = None
         if config.ft8.enabled:
-            resolved_ft8_clock = ft8_clock or SystemFT8Clock()
+            assert resolved_ft8_clock is not None
             ft8_authorization = FT8QsoAuthorizationService(
                 local_callsign=config.operator.callsign,
                 home_grid=config.operator.home_grid,

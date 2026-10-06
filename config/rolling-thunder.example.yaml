@@ -190,10 +190,22 @@ ft8:
   receive:
     # DigiRig DR-891 C-Media capture. ALSA plug performs 44.1/48 kHz -> 12 kHz.
     audio_device: plughw:CARD=Device,DEV=0
+    # Primary decoder selected from ft8_lib or ft8mon.
+    decoder_backend: ft8_lib
     # Required only when ft8.enabled is true.
     decoder_executable: null
     decoder_timeout_s: 12.0
     reconnect_delay_s: 2.0
+    # Optional bounded same-PCM investigation. A session started before 05:15
+    # New York time stops comparison/recording at 05:15; one started during the
+    # prior evening runs only until the next 05:15. Leave null in normal use.
+    comparison_backend: null
+    comparison_decoder_executable: null
+    diagnostic_session_end_local: null
+    # The JSON file is atomically replaced; PCM uses at most three stable slots.
+    diagnostic_snapshot_path: null
+    saved_pcm_directory: null
+    saved_pcm_periods: 0
   transmit:
     # Independent RF gate. Keep false for receive-only FT8.
     enabled: false

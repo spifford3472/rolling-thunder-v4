@@ -147,6 +147,7 @@ originates from one screen.
 - `src/rolling_thunder/ft8/bands.py` — FT8 subsystem module for bands; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/coordinator.py` — FT8 subsystem module for coordinator; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/decoder.py` — FT8 subsystem module for decoder; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/diagnostics.py` — Bounded FT8 audio/clock/decoder diagnostics, NTP-primary readiness, and morning comparison-session accounting.
 - `src/rolling_thunder/ft8/distance.py` — FT8 subsystem module for distance; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/domain.py` — Core shared domain models used across application services.
 - `src/rolling_thunder/ft8/encoder.py` — FT8 subsystem module for encoder; see FT8 engineering documents before modifying its contract.

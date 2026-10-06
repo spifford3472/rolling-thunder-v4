@@ -7,10 +7,52 @@ from enum import StrEnum
 
 from rolling_thunder.friend_presentation import friend_marker
 from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
+from rolling_thunder.ft8.diagnostics import FT8ClockQuality
 from rolling_thunder.ft8.domain import FT8CQActivity
+from rolling_thunder.ft8.receive import FT8ReceiveState
 
 FT8_BROWSER_HEADERS = ("CALL", "SNR", "AUDIO", "GRID")
 FT8_POTA_TREE_GLYPH = "🌲"
+
+
+def format_ft8_receive_diagnostic(state: FT8ReceiveState | None) -> str:
+    """Build a compact glance-readable receive-chain health summary."""
+    if state is None:
+        return "RX DIAGNOSTICS UNAVAILABLE"
+    warnings: list[str] = []
+    if state.last_clock is not None and state.last_clock.quality is not FT8ClockQuality.TRUSTED:
+        warnings.append(f"CLOCK {state.last_clock.quality.value.upper()}")
+    if state.last_audio is not None and state.last_audio.quality.value != "healthy":
+        warnings.append(f"AUDIO {state.last_audio.quality.value.upper()}")
+    if state.periods_dropped:
+        warnings.append(f"DROPPED {state.periods_dropped}")
+    if state.last_error:
+        warnings.append(state.last_error.upper())
+    if state.last_diagnostic_error:
+        warnings.append(state.last_diagnostic_error.upper())
+    if warnings:
+        return "RX DEGRADED — " + " • ".join(warnings)
+
+    audio = state.last_audio
+    decoder = state.last_decoder
+    if audio is None or decoder is None:
+        return "RX STARTING — WAITING FOR COMPLETE PERIOD"
+    rms = "-INF" if audio.rms_dbfs is None else f"{audio.rms_dbfs:.1f}"
+    summary = (
+        f"RX OK • RMS {rms} dBFS • ALIGN {audio.boundary_lateness_ms:.1f}ms • "
+        f"RAW {decoder.raw_line_count} • "
+        f"DECODE {decoder.parsed_decode_count} • CQ {decoder.cq_decode_count} • "
+        f"{decoder.runtime_seconds:.2f}s"
+    )
+    session = state.diagnostic_session
+    if session is None:
+        return summary
+    status = "RUN" if session.active else "DONE"
+    return (
+        f"{summary}\nDIAG {status} • ALL "
+        f"{session.primary_all_decodes}/{session.comparison_all_decodes} • CQ "
+        f"{session.primary_cq_decodes}/{session.comparison_cq_decodes}"
+    )
 
 
 class FT8CallPresentation(StrEnum):

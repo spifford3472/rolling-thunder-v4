@@ -99,6 +99,7 @@ attempt history/performance telemetry, FT8 logging adaptation, and FT8 UI.
 Depends on:
 - FT-891/CAT/audio adapters;
 - shared GPS/grid snapshot at QSO start;
+- host chrony/NTP readiness with trusted shared GPS UTC as a read-only fallback;
 - shared local contact persistence;
 - shared QRZ enrichment eligibility and background contact synchronization;
 - dashboard context/control infrastructure;
@@ -116,6 +117,11 @@ composition records worked-today state and invokes the dashboard completion
 handler, which requests the same `LogPanelController` background sync used by
 ordinary and DMR commits. This callback runs only after durable persistence;
 it must not perform network work on the FT8 worker.
+
+Receive diagnostics may query local chrony status and consume the published GPS
+UTC observation, but they do not own NTP configuration, GPS acquisition, system
+clock writes, or the privileged GPS clock-correction helper. Optional comparison
+and PCM retention must remain explicitly time/count bounded.
 
 ### Repeaters
 

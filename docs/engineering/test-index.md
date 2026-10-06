@@ -199,6 +199,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_qso.py`
 - `tests/test_ft8_radio_preparation.py`
 - `tests/test_ft8_receive.py`
+- `tests/test_ft8_diagnostics.py` — NTP-primary/GPS-fallback readiness, audio health, and bounded 05:15 New York comparison-session accounting.
 - `tests/test_ft8_schema_migration.py`
 - `tests/test_ft8_session.py`
 - `tests/test_ft8_start_control.py`

@@ -233,6 +233,86 @@ sample is used for the next period rather than the previous start plus a fixed
 Operational expectation: FT8 receive must remain correctly aligned during
 30–90-day continuous Rolling Thunder uptime without requiring a service restart.
 
+## Receive-Loss Investigation Diagnostics
+
+Issue #237 distinguishes three different quantities that must not be conflated:
+
+1. all normalized FT8 messages decoded by a backend;
+2. the subset of those messages that are CQ messages; and
+3. CQ rows still eligible for the operator browser after activity expiry and
+   worked-today filtering.
+
+The earlier decoder bake-off already establishes a sensitivity limitation in
+the default backend. On the same five WAV periods, `ft8_lib` matched 62 of 88
+WSJT-X oracle messages while `ft8mon` matched 70 of 88. A lower Rolling Thunder
+count than iFTx is therefore not, by itself, evidence of audio loss or CQ
+filtering. The bounded diagnostic mode runs both configured adapters against
+the exact same immutable `FT8PcmPeriod` and retains independent ALL and CQ
+counts so the remaining gap can be localized.
+
+Adapter parsing also accepts leading whitespace, signed decimal DT/frequency
+values, and `ft8_lib` lines both with and without the optional `~` separator;
+decoder-looking lines that still fail normalization are counted as malformed
+instead of disappearing without evidence.
+
+The optional diagnostic session is deliberately temporary. Its configured
+local cutoff is interpreted in `America/New_York`; the issue-237 run uses
+`05:15`. A session started before the morning cutoff stops comparison at that
+cutoff. A session started after 18:00 runs only until the next morning cutoff,
+while one started after the cutoff during the day remains inactive. The primary
+decoder continues normally after the comparison session ends.
+
+The receive configuration shape for the planned run is:
+
+```yaml
+ft8:
+  receive:
+    decoder_backend: ft8_lib
+    decoder_executable: /absolute/path/to/decode_ft8
+    comparison_backend: ft8mon
+    comparison_decoder_executable: /absolute/path/to/ft8mon
+    diagnostic_session_end_local: "05:15"
+    diagnostic_snapshot_path: /absolute/bounded/path/ft8-diagnostics.json
+    saved_pcm_directory: /absolute/bounded/path/ft8-pcm
+    saved_pcm_periods: 3
+```
+
+Comparison and saved PCM configuration are rejected unless the local session
+cutoff is also present. Normal production configuration leaves these fields
+null/zero.
+
+PCM retention is capped at one to three stable WAV slots. Later process starts
+replace the same slot names rather than creating an unbounded period archive.
+The JSON diagnostic snapshot is also atomically replaced in place. Snapshot
+state includes capture/restart/drop counts, audio level/clipping, capture-boundary
+lateness, parser/malformed-line counts, primary and comparison decoder metrics,
+and the bounded session aggregate. Optional diagnostic I/O or clock-probe
+failure is reported in state but cannot stop receive.
+
+### Clock readiness
+
+FT8 UTC slicing now treats the host's normal chrony/NTP synchronization as the
+primary clock authority. A read-only `chronyc tracking` probe requires a normal
+leap state, a usable source, and stratum 1–15. It changes no service or clock
+configuration. When NTP is unavailable, already-published trusted GPS UTC is
+the fallback verifier. If both are available but disagree by more than one
+second, or either trusted source reports excessive offset, FT8 diagnostics fail
+safe to degraded rather than claiming readiness.
+
+GPS-assisted system-clock correction remains owned by the existing bounded
+`ClockSynchronizationService` and its explicit deployment enablement. This
+investigation does not alter sudoers, the privileged helper, chrony/systemd
+configuration, or production ALSA. Receive diagnostics do not gain clock-write,
+radio-control, or RF-transmit authority.
+
+### Capture-boundary correction
+
+Per-period UTC re-anchoring now back-projects from observed scheduler wake
+lateness instead of blindly treating the next buffered sample as the UTC
+boundary. The measured lateness travels with the exact PCM period for diagnosis.
+This closes a smaller per-period alignment error that could otherwise remain
+after the earlier long-run USB-clock drift fix.
+
 
 ## FT-891 context audio source
 

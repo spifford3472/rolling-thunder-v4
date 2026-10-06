@@ -1,12 +1,22 @@
 """Tests for mobile FT8 CQ browser presentation."""
 
+from datetime import UTC, datetime
+
 from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
+from rolling_thunder.ft8.decoder import FT8DecoderDiagnostics
+from rolling_thunder.ft8.diagnostics import (
+    FT8AudioDiagnostics,
+    FT8AudioQuality,
+    FT8DiagnosticSessionState,
+)
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period
+from rolling_thunder.ft8.receive import FT8ReceiveState
 from rolling_thunder.ft8_ui import (
     FT8_BROWSER_HEADERS,
     FT8_POTA_TREE_GLYPH,
     FT8CallPresentation,
     build_ft8_browser_viewport,
+    format_ft8_receive_diagnostic,
 )
 
 
@@ -151,3 +161,39 @@ def test_friend_marker_changes_only_decoration_not_ft8_identity_or_outcome() -> 
     assert decorated.rows[1] == ordinary.rows[1]
     assert replace(decorated.rows[0], friend_marker="") == ordinary.rows[0]
     assert activity[0].callsign == "W1ABC"
+
+
+def test_receive_diagnostic_separately_presents_all_and_cq_session_counts() -> None:
+    state = FT8ReceiveState(
+        last_audio=FT8AudioDiagnostics(
+            sample_count=180_000,
+            peak_dbfs=-3.0,
+            rms_dbfs=-20.0,
+            clipped_samples=0,
+            quality=FT8AudioQuality.HEALTHY,
+        ),
+        last_decoder=FT8DecoderDiagnostics(
+            backend="ft8_lib",
+            runtime_seconds=0.1,
+            raw_line_count=7,
+            parsed_decode_count=6,
+            cq_decode_count=2,
+            malformed_line_count=1,
+        ),
+        diagnostic_session=FT8DiagnosticSessionState(
+            active=True,
+            started_at=datetime(2026, 10, 6, 5, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 10, 6, 9, 15, tzinfo=UTC),
+            periods_compared=10,
+            primary_all_decodes=40,
+            primary_cq_decodes=12,
+            comparison_all_decodes=53,
+            comparison_cq_decodes=17,
+        ),
+    )
+
+    text = format_ft8_receive_diagnostic(state)
+
+    assert "DIAG RUN" in text
+    assert "ALL 40/53" in text
+    assert "CQ 12/17" in text

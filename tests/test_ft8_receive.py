@@ -6,12 +6,18 @@ import threading
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 
 from rolling_thunder.ft8.activity import FT8CQActivityManager
 from rolling_thunder.ft8.audio import FT8AudioInputError
 from rolling_thunder.ft8.decoder import FT8DecoderError, FT8PcmPeriod
+from rolling_thunder.ft8.diagnostics import FT8ClockQuality, NTPClockStatus
 from rolling_thunder.ft8.domain import FT8Decode, FT8MessageKind, FT8Period
-from rolling_thunder.ft8.receive import FT8ReceiveService, FT8ReceiveStatus
+from rolling_thunder.ft8.receive import (
+    BoundedFT8PeriodRecorder,
+    FT8ReceiveService,
+    FT8ReceiveStatus,
+)
 
 
 def _period(index: int) -> FT8PcmPeriod:
@@ -291,3 +297,39 @@ def test_receive_service_reports_decoder_failure_to_observer() -> None:
     service.stop()
 
     assert observer.errors[0] == "synthetic decoder failure"
+
+
+def test_pcm_recorder_uses_only_three_stable_storage_slots(tmp_path: Path) -> None:
+    recorder = BoundedFT8PeriodRecorder(tmp_path, maximum_periods=3)
+
+    paths = [recorder.save(_period(index)) for index in range(4)]
+
+    assert paths[-1] is None
+    assert recorder.saved == 3
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "ft8-period-01.wav",
+        "ft8-period-02.wav",
+        "ft8-period-03.wav",
+    ]
+
+
+def test_clock_diagnostic_failure_does_not_interrupt_receive_capture() -> None:
+    def failed_ntp_probe() -> NTPClockStatus:
+        raise RuntimeError("synthetic chrony failure")
+
+    service = FT8ReceiveService(
+        FakeAudioInput([]),
+        RecordingDecoder(),
+        FT8CQActivityManager(),
+        ntp_status=failed_ntp_probe,
+    )
+
+    service._record_capture(_period(600))
+
+    state = service.latest_state
+    assert state.periods_captured == 1
+    assert state.last_clock is not None
+    assert state.last_clock.quality is FT8ClockQuality.UNVERIFIED
+    assert state.last_diagnostic_error == (
+        "clock readiness diagnostic failed: synthetic chrony failure"
+    )

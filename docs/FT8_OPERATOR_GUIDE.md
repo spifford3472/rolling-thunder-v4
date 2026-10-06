@@ -16,6 +16,25 @@ Once a station has entered the CQ browser, later non-CQ traffic may update its p
 
 New CQ stations are appended to the bottom of the existing list so the operator's selection does not jump unexpectedly.
 
+## Receive Diagnostics
+
+The footer reports receive health without changing radio or transmit authority.
+`RX OK` includes the most recent audio RMS level, raw decoder output-line count,
+all parsed FT8 decodes, CQ decodes, and decoder runtime. `RX DEGRADED` identifies
+unready/disagreeing clock sources, silence/very-low/clipping audio, dropped
+periods, or capture/decoder/diagnostic errors.
+
+During an explicitly configured bounded comparison session, a second line shows
+`DIAG RUN` or `DIAG DONE`. `ALL primary/comparison` counts every parsed FT8
+message from `ft8_lib` and `ft8mon` independently; `CQ primary/comparison` counts
+only CQ messages. These figures are intentionally different from visible CQ
+rows, which also follow CQ eligibility, expiry, and worked-today rules.
+
+For the issue-237 morning run, comparison and sample retention stop at 05:15
+America/New_York. Normal primary receive continues. At most three WAV samples
+are retained in stable slots, and both decoders receive the same captured PCM.
+The mode is receive-only and does not authorize or transmit RF.
+
 ## Callsign Colors and Markers
 
 The callsign color describes the most useful current/prior state while the station remains an eligible CQ candidate.

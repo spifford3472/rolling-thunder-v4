@@ -164,6 +164,7 @@ class FT8Widgets:
         *,
         transmit_enabled: bool,
         distance_text: str | None = None,
+        diagnostic_text: str | None = None,
     ) -> None:
         self.more_above.set("▲ MORE ▲" if viewport.hidden_above else "")
         self.more_below.set("▼ MORE ▼" if viewport.hidden_below else "")
@@ -216,4 +217,6 @@ class FT8Widgets:
             footer = "BUTTON 1 BAND  •  ROTATE SELECT  •  RECEIVE ONLY"
         if distance_text:
             footer += f"\n{distance_text}"
+        if diagnostic_text:
+            footer += f"\n{diagnostic_text}"
         self.footer.set(footer)

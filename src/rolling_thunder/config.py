@@ -1,5 +1,6 @@
 """Typed YAML configuration for Rolling Thunder."""
 
+from datetime import time
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Self
@@ -603,13 +604,27 @@ class FT8QsoConfig(ConfigurationModel):
     attempts_per_state: int = Field(default=6, ge=1, le=20)
 
 
+class FT8DecoderBackend(StrEnum):
+    """Supported receive decoder adapters."""
+
+    FT8_LIB = "ft8_lib"
+    FT8MON = "ft8mon"
+
+
 class FT8ReceiveConfig(ConfigurationModel):
     """Receive-only FT8 capture and decoder settings."""
 
     audio_device: str = "plughw:CARD=Device,DEV=0"
+    decoder_backend: FT8DecoderBackend = FT8DecoderBackend.FT8_LIB
     decoder_executable: Path | None = None
+    comparison_backend: FT8DecoderBackend | None = None
+    comparison_decoder_executable: Path | None = None
+    diagnostic_session_end_local: time | None = None
     decoder_timeout_s: float = Field(default=12.0, gt=0, le=60)
     reconnect_delay_s: float = Field(default=2.0, gt=0, le=60)
+    diagnostic_snapshot_path: Path | None = None
+    saved_pcm_directory: Path | None = None
+    saved_pcm_periods: int = Field(default=0, ge=0, le=3)
 
     @field_validator("audio_device")
     @classmethod
@@ -619,7 +634,13 @@ class FT8ReceiveConfig(ConfigurationModel):
             raise ValueError("must not be empty")
         return normalized
 
-    @field_validator("decoder_executable", mode="before")
+    @field_validator(
+        "decoder_executable",
+        "comparison_decoder_executable",
+        "diagnostic_snapshot_path",
+        "saved_pcm_directory",
+        mode="before",
+    )
     @classmethod
     def validate_decoder_executable(cls, value: object) -> object:
         if value is None:
@@ -633,6 +654,36 @@ class FT8ReceiveConfig(ConfigurationModel):
             if not path.is_absolute():
                 raise ValueError("must be an absolute path")
         return path
+
+    @model_validator(mode="after")
+    def validate_diagnostic_and_comparison_settings(self) -> Self:
+        if (self.comparison_backend is None) != (
+            self.comparison_decoder_executable is None
+        ):
+            raise ValueError(
+                "comparison_backend and comparison_decoder_executable must be configured together"
+            )
+        if (
+            self.comparison_backend is not None
+            and self.comparison_backend is self.decoder_backend
+        ):
+            raise ValueError("comparison_backend must differ from decoder_backend")
+        if (
+            self.comparison_backend is not None
+            and self.diagnostic_session_end_local is None
+        ):
+            raise ValueError(
+                "comparison decoder requires diagnostic_session_end_local"
+            )
+        if (self.saved_pcm_periods == 0) != (self.saved_pcm_directory is None):
+            raise ValueError(
+                "saved_pcm_directory is required only when saved_pcm_periods is 1..3"
+            )
+        if self.saved_pcm_periods and self.diagnostic_session_end_local is None:
+            raise ValueError(
+                "saved PCM capture requires diagnostic_session_end_local"
+            )
+        return self
 
 
 class FT8TransmitConfig(ConfigurationModel):

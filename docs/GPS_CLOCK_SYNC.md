@@ -63,6 +63,13 @@ Inspection on 2026-08-08 established:
 
 The deployment therefore preserves chrony as the normal network time authority. GPS is only a bounded verification/fallback source.
 
+FT8 receive diagnostics follow the same authority order. They use a read-only
+chrony tracking probe as the primary readiness signal and the already-published
+trusted GPS UTC observation as fallback/independent verification. This adds no
+clock-write path and does not alter the helper, sudoers, systemd, chrony, or NTP
+configuration. A greater-than-one-second disagreement is reported as degraded
+rather than selecting a source silently.
+
 The installed privilege boundary is:
 
 - root-owned `/usr/local/sbin/rolling-thunder-chrony-settime`, mode 0755

@@ -48,6 +48,11 @@ this per QSO attempt: the captured grid remains fixed until that attempt
 succeeds, fails, is aborted, or otherwise terminates. The next QSO obtains a new
 current grid.
 
+FT8 clock-readiness diagnostics consume the existing published trusted GPS UTC
+observation only as fallback/independent verification when normal host NTP is
+not ready. They must not open a second GPS serial path, weaken UTC trust, or
+silently claim readiness when NTP and GPS disagree.
+
 Do not globally freeze location merely to satisfy one feature.
 
 ## Shared POTA/DX spot identity

@@ -8,7 +8,7 @@ import pytest
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
-from rolling_thunder.ft8.decoder import FT8PcmPeriod
+from rolling_thunder.ft8.decoder import ComparingFT8Decoder, FT8PcmPeriod
 from rolling_thunder.ft8.domain import FT8Decode, FT8Period
 from rolling_thunder.ft8.encoder import FT8Waveform
 from rolling_thunder.ft8.hardware_transmit import RecordingFT8HardwareTransmitExecutor
@@ -375,6 +375,41 @@ def test_runtime_ft8_receive_only_creates_no_transmit_authority() -> None:
     assert runtime.ft8_panel is not None
     assert runtime.ft8_qso is None
     assert runtime.ft8_hardware_transmit is None
+
+
+def test_runtime_composes_bounded_same_pcm_diagnostic_session() -> None:
+    config = ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {"mock": True},
+            "ft8": {
+                "enabled": True,
+                "receive": {
+                    "decoder_backend": "ft8_lib",
+                    "decoder_executable": "/opt/ft8_lib/decode_ft8",
+                    "comparison_backend": "ft8mon",
+                    "comparison_decoder_executable": "/opt/ft8mon/ft8mon",
+                    "diagnostic_session_end_local": "05:15",
+                },
+            },
+        }
+    )
+    clock = FakeFT8Clock(datetime(2026, 10, 6, 5, 0, tzinfo=UTC))
+
+    runtime = ApplicationRuntime.from_config(
+        config,
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_clock=clock,
+    )
+
+    assert runtime.ft8_receive is not None
+    assert isinstance(runtime.ft8_receive._decoder, ComparingFT8Decoder)
+    session = runtime.ft8_receive.latest_state.diagnostic_session
+    assert session is not None
+    assert session.active is True
+    assert session.ends_at == datetime(2026, 10, 6, 9, 15, tzinfo=UTC)
 
 
 def test_runtime_ft8_transmit_requires_explicit_gate() -> None:

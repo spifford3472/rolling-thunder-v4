@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- adds bounded FT8 receive-loss diagnostics with NTP-primary/GPS-fallback clock
+  readiness, same-PCM `ft8_lib`/`ft8mon` comparison, separate ALL/CQ counts,
+  three-slot WAV retention, and a 05:15 America/New_York session cutoff
+- corrects per-period FT8 audio boundary selection for scheduler wake lateness
+  and exposes audio, parser, decoder, drop/restart, and clock health in the FT8
+  footer and atomic diagnostic snapshot
+
 ## v4.4.0 — 2026-10-04
 
 ### DX Summit production architecture

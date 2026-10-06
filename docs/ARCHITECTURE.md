@@ -976,6 +976,18 @@ timing margin. The measured sensitivity deficit versus `ft8mon` is retained
 as an explicit architectural limitation, and `ft8mon` remains a comparison
 or fallback candidate. WSJT-X 3.0.2 is benchmark/oracle only.
 
+Issue #237 adds an explicitly bounded runtime comparison path around that
+limitation. When configured, `ft8_lib` and `ft8mon` receive the same immutable
+PCM period and publish independent all-message and CQ-message counts. Comparison
+stops at the configured America/New_York morning cutoff (05:15 for the planned
+run), while primary receive continues. PCM retention is capped at three stable
+WAV slots and diagnostic JSON is replaced atomically.
+
+FT8 period slicing treats local chrony/NTP health as its primary UTC-readiness
+signal and trusted published GPS UTC as fallback/independent verification.
+Readiness probing is read-only and does not alter NTP, systemd, the privileged
+GPS clock helper, ALSA, radio control, or transmit authority.
+
 ## Experimental v4.3 FT8 live receive composition
 
 Checkpoint 4 composes the receive-only FT8 pipeline when and only when
