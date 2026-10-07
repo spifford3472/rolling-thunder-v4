@@ -1,0 +1,22 @@
+enabled: false
+database_path: data/forge-propagation-history.db
+collection_interval_s: 3600
+provider_timeout_s: 10.0
+# Reserved for the future independently supervised QSO-ingestion worker;
+# the current --once collector does not invoke VOACAP enrichment.
+voacap_enabled: false
+voacap_base_url: http://127.0.0.1:8787
+# Reserved for that future worker; the current --once collector does not
+# invoke weather enrichment or PSK Reporter analytics.
+weather_enrichment_enabled: false
+pskreporter:
+  enabled: false
+  sender_callsign: KI5VNB
+  mode: FT8
+  minimum_query_interval_s: 300
+  report_latency_s: 300
+  recent_window_s: 1800
+  correlation_window_s: 300
+  report_limit: 5000
+  timeout_s: 10.0
+  maximum_response_bytes: 2097152
