@@ -176,8 +176,11 @@ The primary live map is authoritative for DAY/NIGHT style and installed-style
 availability. Solar automation and the manual Settings toggle must use the same
 style fan-out; the callsign mini-map mirrors accepted style changes but retains
 its separate worldwide online source and cache. Its cache must partition styles,
-and a non-style-aware source must never supply or relabel DAY pixels for NIGHT.
-Map zoom remains scoped to the primary live map.
+and a non-style-aware fallback may satisfy NIGHT only through the explicit
+callsign-only validated dark-raster transform. Raw DAY bytes must never be
+relabelled or persisted in the NIGHT partition. A `{style}` source must use its
+actual style endpoint without the local transform. The primary live-map client
+must not opt into this fallback. Map zoom remains scoped to the primary live map.
 
 Map availability and GPS availability are distinct states.
 
@@ -209,6 +212,9 @@ spot API listener. It supports only validated `day` and `night` tiles, delegates
 all non-map paths unchanged, and must remain failure-isolated from spots,
 weather, alerts, mobile location, radar, and health. Enabling it must not create
 a second production listener. Health requests never trigger map rendering.
+The route is optional rather than a prerequisite for the callsign mini-map and
+is a valid worldwide source only when backed by worldwide renderer data; the
+regional I-71 dataset does not satisfy that contract.
 
 Provider quirks, credentials, reconnect etiquette, and polling belong behind
 Forge service/provider boundaries.

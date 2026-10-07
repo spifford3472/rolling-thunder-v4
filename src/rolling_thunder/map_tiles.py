@@ -13,7 +13,7 @@ from tempfile import NamedTemporaryFile
 from urllib.error import URLError
 from urllib.parse import urlparse
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
 from rolling_thunder.live_map import GeoPoint
@@ -183,6 +183,29 @@ def validate_map_tile_png(
     return bytes(body)
 
 
+def transform_map_tile_for_night(body: bytes) -> bytes:
+    """Return a deterministic dark PNG while preserving source alpha values."""
+    validated = validate_map_tile_png(body)
+    try:
+        with Image.open(BytesIO(validated)) as source:
+            rgba = source.convert("RGBA")
+            alpha = rgba.getchannel("A")
+            luminance = ImageOps.grayscale(rgba)
+            inverted = ImageOps.invert(luminance)
+            dark_rgb = ImageOps.colorize(
+                inverted,
+                black=(12, 18, 28),
+                white=(164, 184, 204),
+            )
+            dark_rgba = dark_rgb.convert("RGBA")
+            dark_rgba.putalpha(alpha)
+            output = BytesIO()
+            dark_rgba.save(output, format="PNG", optimize=False)
+    except (UnidentifiedImageError, OSError, SyntaxError) as error:
+        raise MapTileError("Map tile NIGHT transform failed.") from error
+    return validate_map_tile_png(output.getvalue())
+
+
 class MapTileClient:
     """Retrieve map tiles through the injectable HTTP boundary.
 
@@ -199,6 +222,7 @@ class MapTileClient:
         user_agent: str = DEFAULT_MAP_USER_AGENT,
         style: str = "day",
         require_style_token_for_night: bool = False,
+        transform_night_without_style_token: bool = False,
         internet_health_url: str = DEFAULT_MAP_INTERNET_HEALTH_URL,
     ) -> None:
         if timeout_s <= 0:
@@ -210,6 +234,11 @@ class MapTileClient:
                 raise ValueError(f"Map tile URL template must contain {token}.")
         if not style.strip():
             raise ValueError("Map tile style must not be blank.")
+        if require_style_token_for_night and transform_night_without_style_token:
+            raise ValueError(
+                "Map tile NIGHT policy cannot both require a style token and "
+                "allow a local transform."
+            )
         parsed = urlparse(url_template)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("Map tile URL template must be an absolute HTTP or HTTPS URL.")
@@ -220,6 +249,9 @@ class MapTileClient:
         self._style = style.strip()
         self._has_style_token = "{style}" in url_template
         self._require_style_token_for_night = require_style_token_for_night
+        self._transform_night_without_style_token = (
+            transform_night_without_style_token
+        )
         self._internet_health_url = internet_health_url
         self._forge_health_url = f"{parsed.scheme}://{parsed.netloc}/api/v1/health"
         self._supports_forge_refresh = (
@@ -278,7 +310,14 @@ class MapTileClient:
             raise MapTileError(
                 f"Map tile request returned HTTP {response.status_code}."
             )
-        return validate_map_tile_png(response.body)
+        png = validate_map_tile_png(response.body)
+        if (
+            normalized_style == "night"
+            and not self._has_style_token
+            and self._transform_night_without_style_token
+        ):
+            return transform_map_tile_for_night(png)
+        return png
 
     def refresh_health(self) -> tuple[bool, bool]:
         """Check Internet then Forge health without downloading tile data."""

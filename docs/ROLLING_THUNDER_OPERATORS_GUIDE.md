@@ -775,15 +775,19 @@ Depending on available data, the overlay may include:
 - prior-QSO summary;
 - FIRST CONTACT when no prior QSO is found.
 
-The contact mini-map follows the primary live map's DAY/NIGHT theme. At night it
-loads NIGHT tiles from the configured style-aware source. If those tiles are not
-available, the map area reports unavailable instead of displaying a bright DAY
-map as NIGHT.
+The contact mini-map follows the primary live map's DAY/NIGHT theme. A configured
+worldwide style-aware source supplies its own NIGHT tiles. When no dedicated
+callsign source is configured, the normal worldwide online source supplies DAY
+tiles and Rolling Thunder locally converts validated NIGHT requests into a
+genuinely dark raster. DAY tiles stay unchanged, and separate cache partitions
+prevent DAY pixels from being presented or stored as NIGHT.
 
 When configured for Forge tiles, that source is an optional disabled-by-default
 route on the existing private Forge spot/weather/radar service. A renderer or
 map-route failure affects only the mini-map; spots, health, weather, location,
 radar, local logging, and radio operation continue independently.
+The route must have worldwide backing data for callsign use; the regional I-71
+renderer is not worldwide coverage.
 
 ## Location priority
 

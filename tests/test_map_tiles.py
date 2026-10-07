@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw, ImageOps, ImageStat
 
 from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.map_tiles import (
@@ -19,6 +19,7 @@ from rolling_thunder.map_tiles import (
     MapTileKey,
     StylePartitionedMapTileCache,
     build_map_viewport,
+    transform_map_tile_for_night,
     validate_map_tile_png,
     web_mercator_world_pixel,
 )
@@ -31,6 +32,26 @@ def png_tile(value: int = 20) -> bytes:
     output = BytesIO()
     image.save(output, format="PNG")
     return output.getvalue()
+
+
+def representative_light_tile(*, alpha: bool = False) -> bytes:
+    image = Image.new("RGBA", (256, 256), (238, 235, 226, 255))
+    draw = ImageDraw.Draw(image)
+    draw.line((0, 64, 255, 192), fill=(55, 65, 75, 255), width=7)
+    draw.line((32, 255, 210, 0), fill=(252, 252, 248, 255), width=12)
+    draw.rectangle((72, 88, 184, 132), fill=(146, 185, 120, 255))
+    draw.text((91, 101), "MAP LABEL", fill=(20, 25, 30, 255))
+    if alpha:
+        for x in range(256):
+            draw.line((x, 0, x, 15), fill=(238, 235, 226, x))
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
+
+
+def mean_luminance(png: bytes) -> float:
+    with Image.open(BytesIO(png)) as image:
+        return float(ImageStat.Stat(ImageOps.grayscale(image.convert("RGB"))).mean[0])
 
 
 @dataclass(frozen=True)
@@ -163,6 +184,94 @@ def test_tile_client_substitutes_explicit_day_and_night_styles() -> None:
         "https://forge.invalid/api/v1/map/tiles/day/6/17/25.png",
         "https://forge.invalid/api/v1/map/tiles/night/6/17/25.png",
     ]
+
+
+def test_night_transform_returns_distinct_valid_dark_png() -> None:
+    day = representative_light_tile()
+
+    night = transform_map_tile_for_night(day)
+
+    assert validate_map_tile_png(night) == night
+    assert night != day
+    with Image.open(BytesIO(night)) as image:
+        assert image.size == (256, 256)
+        assert image.format == "PNG"
+    assert mean_luminance(night) < mean_luminance(day) * 0.5
+
+
+def test_night_transform_preserves_alpha_channel() -> None:
+    day = representative_light_tile(alpha=True)
+
+    night = transform_map_tile_for_night(day)
+
+    with Image.open(BytesIO(day)) as day_image, Image.open(BytesIO(night)) as night_image:
+        assert night_image.getchannel("A").tobytes() == day_image.getchannel("A").tobytes()
+
+
+def test_unstyled_client_leaves_day_bytes_unchanged_with_night_transform_enabled() -> None:
+    day = representative_light_tile()
+    client = MapTileClient(
+        "https://tiles.example.invalid/{z}/{x}/{y}.png",
+        transport=RecordingTransport(FakeResponse(200, day)),
+        transform_night_without_style_token=True,
+    )
+
+    assert client.fetch_for_style(MapTileKey(zoom=6, x=17, y=25), "day") == day
+
+
+def test_unstyled_client_transforms_night_only_when_explicitly_enabled() -> None:
+    day = representative_light_tile()
+    key = MapTileKey(zoom=6, x=17, y=25)
+    ordinary = MapTileClient(
+        "https://tiles.example.invalid/{z}/{x}/{y}.png",
+        transport=RecordingTransport(FakeResponse(200, day)),
+    )
+    transforming = MapTileClient(
+        "https://tiles.example.invalid/{z}/{x}/{y}.png",
+        transport=RecordingTransport(FakeResponse(200, day)),
+        transform_night_without_style_token=True,
+    )
+
+    assert ordinary.fetch_for_style(key, "night") == day
+    assert transforming.fetch_for_style(key, "night") == transform_map_tile_for_night(day)
+
+
+def test_unstyled_client_remains_fail_closed_when_night_requires_style_token() -> None:
+    transport = RecordingTransport(FakeResponse(200, representative_light_tile()))
+    client = MapTileClient(
+        "https://tiles.example.invalid/{z}/{x}/{y}.png",
+        transport=transport,
+        require_style_token_for_night=True,
+    )
+
+    with pytest.raises(MapTileError, match="distinct NIGHT style"):
+        client.fetch_for_style(MapTileKey(zoom=6, x=17, y=25), "night")
+
+    assert transport.requests == []
+
+
+def test_style_aware_client_uses_night_endpoint_without_local_transform() -> None:
+    provider_night = png_tile(91)
+    transport = RecordingTransport(FakeResponse(200, provider_night))
+    client = MapTileClient(
+        "https://forge.invalid/tiles/{style}/{z}/{x}/{y}.png",
+        transport=transport,
+        transform_night_without_style_token=True,
+    )
+
+    result = client.fetch_for_style(MapTileKey(zoom=6, x=17, y=25), "night")
+
+    assert result == provider_night
+    assert transport.requests[0][1] == "https://forge.invalid/tiles/night/6/17/25.png"
+
+
+def test_tile_client_rejects_contradictory_night_policies() -> None:
+    with pytest.raises(ValueError, match="cannot both require"):
+        MapTileClient(
+            "https://tiles.example.invalid/{z}/{x}/{y}.png",
+            require_style_token_for_night=True,
+            transform_night_without_style_token=True,
+        )
 
 
 @pytest.mark.parametrize(

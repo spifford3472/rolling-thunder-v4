@@ -1,11 +1,17 @@
 """Tests for live-map application runtime composition and lifecycle."""
 
+from collections.abc import Mapping
 from concurrent.futures import Executor, Future
+from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
+from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.live_map_service import MapDataStatus
 from rolling_thunder.map_sources import MapPackageStyle
 from rolling_thunder.radio_polling import PollCallback
@@ -62,12 +68,59 @@ class NoopExecutor(Executor):
         return Future()
 
 
+class InlineExecutor(Executor):
+    def submit(
+        self,
+        fn: Any,
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Future[Any]:
+        future: Future[Any] = Future()
+        future.set_result(fn(*args, **kwargs))
+        return future
+
+
+@dataclass(frozen=True)
+class TileResponse:
+    status_code: int
+    body: bytes
+
+
+class RecordingTileTransport:
+    def __init__(self, png: bytes) -> None:
+        self._png = png
+        self.urls: list[str] = []
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: Mapping[str, str],
+        body: bytes | None,
+        timeout_s: float,
+    ) -> TileResponse:
+        self.urls.append(url)
+        return TileResponse(200, self._png)
+
+
+def light_png_tile() -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (256, 256), (238, 235, 226)).save(output, format="PNG")
+    return output.getvalue()
+
+
 def config(
     tmp_path: Path,
     *,
     map_enabled: bool,
     callsign_info_enabled: bool = False,
     map_style: str = "day",
+    tile_url_template: str = "https://tiles.example.invalid/{z}/{x}/{y}.png",
+    callsign_tile_url_template: str | None = (
+        "http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png"
+    ),
 ) -> ApplicationConfig:
     return ApplicationConfig.model_validate(
         {
@@ -81,9 +134,8 @@ def config(
                 "cache_directory": tmp_path / "map-cache",
                 "installed_packages": ([tmp_path / "missing-ohio.mbtiles"] if map_enabled else []),
                 "style": map_style,
-                "callsign_tile_url_template": (
-                    "http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png"
-                ),
+                "tile_url_template": tile_url_template,
+                "callsign_tile_url_template": callsign_tile_url_template,
             },
             "forge": {
                 "enabled": callsign_info_enabled,
@@ -161,3 +213,79 @@ def test_callsign_map_starts_with_configured_main_map_style(tmp_path: Path) -> N
     assert runtime.callsign_map is not None
     assert runtime.live_map.style is MapPackageStyle.NIGHT
     assert runtime.callsign_map.style is runtime.live_map.style
+
+
+def test_callsign_runtime_fallback_transforms_night_and_separates_cache(
+    tmp_path: Path,
+) -> None:
+    day = light_png_tile()
+    transport = RecordingTileTransport(day)
+    runtime = ApplicationRuntime.from_config(
+        config(
+            tmp_path,
+            map_enabled=True,
+            callsign_info_enabled=True,
+            callsign_tile_url_template=None,
+        ),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        map_solar_scheduler=SolarManualScheduler(),
+        map_executor=NoopExecutor(),
+        callsign_map_executor=InlineExecutor(),
+        map_transport=transport,
+    )
+    assert runtime.callsign_map is not None
+    runtime.callsign_map.start()
+
+    center = GeoPoint(39.2, -84.5)
+    runtime.callsign_map.request_viewport(center, width_px=1, height_px=1)
+    day_tiles = runtime.callsign_map.latest_state.tiles
+    assert day_tiles
+    assert all(tile.png == day for tile in day_tiles)
+
+    assert runtime.callsign_map.set_style(MapPackageStyle.NIGHT) is True
+    runtime.callsign_map.request_viewport(center, width_px=1, height_px=1)
+    night_tiles = runtime.callsign_map.latest_state.tiles
+
+    assert night_tiles
+    assert all(tile.png is not None and tile.png != day for tile in night_tiles)
+    assert all("/night/" not in url for url in transport.urls)
+    day_paths = tuple((tmp_path / "map-cache/callsign-info/day").glob("*/*/*.png"))
+    night_paths = tuple((tmp_path / "map-cache/callsign-info/night").glob("*/*/*.png"))
+    assert day_paths
+    assert night_paths
+    assert all(path.read_bytes() == day for path in day_paths)
+    assert all(path.read_bytes() != day for path in night_paths)
+    runtime.callsign_map.stop()
+
+
+def test_callsign_runtime_prefers_explicit_style_aware_source(tmp_path: Path) -> None:
+    provider_night = light_png_tile()
+    transport = RecordingTileTransport(provider_night)
+    runtime = ApplicationRuntime.from_config(
+        config(
+            tmp_path,
+            map_enabled=True,
+            callsign_info_enabled=True,
+            map_style="night",
+        ),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        map_solar_scheduler=SolarManualScheduler(),
+        map_executor=NoopExecutor(),
+        callsign_map_executor=InlineExecutor(),
+        map_transport=transport,
+    )
+    assert runtime.callsign_map is not None
+    runtime.callsign_map.start()
+
+    runtime.callsign_map.request_viewport(
+        GeoPoint(39.2, -84.5),
+        width_px=1,
+        height_px=1,
+    )
+
+    assert transport.urls
+    assert all("/api/v1/map/tiles/night/" in url for url in transport.urls)
+    assert all(tile.png == provider_night for tile in runtime.callsign_map.latest_state.tiles)
+    runtime.callsign_map.stop()

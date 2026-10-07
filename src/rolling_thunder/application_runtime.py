@@ -867,12 +867,17 @@ class ApplicationRuntime:
                     map_config.callsign_tile_url_template
                     or map_config.tile_url_template
                 )
+                transform_callsign_night = (
+                    map_config.callsign_tile_url_template is None
+                    and "{style}" not in map_config.tile_url_template
+                )
                 callsign_map_client = MapTileClient(
                     callsign_tile_url_template,
                     timeout_s=map_config.request_timeout_s,
                     transport=map_transport,
                     style=map_config.style.value,
-                    require_style_token_for_night=True,
+                    require_style_token_for_night=not transform_callsign_night,
+                    transform_night_without_style_token=transform_callsign_night,
                 )
                 callsign_map_registry = InstalledMapRegistry.load(())
                 callsign_map_resolver = MapTileResolver(

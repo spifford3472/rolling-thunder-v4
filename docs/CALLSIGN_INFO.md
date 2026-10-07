@@ -78,9 +78,18 @@ The dedicated cache stores identical tile coordinates in separate `day/` and
 validation, and maximum-tile policy are unchanged and apply across both
 partitions. `map.callsign_tile_url_template` may point at the existing private
 Forge route `/api/v1/map/tiles/{style}/{z}/{x}/{y}.png`; when omitted, the main
-tile URL is reused. A non-style-aware source cannot satisfy NIGHT requests, so
-the overlay shows normal map-unavailable presentation instead of a cached or
-fresh bright DAY map.
+worldwide online tile URL is reused. If that inherited source has no `{style}`
+token, the callsign client leaves DAY responses byte-for-byte unchanged and
+deterministically transforms each validated NIGHT response into a validated dark
+PNG while preserving alpha and map detail. Only the transformed bytes are stored
+under `night/`; the raw response is not cached as NIGHT. An explicit
+`callsign_tile_url_template` containing `{style}` remains preferred and uses the
+provider's real style endpoint without a local transform. An explicitly configured
+callsign source without `{style}` remains fail-closed for NIGHT.
+
+The optional Forge route is a worldwide dependency only when its renderer has
+worldwide coverage. The existing I-71 corridor TileServer/Protomaps dataset does
+not, so it is not a valid callsign mini-map source.
 
 ## Location priority
 
