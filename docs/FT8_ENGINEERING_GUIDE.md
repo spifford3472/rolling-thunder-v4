@@ -125,6 +125,13 @@ power readback; they are distinct from the raw RF power meter. End readback is
 best-effort in terminal/receive handling and can never change the QSO result.
 Old Pi payloads remain valid, and Forge schema v1 migrates additively to v2.
 
+For a completed QSO, the same terminal configured-power read is captured on the
+immutable Contact for Wavelog `TX_PWR`. A failed read leaves it null and never changes
+QSO completion. The coordinator invokes the terminal handler before the later
+operator/context exit restores normal 100 W operation, so the saved value is the
+final configured FT8 power rather than `FT8_EXIT_POWER_WATTS`. Propagation correlation identifies the operating mode as FT8 even
+though CAT power uses the FT-891 HF/SSB configured-power control.
+
 Successful QSO:
 - normal contact exactly once;
 - telemetry exactly once.
@@ -164,6 +171,8 @@ does not implicitly authorize a subsequent station.
 - CAT loss fails closed.
 - Receive-only configuration creates no physical transmit authority.
 - Local Maidenhead grid is frozen for the duration of one authorized QSO.
+- `local_grid6` is authoritative; `local_grid4` and the backward-compatible trusted
+  `logging_grid` view are derived and cannot drift.
 - Persistent continuous receive architecture remains independent of transmit execution.
 
 ## October 6 drive-home behavior

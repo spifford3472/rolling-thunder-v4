@@ -77,6 +77,7 @@ originates from one screen.
 - `src/rolling_thunder/contact_repository.py` — Local contact persistence repository.
 - `src/rolling_thunder/contact_retry.py` — Durable retry metadata for remote contact synchronization.
 - `src/rolling_thunder/contact_sync.py` — Background synchronization orchestration for locally committed contacts.
+- `src/rolling_thunder/contact_weather.py` — Forge-side projection of shared normalized weather snapshots into deterministic best-effort QSO enrichment.
 - `src/rolling_thunder/log_panel.py` — Local contact-log panel repository/controller.
 - `src/rolling_thunder/log_panel_commands.py` — Module providing log panel commands behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/log_ui.py` — Tk presentation for recent local contacts.
@@ -254,7 +255,7 @@ originates from one screen.
 - `src/rolling_thunder/forge_callsign_info_main.py` — Independent Forge callsign-intelligence process entry/composition.
 - `src/rolling_thunder/forge_client.py` — Forge backend module for client; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_config.py` — Forge backend module for config; keep provider/backend contracts reusable by non-UI clients.
-- `src/rolling_thunder/forge_contact_sync.py` — Forge contact-sync application service and SQLite repository for exact target selection, durable UUID claims, and verified dynamic-station recovery bindings.
+- `src/rolling_thunder/forge_contact_sync.py` — Forge contact-sync application service and SQLite repository for exact target selection, frozen weather enrichment, durable UUID claims, and verified dynamic-station recovery bindings.
 - `src/rolling_thunder/forge_contact_sync_api.py` — HTTP API contract for idempotent contact synchronization.
 - `src/rolling_thunder/forge_contact_sync_config.py` — Forge backend module for contact sync config; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_contact_sync_main.py` — Independent Forge contact-sync process entry/composition.
@@ -264,6 +265,11 @@ originates from one screen.
 - `src/rolling_thunder/forge_dxsummit_irc_parser.py` — Network-independent parser for DX Summit IRC messages.
 - `src/rolling_thunder/forge_dxsummit_provider.py` — Persistent DX Summit IRC provider lifecycle, cache, health, and reconnect behavior.
 - `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
+- `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
+- `src/rolling_thunder/forge_propagation_history.py` — Dedicated raw-observation and QSO-correlation SQLite domain/repository.
+- `src/rolling_thunder/forge_propagation_main.py` — Undeployed opt-in propagation-history collection entry point.
+- `src/rolling_thunder/forge_pskreporter.py` — Disabled typed PSK Reporter batch analytics boundary and etiquette controls.
 - `src/rolling_thunder/forge_location_client.py` — Forge backend module for location client; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_map_main.py` — Forge backend module for map main; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_mobile_location.py` — Forge backend module for mobile location; keep provider/backend contracts reusable by non-UI clients.

@@ -54,6 +54,12 @@ A completed contact is written to the local Rolling Thunder database before
 remote synchronization is considered complete. Loss of the home network or
 Wavelog does not make a locally committed contact disappear.
 
+New POTA, DX, Browse, and FT8 contacts retain their originating workflow and a
+best-effort configured transmit-power snapshot. When weather-note enrichment is
+enabled, Forge uses frozen QSO locations for bounded best-effort lookup and synchronized
+Wavelog notes explicitly show contact and local weather or `N/A`; unavailable weather
+never prevents saving or synchronizing the QSO.
+
 ### Shared behavior stays consistent
 
 POTA, DX, Browse, FT8, DMR, and other screens share services such as GPS,
@@ -887,6 +893,11 @@ no fabricated grid/state/CQ/ITU metadata. This routing uses the location capture
 with the contact; a later vehicle position cannot redirect a retry. Grid-based
 dynamic Station Locations keep a four-character grid, while the QSO keeps its full
 captured grid when available.
+
+The full local QSO grid is the sole stored grid identity; the four-character station
+profile grid is derived from it. Weather lookup prefers frozen POTA park coordinates,
+then a trusted contacted-grid center, and uses the QSO's frozen local GPS coordinates
+for local conditions. Provider or location failure is shown as `N/A`.
 
 If the contact has no operator notes, its Wavelog ADIF `NOTES` value is `Mobile QSO`.
 Existing notes are kept exactly and are not prefixed, appended, or replaced. Station

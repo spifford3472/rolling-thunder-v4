@@ -107,6 +107,21 @@ readbacks and new payloads with nullable `tx_power_start_watts`,
 schema migrates v1 to v2 without rebuilding or discarding attempts; legacy
 payload hashes remain valid for idempotent replay.
 
+When requested by a contact's immutable weather-note flag, contact sync also reuses
+`OpenMeteoForgeWeatherProvider` through the shared `WeatherProvider` contract. Remote
+weather uses frozen POTA coordinates when present, otherwise the trusted remote-grid
+center; local weather uses frozen QSO-local coordinates. Each endpoint fails to
+`N/A` independently, and the first enriched result is persisted per UUID before the
+Wavelog attempt so retries remain deterministic.
+
+### Propagation history (implemented, not deployed)
+
+`forge_propagation_*` provides a separate disabled-by-default service entry point,
+typed collectors, and a dedicated SQLite repository for raw HamQSL/KC2G observations
+and QSO correlation. It reuses the existing VOACAP summary API and does not add a
+propagation engine. It is deliberately not stored in the contact-sync or spot
+database. See `docs/PROPAGATION_HISTORY.md`.
+
 ## Reusable service design rules
 
 All Forge additions and modifications must follow these rules:

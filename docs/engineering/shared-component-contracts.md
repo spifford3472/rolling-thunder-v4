@@ -50,6 +50,16 @@ fallback receives the existing per-QSO profile-grid PATCH. Wavelog-bound ADIF
 always carries full frozen `MY_GRIDSQUARE` when present and carries ADIF `NOTES`
 equal to exact nonblank `Contact.notes` or exactly `Mobile QSO` when blank.
 
+New contacts also retain typed workflow source and optional configured TX power.
+When weather-note capture is enabled on the immutable contact, Wavelog notes append
+`Contact Wx:` and `Local Wx:` lines; unavailable data is `N/A` and no weather request
+may delay local logging. Forge performs bounded best-effort enrichment on the
+background synchronization worker, freezes the first result for retry safety, and
+continues Wavelog synchronization with `N/A` after lookup failure. ADIF `TX_PWR` is emitted only
+when the snapshot contains a verified configured-power value. Dynamic station
+profiles remain four-character routing identities while QSO `MY_GRIDSQUARE` remains
+the full frozen grid.
+
 Forge persists each Rolling-Thunder-created dynamic station's verified exact name,
 ID, and UUID before its first logbook link attempt. If Wavelog's `active_log_only`
 list hides that unlinked station, retry may direct-fetch only the bound ID and must
@@ -63,6 +73,11 @@ strictly read-only and never creates, links, or binds stations.
 GPS/location is shared infrastructure.
 
 Features consume published GPS state rather than opening serial GPS paths.
+
+`Contact.my_grid` is the single six-character persisted local-grid source.
+`my_grid6` exposes it explicitly and `my_grid4` is derived from its first four
+characters. FT8 likewise has one authoritative `local_grid6`; its on-air
+`local_grid4` and trusted logging view are derived rather than separately stored.
 
 When a QSO workflow requires a stable grid for the duration of an attempt, it
 may snapshot the current shared grid at the defined lifecycle boundary. FT8 does

@@ -6,6 +6,14 @@ This document is the architectural and operational reference for Rolling Thunder
 
 Rolling Thunder remains a local-first mobile logger. A QSO succeeds when it has been durably committed to the local Rolling Thunder SQLite database. Forge, WireGuard, DNS, mobile connectivity, Wavelog, QRZ, and every other remote service are outside that local transaction and cannot make local logging unavailable.
 
+Contact payload format 5 adds a typed originating workflow, nullable configured
+TX power, structured nullable weather slots, and an immutable weather-note flag.
+Wavelog ADIF emits `TX_PWR` only when known and appends the exact `Contact Wx:` and
+`Local Wx:` lines when requested. Local commit never performs weather I/O. The Forge
+contact-sync worker resolves both endpoints through the existing typed weather-provider
+boundary with a bounded timeout, freezes the first result for deterministic retry, and
+continues to Wavelog with `N/A` independently for an unknown location or failed lookup.
+
 ```text
 Rolling Thunder UI / physical controls
         |
@@ -68,6 +76,12 @@ station profile grid is the four-character prefix, while QSO ADIF retains the fu
 frozen `MY_GRIDSQUARE`. Existing exact-name stations are reused only when UUID,
 callsign, DXCC, grid, state, CQ zone, and ITU zone are compatible with the requested
 identity and validated legacy template.
+
+`Contact.my_grid` remains the backward-compatible stored field, but it is validated
+as the single authoritative six-character value. `my_grid6` aliases it and `my_grid4`
+is always derived as `my_grid6[:4]`; there is no independently persisted routing grid.
+POTA contact coordinates are frozen when available. Otherwise Forge may use the
+trusted remote grid center for contact weather; it never invents a location.
 
 Wavelog's `GET /index.php/api/v2/station` list may include only locations linked to
 the owner's active logbook when the account's `active_log_only` option is enabled.

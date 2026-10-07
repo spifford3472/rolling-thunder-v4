@@ -161,6 +161,11 @@ provider access, normalization, retained state, and APIs.
 Weather presentation is also consumed by the map information overlay, so
 format/state semantics are shared beyond the WEATHER context.
 
+Contact-weather notes reuse the same provider-neutral `WeatherProvider` abstraction
+on Forge. The Pi freezes available POTA and local coordinates during local commit;
+Forge performs bounded best-effort lookup on the background sync path and freezes
+the result per UUID so Wavelog retries cannot change payloads.
+
 ### Map/radar
 
 Owns primary map viewport, installed/cache/provider tile resolution, day/night
@@ -217,6 +222,7 @@ Contact persistence
   +--> DMR staged logging
   +--> LOG screen
   +--> background Forge/Wavelog synchronization
+  +--> optional asynchronous Forge propagation-history ingestion
 
 Forge contact synchronization owns Wavelog-specific station management. It derives
 dynamic routing only from the immutable contact's frozen grid/state/CQ/ITU fields,
