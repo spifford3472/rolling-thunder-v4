@@ -11,6 +11,7 @@ from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.live_map_service import LiveMapService, MapDataStatus
 from rolling_thunder.map_sources import (
     InstalledMapRegistry,
+    MapPackageStyle,
     MapTileResolver,
     MapTileSource,
     ResolvedMapTile,
@@ -176,6 +177,25 @@ def test_service_loads_missing_tiles_and_publishes_ready_snapshot() -> None:
     assert {tile.source for tile in state.tiles} == {MapTileSource.NETWORK}
     assert set(client.requests) == set(requested_keys())
     assert {key for key, _ in cache.writes} == set(requested_keys())
+
+
+def test_callsign_style_switch_invalidates_loaded_base_map_snapshot() -> None:
+    live_map = service(FakeClient(), FakeCache())
+    live_map.start()
+    live_map.request_viewport(
+        GeoPoint(39.53, -84.08),
+        width_px=600,
+        height_px=400,
+    )
+    assert live_map.latest_state.status is MapDataStatus.READY
+
+    assert live_map.set_style(MapPackageStyle.NIGHT) is True
+
+    state = live_map.latest_state
+    assert state.status is MapDataStatus.IDLE
+    assert state.viewport is None
+    assert state.tiles == ()
+    assert state.detail == "LOADING NIGHT MAP"
 
 
 def test_service_never_refreshes_missing_installed_coverage() -> None:

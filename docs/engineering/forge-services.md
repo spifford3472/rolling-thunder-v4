@@ -10,7 +10,7 @@ Screen-specific presentation belongs on clients, not Forge.
 
 ## Current process families
 
-### Spot / weather / radar service
+### Spot / weather / radar / map service
 
 Entry point: `rolling-thunder-forge-spots` / `forge_spot_main.py`.
 
@@ -29,9 +29,20 @@ Responsibilities include:
 - retained weather;
 - weather alerts;
 - radar;
+- optional on-demand style-aware map tiles backed by a local TileServer
+  GL-compatible renderer;
 - HTTP publication of retained state.
 
 The service publishes retained state immediately and performs provider/network work in background lifecycles.
+
+The optional map route is the exception to retained/polled publication: one
+bounded tile request is rendered on demand from the local renderer. It is
+disabled by default, has no background lifecycle, and is layered into the same
+private port 8766 application as spots, weather, location, alerts, and radar.
+Map failure does not change those other routes. The standalone
+`rolling-thunder-forge-map` entry point remains useful for development/testing,
+defaults to port 8767, and must not be used as a second production service unless
+deliberately isolated.
 
 #### DX Summit
 
@@ -117,9 +128,14 @@ propagation/history worker.
 
 `forge_propagation_*` provides a separate disabled-by-default service entry point,
 typed collectors, and a dedicated SQLite repository for raw HamQSL/KC2G observations
-and QSO correlation. It reuses the existing VOACAP summary API and does not add a
-propagation engine. It is deliberately not stored in the contact-sync or spot
-database. See `docs/PROPAGATION_HISTORY.md`.
+and QSO correlation. PSK Reporter eligibility consumes an injected FT8 terminal-time
+lookup keyed by the shared contact/attempt UUID, and batched provider XML is stored
+once per query rather than copied into every QSO summary. It reuses the existing
+VOACAP summary API and does not add a propagation engine. It is deliberately not
+stored in the contact-sync or spot database. The current entry point runs only the
+hourly HamQSL/KC2G collection cycle; VOACAP, weather, and PSK Reporter controls
+default off and are reserved for a future independently supervised QSO-ingestion
+worker. See `docs/PROPAGATION_HISTORY.md`.
 
 ## Reusable service design rules
 

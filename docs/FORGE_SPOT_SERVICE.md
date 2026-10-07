@@ -82,6 +82,27 @@ The mapping preserves normalized activator callsign, integer-hertz frequency, no
 
 A successful empty provider result is a valid complete empty slice. A nonempty public response that yields no usable typed records is a provider failure rather than silently replacing active data with an empty slice.
 
+### Optional style-aware map route
+
+The `map_tiles` section is disabled by default, so existing YAML validates and
+behaves exactly as before. When deliberately enabled it adds no bind address,
+port, daemon, polling loop, or background lifecycle. It layers this route onto
+the existing spot service application and listener:
+
+```text
+GET /api/v1/map/tiles/{style}/{z}/{x}/{y}.png
+```
+
+Only `day` and `night` are accepted. Coordinates use the shared `MapTileKey`
+bounds. Forge requests the configured local TileServer GL-compatible URL with a
+bounded timeout and minimum request interval, validates a bounded 256x256 PNG,
+and returns private cache control plus the configured attribution header. It
+does not contact a public tile provider and uses no API key.
+
+Disabled or failed rendering returns a bounded 503 response for that map request
+only. Invalid style/coordinates fail closed, HEAD is explicitly 405, and all
+non-map routes delegate unchanged. Health never renders or probes a map tile.
+
 ### DX sources
 
 Forge permits at most one DX source at a time.
@@ -345,6 +366,11 @@ Production runs:
 - with database `/var/lib/rolling-thunder/forge-spots.db`
 - through `rolling-thunder-forge-spots.service`
 - on `192.168.9.170:8766`
+
+Optional production map serving uses this same service and listener. The
+standalone `rolling-thunder-forge-map` entry point may remain for isolated
+development/testing and defaults to port 8767, but it must not be used as a
+second production service unless deliberately isolated.
 
 The service uses `Restart=on-failure` and is enabled at boot after production acceptance.
 

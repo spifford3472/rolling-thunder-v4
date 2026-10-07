@@ -217,10 +217,10 @@ originates from one screen.
 - `src/rolling_thunder/live_map_service.py` — Background base-map viewport/tile service and immutable snapshot publication.
 - `src/rolling_thunder/live_map_ui.py` — Tk rendering for map, overlays, marker, and map status.
 - `src/rolling_thunder/map_refresh.py` — Primary-map subsystem module for refresh.
-- `src/rolling_thunder/map_solar.py` — Primary-map subsystem module for solar.
-- `src/rolling_thunder/map_sources.py` — Primary-map subsystem module for sources.
-- `src/rolling_thunder/map_tiles.py` — Primary-map subsystem module for tiles.
-- `src/rolling_thunder/map_zoom.py` — Primary-map subsystem module for zoom.
+- `src/rolling_thunder/map_solar.py` — GPS/solar DAY/NIGHT policy and shared primary-to-mirror style fan-out.
+- `src/rolling_thunder/map_sources.py` — Local-first installed/cache/online map resolution with style switching.
+- `src/rolling_thunder/map_tiles.py` — Validated tile HTTP/cache adapters, including callsign-only style-partitioned storage.
+- `src/rolling_thunder/map_zoom.py` — Primary-map zoom settings plus optional shared style-target dispatch.
 - `src/rolling_thunder/radar_coverage.py` — Radar domain/presentation module for coverage.
 - `src/rolling_thunder/radar_domain.py` — Radar domain/presentation module for domain.
 - `src/rolling_thunder/radar_tiles.py` — Radar domain/presentation module for tiles.
@@ -267,11 +267,13 @@ originates from one screen.
 - `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
-- `src/rolling_thunder/forge_propagation_history.py` — Dedicated raw-observation and QSO-correlation SQLite domain/repository.
+- `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.
 - `src/rolling_thunder/forge_propagation_main.py` — Undeployed opt-in propagation-history collection entry point.
-- `src/rolling_thunder/forge_pskreporter.py` — Disabled typed PSK Reporter batch analytics boundary and etiquette controls.
+- `src/rolling_thunder/forge_pskreporter.py` — Official bounded PSK Reporter XML client, five-minute etiquette gate, FT8 completion-aware eligibility, versioned correlation, and repository-backed batch analytics service.
 - `src/rolling_thunder/forge_location_client.py` — Forge backend module for location client; keep provider/backend contracts reusable by non-UI clients.
-- `src/rolling_thunder/forge_map_main.py` — Forge backend module for map main; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_map.py` — Reusable typed configuration and bounded local style-aware map-renderer adapter.
+- `src/rolling_thunder/forge_map_api.py` — Optional map-tile route layer that delegates non-map requests to the existing Forge API application.
+- `src/rolling_thunder/forge_map_main.py` — Standalone Forge map development/testing entry point; production map serving is composed into the spot listener.
 - `src/rolling_thunder/forge_mobile_location.py` — Forge backend module for mobile location; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_mobile_location_repository.py` — Forge backend module for mobile location repository; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_noaa_radar.py` — Forge backend module for noaa radar; keep provider/backend contracts reusable by non-UI clients.

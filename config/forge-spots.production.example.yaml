@@ -106,4 +106,14 @@ radar:
   maximum_cached_tiles: 256
   refresh_on_start: true
 
+map_tiles:
+  # Deliberately disabled until the local renderer is installed and accepted.
+  # When enabled, tiles use this existing private 8766 listener; do not run a
+  # second production map listener or change the real /etc config casually.
+  enabled: false
+  renderer_url_template: http://127.0.0.1:8080/styles/{style}/{z}/{x}/{y}.png
+  request_timeout_s: 10.0
+  minimum_request_interval_s: 0.05
+  attribution: © OpenStreetMap contributors · Protomaps
+
 logging_level: INFO

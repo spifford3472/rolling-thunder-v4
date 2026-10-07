@@ -637,7 +637,9 @@ The page displays the effective zoom and availability of the map/radar/callsign
 controls.
 
 A manual DAY/NIGHT selection can temporarily override automatic solar style
-selection until the next real solar transition.
+selection until the next real solar transition. The callsign-information
+mini-map follows the same accepted DAY/NIGHT selection; map zoom remains a
+primary-live-map-only setting.
 
 ---
 
@@ -773,6 +775,16 @@ Depending on available data, the overlay may include:
 - prior-QSO summary;
 - FIRST CONTACT when no prior QSO is found.
 
+The contact mini-map follows the primary live map's DAY/NIGHT theme. At night it
+loads NIGHT tiles from the configured style-aware source. If those tiles are not
+available, the map area reports unavailable instead of displaying a bright DAY
+map as NIGHT.
+
+When configured for Forge tiles, that source is an optional disabled-by-default
+route on the existing private Forge spot/weather/radar service. A renderer or
+map-route failure affects only the mini-map; spots, health, weather, location,
+radar, local logging, and radio operation continue independently.
+
 ## Location priority
 
 For a selected current POTA activation, park coordinates are preferred for the
@@ -842,10 +854,12 @@ Forge centralizes:
 - heavier normalization/caching;
 - integration with home services such as Wavelog.
 
-## Spot/weather/radar service
+## Spot/weather/radar/map service
 
 The primary Forge service publishes retained spot, health, weather, alert,
-location, and radar capabilities.
+location, and radar capabilities. It can also expose optional on-demand
+style-aware map tiles through the same private listener; no second production
+map daemon or port is required.
 
 ### POTA
 

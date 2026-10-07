@@ -405,6 +405,7 @@ class MapConfig(ConfigurationModel):
 
     enabled: bool = False
     tile_url_template: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    callsign_tile_url_template: str | None = None
     zoom: int = Field(default=17, ge=0, le=22)
     request_timeout_s: float = Field(default=4.0, gt=0, le=60)
     gps_stale_after_s: float = Field(default=10.0, gt=0, le=300)
@@ -415,10 +416,12 @@ class MapConfig(ConfigurationModel):
     style: MapPackageStyle = MapPackageStyle.DAY
     online_attribution: str = DEFAULT_MAP_ATTRIBUTION
 
-    @field_validator("tile_url_template")
+    @field_validator("tile_url_template", "callsign_tile_url_template")
     @classmethod
-    def validate_tile_url_template(cls, value: str) -> str:
+    def validate_tile_url_template(cls, value: str | None) -> str | None:
         """Require an HTTP URL containing all standard tile placeholders."""
+        if value is None:
+            return None
         normalized = value.strip()
         parsed = urlparse(normalized)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:

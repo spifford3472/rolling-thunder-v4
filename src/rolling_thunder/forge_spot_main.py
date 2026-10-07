@@ -29,6 +29,8 @@ from rolling_thunder.forge_dxsummit_provider import (
     DxSummitIrcSessionFactory,
     ForgeDxSummitSpotProvider,
 )
+from rolling_thunder.forge_map import ForgeMapRenderer
+from rolling_thunder.forge_map_api import MapAwareForgeSpotApiApplication
 from rolling_thunder.forge_mobile_location import (
     ForgeMobileLocationService,
     ForgeMobileLocationStorageError,
@@ -445,8 +447,17 @@ def build_forge_runtime(
         core_application,
         radar_service,
     )
-    application = WeatherAlertAwareForgeSpotApiApplication(
+    map_renderer = (
+        ForgeMapRenderer(config.map_tiles, transport=transport)
+        if config.map_tiles.enabled
+        else None
+    )
+    map_application = MapAwareForgeSpotApiApplication(
         radar_application,
+        map_renderer,
+    )
+    application = WeatherAlertAwareForgeSpotApiApplication(
+        map_application,
         weather_alert_service,
     )
     factory = server_factory or _default_server_factory

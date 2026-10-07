@@ -141,12 +141,19 @@ class MapZoomSettingsController:
         live_map: LiveMapZoomTarget,
         bounds: MapZoomBounds,
         persistence: MapZoomPersistence,
+        *,
+        style_target: LiveMapStyleTarget | None = None,
     ) -> None:
         if not bounds.contains(live_map.zoom):
             raise ValueError("Initial live-map zoom must be inside effective bounds.")
         self._live_map = live_map
         self._bounds = bounds
         self._persistence = persistence
+        self._style_target = (
+            style_target
+            if style_target is not None
+            else live_map if isinstance(live_map, LiveMapStyleTarget) else None
+        )
 
     @property
     def state(self) -> MapZoomSettingsState:
@@ -182,7 +189,8 @@ class MapZoomSettingsController:
         )
         if target not in available:
             return False
-        return self._live_map.set_style(target)
+        style_target = self._style_target
+        return style_target is not None and style_target.set_style(target)
 
     def _set_zoom(self, requested: int) -> bool:
         target = self._bounds.clamp(requested)

@@ -13,11 +13,12 @@ This document prevents feature-scoped work from accidentally breaking shared beh
 | Shared spot UI/controller | `shared_spot_panel.py`, `shared_spot_ui.py` | POTA and DX | High: one provider must not inherit unintended behavior from the other |
 | Shared spot tuning | `shared_spot_tuning.py`, `active_panel_commands.py`, `shared_spot_tune_status.py` | POTA and DX, global status bar | High: staged identity/frequency/mode must remain exact |
 | Global status messages | `status_messages.py`, `status_bar_ui.py`, `status_strip.py` | radio/tuning, connectivity, operator feedback, multiple contexts | Medium-high: priority/expiry changes affect unrelated alerts |
-| Map runtime | `live_map*.py`, `map_*.py` | primary map, GPS state, POTA markers, radar, weather info | High: provider/cache/viewport changes have broad visual impact |
+| Map runtime | `live_map*.py`, `map_*.py` | primary map, callsign mini-map style mirror, GPS state, POTA markers, radar, weather info | High: provider/cache/viewport changes have broad visual impact |
 | Operator preferences | `operator_preferences.py`, settings controllers | map zoom/style, radar image, callsign info and future preferences | Medium: persisted keys are cross-session contracts |
 | Physical controls | `physical_controls.py`, dispatcher/source modules | all active contexts | Critical: action remapping can change behavior across every screen |
 | Context navigation | `context_navigation.py` | all screens, physical NEXT/BACK/home behavior, keyboard test shortcuts | High |
 | Forge spot API | `forge_spot_api.py`, Pi Forge spot clients | POTA, DX, health/status | High: reusable external contract |
+| Forge map API layer | `forge_map.py`, `forge_map_api.py`, `forge_spot_main.py` | callsign mini-map and future authorized private clients; shares the spot/weather/radar listener | High: route or listener changes must preserve every existing Forge API |
 | Forge weather API | `forge_weather*.py`, Pi weather clients | WEATHER, map local temperature, alerts/status | High: shared retained-state contract |
 | Forge callsign intelligence | `forge_callsign_info*.py` | shared callsign overlay; potentially future clients | High: reusable backend API |
 | Forge contact sync | `forge_contact_sync*.py`, `wavelog.py` | ordinary/POTA/DX commits, FT8, DMR, local retry, LOG status; potentially future clients | Critical: immutable-QSO routing, station/logbook safety, and UUID idempotency |

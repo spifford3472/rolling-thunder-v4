@@ -7,6 +7,7 @@ from typing import Any
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.live_map_service import MapDataStatus
+from rolling_thunder.map_sources import MapPackageStyle
 from rolling_thunder.radio_polling import PollCallback
 
 
@@ -61,7 +62,13 @@ class NoopExecutor(Executor):
         return Future()
 
 
-def config(tmp_path: Path, *, map_enabled: bool) -> ApplicationConfig:
+def config(
+    tmp_path: Path,
+    *,
+    map_enabled: bool,
+    callsign_info_enabled: bool = False,
+    map_style: str = "day",
+) -> ApplicationConfig:
     return ApplicationConfig.model_validate(
         {
             "operator": {
@@ -73,6 +80,18 @@ def config(tmp_path: Path, *, map_enabled: bool) -> ApplicationConfig:
                 "enabled": map_enabled,
                 "cache_directory": tmp_path / "map-cache",
                 "installed_packages": ([tmp_path / "missing-ohio.mbtiles"] if map_enabled else []),
+                "style": map_style,
+                "callsign_tile_url_template": (
+                    "http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png"
+                ),
+            },
+            "forge": {
+                "enabled": callsign_info_enabled,
+                "api_url": ("http://forge:8765" if callsign_info_enabled else None),
+                "callsign_info": {
+                    "enabled": callsign_info_enabled,
+                    "api_url": ("http://forge:8788" if callsign_info_enabled else None),
+                },
             },
             "storage": {
                 "database_path": tmp_path / "rolling-thunder.db",
@@ -121,3 +140,24 @@ def test_runtime_starts_and_stops_enabled_map(tmp_path: Path) -> None:
     assert runtime.live_map.is_running is False
     assert runtime.map_solar.is_running is False
     assert solar_scheduler.polls[-1].cancelled is True
+
+
+def test_callsign_map_starts_with_configured_main_map_style(tmp_path: Path) -> None:
+    runtime = ApplicationRuntime.from_config(
+        config(
+            tmp_path,
+            map_enabled=True,
+            callsign_info_enabled=True,
+            map_style="night",
+        ),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        map_solar_scheduler=SolarManualScheduler(),
+        map_executor=NoopExecutor(),
+        callsign_map_executor=NoopExecutor(),
+    )
+
+    assert runtime.live_map is not None
+    assert runtime.callsign_map is not None
+    assert runtime.live_map.style is MapPackageStyle.NIGHT
+    assert runtime.callsign_map.style is runtime.live_map.style

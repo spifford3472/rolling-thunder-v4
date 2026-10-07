@@ -40,7 +40,9 @@ services. Do not move provider, persistence, CAT, or other blocking work here.
 ### `forge_spot_main.py`
 
 Owns the lifecycle/composition of the primary retained Forge backend process.
-Provider/session policy belongs in the provider/service modules it composes.
+Provider/session policy belongs in the provider/service modules it composes. It
+also owns the single-listener composition of optional radar, weather-alert, and
+style-aware map route layers; enabling map tiles must not create another server.
 
 ## Feature ownership
 
@@ -108,6 +110,13 @@ Depends on:
 The typed FT-891 adapter owns menu 11-05 encoding/readback. Existing FT8
 receive/preparation services own REAR entry and MIC normal-context cleanup;
 UI contexts do not issue CAT writes.
+
+The optional Forge propagation-history worker consumes terminal FT8 completion
+time through an injected read-only provider keyed by the same stable UUID used for
+the completed contact and FT8 attempt. It may use that time only to delay PSK
+Reporter eligibility; correlation remains anchored to the immutable contact start.
+Missing completion data uses the documented conservative fallback, while invalid
+completion data fails closed without provider I/O.
 
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
@@ -178,9 +187,13 @@ Depends on:
 - retained weather for local temperature;
 - POTA catalog for park markers;
 - Forge radar backend.
+- optional Forge style-aware callsign-map route backed by a local renderer.
 
 The callsign mini-map is a separate contact-intelligence presentation path and
-must not be casually merged with primary-map source rules.
+must not be casually merged with primary-map source rules. It remains worldwide,
+online-only, and cache-isolated, but mirrors the authoritative primary map style
+through the shared style fan-out used by both solar automation and Settings.
+Zoom and installed-package availability remain primary-map-only concerns.
 
 ### LOG
 

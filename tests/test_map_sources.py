@@ -18,8 +18,10 @@ from rolling_thunder.map_sources import (
 )
 from rolling_thunder.map_tiles import (
     CachedMapTile,
+    MapTileClient,
     MapTileError,
     MapTileKey,
+    StylePartitionedMapTileCache,
 )
 
 NOW = datetime(2026, 8, 3, 20, 0, tzinfo=UTC)
@@ -351,6 +353,39 @@ def test_missing_tile_outside_installed_coverage_may_use_network(
     assert refreshed.png == png_tile(85)
     assert online.requests == [OUTSIDE_KEY]
     assert cache.writes == [(OUTSIDE_KEY, png_tile(85))]
+
+    resolver.close()
+
+
+def test_night_resolver_never_reuses_day_cache_with_unstyled_source(
+    tmp_path: Path,
+) -> None:
+    day = png_tile(230)
+    cache = StylePartitionedMapTileCache(
+        tmp_path,
+        style="day",
+        clock=lambda: NOW,
+    )
+    cache.write_for_style(KEY, day, "day")
+    resolver = MapTileResolver(
+        InstalledMapRegistry(),
+        cache,
+        MapTileClient(
+            "https://tiles.example.invalid/{z}/{x}/{y}.png",
+            require_style_token_for_night=True,
+        ),
+        style=MapPackageStyle.NIGHT,
+    )
+
+    local = resolver.read_local(KEY)
+    refreshed = resolver.refresh_online(KEY, local)
+
+    assert local.png is None
+    assert local.source is MapTileSource.MISSING
+    assert refreshed == local
+    day_result = cache.read_for_style(KEY, "day")
+    assert day_result is not None
+    assert day_result.png == day
 
     resolver.close()
 

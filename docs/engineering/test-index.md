@@ -259,6 +259,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_live_map_ui.py`
 - `tests/test_live_map_zoom.py`
 - `tests/test_live_radar_service.py`
+- `tests/test_forge_map_route.py`
 - `tests/test_map_solar.py`
 - `tests/test_map_sources.py`
 - `tests/test_map_tiles.py`

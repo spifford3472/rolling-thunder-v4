@@ -26,6 +26,11 @@ Port `8765` is not used by the production Forge service. The service must not bi
 
 Checkpoint #162 does not add another listener or daemon. Weather uses the same process, systemd unit, listener, and SQLite file as the existing Forge service.
 
+Optional style-aware map serving likewise uses this one process and private 8766
+listener. Do not start the standalone `rolling-thunder-forge-map` entry point in
+production. Its development/testing default is 8767, but it must not be used as
+a second production service unless deliberately isolated.
+
 ## Production layout
 
 | Purpose | Path |
@@ -97,6 +102,25 @@ weather:
 `check_interval_s` controls how frequently the background weather worker evaluates whether refresh is required; it does not force a provider call every interval. A provider refresh occurs when no complete forecast exists, the retained forecast reaches the configured maximum age, or the latest retained mobile location moves at least the configured distance from the forecast coordinates.
 
 Weather adds no second database path. Spot snapshots, retained mobile location, and retained weather use independent schema/table families inside the same configured Forge SQLite file.
+
+### Optional map-tile configuration
+
+Map serving remains disabled by default and must be explicitly adopted only
+after a local TileServer GL-compatible renderer is available:
+
+```yaml
+map_tiles:
+  enabled: false
+  renderer_url_template: http://127.0.0.1:8080/styles/{style}/{z}/{x}/{y}.png
+  request_timeout_s: 10.0
+  minimum_request_interval_s: 0.05
+  attribution: © OpenStreetMap contributors · Protomaps
+```
+
+The template requires `{style}`, `{z}`, `{x}`, and `{y}`. No second bind setting
+exists. Enabling this section does not authorize a deployment change in this
+worktree; update the real `/etc/rolling-thunder/forge-spots.yaml` only through a
+separate approved production procedure.
 
 DXSpider login uses the licensed operator callsign configured in production YAML.
 
@@ -190,6 +214,13 @@ Retained weather:
 
 ```bash
 curl -fsS http://192.168.9.170:8766/api/v1/weather
+```
+
+Optional map tile, after explicit enablement:
+
+```bash
+curl -fsS -o /tmp/forge-map-day.png \
+  http://192.168.9.170:8766/api/v1/map/tiles/day/7/34/49.png
 ```
 
 Mobile location write endpoint:

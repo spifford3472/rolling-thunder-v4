@@ -41,6 +41,7 @@ def test_map_defaults_are_safe_and_disabled() -> None:
     assert config.map.cache_retention_days == 7
     assert config.map.installed_packages == ()
     assert config.map.style.value == "day"
+    assert config.map.callsign_tile_url_template is None
     assert config.map.online_attribution == "© OpenStreetMap contributors"
 
 
@@ -55,6 +56,7 @@ def test_map_configuration_loads_and_resolves_cache_path(tmp_path: Path) -> None
     - maps/ohio.mbtiles
     - /opt/rolling-thunder/maps/corridor.mbtiles
   style: night
+  callsign_tile_url_template: http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png
   online_attribution: © Example Map Provider
 """,
         )
@@ -68,6 +70,9 @@ def test_map_configuration_loads_and_resolves_cache_path(tmp_path: Path) -> None
         Path("/opt/rolling-thunder/maps/corridor.mbtiles"),
     )
     assert config.map.style.value == "night"
+    assert config.map.callsign_tile_url_template == (
+        "http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png"
+    )
     assert config.map.online_attribution == "© Example Map Provider"
 
 
@@ -79,6 +84,12 @@ def test_map_configuration_loads_and_resolves_cache_path(tmp_path: Path) -> None
   tile_url_template: https://tiles.example.invalid/{z}/{x}.png
 """,
             "map.tile_url_template",
+        ),
+        (
+            """  enabled: true
+  callsign_tile_url_template: https://tiles.example.invalid/{z}/{x}.png
+""",
+            "map.callsign_tile_url_template",
         ),
         (
             """  enabled: true

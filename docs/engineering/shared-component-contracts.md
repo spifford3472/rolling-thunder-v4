@@ -36,6 +36,11 @@ shared enrichment worker completes, including lookup failure without a grid.
 Only `ready` contacts are upload-eligible. Completion notifications request
 background work; they do not select a Wavelog station or perform remote I/O.
 
+That stable QSO UUID is also the FT8 attempt UUID used by optional Forge
+propagation analytics to read terminal `ended_at_utc`. This read-only dependency
+does not place PSK Reporter work on the FT8 worker or contact-sync request path.
+Invalid terminal timestamps must not trigger a provider query.
+
 Forge selects the exact Wavelog station target for every upload through one shared
 boundary after receiving the immutable `Contact` and before claiming its UUID in
 the Forge ledger. Dynamic mobile identity uses only frozen `my_grid`, `my_state`,
@@ -167,6 +172,13 @@ overwriting another feature's status presentation.
 The primary live map is local-first and can remain useful from installed/cache
 data when networks fail.
 
+The primary live map is authoritative for DAY/NIGHT style and installed-style
+availability. Solar automation and the manual Settings toggle must use the same
+style fan-out; the callsign mini-map mirrors accepted style changes but retains
+its separate worldwide online source and cache. Its cache must partition styles,
+and a non-style-aware source must never supply or relabel DAY pixels for NIGHT.
+Map zoom remains scoped to the primary live map.
+
 Map availability and GPS availability are distinct states.
 
 Do not infer current GPS merely because a map snapshot exists, and do not blank
@@ -191,6 +203,12 @@ A failed candidate must not replace the last valid retained state.
 Forge APIs are presentation-neutral reusable service contracts. They must not
 return Tkinter/widget layout or assume one Rolling Thunder context is the only
 consumer.
+
+The optional style-aware map route is layered onto the existing private Forge
+spot API listener. It supports only validated `day` and `night` tiles, delegates
+all non-map paths unchanged, and must remain failure-isolated from spots,
+weather, alerts, mobile location, radar, and health. Enabling it must not create
+a second production listener. Health requests never trigger map rendering.
 
 Provider quirks, credentials, reconnect etiquette, and polling belong behind
 Forge service/provider boundaries.

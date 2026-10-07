@@ -17,6 +17,7 @@ from rolling_thunder.map_tiles import (
     MapTileClient,
     MapTileError,
     MapTileKey,
+    StylePartitionedMapTileCache,
     build_map_viewport,
     validate_map_tile_png,
     web_mercator_world_pixel,
@@ -147,6 +148,23 @@ def test_tile_client_uses_configured_url_headers_and_timeout() -> None:
     ]
 
 
+def test_tile_client_substitutes_explicit_day_and_night_styles() -> None:
+    transport = RecordingTransport()
+    client = MapTileClient(
+        "https://forge.invalid/api/v1/map/tiles/{style}/{z}/{x}/{y}.png",
+        transport=transport,
+    )
+    key = MapTileKey(zoom=6, x=17, y=25)
+
+    client.fetch_for_style(key, "DAY")
+    client.fetch_for_style(key, "night")
+
+    assert [request[1] for request in transport.requests] == [
+        "https://forge.invalid/api/v1/map/tiles/day/6/17/25.png",
+        "https://forge.invalid/api/v1/map/tiles/night/6/17/25.png",
+    ]
+
+
 @pytest.mark.parametrize(
     ("response", "message"),
     [
@@ -193,6 +211,60 @@ def test_cache_returns_fresh_tile_without_modifying_bytes(tmp_path: Path) -> Non
     assert result.png == original
     assert result.is_fresh is True
     assert result.stored_at == NOW
+
+
+def test_style_partitioned_cache_keeps_same_key_pixels_separate(
+    tmp_path: Path,
+) -> None:
+    cache = StylePartitionedMapTileCache(
+        tmp_path,
+        style="day",
+        clock=lambda: NOW,
+    )
+    key = MapTileKey(zoom=2, x=1, y=2)
+    day = png_tile(235)
+    night = png_tile(25)
+
+    cache.write_for_style(key, day, "day")
+    cache.write_for_style(key, night, "night")
+
+    day_result = cache.read_for_style(key, "day")
+    night_result = cache.read_for_style(key, "night")
+    assert day_result is not None
+    assert night_result is not None
+    assert day_result.png == day
+    assert night_result.png == night
+    assert (tmp_path / "day" / "2" / "1" / "2.png").is_file()
+    assert (tmp_path / "night" / "2" / "1" / "2.png").is_file()
+
+
+def test_style_partitioned_cache_preserves_retention_and_global_size_limit(
+    tmp_path: Path,
+) -> None:
+    mutable_now = [NOW]
+    cache = StylePartitionedMapTileCache(
+        tmp_path,
+        style="day",
+        retention=timedelta(days=7),
+        maximum_tiles=1,
+        prune_interval_writes=1,
+        clock=lambda: mutable_now[0],
+    )
+    day_key = MapTileKey(zoom=2, x=1, y=2)
+    night_key = MapTileKey(zoom=2, x=1, y=3)
+    cache.write_for_style(day_key, png_tile(235), "day")
+
+    mutable_now[0] += timedelta(days=8)
+    stale_day = cache.read_for_style(day_key, "day")
+    assert stale_day is not None
+    assert stale_day.is_fresh is False
+
+    cache.write_for_style(night_key, png_tile(25), "night")
+
+    assert cache.read_for_style(day_key, "day") is None
+    fresh_night = cache.read_for_style(night_key, "night")
+    assert fresh_night is not None
+    assert fresh_night.is_fresh is True
 
 
 def test_cache_returns_expired_tile_as_stale(tmp_path: Path) -> None:

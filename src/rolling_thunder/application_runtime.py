@@ -109,13 +109,16 @@ from rolling_thunder.known_callsign_client import (
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
 from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
-from rolling_thunder.map_solar import MapSolarStyleService
+from rolling_thunder.map_solar import MapSolarStyleService, SynchronizedMapStyleTarget
 from rolling_thunder.map_sources import (
     InstalledMapRegistry,
-    MapPackageStyle,
     MapTileResolver,
 )
-from rolling_thunder.map_tiles import MapTileCache, MapTileClient
+from rolling_thunder.map_tiles import (
+    MapTileCache,
+    MapTileClient,
+    StylePartitionedMapTileCache,
+)
 from rolling_thunder.map_zoom import (
     MapZoomSettingsController,
     effective_map_zoom_bounds,
@@ -854,22 +857,29 @@ class ApplicationRuntime:
                 # Contact maps can be anywhere in the world. Keep their tile
                 # source/cache isolated from corridor MBTiles so a viewport
                 # cannot splice night installed tiles with light online tiles.
-                callsign_map_cache = MapTileCache(
+                callsign_map_cache = StylePartitionedMapTileCache(
                     map_config.cache_directory / "callsign-info",
+                    style=map_config.style.value,
                     retention=timedelta(days=map_config.cache_retention_days),
                     maximum_tiles=map_config.maximum_cached_tiles,
                 )
+                callsign_tile_url_template = (
+                    map_config.callsign_tile_url_template
+                    or map_config.tile_url_template
+                )
                 callsign_map_client = MapTileClient(
-                    map_config.tile_url_template,
+                    callsign_tile_url_template,
                     timeout_s=map_config.request_timeout_s,
                     transport=map_transport,
+                    style=map_config.style.value,
+                    require_style_token_for_night=True,
                 )
                 callsign_map_registry = InstalledMapRegistry.load(())
                 callsign_map_resolver = MapTileResolver(
                     callsign_map_registry,
                     callsign_map_cache,
                     callsign_map_client,
-                    style=MapPackageStyle.DAY,
+                    style=map_config.style,
                     online_attribution=map_config.online_attribution,
                 )
                 callsign_map = LiveMapService(
@@ -877,13 +887,18 @@ class ApplicationRuntime:
                     zoom=6,
                     executor=callsign_map_executor,
                 )
+            map_style_target = SynchronizedMapStyleTarget(
+                live_map,
+                (() if callsign_map is None else (callsign_map,)),
+            )
             map_zoom_settings = MapZoomSettingsController(
                 live_map,
                 zoom_bounds,
                 operator_preferences,
+                style_target=map_style_target,
             )
             map_solar = MapSolarStyleService(
-                live_map,
+                map_style_target,
                 map_solar_scheduler or ThreadingPollScheduler(),
                 stale_after=timedelta(seconds=map_config.gps_stale_after_s),
             )

@@ -2,10 +2,13 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.map_solar import (
     MapSolarStyleService,
+    SynchronizedMapStyleTarget,
     next_solar_transition,
     solar_map_style,
 )
@@ -52,6 +55,10 @@ class FakeMapStyleTarget:
     @property
     def style(self) -> MapPackageStyle:
         return self._style
+
+    @property
+    def available_styles(self) -> tuple[MapPackageStyle, ...]:
+        return (MapPackageStyle.DAY, MapPackageStyle.NIGHT)
 
     def set_style(self, style: MapPackageStyle) -> bool:
         self.requests.append(style)
@@ -127,6 +134,44 @@ def test_first_valid_fix_applies_style_and_schedules_only_next_transition() -> N
     assert scheduler.polls[0].interval_s > 0
 
 
+@pytest.mark.parametrize(
+    "now",
+    (
+        datetime(2026, 6, 21, 17, 0, tzinfo=UTC),
+        datetime(2026, 6, 21, 6, 0, tzinfo=UTC),
+    ),
+)
+def test_solar_day_night_transitions_fan_out_to_both_maps(
+    now: datetime,
+) -> None:
+    clock = [now]
+    scheduler = ManualScheduler()
+    primary = FakeMapStyleTarget(MapPackageStyle.NIGHT)
+    mirror = FakeMapStyleTarget(MapPackageStyle.NIGHT)
+    target = SynchronizedMapStyleTarget(primary, (mirror,))
+    service = MapSolarStyleService(
+        target,
+        scheduler,
+        stale_after=timedelta(seconds=10),
+        wall_clock=lambda: clock[0],
+    )
+
+    service.start(gps_state(clock[0]))
+    initial_style = solar_map_style(clock[0], LATITUDE, LONGITUDE)
+    assert primary.style is initial_style
+    assert mirror.style is initial_style
+
+    transition_poll = scheduler.polls[-1]
+    clock[0] += timedelta(seconds=transition_poll.interval_s + 60)
+    transition_poll.fire()
+
+    transitioned_style = solar_map_style(clock[0], LATITUDE, LONGITUDE)
+    assert transitioned_style is not initial_style
+    assert primary.style is transitioned_style
+    assert mirror.style is transitioned_style
+    service.stop()
+
+
 def test_missing_gps_is_safe_and_does_not_schedule() -> None:
     now = datetime(2026, 6, 21, 17, 0, tzinfo=UTC)
     scheduler = ManualScheduler()
@@ -176,7 +221,9 @@ def test_meaningful_location_change_replaces_transition_but_small_motion_does_no
 def test_manual_override_survives_location_reschedule_until_solar_transition() -> None:
     clock = [datetime(2026, 6, 21, 17, 0, tzinfo=UTC)]
     scheduler = ManualScheduler()
-    target = FakeMapStyleTarget(MapPackageStyle.NIGHT)
+    primary = FakeMapStyleTarget(MapPackageStyle.NIGHT)
+    mirror = FakeMapStyleTarget(MapPackageStyle.NIGHT)
+    target = SynchronizedMapStyleTarget(primary, (mirror,))
     service = MapSolarStyleService(
         target,
         scheduler,
@@ -186,7 +233,8 @@ def test_manual_override_survives_location_reschedule_until_solar_transition() -
     )
     service.start(gps_state(clock[0]))
     target.set_style(MapPackageStyle.NIGHT)
-    target.requests.clear()
+    primary.requests.clear()
+    mirror.requests.clear()
     service.note_manual_override()
 
     moved_latitude = 40.10
@@ -199,19 +247,23 @@ def test_manual_override_survives_location_reschedule_until_solar_transition() -
         )
     )
 
-    assert target.style is MapPackageStyle.NIGHT
-    assert target.requests == []
+    assert primary.style is MapPackageStyle.NIGHT
+    assert mirror.style is MapPackageStyle.NIGHT
+    assert primary.requests == []
+    assert mirror.requests == []
     transition_poll = scheduler.polls[-1]
 
     clock[0] += timedelta(seconds=transition_poll.interval_s + 60)
     transition_poll.fire()
 
-    assert target.requests
-    assert target.requests[-1] is solar_map_style(
+    assert primary.requests
+    assert mirror.requests
+    assert primary.requests[-1] is solar_map_style(
         clock[0],
         moved_latitude,
         moved_longitude,
     )
+    assert mirror.requests[-1] is primary.requests[-1]
     assert transition_poll.cancelled is True
 
 

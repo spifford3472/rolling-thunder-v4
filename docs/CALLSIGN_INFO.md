@@ -67,6 +67,21 @@ blend installed regional MBTiles into that viewport. This keeps worldwide contac
 maps visually consistent and avoids a viewport straddling the edge of a regional
 night-map package showing dark installed tiles beside light online tiles.
 
+The primary live map is the authoritative DAY/NIGHT style target. Solar changes
+and the Settings style button fan out each accepted primary-map style to the
+mini-map; the mini-map has no separate timer or style control. A style change
+invalidates its base-map snapshot so an open or subsequently opened overlay loads
+the new pixels.
+
+The dedicated cache stores identical tile coordinates in separate `day/` and
+`night/` partitions under `cache_directory/callsign-info`. Its retention,
+validation, and maximum-tile policy are unchanged and apply across both
+partitions. `map.callsign_tile_url_template` may point at the existing private
+Forge route `/api/v1/map/tiles/{style}/{z}/{x}/{y}.png`; when omitted, the main
+tile URL is reused. A non-style-aware source cannot satisfy NIGHT requests, so
+the overlay shows normal map-unavailable presentation instead of a cached or
+fresh bright DAY map.
+
 ## Location priority
 
 For the current contact:
