@@ -846,8 +846,8 @@ class WavelogClient:
         location: WavelogStationLocation,
         contact: Contact,
     ) -> WavelogStationLocation:
-        """Make Wavelog's Mobile profile grid match this contact before import."""
-        desired_grid = "" if contact.my_grid6 is None else str(contact.my_grid6).upper()
+        """Keep the legacy Mobile profile at the contact's stable routing grid."""
+        desired_grid = "" if contact.my_grid4 is None else contact.my_grid4.upper()
         if location.gridsquare == desired_grid:
             return location
 

@@ -107,12 +107,11 @@ readbacks and new payloads with nullable `tx_power_start_watts`,
 schema migrates v1 to v2 without rebuilding or discarding attempts; legacy
 payload hashes remain valid for idempotent replay.
 
-When requested by a contact's immutable weather-note flag, contact sync also reuses
-`OpenMeteoForgeWeatherProvider` through the shared `WeatherProvider` contract. Remote
-weather uses frozen POTA coordinates when present, otherwise the trusted remote-grid
-center; local weather uses frozen QSO-local coordinates. Each endpoint fails to
-`N/A` independently, and the first enriched result is persisted per UUID before the
-Wavelog attempt so retries remain deterministic.
+Contact sync performs no weather-provider work. It uploads the immutable contact it
+receives; existing structured weather is retained, while requested notes render
+missing weather as `N/A`. `contact_weather.py` and `OpenMeteoForgeWeatherProvider`
+remain reusable outside synchronization, including for a separate background
+propagation/history worker.
 
 ### Propagation history (implemented, not deployed)
 

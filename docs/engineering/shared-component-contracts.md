@@ -45,20 +45,24 @@ one UUID cannot move between stations. Browse, POTA, DX, FT8, and DMR must not a
 feature-specific station-routing forks.
 
 Verified dynamic stations use `Mobile - XXXX - YY`, retain a four-character
-profile grid, and belong to the exact configured logbook. Only legacy `Mobile`
-fallback receives the existing per-QSO profile-grid PATCH. Wavelog-bound ADIF
+profile grid, and belong to the exact configured logbook. Any legacy `Mobile`
+profile alignment also uses only derived grid4; no station profile follows a
+moving six-character subsquare. Wavelog-bound ADIF
 always carries full frozen `MY_GRIDSQUARE` when present and carries ADIF `NOTES`
 equal to exact nonblank `Contact.notes` or exactly `Mobile QSO` when blank.
 
 New contacts also retain typed workflow source and optional configured TX power.
 When weather-note capture is enabled on the immutable contact, Wavelog notes append
-`Contact Wx:` and `Local Wx:` lines; unavailable data is `N/A` and no weather request
-may delay local logging. Forge performs bounded best-effort enrichment on the
-background synchronization worker, freezes the first result for retry safety, and
-continues Wavelog synchronization with `N/A` after lookup failure. ADIF `TX_PWR` is emitted only
+`Contact Wx:` and `Local Wx:` lines; unavailable data is `N/A`. Contact sync performs
+no weather lookup: it immediately routes, hashes, and uploads the immutable payload
+it received. Weather already present is preserved, and absent weather formats as
+`N/A`. ADIF `TX_PWR` is emitted only
 when the snapshot contains a verified configured-power value. Dynamic station
 profiles remain four-character routing identities while QSO `MY_GRIDSQUARE` remains
-the full frozen grid.
+the full frozen grid in Rolling Thunder's submitted ADIF. Wavelog 3.2.3 currently
+overwrites the imported QSO field from the grid4 station profile; correcting that
+provider limitation requires a separate Wavelog API/import change, not temporary
+profile mutation.
 
 Forge persists each Rolling-Thunder-created dynamic station's verified exact name,
 ID, and UUID before its first logbook link attempt. If Wavelog's `active_log_only`

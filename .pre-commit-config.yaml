@@ -3,18 +3,18 @@ repos:
     hooks:
       - id: ruff
         name: Ruff
-        entry: ruff check src tests
+        entry: .venv/bin/ruff check src tests
         language: system
         pass_filenames: false
 
       - id: mypy
         name: MyPy
-        entry: mypy src
+        entry: .venv/bin/mypy src
         language: system
         pass_filenames: false
 
       - id: pytest
         name: Pytest
-        entry: bash -c 'PYTHONPATH=src pytest'
+        entry: bash -c 'PYTHONPATH=src .venv/bin/python -m pytest'
         language: system
         pass_filenames: false

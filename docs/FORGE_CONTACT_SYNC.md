@@ -9,10 +9,10 @@ Rolling Thunder remains a local-first mobile logger. A QSO succeeds when it has 
 Contact payload format 5 adds a typed originating workflow, nullable configured
 TX power, structured nullable weather slots, and an immutable weather-note flag.
 Wavelog ADIF emits `TX_PWR` only when known and appends the exact `Contact Wx:` and
-`Local Wx:` lines when requested. Local commit never performs weather I/O. The Forge
-contact-sync worker resolves both endpoints through the existing typed weather-provider
-boundary with a bounded timeout, freezes the first result for deterministic retry, and
-continues to Wavelog with `N/A` independently for an unknown location or failed lookup.
+`Local Wx:` lines when requested. Contact synchronization performs no weather I/O:
+it uploads the immutable structured weather values it receives, and formats an absent
+value as `N/A`. The reusable weather provider remains available to separate background
+workers, but public HTTP latency cannot delay station resolution, claim, or upload.
 
 ```text
 Rolling Thunder UI / physical controls
@@ -121,7 +121,17 @@ data is insufficient, Forge resolves or creates the exact `Mobile - Unknown Loca
 profile, verifies that it carries no grid/state/CQ/ITU metadata, binds it durably, and
 links it to the configured logbook. The legacy `Mobile` profile remains the verified
 template for callsign/DXCC and health checks, not the locationless QSO target. Dynamic
-profiles are never patched to a six-character QSO grid.
+profiles are never patched to a six-character QSO grid. The legacy alignment helper
+also uses only derived grid4, so neither legacy nor dynamic profiles chase moving
+six-character subsquares.
+
+Wavelog 3.2.3 parses the submitted full `MY_GRIDSQUARE`, but its import path then
+unconditionally replaces `COL_MY_GRIDSQUARE` with the selected station profile's
+grid. Its QSO PATCH resource does not permit `my_gridsquare`. Rolling Thunder therefore
+remains authoritative for grid6 and derived grid4, configures station profiles with
+grid4, and submits grid6 in ADIF, while Wavelog 3.2.3 stores grid4. Preserving grid6
+inside Wavelog requires a separate provider/API change; Rolling Thunder must not
+temporarily mutate a station profile to a moving grid6 as a workaround.
 
 Absent/ambiguous legacy or dynamic names, incompatible metadata, an unlinked legacy
 profile, malformed responses, unverifiable identity, failed creation, or failed
@@ -438,9 +448,9 @@ CI/mocks are necessary but not sufficient. Before merge, acceptance must use:
 8. repeated manual/retry verification that only one Wavelog QSO exists;
 9. one locationless/historical contact confirming `Mobile - Unknown Location`
    routing with no fabricated grid/state/CQ/ITU metadata;
-10. Wavelog confirmation that the dynamic profile retains a four-character grid
-    while the QSO carries its full frozen `MY_GRIDSQUARE` and the expected ADIF
-    `NOTES` value.
+10. capture confirming Rolling Thunder submits the full frozen `MY_GRIDSQUARE` and
+    expected ADIF `NOTES`, while the dynamic profile and Wavelog 3.2.3 stored QSO
+    retain grid4 because of the documented provider overwrite.
 
 The PR remains draft until this installed acceptance is complete.
 
@@ -453,8 +463,8 @@ Ordinary logging resolves coordinates and `my_grid` from the GPSState captured
 before the commit worker starts, using the existing connected/fixed/fresh
 (maximum age 10 seconds) rule. FT8 successful logging uses the latitude,
 longitude and grid frozen in FT8QsoContext at authorization; the next authorization
-captures its own location. Failed/aborted attempts create no Contact. No sync,
-retry or enrichment operation reads current GPS to fill historical coordinates.
+captures its own location. Failed/aborted attempts create no Contact. No sync or
+retry operation reads current GPS to fill historical coordinates.
 Missing GPS remains valid, and historical contacts retain NULL coordinates.
 
 Pi SQLite schema 16 adds two nullable REAL columns to schema 15 with ALTER TABLE;
@@ -468,15 +478,15 @@ coordinates remain accepted. **Upgrade and verify the actual Forge contact-sync
 venv before enabling the updated Pi sender:** older Forge models reject extra
 fields, including fields serialized as null. Inspect installed import paths and
 source, not just the checkout/version string. No Forge ledger migration is needed.
-Local idempotent replay includes coordinates and rejects changed-location UUIDs;
-synchronization/enrichment updates still permit identical terminal replay.
+Local idempotent replay includes coordinates and rejects changed-location UUIDs.
 Forge's existing hash remains based on station profile and Wavelog-bound ADIF,
 so coordinate-only differences do not change that hash.
 
-Coordinates are not added to ADIF and synchronization never reads current GPS.
+Coordinates are not added to ADIF and synchronization never reads current GPS or
+calls a weather provider.
 Checkpoints C/D/E now use the frozen Checkpoint A/B fields to select, safely create,
 verify, and link dynamic mobile station locations. Locationless/historical contacts
-retain legacy `Mobile` routing and per-QSO grid alignment. The blank-only Wavelog
+retain legacy `Mobile` routing and grid4-only profile alignment. The blank-only Wavelog
 default is implemented in ADIF `NOTES` (not a separate comments field). See
 [owner acceptance and rollback](CHECKPOINT_A_ACCEPTANCE.md) for the earlier schema
 checkpoint; the current routing contract is this document.

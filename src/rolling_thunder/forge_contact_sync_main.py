@@ -12,7 +12,6 @@ from rolling_thunder.application_secrets import (
     SecretConfigurationError,
     load_application_secrets,
 )
-from rolling_thunder.contact_weather import ForgeContactWeatherEnricher
 from rolling_thunder.forge_contact_sync import (
     ForgeContactSyncRepository,
     ForgeContactSyncService,
@@ -31,7 +30,6 @@ from rolling_thunder.forge_ft8_performance import (
     ForgeFT8PerformanceService,
     ForgeFT8PerformanceStorageError,
 )
-from rolling_thunder.forge_open_meteo_weather import OpenMeteoForgeWeatherProvider
 from rolling_thunder.wavelog import WavelogClient
 
 DEFAULT_CONFIG_PATH = Path("config/forge-contact-sync.yaml")
@@ -98,19 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             timeout_s=config.wavelog.request_timeout_s,
             station_binding_store=repository,
         )
-        weather_enricher = None
-        if config.weather.enabled:
-            weather_enricher = ForgeContactWeatherEnricher(
-                OpenMeteoForgeWeatherProvider(
-                    timeout_s=config.weather.request_timeout_s,
-                    endpoint=str(config.weather.endpoint),
-                )
-            )
-        service = ForgeContactSyncService(
-            repository,
-            wavelog,
-            weather_enricher=weather_enricher,
-        )
+        service = ForgeContactSyncService(repository, wavelog)
         ft8_performance_repository = ForgeFT8PerformanceRepository(
             config.storage.database_path
         )

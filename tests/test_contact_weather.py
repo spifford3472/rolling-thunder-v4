@@ -1,6 +1,7 @@
 """Forge-side best-effort weather enrichment for immutable contacts."""
 
 from datetime import UTC, datetime, timedelta
+from inspect import signature
 from pathlib import Path
 
 from rolling_thunder.contact_weather import ForgeContactWeatherEnricher
@@ -152,32 +153,43 @@ def test_enrichment_uses_remote_grid_center_only_when_coordinates_are_absent() -
     assert len(provider.locations) == 2
 
 
-def test_weather_failure_never_prevents_wavelog_sync_and_emits_na(tmp_path: Path) -> None:
-    provider = RecordingProvider(fail=True)
+def test_contact_sync_never_invokes_weather_enrichment(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_if_invoked(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise AssertionError("contact synchronization must not invoke a weather provider")
+
+    monkeypatch.setattr(ForgeContactWeatherEnricher, "enrich", fail_if_invoked)
     wavelog = RecordingWavelog()
     service = ForgeContactSyncService(
         ForgeContactSyncRepository(tmp_path / "forge.db"),
         wavelog,
-        weather_enricher=ForgeContactWeatherEnricher(provider),
     )
+    source = contact()
 
-    service.synchronize(contact())
+    service.synchronize(source)
 
+    assert "weather_enricher" not in signature(ForgeContactSyncService).parameters
     assert len(wavelog.uploaded) == 1
+    assert wavelog.uploaded[0] is source
     adif = contact_to_adif(wavelog.uploaded[0])
     assert "Contact Wx: N/A\nLocal Wx: N/A" in adif
 
 
-def test_weather_result_is_frozen_for_retry_idempotency(tmp_path: Path) -> None:
+def test_contact_sync_preserves_weather_already_present_on_immutable_payload(
+    tmp_path: Path,
+) -> None:
     provider = RecordingProvider()
-    repository = ForgeContactSyncRepository(tmp_path / "forge.db")
-    source = contact()
-    first = ForgeContactWeatherEnricher(provider).enrich(source)
-    frozen = repository.resolve_weather_snapshot(source, first)
-    provider.fail = True
-    failed_candidate = ForgeContactWeatherEnricher(provider).enrich(source)
+    source = ForgeContactWeatherEnricher(provider).enrich(contact())
+    wavelog = RecordingWavelog()
+    service = ForgeContactSyncService(
+        ForgeContactSyncRepository(tmp_path / "forge.db"),
+        wavelog,
+    )
 
-    replay = repository.resolve_weather_snapshot(source, failed_candidate)
+    service.synchronize(source)
 
-    assert replay == frozen
-    assert replay.contact_weather is not None
+    assert wavelog.uploaded == [source]
+    assert "Contact Wx: Partly Cloudy; 21.5 C; humidity 57%" in contact_to_adif(source)

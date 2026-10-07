@@ -64,21 +64,12 @@ class WavelogSyncConfig(ForgeContactSyncConfigModel):
         return normalized
 
 
-class ContactWeatherConfig(ForgeContactSyncConfigModel):
-    """Bounded Forge-side QSO weather-enrichment settings."""
-
-    enabled: bool = True
-    request_timeout_s: float = Field(default=5.0, gt=0, le=30)
-    endpoint: AnyHttpUrl = AnyHttpUrl("https://api.open-meteo.com/v1/forecast")
-
-
 class ForgeContactSyncConfig(ForgeContactSyncConfigModel):
     """Complete Forge contact synchronization process configuration."""
 
     server: ForgeContactServerConfig = ForgeContactServerConfig()
     storage: ForgeContactStorageConfig = ForgeContactStorageConfig()
     wavelog: WavelogSyncConfig = WavelogSyncConfig()
-    weather: ContactWeatherConfig = ContactWeatherConfig()
 
 
 def load_forge_contact_sync_config(path: Path) -> ForgeContactSyncConfig:

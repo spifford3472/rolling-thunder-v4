@@ -3,7 +3,9 @@
 ## Outcome
 
 Implemented and reviewer-corrected the local QSO contract plus an undeployed Forge
-propagation-history foundation. No production host, service, database,
+propagation-history foundation. This correction removes public weather calls from
+contact synchronization, makes pre-commit hooks worktree-local, and documents the
+verified Wavelog 3.2.3 grid limitation. No production host, service, database,
 configuration, systemd unit, runtime tree, Wavelog instance, secret, or main branch
 was changed. The reviewer-directed pass did not modify the KC2G interpolation or
 PSK Reporter adapter files reserved for specialist follow-up.
@@ -12,12 +14,14 @@ PSK Reporter adapter files reserved for specialist follow-up.
 
 ### Six-character `MY_GRIDSQUARE`
 
-The baseline path already preserves the full frozen grid through `Contact`, SQLite,
-Pi JSON, Forge validation, and Wavelog ADIF. Dynamic station routing alone truncates
-to four characters. The adapter regression proves a dynamic profile of `EM79` is
-submitted with `<MY_GRIDSQUARE:6>EM79xm`. The observed Wavelog value of `EM79`
-therefore occurs after the correct import payload crosses the Wavelog provider
-boundary. This build does not invent an undocumented post-import Wavelog mutation.
+Rolling Thunder preserves the full frozen grid through `Contact`, SQLite, Pi JSON,
+Forge validation, and submitted Wavelog ADIF. It derives grid4 for every station
+profile and never moves a profile among six-character subsquares. Reviewer inspection
+of Wavelog 3.2.3 established that import parses `MY_GRIDSQUARE` and then unconditionally
+overwrites `COL_MY_GRIDSQUARE` from `station_profile.station_gridsquare`; the QSO PATCH
+resource does not allow `my_gridsquare`. Consequently Rolling Thunder remains
+authoritative for grid6 and derived grid4, the profile uses grid4, the ADIF submits
+grid6, and Wavelog 3.2.3 stores grid4. A separate provider/API change is required.
 
 ### FT8 performance uploads stopping independently
 
@@ -41,10 +45,9 @@ remains active and observable.
 - Nullable structured contact/local weather observations include provider identity,
   observation/fetch time, coordinates, normalized condition, temperature, and
   humidity when lookup succeeds.
-- Immutable `weather_notes_enabled`; Forge reuses the existing typed Open-Meteo
-  provider, prefers frozen POTA coordinates over remote-grid center, uses frozen
-  local coordinates, freezes the first result for deterministic retry, and falls
-  back independently to `N/A` without preventing Wavelog sync.
+- Immutable `weather_notes_enabled`; contact sync uploads structured weather already
+  present on the received payload and formats absent values as `N/A`. It never calls
+  Open-Meteo or another weather provider.
 - FT8 reads configured power in the coordinator terminal callback before the later
   100 W context-exit restore and shares that snapshot with performance telemetry.
 - Ordinary POTA/DX/Browse power reads occur on the existing background commit worker.
@@ -55,9 +58,20 @@ remains active and observable.
 - Contact export format 5 preserves the expanded immutable payload while formats
   1–4 remain accepted with safe defaults.
 
-Weather data remains nullable. Local commit never performs network work. The
-existing Pi contact-sync worker invokes bounded Forge enrichment, and provider or
-location failure proceeds to Wavelog with the required explicit `N/A` lines.
+Weather data remains nullable. Neither local commit nor Forge contact synchronization
+performs weather network work. The reusable `contact_weather.py` and Open-Meteo
+adapter remain available to a separate background propagation/history worker.
+
+## Reviewer correction details
+
+- `ForgeContactSyncService.synchronize` routes, hashes, claims, and uploads the exact
+  immutable `Contact` it received; its weather dependency and retry-freezing weather
+  table/method were removed.
+- Contact-sync main and YAML configuration no longer construct or configure a weather
+  provider. Obsolete `weather:` configuration fails closed as an unknown field.
+- Legacy `Mobile` profile alignment now uses derived grid4, matching dynamic profiles.
+- Local pre-commit entries explicitly execute `.venv/bin/ruff`, `.venv/bin/mypy`, and
+  `.venv/bin/python -m pytest`; no absolute checkout path is embedded.
 
 ## Propagation-history component
 
@@ -98,22 +112,19 @@ and SNR when present.
 
 ## Validation
 
-- Reviewer-focused core tests: **219 passed**.
-- Full `pytest` with no ignores: **2,812 passed, 7 skipped** out of **2,819
+- Reviewer-focused contact/weather/Wavelog tests: **62 passed**.
+- Full `pytest` with no ignores: **2,813 passed, 7 skipped** out of **2,820
   collected** on Python 3.12.3. The skips are the suite's existing declared skips.
 - `ruff check src tests`: **passed**.
-- `mypy src/rolling_thunder`: **passed**, 273 source files.
+- `mypy src`: **passed**, 273 source files.
 - `git diff --check`: **passed**.
-- The three protocol tests now import `typing_extensions.get_protocol_members`, and
-  `typing-extensions>=4.15` is an explicit development dependency for Python <3.13.
-- Pre-commit with the repaired canonical shared venv on `PATH`: **Ruff passed,
-  MyPy passed, Pytest passed**. An initial direct launcher invocation found the
-  pre-commit package but reported `ruff`, `mypy`, and `pytest` missing because the
-  local `language: system` hooks do not prepend the launcher's venv automatically;
-  no hook or check was bypassed or weakened.
+- `/home/geoff/projects/rolling-thunder-v4/.venv/bin/pre-commit run --all-files`
+  from this worktree, without a PATH override: **Ruff passed, MyPy passed, Pytest
+  passed**.
+- A normal `git commit` hook invocation: **Ruff passed, MyPy passed, Pytest passed**.
 
 ## Commits
 
 - `8375a56 Correct QSO contracts and enrichment reliability`
-- Documentation and this report are committed separately in the follow-up
-  documentation commit.
+- `e3272dd Document corrected QSO contracts`
+- One corrective local commit from this reviewer pass.

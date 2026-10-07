@@ -161,10 +161,11 @@ provider access, normalization, retained state, and APIs.
 Weather presentation is also consumed by the map information overlay, so
 format/state semantics are shared beyond the WEATHER context.
 
-Contact-weather notes reuse the same provider-neutral `WeatherProvider` abstraction
-on Forge. The Pi freezes available POTA and local coordinates during local commit;
-Forge performs bounded best-effort lookup on the background sync path and freezes
-the result per UUID so Wavelog retries cannot change payloads.
+Contact weather is part of the immutable payload, not work owned by contact sync.
+The Pi freezes available POTA and local coordinates during local commit. A separate
+background history/propagation worker may reuse the provider-neutral
+`WeatherProvider` abstraction, but the Wavelog synchronization path performs no
+public weather request and uploads the weather fields it receives unchanged.
 
 ### Map/radar
 

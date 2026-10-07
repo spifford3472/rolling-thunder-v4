@@ -7,13 +7,11 @@ import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
-from json import JSONDecodeError, dumps, loads
 from pathlib import Path
 from threading import Lock
 from typing import Protocol
 from uuid import UUID
 
-from rolling_thunder.contact_weather import ContactWeatherEnricher
 from rolling_thunder.domain import Contact
 from rolling_thunder.home_platform import (
     ContactUploadDisposition,
@@ -109,16 +107,6 @@ class ForgeContactSyncRepository:
                         station_uuid TEXT NOT NULL CHECK(length(station_uuid) > 0),
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         verified_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                    )
-                    """
-                )
-                connection.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS forge_contact_weather (
-                        contact_id TEXT PRIMARY KEY,
-                        source_sha256 TEXT NOT NULL CHECK(length(source_sha256) = 64),
-                        enriched_contact_json TEXT NOT NULL,
-                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                     """
                 )
@@ -255,56 +243,6 @@ class ForgeContactSyncRepository:
                 f"Forge contact synchronization ledger claim failed: {contact_id}"
             ) from error
 
-    def resolve_weather_snapshot(
-        self,
-        source: Contact,
-        candidate: Contact,
-    ) -> Contact:
-        """Freeze one best-effort weather result for deterministic remote retries."""
-        source_sha256 = _contact_event_sha256(source)
-        candidate_json = candidate.model_dump_json()
-        try:
-            with sqlite3.connect(self._database_path) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                row = connection.execute(
-                    """
-                    SELECT source_sha256, enriched_contact_json
-                    FROM forge_contact_weather
-                    WHERE contact_id = ?
-                    """,
-                    (str(source.contact_id),),
-                ).fetchone()
-                if row is None:
-                    connection.execute(
-                        """
-                        INSERT INTO forge_contact_weather (
-                            contact_id, source_sha256, enriched_contact_json
-                        ) VALUES (?, ?, ?)
-                        """,
-                        (str(source.contact_id), source_sha256, candidate_json),
-                    )
-                    connection.commit()
-                    return candidate
-                stored_sha256, stored_json = row
-                if stored_sha256 != source_sha256:
-                    connection.rollback()
-                    raise ForgeContactPayloadConflictError(
-                        "Contact idempotency key was already used with different QSO data."
-                    )
-                connection.commit()
-        except ForgeContactPayloadConflictError:
-            raise
-        except sqlite3.Error as error:
-            raise ForgeContactSyncStorageError(
-                f"Forge contact weather snapshot could not be resolved: {source.contact_id}"
-            ) from error
-        try:
-            return Contact.model_validate(loads(str(stored_json)))
-        except (JSONDecodeError, TypeError, ValueError) as error:
-            raise ForgeContactSyncStorageError(
-                f"Forge contact weather snapshot is invalid: {source.contact_id}"
-            ) from error
-
     def mark_synchronized(
         self,
         contact_id: UUID,
@@ -354,12 +292,10 @@ class ForgeContactSyncService:
         wavelog: WavelogContactSync,
         *,
         clock: Clock = _utc_now,
-        weather_enricher: ContactWeatherEnricher | None = None,
     ) -> None:
         self._repository = repository
         self._wavelog = wavelog
         self._clock = clock
-        self._weather_enricher = weather_enricher
         self._lock = Lock()
 
     def health(self) -> HomePlatformState:
@@ -381,10 +317,9 @@ class ForgeContactSyncService:
     def synchronize(self, contact: Contact) -> ContactUploadResult:
         """Synchronize one contact idempotently, retrying uncertain remote outcomes safely."""
         with self._lock:
-            upload_contact = self._weather_contact(contact)
-            target = self._wavelog.resolve_station_target(upload_contact)
+            target = self._wavelog.resolve_station_target(contact)
             payload_sha256 = _remote_payload_sha256(
-                upload_contact,
+                contact,
                 station_profile_id=target.location.station_id,
             )
             claim = self._repository.claim(
@@ -400,7 +335,7 @@ class ForgeContactSyncService:
                     received_at=received_at,
                 )
 
-            remote_disposition = self._wavelog.upload_contact(upload_contact, target=target)
+            remote_disposition = self._wavelog.upload_contact(contact, target=target)
             self._repository.mark_synchronized(
                 contact.contact_id,
                 synchronized_at=received_at,
@@ -417,31 +352,11 @@ class ForgeContactSyncService:
                 received_at=received_at,
             )
 
-    def _weather_contact(self, contact: Contact) -> Contact:
-        enricher = self._weather_enricher
-        if enricher is None or not contact.weather_notes_enabled:
-            return contact
-        try:
-            candidate = enricher.enrich(contact)
-        except (OSError, RuntimeError, ValueError):
-            candidate = contact
-        return self._repository.resolve_weather_snapshot(contact, candidate)
-
     def _timestamp(self) -> datetime:
         timestamp = self._clock()
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             raise ValueError("Forge contact synchronization clock must be timezone-aware.")
         return timestamp.astimezone(UTC)
-
-
-def _contact_event_sha256(contact: Contact) -> str:
-    payload = dumps(
-        contact.model_dump(mode="json"),
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
 
 
 def _remote_payload_sha256(contact: Contact, *, station_profile_id: int) -> str:

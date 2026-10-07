@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 283.**
+**Cataloged Python test modules: 289.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -291,6 +291,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_config.py`
 - `tests/test_forge_contact_sync.py`
 - `tests/test_forge_contact_sync_api.py`
+- `tests/test_forge_contact_sync_config.py`
 - `tests/test_forge_deployment_assets.py`
 - `tests/test_forge_dx_spot_parser.py`
 - `tests/test_forge_dxspider_provider.py`
@@ -416,6 +417,10 @@ cover capture boundaries, movement and receiver compatibility.
 
 `tests/test_forge_contact_sync.py` owns ledger binding, uncertain duplicate replay,
 and changed-payload/changed-station conflict behavior after exact target selection.
+`tests/test_contact_weather.py` proves synchronization has no weather-enricher
+dependency, uploads the exact immutable payload, preserves weather already present,
+and formats absent requested weather as `N/A`. `tests/test_forge_contact_sync_config.py`
+rejects the removed contact-sync weather-provider configuration.
 `tests/test_wavelog.py` owns provider-adapter station creation and configured-logbook
 membership semantics. `tests/test_forge_contact_sync_api.py`,
 `tests/test_ft8_contact_sync.py`, and DMR/ADIF tests protect the one shared

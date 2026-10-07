@@ -55,10 +55,10 @@ remote synchronization is considered complete. Loss of the home network or
 Wavelog does not make a locally committed contact disappear.
 
 New POTA, DX, Browse, and FT8 contacts retain their originating workflow and a
-best-effort configured transmit-power snapshot. When weather-note enrichment is
-enabled, Forge uses frozen QSO locations for bounded best-effort lookup and synchronized
-Wavelog notes explicitly show contact and local weather or `N/A`; unavailable weather
-never prevents saving or synchronizing the QSO.
+best-effort configured transmit-power snapshot. When weather notes are enabled,
+synchronized Wavelog notes use weather already captured on the contact and explicitly
+show `N/A` when it is absent; contact synchronization never waits on public weather.
+Unavailable weather never prevents saving or synchronizing the QSO.
 
 ### Shared behavior stays consistent
 
@@ -894,10 +894,12 @@ with the contact; a later vehicle position cannot redirect a retry. Grid-based
 dynamic Station Locations keep a four-character grid, while the QSO keeps its full
 captured grid when available.
 
-The full local QSO grid is the sole stored grid identity; the four-character station
-profile grid is derived from it. Weather lookup prefers frozen POTA park coordinates,
-then a trusted contacted-grid center, and uses the QSO's frozen local GPS coordinates
-for local conditions. Provider or location failure is shown as `N/A`.
+The full local QSO grid is the sole Rolling Thunder grid identity; the four-character
+station profile grid is derived from it. Rolling Thunder submits the full grid in ADIF,
+but Wavelog 3.2.3 overwrites its stored QSO value from the grid4 station profile. This
+requires a separate Wavelog provider/API change; no station profile is moved among
+six-character subsquares as a workaround. Contact sync uses weather already present
+on the QSO, and missing contact or local weather is shown as `N/A`.
 
 If the contact has no operator notes, its Wavelog ADIF `NOTES` value is `Mobile QSO`.
 Existing notes are kept exactly and are not prefixed, appended, or replaced. Station

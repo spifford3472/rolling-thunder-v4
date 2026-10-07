@@ -790,9 +790,9 @@ def test_qso_import_aligns_mobile_grid_then_targets_resolved_profile() -> None:
     transport = ScriptedTransport(
         [
             station_response(
-                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79"}
             ),
-            station_update_response(gridsquare="EM79XM"),
+            station_update_response(gridsquare="EM79"),
             qso_import_response(imported=1, skipped=0),
         ]
     )
@@ -804,7 +804,7 @@ def test_qso_import_aligns_mobile_grid_then_targets_resolved_profile() -> None:
     )
 
     moving_contact = contact().model_copy(update={"my_grid": "EM89lx"})
-    transport.responses[1] = station_update_response(gridsquare="EM89LX")
+    transport.responses[1] = station_update_response(gridsquare="EM89")
 
     target = WavelogStationTarget(client.resolve_station_location(), dynamic=False)
     result = client.upload_contact(moving_contact, target=target)
@@ -815,7 +815,7 @@ def test_qso_import_aligns_mobile_grid_then_targets_resolved_profile() -> None:
     assert method == "PATCH"
     assert url.endswith("/index.php/api/v2/station/42")
     assert body is not None
-    assert loads(body) == {"gridsquare": "EM89LX"}
+    assert loads(body) == {"gridsquare": "EM89"}
 
     method, url, _, body, _ = transport.requests[2]
     assert method == "POST"
@@ -832,7 +832,7 @@ def test_matching_mobile_grid_does_not_patch_station_profile() -> None:
     transport = ScriptedTransport(
         [
             station_response(
-                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79"}
             ),
             qso_import_response(imported=1, skipped=0),
         ]
@@ -856,7 +856,7 @@ def test_unknown_mobile_grid_clears_stale_profile_grid_before_import() -> None:
     transport = ScriptedTransport(
         [
             station_response(
-                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79"}
             ),
             station_update_response(gridsquare=""),
             qso_import_response(imported=1, skipped=0),
@@ -883,7 +883,7 @@ def test_wavelog_duplicate_is_a_successful_idempotent_outcome() -> None:
     transport = ScriptedTransport(
         [
             station_response(
-                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79"}
             ),
             qso_import_response(imported=0, skipped=1),
         ]
@@ -906,7 +906,7 @@ def test_station_grid_update_requires_wavelog_write_authorization() -> None:
     transport = ScriptedTransport(
         [
             station_response(
-                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79XM"}
+                {"id": 42, "uuid": "mobile", "name": "Mobile", "gridsquare": "EM79"}
             ),
             UrllibHttpResponse(403, b'{"message":"denied"}'),
         ]
