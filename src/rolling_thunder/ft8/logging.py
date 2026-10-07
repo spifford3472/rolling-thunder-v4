@@ -7,7 +7,7 @@ from threading import RLock
 
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_metadata import unique_matching_pota_spot
-from rolling_thunder.domain import Contact, RadioMode
+from rolling_thunder.domain import Contact, ContactSource, RadioMode
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.domain import FT8QsoState
 from rolling_thunder.pota_spots import PotaSpot
@@ -41,7 +41,13 @@ class FT8QsoLoggingService:
         with self._lock:
             return self._latest_error
 
-    def handle_terminal_result(self, result: FT8QsoResult) -> Contact | None:
+    def handle_terminal_result(
+        self,
+        result: FT8QsoResult,
+        *,
+        tx_power_watts: int | None = None,
+        weather_notes_enabled: bool = False,
+    ) -> Contact | None:
         """Log COMPLETED exactly once by stable QSO UUID; ignore all other outcomes."""
         if result.status is not FT8QsoState.COMPLETED:
             return None
@@ -51,6 +57,8 @@ class FT8QsoLoggingService:
             return None
 
         pota_reference = None
+        contact_latitude = None
+        contact_longitude = None
         if result.context.pota_cq:
             spot = unique_matching_pota_spot(
                 callsign=result.context.remote_callsign,
@@ -60,6 +68,8 @@ class FT8QsoLoggingService:
             )
             if spot is not None:
                 pota_reference = spot.park.reference
+                contact_latitude = spot.park.latitude
+                contact_longitude = spot.park.longitude
 
         try:
             contact = self._contact_logging.commit_completed(
@@ -77,7 +87,12 @@ class FT8QsoLoggingService:
                 my_cq_zone=result.context.local_cq_zone,
                 my_itu_zone=result.context.local_itu_zone,
                 grid=result.context.remote_grid,
+                contact_latitude=contact_latitude,
+                contact_longitude=contact_longitude,
                 pota_reference=pota_reference,
+                source=ContactSource.FT8,
+                tx_power_watts=tx_power_watts,
+                weather_notes_enabled=weather_notes_enabled,
             )
         except (StorageError, ValueError) as error:
             with self._lock:

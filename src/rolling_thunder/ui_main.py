@@ -420,6 +420,12 @@ def run_dashboard(
         ),
         pota_worked_tracker=pota_worked,
         dx_worked_tracker=dx_worked,
+        tx_power_provider=(
+            runtime.read_tx_power_watts
+            if config.contact_logging.capture_tx_power
+            else None
+        ),
+        weather_notes_enabled=config.contact_logging.append_weather_notes,
     )
     operator_commands = OperatorCommandController(
         capture,

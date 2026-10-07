@@ -2,10 +2,10 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import get_protocol_members
 
 import pytest
 from pydantic import ValidationError
+from typing_extensions import get_protocol_members
 
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
 from rolling_thunder.fm_repeater import (

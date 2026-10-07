@@ -25,6 +25,8 @@ class ContactMetadata:
     """Optional metadata captured for one committed contact."""
 
     grid: MaidenheadGrid | None = None
+    contact_latitude: float | None = None
+    contact_longitude: float | None = None
     my_grid: MaidenheadGrid | None = None
     my_latitude: float | None = None
     my_longitude: float | None = None
@@ -126,6 +128,8 @@ def resolve_contact_metadata(
 
     return ContactMetadata(
         grid=grid,
+        contact_latitude=spot.park.latitude,
+        contact_longitude=spot.park.longitude,
         my_grid=my_grid,
         my_latitude=latitude,
         my_longitude=longitude,

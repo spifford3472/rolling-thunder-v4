@@ -3,7 +3,10 @@
 import threading
 from dataclasses import replace
 from datetime import timedelta
+from pathlib import Path
 
+from rolling_thunder.contact_logging import ContactLoggingService
+from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.ft8.coordinator import FT8QsoCoordinator
 from rolling_thunder.ft8.domain import (
     FT8Decode,
@@ -14,6 +17,7 @@ from rolling_thunder.ft8.domain import (
     FT8QsoContext,
     FT8QsoState,
 )
+from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.ft8.transmit import FT8TransmitKind, RecordingDigitalTransmitSession
 
@@ -84,6 +88,51 @@ def test_coordinator_drives_one_complete_qso_without_selecting_another_station()
     assert coordinator.state is FT8QsoState.COMPLETED
     assert session.requests[-1].kind is FT8TransmitKind.SEVENTY_THREE
     assert coordinator.context == context
+
+
+def test_terminal_handler_captures_final_ft8_power_before_exit_restore(
+    tmp_path: Path,
+) -> None:
+    context = _context()
+    clock = FakeFT8Clock(context.authorized_utc)
+    session = RecordingDigitalTransmitSession()
+    repository = ContactRepository(tmp_path / "contacts.db")
+    logger = FT8QsoLoggingService(ContactLoggingService(repository))
+    configured_power = {"watts": 55}
+    lifecycle: list[tuple[str, int]] = []
+
+    def handle_terminal(result):  # type: ignore[no-untyped-def]
+        lifecycle.append(("terminal", configured_power["watts"]))
+        return logger.handle_terminal_result(
+            result,
+            tx_power_watts=configured_power["watts"],
+        )
+
+    coordinator = FT8QsoCoordinator(
+        session,
+        clock,
+        terminal_result_handler=handle_terminal,
+    )
+    coordinator.authorize(context)
+    coordinator.start_qso()
+    clock.advance(14)
+    coordinator.tick()
+    clock.advance(15)
+    coordinator.tick()
+    coordinator.on_decodes((_decode(102, FT8MessageKind.REPORT),))
+    clock.advance(15)
+    coordinator.tick()
+    clock.advance(15)
+    coordinator.tick()
+    coordinator.on_decodes((_decode(104, FT8MessageKind.ACK_73),))
+    clock.advance(15)
+    coordinator.tick()
+
+    configured_power["watts"] = 100
+    lifecycle.append(("exit_restore", configured_power["watts"]))
+
+    assert lifecycle == [("terminal", 55), ("exit_restore", 100)]
+    assert repository.list_all()[0].tx_power_watts == 55
 
 
 def test_responder_initial_report_is_retained_in_terminal_result() -> None:

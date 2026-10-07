@@ -77,7 +77,7 @@ def message_from_transmit_request(request: FT8TransmitRequest) -> str:
     remote = context.remote_callsign
     local = context.local_callsign
     if request.kind is FT8TransmitKind.CALL:
-        return f"{remote} {local} {context.local_grid[:4]}"
+        return f"{remote} {local} {context.local_grid4}"
     if request.kind is FT8TransmitKind.REPORT:
         return f"{remote} {local} {format_signal_report(context.signal_report_db)}"
     if request.kind is FT8TransmitKind.R_REPORT:

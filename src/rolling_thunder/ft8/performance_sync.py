@@ -36,6 +36,11 @@ class FT8PerformanceSyncResult(DomainModel):
     attempted: int = Field(ge=0)
     synchronized: int = Field(ge=0)
     failed: int = Field(ge=0)
+    running: bool = False
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_error: str | None = Field(default=None, max_length=1000)
+    consecutive_failed_runs: int = Field(default=0, ge=0)
 
 
 class FT8PerformanceSyncService:
@@ -93,6 +98,7 @@ class FT8PerformanceSyncService:
             self._interval_s,
             self._synchronize_once,
         )
+        self._latest_result = self._latest_result.model_copy(update={"running": True})
         return self._latest_result
 
     def stop(self) -> FT8PerformanceSyncResult:
@@ -100,6 +106,7 @@ class FT8PerformanceSyncService:
         self._scheduled_poll = None
         if poll is not None:
             poll.cancel()
+        self._latest_result = self._latest_result.model_copy(update={"running": False})
         return self._latest_result
 
     def synchronize_due_now(self) -> FT8PerformanceSyncResult:
@@ -112,14 +119,24 @@ class FT8PerformanceSyncService:
 
     def _synchronize_once(self) -> None:
         if self.is_running:
-            self.synchronize_due_now()
+            try:
+                self.synchronize_due_now()
+            except Exception as error:  # noqa: BLE001 - scheduler must remain alive
+                # A repeating ThreadScheduledPoll exits when its callback raises.  Keep
+                # analytics failures isolated from contact logging and make the degraded
+                # worker visible instead of silently killing its scheduler thread.
+                self._record_run_failure(error)
 
     def _run_once(self) -> FT8PerformanceSyncResult:
         now = self._timestamp()
-        attempts = self._repository.list_ready(now, limit=self._batch_size)
+        try:
+            attempts = self._repository.list_ready(now, limit=self._batch_size)
+        except Exception as error:  # noqa: BLE001 - publish repository health failure
+            return self._record_run_failure(error, attempted_at=now)
         attempted = 0
         synchronized = 0
         failed = 0
+        last_error: str | None = None
 
         for attempt in attempts:
             attempted += 1
@@ -127,24 +144,68 @@ class FT8PerformanceSyncService:
                 self._client.upload_ft8_performance(attempt)
             except HomePlatformError as error:
                 failed += 1
-                self._repository.record_failure(
-                    attempt.attempt_id,
-                    str(error),
-                    now=self._timestamp(),
-                    initial_delay_s=self._retry_initial_delay_s,
-                    maximum_delay_s=self._retry_max_delay_s,
-                )
+                last_error = self._error_text(error)
+                try:
+                    self._repository.record_failure(
+                        attempt.attempt_id,
+                        last_error,
+                        now=self._timestamp(),
+                        initial_delay_s=self._retry_initial_delay_s,
+                        maximum_delay_s=self._retry_max_delay_s,
+                    )
+                except Exception as persistence_error:  # noqa: BLE001 - keep batch alive
+                    last_error = self._error_text(persistence_error)
                 continue
 
-            self._repository.mark_synchronized(attempt.attempt_id)
-            synchronized += 1
+            try:
+                self._repository.mark_synchronized(attempt.attempt_id)
+            except Exception as error:  # noqa: BLE001 - keep later attempts eligible
+                failed += 1
+                last_error = self._error_text(error)
+            else:
+                synchronized += 1
 
         self._latest_result = FT8PerformanceSyncResult(
             attempted=attempted,
             synchronized=synchronized,
             failed=failed,
+            running=self.is_running,
+            last_attempt_at=now,
+            last_success_at=(
+                self._timestamp()
+                if synchronized > 0
+                else self._latest_result.last_success_at
+            ),
+            last_error=last_error,
+            consecutive_failed_runs=(
+                self._latest_result.consecutive_failed_runs + 1
+                if failed > 0 and synchronized == 0
+                else 0
+            ),
         )
         return self._latest_result
+
+    def _record_run_failure(
+        self,
+        error: Exception,
+        *,
+        attempted_at: datetime | None = None,
+    ) -> FT8PerformanceSyncResult:
+        self._latest_result = FT8PerformanceSyncResult(
+            attempted=0,
+            synchronized=0,
+            failed=1,
+            running=self.is_running,
+            last_attempt_at=attempted_at or self._timestamp(),
+            last_success_at=self._latest_result.last_success_at,
+            last_error=self._error_text(error),
+            consecutive_failed_runs=self._latest_result.consecutive_failed_runs + 1,
+        )
+        return self._latest_result
+
+    @staticmethod
+    def _error_text(error: Exception) -> str:
+        return (str(error).strip() or error.__class__.__name__)[:1000]
 
     def _timestamp(self) -> datetime:
         value = self._clock()

@@ -25,6 +25,7 @@ class FakeWavelog:
         self.dispositions: list[WavelogUploadDisposition] = []
         self.upload_count = 0
         self.targets: list[WavelogStationTarget] = []
+        self.contacts: list[Contact] = []
 
     def verify_health_target(self) -> None:
         return None
@@ -39,7 +40,7 @@ class FakeWavelog:
         *,
         target: WavelogStationTarget,
     ) -> WavelogUploadDisposition:
-        del contact
+        self.contacts.append(contact)
         self.targets.append(target)
         self.upload_count += 1
         if self.dispositions:

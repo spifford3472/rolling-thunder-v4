@@ -11,7 +11,7 @@ from typing import Final
 import pytest
 from pydantic import SecretStr
 
-from rolling_thunder.domain import Contact, RadioMode
+from rolling_thunder.domain import Contact, ContactWeatherObservation, RadioMode
 from rolling_thunder.forge_contact_sync import (
     ForgeContactSyncRepository,
     ForgeContactSyncService,
@@ -263,6 +263,23 @@ def test_contact_to_adif_preserves_existing_notes_exactly() -> None:
 
     assert "<NOTES:23>  Exact operator text  " in adif
     assert "Mobile QSO" not in adif
+
+
+def test_contact_to_adif_adds_power_and_structured_weather_notes() -> None:
+    qso = contact().model_copy(
+        update={
+            "tx_power_watts": 60,
+            "weather_notes_enabled": True,
+            "contact_weather": ContactWeatherObservation(summary="Clear, 61 F"),
+            "local_weather": None,
+        }
+    )
+
+    adif = contact_to_adif(qso)
+
+    assert "<TX_PWR:2>60" in adif
+    notes = "POTA US-0732\nContact Wx: Clear, 61 F\nLocal Wx: N/A"
+    assert f"<NOTES:{len(notes)}>{notes}" in adif
 
 
 def test_mobile_station_location_is_resolved_by_name_not_assumed_id() -> None:

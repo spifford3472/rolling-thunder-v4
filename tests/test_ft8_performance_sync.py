@@ -72,6 +72,12 @@ class Scheduler:
         self.callback = callback
         return Poll()
 
+
+class BrokenRepository:
+    def list_ready(self, now: datetime, *, limit: int):  # type: ignore[no-untyped-def]
+        del now, limit
+        raise RuntimeError("database temporarily unavailable")
+
 def test_sync_success_marks_outbox_once(tmp_path: Path) -> None:
     now = datetime(2026, 10, 2, 20, 5, tzinfo=UTC)
     repository = FT8PerformanceOutboxRepository(tmp_path / "contacts.db")
@@ -127,3 +133,27 @@ def test_sync_failure_leaves_retryable_outbox_without_duplicate(tmp_path: Path) 
     assert second.synchronized == 1
     assert client.calls == [_ATTEMPT_ID, _ATTEMPT_ID]
     assert repository.state_for(_ATTEMPT_ID) is FT8PerformanceSyncState.SYNCHRONIZED
+
+
+def test_scheduled_repository_failure_is_observable_and_does_not_escape() -> None:
+    scheduler = Scheduler()
+    service = FT8PerformanceSyncService(
+        BrokenRepository(),  # type: ignore[arg-type]
+        Client(),
+        scheduler,  # type: ignore[arg-type]
+        clock=lambda: datetime(2026, 10, 2, 20, 5, tzinfo=UTC),
+    )
+    service.start()
+
+    assert scheduler.callback is not None
+    scheduler.callback()
+    first = service.latest_result
+    assert first.running
+    assert first.failed == 1
+    assert first.consecutive_failed_runs == 1
+    assert first.last_attempt_at == datetime(2026, 10, 2, 20, 5, tzinfo=UTC)
+    assert first.last_error == "database temporarily unavailable"
+
+    scheduler.callback()
+    assert service.latest_result.consecutive_failed_runs == 2
+    assert service.is_running

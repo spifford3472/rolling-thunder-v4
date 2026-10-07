@@ -1,9 +1,9 @@
 """Tests for the ordered receive-only tuning service."""
 
 from datetime import UTC, datetime
-from typing import get_protocol_members
 
 import pytest
+from typing_extensions import get_protocol_members
 
 from rolling_thunder.domain import (
     Frequency,

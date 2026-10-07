@@ -847,7 +847,7 @@ class WavelogClient:
         contact: Contact,
     ) -> WavelogStationLocation:
         """Make Wavelog's Mobile profile grid match this contact before import."""
-        desired_grid = "" if contact.my_grid is None else str(contact.my_grid).strip().upper()
+        desired_grid = "" if contact.my_grid6 is None else str(contact.my_grid6).upper()
         if location.gridsquare == desired_grid:
             return location
 
@@ -1032,14 +1032,28 @@ def contact_to_adif(contact: Contact) -> str:
         fields.append(("SUBMODE", submode))
     if contact.grid is not None:
         fields.append(("GRIDSQUARE", str(contact.grid)))
-    if contact.my_grid is not None:
-        fields.append(("MY_GRIDSQUARE", str(contact.my_grid)))
+    if contact.my_grid6 is not None:
+        fields.append(("MY_GRIDSQUARE", str(contact.my_grid6)))
+    if contact.tx_power_watts is not None:
+        fields.append(("TX_PWR", str(contact.tx_power_watts)))
     if contact.pota_reference is not None:
         fields.append(("POTA_REF", str(contact.pota_reference)))
-    notes = contact.notes
-    fields.append(("NOTES", "Mobile QSO" if notes is None or not notes.strip() else notes))
+    fields.append(("NOTES", _wavelog_notes(contact)))
 
     return "".join(_adif_field(name, value) for name, value in fields) + "<EOR>"
+
+
+def _wavelog_notes(contact: Contact) -> str:
+    notes = contact.notes
+    if notes is None or not notes.strip():
+        notes = "Mobile QSO"
+    if not contact.weather_notes_enabled:
+        return notes
+    contact_weather = (
+        "N/A" if contact.contact_weather is None else contact.contact_weather.summary
+    )
+    local_weather = "N/A" if contact.local_weather is None else contact.local_weather.summary
+    return f"{notes}\nContact Wx: {contact_weather}\nLocal Wx: {local_weather}"
 
 
 def _adif_mode(mode: RadioMode) -> tuple[str, str | None]:
@@ -1063,13 +1077,13 @@ def _dynamic_station_identity(
 ) -> tuple[str, str, str, int, int] | None:
     """Return a deterministic identity only when all frozen routing data is usable."""
     if (
-        contact.my_grid is None
+        contact.my_grid4 is None
         or contact.my_state is None
         or contact.my_cq_zone is None
         or contact.my_itu_zone is None
     ):
         return None
-    grid = str(contact.my_grid).strip().upper()[:4]
+    grid = contact.my_grid4.upper()
     state = contact.my_state.strip().upper()
     if len(grid) != 4 or len(state) != 2:
         return None

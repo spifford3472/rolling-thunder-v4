@@ -598,6 +598,13 @@ class StorageConfig(ConfigurationModel):
         return value
 
 
+class ContactLoggingConfig(ConfigurationModel):
+    """Central controls for optional QSO snapshot and enrichment data."""
+
+    capture_tx_power: bool = True
+    append_weather_notes: bool = True
+
+
 class FT8QsoConfig(ConfigurationModel):
     """Hardware-independent FT8 QSO policy settings."""
 
@@ -760,6 +767,7 @@ class ApplicationConfig(ConfigurationModel):
     radar: RadarConfig = RadarConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     ft8: FT8Config = FT8Config()
+    contact_logging: ContactLoggingConfig = ContactLoggingConfig()
     storage: StorageConfig = StorageConfig()
 
     @model_validator(mode="after")

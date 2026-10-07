@@ -20,6 +20,12 @@ wavelog:
   station_location_name: "Mobile"
   request_timeout_s: 5.0
 
+weather:
+  # Best-effort Forge-side enrichment. Failures preserve QSO sync with N/A notes.
+  enabled: true
+  request_timeout_s: 5.0
+  endpoint: "https://api.open-meteo.com/v1/forecast"
+
 # Required secret, supplied to the process environment (never this YAML). Its
 # Wavelog v2 token needs station:read/write, logbook:read/write, and qso:write;
 # controlled live acceptance also uses qso:read.

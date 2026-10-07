@@ -23,6 +23,7 @@ rolling-thunder-forge-spots = "rolling_thunder.forge_spot_main:main"
 rolling-thunder-forge-map = "rolling_thunder.forge_map_main:main"
 rolling-thunder-forge-contact-sync = "rolling_thunder.forge_contact_sync_main:main"
 rolling-thunder-forge-callsign-info = "rolling_thunder.forge_callsign_info_main:main"
+rolling-thunder-forge-propagation = "rolling_thunder.forge_propagation_main:main"
 rolling-thunder-pota-catalog = "rolling_thunder.pota_catalog_main:main"
 
 [project.optional-dependencies]
@@ -37,6 +38,7 @@ development = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "typing-extensions>=4.15; python_version < '3.13'",
     "pyshp>=2.3,<3",
 ]
 

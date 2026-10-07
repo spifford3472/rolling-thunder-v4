@@ -10,7 +10,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingService
-from rolling_thunder.domain import Contact, GPSFixState, RadioState
+from rolling_thunder.domain import Contact, ContactSource, GPSFixState, RadioState
 from rolling_thunder.gps import GPSState
 from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.pota_spots import PotaSpot
@@ -63,6 +63,8 @@ class ContactCommitController:
         pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
         pota_worked_tracker: PotaWorkedRecorder | None = None,
         dx_worked_tracker: DxWorkedRecorder | None = None,
+        tx_power_provider: Callable[[], int | None] | None = None,
+        weather_notes_enabled: bool = False,
     ) -> None:
         self._service = service
         self._on_started = on_started
@@ -75,6 +77,8 @@ class ContactCommitController:
         self._pota_spots_provider = pota_spots_provider or (lambda: ())
         self._pota_worked_tracker = pota_worked_tracker
         self._dx_worked_tracker = dx_worked_tracker
+        self._tx_power_provider = tx_power_provider or (lambda: None)
+        self._weather_notes_enabled = weather_notes_enabled
         self._lock = Lock()
         self._status = ContactCommitStatus()
 
@@ -125,6 +129,7 @@ class ContactCommitController:
         pota_spots: tuple[PotaSpot, ...],
     ) -> None:
         try:
+            tx_power_watts = self._tx_power_provider()
             contact = self._service.commit(
                 pending_callsign=callsign,
                 radio_state=radio_state,
@@ -132,6 +137,13 @@ class ContactCommitController:
                 pota_context_active=pota_context_active,
                 pota_spots=pota_spots,
                 notes=self._browse_notes(gps_state) if browse_context_active else None,
+                source=self._source_for_context(
+                    pota=pota_context_active,
+                    dx=dx_context_active,
+                    browse=browse_context_active,
+                ),
+                tx_power_watts=tx_power_watts,
+                weather_notes_enabled=self._weather_notes_enabled,
             )
         except (
             ContactCommitError,
@@ -153,6 +165,16 @@ class ContactCommitController:
         self._on_succeeded(contact.callsign)
         with self._lock:
             self._status = ContactCommitStatus(committed_contact=contact)
+
+    @staticmethod
+    def _source_for_context(*, pota: bool, dx: bool, browse: bool) -> ContactSource:
+        if pota:
+            return ContactSource.POTA
+        if dx:
+            return ContactSource.DX
+        if browse:
+            return ContactSource.BROWSE
+        return ContactSource.UNKNOWN
 
     @staticmethod
     def _browse_notes(gps_state: GPSState | None) -> str:

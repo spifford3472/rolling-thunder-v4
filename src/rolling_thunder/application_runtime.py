@@ -765,15 +765,25 @@ class ApplicationRuntime:
                 )
 
             def handle_ft8_terminal_result(result: FT8QsoResult) -> object:
-                contact = ft8_logging.handle_terminal_result(result)
+                tx_power_end_watts = self_power = None
+                power_reader = getattr(radio, "read_power_watts", None)
+                if callable(power_reader):
+                    try:
+                        self_power = power_reader()
+                    except (RadioError, RuntimeError, ValueError):
+                        self_power = None
+                if isinstance(self_power, int) and not isinstance(self_power, bool):
+                    tx_power_end_watts = self_power
+                contact = ft8_logging.handle_terminal_result(
+                    result,
+                    tx_power_watts=(
+                        tx_power_end_watts
+                        if config.contact_logging.capture_tx_power
+                        else None
+                    ),
+                    weather_notes_enabled=config.contact_logging.append_weather_notes,
+                )
                 if ft8_performance_recorder is not None:
-                    tx_power_end_watts = None
-                    power_reader = getattr(radio, "read_power_watts", None)
-                    if callable(power_reader):
-                        try:
-                            tx_power_end_watts = power_reader()
-                        except (RadioError, RuntimeError, ValueError):
-                            tx_power_end_watts = None
                     meter_summary = None
                     meter_reader = getattr(resolved_ft8_executor, "meter_summary", None)
                     if callable(meter_reader):
@@ -1201,6 +1211,17 @@ class ApplicationRuntime:
     def latest_radio_state(self) -> RadioState:
         """Return the latest radio state available to the UI."""
         return self.polling.latest_state
+
+    def read_tx_power_watts(self) -> int | None:
+        """Best-effort configured-power snapshot through the typed radio adapter."""
+        reader = getattr(self.radio, "read_power_watts", None)
+        if not callable(reader):
+            return None
+        try:
+            value = reader()
+        except (RadioError, RuntimeError, ValueError):
+            return None
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
 
     @property
     def latest_gps_state(self) -> GPSState | None:

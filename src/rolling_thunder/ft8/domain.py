@@ -204,7 +204,7 @@ class FT8QsoContext:
     authorized_period: FT8Period
     authorized_utc: datetime
     signal_report_db: int
-    logging_grid: str | None = None
+    local_grid_trusted: bool | None = None
     latitude: float | None = None
     longitude: float | None = None
     local_state: str | None = None
@@ -218,6 +218,21 @@ class FT8QsoContext:
     responder_inbound: FT8IncomingCall | None = None
     qso_id: UUID = field(default_factory=uuid4)
 
+    @property
+    def local_grid6(self) -> str:
+        """Return the one authoritative full local grid for this attempt."""
+        return self.local_grid
+
+    @property
+    def local_grid4(self) -> str:
+        """Return the on-air grid derived from ``local_grid6``."""
+        return self.local_grid[:4]
+
+    @property
+    def logging_grid(self) -> str | None:
+        """Backward-compatible trusted logging grid derived from one source."""
+        return self.local_grid if self.local_grid_trusted else None
+
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -230,12 +245,8 @@ class FT8QsoContext:
             _CALLSIGN_ADAPTER.validate_python(self.remote_callsign),
         )
         object.__setattr__(self, "local_grid", _GRID_ADAPTER.validate_python(self.local_grid))
-        if self.logging_grid is None and self.latitude is not None and self.longitude is not None:
-            object.__setattr__(self, "logging_grid", self.local_grid)
-        if self.logging_grid is not None:
-            object.__setattr__(
-                self, "logging_grid", _GRID_ADAPTER.validate_python(self.logging_grid)
-            )
+        if len(self.local_grid) != 6:
+            raise ValueError("local_grid must be a six-character Maidenhead grid")
         if self.remote_grid is not None:
             object.__setattr__(
                 self,
@@ -262,6 +273,15 @@ class FT8QsoContext:
             raise ValueError("latitude must be between -90 and 90")
         if self.longitude is not None and not -180 <= self.longitude <= 180:
             raise ValueError("longitude must be between -180 and 180")
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("FT8 latitude and longitude must be present together")
+        coordinates_present = self.latitude is not None
+        if self.local_grid_trusted is None:
+            object.__setattr__(self, "local_grid_trusted", coordinates_present)
+        elif self.local_grid_trusted != coordinates_present:
+            raise ValueError(
+                "local_grid_trusted must match the presence of frozen coordinates"
+            )
         jurisdiction_values = (self.local_state, self.local_cq_zone, self.local_itu_zone)
         if any(value is None for value in jurisdiction_values) and any(
             value is not None for value in jurisdiction_values

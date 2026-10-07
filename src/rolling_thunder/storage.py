@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 18
+CURRENT_SCHEMA_VERSION: Final = 20
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -652,6 +652,17 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         CREATE INDEX dx_worked_markers_day_index
         ON dx_worked_markers (utc_date, worked_at)
         """,
+    ),
+    19: (
+        "ALTER TABLE contacts ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown'",
+        "ALTER TABLE contacts ADD COLUMN tx_power_watts INTEGER",
+        "ALTER TABLE contacts ADD COLUMN contact_weather_json TEXT",
+        "ALTER TABLE contacts ADD COLUMN local_weather_json TEXT",
+        "ALTER TABLE contacts ADD COLUMN weather_notes_enabled INTEGER NOT NULL DEFAULT 0",
+    ),
+    20: (
+        "ALTER TABLE contacts ADD COLUMN contact_latitude REAL",
+        "ALTER TABLE contacts ADD COLUMN contact_longitude REAL",
     ),
 }
 
