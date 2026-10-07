@@ -12,7 +12,9 @@ A callsign appears only when:
 
 Non-CQ traffic from a station that has never appeared as a CQ candidate does not create a browser row.
 
-Once a station has entered the CQ browser, later non-CQ traffic may update its presentation and may extend its activity lifetime. A station is removed after six FT8 periods with no traffic of any kind.
+Once a station has entered the CQ browser, later non-CQ traffic may update
+informational fields but does not extend CQ eligibility. Ages 0 through 5 are
+visible; the station is removed when its most recent actual CQ reaches age six.
 
 New CQ stations are appended to the bottom of the existing list so the operator's selection does not jump unexpectedly.
 
@@ -39,9 +41,9 @@ The mode is receive-only and does not authorize or transmit RF.
 
 The callsign color describes the most useful current/prior state while the station remains an eligible CQ candidate.
 
-- **Yellow** — fresh CQ. The station has been heard calling CQ once or twice.
-- **White** — repeated CQ. The station has been heard calling CQ three or more times.
-- **Gray** — the station previously called CQ but recent non-CQ traffic shows it is active with someone else.
+- **Yellow** — the most recent actual CQ is age 0 or 1 FT8 periods.
+- **White** — the most recent actual CQ is age 2 or 3 periods.
+- **Gray** — the most recent actual CQ is age 4 or 5 periods.
 - **Red + `!` marker** — Rolling Thunder attempted this callsign/band during the current UTC date and the attempt failed, timed out, exhausted retries, or ended in an execution/preparation error.
 - **Blue + `■` marker** — the operator intentionally aborted an FT8 attempt with this callsign/band during the current UTC date.
 - **Tree symbol** — the decoded CQ explicitly contained the POTA token.
@@ -102,6 +104,13 @@ It shows the caller, received SNR, and grid when known. Button 2 answers exactly
 that caller; Button 3 ignores it. Repeated messages from an ignored or already
 accepted caller do not repeatedly authorize a QSO. Incoming messages do not
 interrupt active or terminal QSO screens.
+
+After a completed QSO, repeats from that just-worked callsign are treated as
+continuation traffic for the next six FT8 periods and do not immediately reopen
+the incoming-call alert. A different callsign still appears immediately, and a
+later genuinely new call from the worked station can appear after the cutoff.
+Failed or aborted attempts do not use this continuation guard. If Button 2
+cannot start the responder workflow, the alert remains visible.
 
 Button 2 starts a responder exchange, not a new CQ call. If the accepted message
 contains the caller's grid, Rolling Thunder's first transmission in the opposite

@@ -65,15 +65,16 @@ transmit authority are never created accidentally.
 
 The mobile CQ browser intentionally shows only CQ candidates. A callsign enters
 the browser only after a decoded CQ. Non-CQ traffic from an unknown callsign
-does not create a row. Once a station has called CQ, subsequent traffic can
-refresh that existing row until it expires after six FT8 periods with no traffic.
+does not create a row. Once a station has called CQ, subsequent non-CQ traffic
+can update informational fields but cannot refresh eligibility. The row expires
+when the most recent actual CQ reaches age six periods.
 
 The current color model is intentionally redundant with symbols for color-vision
 accessibility:
 
-- fresh CQ (first or second CQ period): yellow;
-- repeated CQ (third or later CQ period): white;
-- recent non-CQ traffic from an existing CQ candidate: gray;
+- actual-CQ age 0-1 periods: yellow;
+- actual-CQ age 2-3 periods: white;
+- actual-CQ age 4-5 periods: gray;
 - failed/retry-exhausted/error/preparation-failed attempt: red plus `!`;
 - operator-aborted attempt: blue plus `■`;
 - explicit POTA CQ token: tree indicator independent of attempt state.
@@ -1145,7 +1146,8 @@ optional report, optional CQ qualifier, and read-only backend metadata.
 `FT8CQActivityManager` accepts only normalized decodes. CQ entries are keyed by
 normalized callsign, repeated CQs refresh the latest signal details, older
 decodes cannot replace newer activity, and non-CQ traffic never becomes a
-browser entry. The default expiry is four FT8 periods (60 seconds). Snapshots
+browser entry. Non-CQ traffic does not extend eligibility; the default expiry is
+six FT8 periods (90 seconds) from the most recent actual CQ. Snapshots
 are immutable and carry no station-selection or transmit authority.
 
 ### Frozen QSO authorization context

@@ -283,6 +283,35 @@ def test_authorization_uses_frozen_selection_period_for_freshness() -> None:
     assert context.radio_mode == "USB"
 
 
+def test_one_period_receive_snapshot_lag_is_accepted() -> None:
+    service = _service(105)
+
+    service.validate_selection_freshness(
+        _activity(period=99),
+        selection_period=FT8Period(104),
+    )
+
+
+def test_two_period_receive_snapshot_lag_is_rejected() -> None:
+    service = _service(105)
+
+    with pytest.raises(FT8QsoAuthorizationError, match="receive state is stale"):
+        service.validate_selection_freshness(
+            _activity(period=100),
+            selection_period=FT8Period(103),
+        )
+
+
+def test_future_receive_snapshot_period_is_rejected() -> None:
+    service = _service(105)
+
+    with pytest.raises(FT8QsoAuthorizationError, match="future"):
+        service.validate_selection_freshness(
+            _activity(period=105),
+            selection_period=FT8Period(106),
+        )
+
+
 def test_valid_selection_remains_accepted_after_several_preparation_periods() -> None:
     clock = FakeFT8Clock(FT8Period(104).start_utc + timedelta(seconds=1))
     service = FT8QsoAuthorizationService(

@@ -104,13 +104,11 @@ class FT8CQActivityManager:
         self._latest_period = None
 
     def expire(self, current_period: FT8Period) -> None:
-        """Expire entries after the configured number of periods without any traffic."""
+        """Expire entries after the configured number of periods without a CQ."""
         stale = [
             callsign
             for callsign, activity in self._activity.items()
-            if current_period.index
-            - (activity.last_any_decode or activity.last_period).index
-            >= self._expiry_periods
+            if current_period.index - activity.last_cq.index >= self._expiry_periods
         ]
         for callsign in stale:
             del self._activity[callsign]

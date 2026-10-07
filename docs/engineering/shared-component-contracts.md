@@ -136,6 +136,9 @@ An addressed decode remains receive-only until Button 2 explicitly accepts its
 exact immutable inbound record. Responder start phase is protocol-derived from
 that record (grid to REPORT; report to R_REPORT) and must not reuse the
 CQ-selected initiator start phase.
+Failed responder start leaves the inbound alert eligible. A completed QSO adds
+only a bounded six-period same-remote continuation guard; unsuccessful terminal
+results do not prevent an immediate retry, and different callers are unaffected.
 
 Do not reuse that implementation as implicit permission for unrelated PTT,
 MOX, keying, tuner, or unattended transmission.

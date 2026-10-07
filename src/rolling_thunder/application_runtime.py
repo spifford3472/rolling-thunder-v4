@@ -1071,16 +1071,21 @@ class ApplicationRuntime:
         """Accept one selected CQ without blocking the caller on CAT preparation."""
         if self.ft8_authorization is None or self.ft8_qso is None:
             return False
+        selected_at_utc = self.ft8_authorization.clock.now_utc()
+        current_period = FT8Period.from_utc(selected_at_utc)
+        receive = self.latest_ft8_receive_state
+        if receive is None or receive.last_period is None:
+            return False
+        selection_period = receive.last_period
+        try:
+            self.ft8_authorization.validate_selection_freshness(
+                activity,
+                selection_period=selection_period,
+                current_period=current_period,
+            )
+        except FT8QsoAuthorizationError:
+            return False
         if self.ft8_qso_start is not None:
-            selected_at_utc = self.ft8_authorization.clock.now_utc()
-            selection_period = FT8Period.from_utc(selected_at_utc)
-            try:
-                self.ft8_authorization.validate_selection_freshness(
-                    activity,
-                    selection_period=selection_period,
-                )
-            except FT8QsoAuthorizationError:
-                return False
             seed = build_ft8_attempt_seed(
                 activity,
                 radio_state=self.latest_radio_state,
@@ -1089,23 +1094,34 @@ class ApplicationRuntime:
                 started_at_utc=selected_at_utc,
             )
             return self.ft8_qso_start.start(activity, attempt_seed=seed)
-        self.authorize_ft8_qso(activity)
+        context = self.ft8_authorization.authorize(
+            activity,
+            radio_state=self.latest_radio_state,
+            gps_state=self.latest_gps_state,
+            freshness_reference_period=selection_period,
+        )
+        self.ft8_qso.authorize_and_start(context)
         return True
 
     def request_ft8_response(self, incoming: FT8IncomingCall) -> bool:
         """Accept one exact addressed decode after explicit Button 2 authorization."""
         if self.ft8_authorization is None or self.ft8_qso is None:
             return False
+        selected_at_utc = self.ft8_authorization.clock.now_utc()
+        current_period = FT8Period.from_utc(selected_at_utc)
+        receive = self.latest_ft8_receive_state
+        if receive is None or receive.last_period is None:
+            return False
+        selection_period = receive.last_period
+        try:
+            self.ft8_authorization.validate_incoming_freshness(
+                incoming,
+                selection_period=selection_period,
+                current_period=current_period,
+            )
+        except FT8QsoAuthorizationError:
+            return False
         if self.ft8_qso_start is not None:
-            selected_at_utc = self.ft8_authorization.clock.now_utc()
-            selection_period = FT8Period.from_utc(selected_at_utc)
-            try:
-                self.ft8_authorization.validate_incoming_freshness(
-                    incoming,
-                    selection_period=selection_period,
-                )
-            except FT8QsoAuthorizationError:
-                return False
             seed = build_ft8_responder_attempt_seed(
                 incoming,
                 radio_state=self.latest_radio_state,
@@ -1114,7 +1130,13 @@ class ApplicationRuntime:
                 started_at_utc=selected_at_utc,
             )
             return self.ft8_qso_start.start_incoming(incoming, attempt_seed=seed)
-        self.authorize_ft8_response(incoming)
+        context = self.ft8_authorization.authorize_incoming(
+            incoming,
+            radio_state=self.latest_radio_state,
+            gps_state=self.latest_gps_state,
+            freshness_reference_period=selection_period,
+        )
+        self.ft8_qso.authorize_and_start(context)
         return True
 
     @property

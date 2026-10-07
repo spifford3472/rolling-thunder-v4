@@ -44,25 +44,28 @@ For an existing CQ candidate:
 - `last_cq` records the most recent CQ period;
 - `last_any_decode` records the most recent decode of any type;
 - `cq_count` counts distinct CQ periods;
-- non-CQ traffic can mark the station active;
-- six periods without any traffic expire the row;
+- non-CQ traffic can update informational fields but does not refresh CQ eligibility;
+- the row expires when its most recent actual CQ reaches age six periods;
 - insertion order is preserved, so new CQs append at the bottom.
 
 ## CQ Presentation State
 
 Base presentation for an eligible CQ is:
 
-1. fresh CQ (CQ count 1-2) -> yellow;
-2. repeated CQ (CQ count 3+) -> white;
-3. recent non-CQ activity from an existing CQ candidate -> gray.
+1. actual-CQ age 0-1 periods -> yellow;
+2. actual-CQ age 2-3 periods -> white;
+3. actual-CQ age 4-5 periods -> gray;
+4. actual-CQ age 6+ periods -> absent.
+
+Presentation receives the published receive period explicitly and computes age
+from `last_cq`; `cq_count` and recent non-CQ activity do not change the normal
+row color.
 
 Persistent same-day attempt history has higher presentation precedence:
 
 1. failed/error/retry-exhausted/preparation-failed -> red + `!`;
 2. operator aborted -> blue + `■`;
-3. otherwise active non-CQ -> gray;
-4. otherwise repeated CQ -> white;
-5. otherwise fresh CQ -> yellow.
+3. otherwise the actual-CQ age mapping above applies.
 
 The selected row retains this callsign color and adds an independent high-contrast selection border/background.
 
@@ -183,6 +186,12 @@ source callsign is present. Its immutable incoming-call record preserves the
 message kind, report, grid, timing, audio frequency, and raw message. The panel
 shows it only in BROWSE. Button 2 explicitly accepts that exact decode into the
 responder path, while Button 3 dismisses it; decoding alone never authorizes RF.
+Button 2 dismisses the alert only after responder start accepts it. When a
+completed QSO returns to BROWSE, addressed traffic from that same remote is
+treated as terminal continuation through the next six FT8 periods; other
+callsigns remain immediately eligible, and later calls from the worked remote
+can appear after the bounded cutoff. Failed, aborted, retry-exhausted, and error
+results do not install this continuation guard.
 An accepted grid message starts with REPORT and waits for R_REPORT. An accepted
 REPORT starts with R_REPORT, retaining the received report for telemetry, and
 waits for ACK_73. Both then send 73 and finish under the existing bounded retry,
@@ -195,7 +204,13 @@ Initial QSO power is derived only from frozen local/remote Maidenhead grids:
 beyond. Unknown/invalid distance uses 20 W. The target is applied once during
 preparation and is never continuously reasserted during the active QSO.
 
-CQ freshness is validated synchronously at the explicit operator selection.
+CQ freshness is validated synchronously at the explicit operator selection
+against the period in the one immutable receive snapshot the operator saw. A
+receive snapshot at the wall-clock period or one period behind is allowed;
+two-period-stale or future receive state fails closed. The selected CQ must be
+age 0-5 relative to that frozen receive period. One encoder activation uses one
+panel snapshot and one exact activity object; a rejected authorization leaves
+the selection highlighted.
 The accepted selection remains valid across bounded CAT preparation delay;
 post-preparation authorization still checks all radio, mode, location, identity,
 and transmit-session gates without aging the already accepted selection again.

@@ -121,7 +121,9 @@ completion data fails closed without provider I/O.
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder
-start phase; it does not synthesize CQ activity. Adaptive initial power is
+start phase; a failed start preserves the alert, and completed-QSO continuation
+suppression is bounded to six periods for the same remote. It does not synthesize
+CQ activity. Adaptive initial power is
 computed from the QSO-frozen Maidenhead grids and applied once by the existing
 preparation service. Configured-power telemetry uses typed FT-891 CAT readback
 and remains distinct from raw transmit-meter values.

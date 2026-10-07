@@ -8,7 +8,7 @@ from enum import StrEnum
 from rolling_thunder.friend_presentation import friend_marker
 from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
 from rolling_thunder.ft8.diagnostics import FT8ClockQuality
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8IncomingCall
+from rolling_thunder.ft8.domain import FT8CQActivity, FT8IncomingCall, FT8Period
 from rolling_thunder.ft8.receive import FT8ReceiveState
 
 FT8_BROWSER_HEADERS = ("CALL", "SNR", "AUDIO", "GRID")
@@ -110,6 +110,7 @@ def present_ft8_incoming_call(
 def build_ft8_browser_viewport(
     activity: tuple[FT8CQActivity, ...],
     *,
+    current_period: FT8Period | None,
     selected_callsign: str | None,
     visible_rows: int = 5,
     attempt_states: dict[str, FT8AttemptVisualState] | None = None,
@@ -118,17 +119,25 @@ def build_ft8_browser_viewport(
     """Build a stable-order viewport that always keeps selection visible."""
     if visible_rows < 1:
         raise ValueError("visible_rows must be at least 1")
+    if current_period is None:
+        return FT8BrowserViewport(headers=FT8_BROWSER_HEADERS, rows=())
+
+    visible_activity = tuple(
+        item
+        for item in activity
+        if 0 <= current_period.index - item.last_cq.index < 6
+    )
 
     start = 0
-    if len(activity) > visible_rows and selected_callsign is not None:
-        callsigns = tuple(item.callsign for item in activity)
+    if len(visible_activity) > visible_rows and selected_callsign is not None:
+        callsigns = tuple(item.callsign for item in visible_activity)
         try:
             selected_index = callsigns.index(selected_callsign)
         except ValueError:
             selected_index = 0
         start = max(0, selected_index - visible_rows + 1)
 
-    visible = activity[start : start + visible_rows]
+    visible = visible_activity[start : start + visible_rows]
     state_map = attempt_states or {}
     rows = tuple(
         _row(
@@ -136,6 +145,7 @@ def build_ft8_browser_viewport(
             selected=item.callsign == selected_callsign,
             friends=friends,
             attempt_state=state_map.get(item.callsign),
+            current_period=current_period,
         )
         for item in visible
     )
@@ -143,7 +153,7 @@ def build_ft8_browser_viewport(
         headers=FT8_BROWSER_HEADERS,
         rows=rows,
         hidden_above=start,
-        hidden_below=max(0, len(activity) - (start + len(visible))),
+        hidden_below=max(0, len(visible_activity) - (start + len(visible))),
     )
 
 
@@ -153,6 +163,7 @@ def _row(
     selected: bool,
     attempt_state: FT8AttemptVisualState | None,
     friends: frozenset[str],
+    current_period: FT8Period,
 ) -> FT8BrowserRow:
     if attempt_state is FT8AttemptVisualState.FAILED:
         presentation = FT8CallPresentation.RED
@@ -160,14 +171,14 @@ def _row(
     elif attempt_state is FT8AttemptVisualState.ABORTED:
         presentation = FT8CallPresentation.BLUE
         call_text = f"■ {activity.callsign}"
-    elif activity.active_non_cq:
-        presentation = FT8CallPresentation.GRAY
-        call_text = activity.callsign
-    elif activity.cq_count >= 3:
-        presentation = FT8CallPresentation.WHITE
-        call_text = activity.callsign
     else:
-        presentation = FT8CallPresentation.YELLOW
+        age = current_period.index - activity.last_cq.index
+        if age <= 1:
+            presentation = FT8CallPresentation.YELLOW
+        elif age <= 3:
+            presentation = FT8CallPresentation.WHITE
+        else:
+            presentation = FT8CallPresentation.GRAY
         call_text = activity.callsign
 
     return FT8BrowserRow(

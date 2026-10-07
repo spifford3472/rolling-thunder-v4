@@ -10,6 +10,7 @@ from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
 from rolling_thunder.ft8.decoder import ComparingFT8Decoder, FT8PcmPeriod
 from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
     FT8Decode,
     FT8IncomingCall,
     FT8MessageKind,
@@ -18,6 +19,7 @@ from rolling_thunder.ft8.domain import (
 from rolling_thunder.ft8.encoder import FT8Waveform
 from rolling_thunder.ft8.hardware_transmit import RecordingFT8HardwareTransmitExecutor
 from rolling_thunder.ft8.performance import FT8AttemptSeed
+from rolling_thunder.ft8.receive import FT8ReceiveState
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.gps import (
     GPSConnectionError,
@@ -546,9 +548,16 @@ class _ResponderAuthorization:
         incoming: FT8IncomingCall,
         *,
         selection_period: FT8Period,
+        current_period: FT8Period,
     ) -> None:
         assert selection_period == self.clock.current_period()
+        assert current_period == self.clock.current_period()
         self.validated.append(incoming)
+
+
+class _PublishedFT8Receive:
+    def __init__(self, state: FT8ReceiveState) -> None:
+        self.latest_state = state
 
 
 class _IncomingStartRecorder:
@@ -563,6 +572,70 @@ class _IncomingStartRecorder:
     ) -> bool:
         self.started.append((incoming, attempt_seed))
         return True
+
+
+class _SelectionAuthorization:
+    def __init__(self, clock: FakeFT8Clock) -> None:
+        self.clock = clock
+        self.home_grid = "EM79xm"
+        self.validated: list[tuple[FT8CQActivity, FT8Period, FT8Period]] = []
+
+    def validate_selection_freshness(
+        self,
+        activity: FT8CQActivity,
+        *,
+        selection_period: FT8Period,
+        current_period: FT8Period,
+    ) -> None:
+        self.validated.append((activity, selection_period, current_period))
+
+
+class _SelectionStartRecorder:
+    def __init__(self) -> None:
+        self.started: list[tuple[FT8CQActivity, FT8AttemptSeed]] = []
+
+    def start(
+        self,
+        activity: FT8CQActivity,
+        *,
+        attempt_seed: FT8AttemptSeed,
+    ) -> bool:
+        self.started.append((activity, attempt_seed))
+        return True
+
+
+def test_runtime_validates_selection_against_one_period_lagged_receive_snapshot() -> None:
+    current_period = FT8Period(101)
+    receive_period = FT8Period(100)
+    activity = FT8CQActivity(
+        callsign="K1ABC",
+        last_period=FT8Period(95),
+        snr_db=-10,
+        dt_seconds=0.1,
+        audio_frequency_hz=1500,
+        grid="FN31",
+    )
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    authorization = _SelectionAuthorization(
+        FakeFT8Clock(current_period.start_utc)
+    )
+    starter = _SelectionStartRecorder()
+    runtime.ft8_authorization = authorization  # type: ignore[assignment]
+    runtime.ft8_qso = object()  # type: ignore[assignment]
+    runtime.ft8_qso_start = starter  # type: ignore[assignment]
+    runtime.ft8_receive = _PublishedFT8Receive(
+        FT8ReceiveState(last_period=receive_period, cq_activity=(activity,))
+    )  # type: ignore[assignment]
+
+    assert runtime.request_ft8_qso(activity) is True
+    assert authorization.validated == [
+        (activity, receive_period, current_period)
+    ]
+    assert starter.started[0][0] is activity
 
 
 @pytest.mark.parametrize(
@@ -611,6 +684,9 @@ def test_runtime_routes_explicit_incoming_acceptance_to_responder_start(
     runtime.ft8_authorization = authorization  # type: ignore[assignment]
     runtime.ft8_qso = object()  # type: ignore[assignment]
     runtime.ft8_qso_start = starter  # type: ignore[assignment]
+    runtime.ft8_receive = _PublishedFT8Receive(
+        FT8ReceiveState(last_period=incoming.period, incoming_call=incoming)
+    )  # type: ignore[assignment]
 
     assert runtime.request_ft8_response(incoming) is True
 

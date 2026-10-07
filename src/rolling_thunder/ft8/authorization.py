@@ -22,6 +22,7 @@ from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_b
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
 
 FT8_CQ_MAX_AGE_PERIODS = 5
+FT8_RECEIVE_MAX_LAG_PERIODS = 1
 FT8_GPS_MAXIMUM_AGE = timedelta(seconds=120)
 FT8_QSO_ALLOWED_RADIO_MODES = frozenset({RadioMode.DATA, RadioMode.USB})
 
@@ -179,6 +180,8 @@ class FT8QsoAuthorizationService:
             raise FT8QsoAuthorizationError(
                 "FT8 freshness reference period cannot be in the future"
             )
+        if observed_current.index - selection_period.index > FT8_RECEIVE_MAX_LAG_PERIODS:
+            raise FT8QsoAuthorizationError("FT8 receive state is stale")
         age_periods = selection_period.index - activity.last_period.index
         if age_periods < 0:
             raise FT8QsoAuthorizationError("selected FT8 CQ is from a future period")

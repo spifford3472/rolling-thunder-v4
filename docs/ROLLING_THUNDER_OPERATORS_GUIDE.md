@@ -392,15 +392,14 @@ operator workflow. It is not simply a general list of all decoded messages.
 ## CQ browser
 
 A station enters the browser when Rolling Thunder decodes it calling CQ.
-Subsequent activity can update its state while it remains inside the activity
-retention window.
+Subsequent non-CQ activity may update informational fields but cannot extend the
+six-period lifetime measured from the most recent actual CQ.
 
 Typical states include:
 
-- **yellow** — fresh CQ;
-- **white** — repeated CQ;
-- **gray** — previously called CQ but recent traffic indicates activity with
-  another station;
+- **yellow** — actual CQ age 0-1 periods;
+- **white** — actual CQ age 2-3 periods;
+- **gray** — actual CQ age 4-5 periods;
 - **red + !** — failed/exhausted attempt for that callsign/band today;
 - **blue + square marker** — operator-aborted attempt;
 - **tree/POTA marker** — CQ explicitly included a POTA indication.
@@ -432,6 +431,13 @@ signal report; an inbound signal report starts with our acknowledged report.
 Both continue to the normal final 73. **Context Button #3** ignores the caller.
 The alert never interrupts an active or terminal QSO, and a decode never grants
 transmit authority by itself.
+
+Button #2 leaves the alert present if the responder workflow cannot start. After
+a completed QSO, repeat addressed traffic from that same station is suppressed
+for the next six FT8 periods so the final exchange is not mistaken for a new
+call. Other callsigns appear immediately; the worked callsign can appear again
+after the bounded cutoff. Failed and aborted attempts are not suppressed this
+way.
 
 ## One authorization means one QSO
 

@@ -99,7 +99,8 @@ class Panel:
         self.selected_callsign = None
         return changed
 
-    def activate_selection(self) -> bool:
+    def activate_selection(self, snapshot: FT8PanelSnapshot | None = None) -> bool:
+        del snapshot
         self.calls.append("activate")
         return self.selected_callsign is not None
 

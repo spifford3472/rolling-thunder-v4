@@ -1578,6 +1578,7 @@ def run_dashboard(
                     }
                     viewport = build_ft8_browser_viewport(
                         ft8_snapshot.cq_activity,
+                        current_period=ft8_snapshot.receive_period,
                         selected_callsign=selected_callsign,
                         visible_rows=ft8_widgets.visible_rows,
                         attempt_states=attempt_states,

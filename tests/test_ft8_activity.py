@@ -107,7 +107,7 @@ def test_subsequent_cq_clears_non_cq_active_state() -> None:
     assert activity.cq_count == 2
 
 
-def test_activity_expires_after_six_periods_without_any_traffic() -> None:
+def test_activity_expires_after_six_periods_without_a_new_cq() -> None:
     manager = FT8CQActivityManager()
     manager.ingest(_decode(100))
 
@@ -115,14 +115,14 @@ def test_activity_expires_after_six_periods_without_any_traffic() -> None:
     assert manager.snapshot(current_period=FT8Period(index=106)) == ()
 
 
-def test_non_cq_traffic_extends_lifetime_without_changing_last_cq() -> None:
+def test_non_cq_traffic_does_not_extend_cq_lifetime() -> None:
     manager = FT8CQActivityManager()
     manager.ingest(_decode(100))
     manager.ingest(_decode(104, kind=FT8MessageKind.REPORT))
 
-    assert len(manager.snapshot(current_period=FT8Period(index=109))) == 1
     assert manager.snapshot()[0].last_cq == FT8Period(index=100)
-    assert manager.snapshot(current_period=FT8Period(index=110)) == ()
+    assert manager.snapshot(current_period=FT8Period(index=105))[0].last_any_decode == FT8Period(104)
+    assert manager.snapshot(current_period=FT8Period(index=106)) == ()
 
 
 def test_older_repeated_cq_does_not_replace_newer_signal_data() -> None:

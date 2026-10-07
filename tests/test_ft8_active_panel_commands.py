@@ -61,8 +61,10 @@ class Panel:
         self.selected_callsign: str | None = None
         self.calls: list[str] = []
         self.incoming_call: FT8IncomingCall | None = None
+        self.snapshot_count = 0
 
     def snapshot(self) -> FT8PanelSnapshot:
+        self.snapshot_count += 1
         state = FT8QsoState.IDLE if self.mode is FT8PanelMode.BROWSE else FT8QsoState.WAIT_REPORT
         if self.mode is FT8PanelMode.TERMINAL:
             state = FT8QsoState.ABORTED
@@ -89,7 +91,8 @@ class Panel:
         self.selected_callsign = None
         return changed
 
-    def activate_selection(self) -> bool:
+    def activate_selection(self, snapshot: FT8PanelSnapshot | None = None) -> bool:
+        del snapshot
         self.calls.append("activate")
         return self.selected_callsign is not None
 
@@ -118,6 +121,7 @@ def test_ft8_context_owns_selection_and_activation_without_delegate() -> None:
     assert commands.move_next() is True
     assert commands.activate_selection() is True
     assert panel.calls == ["next", "activate"]
+    assert panel.snapshot_count == 1
     assert delegate.calls == []
 
 
