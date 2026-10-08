@@ -64,9 +64,14 @@ The hook creates an immutable release at:
 /opt/rolling-thunder-forge-propagation/releases/<40-sha>
 ```
 
-It installs only from the staged wheelhouse with `pip --no-index`, records the SHA in
-the release, takes its own fixed propagation deployment lock, and atomically changes
-the relative `current` symlink. The systemd unit and Phase 1 rollout helper resolve
+It reserves that final SHA path before creating the virtualenv and installs only from
+the staged wheelhouse with `pip --no-index`; pip-generated launchers therefore name
+the final path and are never relocated from a temporary directory. It records the SHA
+and runs the installed propagation launcher with provider-free `--help` validation as
+the dedicated service identity before atomically changing the relative `current`
+symlink. An existing immutable release is validated the same way and fails closed
+without changing `current` when broken. A failed new install/validation removes only
+the newly reserved SHA directory. The systemd unit and Phase 1 rollout helper resolve
 the executable through `current`. If the dedicated service was active, only
 `rolling-thunder-forge-propagation.service` is restarted. A failed restart restores
 the prior link when one existed and attempts to restart that prior release. An
@@ -185,6 +190,11 @@ For service rollback, use the existing propagation rollout helper's `deactivate`
 action and restore `enabled: false`. Preserve the dedicated database. Removing old
 release directories is deliberately outside this hook and requires a separately
 reviewed retention procedure.
+
+An already-created release whose launcher refers to a removed `.incoming` path is
+not repaired or replaced in place. Follow
+`FORGE_PROPAGATION_BROKEN_RELEASE_RECOVERY.md` to preserve it, install the corrected
+hook, and deploy a fresh reviewed exact SHA without provider access.
 
 ## What is safe now
 

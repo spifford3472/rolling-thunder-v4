@@ -127,36 +127,53 @@ find_project_wheel() {
     printf '%s\n' "${wheels[0]}"
 }
 
+validate_release() {
+    local sha="$1"
+    local release_path="$2"
+    local entry_point="${release_path}/.venv/bin/rolling-thunder-forge-propagation"
+
+    [[ -d "${release_path}" && ! -L "${release_path}" ]] || die \
+        "installed release is missing or is a symlink"
+    [[ -f "${release_path}/COMMIT_SHA" && \
+       ! -L "${release_path}/COMMIT_SHA" ]] || die \
+        "installed release lacks a regular commit marker"
+    cmp --silent <(printf '%s\n' "${sha}") "${release_path}/COMMIT_SHA" || die \
+        "installed release commit marker does not match exactly"
+    [[ -f "${entry_point}" && ! -L "${entry_point}" && -x "${entry_point}" ]] || die \
+        "installed release lacks a regular propagation entry point"
+    runuser --user "${service_user}" -- "${entry_point}" --help >/dev/null || die \
+        "installed propagation entry point failed provider-free validation"
+}
+
 install_release() {
     local sha="$1"
     local stage="$2"
     local release_path="${releases_root}/${sha}"
-    local temp_release project_wheel
+    local project_wheel
 
-    if [[ -d "${release_path}" ]]; then
-        [[ ! -L "${release_path}" ]] || die "existing release is a symlink"
-        [[ -f "${release_path}/COMMIT_SHA" ]] || die \
-            "existing release lacks its commit marker"
-        [[ "$(<"${release_path}/COMMIT_SHA")" == "${sha}" ]] || die \
-            "existing release commit marker does not match"
+    if [[ -e "${release_path}" || -L "${release_path}" ]]; then
+        validate_release "${sha}" "${release_path}"
         printf '%s\n' "${release_path}"
         return
     fi
 
     project_wheel="$(find_project_wheel "${stage}/wheelhouse")"
-    temp_release="$(mktemp -d --tmpdir="${releases_root}" ".${sha}.incoming.XXXXXXXX")"
-    trap 'rm -rf -- "${temp_release}"' RETURN
-    chmod 0750 "${temp_release}"
-    chown root:"${service_user}" "${temp_release}"
-    python3 -m venv "${temp_release}/.venv"
-    "${temp_release}/.venv/bin/pip" install \
-        --no-index --find-links "${stage}/wheelhouse" "${project_wheel}" >&2
-    install -o root -g "${service_user}" -m 0640 \
-        "${stage}/COMMIT_SHA" "${temp_release}/COMMIT_SHA"
-    chown -R root:"${service_user}" "${temp_release}"
-    chmod -R g-w,o-rwx "${temp_release}"
-    mv -- "${temp_release}" "${release_path}"
-    trap - RETURN
+    mkdir --mode=0750 -- "${release_path}"
+    if ! (
+        set -e
+        chown root:"${service_user}" "${release_path}"
+        python3 -m venv "${release_path}/.venv"
+        "${release_path}/.venv/bin/pip" install \
+            --no-index --find-links "${stage}/wheelhouse" "${project_wheel}" >&2
+        install -o root -g "${service_user}" -m 0640 \
+            "${stage}/COMMIT_SHA" "${release_path}/COMMIT_SHA"
+        chown -R root:"${service_user}" "${release_path}"
+        chmod -R g-w,o-rwx "${release_path}"
+        validate_release "${sha}" "${release_path}"
+    ); then
+        rm -rf -- "${release_path}"
+        die "failed to install and validate propagation release"
+    fi
     printf '%s\n' "${release_path}"
 }
 
@@ -167,8 +184,7 @@ activate_release() {
     local next_link="${application_root}/.current.${sha}.next"
     local was_active=false
 
-    [[ -x "${release_path}/.venv/bin/rolling-thunder-forge-propagation" ]] || die \
-        "installed release lacks the propagation entry point"
+    validate_release "${sha}" "${release_path}"
     if [[ -L "${current_link}" ]]; then
         previous_target="$(readlink -- "${current_link}")"
     elif [[ -e "${current_link}" ]]; then

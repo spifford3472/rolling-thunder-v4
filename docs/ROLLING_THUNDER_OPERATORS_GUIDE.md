@@ -959,6 +959,13 @@ tree, checksum-manifested, reviewed, and separately promoted to root-owned stagi
 The older uncommitted wheelhouse is never deployment input. Code deployment does not
 activate the collector or authorize provider access.
 
+The deploy hook builds the propagation virtualenv at its final immutable SHA path
+and validates the real installed launcher before selecting it. An existing release
+with a broken launcher is not selected or repaired in place; Forge administrators use
+the separate broken-release recovery runbook and a fresh reviewed SHA. This recovery
+does not alter the original contact-sync, callsign-info, or spots services and does
+not authorize provider access.
+
 The release candidate also contains undeployed QSO-analysis components: a separately
 double-gated completed-QSO VOACAP worker and a disabled PSK Reporter orchestration
 contract. They have no completed-QSO producer, service unit, dashboard control,

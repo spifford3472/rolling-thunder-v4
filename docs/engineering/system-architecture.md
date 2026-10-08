@@ -133,8 +133,12 @@ configuration, and StateDirectory. It has no API listener and no path to radio,
 contact logging, Wavelog, contact sync, VOACAP, weather enrichment, or PSK Reporter.
 Its staged deployment layout selects one immutable exact-40-SHA release through a
 root-managed `current` symlink. A propagation-only component hook cannot select or
-restart any other service. Central deploy-helper integration is not installed and
-must wait for privileged inspection of the existing unreadable helper.
+restart any other service. Its virtualenv is built at the final SHA path, and its
+real pip-generated launcher must execute provider-free as the service identity before
+`current` can change. Existing broken releases fail closed and are recovered with a
+new reviewed SHA rather than in-place mutation. Central deploy-helper integration is
+not installed and must wait for privileged inspection of the existing unreadable
+helper.
 
 ### Propagation QSO analysis components (undeployed)
 
