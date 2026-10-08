@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from rolling_thunder.contact_metadata import resolve_contact_metadata
+from rolling_thunder.contact_weather import ContactWeatherSnapshotProvider
 from rolling_thunder.domain import (
     Contact,
     ContactEnrichmentState,
@@ -59,11 +60,13 @@ class ContactLoggingService:
         *,
         qrz_fallback_available: bool = False,
         jurisdiction_resolver: LocalJurisdictionResolver | None = None,
+        weather_snapshot_provider: ContactWeatherSnapshotProvider | None = None,
     ) -> None:
         self._repository = repository
         self._clock = clock or SystemClock()
         self._qrz_fallback_available = qrz_fallback_available
         self._jurisdiction_resolver = jurisdiction_resolver
+        self._weather_snapshot_provider = weather_snapshot_provider
 
     def commit(
         self,
@@ -129,6 +132,7 @@ class ContactLoggingService:
             enrichment_state=metadata.enrichment_state,
             notes=notes if notes is not None else metadata.notes,
         )
+        contact = self._with_weather_snapshot(contact)
         self._repository.add(contact)
         return contact
 
@@ -187,4 +191,22 @@ class ContactLoggingService:
             enrichment_state=enrichment_state,
             notes=notes,
         )
+        contact = self._with_weather_snapshot(contact)
         return self._repository.add_idempotent(contact)
+
+    def _with_weather_snapshot(self, contact: Contact) -> Contact:
+        """Freeze published weather without allowing enrichment to fail the commit."""
+        provider = self._weather_snapshot_provider
+        if not contact.weather_notes_enabled or provider is None:
+            return contact
+        try:
+            snapshot = provider.capture(contact)
+        except (LookupError, OSError, RuntimeError, ValueError):
+            # This boundary is deliberately fail-open: weather is optional metadata.
+            return contact
+        return contact.model_copy(
+            update={
+                "contact_weather": snapshot.contact,
+                "local_weather": snapshot.local,
+            }
+        )

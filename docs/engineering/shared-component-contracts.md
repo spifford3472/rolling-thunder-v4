@@ -60,7 +60,13 @@ New contacts also retain typed workflow source and optional configured TX power.
 When weather-note capture is enabled on the immutable contact, Wavelog notes append
 `Contact Wx:` and `Local Wx:` lines; unavailable data is `N/A`. Contact sync performs
 no weather lookup: it immediately routes, hashes, and uploads the immutable payload
-it received. Weather already present is preserved, and absent weather formats as
+it received. Local commit may snapshot only fresh already-published Pi retained
+weather proven to match the contact's frozen local coordinates (within Forge's default
+10 km mobile-weather refresh boundary), falling back to a frozen local-grid match only
+when coordinates are unavailable, and callsign-info weather proven to match that
+contact's callsign/target;
+manual and FT8 logging share this boundary. Weather already present is preserved,
+and absent, stale, or mismatched weather formats as
 `N/A`. ADIF `TX_PWR` is emitted only
 when the snapshot contains a verified configured-power value. Dynamic station
 profiles remain four-character routing identities while QSO `MY_GRIDSQUARE` remains

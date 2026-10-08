@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from json import JSONDecodeError, loads
 from urllib.error import URLError
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
 from rolling_thunder.forge_weather import (
@@ -68,7 +69,7 @@ class OpenMeteoForgeWeatherProvider:
                 ),
                 "hourly": "temperature_2m,precipitation_probability",
                 "daily": "sunrise,sunset",
-                "timezone": "UTC",
+                "timezone": "auto",
                 "forecast_hours": 6,
                 "forecast_days": 2,
             }
@@ -99,16 +100,20 @@ class OpenMeteoForgeWeatherProvider:
         if payload.get("error") is True:
             raise ForgeWeatherProviderError("Open-Meteo rejected the weather request.")
 
+        timezone = self._parse_timezone(payload.get("timezone"))
         current_payload = self._mapping(payload, "current")
-        source_at = self._parse_utc_timestamp(current_payload.get("time"), "current.time")
+        source_at = self._parse_timestamp(
+            current_payload.get("time"), "current.time", timezone
+        )
         current = self._parse_current(current_payload)
-        hourly = self._parse_hourly(payload, source_at)
-        solar = self._parse_solar(payload, source_at)
+        hourly = self._parse_hourly(payload, source_at, timezone)
+        solar = self._parse_solar(payload, source_at, timezone)
         fetched_at = self._aware_now()
 
         return WeatherSnapshot(
             latitude=location.latitude,
             longitude=location.longitude,
+            timezone=timezone.key,
             source_at=source_at,
             fetched_at=fetched_at,
             current=current,
@@ -141,6 +146,7 @@ class OpenMeteoForgeWeatherProvider:
         self,
         payload: Mapping[object, object],
         source_at: datetime,
+        timezone: ZoneInfo,
     ) -> tuple[WeatherHourlyPoint, ...]:
         hourly = self._mapping(payload, "hourly")
         times = self._sequence(hourly.get("time"), "hourly.time")
@@ -159,9 +165,10 @@ class OpenMeteoForgeWeatherProvider:
 
         points: list[WeatherHourlyPoint] = []
         for index, raw_time in enumerate(times):
-            forecast_at = self._parse_utc_timestamp(
+            forecast_at = self._parse_timestamp(
                 raw_time,
                 f"hourly.time[{index}]",
+                timezone,
             )
             if forecast_at <= source_at:
                 continue
@@ -191,6 +198,7 @@ class OpenMeteoForgeWeatherProvider:
         self,
         payload: Mapping[object, object],
         source_at: datetime,
+        timezone: ZoneInfo,
     ) -> WeatherSolar:
         daily = self._mapping(payload, "daily")
         sunrises = self._sequence(daily.get("sunrise"), "daily.sunrise")
@@ -202,18 +210,20 @@ class OpenMeteoForgeWeatherProvider:
 
         fallback: WeatherSolar | None = None
         for index, raw_sunrise in enumerate(sunrises):
-            sunrise = self._parse_utc_timestamp(
+            sunrise = self._parse_timestamp(
                 raw_sunrise,
                 f"daily.sunrise[{index}]",
+                timezone,
             )
-            sunset = self._parse_utc_timestamp(
+            sunset = self._parse_timestamp(
                 sunsets[index],
                 f"daily.sunset[{index}]",
+                timezone,
             )
             solar = WeatherSolar(sunrise_at=sunrise, sunset_at=sunset)
             if fallback is None:
                 fallback = solar
-            if sunrise.date() == source_at.date():
+            if sunrise.astimezone(timezone).date() == source_at.astimezone(timezone).date():
                 return solar
 
         assert fallback is not None
@@ -269,7 +279,11 @@ class OpenMeteoForgeWeatherProvider:
         return value
 
     @staticmethod
-    def _parse_utc_timestamp(value: object, field_name: str) -> datetime:
+    def _parse_timestamp(
+        value: object,
+        field_name: str,
+        timezone: ZoneInfo,
+    ) -> datetime:
         if not isinstance(value, str) or not value.strip():
             raise ForgeWeatherProviderError(
                 f"Open-Meteo {field_name} must be an ISO-8601 timestamp."
@@ -282,8 +296,21 @@ class OpenMeteoForgeWeatherProvider:
                 f"Open-Meteo {field_name} is not a valid ISO-8601 timestamp."
             ) from error
         if parsed.tzinfo is None or parsed.utcoffset() is None:
-            parsed = parsed.replace(tzinfo=UTC)
+            parsed = parsed.replace(tzinfo=timezone)
         return parsed.astimezone(UTC)
+
+    @staticmethod
+    def _parse_timezone(value: object) -> ZoneInfo:
+        if not isinstance(value, str) or not value.strip():
+            raise ForgeWeatherProviderError(
+                "Open-Meteo timezone must be a nonblank IANA timezone identifier."
+            )
+        try:
+            return ZoneInfo(value.strip())
+        except ZoneInfoNotFoundError as error:
+            raise ForgeWeatherProviderError(
+                "Open-Meteo timezone is not a recognized IANA timezone identifier."
+            ) from error
 
 
 def normalize_open_meteo_weather_code(code: int) -> WeatherConditionToken:

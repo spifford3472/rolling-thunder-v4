@@ -74,8 +74,10 @@ and remains eligible. On successful logging, the current cached POTA records are
 consulted with the same callsign/frequency/mode ambiguity rules as ordinary POTA
 logging; exactly one matching park adds `POTA_REF`, while zero or multiple parks add
 nothing. A U.S. station explicitly calling `CQ DX` is filtered from the selectable CQ
-browser. The status area also shows the parsed decode count for the most recently
-completed cycle at the far right.
+browser. The right side of the top FT8 title/status row shows `DECODE n` for the most
+recently completed decode cycle in the same 48-point bold type as the FT8 status. The
+field is absent when no count exists and is cleared in every non-FT8 context; there is
+no duplicate decode count in the FT8 footer.
 
 ## Attempt History
 

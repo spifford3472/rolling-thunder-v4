@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from math import asin, cos, radians, sin, sqrt
 from typing import Protocol
 
+from rolling_thunder.callsign_info_service import CallsignInfoState
 from rolling_thunder.domain import Contact, ContactWeatherObservation
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
 from rolling_thunder.forge_weather import (
@@ -12,7 +16,148 @@ from rolling_thunder.forge_weather import (
     WeatherProvider,
     WeatherSnapshot,
 )
-from rolling_thunder.maidenhead import maidenhead_grid_center
+from rolling_thunder.maidenhead import maidenhead_grid, maidenhead_grid_center
+from rolling_thunder.pi_forge_weather_service import PiForgeWeatherState
+
+_MAX_OBSERVATION_AGE = timedelta(minutes=30)
+_MAX_FUTURE_SKEW = timedelta(minutes=5)
+_LOCAL_WEATHER_LOCATION_TOLERANCE_KM = 10.0
+
+
+@dataclass(frozen=True, slots=True)
+class ContactWeatherSnapshot:
+    """Already-published endpoint weather frozen for one contact."""
+
+    contact: ContactWeatherObservation | None = None
+    local: ContactWeatherObservation | None = None
+
+
+class ContactWeatherSnapshotProvider(Protocol):
+    """Read already-published weather without provider or storage I/O."""
+
+    def capture(self, contact: Contact) -> ContactWeatherSnapshot: ...
+
+
+class PublishedContactWeatherSnapshotProvider:
+    """Project retained Pi and callsign-info weather into an immutable QSO."""
+
+    def __init__(
+        self,
+        local_state: Callable[[], PiForgeWeatherState],
+        callsign_state: Callable[[], CallsignInfoState | None],
+    ) -> None:
+        self._local_state = local_state
+        self._callsign_state = callsign_state
+
+    def capture(self, contact: Contact) -> ContactWeatherSnapshot:
+        """Return only fresh weather proven to belong to the QSO endpoints."""
+        return ContactWeatherSnapshot(
+            contact=self._contact_observation(contact),
+            local=self._local_observation(contact),
+        )
+
+    def _local_observation(self, contact: Contact) -> ContactWeatherObservation | None:
+        state = self._local_state()
+        snapshot = state.snapshot
+        if state.stale or snapshot is None:
+            return None
+        observation = weather_observation_from_snapshot(snapshot)
+        if not self._is_fresh(observation, contact.started_at):
+            return None
+        if not self._matches_local_location(contact, observation):
+            return None
+        return observation
+
+    def _contact_observation(self, contact: Contact) -> ContactWeatherObservation | None:
+        state = self._callsign_state()
+        if state is None or state.response is None:
+            return None
+        response = state.response
+        callsign = str(contact.callsign).upper()
+        if state.callsign != callsign or response.callsign.upper() != callsign:
+            return None
+        weather = response.weather
+        if weather is None or weather.observation is None:
+            return None
+        observation = weather.observation
+        if not self._is_fresh(observation, contact.started_at):
+            return None
+        if not self._matches_remote_target(contact, state, observation):
+            return None
+        return observation
+
+    @staticmethod
+    def _is_fresh(
+        observation: ContactWeatherObservation,
+        reference: datetime,
+    ) -> bool:
+        observed_at = observation.observed_at
+        fetched_at = observation.fetched_at
+        if observed_at is None or fetched_at is None:
+            return False
+        reference_utc = reference.astimezone(UTC)
+        return (
+            reference_utc - observed_at <= _MAX_OBSERVATION_AGE
+            and reference_utc - fetched_at <= _MAX_OBSERVATION_AGE
+            and observed_at - reference_utc <= _MAX_FUTURE_SKEW
+            and fetched_at - reference_utc <= _MAX_FUTURE_SKEW
+        )
+
+    @staticmethod
+    def _matches_remote_target(
+        contact: Contact,
+        state: CallsignInfoState,
+        observation: ContactWeatherObservation,
+    ) -> bool:
+        latitude = observation.latitude
+        longitude = observation.longitude
+        if latitude is None or longitude is None:
+            return False
+        if contact.contact_latitude is not None and contact.contact_longitude is not None:
+            return (
+                state.target_latitude is not None
+                and state.target_longitude is not None
+                and abs(state.target_latitude - contact.contact_latitude) < 0.0001
+                and abs(state.target_longitude - contact.contact_longitude) < 0.0001
+                and abs(latitude - contact.contact_latitude) < 0.0001
+                and abs(longitude - contact.contact_longitude) < 0.0001
+            )
+        if contact.grid is None:
+            return True
+        try:
+            weather_grid = maidenhead_grid(latitude, longitude)
+        except ValueError:
+            return False
+        expected = str(contact.grid).upper()
+        return weather_grid.upper()[: len(expected)] == expected
+
+    @staticmethod
+    def _matches_local_location(
+        contact: Contact,
+        observation: ContactWeatherObservation,
+    ) -> bool:
+        latitude = observation.latitude
+        longitude = observation.longitude
+        if latitude is None or longitude is None:
+            return False
+        if contact.my_latitude is not None and contact.my_longitude is not None:
+            return (
+                _distance_km(
+                    contact.my_latitude,
+                    contact.my_longitude,
+                    latitude,
+                    longitude,
+                )
+                < _LOCAL_WEATHER_LOCATION_TOLERANCE_KM
+            )
+        if contact.my_grid is None:
+            return False
+        try:
+            weather_grid = maidenhead_grid(latitude, longitude)
+        except ValueError:
+            return False
+        expected = str(contact.my_grid).upper()
+        return weather_grid.upper()[: len(expected)] == expected
 
 
 class ContactWeatherEnricher(Protocol):
@@ -103,3 +248,24 @@ def weather_observation_from_snapshot(
         temperature_c=current.temperature_c,
         relative_humidity_percent=current.relative_humidity_percent,
     )
+
+
+def _distance_km(
+    latitude_a: float,
+    longitude_a: float,
+    latitude_b: float,
+    longitude_b: float,
+) -> float:
+    """Return deterministic great-circle distance between WGS84 coordinates."""
+    earth_radius_km = 6_371.0088
+    latitude_a_radians = radians(latitude_a)
+    latitude_b_radians = radians(latitude_b)
+    delta_latitude = radians(latitude_b - latitude_a)
+    delta_longitude = radians(longitude_b - longitude_a)
+    haversine = (
+        sin(delta_latitude / 2.0) ** 2
+        + cos(latitude_a_radians)
+        * cos(latitude_b_radians)
+        * sin(delta_longitude / 2.0) ** 2
+    )
+    return 2.0 * earth_radius_km * asin(min(1.0, sqrt(haversine)))

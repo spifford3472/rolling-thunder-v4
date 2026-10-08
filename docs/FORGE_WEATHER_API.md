@@ -162,6 +162,7 @@ A retained weather response uses API schema version 1:
   "snapshot": {
     "latitude": 39.524492,
     "longitude": -84.062475,
+    "timezone": "America/New_York",
     "source_at": "2026-08-09T00:30:00Z",
     "fetched_at": "2026-08-09T00:35:00Z",
     "current": {
@@ -199,6 +200,11 @@ A retained weather response uses API schema version 1:
 ```
 
 The abbreviated `hourly` array above is illustrative; a persisted valid snapshot always contains at least three hourly points.
+`timezone` is the provider-returned IANA identifier for the requested coordinates. It
+is optional for new readers and lets downstream target-time presentation preserve
+daylight-saving behavior without guessing offsets or mapping states. Because shared
+wire models reject unknown fields, deployment compatibility is Pi-first: upgrade the
+reader before a Forge response begins including this additive field.
 
 When weather is enabled but no complete snapshot is yet available, the endpoint still returns HTTP 200 with `snapshot: null`, `stale: true`, revision 0, and truthful health such as `starting` or `unavailable`. When weather is disabled entirely, the endpoint returns HTTP 503 with a versioned `weather_unavailable` error.
 

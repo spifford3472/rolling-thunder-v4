@@ -4,7 +4,17 @@ from datetime import UTC, datetime, timedelta
 from inspect import signature
 from pathlib import Path
 
-from rolling_thunder.contact_weather import ForgeContactWeatherEnricher
+from rolling_thunder.callsign_info import (
+    CallsignInfoLastQso,
+    CallsignInfoResponse,
+    CallsignInfoWeather,
+)
+from rolling_thunder.callsign_info_service import CallsignInfoState
+from rolling_thunder.contact_weather import (
+    ForgeContactWeatherEnricher,
+    PublishedContactWeatherSnapshotProvider,
+    weather_observation_from_snapshot,
+)
 from rolling_thunder.domain import Contact
 from rolling_thunder.forge_contact_sync import (
     ForgeContactSyncRepository,
@@ -20,6 +30,10 @@ from rolling_thunder.forge_weather import (
     WeatherSnapshot,
     WeatherSolar,
     WeatherSourceMetadata,
+)
+from rolling_thunder.pi_forge_weather_service import (
+    PiForgeWeatherState,
+    PiForgeWeatherStateKind,
 )
 from rolling_thunder.wavelog import (
     WavelogStationLocation,
@@ -117,6 +131,128 @@ def contact(**updates: object) -> Contact:
             **updates,
         }
     )
+
+
+def published_weather_provider(
+    *,
+    remote_callsign: str = "W1AW",
+    remote_age: timedelta = timedelta(0),
+    remote_grid: str = "FN31pr",
+    include_remote: bool = True,
+    local_stale: bool = False,
+    local_latitude: float = 39.53,
+    local_longitude: float = -84.09,
+) -> PublishedContactWeatherSnapshotProvider:
+    local_snapshot = RecordingProvider().fetch_weather(
+        MobileLocationRecord(
+            latitude=local_latitude,
+            longitude=local_longitude,
+            fix_at=NOW,
+            received_at=NOW,
+        )
+    )
+    remote_snapshot = RecordingProvider().fetch_weather(
+        MobileLocationRecord(
+            latitude=41.25 if remote_grid == "FN31pr" else 39.53,
+            longitude=-72.75 if remote_grid == "FN31pr" else -84.09,
+            fix_at=NOW,
+            received_at=NOW,
+        )
+    )
+    remote_observation = weather_observation_from_snapshot(remote_snapshot).model_copy(
+        update={
+            "observed_at": NOW - remote_age,
+            "fetched_at": NOW - remote_age,
+        }
+    )
+    response = CallsignInfoResponse(
+        callsign=remote_callsign,
+        last_qso=CallsignInfoLastQso(exists=False),
+        weather=(
+            CallsignInfoWeather(
+                temperature_f=71,
+                condition="PARTLY CLOUDY",
+                location_source="qrz",
+                timezone="America/New_York",
+                observation=remote_observation,
+            )
+            if include_remote
+            else None
+        ),
+    )
+    callsign_state = CallsignInfoState(
+        generation=1,
+        enabled=True,
+        callsign=remote_callsign,
+        loading=False,
+        response=response,
+        shown_at_monotonic=100.0,
+        target_latitude=remote_snapshot.latitude,
+        target_longitude=remote_snapshot.longitude,
+    )
+    local_state = PiForgeWeatherState(
+        kind=PiForgeWeatherStateKind.RETAINED,
+        snapshot_revision=1,
+        snapshot=local_snapshot,
+        stale=local_stale,
+        last_success_at=NOW,
+    )
+    return PublishedContactWeatherSnapshotProvider(
+        lambda: local_state,
+        lambda: callsign_state,
+    )
+
+
+def test_published_snapshot_captures_fresh_matching_endpoint_weather() -> None:
+    snapshot = published_weather_provider().capture(contact())
+
+    assert snapshot.contact is not None
+    assert snapshot.contact.latitude == 41.25
+    assert snapshot.local is not None
+    assert snapshot.local.latitude == 39.53
+
+
+def test_published_snapshot_matches_local_weather_by_frozen_grid_without_coordinates() -> None:
+    snapshot = published_weather_provider().capture(
+        contact(my_grid="EM79wm", my_latitude=None, my_longitude=None)
+    )
+
+    assert snapshot.local is not None
+    assert snapshot.local.latitude == 39.53
+
+
+def test_published_snapshot_rejects_retained_local_weather_for_another_location() -> None:
+    mismatched_coordinates = published_weather_provider(
+        local_latitude=39.70,
+    ).capture(contact())
+    mismatched_grid = published_weather_provider(
+        local_latitude=40.0,
+        local_longitude=-83.0,
+    ).capture(contact(my_latitude=None, my_longitude=None))
+
+    assert mismatched_coordinates.local is None
+    assert mismatched_grid.local is None
+
+
+def test_published_snapshot_rejects_stale_or_mismatched_remote_weather() -> None:
+    stale = published_weather_provider(remote_age=timedelta(minutes=31)).capture(contact())
+    mismatched_call = published_weather_provider(remote_callsign="K1ABC").capture(contact())
+    mismatched_grid = published_weather_provider(remote_grid="EM79xm").capture(contact())
+
+    assert stale.contact is None
+    assert mismatched_call.contact is None
+    assert mismatched_grid.contact is None
+    assert stale.local is not None
+
+
+def test_published_snapshot_keeps_missing_and_stale_weather_absent() -> None:
+    snapshot = published_weather_provider(
+        include_remote=False,
+        local_stale=True,
+    ).capture(contact())
+
+    assert snapshot.contact is None
+    assert snapshot.local is None
 
 
 def test_enrichment_prefers_frozen_park_coordinates_and_captures_provenance() -> None:

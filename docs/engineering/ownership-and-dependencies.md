@@ -173,7 +173,9 @@ Weather presentation is also consumed by the map information overlay, so
 format/state semantics are shared beyond the WEATHER context.
 
 Contact weather is part of the immutable payload, not work owned by contact sync.
-The Pi freezes available POTA and local coordinates during local commit. A separate
+The Pi freezes fresh, matching already-published callsign target weather and non-stale
+retained local weather proven against the contact's frozen local coordinates (or local
+grid when coordinates are unavailable) during both ordinary and FT8 local commit. A separate
 background history/propagation worker may reuse the provider-neutral
 `WeatherProvider` abstraction, but the Wavelog synchronization path performs no
 public weather request and uploads the weather fields it receives unchanged.

@@ -13,6 +13,15 @@ Wavelog ADIF emits `TX_PWR` only when known and appends the exact `Contact Wx:` 
 it uploads the immutable structured weather values it receives, and formats an absent
 value as `N/A`. The reusable weather provider remains available to separate background
 workers, but public HTTP latency cannot delay station resolution, claim, or upload.
+At local commit, the Pi best-effort snapshots only already-published state: fresh
+callsign-info target weather proven to match the same callsign/location or grid, plus
+non-stale retained local Forge weather proven to match the QSO's frozen local location.
+Frozen local coordinates take precedence and use the same 10 km boundary as Forge's
+default mobile weather refresh policy; when coordinates are unavailable, the frozen
+six-character local grid must match the weather coordinates. Manual Browse/POTA/DX
+commits and completed FT8 contacts share this path. Missing, stale, or mismatched
+observations remain null, and retries reuse the stored payload rather than substituting
+newer weather.
 
 ```text
 Rolling Thunder UI / physical controls

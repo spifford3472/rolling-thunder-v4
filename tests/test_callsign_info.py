@@ -83,6 +83,12 @@ def test_first_contact_replaces_empty_history_section() -> None:
     response = CallsignInfoResponse(
         callsign="W1AW",
         last_qso=CallsignInfoLastQso(exists=False),
+        weather=CallsignInfoWeather(
+            temperature_f=72,
+            condition="CLEAR",
+            location_source="qrz",
+            timezone="UTC",
+        ),
     )
 
     presentation = build_callsign_info_presentation(
@@ -93,6 +99,60 @@ def test_first_contact_replaces_empty_history_section() -> None:
     assert presentation.history_heading == "FIRST CONTACT"
     assert presentation.history_line is None
     assert presentation.local_time_text == "LOCAL 20:17"
+
+
+def test_target_local_time_uses_iana_timezone_with_dst() -> None:
+    response = CallsignInfoResponse(
+        callsign="W6RO",
+        last_qso=CallsignInfoLastQso(exists=False),
+        weather=CallsignInfoWeather(
+            temperature_f=74,
+            condition="CLEAR",
+            location_source="qrz",
+            timezone="America/Los_Angeles",
+        ),
+    )
+
+    presentation = build_callsign_info_presentation(
+        response,
+        local_time=datetime(2026, 7, 15, 20, 0, tzinfo=UTC),
+    )
+
+    assert presentation.local_time_text == "LOCAL 13:00"
+
+
+def test_target_local_time_is_hidden_when_timezone_is_unavailable() -> None:
+    response = CallsignInfoResponse(
+        callsign="DX1AA",
+        last_qso=CallsignInfoLastQso(exists=False),
+    )
+
+    presentation = build_callsign_info_presentation(
+        response,
+        local_time=datetime(2026, 7, 15, 20, 0, tzinfo=UTC),
+    )
+
+    assert presentation.local_time_text == ""
+
+
+def test_target_local_time_is_hidden_when_timezone_is_invalid() -> None:
+    response = CallsignInfoResponse(
+        callsign="DX1AA",
+        last_qso=CallsignInfoLastQso(exists=False),
+        weather=CallsignInfoWeather(
+            temperature_f=70,
+            condition="CLEAR",
+            location_source="qrz",
+            timezone="Not/A_Real_Zone",
+        ),
+    )
+
+    presentation = build_callsign_info_presentation(
+        response,
+        local_time=datetime(2026, 7, 15, 20, 0, tzinfo=UTC),
+    )
+
+    assert presentation.local_time_text == ""
 
 
 def test_license_is_separated_from_identity_for_call_header() -> None:

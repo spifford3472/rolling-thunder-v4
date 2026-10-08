@@ -153,18 +153,6 @@ class FT8Widgets:
             anchor="center",
             justify="center",
         ).grid(row=0, column=0, sticky="ew")
-        self.decode_count = tk.StringVar(value="")
-        tk.Label(
-            footer_frame,
-            textvariable=self.decode_count,
-            bg=_BACKGROUND,
-            fg="#b8b8b8",
-            font=("DejaVu Sans", 18, "bold"),
-            anchor="e",
-            justify="right",
-            padx=4,
-        ).grid(row=0, column=1, sticky="e", padx=(16, 4))
-
         self.incoming_frame = tk.Frame(
             self.frame,
             bg="#421515",
@@ -220,7 +208,6 @@ class FT8Widgets:
         transmit_enabled: bool,
         distance_text: str | None = None,
         diagnostic_text: str | None = None,
-        last_decode_count: int | None = None,
         incoming_call: FT8IncomingCallPresentation | None = None,
     ) -> None:
         if incoming_call is not None:
@@ -293,6 +280,3 @@ class FT8Widgets:
         if diagnostic_text:
             footer += f"\n{diagnostic_text}"
         self.footer.set(footer)
-        self.decode_count.set(
-            "" if last_decode_count is None else f"DECODE {last_decode_count}"
-        )

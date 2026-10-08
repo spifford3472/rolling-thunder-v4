@@ -29,6 +29,7 @@ from rolling_thunder.contact_qrz_enrichment import ContactQrzEnrichmentService
 from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
+from rolling_thunder.contact_weather import PublishedContactWeatherSnapshotProvider
 from rolling_thunder.domain import Contact, RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager, is_us_cq_dx
@@ -545,10 +546,21 @@ class ApplicationRuntime:
             executor=enrichment_executor,
         )
 
+        contact_weather_snapshots = PublishedContactWeatherSnapshotProvider(
+            local_state=lambda: (
+                PiForgeWeatherState.disabled()
+                if pi_forge_weather_polling is None
+                else pi_forge_weather_polling.latest_state
+            ),
+            callsign_state=lambda: (
+                None if callsign_info is None else callsign_info.state
+            ),
+        )
         contact_logging = ContactLoggingService(
             repository,
             qrz_fallback_available=qrz_provider is not None,
             jurisdiction_resolver=jurisdiction_resolver,
+            weather_snapshot_provider=contact_weather_snapshots,
         )
         ft8_worked_today = (
             FT8WorkedTodayService(repository) if config.ft8.enabled else None

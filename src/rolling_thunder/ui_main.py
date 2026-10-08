@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from rolling_thunder.active_panel_commands import (
@@ -139,6 +139,7 @@ _POTA_CARD_SELECTED_BORDER_PX = 6
 _POTA_VISIBLE_CARD_COUNT = 3
 _POTA_WORKED_BACKGROUND = "#b9ddf5"
 _POTA_WORKED_FOREGROUND = "#0b1f33"
+_CONTEXT_HEADER_FONT = ("DejaVu Sans", 48, "bold")
 
 
 def _indicator_color(value: str) -> str:
@@ -200,6 +201,16 @@ def _pota_card_colors(*, selected: bool, worked: bool) -> tuple[str, str]:
     if selected:
         return _CONTEXT_SELECTED, _BRIGHT
     return _PANEL_BACKGROUND, _BRIGHT
+
+
+def _context_decode_header_text(
+    context: ContextId,
+    decode_count: int | None,
+) -> str:
+    """Return decode text only for an FT8 context with an available count."""
+    if context is not ContextId.FT8 or decode_count is None:
+        return ""
+    return f"DECODE {decode_count}"
 
 
 def run_dashboard(
@@ -602,16 +613,30 @@ def run_dashboard(
     context_content.grid_rowconfigure(1, weight=1)
     context_content.grid_rowconfigure(2, weight=0)
 
+    context_header = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
+    context_header.grid(row=0, column=0, sticky="ew", pady=(2, 8))
+    context_header.grid_columnconfigure(0, weight=1)
+
     context_title_text = tk.StringVar(value="POTA")
     context_title_label = tk.Label(
-        context_content,
+        context_header,
         textvariable=context_title_text,
         bg=_SECONDARY_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 48, "bold"),
+        font=_CONTEXT_HEADER_FONT,
         anchor="center",
     )
-    context_title_label.grid(row=0, column=0, sticky="ew", pady=(2, 8))
+    context_title_label.grid(row=0, column=0, sticky="ew")
+    context_decode_text = tk.StringVar(value="")
+    context_decode_label = tk.Label(
+        context_header,
+        textvariable=context_decode_text,
+        bg=_SECONDARY_BACKGROUND,
+        fg=_BRIGHT,
+        font=_CONTEXT_HEADER_FONT,
+        anchor="e",
+    )
+    context_decode_label.grid(row=0, column=1, sticky="e", padx=(12, 0))
 
     context_body_text = tk.StringVar(value="")
     context_body_label = tk.Label(
@@ -1298,7 +1323,6 @@ def run_dashboard(
                     pota_latitude=callsign_info_state.target_latitude,
                     pota_longitude=callsign_info_state.target_longitude,
                     target_grid=callsign_info_target_grid,
-                    local_time=datetime.now().astimezone(),
                 )
                 callsign_map_snapshot = None
                 if runtime.callsign_map is not None and callsign_presentation.target is not None:
@@ -1376,6 +1400,7 @@ def run_dashboard(
             and dmr_panel_runtime is not None
         )
 
+        context_decode_text.set("")
         if selected_context.selected in {ContextId.POTA, ContextId.DX}:
             health_frame.grid_remove()
             show_pota_context_body()
@@ -1459,7 +1484,7 @@ def run_dashboard(
             show_browse_context_body()
             health_frame.grid_remove()
             context_title_text.set("BROWSE")
-            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_title_label.configure(font=_CONTEXT_HEADER_FONT)
             browse_state = browse_controls.state
             browse_mode_text.set(browse_mode_label(radio_state.mode))
             browse_frequency_text.set(
@@ -1541,7 +1566,7 @@ def run_dashboard(
         elif selected_context.selected is ContextId.FT8:
             health_frame.grid_remove()
             context_title_text.set("FT8")
-            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_title_label.configure(font=_CONTEXT_HEADER_FONT)
             if runtime.ft8_panel is None:
                 show_standard_context_body()
                 context_body_label.configure(
@@ -1562,6 +1587,14 @@ def run_dashboard(
                     else receive_state.status.value.upper()
                 )
                 context_title_text.set(f"FT8  •  RX {receive_status}")
+                context_decode_text.set(
+                    _context_decode_header_text(
+                        selected_context.selected,
+                        None
+                        if receive_state is None or receive_state.last_decoder is None
+                        else receive_state.last_decoder.parsed_decode_count
+                    )
+                )
 
                 if ft8_snapshot.mode is FT8PanelMode.BROWSE:
                     show_ft8_context_body()
@@ -1606,11 +1639,6 @@ def run_dashboard(
                         ),
                         diagnostic_text=format_ft8_receive_diagnostic(
                             receive_state
-                        ),
-                        last_decode_count=(
-                            None
-                            if receive_state is None or receive_state.last_decoder is None
-                            else receive_state.last_decoder.parsed_decode_count
                         ),
                         incoming_call=present_ft8_incoming_call(
                             ft8_snapshot.incoming_call

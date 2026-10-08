@@ -140,6 +140,7 @@ class WeatherSnapshot(DomainModel):
 
     latitude: float = Field(ge=-90.0, le=90.0, allow_inf_nan=False)
     longitude: float = Field(ge=-180.0, le=180.0, allow_inf_nan=False)
+    timezone: str | None = Field(default=None, min_length=1, max_length=128)
     source_at: datetime
     fetched_at: datetime
     current: WeatherCurrent

@@ -6,7 +6,14 @@ from uuid import UUID
 
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.contact_repository import ContactRepository
-from rolling_thunder.domain import Contact, ContactSource, RadioMode, SynchronizationState
+from rolling_thunder.contact_weather import ContactWeatherSnapshot
+from rolling_thunder.domain import (
+    Contact,
+    ContactSource,
+    ContactWeatherObservation,
+    RadioMode,
+    SynchronizationState,
+)
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.domain import FT8Period, FT8PeriodParity, FT8QsoContext, FT8QsoState
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
@@ -61,13 +68,31 @@ def _result(
     )
 
 
-def _service(database_path: Path) -> tuple[ContactRepository, FT8QsoLoggingService]:
+class FixedWeatherSnapshots:
+    def capture(self, contact: Contact) -> ContactWeatherSnapshot:
+        del contact
+        return ContactWeatherSnapshot(
+            contact=ContactWeatherObservation(summary="Remote rain; 12.0 C"),
+            local=ContactWeatherObservation(summary="Local clear; 20.0 C"),
+        )
+
+
+def _service(
+    database_path: Path,
+    *,
+    weather: FixedWeatherSnapshots | None = None,
+) -> tuple[ContactRepository, FT8QsoLoggingService]:
     repository = ContactRepository(database_path)
-    return repository, FT8QsoLoggingService(ContactLoggingService(repository))
+    return repository, FT8QsoLoggingService(
+        ContactLoggingService(repository, weather_snapshot_provider=weather)
+    )
 
 
 def test_completed_ft8_result_logs_exact_frozen_snapshot_once(tmp_path: Path) -> None:
-    repository, service = _service(tmp_path / "contacts.db")
+    repository, service = _service(
+        tmp_path / "contacts.db",
+        weather=FixedWeatherSnapshots(),
+    )
     result = _result()
 
     first = service.handle_terminal_result(
@@ -94,6 +119,10 @@ def test_completed_ft8_result_logs_exact_frozen_snapshot_once(tmp_path: Path) ->
     assert first.source is ContactSource.FT8
     assert first.tx_power_watts == 60
     assert first.weather_notes_enabled
+    assert first.contact_weather is not None
+    assert first.contact_weather.summary == "Remote rain; 12.0 C"
+    assert first.local_weather is not None
+    assert first.local_weather.summary == "Local clear; 20.0 C"
     assert (first.my_latitude, first.my_longitude) == (39.5309, -84.0866)
     assert (first.my_state, first.my_cq_zone, first.my_itu_zone) == ("OH", 4, 8)
     assert first.synchronization_state is SynchronizationState.PENDING

@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from rolling_thunder.domain import DomainModel
+from rolling_thunder.domain import ContactWeatherObservation, DomainModel
 
 
 class CallsignInfoProfile(DomainModel):
@@ -51,6 +51,8 @@ class CallsignInfoWeather(DomainModel):
     condition: str = Field(min_length=1, max_length=40)
     location_source: Literal["pota", "qrz"]
     attribution: str | None = Field(default=None, max_length=256)
+    timezone: str | None = Field(default=None, min_length=1, max_length=128)
+    observation: ContactWeatherObservation | None = None
 
 
 class CallsignInfoResponse(DomainModel):

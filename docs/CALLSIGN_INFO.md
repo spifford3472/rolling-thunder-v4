@@ -105,7 +105,12 @@ The profile may still display textual information when no reliable coordinate ex
 
 ## Weather
 
-The QRZ photograph is deliberately not used by this feature. The current local QSO time is rendered in the upper-right of the mini-map rather than consuming identity-panel space.
+The QRZ photograph is deliberately not used by this feature. The contacted
+station/target's current local time is rendered in the upper-right of the mini-map
+rather than consuming identity-panel space. It is derived with the IANA timezone
+returned by the same target-weather response, so daylight-saving transitions remain
+correct. When that timezone is unavailable or invalid, the field is blank; the Pi's
+operator timezone is never presented as the target's time.
 
 Instead the overlay shows simple current weather:
 
@@ -116,6 +121,16 @@ Instead the overlay shows simple current weather:
 Open-Meteo is normalized on Forge. Weather failure is optional enrichment failure and must not suppress otherwise useful callsign/history information.
 
 Target weather is cached for 15 minutes by default.
+
+The compact response also carries the provider-neutral normalized observation used
+to render that target weather (timestamps, coordinates, condition, temperature,
+humidity, and provider identity). The Pi may freeze that already-resolved value into
+a contact only while the published callsign and target still match and the observation
+is fresh. No Commit-time provider request is made.
+
+The optional `timezone` and `observation` members require Pi-first deployment. New Pi
+readers accept older responses without them, but the shared strict response models
+reject unknown fields, so an older Pi must not receive the expanded Forge response.
 
 ## Previous contact
 

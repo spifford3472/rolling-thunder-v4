@@ -59,6 +59,11 @@ best-effort configured transmit-power snapshot. When weather notes are enabled,
 synchronized Wavelog notes use weather already captured on the contact and explicitly
 show `N/A` when it is absent; contact synchronization never waits on public weather.
 Unavailable weather never prevents saving or synchronizing the QSO.
+The capture uses only fresh weather already published for the car and the exact
+contacted callsign/target. Retained car weather must also match the contact's frozen
+local coordinates or, when those are unavailable, its frozen local grid. Stale or
+mismatched endpoint weather remains `N/A`, and later
+retries retain the original snapshot rather than replacing it with newer conditions.
 
 ### Shared behavior stays consistent
 
@@ -408,7 +413,8 @@ A successful callsign/band contact is removed from the eligible list for the
 rest of the UTC date. A U.S. callsign explicitly calling `CQ DX` is not listed as
 an eligible FT8 target. An explicit `CQ POTA` remains eligible and carries the
 green tree marker. The far-right side of the FT8 status area shows the parsed
-decode count from the most recently completed decode cycle.
+decode count from the most recently completed decode cycle in the same large type as
+the FT8 header. It is hidden when no count is available and on every other screen.
 
 ## Controls
 
@@ -778,6 +784,7 @@ Depending on available data, the overlay may include:
 - callsign/name/address identity;
 - a contact mini-map;
 - current target weather;
+- target local time when a reliable IANA timezone accompanies that weather;
 - prior-QSO summary;
 - FIRST CONTACT when no prior QSO is found.
 
@@ -806,6 +813,10 @@ not presented as an exact station pin.
 
 The overlay follows the shared pending callsign. Callsign replacement, Commit,
 Discard, timeout, or disabling the feature invalidates the current overlay.
+
+`LOCAL` means the contacted target's time, including daylight-saving rules. If Forge
+cannot establish that timezone reliably, the field is left blank rather than showing
+the vehicle/operator timezone.
 
 If Forge/QRZ/Wavelog/weather is unavailable, contact logging and radio operation
 continue; an enrichment failure is not a Commit failure.
