@@ -296,7 +296,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_contact_sync_config.py`
 - `tests/test_forge_deployment_assets.py` — static production path, privilege,
   disabled-default, rollout-confirmation, exact-SHA component-hook parameter and
-  path constraints, and cross-service isolation checks.
+  path constraints, successful isolated stage preparation/cleanup, artifact
+  replacement refusal, and cross-service isolation checks.
 - `tests/test_forge_dx_spot_parser.py`
 - `tests/test_forge_dxspider_provider.py`
 - `tests/test_forge_dxsummit_irc_parser.py`
