@@ -64,6 +64,9 @@ central-helper integration runbook is documented in
 `FORGE_PROPAGATION_DEPLOYMENT_PROPOSAL.md`. It reflects the separately inspected
 helper's real `<component> <40hex>` interface, repository variables, `run_as_geoff`
 Git boundary, remote-commit validation, and legacy deployment ordering.
+An immutable release whose generated launcher refers to a removed staging path must
+fail closed and be recovered with a fresh reviewed SHA by following
+`FORGE_PROPAGATION_BROKEN_RELEASE_RECOVERY.md`; never edit that release in place.
 
 ```bash
 cd /path/to/exact-reviewed-release

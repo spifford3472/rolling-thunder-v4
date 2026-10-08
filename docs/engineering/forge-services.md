@@ -165,6 +165,14 @@ wheels are prepared separately from a Git archive, manifested, reviewed, and onl
 then promoted into the root-owned staging contract. See
 `../FORGE_PROPAGATION_DEPLOYMENT_PROPOSAL.md`.
 
+The component hook creates each virtualenv at its immutable final SHA path so pip
+console launchers are not invalidated by directory relocation. Before selecting a
+release, it executes the installed propagation launcher with provider-free `--help`
+as the dedicated service identity. Broken existing releases fail closed without a
+`current` change; recovery uses a new reviewed SHA under
+`../FORGE_PROPAGATION_BROKEN_RELEASE_RECOVERY.md` rather than mutating an immutable
+release.
+
 ## Reusable service design rules
 
 All Forge additions and modifications must follow these rules:

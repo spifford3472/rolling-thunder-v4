@@ -1,7 +1,9 @@
 """Static safety checks for the production Forge deployment assets."""
 
 import os
+import shlex
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -115,6 +117,71 @@ PROPAGATION_DISPATCH_EXAMPLE_PATH = (
 PROPAGATION_STAGE_PREPARER_PATH = (
     ROOT / "deploy/prepare-forge-propagation-stage"
 )
+
+
+def _write_console_script_fixture_wheel(wheelhouse: Path) -> Path:
+    wheel = wheelhouse / "rolling_thunder-0-py3-none-any.whl"
+    dist_info = "rolling_thunder-0.dist-info"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("rolling_thunder_fixture/__init__.py", "")
+        archive.writestr(
+            "rolling_thunder_fixture/cli.py",
+            "def main():\n    return 0\n",
+        )
+        archive.writestr(
+            f"{dist_info}/METADATA",
+            "Metadata-Version: 2.1\nName: rolling-thunder\nVersion: 0\n",
+        )
+        archive.writestr(
+            f"{dist_info}/WHEEL",
+            "Wheel-Version: 1.0\nGenerator: test fixture\n"
+            "Root-Is-Purelib: true\nTag: py3-none-any\n",
+        )
+        archive.writestr(
+            f"{dist_info}/entry_points.txt",
+            "[console_scripts]\n"
+            "rolling-thunder-forge-propagation = rolling_thunder_fixture.cli:main\n",
+        )
+        archive.writestr(f"{dist_info}/RECORD", "")
+    return wheel
+
+
+def _write_deploy_hook_harness(
+    tmp_path: Path,
+    application_root: Path,
+    invocation: str,
+) -> tuple[Path, dict[str, str]]:
+    hook = PROPAGATION_DEPLOY_HOOK_PATH.read_text(encoding="utf-8")
+    hook = hook.replace(
+        'readonly application_root="/opt/rolling-thunder-forge-propagation"',
+        f"readonly application_root={shlex.quote(str(application_root))}",
+    )
+    hook = hook.replace('chown root:"${service_user}"', ":")
+    hook = hook.replace('chown -R root:"${service_user}"', ":")
+    hook = hook.replace(
+        'install -o root -g "${service_user}" -m 0640',
+        "install -m 0640",
+    )
+    hook = hook.removesuffix('main "$@"\n') + f"{invocation}\n"
+
+    harness = tmp_path / "deploy-hook-harness"
+    harness.write_text(hook, encoding="utf-8")
+    harness.chmod(0o755)
+
+    stub_bin = tmp_path / "stub-bin"
+    stub_bin.mkdir()
+    runuser = stub_bin / "runuser"
+    runuser.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "while [[ \"$1\" != \"--\" ]]; do shift; done\n"
+        "shift\n"
+        "exec \"$@\"\n",
+        encoding="utf-8",
+    )
+    runuser.chmod(0o755)
+    environment = os.environ | {"PATH": f"{stub_bin}{os.pathsep}{os.environ['PATH']}"}
+    return harness, environment
 
 
 def test_propagation_service_is_independent_and_unprivileged() -> None:
@@ -312,6 +379,82 @@ def test_propagation_deploy_hook_is_path_and_service_isolated() -> None:
     assert '[[ "$1" =~ ^[0-9a-f]{40}$ ]]' in hook
     assert "cmp --silent <(printf '%s\\n' \"${sha}\")" in hook
     assert main_body.index('validate_arguments "$@"') < main_body.index("require_root")
+
+
+def test_propagation_deploy_hook_installs_real_launcher_at_final_path(
+    tmp_path: Path,
+) -> None:
+    sha = "1" * 40
+    application_root = tmp_path / "application"
+    releases_root = application_root / "releases"
+    releases_root.mkdir(parents=True)
+    stage = tmp_path / "stage"
+    wheelhouse = stage / "wheelhouse"
+    wheelhouse.mkdir(parents=True)
+    _write_console_script_fixture_wheel(wheelhouse)
+    (stage / "COMMIT_SHA").write_text(f"{sha}\n", encoding="utf-8")
+    harness, environment = _write_deploy_hook_harness(
+        tmp_path,
+        application_root,
+        'install_release "$1" "$2"',
+    )
+
+    result = subprocess.run(
+        [str(harness), sha, str(stage)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    release = releases_root / sha
+    launcher = release / ".venv/bin/rolling-thunder-forge-propagation"
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(release)
+    assert launcher.is_file()
+    launcher_text = launcher.read_text(encoding="utf-8")
+    shebang = launcher_text.splitlines()[0]
+    assert shebang.startswith("#!")
+    assert str(release / ".venv/bin") in launcher_text
+    assert ".incoming." not in launcher_text
+    subprocess.run([str(launcher), "--help"], check=True)
+    assert not list(releases_root.glob(f".{sha}.incoming.*"))
+
+
+def test_propagation_deploy_hook_rejects_existing_broken_release_before_switch(
+    tmp_path: Path,
+) -> None:
+    sha = "2" * 40
+    application_root = tmp_path / "application"
+    release = application_root / "releases" / sha
+    launcher = release / ".venv/bin/rolling-thunder-forge-propagation"
+    launcher.parent.mkdir(parents=True)
+    (release / "COMMIT_SHA").write_text(f"{sha}\n", encoding="utf-8")
+    launcher.write_text(
+        f"#!{application_root}/releases/.{sha}.incoming.removed/.venv/bin/python3\n",
+        encoding="utf-8",
+    )
+    launcher.chmod(0o750)
+    current = application_root / "current"
+    current.symlink_to("releases/known-good")
+    harness, environment = _write_deploy_hook_harness(
+        tmp_path,
+        application_root,
+        'activate_release "$1" "$2"',
+    )
+
+    result = subprocess.run(
+        [str(harness), sha, str(release)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert result.returncode == 2
+    assert "failed provider-free validation" in result.stderr
+    assert current.readlink() == Path("releases/known-good")
+    assert release.is_dir()
 
 
 def test_propagation_dispatch_fragment_matches_verified_early_interface() -> None:
