@@ -111,12 +111,22 @@ The typed FT-891 adapter owns menu 11-05 encoding/readback. Existing FT8
 receive/preparation services own REAR entry and MIC normal-context cleanup;
 UI contexts do not issue CAT writes.
 
-The optional Forge propagation-history worker consumes terminal FT8 completion
-time through an injected read-only provider keyed by the same stable UUID used for
-the completed contact and FT8 attempt. It may use that time only to delay PSK
+The optional Forge PSK orchestration boundary accepts only a confirmed event
+containing the immutable durable FT8 `Contact` and its matching successful terminal
+attempt, keyed by the shared stable UUID. It may use terminal time only to delay PSK
 Reporter eligibility; correlation remains anchored to the immutable contact start.
-Missing completion data uses the documented conservative fallback, while invalid
-completion data fails closed without provider I/O.
+The source/transport owner retains authentication and confirmation authority. The
+orchestrator reads neither Pi nor contact-sync storage and runs on neither request
+path. The lower-level analytics API retains its conservative missing-completion
+fallback for non-orchestrated callers; invalid completion data fails closed.
+
+The undeployed completed-QSO propagation inbox is a separate Forge-owned consumer of
+the immutable `Contact`. Enqueue is durable and provider-free; exact stable-UUID
+replays are accepted and changed payloads fail closed. A separately scheduled bounded
+worker composition may perform VOACAP correlation with identified lease recovery,
+retry isolation, dead letters, and local status publication. Its two gates default
+off and it has no deployed supervisor or producer. It is not a contact-commit
+callback, contact-sync responsibility, or Wavelog extension.
 
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves

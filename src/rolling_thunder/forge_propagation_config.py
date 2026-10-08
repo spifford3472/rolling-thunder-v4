@@ -1,10 +1,10 @@
 """Typed configuration for the standalone Forge propagation-history component."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import yaml
-from pydantic import AnyHttpUrl, Field, ValidationError
+from pydantic import AnyHttpUrl, Field, ValidationError, model_validator
 
 from rolling_thunder.config import ConfigurationModel
 from rolling_thunder.forge_pskreporter import PskReporterConfig
@@ -14,11 +14,26 @@ class ForgePropagationHistoryConfig(ConfigurationModel):
     enabled: bool = False
     database_path: Path = Path("data/forge-propagation-history.db")
     collection_interval_s: int = Field(default=3600, ge=3600)
+    scheduler_check_interval_s: float = Field(default=60.0, gt=0, le=300)
+    retry_initial_backoff_s: int = Field(default=3600, ge=3600)
+    retry_maximum_backoff_s: int = Field(default=21_600, ge=3600)
     provider_timeout_s: float = Field(default=10.0, gt=0, le=60)
     voacap_enabled: bool = False
     voacap_base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8787")
     weather_enrichment_enabled: bool = False
     pskreporter: PskReporterConfig = PskReporterConfig()
+
+    @model_validator(mode="after")
+    def validate_collection_backoff(self) -> Self:
+        if self.retry_initial_backoff_s < self.collection_interval_s:
+            raise ValueError(
+                "retry_initial_backoff_s must not be shorter than collection_interval_s"
+            )
+        if self.retry_maximum_backoff_s < self.retry_initial_backoff_s:
+            raise ValueError(
+                "retry_maximum_backoff_s must be at least retry_initial_backoff_s"
+            )
+        return self
 
 
 class ForgePropagationConfigurationError(ValueError):

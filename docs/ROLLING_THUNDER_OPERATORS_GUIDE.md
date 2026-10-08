@@ -941,6 +941,31 @@ Existing notes are kept exactly and are not prefixed, appended, or replaced. Sta
 creation/linking or Wavelog failures do not undo the local contact; the LOG retry
 path remains available.
 
+## Propagation environmental collector
+
+Forge has a separately supervised, disabled-by-default Phase 1 collector for hourly
+HamQSL solar and KC2G ionospheric snapshots. It has no dashboard control, radio or
+transmit authority, contact-log callback, Wavelog path, or effect on contact retry.
+Its failure therefore does not change radio operation, FT8, local logging, or contact
+synchronization. Forge administrators inspect and activate it separately; vehicle
+operators do not need to enable or acknowledge it.
+
+Its code-deployment path also remains separate: a reviewed, pushed exact 40-character
+commit selects an immutable propagation-only release and cannot select another
+service. The dispatcher adaptation is staged for an authorized Forge administrator;
+it validates the origin commit and exits into the isolated hook before any legacy
+shared-service deployment work. Fresh wheels must be built from that committed Git
+tree, checksum-manifested, reviewed, and separately promoted to root-owned staging.
+The older uncommitted wheelhouse is never deployment input. Code deployment does not
+activate the collector or authorize provider access.
+
+The release candidate also contains undeployed QSO-analysis components: a separately
+double-gated completed-QSO VOACAP worker and a disabled PSK Reporter orchestration
+contract. They have no completed-QSO producer, service unit, dashboard control,
+contact-sync hook, or Wavelog path. They must remain inactive until a Forge
+administrator separately approves authenticated ingestion, supervision, and bounded
+live-provider acceptance. Their absence or failure never blocks local logging.
+
 ## Forge is reusable
 
 Forge is intentionally not a private helper for one Rolling Thunder screen.

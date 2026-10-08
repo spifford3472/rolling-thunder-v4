@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 289.**
+**Cataloged Python test modules: 296.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -120,7 +120,6 @@ Live acceptance should use an exact commit SHA and record rollback information.
   blank-only ADIF `NOTES` defaulting.
 - `tests/test_wavelog_history.py`
 - `tests/test_wavelog_http_errors.py`
-
 ## Callsign intelligence
 
 - `tests/test_callsign_capture.py`
@@ -173,6 +172,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
 
 - `tests/test_forge_ft8_performance.py` — structured configured-power fields, legacy replay, and additive Forge schema migration.
 - `tests/test_forge_ft8_performance_api.py`
+- `tests/test_forge_pskreporter.py` — bounded provider parsing, concurrency etiquette, terminal eligibility, correlation, restart-safe zero/failure distinctions, and raw-query archival.
+- `tests/test_forge_pskreporter_orchestration.py` — confirmed event validation, exact replay, terminal latency, durable global pacing, bounded batching, restart reconciliation, disabled behavior, and provider-free health.
 - `tests/test_ft891_cat.py`
 - `tests/test_ft891_fm_repeater_cat.py`
 - `tests/test_ft891_fm_repeater_radio.py`
@@ -293,7 +294,9 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_contact_sync.py`
 - `tests/test_forge_contact_sync_api.py`
 - `tests/test_forge_contact_sync_config.py`
-- `tests/test_forge_deployment_assets.py`
+- `tests/test_forge_deployment_assets.py` — static production path, privilege,
+  disabled-default, rollout-confirmation, exact-SHA component-hook parameter and
+  path constraints, and cross-service isolation checks.
 - `tests/test_forge_dx_spot_parser.py`
 - `tests/test_forge_dxspider_provider.py`
 - `tests/test_forge_dxsummit_irc_parser.py`
@@ -306,6 +309,14 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_nws_weather_alerts.py`
 - `tests/test_forge_open_meteo_weather.py`
 - `tests/test_forge_pota_provider.py`
+- `tests/test_forge_propagation_history.py` — offline collector/runtime behavior,
+  provider bounds, durable health, and database/provider-free config preflight.
+- `tests/test_forge_propagation_qso_ingestion.py` — immutable UUID replay,
+  schema coexistence/migration boundary, identified bounded leases, final-attempt
+  recovery, queue observation, retry/dead-letter isolation, and VOACAP provenance.
+- `tests/test_forge_propagation_qso_worker.py` — disabled startup, independent
+  configuration bounds, deterministic fake cycles, and atomic versioned status.
+- `tests/test_forge_propagation_repository.py`
 - `tests/test_forge_qrz_enrichment.py`
 - `tests/test_forge_qrz_provider.py`
 - `tests/test_forge_radar.py`

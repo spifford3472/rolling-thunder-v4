@@ -122,6 +122,28 @@ Entry point: `forge_contact_sync_main.py`.
 Accepts normalized contact synchronization work and performs controlled,
 idempotent Wavelog integration.
 
+### Propagation environmental collector
+
+Entry point: `forge_propagation_main.py`.
+
+The independently supervised Phase 1 process is disabled by default and owns only
+hourly HamQSL solar XML plus KC2G MUF(3000)/foF2 snapshot collection into its
+dedicated SQLite database. It has a separate service identity, application root,
+configuration, and StateDirectory. It has no API listener and no path to radio,
+contact logging, Wavelog, contact sync, VOACAP, weather enrichment, or PSK Reporter.
+Its staged deployment layout selects one immutable exact-40-SHA release through a
+root-managed `current` symlink. A propagation-only component hook cannot select or
+restart any other service. Central deploy-helper integration is not installed and
+must wait for privileged inspection of the existing unreadable helper.
+
+### Propagation QSO analysis components (undeployed)
+
+Entry point: `forge_propagation_qso_worker_main.py` for the double-gated VOACAP
+worker. It owns a durable inbox, separate history database, and local status file,
+but no service unit or completed-QSO producer. The PSK orchestration module has no
+process entry point. Neither component is part of the Phase 1 service, Pi runtime,
+FT8 execution, contact synchronization, Wavelog, or local logging.
+
 ## Reusable backend boundary
 
 Forge is a backend platform, not a hidden extension of one Tkinter screen.

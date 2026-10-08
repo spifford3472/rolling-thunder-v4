@@ -1,13 +1,16 @@
 enabled: false
 database_path: data/forge-propagation-history.db
 collection_interval_s: 3600
+scheduler_check_interval_s: 60.0
+retry_initial_backoff_s: 3600
+retry_maximum_backoff_s: 21600
 provider_timeout_s: 10.0
-# Reserved for the future independently supervised QSO-ingestion worker;
-# the current --once collector does not invoke VOACAP enrichment.
+# Reserved on the environmental collector; the separate completed-QSO worker has
+# its own double-gated configuration and does not read this value.
 voacap_enabled: false
 voacap_base_url: http://127.0.0.1:8787
-# Reserved for that future worker; the current --once collector does not
-# invoke weather enrichment or PSK Reporter analytics.
+# Reserved on the environmental collector; it does not invoke weather enrichment
+# or the production-inactive PSK Reporter orchestration component.
 weather_enrichment_enabled: false
 pskreporter:
   enabled: false
@@ -20,3 +23,4 @@ pskreporter:
   report_limit: 5000
   timeout_s: 10.0
   maximum_response_bytes: 2097152
+  maximum_qsos_per_query: 50

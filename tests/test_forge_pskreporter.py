@@ -1,8 +1,10 @@
 """Offline contract tests for respectful PSK Reporter analytics."""
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
@@ -98,6 +100,28 @@ def test_client_rate_limits_successes_and_failures_for_five_minutes() -> None:
     assert len(transport.requests) == 2
 
 
+def test_client_allows_only_one_concurrent_network_attempt_per_interval() -> None:
+    caller_count = 16
+    start = Barrier(caller_count)
+    transport = Transport(
+        [UrllibHttpResponse(200, b"<receptionReports/>")] * caller_count
+    )
+    client = PskReporterHttpClient(PskReporterConfig(enabled=True), transport=transport)
+
+    def query() -> PskReporterQueryStatus:
+        start.wait()
+        return client.query(
+            now=NOW, window_s=300, frequency_range_hz=None
+        ).status
+
+    with ThreadPoolExecutor(max_workers=caller_count) as executor:
+        statuses = list(executor.map(lambda _: query(), range(caller_count)))
+
+    assert statuses.count(PskReporterQueryStatus.SUCCEEDED) == 1
+    assert statuses.count(PskReporterQueryStatus.NOT_DUE) == caller_count - 1
+    assert len(transport.requests) == 1
+
+
 def test_xml_parser_retains_optional_fields_and_skips_bad_records() -> None:
     xml = _xml(
         _report(
@@ -134,6 +158,21 @@ def test_malformed_provider_document_is_query_failure_not_zero(body: bytes) -> N
     assert result.status is PskReporterQueryStatus.QUERY_FAILED
     assert result.reports == ()
     assert result.error
+
+
+def test_provider_report_count_above_requested_limit_is_query_failure() -> None:
+    body = _xml(
+        _report("W1ONE", "FN31pr", NOW - timedelta(minutes=2)),
+        _report("W2TWO", "EM79xp", NOW - timedelta(minutes=1)),
+    )
+    transport = Transport([UrllibHttpResponse(200, body.encode())])
+    result = PskReporterHttpClient(
+        PskReporterConfig(enabled=True, report_limit=1), transport=transport
+    ).query(now=NOW, window_s=300, frequency_range_hz=None)
+
+    assert result.status is PskReporterQueryStatus.QUERY_FAILED
+    assert result.reports == ()
+    assert result.error == "PSK Reporter response exceeded the requested report limit"
 
 
 def test_conservative_fallback_batches_due_qsos_and_distinguishes_zero_from_failure(

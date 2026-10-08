@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
-from json import dumps
+from json import dumps, loads
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Any
@@ -28,9 +28,13 @@ from rolling_thunder.forge_propagation_history import (
     ForgePropagationHistoryRepository,
     IonosphereMetric,
     Kc2gSnapshot,
+    PropagationCollectionProvider,
     PropagationHistoryStorageError,
+    SolarObservation,
     VoacapPrediction,
 )
+from rolling_thunder.forge_propagation_main import main as propagation_main
+from rolling_thunder.forge_propagation_runtime import ForgePropagationCollectionRuntime
 from rolling_thunder.forge_pskreporter import PskReporterConfig
 from rolling_thunder.forge_weather import (
     WeatherConditionToken,
@@ -56,6 +60,50 @@ class Transport:
         del headers, timeout_s
         self.requests.append((method, url, body))
         return self.responses.pop(0)
+
+
+class _CollectionSolar:
+    def __init__(self, *, failures: int = 0) -> None:
+        self.failures = failures
+        self.calls = 0
+
+    def fetch(self, collected_at: datetime) -> SolarObservation:
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise RuntimeError("fixture failure")
+        return SolarObservation(
+            source_url=HAMQSL_SOLAR_URL,
+            source_updated="07 Oct 2026 0200 GMT",
+            collected_at_utc=collected_at,
+            raw_xml="<solar><solardata/></solar>",
+            solarflux="150",
+            aindex="7",
+            kindex="2",
+            xray="B1.2",
+            sunspots="90",
+            protonflux="0.10",
+            aurora="1",
+            normalization="1.00",
+            latdegree="67.3",
+            solarwind="410.2",
+            magneticfield="5.1",
+            geomagfield="QUIET",
+            signalnoise="S1-S2",
+        )
+
+
+class _CollectionKc2g:
+    def __init__(self) -> None:
+        self.calls: list[IonosphereMetric] = []
+
+    def fetch(self, metric: IonosphereMetric, collected_at: datetime) -> Kc2gSnapshot:
+        self.calls.append(metric)
+        return Kc2gSnapshot(
+            metric=metric,
+            source_url=f"https://prop.kc2g.com/{metric.value}.geojson",
+            collected_at_utc=collected_at,
+            geojson={"type": "FeatureCollection", "features": []},
+        )
 
 
 def test_hamqsl_preserves_raw_values_and_collection_time() -> None:
@@ -250,6 +298,113 @@ def test_propagation_example_keeps_qso_enrichment_disabled() -> None:
     assert config.voacap_enabled is False
     assert config.weather_enrichment_enabled is False
     assert config.pskreporter.enabled is False
+
+
+def test_check_config_is_database_and_provider_free(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database = tmp_path / "must-not-be-created.sqlite3"
+    config = tmp_path / "propagation.yaml"
+    config.write_text(
+        f"enabled: false\ndatabase_path: {database}\n",
+        encoding="utf-8",
+    )
+
+    result = propagation_main(["--config", str(config), "--check-config"])
+
+    assert result == 0
+    assert not database.exists()
+    payload = loads(capsys.readouterr().out)
+    assert payload["enabled"] is False
+    assert payload["database_path"] == str(database)
+    assert payload["qso_enrichment"] == {
+        "pskreporter_enabled": False,
+        "voacap_enabled": False,
+        "weather_enrichment_enabled": False,
+    }
+    assert payload["providers"] == [
+        "https://www.hamqsl.com/solarxml.php",
+        "https://prop.kc2g.com/renders/current/mufd-normal-now.geojson",
+        "https://prop.kc2g.com/renders/current/fof2-normal-now.geojson",
+    ]
+
+
+def test_hourly_collection_is_independent_durable_and_backed_off(tmp_path: Path) -> None:
+    repository = ForgePropagationHistoryRepository(tmp_path / "collection.db")
+    solar = _CollectionSolar(failures=1)
+    kc2g = _CollectionKc2g()
+    service = ForgePropagationHistoryService(
+        repository,
+        solar,  # type: ignore[arg-type]
+        kc2g,  # type: ignore[arg-type]
+        _NoPredictionClient(),
+        retry_initial_backoff=timedelta(hours=1),
+        retry_maximum_backoff=timedelta(hours=2),
+    )
+    first = datetime(2026, 10, 7, 1, tzinfo=UTC)
+
+    assert service.collect_due(first) == {
+        "solar": "failed:fixture failure",
+        "mufd": "collected",
+        "fof2": "collected",
+    }
+    assert service.collect_due(first + timedelta(minutes=59)) == {
+        "solar": "not_due",
+        "mufd": "not_due",
+        "fof2": "not_due",
+    }
+
+    second = first + timedelta(hours=1)
+    assert service.collect_due(second) == {
+        "solar": "collected",
+        "mufd": "collected",
+        "fof2": "collected",
+    }
+    health = service.get_health(second)
+    assert health.state == "healthy"
+    assert {item.provider for item in health.providers} == {
+        PropagationCollectionProvider.SOLAR,
+        PropagationCollectionProvider.MUF_3000,
+        PropagationCollectionProvider.FOF2,
+    }
+    assert all(item.state == "healthy" for item in health.providers)
+    assert solar.calls == 2
+    assert kc2g.calls == [IonosphereMetric.MUF_3000, IonosphereMetric.FOF2] * 2
+
+
+def test_supervised_runtime_collects_immediately_then_honors_stop_waiter(
+    tmp_path: Path,
+) -> None:
+    repository = ForgePropagationHistoryRepository(tmp_path / "runtime.db")
+    solar = _CollectionSolar()
+    kc2g = _CollectionKc2g()
+    service = ForgePropagationHistoryService(
+        repository,
+        solar,  # type: ignore[arg-type]
+        kc2g,  # type: ignore[arg-type]
+        _NoPredictionClient(),
+    )
+    now = datetime(2026, 10, 7, 1, tzinfo=UTC)
+    waits: list[float] = []
+
+    def stop_after_first_cycle(interval_s: float) -> bool:
+        waits.append(interval_s)
+        return True
+
+    runtime = ForgePropagationCollectionRuntime(
+        service,
+        check_interval_s=15.0,
+        clock=lambda: now,
+        waiter=stop_after_first_cycle,
+    )
+
+    runtime.run_forever()
+
+    assert waits == [15.0]
+    assert solar.calls == 1
+    assert kc2g.calls == [IonosphereMetric.MUF_3000, IonosphereMetric.FOF2]
+    assert runtime.is_running is False
+    assert runtime.get_health().running is False
 
 
 def test_service_stores_path_minimum_and_prefers_frozen_coordinates(

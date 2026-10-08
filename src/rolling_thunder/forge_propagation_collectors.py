@@ -13,13 +13,16 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
-from rolling_thunder.domain import Contact, Frequency, RadioMode
+from rolling_thunder.domain import Contact, DomainModel, Frequency, RadioMode
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
 from rolling_thunder.forge_propagation_history import (
     ForgePropagationHistoryRepository,
     IonosphereCorrelation,
     IonosphereMetric,
     Kc2gSnapshot,
+    PropagationCollectionProvider,
+    PropagationCollectionResult,
+    PropagationProviderRecord,
     SolarObservation,
     VoacapPrediction,
     WeatherObservation,
@@ -71,6 +74,27 @@ class PropagationCorrelationResult:
     ionosphere: str
     local_weather: str
     contact_weather: str
+
+
+class PropagationProviderHealth(DomainModel):
+    """Read-only status for one independently scheduled environmental source."""
+
+    provider: PropagationCollectionProvider
+    state: Literal["pending", "healthy", "degraded"]
+    last_attempt_at_utc: datetime | None = None
+    last_success_at_utc: datetime | None = None
+    next_attempt_at_utc: datetime
+    consecutive_failures: int = 0
+    last_error: str | None = None
+
+
+class ForgePropagationHealth(DomainModel):
+    """Presentation-neutral aggregate collection health."""
+
+    state: Literal["starting", "healthy", "degraded"]
+    observed_at_utc: datetime
+    providers: tuple[PropagationProviderHealth, ...]
+    running: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,38 +362,140 @@ class ForgePropagationHistoryService:
         *,
         weather_provider: WeatherProvider | None = None,
         minimum_collection_interval: timedelta = timedelta(hours=1),
+        retry_initial_backoff: timedelta = timedelta(hours=1),
+        retry_maximum_backoff: timedelta = timedelta(hours=6),
     ) -> None:
+        if minimum_collection_interval < timedelta(hours=1):
+            raise ValueError("minimum collection interval must be at least one hour")
+        if retry_initial_backoff < minimum_collection_interval:
+            raise ValueError("initial retry backoff must preserve the collection interval")
+        if retry_maximum_backoff < retry_initial_backoff:
+            raise ValueError("maximum retry backoff must not be shorter than initial backoff")
         self._repository = repository
         self._solar = solar
         self._kc2g = kc2g
         self._voacap = voacap
         self._weather_provider = weather_provider
         self._minimum = minimum_collection_interval
+        self._retry_initial = retry_initial_backoff
+        self._retry_maximum = retry_maximum_backoff
 
     def collect_due(self, now: datetime) -> dict[str, str]:
         """Collect each hourly source independently; one failure never suppresses another."""
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("collection time must be timezone-aware")
+        now = now.astimezone(UTC)
         results: dict[str, str] = {}
         jobs = (
-            ("solar", None),
-            (IonosphereMetric.MUF_3000.value, IonosphereMetric.MUF_3000),
-            (IonosphereMetric.FOF2.value, IonosphereMetric.FOF2),
+            (PropagationCollectionProvider.SOLAR, None),
+            (PropagationCollectionProvider.MUF_3000, IonosphereMetric.MUF_3000),
+            (PropagationCollectionProvider.FOF2, IonosphereMetric.FOF2),
         )
-        for name, metric in jobs:
+        for provider, metric in jobs:
+            name = provider.value
             table = "solar_observation" if metric is None else "kc2g_snapshot"
-            latest = self._repository.latest_collection_time(table, metric=metric)
-            if latest is not None and now.astimezone(UTC) - latest < self._minimum:
-                results[name] = "not_due"
-                continue
             try:
+                latest = self._repository.latest_collection_time(table, metric=metric)
+                record = self._repository.get_provider_record(provider)
+                if now < self._next_attempt_at(latest, record):
+                    results[name] = "not_due"
+                    continue
+                self._repository.begin_provider_attempt(provider, now)
                 if metric is None:
                     self._repository.add_solar(self._solar.fetch(now))
                 else:
                     self._repository.add_kc2g(self._kc2g.fetch(metric, now))
             except Exception as error:  # noqa: BLE001 - provider jobs are failure-isolated
-                results[name] = f"failed:{(str(error) or error.__class__.__name__)[:200]}"
+                message = _bounded_error(error)
+                try:
+                    self._repository.complete_provider_failure(provider, now, message)
+                except Exception as status_error:  # noqa: BLE001 - preserve provider isolation
+                    message = _bounded_error(status_error)
+                results[name] = f"failed:{message}"
             else:
-                results[name] = "collected"
+                try:
+                    self._repository.complete_provider_success(provider, now)
+                except Exception as error:  # noqa: BLE001 - provider jobs are failure-isolated
+                    results[name] = f"failed:{_bounded_error(error)}"
+                else:
+                    results[name] = "collected"
         return results
+
+    def get_health(self, now: datetime) -> ForgePropagationHealth:
+        """Return durable provider health without performing provider I/O."""
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("health time must be timezone-aware")
+        now = now.astimezone(UTC)
+        providers: list[PropagationProviderHealth] = []
+        for provider, metric in (
+            (PropagationCollectionProvider.SOLAR, None),
+            (PropagationCollectionProvider.MUF_3000, IonosphereMetric.MUF_3000),
+            (PropagationCollectionProvider.FOF2, IonosphereMetric.FOF2),
+        ):
+            table = "solar_observation" if metric is None else "kc2g_snapshot"
+            latest = self._repository.latest_collection_time(table, metric=metric)
+            record = self._repository.get_provider_record(provider)
+            failed = record is not None and (
+                record.last_result is not PropagationCollectionResult.SUCCESS
+                or record.consecutive_failures > 0
+            )
+            state: Literal["pending", "healthy", "degraded"]
+            if failed:
+                state = "degraded"
+            elif latest is None:
+                state = "pending"
+            else:
+                state = "healthy"
+            providers.append(
+                PropagationProviderHealth(
+                    provider=provider,
+                    state=state,
+                    last_attempt_at_utc=(
+                        None if record is None else record.last_attempt_at_utc
+                    ),
+                    last_success_at_utc=(
+                        latest
+                        if record is None or record.last_success_at_utc is None
+                        else record.last_success_at_utc
+                    ),
+                    next_attempt_at_utc=self._next_attempt_at(latest, record),
+                    consecutive_failures=(
+                        0 if record is None else record.consecutive_failures
+                    ),
+                    last_error=None if record is None else record.last_error,
+                )
+            )
+        aggregate: Literal["starting", "healthy", "degraded"]
+        if any(provider.state == "degraded" for provider in providers):
+            aggregate = "degraded"
+        elif any(provider.state == "pending" for provider in providers):
+            aggregate = "starting"
+        else:
+            aggregate = "healthy"
+        return ForgePropagationHealth(
+            state=aggregate,
+            observed_at_utc=now,
+            providers=tuple(providers),
+        )
+
+    def _next_attempt_at(
+        self,
+        latest_success: datetime | None,
+        record: PropagationProviderRecord | None,
+    ) -> datetime:
+        if record is None:
+            return (
+                datetime.min.replace(tzinfo=UTC)
+                if latest_success is None
+                else latest_success + self._minimum
+            )
+        if record.last_result is PropagationCollectionResult.SUCCESS:
+            return record.last_attempt_at_utc + self._minimum
+        failure_count = max(1, record.consecutive_failures)
+        multiplier = 2 ** min(failure_count - 1, 30)
+        candidate_delay = self._retry_initial * multiplier
+        retry_delay: timedelta = min(candidate_delay, self._retry_maximum)
+        return record.last_attempt_at_utc + retry_delay
 
     def correlate_contact(self, contact: Contact) -> PropagationCorrelationResult:
         """Persist a QSO and independently enrich it with propagation analytics."""

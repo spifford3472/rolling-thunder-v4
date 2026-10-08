@@ -268,8 +268,14 @@ originates from one screen.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.
-- `src/rolling_thunder/forge_propagation_main.py` — Undeployed opt-in propagation-history collection entry point.
-- `src/rolling_thunder/forge_pskreporter.py` — Official bounded PSK Reporter XML client, five-minute etiquette gate, FT8 completion-aware eligibility, versioned correlation, and repository-backed batch analytics service.
+- `src/rolling_thunder/forge_propagation_main.py` — Disabled-by-default supervised propagation environmental entry point with database/provider-free configuration preflight and provider-free durable status.
+- `src/rolling_thunder/forge_propagation_runtime.py` — Supervised lifecycle for the independent hourly propagation environmental collector.
+- `src/rolling_thunder/forge_propagation_qso_ingestion.py` — Durable UUID-idempotent completed-QSO inbox/source-sink contract, identified bounded leases, retry/dead-letter worker contract, and isolated VOACAP correlator.
+- `src/rolling_thunder/forge_propagation_qso_worker.py` — Deterministic one-cycle orchestration and versioned atomic Forge-local status publication.
+- `src/rolling_thunder/forge_propagation_qso_worker_config.py` — Separate double-gated worker identity, storage, polling, lease, retry, and VOACAP configuration.
+- `src/rolling_thunder/forge_propagation_qso_worker_main.py` — Undeployed independent completed-QSO worker composition and polling lifecycle root.
+- `src/rolling_thunder/forge_pskreporter.py` — Official bounded PSK Reporter XML client, concurrency-safe five-minute etiquette gate, bounded FT8 completion-aware correlation, and repository-backed analytics service.
+- `src/rolling_thunder/forge_pskreporter_orchestration.py` — Production-inactive completed-FT8 event sink, durable global pacing/exact-window inbox, bounded PSK worker, and provider-free health contract.
 - `src/rolling_thunder/forge_location_client.py` — Forge backend module for location client; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_map.py` — Reusable typed configuration and bounded local style-aware map-renderer adapter.
 - `src/rolling_thunder/forge_map_api.py` — Optional map-tile route layer that delegates non-map requests to the existing Forge API application.

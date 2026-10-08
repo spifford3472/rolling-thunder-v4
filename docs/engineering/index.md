@@ -68,6 +68,7 @@ Forge owns reusable backend services and provider-facing work that should not ru
 - mobile-location intake;
 - callsign/contact intelligence;
 - contact synchronization to Wavelog.
+- disabled-by-default, independently supervised HamQSL/KC2G environmental history.
 
 Forge services are backend capabilities, not Rolling-Thunder-screen implementations. Their APIs should remain usable by other authorized programs.
 
@@ -92,6 +93,18 @@ Independent Forge contact-sync process. It is intentionally deployment-isolated 
 ### `forge_callsign_info_main.py`
 
 Independent Forge callsign/contact-intelligence process. It keeps QRZ, Wavelog history, and target-weather provider work off the Pi UI process.
+
+### `forge_propagation_main.py`
+
+Independent disabled-by-default Forge HamQSL/KC2G environmental collector. It owns
+only its dedicated propagation database and has no radio, contact-sync, Wavelog, or
+QSO-ingestion path.
+
+### `forge_propagation_qso_worker_main.py`
+
+Independent double-gated, undeployed completed-QSO VOACAP worker. It consumes only
+its durable inbox, owns separate history/status paths, and has no producer, listener,
+radio, local-logging, contact-sync, or Wavelog path.
 
 ## Feature ownership map
 
@@ -313,6 +326,7 @@ Do not duplicate protocol details unnecessarily. Use these documents for deeper 
 - `docs/SHARED_SPOT_DOMAIN.md`
 - `docs/FORGE_SPOT_SERVICE.md`
 - `docs/FORGE_CONTACT_SYNC.md`
+- `docs/WAVELOG_STATION_PROFILE_RESOLVER_DESIGN.md`
 - `docs/CALLSIGN_INFO.md`
 - `docs/LIVE_MAP.md`
 - `docs/WEATHER_PANEL.md`
