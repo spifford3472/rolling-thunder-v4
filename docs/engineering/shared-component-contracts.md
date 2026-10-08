@@ -36,10 +36,21 @@ shared enrichment worker completes, including lookup failure without a grid.
 Only `ready` contacts are upload-eligible. Completion notifications request
 background work; they do not select a Wavelog station or perform remote I/O.
 
-That stable QSO UUID is also the FT8 attempt UUID used by optional Forge
-propagation analytics to read terminal `ended_at_utc`. This read-only dependency
-does not place PSK Reporter work on the FT8 worker or contact-sync request path.
-Invalid terminal timestamps must not trigger a provider query.
+That stable QSO UUID is also the FT8 attempt UUID used by optional Forge propagation
+analytics. The production-inactive PSK orchestration contract requires the immutable
+durable FT8 `Contact` and matching successful terminal attempt together; only their
+source/transport owner may attest that both are confirmed. Its sink has no Pi,
+contact-sync, logging, radio, or transmit authority. Enqueue performs no provider
+I/O, and query work remains on an independent bounded worker. Invalid or mismatched
+terminal data must not enter the inbox or trigger a provider query.
+
+The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
+that same UUID without provider work. Exact replay is idempotent; changed frozen
+grids, coordinates, UTC start, frequency/mode, or power under the same UUID is a
+conflict. Provider correlation runs only from a separately scheduled bounded worker,
+so neither local durability nor Wavelog synchronization waits for VOACAP. The worker
+has separate disabled-by-default identity/configuration and publishes only
+non-secret Forge-local status. No completed-QSO producer is implied.
 
 Forge selects the exact Wavelog station target for every upload through one shared
 boundary after receiving the immutable `Contact` and before claiming its UUID in

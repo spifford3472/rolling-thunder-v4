@@ -1,0 +1,15 @@
+# This is a separate Forge-local worker. Both gates must be explicitly enabled.
+enabled: false
+voacap_enabled: false
+worker_identity: forge-propagation-qso-worker-1
+inbox_database_path: data/forge-propagation-qso-inbox.db
+history_database_path: data/forge-propagation-history.db
+status_path: data/forge-propagation-qso-worker-status.json
+poll_interval_s: 30
+batch_limit: 20
+lease_duration_s: 300
+max_attempts: 5
+retry_base_s: 60
+retry_max_s: 3600
+provider_timeout_s: 10
+voacap_base_url: http://127.0.0.1:8787

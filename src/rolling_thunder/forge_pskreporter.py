@@ -6,7 +6,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from math import asin, cos, radians, sin, sqrt
+from math import asin, ceil, cos, radians, sin, sqrt
+from threading import Lock
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -51,6 +52,7 @@ class PskReporterConfig(DomainModel):
     report_limit: int = Field(default=5000, ge=1, le=25_000)
     timeout_s: float = Field(default=10.0, gt=0, le=60)
     maximum_response_bytes: int = Field(default=2_097_152, ge=1024, le=16_777_216)
+    maximum_qsos_per_query: int = Field(default=50, ge=1, le=100)
 
     @field_validator("sender_callsign")
     @classmethod
@@ -142,6 +144,7 @@ class PskReporterHttpClient:
         self._config = config
         self._transport = transport or _BoundedUrllibTransport(config.maximum_response_bytes)
         self._last_network_retrieval_at: datetime | None = None
+        self._retrieval_gate = Lock()
 
     def query(
         self,
@@ -151,31 +154,25 @@ class PskReporterHttpClient:
         frequency_range_hz: tuple[int, int] | None,
     ) -> PskReporterQueryResult:
         now_utc = _utc(now)
-        bounded_window = min(max(int(window_s), 1), _MAX_PROVIDER_WINDOW_S)
-        parameters: dict[str, str | int] = {
-            "senderCallsign": self._config.sender_callsign,
-            "mode": self._config.mode,
-            "flowStartSeconds": -bounded_window,
-            "rronly": 1,
-            "noactive": 1,
-            "nolocator": 1,
-            "rptlimit": self._config.report_limit,
-        }
-        if frequency_range_hz is not None:
-            lower, upper = frequency_range_hz
-            parameters["frange"] = f"{lower}-{upper}"
+        parameters = build_pskreporter_query_parameters(
+            self._config,
+            window_s=window_s,
+            frequency_range_hz=frequency_range_hz,
+        )
 
-        if (
-            self._last_network_retrieval_at is not None
-            and now_utc - self._last_network_retrieval_at < self._config.minimum_query_interval
-        ):
-            return PskReporterQueryResult(
-                status=PskReporterQueryStatus.NOT_DUE,
-                query_parameters=parameters,
-            )
+        with self._retrieval_gate:
+            if (
+                self._last_network_retrieval_at is not None
+                and now_utc - self._last_network_retrieval_at
+                < self._config.minimum_query_interval
+            ):
+                return PskReporterQueryResult(
+                    status=PskReporterQueryStatus.NOT_DUE,
+                    query_parameters=parameters,
+                )
 
-        # Failed attempts also consume the provider interval.
-        self._last_network_retrieval_at = now_utc
+            # Reserve the interval before I/O so concurrent and failed attempts count.
+            self._last_network_retrieval_at = now_utc
         query_id = uuid4()
         url = f"{PSK_REPORTER_QUERY_URL}?{urlencode(parameters)}"
         try:
@@ -191,7 +188,9 @@ class PskReporterHttpClient:
             if len(response.body) > self._config.maximum_response_bytes:
                 raise OSError("PSK Reporter response exceeded maximum size")
             raw_xml = response.body.decode("utf-8")
-            reports, skipped = parse_pskreporter_xml(raw_xml)
+            reports, skipped = parse_pskreporter_xml(
+                raw_xml, maximum_reports=self._config.report_limit
+            )
         except (
             TimeoutError,
             URLError,
@@ -307,11 +306,23 @@ class PskReporterAnalyticsService:
                 self._repository.save_pskreporter(outcome)
                 outcomes[contact.contact_id] = outcome
                 continue
-            due.append(contact)
+            if len(due) < self._config.maximum_qsos_per_query:
+                due.append(contact)
+            else:
+                outcome = PskReporterSummary(
+                    contact_id=contact.contact_id,
+                    status=PskReporterCollectionStatus.NOT_DUE,
+                    summary_json={
+                        "reason": "bounded_batch_pending",
+                        "eligibility": eligibility.as_json(),
+                    },
+                )
+                self._repository.save_pskreporter(outcome)
+                outcomes[contact.contact_id] = outcome
 
         if due:
             maximum_age = max((now_utc - contact.started_at).total_seconds() for contact in due)
-            required_window = int(maximum_age) + self._config.correlation_window_s
+            required_window = ceil(maximum_age) + self._config.correlation_window_s
             if required_window > _MAX_PROVIDER_WINDOW_S:
                 for contact in due:
                     outcome = _failure_summary(
@@ -424,16 +435,26 @@ class PskReporterAnalyticsService:
         )
 
 
-def parse_pskreporter_xml(xml: str) -> tuple[tuple[PskReporterReception, ...], int]:
+def parse_pskreporter_xml(
+    xml: str, *, maximum_reports: int | None = None
+) -> tuple[tuple[PskReporterReception, ...], int]:
     """Parse a valid provider document, skipping only malformed report records."""
+    if maximum_reports is not None and maximum_reports < 1:
+        raise ValueError("maximum_reports must be positive")
     root = ElementTree.fromstring(xml)
     if _local_name(root.tag) != "receptionReports":
         raise ElementTree.ParseError("PSK Reporter root must be receptionReports")
     reports: list[PskReporterReception] = []
     skipped = 0
+    record_count = 0
     for element in root.iter():
         if _local_name(element.tag) != "receptionReport":
             continue
+        record_count += 1
+        if maximum_reports is not None and record_count > maximum_reports:
+            raise ElementTree.ParseError(
+                "PSK Reporter response exceeded the requested report limit"
+            )
         try:
             attributes = element.attrib
             report = PskReporterReception(
@@ -453,6 +474,29 @@ def parse_pskreporter_xml(xml: str) -> tuple[tuple[PskReporterReception, ...], i
             continue
         reports.append(report)
     return tuple(reports), skipped
+
+
+def build_pskreporter_query_parameters(
+    config: PskReporterConfig,
+    *,
+    window_s: int,
+    frequency_range_hz: tuple[int, int] | None,
+) -> dict[str, str | int]:
+    """Build the exact bounded provider parameters used for reservation and I/O."""
+    bounded_window = min(max(int(window_s), 1), _MAX_PROVIDER_WINDOW_S)
+    parameters: dict[str, str | int] = {
+        "senderCallsign": config.sender_callsign,
+        "mode": config.mode,
+        "flowStartSeconds": -bounded_window,
+        "rronly": 1,
+        "noactive": 1,
+        "nolocator": 1,
+        "rptlimit": config.report_limit,
+    }
+    if frequency_range_hz is not None:
+        lower, upper = frequency_range_hz
+        parameters["frange"] = f"{lower}-{upper}"
+    return parameters
 
 
 def _correlate_reports(

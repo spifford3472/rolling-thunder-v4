@@ -124,18 +124,46 @@ missing weather as `N/A`. `contact_weather.py` and `OpenMeteoForgeWeatherProvide
 remain reusable outside synchronization, including for a separate background
 propagation/history worker.
 
-### Propagation history (implemented, not deployed)
+### Propagation environmental history (Phase 1 assets staged, disabled)
 
-`forge_propagation_*` provides a separate disabled-by-default service entry point,
-typed collectors, and a dedicated SQLite repository for raw HamQSL/KC2G observations
-and QSO correlation. PSK Reporter eligibility consumes an injected FT8 terminal-time
-lookup keyed by the shared contact/attempt UUID, and batched provider XML is stored
+`forge_propagation_*` provides a separate disabled-by-default environmental entry
+point, typed collectors, and dedicated SQLite history. That Phase 1 process runs only
+the hourly HamQSL/KC2G cycle with provider-I/O-free status. A distinct double-gated,
+undeployed completed-QSO entry point composes its durable UUID-idempotent inbox,
+identified bounded leases, retry/dead-letter processing, existing VOACAP summary
+client, and atomic local status publication. It has no producer or listener and is
+not composed into the environmental process, contact sync, Wavelog, or local logging.
+
+The production-inactive PSK orchestrator accepts a confirmed event containing the
+immutable FT8 contact and matching successful terminal attempt. It durably owns exact
+event replay, absolute request-window identity, a cross-process 300-second provider
+gate, bounded query batches, and provider-free health. Batched provider XML is stored
 once per query rather than copied into every QSO summary. It reuses the existing
-VOACAP summary API and does not add a propagation engine. It is deliberately not
-stored in the contact-sync or spot database. The current entry point runs only the
-hourly HamQSL/KC2G collection cycle; VOACAP, weather, and PSK Reporter controls
-default off and are reserved for a future independently supervised QSO-ingestion
-worker. See `docs/PROPAGATION_HISTORY.md`.
+analytics/history contracts and adds no propagation engine. No PSK process,
+scheduler, authenticated ingestion transport, or production configuration is added.
+All VOACAP, weather, and PSK controls remain disabled. See
+`docs/PROPAGATION_HISTORY.md`.
+
+Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application
+root, configuration, StateDirectory, and SQLite database. The systemd unit has no
+listener and is not enabled by installation. Its production template remains
+disabled, and its preflight `--check-config` performs neither database nor provider
+access. Activation and the bounded HamQSL/KC2G network smoke test require separate
+explicit confirmations. Stopping/disabling this unit is the complete operational
+rollback and never restarts or changes radio, FT8, spot, Wavelog, or contact-sync
+services.
+
+The staged deployment integration gives propagation its own exact-40-SHA component
+hook and immutable release/current-link layout. The verified central dispatcher uses
+`<component> <40hex>`, `SOURCE_REPO`, `run_as_geoff`, and
+`verify_remote_sha`. Its propagation branch must run immediately after common SHA
+syntax validation and before legacy `STATE_FILE`, virtualenv, database, stop, backup,
+or rollback work. It fetches and validates the pushed origin commit, then `exec`s the
+fixed propagation hook. The hook accepts no caller-controlled paths or service names
+and can restart only the propagation unit when it was already active. Exact-commit
+wheels are prepared separately from a Git archive, manifested, reviewed, and only
+then promoted into the root-owned staging contract. See
+`../FORGE_PROPAGATION_DEPLOYMENT_PROPOSAL.md`.
 
 ## Reusable service design rules
 

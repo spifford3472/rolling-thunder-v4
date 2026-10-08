@@ -16,7 +16,7 @@ from pydantic import Field, field_validator
 
 from rolling_thunder.domain import Contact, DomainModel
 
-PROPAGATION_HISTORY_SCHEMA_VERSION = 2
+PROPAGATION_HISTORY_SCHEMA_VERSION = 3
 
 
 class PropagationHistoryStorageError(RuntimeError):
@@ -26,6 +26,38 @@ class PropagationHistoryStorageError(RuntimeError):
 class IonosphereMetric(StrEnum):
     MUF_3000 = "mufd"
     FOF2 = "fof2"
+
+
+class PropagationCollectionProvider(StrEnum):
+    SOLAR = "solar"
+    MUF_3000 = "mufd"
+    FOF2 = "fof2"
+
+
+class PropagationCollectionResult(StrEnum):
+    STARTED = "started"
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
+class PropagationProviderRecord(DomainModel):
+    """Durable provider-attempt state used for etiquette and health reporting."""
+
+    provider: PropagationCollectionProvider
+    last_result: PropagationCollectionResult
+    last_attempt_at_utc: datetime
+    last_success_at_utc: datetime | None = None
+    consecutive_failures: int = Field(ge=0)
+    last_error: str | None = Field(default=None, max_length=200)
+
+    @field_validator("last_attempt_at_utc", "last_success_at_utc")
+    @classmethod
+    def normalize_provider_time(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("provider timestamps must be timezone-aware")
+        return value.astimezone(UTC)
 
 
 class WeatherObservationRole(StrEnum):
@@ -213,6 +245,101 @@ class ForgePropagationHistoryRepository:
                 observation.raw_xml,
             ),
         )
+
+    def begin_provider_attempt(
+        self,
+        provider: PropagationCollectionProvider,
+        attempted_at_utc: datetime,
+    ) -> None:
+        """Persist an attempt before provider I/O so restarts retain the cadence gate."""
+        self._execute(
+            """
+            INSERT INTO propagation_provider_status (
+                provider, last_result, last_attempt_at_utc,
+                last_success_at_utc, consecutive_failures, last_error
+            ) VALUES (?, 'started', ?, NULL, 0, NULL)
+            ON CONFLICT(provider) DO UPDATE SET
+                last_result='started',
+                last_attempt_at_utc=excluded.last_attempt_at_utc
+            """,
+            (provider.value, _time(attempted_at_utc)),
+        )
+
+    def complete_provider_success(
+        self,
+        provider: PropagationCollectionProvider,
+        completed_at_utc: datetime,
+    ) -> None:
+        self._execute(
+            """
+            INSERT INTO propagation_provider_status (
+                provider, last_result, last_attempt_at_utc,
+                last_success_at_utc, consecutive_failures, last_error
+            ) VALUES (?, 'success', ?, ?, 0, NULL)
+            ON CONFLICT(provider) DO UPDATE SET
+                last_result='success',
+                last_attempt_at_utc=excluded.last_attempt_at_utc,
+                last_success_at_utc=excluded.last_success_at_utc,
+                consecutive_failures=0,
+                last_error=NULL
+            """,
+            (provider.value, _time(completed_at_utc), _time(completed_at_utc)),
+        )
+
+    def complete_provider_failure(
+        self,
+        provider: PropagationCollectionProvider,
+        completed_at_utc: datetime,
+        error: str,
+    ) -> None:
+        self._execute(
+            """
+            INSERT INTO propagation_provider_status (
+                provider, last_result, last_attempt_at_utc,
+                last_success_at_utc, consecutive_failures, last_error
+            ) VALUES (?, 'failure', ?, NULL, 1, ?)
+            ON CONFLICT(provider) DO UPDATE SET
+                last_result='failure',
+                last_attempt_at_utc=excluded.last_attempt_at_utc,
+                consecutive_failures=propagation_provider_status.consecutive_failures + 1,
+                last_error=excluded.last_error
+            """,
+            (provider.value, _time(completed_at_utc), error[:200]),
+        )
+
+    def get_provider_record(
+        self, provider: PropagationCollectionProvider
+    ) -> PropagationProviderRecord | None:
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                row = connection.execute(
+                    """
+                    SELECT last_result, last_attempt_at_utc, last_success_at_utc,
+                           consecutive_failures, last_error
+                    FROM propagation_provider_status
+                    WHERE provider = ?
+                    """,
+                    (provider.value,),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PropagationHistoryStorageError(
+                "propagation provider status read failed"
+            ) from error
+        if row is None:
+            return None
+        try:
+            return PropagationProviderRecord(
+                provider=provider,
+                last_result=row[0],
+                last_attempt_at_utc=row[1],
+                last_success_at_utc=row[2],
+                consecutive_failures=row[3],
+                last_error=row[4],
+            )
+        except (TypeError, ValueError) as error:
+            raise PropagationHistoryStorageError(
+                "propagation provider status validation failed"
+            ) from error
 
     def add_kc2g(self, snapshot: Kc2gSnapshot) -> None:
         raw = _json(snapshot.geojson).encode("utf-8")
@@ -738,7 +865,7 @@ class ForgePropagationHistoryRepository:
                         singleton_id INTEGER PRIMARY KEY CHECK(singleton_id=1),
                         schema_version INTEGER NOT NULL
                     );
-                    INSERT OR IGNORE INTO propagation_schema_metadata VALUES (1, 2);
+                    INSERT OR IGNORE INTO propagation_schema_metadata VALUES (1, 3);
                     CREATE TABLE IF NOT EXISTS solar_observation (
                         collected_at_utc TEXT PRIMARY KEY, source_url TEXT NOT NULL,
                         source_updated TEXT NOT NULL, payload_json TEXT NOT NULL,
@@ -749,6 +876,14 @@ class ForgePropagationHistoryRepository:
                         source_url TEXT NOT NULL, sha256 TEXT NOT NULL,
                         compression TEXT NOT NULL, snapshot_blob BLOB NOT NULL,
                         PRIMARY KEY(metric, collected_at_utc)
+                    );
+                    CREATE TABLE IF NOT EXISTS propagation_provider_status (
+                        provider TEXT PRIMARY KEY,
+                        last_result TEXT NOT NULL,
+                        last_attempt_at_utc TEXT NOT NULL,
+                        last_success_at_utc TEXT,
+                        consecutive_failures INTEGER NOT NULL,
+                        last_error TEXT
                     );
                     CREATE TABLE IF NOT EXISTS weather_observation (
                         contact_id TEXT NOT NULL, role TEXT NOT NULL,
@@ -804,6 +939,12 @@ class ForgePropagationHistoryRepository:
                         "WHERE singleton_id = 1"
                     )
                     version = (2,)
+                if version == (2,):
+                    connection.execute(
+                        "UPDATE propagation_schema_metadata SET schema_version = 3 "
+                        "WHERE singleton_id = 1"
+                    )
+                    version = (3,)
                 if version != (PROPAGATION_HISTORY_SCHEMA_VERSION,):
                     raise PropagationHistoryStorageError("unsupported propagation schema version")
                 connection.commit()
@@ -818,6 +959,8 @@ def _json(value: object) -> str:
 
 
 def _time(value: datetime) -> str:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("propagation timestamps must be timezone-aware")
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 

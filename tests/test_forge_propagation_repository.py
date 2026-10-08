@@ -13,6 +13,8 @@ from rolling_thunder.forge_propagation_history import (
     IonosphereCorrelation,
     IonosphereMetric,
     Kc2gSnapshot,
+    PropagationCollectionProvider,
+    PropagationCollectionResult,
     PropagationHistoryStorageError,
     SolarObservation,
     VoacapPrediction,
@@ -59,6 +61,7 @@ def test_schema_tables_integrity_and_version_are_exact(
     assert repository.table_names() == frozenset(
         {
             "propagation_schema_metadata",
+            "propagation_provider_status",
             "solar_observation",
             "kc2g_snapshot",
             "weather_observation",
@@ -75,7 +78,7 @@ def test_schema_tables_integrity_and_version_are_exact(
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute(
             "SELECT singleton_id, schema_version FROM propagation_schema_metadata"
-        ).fetchall() == [(1, 2)]
+        ).fetchall() == [(1, 3)]
 
 
 def test_v1_schema_migrates_without_losing_existing_psk_summary(database: Path) -> None:
@@ -105,7 +108,7 @@ def test_v1_schema_migrates_without_losing_existing_psk_summary(database: Path) 
     with sqlite3.connect(database) as connection:
         assert connection.execute(
             "SELECT schema_version FROM propagation_schema_metadata"
-        ).fetchone() == (2,)
+        ).fetchone() == (3,)
         columns = {
             row[1]
             for row in connection.execute("PRAGMA table_info(qso_pskreporter_summary)")
@@ -150,6 +153,30 @@ def test_add_solar_exact_replay_does_not_duplicate(
 
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT count(*) FROM solar_observation").fetchone() == (1,)
+
+
+def test_provider_attempt_state_is_durable_and_preserves_last_success(
+    repository: ForgePropagationHistoryRepository,
+) -> None:
+    first_attempt = CAPTURED_AT
+    failed_attempt = CAPTURED_AT + timedelta(hours=1)
+
+    repository.begin_provider_attempt(PropagationCollectionProvider.SOLAR, first_attempt)
+    repository.complete_provider_success(PropagationCollectionProvider.SOLAR, first_attempt)
+    repository.begin_provider_attempt(PropagationCollectionProvider.SOLAR, failed_attempt)
+    repository.complete_provider_failure(
+        PropagationCollectionProvider.SOLAR,
+        failed_attempt,
+        "provider unavailable",
+    )
+
+    record = repository.get_provider_record(PropagationCollectionProvider.SOLAR)
+    assert record is not None
+    assert record.last_result is PropagationCollectionResult.FAILURE
+    assert record.last_attempt_at_utc == failed_attempt
+    assert record.last_success_at_utc == first_attempt
+    assert record.consecutive_failures == 1
+    assert record.last_error == "provider unavailable"
 
 
 def test_add_kc2g_replay_and_round_trip(

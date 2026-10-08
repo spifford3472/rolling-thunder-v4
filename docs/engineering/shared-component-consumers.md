@@ -22,6 +22,7 @@ This document prevents feature-scoped work from accidentally breaking shared beh
 | Forge weather API | `forge_weather*.py`, Pi weather clients | WEATHER, map local temperature, alerts/status | High: shared retained-state contract |
 | Forge callsign intelligence | `forge_callsign_info*.py` | shared callsign overlay; potentially future clients | High: reusable backend API |
 | Forge contact sync | `forge_contact_sync*.py`, `wavelog.py` | ordinary/POTA/DX commits, FT8, DMR, local retry, LOG status; potentially future clients | Critical: immutable-QSO routing, station/logbook safety, and UUID idempotency |
+| Completed FT8 event contract | `ft8/performance.py`, `domain.py`, `forge_pskreporter_orchestration.py` | future authorized completed-QSO source adapter and independent PSK worker | Critical: only matching durable successful terminal attempts may authorize delayed analytics; never transmit, logging, or Wavelog authority |
 | FT8 bounded transmit path | `ft8/authorization.py`, `session.py`, `hardware_transmit.py`, `transmit.py` | FT8 only by design | Critical: must not become general transmit authority |
 | Friend classification | `known_callsigns.py`, `known_callsign_client.py`, `friend_presentation.py` | POTA/DX, FT8 CQ, pending/Browse, callsign overlay, DMR audio/history, LOG | Informational only; no command/identity changes, no UI HTTP or comment leakage |
 

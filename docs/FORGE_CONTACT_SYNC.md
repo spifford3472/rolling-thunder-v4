@@ -65,6 +65,12 @@ The service is private/VPN-only and must not be exposed to the Internet.
 
 ## Wavelog target safety
 
+Wavelog's official station/QSO/logbook semantics and a future read-only,
+operator-provisioned resolver are audited separately in
+`docs/WAVELOG_STATION_PROFILE_RESOLVER_DESIGN.md`. That proposal is not implemented
+in this release and does not authorize automatic profile creation or production
+changes.
+
 Configured safety anchors:
 
 - Station Logbook: `KI5VNB Main`
