@@ -480,6 +480,120 @@ def test_propagation_stage_preparer_requires_a_pushed_origin_commit(
     assert f"Verified pushed origin commit: {pushed_sha}" in accepted.stdout
     assert not (artifact_root / pushed_sha).exists()
 
+    stub_bin = tmp_path / "stub-bin"
+    stub_bin.mkdir()
+    stub_python = stub_bin / "python3"
+    stub_python.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+wheel_dir=""
+while (( $# > 0 )); do
+    if [[ "$1" == "--wheel-dir" ]]; then
+        wheel_dir="$2"
+        shift 2
+    else
+        shift
+    fi
+done
+[[ -n "${wheel_dir}" ]]
+printf 'stub wheel\n' > "${wheel_dir}/rolling_thunder-0-py3-none-any.whl"
+""",
+        encoding="utf-8",
+    )
+    stub_python.chmod(0o755)
+    temporary_root = tmp_path / "temporary"
+    temporary_root.mkdir()
+    build_environment = git_environment | {
+        "PATH": f"{stub_bin}{os.pathsep}{git_environment['PATH']}",
+        "TMPDIR": str(temporary_root),
+    }
+
+    built = subprocess.run(
+        [str(copied_preparer), "build", pushed_sha, str(artifact_root)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=build_environment,
+    )
+
+    destination = artifact_root / pushed_sha
+    wheelhouse = destination / "wheelhouse"
+    assert built.returncode == 0
+    assert "unbound variable" not in built.stderr
+    assert f"Prepared unprivileged exact-commit artifact: {destination}" in built.stdout
+    assert (destination / "COMMIT_SHA").read_text(encoding="utf-8") == (
+        f"{pushed_sha}\n"
+    )
+    assert (wheelhouse / "rolling_thunder-0-py3-none-any.whl").is_file()
+    assert (wheelhouse / "SHA256SUMS").is_file()
+    assert not list(artifact_root.glob(".propagation-stage.*"))
+    assert not list(temporary_root.iterdir())
+
+    replacement = subprocess.run(
+        [str(copied_preparer), "build", pushed_sha, str(artifact_root)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=build_environment,
+    )
+
+    assert replacement.returncode == 2
+    assert "refusing to replace existing artifact" in replacement.stderr
+    assert (wheelhouse / "rolling_thunder-0-py3-none-any.whl").read_text(
+        encoding="utf-8"
+    ) == "stub wheel\n"
+
+    (checkout / "README.md").write_text("pushed failure fixture\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(checkout), "add", "README.md"],
+        check=True,
+        env=git_environment,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(checkout),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-m",
+            "pushed failure fixture",
+        ],
+        check=True,
+        capture_output=True,
+        env=git_environment,
+    )
+    subprocess.run(
+        ["git", "-C", str(checkout), "push", "origin", "main"],
+        check=True,
+        capture_output=True,
+        env=git_environment,
+    )
+    failure_sha = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=git_environment,
+    ).stdout.strip()
+    stub_python.write_text("#!/usr/bin/env bash\nexit 23\n", encoding="utf-8")
+
+    failed_build = subprocess.run(
+        [str(copied_preparer), "build", failure_sha, str(artifact_root)],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=build_environment,
+    )
+
+    assert failed_build.returncode == 23
+    assert not (artifact_root / failure_sha).exists()
+    assert not list(artifact_root.glob(".propagation-stage.*"))
+    assert not list(temporary_root.iterdir())
+
     (checkout / "README.md").write_text("not pushed\n", encoding="utf-8")
     subprocess.run(
         ["git", "-C", str(checkout), "add", "README.md"],

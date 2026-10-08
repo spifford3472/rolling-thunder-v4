@@ -5,6 +5,9 @@ set -euo pipefail
 # never writes the root-owned production staging tree; the runbook promotes the
 # reviewed bytes separately with explicit root-owned installation commands.
 
+build_root=""
+payload_root=""
+
 usage() {
     echo "usage: $0 {dry-run|build} EXACT_40_CHARACTER_LOWERCASE_COMMIT_SHA OUTPUT_ROOT" >&2
 }
@@ -12,6 +15,14 @@ usage() {
 die() {
     echo "ERROR: $*" >&2
     exit 2
+}
+
+cleanup_build_paths() {
+    local -a paths=()
+
+    [[ -z "${build_root}" ]] || paths+=("${build_root}")
+    [[ -z "${payload_root}" ]] || paths+=("${payload_root}")
+    (( ${#paths[@]} == 0 )) || rm -rf -- "${paths[@]}"
 }
 
 require_origin_commit() {
@@ -38,7 +49,7 @@ main() {
     local action="$1"
     local sha="$2"
     local output_root="$3"
-    local script_dir repo destination build_root payload_root source_root
+    local script_dir repo destination source_root
     local source_date_epoch
 
     [[ "${action}" == "dry-run" || "${action}" == "build" ]] || {
@@ -69,9 +80,9 @@ main() {
         exit 0
     fi
 
+    trap cleanup_build_paths EXIT
     build_root="$(mktemp -d)"
     payload_root="$(mktemp -d --tmpdir="${output_root}" .propagation-stage.XXXXXXXX)"
-    trap 'rm -rf -- "${build_root}" "${payload_root}"' EXIT
     source_root="${build_root}/source"
     mkdir -m 0700 "${source_root}"
     mkdir -m 0755 "${payload_root}/wheelhouse"
@@ -88,7 +99,7 @@ main() {
         sha256sum --check --strict SHA256SUMS
     )
     mv -- "${payload_root}" "${destination}"
-    trap 'rm -rf -- "${build_root}"' EXIT
+    payload_root=""
     printf 'Prepared unprivileged exact-commit artifact: %s\n' "${destination}"
     printf 'Review it before separately promoting it to the root-owned staging tree.\n'
 }
