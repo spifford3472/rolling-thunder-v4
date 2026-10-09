@@ -318,7 +318,13 @@ Live acceptance should use an exact commit SHA and record rollback information.
   schema coexistence/migration boundary, identified bounded leases, final-attempt
   recovery, queue observation, retry/dead-letter isolation, and VOACAP provenance.
 - `tests/test_forge_propagation_qso_worker.py` — disabled startup, independent
-  configuration bounds, deterministic fake cycles, and atomic versioned status.
+  configuration bounds, provider-free preflight/status, deterministic fake cycles,
+  and atomic versioned status.
+- `tests/test_forge_propagation_qso_api.py` — authentication-before-body,
+  UUID/idempotency validation, durable provider-free ingestion, health, disabled
+  behavior, and in-memory producer/consumer contract smoke coverage.
+- `tests/test_completed_qso_ingestion_client.py` — bearer/idempotency transport,
+  complete immutable payload, acknowledgement validation, and failure semantics.
 - `tests/test_forge_propagation_repository.py`
 - `tests/test_forge_qrz_enrichment.py`
 - `tests/test_forge_qrz_provider.py`
