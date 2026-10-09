@@ -967,11 +967,14 @@ does not alter the original contact-sync, callsign-info, or spots services and d
 not authorize provider access.
 
 The release candidate also contains undeployed QSO-analysis components: a separately
-double-gated completed-QSO VOACAP worker and a disabled PSK Reporter orchestration
-contract. They have no completed-QSO producer, service unit, dashboard control,
-contact-sync hook, or Wavelog path. They must remain inactive until a Forge
-administrator separately approves authenticated ingestion, supervision, and bounded
-live-provider acceptance. Their absence or failure never blocks local logging.
+double-gated completed-QSO VOACAP worker and a triple-gated PSK Reporter worker
+service. The PSK assets include an authenticated private event endpoint, scheduler,
+isolated databases, local status, and a hardened unit template, but the unit is not
+installed and the checked-in process, ingestion, and provider gates are all off. No
+Pi/contact-sync completed-QSO producer, dashboard control, or Wavelog path is wired.
+They must remain inactive until a Forge administrator separately approves credential
+provisioning, producer wiring, installation, and bounded live-provider acceptance.
+Their absence or failure never blocks local logging.
 
 ## Forge is reusable
 

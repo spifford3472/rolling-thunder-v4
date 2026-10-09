@@ -37,12 +37,16 @@ Only `ready` contacts are upload-eligible. Completion notifications request
 background work; they do not select a Wavelog station or perform remote I/O.
 
 That stable QSO UUID is also the FT8 attempt UUID used by optional Forge propagation
-analytics. The production-inactive PSK orchestration contract requires the immutable
+analytics. The disabled-by-default PSK service contract requires the immutable
 durable FT8 `Contact` and matching successful terminal attempt together; only their
-source/transport owner may attest that both are confirmed. Its sink has no Pi,
+source/transport owner may attest that both are confirmed. The private ingestion API
+requires a non-repository bearer credential plus the matching stable UUID as its
+idempotency key. Its sink has no Pi,
 contact-sync, logging, radio, or transmit authority. Enqueue performs no provider
-I/O, and query work remains on an independent bounded worker. Invalid or mismatched
-terminal data must not enter the inbox or trigger a provider query.
+I/O, and query work remains on an independent bounded scheduler. Process, ingestion,
+and provider egress are separate gates that default off. Invalid or mismatched
+terminal data must not enter the inbox or trigger a provider query. No current Pi or
+Forge producer is implied by the receiving API.
 
 The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
 that same UUID without provider work. Exact replay is idempotent; changed frozen

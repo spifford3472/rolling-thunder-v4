@@ -134,14 +134,18 @@ identified bounded leases, retry/dead-letter processing, existing VOACAP summary
 client, and atomic local status publication. It has no producer or listener and is
 not composed into the environmental process, contact sync, Wavelog, or local logging.
 
-The production-inactive PSK orchestrator accepts a confirmed event containing the
+The disabled-by-default PSK service accepts a confirmed event containing the
 immutable FT8 contact and matching successful terminal attempt. It durably owns exact
 event replay, absolute request-window identity, a cross-process 300-second provider
 gate, bounded query batches, and provider-free health. Batched provider XML is stored
 once per query rather than copied into every QSO summary. It reuses the existing
-analytics/history contracts and adds no propagation engine. No PSK process,
-scheduler, authenticated ingestion transport, or production configuration is added.
-All VOACAP, weather, and PSK controls remain disabled. See
+analytics/history contracts and adds no propagation engine. A separate composition
+root now provides one bounded scheduler, authenticated private event endpoint,
+provider-free health/status diagnostics, isolated orchestration and history SQLite
+files, and independently hardened systemd/sysusers/configuration templates. Process,
+ingestion, and provider egress are separate gates and all remain disabled in the
+production template. No Pi/contact-sync producer is wired, and the unit is neither
+installed nor activated. All VOACAP, weather, and PSK controls remain disabled. See
 `docs/PROPAGATION_HISTORY.md`.
 
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application

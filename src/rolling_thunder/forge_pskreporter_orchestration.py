@@ -1,4 +1,4 @@
-"""Durable, production-inactive orchestration for completed FT8 PSK analytics."""
+"""Durable orchestration contracts for completed FT8 PSK analytics."""
 
 from __future__ import annotations
 

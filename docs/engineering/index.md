@@ -106,6 +106,14 @@ Independent double-gated, undeployed completed-QSO VOACAP worker. It consumes on
 its durable inbox, owns separate history/status paths, and has no producer, listener,
 radio, local-logging, contact-sync, or Wavelog path.
 
+### `forge_pskreporter_worker_main.py`
+
+Independent triple-gated completed-FT8 PSK Reporter service. It composes the
+existing durable orchestration and analytics contracts with an authenticated,
+bounded private event API, one scheduler, isolated orchestration/history databases,
+and atomic local diagnostics. Its process, ingestion, and provider gates default
+off; no completed-QSO producer is wired into the Pi or another Forge service.
+
 ## Feature ownership map
 
 ### POTA and DX

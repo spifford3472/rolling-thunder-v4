@@ -144,9 +144,12 @@ helper.
 
 Entry point: `forge_propagation_qso_worker_main.py` for the double-gated VOACAP
 worker. It owns a durable inbox, separate history database, and local status file,
-but no service unit or completed-QSO producer. The PSK orchestration module has no
-process entry point. Neither component is part of the Phase 1 service, Pi runtime,
-FT8 execution, contact synchronization, Wavelog, or local logging.
+but no service unit or completed-QSO producer. The separate PSK composition root owns
+an authenticated private ingestion API, one scheduler, isolated orchestration/history
+databases, and local status. Its three gates and production template default off, its
+systemd assets are uninstalled, and it still has no authorized completed-QSO producer.
+Neither component is part of the Phase 1 service, Pi runtime, FT8 execution, contact
+synchronization, Wavelog, or local logging.
 
 ## Reusable backend boundary
 

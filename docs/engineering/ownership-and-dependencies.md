@@ -111,13 +111,15 @@ The typed FT-891 adapter owns menu 11-05 encoding/readback. Existing FT8
 receive/preparation services own REAR entry and MIC normal-context cleanup;
 UI contexts do not issue CAT writes.
 
-The optional Forge PSK orchestration boundary accepts only a confirmed event
+The optional Forge PSK service boundary accepts only an authenticated confirmed event
 containing the immutable durable FT8 `Contact` and its matching successful terminal
 attempt, keyed by the shared stable UUID. It may use terminal time only to delay PSK
 Reporter eligibility; correlation remains anchored to the immutable contact start.
 The source/transport owner retains authentication and confirmation authority. The
-orchestrator reads neither Pi nor contact-sync storage and runs on neither request
-path. The lower-level analytics API retains its conservative missing-completion
+service reads neither Pi nor contact-sync storage and runs on neither request path.
+The independently scheduled provider worker owns two isolated SQLite databases and
+non-secret status; its process, ingestion, and provider gates default off. The
+lower-level analytics API retains its conservative missing-completion
 fallback for non-orchestrated callers; invalid completion data fails closed.
 
 The undeployed completed-QSO propagation inbox is a separate Forge-owned consumer of
