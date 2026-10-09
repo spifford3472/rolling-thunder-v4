@@ -103,7 +103,8 @@ find_project_wheel() {
 }
 
 validate_release() {
-    local sha="$1" release="$2" launcher="${release}/.venv/bin/${launcher_name}"
+    local sha="$1" release="$2" launcher
+    launcher="${release}/.venv/bin/${launcher_name}"
     [[ -d "${release}" && ! -L "${release}" ]] || die "release is missing or a symlink"
     cmp --silent <(printf '%s\n' "${sha}") "${release}/COMMIT_SHA" || die \
         "release commit marker does not match"
@@ -114,7 +115,8 @@ validate_release() {
 }
 
 install_release() {
-    local sha="$1" stage="$2" release="${releases_root}/${sha}" project_wheel
+    local sha="$1" stage="$2" release project_wheel
+    release="${releases_root}/${sha}"
     if [[ -e "${release}" || -L "${release}" ]]; then
         validate_release "${sha}" "${release}"
         printf '%s\n' "${release}"
@@ -141,7 +143,8 @@ install_release() {
 }
 
 select_release() {
-    local sha="$1" release="$2" previous="" next="${application_root}/.current.${sha}.next"
+    local sha="$1" release="$2" previous="" next
+    next="${application_root}/.current.${sha}.next"
     local was_active=false
     validate_release "${sha}" "${release}"
     [[ ! -L "${current_link}" ]] || previous="$(readlink -- "${current_link}")"
