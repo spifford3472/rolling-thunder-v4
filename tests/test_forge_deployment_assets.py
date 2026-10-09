@@ -173,6 +173,47 @@ def test_pskreporter_secret_is_external_and_preflight_is_provider_free() -> None
     assert "ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN=" not in config_text
     assert "ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN=" in environment
 
+PROPAGATION_QSO_UNIT_PATH = (
+    ROOT / "deploy/systemd/rolling-thunder-forge-propagation-qso-worker.service"
+)
+PROPAGATION_QSO_CONFIG_PATH = (
+    ROOT / "config/forge-propagation-qso-worker.production.example.yaml"
+)
+PROPAGATION_QSO_ENV_PATH = (
+    ROOT / "deploy/systemd/forge-propagation-qso-worker.env.example"
+)
+
+
+def test_propagation_qso_service_is_disabled_isolated_and_secret_safe() -> None:
+    unit = PROPAGATION_QSO_UNIT_PATH.read_text(encoding="utf-8")
+    config_text = PROPAGATION_QSO_CONFIG_PATH.read_text(encoding="utf-8")
+    config = yaml.safe_load(config_text)
+    environment = PROPAGATION_QSO_ENV_PATH.read_text(encoding="utf-8")
+
+    assert config["enabled"] is False
+    assert config["ingestion_enabled"] is False
+    assert config["voacap_enabled"] is False
+    assert config["bind_host"] == "192.168.9.170"
+    assert config["bind_host"] != "0.0.0.0"
+    assert config["inbox_database_path"].startswith(
+        "/var/lib/rolling-thunder-forge-propagation-qso/"
+    )
+    assert config["history_database_path"].startswith(
+        "/var/lib/rolling-thunder-forge-propagation-qso/"
+    )
+    assert "token:" not in config_text.lower()
+    assert "EnvironmentFile=-/etc/rolling-thunder-forge-propagation-qso-worker/ingestion.env" in unit
+    assert "StateDirectory=rolling-thunder-forge-propagation-qso" in unit
+    assert "rolling-thunder-forge-propagation-qso-worker" in unit
+    assert "rolling-thunder-forge-contact-sync" not in "\n".join(
+        line for line in unit.splitlines() if line.startswith("Exec")
+    )
+    assert "ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN=" not in unit
+    assert "ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN=replace-me" in environment
+    assert "NoNewPrivileges=true" in unit
+    assert "PrivateDevices=true" in unit
+    assert "CapabilityBoundingSet=" in unit
+
 
 def _write_console_script_fixture_wheel(wheelhouse: Path) -> Path:
     wheel = wheelhouse / "rolling_thunder-0-py3-none-any.whl"

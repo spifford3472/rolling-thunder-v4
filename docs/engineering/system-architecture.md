@@ -140,16 +140,10 @@ new reviewed SHA rather than in-place mutation. Central deploy-helper integratio
 not installed and must wait for privileged inspection of the existing unreadable
 helper.
 
-### Propagation QSO analysis components (undeployed)
+### Propagation completed-QSO service (staged, disabled)
 
 Entry point: `forge_propagation_qso_worker_main.py` for the double-gated VOACAP
-worker. It owns a durable inbox, separate history database, and local status file,
-but no service unit or completed-QSO producer. The separate PSK composition root owns
-an authenticated private ingestion API, one scheduler, isolated orchestration/history
-databases, and local status. Its three gates and production template default off, its
-systemd assets are uninstalled, and it still has no authorized completed-QSO producer.
-Neither component is part of the Phase 1 service, Pi runtime, FT8 execution, contact
-synchronization, Wavelog, or local logging.
+worker and independently gated authenticated ingestion listener. It owns a durable inbox, separate history database, local status file, hardened systemd unit, and private production paths. Its typed producer client is not wired into a live source because no source-side durable outbox exists yet. The separate PSK Reporter composition has an authenticated bounded FT8 event API, scheduler, isolated orchestration and history databases, provider-free local status and a hardened service unit; all three gates default off and no authorized terminal-event producer is attached. Neither component is part of the Phase 1 service, Pi runtime, FT8 execution, contact sync, Wavelog or local logging.
 
 ## Reusable backend boundary
 

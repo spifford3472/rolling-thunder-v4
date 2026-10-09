@@ -129,23 +129,19 @@ propagation/history worker.
 `forge_propagation_*` provides a separate disabled-by-default environmental entry
 point, typed collectors, and dedicated SQLite history. That Phase 1 process runs only
 the hourly HamQSL/KC2G cycle with provider-I/O-free status. A distinct double-gated,
-undeployed completed-QSO entry point composes its durable UUID-idempotent inbox,
+disabled completed-QSO entry point composes its durable UUID-idempotent inbox,
 identified bounded leases, retry/dead-letter processing, existing VOACAP summary
-client, and atomic local status publication. It has no producer or listener and is
-not composed into the environmental process, contact sync, Wavelog, or local logging.
+client, authenticated bounded private listener, and atomic local status publication.
+Its typed producer client defines one authenticated delivery attempt, but no live
+source or durable source outbox is composed. It is not composed into the environmental
+process, contact sync, Wavelog, or local logging.
 
 The disabled-by-default PSK service accepts a confirmed event containing the
 immutable FT8 contact and matching successful terminal attempt. It durably owns exact
 event replay, absolute request-window identity, a cross-process 300-second provider
 gate, bounded query batches, and provider-free health. Batched provider XML is stored
 once per query rather than copied into every QSO summary. It reuses the existing
-analytics/history contracts and adds no propagation engine. A separate composition
-root now provides one bounded scheduler, authenticated private event endpoint,
-provider-free health/status diagnostics, isolated orchestration and history SQLite
-files, and independently hardened systemd/sysusers/configuration templates. Process,
-ingestion, and provider egress are separate gates and all remain disabled in the
-production template. No Pi/contact-sync producer is wired, and the unit is neither
-installed nor activated. All VOACAP, weather, and PSK controls remain disabled. See
+analytics/history contracts and adds no propagation engine. The separate PSK Reporter service has a bounded scheduler, authenticated private event ingestion, provider-free health/status, isolated databases and independently hardened systemd/sysusers/configuration templates. Process, ingestion and provider egress are separately gated and disabled by default. The VOACAP service independently provides authenticated completed-QSO ingestion and prediction through a disabled worker. Neither has an authorized durable source-side producer or is installed/activated; Phase 1 propagation, logging, contact-sync and Wavelog remain unchanged. See
 `docs/PROPAGATION_HISTORY.md`.
 
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application

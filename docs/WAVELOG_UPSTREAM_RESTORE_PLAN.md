@@ -53,8 +53,10 @@ proposal are in `docs/WAVELOG_STATION_PROFILE_RESOLVER_DESIGN.md`.
    restoration. Its later rollout may use only the propagation-specific checklist in
    `docs/FORGE_PROPAGATION_DEPLOYMENT_PROPOSAL.md` and must not restart Wavelog,
    contact sync, the Pi, spot services, or radio services.
-5. Keep the completed-QSO VOACAP worker and PSK Reporter orchestration disabled and
-   without a producer, listener, scheduler, or production configuration.
+5. Keep the completed-QSO ingestion and VOACAP gates disabled; its staged listener,
+   unit, configuration, and one-attempt producer client do not authorize a live
+   source. PSK Reporter orchestration remains without a production process or
+   producer.
 
 ## Failure and rollback
 

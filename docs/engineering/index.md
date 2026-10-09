@@ -102,9 +102,11 @@ QSO-ingestion path.
 
 ### `forge_propagation_qso_worker_main.py`
 
-Independent double-gated, undeployed completed-QSO VOACAP worker. It consumes only
-its durable inbox, owns separate history/status paths, and has no producer, listener,
-radio, local-logging, contact-sync, or Wavelog path.
+Independent disabled-by-default completed-QSO service. It owns an authenticated,
+bounded private ingestion listener, durable inbox, separate history/status paths,
+and double-gated VOACAP worker. A typed producer client defines the reusable
+transport, but no local-logging, contact-sync, Wavelog, or live-contact source is
+composed into it.
 
 ### `forge_pskreporter_worker_main.py`
 

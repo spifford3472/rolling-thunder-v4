@@ -966,15 +966,7 @@ the separate broken-release recovery runbook and a fresh reviewed SHA. This reco
 does not alter the original contact-sync, callsign-info, or spots services and does
 not authorize provider access.
 
-The release candidate also contains undeployed QSO-analysis components: a separately
-double-gated completed-QSO VOACAP worker and a triple-gated PSK Reporter worker
-service. The PSK assets include an authenticated private event endpoint, scheduler,
-isolated databases, local status, and a hardened unit template, but the unit is not
-installed and the checked-in process, ingestion, and provider gates are all off. No
-Pi/contact-sync completed-QSO producer, dashboard control, or Wavelog path is wired.
-They must remain inactive until a Forge administrator separately approves credential
-provisioning, producer wiring, installation, and bounded live-provider acceptance.
-Their absence or failure never blocks local logging.
+The release candidate contains two separately supervised, disabled QSO-analysis services. The completed-QSO VOACAP worker includes authenticated private ingestion, a durable inbox, a typed producer client and a hardened unit; the PSK Reporter FT8 worker includes authenticated private event ingestion, a scheduler, isolated databases and a hardened unit. Both lack a connected source-side durable delivery/retry producer, have no dashboard control, contact-sync hook or Wavelog path, and remain disabled pending separately approved credentials, producer integration, ingestion-only acceptance and bounded provider testing. Failure or absence never blocks local logging.
 
 ## Forge is reusable
 
