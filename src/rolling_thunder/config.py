@@ -614,6 +614,52 @@ class FT8QsoConfig(ConfigurationModel):
     attempts_per_state: int = Field(default=6, ge=1, le=20)
 
 
+class CompletedQsoReceiverConfig(ConfigurationModel):
+    """One independently gated private completed-QSO receiver."""
+
+    enabled: bool = False
+    base_url: AnyHttpUrl | None = None
+    timeout_s: float = Field(default=5.0, gt=0, le=60)
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint(self) -> Self:
+        if self.enabled and self.base_url is None:
+            raise ValueError("base_url is required when the receiver is enabled")
+        return self
+
+
+class CompletedQsoDeliveryConfig(ConfigurationModel):
+    """Disabled source-side completed-FT8 analytics delivery."""
+
+    enabled: bool = False
+    database_path: Path = Path("data/completed-qso-outbox.db")
+    interval_s: float = Field(default=30.0, ge=1.0, le=3600.0)
+    batch_size: int = Field(default=25, ge=1, le=100)
+    retry_initial_delay_s: float = Field(default=5.0, gt=0, le=3600.0)
+    retry_maximum_delay_s: float = Field(default=300.0, gt=0, le=86400.0)
+    voacap: CompletedQsoReceiverConfig = CompletedQsoReceiverConfig()
+    psk_reporter: CompletedQsoReceiverConfig = CompletedQsoReceiverConfig()
+
+    @field_validator("database_path", mode="before")
+    @classmethod
+    def validate_database_path(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        if isinstance(value, (str, Path)) and str(Path(value)) == ".":
+            raise ValueError("must name a database file")
+        return value
+
+    @model_validator(mode="after")
+    def validate_delivery(self) -> Self:
+        if self.retry_maximum_delay_s < self.retry_initial_delay_s:
+            raise ValueError(
+                "retry_maximum_delay_s must be at least retry_initial_delay_s"
+            )
+        if self.enabled and not (self.voacap.enabled or self.psk_reporter.enabled):
+            raise ValueError("at least one receiver must be enabled when delivery is enabled")
+        return self
+
+
 class FT8DecoderBackend(StrEnum):
     """Supported receive decoder adapters."""
 
@@ -735,6 +781,7 @@ class FT8Config(ConfigurationModel):
     receive: FT8ReceiveConfig = FT8ReceiveConfig()
     transmit: FT8TransmitConfig = FT8TransmitConfig()
     qso: FT8QsoConfig = FT8QsoConfig()
+    completed_qso_delivery: CompletedQsoDeliveryConfig = CompletedQsoDeliveryConfig()
 
     @model_validator(mode="after")
     def validate_enabled_resources(self) -> Self:
@@ -750,6 +797,8 @@ class FT8Config(ConfigurationModel):
                     "ft8.transmit.encoder_executable must be configured when "
                     "ft8.transmit.enabled is true"
                 )
+        if self.completed_qso_delivery.enabled and not self.enabled:
+            raise ValueError("ft8.completed_qso_delivery.enabled requires ft8.enabled")
         return self
 
 
@@ -806,6 +855,17 @@ def resolve_database_path(
     if database_path.is_absolute():
         return database_path
 
+    return (config_path.parent / database_path).resolve()
+
+
+def resolve_completed_qso_outbox_path(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path:
+    """Resolve the optional completed-QSO outbox beside the active configuration."""
+    database_path = config.ft8.completed_qso_delivery.database_path
+    if database_path.is_absolute():
+        return database_path
     return (config_path.parent / database_path).resolve()
 
 
@@ -969,6 +1029,12 @@ def load_config(path: Path) -> ApplicationConfig:
             "installed_packages": resolve_map_package_paths(config, path),
         }
     )
+    resolved_completed_qso_delivery = config.ft8.completed_qso_delivery.model_copy(
+        update={"database_path": resolve_completed_qso_outbox_path(config, path)}
+    )
+    resolved_ft8 = config.ft8.model_copy(
+        update={"completed_qso_delivery": resolved_completed_qso_delivery}
+    )
     return config.model_copy(
         update={
             "storage": resolved_storage,
@@ -977,5 +1043,6 @@ def load_config(path: Path) -> ApplicationConfig:
             "pota_map": resolved_pota_map,
             "repeaters": resolved_repeaters,
             "map": resolved_map,
+            "ft8": resolved_ft8,
         }
     )

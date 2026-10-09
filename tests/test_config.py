@@ -625,6 +625,69 @@ storage:
     ) == absolute_directory
 
 
+def test_completed_qso_delivery_defaults_disabled_and_resolves_outbox(
+    tmp_path: Path,
+) -> None:
+    config_path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+""",
+    )
+    config = load_config(config_path)
+
+    assert config.ft8.completed_qso_delivery.enabled is False
+    assert config.ft8.completed_qso_delivery.voacap.enabled is False
+    assert config.ft8.completed_qso_delivery.psk_reporter.enabled is False
+    assert config.ft8.completed_qso_delivery.database_path == (
+        tmp_path / "data/completed-qso-outbox.db"
+    ).resolve()
+
+
+def test_completed_qso_delivery_requires_ft8_receiver_and_endpoint(
+    tmp_path: Path,
+) -> None:
+    for ft8 in (
+        """
+  completed_qso_delivery:
+    enabled: true
+    voacap:
+      enabled: true
+      base_url: http://forge.test:8790
+""",
+        """
+  enabled: true
+  receive:
+    decoder_executable: /unused/decode_ft8
+  completed_qso_delivery:
+    enabled: true
+""",
+        """
+  enabled: true
+  receive:
+    decoder_executable: /unused/decode_ft8
+  completed_qso_delivery:
+    enabled: true
+    voacap:
+      enabled: true
+""",
+    ):
+        path = write_config(
+            tmp_path,
+            f"""
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+ft8:
+{ft8}
+""",
+        )
+        with pytest.raises(ConfigurationValidationError):
+            load_config(path)
+
+
 def test_repeater_source_defaults_to_worktree_independent_user_data_path(
     tmp_path: Path,
 ) -> None:

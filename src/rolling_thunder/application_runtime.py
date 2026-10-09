@@ -20,9 +20,21 @@ from rolling_thunder.clock_sync import (
     ClockSyncState,
     SystemClockSetter,
 )
+from rolling_thunder.completed_ft8_ingestion_client import (
+    CompletedFt8HttpTransport,
+    HttpCompletedFt8IngestionClient,
+)
+from rolling_thunder.completed_qso_ingestion_client import (
+    CompletedQsoHttpTransport,
+    HttpCompletedQsoIngestionClient,
+)
 from rolling_thunder.completed_qso_producer import (
     CompletedQsoCapture,
+    CompletedQsoDeliveryService,
+    CompletedQsoDeliveryWorker,
+    CompletedQsoPostDurabilityAdapter,
     CompletedQsoProducerError,
+    CompletedQsoProducerRepository,
 )
 from rolling_thunder.config import (
     ApplicationConfig,
@@ -255,6 +267,7 @@ class ApplicationRuntime:
     ft8_performance_recorder: FT8PerformanceRecorder | None = None
     ft8_attempt_history: FT8AttemptHistoryService | None = None
     ft8_performance_sync: FT8PerformanceSyncService | None = None
+    ft8_completed_qso_delivery: CompletedQsoDeliveryService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     _started: bool = False
@@ -273,6 +286,9 @@ class ApplicationRuntime:
         contact_sync_scheduler: PollScheduler | None = None,
         ft8_completed_contact_handler: Callable[[Contact], None] | None = None,
         ft8_completed_qso_producer: CompletedQsoCapture | None = None,
+        ft8_completed_qso_delivery_scheduler: PollScheduler | None = None,
+        ft8_completed_qso_voacap_transport: CompletedQsoHttpTransport | None = None,
+        ft8_completed_qso_psk_transport: CompletedFt8HttpTransport | None = None,
         ft8_performance_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
@@ -630,6 +646,71 @@ class ApplicationRuntime:
                 batch_size=platform_config.contact_sync_batch_size,
             )
 
+        resolved_completed_qso_producer = ft8_completed_qso_producer
+        completed_qso_delivery: CompletedQsoDeliveryService | None = None
+        completed_qso_config = config.ft8.completed_qso_delivery
+        if completed_qso_config.enabled:
+            credentials = resolved_secrets.completed_qso_delivery
+            if credentials is None:
+                raise ValueError(
+                    "completed-QSO delivery requires protected receiver credentials"
+                )
+            outbox = CompletedQsoProducerRepository(
+                completed_qso_config.database_path
+            )
+            if resolved_completed_qso_producer is None:
+                resolved_completed_qso_producer = CompletedQsoPostDurabilityAdapter(
+                    outbox
+                )
+            voacap_sink = None
+            if completed_qso_config.voacap.enabled:
+                voacap_token = credentials.voacap_token
+                if voacap_token is None:
+                    raise ValueError(
+                        "enabled completed-QSO VOACAP delivery requires "
+                        "ROLLING_THUNDER_COMPLETED_QSO_VOACAP_TOKEN"
+                    )
+                voacap_url = completed_qso_config.voacap.base_url
+                assert voacap_url is not None
+                voacap_sink = HttpCompletedQsoIngestionClient(
+                    str(voacap_url),
+                    bearer_token=voacap_token.get_secret_value(),
+                    timeout_s=completed_qso_config.voacap.timeout_s,
+                    transport=ft8_completed_qso_voacap_transport,
+                )
+            psk_reporter_sink = None
+            if completed_qso_config.psk_reporter.enabled:
+                psk_token = credentials.psk_reporter_token
+                if psk_token is None:
+                    raise ValueError(
+                        "enabled completed-QSO PSK Reporter delivery requires "
+                        "ROLLING_THUNDER_COMPLETED_QSO_PSKREPORTER_TOKEN"
+                    )
+                psk_url = completed_qso_config.psk_reporter.base_url
+                assert psk_url is not None
+                psk_reporter_sink = HttpCompletedFt8IngestionClient(
+                    str(psk_url),
+                    bearer_token=psk_token.get_secret_value(),
+                    timeout_s=completed_qso_config.psk_reporter.timeout_s,
+                    transport=ft8_completed_qso_psk_transport,
+                )
+            completed_qso_delivery = CompletedQsoDeliveryService(
+                CompletedQsoDeliveryWorker(
+                    outbox,
+                    voacap_sink=voacap_sink,
+                    psk_reporter_sink=psk_reporter_sink,
+                    batch_size=completed_qso_config.batch_size,
+                    retry_initial_delay=timedelta(
+                        seconds=completed_qso_config.retry_initial_delay_s
+                    ),
+                    retry_maximum_delay=timedelta(
+                        seconds=completed_qso_config.retry_maximum_delay_s
+                    ),
+                ),
+                ft8_completed_qso_delivery_scheduler or ThreadingPollScheduler(),
+                interval_s=completed_qso_config.interval_s,
+            )
+
         ft8_receive: FT8ReceiveService | None = None
         resolved_ft8_clock: FT8Clock | None = None
         if config.ft8.enabled:
@@ -827,10 +908,10 @@ class ApplicationRuntime:
                 if (
                     contact is not None
                     and terminal_attempt is not None
-                    and ft8_completed_qso_producer is not None
+                    and resolved_completed_qso_producer is not None
                 ):
                     try:
-                        ft8_completed_qso_producer.capture(contact, terminal_attempt)
+                        resolved_completed_qso_producer.capture(contact, terminal_attempt)
                     except (CompletedQsoProducerError, OSError, ValueError) as error:
                         # Both authoritative source records are already durable. A
                         # producer-outbox failure must not undo logging or alter the
@@ -1011,6 +1092,7 @@ class ApplicationRuntime:
             ft8_performance_recorder=ft8_performance_recorder,
             ft8_attempt_history=ft8_attempt_history,
             ft8_performance_sync=ft8_performance_sync,
+            ft8_completed_qso_delivery=completed_qso_delivery,
             ft8_hardware_transmit=resolved_ft8_executor,
         )
         if (
@@ -1442,6 +1524,8 @@ class ApplicationRuntime:
             self.contact_sync.start()
         if self.ft8_performance_sync is not None:
             self.ft8_performance_sync.start()
+        if self.ft8_completed_qso_delivery is not None:
+            self.ft8_completed_qso_delivery.start()
         if self.network_keepalive is not None:
             self.network_keepalive.start()
         if self.pi_forge_spot_polling is not None:
@@ -1480,6 +1564,8 @@ class ApplicationRuntime:
             self.pi_forge_spot_polling.stop()
         if self.network_keepalive is not None:
             self.network_keepalive.stop()
+        if self.ft8_completed_qso_delivery is not None:
+            self.ft8_completed_qso_delivery.stop()
         if self.ft8_performance_sync is not None:
             self.ft8_performance_sync.stop()
         if self.contact_sync is not None:

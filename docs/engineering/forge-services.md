@@ -132,16 +132,17 @@ the hourly HamQSL/KC2G cycle with provider-I/O-free status. A distinct double-ga
 disabled completed-QSO entry point composes its durable UUID-idempotent inbox,
 identified bounded leases, retry/dead-letter processing, existing VOACAP summary
 client, authenticated bounded private listener, and atomic local status publication.
-Its typed producer client defines one authenticated delivery attempt, but no live
-source or durable source outbox is composed. It is not composed into the environmental
-process, contact sync, Wavelog, or local logging.
+Its typed producer client defines one authenticated delivery attempt. The optional
+Pi source outbox now composes that client behind disabled-by-default gates and an
+independent scheduler. It is not composed into the environmental process, contact
+sync, Wavelog, or local logging.
 
 The disabled-by-default PSK service accepts a confirmed event containing the
 immutable FT8 contact and matching successful terminal attempt. It durably owns exact
 event replay, absolute request-window identity, a cross-process 300-second provider
 gate, bounded query batches, and provider-free health. Batched provider XML is stored
 once per query rather than copied into every QSO summary. It reuses the existing
-analytics/history contracts and adds no propagation engine. The separate PSK Reporter service has a bounded scheduler, authenticated private event ingestion, provider-free health/status, isolated databases and independently hardened systemd/sysusers/configuration templates. Process, ingestion and provider egress are separately gated and disabled by default. The VOACAP service independently provides authenticated completed-QSO ingestion and prediction through a disabled worker. Neither has an authorized durable source-side producer or is installed/activated; Phase 1 propagation, logging, contact-sync and Wavelog remain unchanged. See
+analytics/history contracts and adds no propagation engine. The separate PSK Reporter service has a bounded scheduler, authenticated private event ingestion, provider-free health/status, isolated databases and independently hardened systemd/sysusers/configuration templates. Process, ingestion and provider egress are separately gated and disabled by default. The VOACAP service independently provides authenticated completed-QSO ingestion and prediction through a disabled worker. Both use isolated exact-SHA release trees and dedicated no-login identities. Optional Pi production delivery is also gated off by default; neither service is installed/activated by source composition. Phase 1 propagation, logging, contact-sync and Wavelog remain unchanged. See
 `docs/PROPAGATION_HISTORY.md`.
 
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application

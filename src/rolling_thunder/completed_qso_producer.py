@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -16,9 +17,11 @@ from pydantic import Field, field_validator
 from rolling_thunder.domain import Contact, DomainModel
 from rolling_thunder.forge_pskreporter_orchestration import CompletedFt8QsoEvent
 from rolling_thunder.ft8.performance import FT8PerformanceAttempt
+from rolling_thunder.radio_polling import PollScheduler, ScheduledPoll
 
 _MAX_BATCH_SIZE = 100
 _MAX_ERROR_LENGTH = 1_000
+_LOGGER = logging.getLogger("rolling_thunder.completed_qso_producer")
 
 
 class CompletedQsoProducerError(RuntimeError):
@@ -434,6 +437,46 @@ class CompletedQsoDeliveryWorker:
                 )
                 delivered += 1
         return len(items), delivered
+
+
+class CompletedQsoDeliveryService:
+    """Schedule bounded outbox delivery outside FT8 and UI execution threads."""
+
+    def __init__(
+        self,
+        worker: CompletedQsoDeliveryWorker,
+        scheduler: PollScheduler,
+        *,
+        interval_s: float,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        if interval_s <= 0:
+            raise ValueError("completed-QSO delivery interval must be positive")
+        self._worker = worker
+        self._scheduler = scheduler
+        self._interval_s = interval_s
+        self._logger = logger or _LOGGER
+        self._scheduled: ScheduledPoll | None = None
+
+    def start(self) -> None:
+        if self._scheduled is not None:
+            raise RuntimeError("completed-QSO delivery is already running")
+        self._scheduled = self._scheduler.schedule_repeating(
+            self._interval_s,
+            self._run_once,
+        )
+
+    def stop(self) -> None:
+        scheduled = self._scheduled
+        self._scheduled = None
+        if scheduled is not None:
+            scheduled.cancel()
+
+    def _run_once(self) -> None:
+        try:
+            self._worker.run_once()
+        except (CompletedQsoProducerError, OSError, ValueError) as error:
+            self._logger.error("Completed-QSO delivery cycle failed: %s", error)
 
 
 def _columns(destination: CompletedQsoDestination) -> tuple[str, str, str, str]:

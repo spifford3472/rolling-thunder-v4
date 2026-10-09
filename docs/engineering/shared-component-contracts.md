@@ -55,7 +55,9 @@ changed event under the stable UUID fails closed. VOACAP and PSK delivery retry
 independently on a background worker, use distinct protected bearer credentials,
 and require a matching receiver acknowledgement before local completion. No network
 or provider work may run in terminal handling, local logging, contact sync, or
-Wavelog synchronization. Production composition follows both receiver merges.
+Wavelog synchronization. Production composition remains disabled by default, runs
+on a separate scheduler, and validates each receiver's acknowledged UUID before
+advancing only that destination.
 
 The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
 
