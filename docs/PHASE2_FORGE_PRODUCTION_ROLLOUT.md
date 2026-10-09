@@ -14,23 +14,25 @@ their unit templates must not enable them.
 
 ## Preflight blockers
 
-1. A merged source-side producer outbox contract exists but **no production
-   scheduler or transports** construct and start its VOACAP/PSK sinks. Do not
-   mistake an optional `ApplicationRuntime` injection point for live delivery.
+1. The source-side producer, authenticated transports, and scheduler are composed
+   but remain explicitly disabled by default. Before activation, install two
+   independent Pi bearer values in the protected environment file and complete
+   provider-free ingestion acceptance against the exact deployed receiver SHA.
 2. Distinct private ingress addresses and ports are documented: VOACAP/QSO
    `192.168.9.170:8790`; PSK Reporter `192.168.9.170:8789`. Verify
    address ownership, route, firewall, and that only approved private peers
    can reach them. Do not expose bearer credentials over untrusted plaintext.
-3. VOACAP's new unit currently points to the **existing propagation release**
-   tree, which may be older than these Phase 2 binaries. A new exact merged
-   SHA must be packaged, verified, promoted and deployed before any preflight
-   using that unit can succeed. The PSK Reporter unit points to a separate
-   `/opt/rolling-thunder-forge-pskreporter/current` tree, for which no reviewed
-   exact-SHA deployment hook/staging promotion currently exists.
+3. Both units now point to isolated immutable release trees. Build a review artifact
+   with `deploy/prepare-forge-phase2-worker-stage`, review and separately promote it
+   to the matching root-owned component staging path, then have an authorized Forge
+   administrator run `deploy/rolling-thunder-forge-deploy-phase2-worker` for the
+   same exact pushed SHA. The selector never enables a unit and restores the prior
+   symlink if restart of an already-active unit fails.
 4. Verify both units' `WorkingDirectory`, `ExecStart`, runtime identities,
-   `StateDirectory`, `InaccessiblePaths` and configuration ownership as
-   one coupled review. VOACAP uses `rolling-thunder-propagation`; PSK uses a
-   separate no-login `rolling-thunder-pskreporter` identity.
+   `StateDirectory`, `InaccessiblePaths` and configuration ownership as one coupled
+   review. VOACAP uses `rolling-thunder-propagation-qso`; PSK uses
+   `rolling-thunder-pskreporter`; both are separate no-login identities and neither
+   shares the Phase 1 release or state tree.
 5. Produce two **independent** random high-entropy ingest secrets on Forge,
    held only in root-protected environment files, and provision matching
    credentials on the approved producer endpoint through the private transport.
@@ -51,8 +53,9 @@ B. Install system identities, config directories, and private environment
    files while both units remain uninstalled or `disabled`/`inactive`.
    Use exact checksums, root-owned backups, owner-approved sudo and separate
    operator confirmation.
-C. Install exact-SHA application environments with immutable launchers at
-   their final paths. Validate the actual launcher as the runtime account.
+C. Build each artifact from the exact pushed origin SHA, verify its wheel checksum
+   manifest and component marker, then install its immutable application environment
+   at the final SHA path. Validate the actual launcher as the runtime account.
 D. Install unit files, `daemon-reload`, verify `disabled`/`inactive`.
    Recheck Phase 1 and contact-sync health.
 E. Enable ingestion **without provider egress** in one service at a time.

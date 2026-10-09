@@ -1,6 +1,6 @@
 [Unit]
 Description=Rolling Thunder Forge Completed-QSO Propagation Service
-Documentation=file:/opt/rolling-thunder-forge-propagation/docs/PROPAGATION_HISTORY.md
+Documentation=file:/opt/rolling-thunder-forge-propagation-qso-worker/current/docs/PROPAGATION_HISTORY.md
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=300
@@ -8,13 +8,13 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
-User=rolling-thunder-propagation
-Group=rolling-thunder-propagation
-WorkingDirectory=/opt/rolling-thunder-forge-propagation/current
+User=rolling-thunder-propagation-qso
+Group=rolling-thunder-propagation-qso
+WorkingDirectory=/opt/rolling-thunder-forge-propagation-qso-worker/current
 
 EnvironmentFile=-/etc/rolling-thunder-forge-propagation-qso-worker/ingestion.env
-ExecStartPre=/opt/rolling-thunder-forge-propagation/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml --check-config
-ExecStart=/opt/rolling-thunder-forge-propagation/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml
+ExecStartPre=/opt/rolling-thunder-forge-propagation-qso-worker/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml --check-config
+ExecStart=/opt/rolling-thunder-forge-propagation-qso-worker/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml
 
 Restart=on-failure
 RestartSec=30s
@@ -37,7 +37,7 @@ ProtectClock=true
 ProtectHostname=true
 ProtectProc=invisible
 ProcSubset=pid
-InaccessiblePaths=-/etc/rolling-thunder -/var/lib/rolling-thunder -/var/lib/rolling-thunder-forge-propagation -/opt/rolling-thunder-forge-contact-sync
+InaccessiblePaths=-/etc/rolling-thunder -/var/lib/rolling-thunder -/var/lib/rolling-thunder-forge-propagation -/opt/rolling-thunder-forge-propagation -/opt/rolling-thunder-forge-contact-sync -/opt/rolling-thunder-forge-pskreporter
 RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true

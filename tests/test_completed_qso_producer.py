@@ -1,5 +1,6 @@
 """Tests for the source-owned completed-QSO producer outbox."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
@@ -7,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from rolling_thunder.completed_qso_producer import (
+    CompletedQsoDeliveryService,
     CompletedQsoDeliveryState,
     CompletedQsoDeliveryWorker,
     CompletedQsoDestination,
@@ -115,6 +117,50 @@ def test_destinations_progress_and_retry_independently_after_restart(tmp_path: P
     assert restarted_repository.state_for(
         QSO_ID, CompletedQsoDestination.PSK_REPORTER
     ) is CompletedQsoDeliveryState.DELIVERED
+
+
+def test_delivery_service_schedules_and_cancels_background_work(tmp_path: Path) -> None:
+    repository = CompletedQsoProducerRepository(tmp_path / "completed-qso.sqlite3")
+    CompletedQsoPostDurabilityAdapter(repository, clock=lambda: NOW).capture(
+        _contact(), _attempt()
+    )
+    sink = ContactSink()
+    scheduler = ManualScheduler()
+    service = CompletedQsoDeliveryService(
+        CompletedQsoDeliveryWorker(repository, voacap_sink=sink, clock=lambda: NOW),
+        scheduler,
+        interval_s=30,
+    )
+
+    service.start()
+    assert scheduler.callback is not None
+    assert sink.contacts == []
+    scheduler.callback()
+    service.stop()
+
+    assert sink.contacts == [_contact()]
+    assert scheduler.cancelled is True
+
+
+class ManualScheduler:
+    def __init__(self) -> None:
+        self.callback: Callable[[], None] | None = None
+        self.cancelled = False
+
+    def schedule_repeating(
+        self, interval_s: float, callback: Callable[[], None]
+    ) -> "ManualPoll":
+        assert interval_s == 30
+        self.callback = callback
+        return ManualPoll(self)
+
+
+class ManualPoll:
+    def __init__(self, scheduler: ManualScheduler) -> None:
+        self._scheduler = scheduler
+
+    def cancel(self) -> None:
+        self._scheduler.cancelled = True
 
 
 class ContactSink:

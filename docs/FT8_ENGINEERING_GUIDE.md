@@ -150,8 +150,9 @@ The outbox is idempotent by stable attempt UUID and synchronizes to Forge for fu
 Optional completed-QSO propagation analytics use a separate source outbox only after
 both the successful `Contact` and matching successful performance attempt have been
 durably written. The terminal callback may perform that short local enqueue but no
-network work. VOACAP and PSK delivery state/retry are independent and production
-composition remains deferred until both receiver PRs merge. See
+network work. VOACAP and PSK delivery state/retry are independent. The production
+composition is explicitly disabled by default and schedules authenticated delivery
+outside FT8/UI execution only when configured. See
 `COMPLETED_QSO_PRODUCER.md`.
 
 ## Operator-Authorization Semantics

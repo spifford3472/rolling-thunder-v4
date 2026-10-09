@@ -966,7 +966,7 @@ the separate broken-release recovery runbook and a fresh reviewed SHA. This reco
 does not alter the original contact-sync, callsign-info, or spots services and does
 not authorize provider access.
 
-The release candidate contains two separately supervised, disabled QSO-analysis services. The completed-QSO VOACAP worker includes authenticated private ingestion, a durable inbox, a typed producer client and a hardened unit; the PSK Reporter FT8 worker includes authenticated private event ingestion, a scheduler, isolated databases and a hardened unit. Both lack a connected source-side durable delivery/retry producer, have no dashboard control, contact-sync hook or Wavelog path, and remain disabled pending separately approved credentials, producer integration, ingestion-only acceptance and bounded provider testing. Failure or absence never blocks local logging.
+The release candidate contains two separately supervised, disabled QSO-analysis services. The completed-QSO VOACAP worker includes authenticated private ingestion and a durable inbox; the PSK Reporter FT8 worker includes authenticated private event ingestion, a scheduler and isolated databases. Both have hardened off-by-default units, dedicated identities, and reversible exact-SHA release selection. The Pi now has an independently gated durable delivery/retry outbox, but it has no dashboard control, contact-sync hook, Wavelog path, or effect on radio operation. Source delivery, receiver ingestion, and provider egress all remain disabled pending separately approved credentials, private ingestion acceptance, and bounded provider testing. Failure or absence never blocks local logging.
 
 ## Forge is reusable
 

@@ -225,6 +225,24 @@ ft8:
   qso:
     # Retry budget is per unchanged QSO transmit state/message, not per whole QSO.
     attempts_per_state: 6
+  completed_qso_delivery:
+    # Optional post-durability analytics fan-out. This never changes local logging,
+    # Wavelog sync, or radio behavior. Keep the global and receiver gates false
+    # until both private Forge ingestion services and protected tokens are approved.
+    enabled: false
+    database_path: data/completed-qso-outbox.db
+    interval_s: 30
+    batch_size: 25
+    retry_initial_delay_s: 5
+    retry_maximum_delay_s: 300
+    voacap:
+      enabled: false
+      base_url: http://192.168.9.170:8790
+      timeout_s: 5
+    psk_reporter:
+      enabled: false
+      base_url: http://192.168.9.170:8789
+      timeout_s: 5
 
 storage:
   database_path: data/rolling-thunder.db

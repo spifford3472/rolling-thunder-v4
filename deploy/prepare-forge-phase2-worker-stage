@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build an unprivileged, reviewable wheelhouse from one pushed exact commit.
+# This tool never promotes into root-owned staging and never touches systemd.
+
+build_root=""
+payload_root=""
+
+usage() {
+    echo "usage: $0 {dry-run|build} {propagation-qso-worker|pskreporter-worker} EXACT_40_CHARACTER_LOWERCASE_COMMIT_SHA OUTPUT_ROOT" >&2
+}
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 2
+}
+
+cleanup() {
+    local -a paths=()
+    [[ -z "${build_root}" ]] || paths+=("${build_root}")
+    [[ -z "${payload_root}" ]] || paths+=("${payload_root}")
+    (( ${#paths[@]} == 0 )) || rm -rf -- "${paths[@]}"
+}
+
+require_origin_commit() {
+    local repo="$1" sha="$2" ref remote_ref=""
+    git -C "${repo}" fetch origin
+    git -C "${repo}" cat-file -e "${sha}^{commit}" 2>/dev/null || die \
+        "commit is not present after fetching origin: ${sha}"
+    while IFS= read -r ref; do
+        [[ "${ref}" == "refs/remotes/origin/HEAD" ]] || { remote_ref="${ref}"; break; }
+    done < <(git -C "${repo}" for-each-ref --format='%(refname)' \
+        --contains "${sha}" refs/remotes/origin/)
+    [[ -n "${remote_ref}" ]] || die "commit is not contained in a fetched origin branch"
+}
+
+main() {
+    (( $# == 4 )) || { usage; exit 2; }
+    local action="$1" component="$2" sha="$3" output_root="$4"
+    local script_dir repo component_root destination source_root source_date_epoch
+    [[ "${action}" == "dry-run" || "${action}" == "build" ]] || { usage; exit 2; }
+    [[ "${component}" == "propagation-qso-worker" || \
+       "${component}" == "pskreporter-worker" ]] || die "unsupported Phase 2 component"
+    [[ "${sha}" =~ ^[0-9a-f]{40}$ ]] || die \
+        "commit must be exactly 40 lowercase hexadecimal characters"
+    (( EUID != 0 )) || die "run this preparation tool as an unprivileged account"
+    script_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    repo="$(git -C "${script_dir}/.." rev-parse --show-toplevel)" || die \
+        "tool must be run from a Git checkout"
+    [[ -d "${output_root}" && ! -L "${output_root}" ]] || die \
+        "OUTPUT_ROOT must be an existing non-symlink directory"
+    output_root="$(CDPATH= cd -- "${output_root}" && pwd -P)"
+    component_root="${output_root}/${component}"
+    destination="${component_root}/${sha}"
+    [[ ! -e "${destination}" && ! -L "${destination}" ]] || die \
+        "refusing to replace existing artifact: ${destination}"
+    require_origin_commit "${repo}" "${sha}"
+    source_date_epoch="$(git -C "${repo}" show -s --format=%ct "${sha}")"
+    if [[ "${action}" == "dry-run" ]]; then
+        printf 'Verified pushed origin commit: %s\n' "${sha}"
+        printf 'Would build %s artifact into: %s\n' "${component}" "${destination}"
+        exit 0
+    fi
+    mkdir -p -- "${component_root}"
+    trap cleanup EXIT
+    build_root="$(mktemp -d)"
+    payload_root="$(mktemp -d --tmpdir="${component_root}" .phase2-stage.XXXXXXXX)"
+    source_root="${build_root}/source"
+    mkdir -m 0700 "${source_root}"
+    mkdir -m 0755 "${payload_root}/wheelhouse"
+    git -C "${repo}" archive --format=tar "${sha}" | tar -xf - -C "${source_root}"
+    SOURCE_DATE_EPOCH="${source_date_epoch}" python3 -m pip wheel \
+        --disable-pip-version-check --wheel-dir "${payload_root}/wheelhouse" "${source_root}"
+    printf '%s\n' "${sha}" > "${payload_root}/COMMIT_SHA"
+    printf '%s\n' "${component}" > "${payload_root}/COMPONENT"
+    (
+        cd "${payload_root}/wheelhouse"
+        sha256sum -- *.whl > SHA256SUMS
+        sha256sum --check --strict SHA256SUMS
+    )
+    mv -- "${payload_root}" "${destination}"
+    payload_root=""
+    printf 'Prepared reviewable %s artifact: %s\n' "${component}" "${destination}"
+}
+
+main "$@"

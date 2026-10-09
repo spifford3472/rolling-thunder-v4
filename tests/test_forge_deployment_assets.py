@@ -182,6 +182,11 @@ PROPAGATION_QSO_CONFIG_PATH = (
 PROPAGATION_QSO_ENV_PATH = (
     ROOT / "deploy/systemd/forge-propagation-qso-worker.env.example"
 )
+PROPAGATION_QSO_SYSUSERS_PATH = (
+    ROOT / "deploy/sysusers.d/rolling-thunder-forge-propagation-qso-worker.conf"
+)
+PHASE2_STAGE_PREPARER_PATH = ROOT / "deploy/prepare-forge-phase2-worker-stage"
+PHASE2_DEPLOY_HOOK_PATH = ROOT / "deploy/rolling-thunder-forge-deploy-phase2-worker"
 
 
 def test_propagation_qso_service_is_disabled_isolated_and_secret_safe() -> None:
@@ -189,6 +194,7 @@ def test_propagation_qso_service_is_disabled_isolated_and_secret_safe() -> None:
     config_text = PROPAGATION_QSO_CONFIG_PATH.read_text(encoding="utf-8")
     config = yaml.safe_load(config_text)
     environment = PROPAGATION_QSO_ENV_PATH.read_text(encoding="utf-8")
+    sysusers = PROPAGATION_QSO_SYSUSERS_PATH.read_text(encoding="utf-8")
 
     assert config["enabled"] is False
     assert config["ingestion_enabled"] is False
@@ -209,10 +215,77 @@ def test_propagation_qso_service_is_disabled_isolated_and_secret_safe() -> None:
         line for line in unit.splitlines() if line.startswith("Exec")
     )
     assert "ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN=" not in unit
-    assert "ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN=replace-me" in environment
+    assert "ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN=" in environment
+    assert "replace-me" not in environment
+    assert "User=rolling-thunder-propagation-qso" in unit
+    assert "Group=rolling-thunder-propagation-qso" in unit
+    assert "/opt/rolling-thunder-forge-propagation-qso-worker/current" in unit
+    assert "rolling-thunder-propagation-qso" in sysusers
+    assert "/usr/sbin/nologin" in sysusers
     assert "NoNewPrivileges=true" in unit
     assert "PrivateDevices=true" in unit
     assert "CapabilityBoundingSet=" in unit
+
+
+def test_phase2_exact_sha_tools_are_component_bounded_and_nonactivating() -> None:
+    preparer = PHASE2_STAGE_PREPARER_PATH.read_text(encoding="utf-8")
+    hook = PHASE2_DEPLOY_HOOK_PATH.read_text(encoding="utf-8")
+
+    assert PHASE2_STAGE_PREPARER_PATH.stat().st_mode & 0o111
+    assert PHASE2_DEPLOY_HOOK_PATH.stat().st_mode & 0o111
+    assert "propagation-qso-worker" in preparer
+    assert "pskreporter-worker" in preparer
+    assert '[[ "${sha}" =~ ^[0-9a-f]{40}$ ]]' in preparer
+    assert 'git -C "${repo}" archive --format=tar "${sha}"' in preparer
+    assert "refs/remotes/origin/" in preparer
+    assert "sha256sum --check --strict SHA256SUMS" in preparer
+    assert "sudo" not in preparer
+    assert '[[ "$2" =~ ^[0-9a-f]{40}$ ]]' in hook
+    assert 'service_name="rolling-thunder-forge-propagation-qso-worker.service"' in hook
+    assert 'service_name="rolling-thunder-forge-pskreporter.service"' in hook
+    assert 'application_root="/opt/rolling-thunder-forge-propagation-qso-worker"' in hook
+    assert 'application_root="/opt/rolling-thunder-forge-pskreporter"' in hook
+    assert "systemctl enable" not in hook
+    assert "systemctl disable" not in hook
+    assert "rolling-thunder-forge-propagation.service" not in hook
+    assert "rolling-thunder-forge-contact-sync.service" not in hook
+    assert "rolling-thunder.service" not in hook
+    assert "--no-index" in hook
+    assert "COMPONENT" in hook
+    assert "prior release selection was restored" in hook
+
+
+def test_phase2_exact_sha_tools_have_valid_bash_syntax() -> None:
+    for path in (PHASE2_STAGE_PREPARER_PATH, PHASE2_DEPLOY_HOOK_PATH):
+        subprocess.run(
+            ["bash", "-n", str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["propagation-qso-worker"],
+        ["unknown", "0" * 40],
+        ["pskreporter-worker", "A" * 40],
+        ["pskreporter-worker", "0" * 39],
+    ],
+)
+def test_phase2_deploy_hook_rejects_invalid_selection_before_root_check(
+    arguments: list[str],
+) -> None:
+    result = subprocess.run(
+        ["bash", str(PHASE2_DEPLOY_HOOK_PATH), *arguments],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
 
 
 def _write_console_script_fixture_wheel(wheelhouse: Path) -> Path:

@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
 _QRZ_USERNAME_ENV = "ROLLING_THUNDER_QRZ_USERNAME"
 _QRZ_PASSWORD_ENV = "ROLLING_THUNDER_QRZ_PASSWORD"
 _WAVELOG_V2_TOKEN_ENV = "ROLLING_THUNDER_WAVELOG_V2_TOKEN"
+_COMPLETED_QSO_VOACAP_TOKEN_ENV = "ROLLING_THUNDER_COMPLETED_QSO_VOACAP_TOKEN"
+_COMPLETED_QSO_PSKREPORTER_TOKEN_ENV = (
+    "ROLLING_THUNDER_COMPLETED_QSO_PSKREPORTER_TOKEN"
+)
 
 
 class SecretConfigurationError(Exception):
@@ -58,11 +62,31 @@ class WavelogCredentials(SecretModel):
         return value
 
 
+class CompletedQsoDeliveryCredentials(SecretModel):
+    """Independent bearer credentials for optional completed-QSO receivers."""
+
+    voacap_token: SecretStr | None = None
+    psk_reporter_token: SecretStr | None = None
+
+    @field_validator("voacap_token", "psk_reporter_token")
+    @classmethod
+    def validate_token(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        token = value.get_secret_value()
+        if len(token) < 32 or any(character.isspace() for character in token):
+            raise ValueError(
+                "must contain at least 32 non-whitespace characters with no whitespace"
+            )
+        return value
+
+
 class ApplicationSecrets(SecretModel):
     """Complete set of optional runtime secrets."""
 
     qrz: QrzCredentials | None = None
     wavelog: WavelogCredentials | None = None
+    completed_qso_delivery: CompletedQsoDeliveryCredentials | None = None
 
 
 def load_application_secrets(
@@ -73,6 +97,12 @@ def load_application_secrets(
     username = source.get(_QRZ_USERNAME_ENV, "").strip()
     password = source.get(_QRZ_PASSWORD_ENV, "")
     wavelog_token = source.get(_WAVELOG_V2_TOKEN_ENV, "").strip()
+    completed_qso_voacap_token = source.get(
+        _COMPLETED_QSO_VOACAP_TOKEN_ENV, ""
+    ).strip()
+    completed_qso_pskreporter_token = source.get(
+        _COMPLETED_QSO_PSKREPORTER_TOKEN_ENV, ""
+    ).strip()
 
     if bool(username) != bool(password):
         raise SecretConfigurationError(
@@ -91,4 +121,23 @@ def load_application_secrets(
     if wavelog_token:
         wavelog = WavelogCredentials(token=SecretStr(wavelog_token))
 
-    return ApplicationSecrets(qrz=qrz, wavelog=wavelog)
+    completed_qso_delivery = None
+    if completed_qso_voacap_token or completed_qso_pskreporter_token:
+        completed_qso_delivery = CompletedQsoDeliveryCredentials(
+            voacap_token=(
+                SecretStr(completed_qso_voacap_token)
+                if completed_qso_voacap_token
+                else None
+            ),
+            psk_reporter_token=(
+                SecretStr(completed_qso_pskreporter_token)
+                if completed_qso_pskreporter_token
+                else None
+            ),
+        )
+
+    return ApplicationSecrets(
+        qrz=qrz,
+        wavelog=wavelog,
+        completed_qso_delivery=completed_qso_delivery,
+    )

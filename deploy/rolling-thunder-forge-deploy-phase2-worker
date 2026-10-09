@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Root-owned exact-SHA selector for the two isolated Phase 2 workers. It never
+# enables a unit, installs configuration/secrets, or selects a Phase 1 release.
+
+usage() {
+    echo "usage: $0 {propagation-qso-worker|pskreporter-worker} EXACT_40_CHARACTER_LOWERCASE_COMMIT_SHA" >&2
+}
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 2
+}
+
+configure_component() {
+    case "$1" in
+        propagation-qso-worker)
+            service_name="rolling-thunder-forge-propagation-qso-worker.service"
+            service_user="rolling-thunder-propagation-qso"
+            service_home="/var/lib/rolling-thunder-forge-propagation-qso"
+            application_root="/opt/rolling-thunder-forge-propagation-qso-worker"
+            launcher_name="rolling-thunder-forge-propagation-qso-worker"
+            ;;
+        pskreporter-worker)
+            service_name="rolling-thunder-forge-pskreporter.service"
+            service_user="rolling-thunder-pskreporter"
+            service_home="/var/lib/rolling-thunder-forge-pskreporter"
+            application_root="/opt/rolling-thunder-forge-pskreporter"
+            launcher_name="rolling-thunder-forge-pskreporter-worker"
+            ;;
+        *) die "unsupported Phase 2 component" ;;
+    esac
+    component="$1"
+    releases_root="${application_root}/releases"
+    current_link="${application_root}/current"
+    staging_root="/var/lib/rolling-thunder-forge-deploy/${component}"
+    lock_path="/run/lock/rolling-thunder-forge-${component}-deploy.lock"
+}
+
+require_safe_directory() {
+    local path="$1" owner mode
+    [[ -d "${path}" && ! -L "${path}" ]] || die "unsafe or missing directory: ${path}"
+    owner="$(stat -c '%U' -- "${path}")"
+    mode="$(stat -c '%a' -- "${path}")"
+    [[ "${owner}" == "root" ]] || die "directory must be root-owned: ${path}"
+    (( (8#${mode} & 8#022) == 0 )) || die "directory is group/world writable: ${path}"
+}
+
+require_service_account() {
+    local record name password uid gid gecos home shell
+    record="$(getent passwd "${service_user}")" || die "missing account ${service_user}"
+    IFS=: read -r name password uid gid gecos home shell <<< "${record}"
+    [[ "${name}" == "${service_user}" && "${home}" == "${service_home}" && \
+       "${shell}" == "/usr/sbin/nologin" ]] || die "unexpected service account contract"
+    [[ "$(id -gn "${service_user}")" == "${service_user}" ]] || die \
+        "service account must use its dedicated primary group"
+}
+
+validate_stage() {
+    local sha="$1" stage="$2" unsafe_entry filename line
+    local -a wheels=()
+    local -A manifested=()
+    require_safe_directory "${staging_root}"
+    require_safe_directory "${stage}"
+    require_safe_directory "${stage}/wheelhouse"
+    [[ -f "${stage}/COMMIT_SHA" && ! -L "${stage}/COMMIT_SHA" ]] || die \
+        "missing staged COMMIT_SHA"
+    [[ -f "${stage}/COMPONENT" && ! -L "${stage}/COMPONENT" ]] || die \
+        "missing staged COMPONENT"
+    [[ -f "${stage}/wheelhouse/SHA256SUMS" && \
+       ! -L "${stage}/wheelhouse/SHA256SUMS" ]] || die "missing staged SHA256SUMS"
+    unsafe_entry="$(find "${stage}" -xdev \
+        \( -type l -o ! -user root -o -perm /022 \) -print -quit)"
+    [[ -z "${unsafe_entry}" ]] || die "unsafe staged entry: ${unsafe_entry}"
+    cmp --silent <(printf '%s\n' "${sha}") "${stage}/COMMIT_SHA" || die \
+        "staged commit marker does not match"
+    cmp --silent <(printf '%s\n' "${component}") "${stage}/COMPONENT" || die \
+        "staged component marker does not match"
+    mapfile -t wheels < <(find "${stage}/wheelhouse" -maxdepth 1 -type f \
+        -name '*.whl' -printf '%f\n' | sort)
+    (( ${#wheels[@]} > 0 )) || die "staged wheelhouse is empty"
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        [[ "${line}" =~ ^[0-9a-f]{64}[[:space:]]+([A-Za-z0-9_.+-]+\.whl)$ ]] || die \
+            "invalid SHA256SUMS entry"
+        filename="${BASH_REMATCH[1]}"
+        [[ -z "${manifested[${filename}]:-}" ]] || die "duplicate wheel checksum"
+        manifested["${filename}"]=1
+    done < "${stage}/wheelhouse/SHA256SUMS"
+    (( ${#manifested[@]} == ${#wheels[@]} )) || die "checksum manifest is incomplete"
+    (cd "${stage}/wheelhouse" && sha256sum --check --strict SHA256SUMS) || die \
+        "wheel checksum verification failed"
+}
+
+find_project_wheel() {
+    local wheelhouse="$1"
+    local -a wheels=()
+    shopt -s nullglob
+    wheels=("${wheelhouse}"/rolling_thunder-*.whl)
+    shopt -u nullglob
+    (( ${#wheels[@]} == 1 )) || die "expected exactly one rolling_thunder wheel"
+    printf '%s\n' "${wheels[0]}"
+}
+
+validate_release() {
+    local sha="$1" release="$2" launcher="${release}/.venv/bin/${launcher_name}"
+    [[ -d "${release}" && ! -L "${release}" ]] || die "release is missing or a symlink"
+    cmp --silent <(printf '%s\n' "${sha}") "${release}/COMMIT_SHA" || die \
+        "release commit marker does not match"
+    [[ -f "${launcher}" && ! -L "${launcher}" && -x "${launcher}" ]] || die \
+        "release launcher is missing"
+    runuser --user "${service_user}" -- "${launcher}" --help >/dev/null || die \
+        "release launcher failed provider-free validation"
+}
+
+install_release() {
+    local sha="$1" stage="$2" release="${releases_root}/${sha}" project_wheel
+    if [[ -e "${release}" || -L "${release}" ]]; then
+        validate_release "${sha}" "${release}"
+        printf '%s\n' "${release}"
+        return
+    fi
+    project_wheel="$(find_project_wheel "${stage}/wheelhouse")"
+    mkdir --mode=0750 -- "${release}"
+    if ! (
+        set -e
+        chown root:"${service_user}" "${release}"
+        python3 -m venv "${release}/.venv"
+        "${release}/.venv/bin/pip" install --no-index \
+            --find-links "${stage}/wheelhouse" "${project_wheel}" >&2
+        install -o root -g "${service_user}" -m 0640 \
+            "${stage}/COMMIT_SHA" "${release}/COMMIT_SHA"
+        chown -R root:"${service_user}" "${release}"
+        chmod -R g-w,o-rwx "${release}"
+        validate_release "${sha}" "${release}"
+    ); then
+        rm -rf -- "${release}"
+        die "failed to install and validate release"
+    fi
+    printf '%s\n' "${release}"
+}
+
+select_release() {
+    local sha="$1" release="$2" previous="" next="${application_root}/.current.${sha}.next"
+    local was_active=false
+    validate_release "${sha}" "${release}"
+    [[ ! -L "${current_link}" ]] || previous="$(readlink -- "${current_link}")"
+    [[ -L "${current_link}" || ! -e "${current_link}" ]] || die \
+        "current release path is not a symlink"
+    systemctl is-active --quiet "${service_name}" && was_active=true
+    ln -s -- "releases/${sha}" "${next}"
+    mv -T -- "${next}" "${current_link}"
+    if [[ "${was_active}" == true ]] && ! systemctl restart "${service_name}"; then
+        if [[ -n "${previous}" ]]; then
+            ln -s -- "${previous}" "${next}"
+            mv -T -- "${next}" "${current_link}"
+            systemctl restart "${service_name}" || true
+        else
+            rm -f -- "${current_link}"
+        fi
+        die "service restart failed; prior release selection was restored"
+    fi
+}
+
+main() {
+    (( $# == 2 )) || { usage; exit 2; }
+    [[ "$2" =~ ^[0-9a-f]{40}$ ]] || die \
+        "commit must be exactly 40 lowercase hexadecimal characters"
+    configure_component "$1"
+    (( EUID == 0 )) || die "Phase 2 deployment requires root"
+    exec 9>"${lock_path}"
+    flock --nonblock 9 || die "another ${component} deployment is in progress"
+    require_service_account
+    require_safe_directory "${application_root}"
+    require_safe_directory "${releases_root}"
+    local stage="${staging_root}/$2" release
+    validate_stage "$2" "${stage}"
+    release="$(install_release "$2" "${stage}")"
+    select_release "$2" "${release}"
+    printf '%s release %s is current; unit enablement was not changed.\n' "${component}" "$2"
+}
+
+main "$@"

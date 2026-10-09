@@ -1,13 +1,28 @@
 """Tests for the application composition root."""
 
-from datetime import UTC, datetime
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
+from json import dumps
 from pathlib import Path
+from uuid import UUID
 
 import pytest
+from pydantic import SecretStr
 
 from rolling_thunder.application_runtime import ApplicationRuntime
+from rolling_thunder.application_secrets import (
+    ApplicationSecrets,
+    CompletedQsoDeliveryCredentials,
+)
+from rolling_thunder.completed_qso_producer import (
+    CompletedQsoDeliveryState,
+    CompletedQsoDestination,
+    CompletedQsoProducerRepository,
+)
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
+from rolling_thunder.ft8.audio import FT8AudioInputError
+from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.decoder import ComparingFT8Decoder, FT8PcmPeriod
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
@@ -15,6 +30,9 @@ from rolling_thunder.ft8.domain import (
     FT8IncomingCall,
     FT8MessageKind,
     FT8Period,
+    FT8PeriodParity,
+    FT8QsoContext,
+    FT8QsoState,
 )
 from rolling_thunder.ft8.encoder import FT8Waveform
 from rolling_thunder.ft8.hardware_transmit import RecordingFT8HardwareTransmitExecutor
@@ -55,6 +73,55 @@ class ManualScheduler:
         assert interval_s == 1.0
         self.poll = ManualScheduledPoll(callback)
         return self.poll
+
+
+class DeliveryScheduler:
+    def __init__(self) -> None:
+        self.poll: ManualScheduledPoll | None = None
+
+    def schedule_repeating(
+        self,
+        interval_s: float,
+        callback: PollCallback,
+    ) -> ManualScheduledPoll:
+        assert interval_s == 30
+        self.poll = ManualScheduledPoll(callback)
+        return self.poll
+
+
+class CompletedQsoReceiverTransport:
+    def __init__(self, *, wrong_psk_ack: bool = False) -> None:
+        self.wrong_psk_ack = wrong_psk_ack
+        self.calls: list[tuple[str, Mapping[str, str], bytes | None]] = []
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: Mapping[str, str],
+        body: bytes | None,
+        timeout_s: float,
+    ) -> "_HttpResponse":
+        _ = timeout_s
+        self.calls.append((url, headers, body))
+        contact_id = headers["Idempotency-Key"]
+        if self.wrong_psk_ack and url.endswith("/api/v1/completed-ft8-events"):
+            contact_id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        payload: dict[str, str] = {
+            "schema_version": "1",
+            "contact_id": contact_id,
+            "disposition": "accepted",
+        }
+        if url.endswith("/api/v1/completed-qsos"):
+            payload["received_at_utc"] = "2026-10-09T12:00:00Z"
+        return _HttpResponse(202, dumps(payload).encode())
+
+
+class _HttpResponse:
+    def __init__(self, status_code: int, body: bytes) -> None:
+        self.status_code = status_code
+        self.body = body
 
 
 class UnavailableGPSReceiver:
@@ -281,6 +348,7 @@ def test_runtime_rejects_repeated_start() -> None:
 
     with pytest.raises(RuntimeError, match="already started"):
         runtime.start()
+    runtime.stop()
 
 
 def test_runtime_stop_before_start_is_safe() -> None:
@@ -309,7 +377,7 @@ class _UnusedFT8AudioInput:
         return
 
     def read_period(self) -> FT8PcmPeriod:
-        raise RuntimeError("not used")
+        raise FT8AudioInputError("test capture intentionally unavailable")
 
     def stop(self) -> None:
         return
@@ -438,6 +506,108 @@ def test_runtime_ft8_transmit_requires_explicit_gate() -> None:
     assert runtime.ft8_panel is not None
     assert runtime.ft8_qso is not None
     assert runtime.ft8_hardware_transmit is executor
+
+
+def test_completed_qso_delivery_is_scheduled_provider_free_and_ack_safe(
+    tmp_path: Path,
+) -> None:
+    qso_id = UUID("00000000-0000-4000-8000-000000000901")
+    outbox_path = tmp_path / "completed-qso.db"
+    config = ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {"mock": True},
+            "storage": {"database_path": tmp_path / "contacts.db"},
+            "ft8": {
+                "enabled": True,
+                "receive": {"decoder_executable": "/unused/decode_ft8"},
+                "transmit": {
+                    "enabled": True,
+                    "encoder_executable": "/unused/gen_ft8",
+                },
+                "completed_qso_delivery": {
+                    "enabled": True,
+                    "database_path": outbox_path,
+                    "voacap": {
+                        "enabled": True,
+                        "base_url": "http://forge.test:8790",
+                    },
+                    "psk_reporter": {
+                        "enabled": True,
+                        "base_url": "http://forge.test:8789",
+                    },
+                },
+            },
+        }
+    )
+    tokens = CompletedQsoDeliveryCredentials(
+        voacap_token=SecretStr("v" * 32),
+        psk_reporter_token=SecretStr("p" * 32),
+    )
+    voacap_transport = CompletedQsoReceiverTransport()
+    psk_transport = CompletedQsoReceiverTransport(wrong_psk_ack=True)
+    delivery_scheduler = DeliveryScheduler()
+    period = FT8Period(100)
+    runtime = ApplicationRuntime.from_config(
+        config,
+        secrets=ApplicationSecrets(completed_qso_delivery=tokens),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_completed_qso_delivery_scheduler=delivery_scheduler,
+        ft8_completed_qso_voacap_transport=voacap_transport,
+        ft8_completed_qso_psk_transport=psk_transport,
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_decoder=_UnusedFT8Decoder(),
+        ft8_encoder=_UnusedFT8Encoder(),
+        ft8_clock=FakeFT8Clock(period.start_utc),
+        ft8_hardware_executor=RecordingFT8HardwareTransmitExecutor(),
+    )
+    assert runtime.ft8_qso is not None
+    terminal_handler = runtime.ft8_qso._terminal_result_handler
+    assert terminal_handler is not None
+    terminal_handler(
+        FT8QsoResult(
+            status=FT8QsoState.COMPLETED,
+            context=FT8QsoContext(
+                local_callsign="KI5VNB",
+                remote_callsign="K1ABC",
+                target_audio_frequency_hz=1500,
+                radio_frequency_hz=14_074_000,
+                radio_band="20m",
+                radio_mode="USB",
+                local_grid="EM79xm",
+                remote_grid="FN31pr",
+                tx_parity=FT8PeriodParity.ODD,
+                authorized_period=period,
+                authorized_utc=period.start_utc,
+                signal_report_db=-10,
+                qso_id=qso_id,
+            ),
+            sent_report_db=-10,
+            received_report_db=-12,
+            started_utc=period.start_utc,
+            ended_utc=period.start_utc + timedelta(seconds=75),
+            terminal_reason=None,
+        )
+    )
+
+    assert voacap_transport.calls == []
+    assert psk_transport.calls == []
+    runtime.start()
+    assert delivery_scheduler.poll is not None
+    delivery_scheduler.poll.callback()
+    repository = CompletedQsoProducerRepository(outbox_path)
+
+    assert len(voacap_transport.calls) == 1
+    assert len(psk_transport.calls) == 1
+    assert repository.state_for(qso_id, CompletedQsoDestination.VOACAP) is (
+        CompletedQsoDeliveryState.DELIVERED
+    )
+    assert repository.state_for(qso_id, CompletedQsoDestination.PSK_REPORTER) is (
+        CompletedQsoDeliveryState.RETRY
+    )
+    runtime.ft8_completed_qso_delivery.stop()
+    runtime.stop()
 
 
 
