@@ -143,12 +143,7 @@ helper.
 ### Propagation completed-QSO service (staged, disabled)
 
 Entry point: `forge_propagation_qso_worker_main.py` for the double-gated VOACAP
-worker and independently gated authenticated ingestion listener. It owns a durable
-inbox, separate history database, local status file, hardened systemd unit, and
-private production paths. Its typed producer client is not wired into a live source
-because no source-side durable outbox exists yet. The PSK orchestration module has no
-process entry point. Neither component is part of the Phase 1 service, Pi runtime,
-FT8 execution, contact synchronization, Wavelog, or local logging.
+worker and independently gated authenticated ingestion listener. It owns a durable inbox, separate history database, local status file, hardened systemd unit, and private production paths. Its typed producer client is not wired into a live source because no source-side durable outbox exists yet. The separate PSK Reporter composition has an authenticated bounded FT8 event API, scheduler, isolated orchestration and history databases, provider-free local status and a hardened service unit; all three gates default off and no authorized terminal-event producer is attached. Neither component is part of the Phase 1 service, Pi runtime, FT8 execution, contact sync, Wavelog or local logging.
 
 ## Reusable backend boundary
 

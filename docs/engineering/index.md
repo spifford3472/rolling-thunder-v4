@@ -108,6 +108,14 @@ and double-gated VOACAP worker. A typed producer client defines the reusable
 transport, but no local-logging, contact-sync, Wavelog, or live-contact source is
 composed into it.
 
+### `forge_pskreporter_worker_main.py`
+
+Independent triple-gated completed-FT8 PSK Reporter service. It composes the
+existing durable orchestration and analytics contracts with an authenticated,
+bounded private event API, one scheduler, isolated orchestration/history databases,
+and atomic local diagnostics. Its process, ingestion, and provider gates default
+off; no completed-QSO producer is wired into the Pi or another Forge service.
+
 ## Feature ownership map
 
 ### POTA and DX
