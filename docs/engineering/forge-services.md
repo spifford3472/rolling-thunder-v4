@@ -129,10 +129,12 @@ propagation/history worker.
 `forge_propagation_*` provides a separate disabled-by-default environmental entry
 point, typed collectors, and dedicated SQLite history. That Phase 1 process runs only
 the hourly HamQSL/KC2G cycle with provider-I/O-free status. A distinct double-gated,
-undeployed completed-QSO entry point composes its durable UUID-idempotent inbox,
+disabled completed-QSO entry point composes its durable UUID-idempotent inbox,
 identified bounded leases, retry/dead-letter processing, existing VOACAP summary
-client, and atomic local status publication. It has no producer or listener and is
-not composed into the environmental process, contact sync, Wavelog, or local logging.
+client, authenticated bounded private listener, and atomic local status publication.
+Its typed producer client defines one authenticated delivery attempt, but no live
+source or durable source outbox is composed. It is not composed into the environmental
+process, contact sync, Wavelog, or local logging.
 
 The production-inactive PSK orchestrator accepts a confirmed event containing the
 immutable FT8 contact and matching successful terminal attempt. It durably owns exact
@@ -141,7 +143,7 @@ gate, bounded query batches, and provider-free health. Batched provider XML is s
 once per query rather than copied into every QSO summary. It reuses the existing
 analytics/history contracts and adds no propagation engine. No PSK process,
 scheduler, authenticated ingestion transport, or production configuration is added.
-All VOACAP, weather, and PSK controls remain disabled. See
+All ingestion, VOACAP, weather, and PSK controls remain disabled. See
 `docs/PROPAGATION_HISTORY.md`.
 
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application

@@ -120,13 +120,14 @@ orchestrator reads neither Pi nor contact-sync storage and runs on neither reque
 path. The lower-level analytics API retains its conservative missing-completion
 fallback for non-orchestrated callers; invalid completion data fails closed.
 
-The undeployed completed-QSO propagation inbox is a separate Forge-owned consumer of
-the immutable `Contact`. Enqueue is durable and provider-free; exact stable-UUID
-replays are accepted and changed payloads fail closed. A separately scheduled bounded
-worker composition may perform VOACAP correlation with identified lease recovery,
-retry isolation, dead letters, and local status publication. Its two gates default
-off and it has no deployed supervisor or producer. It is not a contact-commit
-callback, contact-sync responsibility, or Wavelog extension.
+The disabled completed-QSO propagation inbox is a separate Forge-owned consumer of
+the immutable `Contact`. Its authenticated private API durably accepts complete
+UUID-matched payloads without provider work; exact replays are accepted and changed
+payloads fail closed. A separately scheduled bounded worker may perform VOACAP
+correlation with identified lease recovery, retry isolation, dead letters, and local
+status publication. Process, ingestion, and VOACAP gates default off. The staged
+supervisor and typed one-attempt producer client do not make local commit, contact
+sync, or Wavelog a producer; an authorized source still needs a durable outbox.
 
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves

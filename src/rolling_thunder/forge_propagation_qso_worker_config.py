@@ -14,10 +14,15 @@ class ForgePropagationQsoWorkerConfigurationError(ValueError):
 
 
 class ForgePropagationQsoWorkerConfig(ConfigurationModel):
-    """Non-secret, disabled-by-default configuration for one worker identity."""
+    """Non-secret, disabled-by-default configuration for ingestion and work."""
 
     enabled: bool = False
+    ingestion_enabled: bool = False
     voacap_enabled: bool = False
+    bind_host: str = Field(default="127.0.0.1", min_length=1, max_length=255)
+    bind_port: int = Field(default=8790, ge=1, le=65_535)
+    request_timeout_s: float = Field(default=10.0, ge=1.0, le=60.0)
+    max_connections: int = Field(default=16, ge=1, le=128)
     worker_identity: str = Field(
         default="forge-propagation-qso-worker",
         min_length=1,
@@ -39,6 +44,11 @@ class ForgePropagationQsoWorkerConfig(ConfigurationModel):
     @field_validator("worker_identity", mode="before")
     @classmethod
     def normalize_worker_identity(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("bind_host", mode="before")
+    @classmethod
+    def normalize_bind_host(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
     @field_validator(
