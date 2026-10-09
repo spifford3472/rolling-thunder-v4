@@ -128,6 +128,14 @@ retry isolation, dead letters, and local status publication. Its two gates defau
 off and it has no deployed supervisor or producer. It is not a contact-commit
 callback, contact-sync responsibility, or Wavelog extension.
 
+The Pi-side `completed_qso_producer.py` contract owns the future source outbox. It
+accepts only a durable immutable FT8 `Contact` plus its matching durable successful
+terminal attempt, then stores one UUID-keyed event with independent VOACAP and PSK
+delivery progress. Runtime calls this boundary only after both authoritative writes;
+producer failure cannot roll either back. Network delivery is a later independently
+scheduled composition and is not part of the FT8 terminal, contact-sync, or Wavelog
+path. Production composition depends on both receiver PRs merging first.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder

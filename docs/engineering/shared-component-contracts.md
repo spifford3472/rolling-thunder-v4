@@ -44,6 +44,15 @@ contact-sync, logging, radio, or transmit authority. Enqueue performs no provide
 I/O, and query work remains on an independent bounded worker. Invalid or mismatched
 terminal data must not enter the inbox or trigger a provider query.
 
+The source-side completed-QSO producer uses one local immutable event and separate
+durable destination states. It may enqueue only after the matching `Contact` and
+successful terminal attempt have both committed. Exact replay is accepted; any
+changed event under the stable UUID fails closed. VOACAP and PSK delivery retry
+independently on a background worker, use distinct protected bearer credentials,
+and require a matching receiver acknowledgement before local completion. No network
+or provider work may run in terminal handling, local logging, contact sync, or
+Wavelog synchronization. Production composition follows both receiver merges.
+
 The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
 that same UUID without provider work. Exact replay is idempotent; changed frozen
 grids, coordinates, UTC start, frequency/mode, or power under the same UUID is a

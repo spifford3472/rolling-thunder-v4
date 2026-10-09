@@ -174,6 +174,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_ft8_performance_api.py`
 - `tests/test_forge_pskreporter.py` — bounded provider parsing, concurrency etiquette, terminal eligibility, correlation, restart-safe zero/failure distinctions, and raw-query archival.
 - `tests/test_forge_pskreporter_orchestration.py` — confirmed event validation, exact replay, terminal latency, durable global pacing, bounded batching, restart reconciliation, disabled behavior, and provider-free health.
+- `tests/test_completed_qso_producer.py` — matching post-durability event validation, exact replay/conflict, independent destination progress, retry timing, and restart recovery without provider I/O.
 - `tests/test_ft891_cat.py`
 - `tests/test_ft891_fm_repeater_cat.py`
 - `tests/test_ft891_fm_repeater_radio.py`
