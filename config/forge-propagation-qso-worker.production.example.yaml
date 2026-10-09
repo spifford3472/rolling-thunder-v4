@@ -1,0 +1,25 @@
+# Production template for the isolated completed-QSO ingestion/VOACAP service.
+# Installation and code deployment do not activate it. Keep all gates false until
+# the authenticated producer and bounded VOACAP acceptance steps are approved.
+enabled: false
+ingestion_enabled: false
+voacap_enabled: false
+
+# Forge's private radio-LAN address. Do not expose this listener publicly.
+bind_host: 192.168.9.170
+bind_port: 8790
+request_timeout_s: 10
+max_connections: 16
+
+worker_identity: forge-propagation-qso-worker-1
+inbox_database_path: /var/lib/rolling-thunder-forge-propagation-qso/ingestion.sqlite3
+history_database_path: /var/lib/rolling-thunder-forge-propagation-qso/history.sqlite3
+status_path: /var/lib/rolling-thunder-forge-propagation-qso/status.json
+poll_interval_s: 30
+batch_limit: 20
+lease_duration_s: 300
+max_attempts: 5
+retry_base_s: 60
+retry_max_s: 3600
+provider_timeout_s: 10
+voacap_base_url: http://127.0.0.1:8787

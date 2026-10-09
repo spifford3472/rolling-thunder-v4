@@ -1,6 +1,7 @@
 """Offline orchestration tests for the independent completed-QSO worker."""
 
 from datetime import UTC, datetime, timedelta
+from json import loads
 from pathlib import Path
 
 import pytest
@@ -34,8 +35,10 @@ def test_worker_configuration_and_example_are_disabled_by_default() -> None:
     example = load_forge_propagation_qso_worker_config(EXAMPLE)
 
     assert defaults.enabled is False
+    assert defaults.ingestion_enabled is False
     assert defaults.voacap_enabled is False
     assert example.enabled is False
+    assert example.ingestion_enabled is False
     assert example.voacap_enabled is False
     assert example.inbox_database_path != example.history_database_path
     assert example.worker_identity == "forge-propagation-qso-worker-1"
@@ -72,6 +75,57 @@ def test_disabled_main_does_not_create_storage_or_contact_provider(
 
     assert main(("--config", str(config_path), "--once")) == 0
     assert "disabled" in capsys.readouterr().out
+    assert not (tmp_path / "inbox.db").exists()
+    assert not (tmp_path / "history.db").exists()
+    assert not (tmp_path / "status.json").exists()
+
+
+def test_check_config_and_missing_status_are_storage_and_provider_free(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config_path = tmp_path / "worker.yaml"
+    config_path.write_text(
+        "enabled: false\n"
+        "ingestion_enabled: false\n"
+        "voacap_enabled: false\n"
+        "inbox_database_path: inbox.db\n"
+        "history_database_path: history.db\n"
+        "status_path: status.json\n",
+        encoding="utf-8",
+    )
+
+    assert main(("--config", str(config_path), "--check-config")) == 0
+    plan = loads(capsys.readouterr().out)
+    assert plan["enabled"] is False
+    assert plan["ingestion_enabled"] is False
+    assert plan["voacap_enabled"] is False
+    assert "token" not in plan
+
+    assert main(("--config", str(config_path), "--status")) == 0
+    status = loads(capsys.readouterr().out)
+    assert status["status"] == "never_run"
+    assert not (tmp_path / "inbox.db").exists()
+    assert not (tmp_path / "history.db").exists()
+    assert not (tmp_path / "status.json").exists()
+
+
+def test_enabled_ingestion_requires_external_secret_before_creating_storage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN", raising=False)
+    config_path = tmp_path / "worker.yaml"
+    config_path.write_text(
+        "enabled: true\n"
+        "ingestion_enabled: true\n"
+        "voacap_enabled: false\n"
+        "inbox_database_path: inbox.db\n"
+        "history_database_path: history.db\n"
+        "status_path: status.json\n",
+        encoding="utf-8",
+    )
+
+    assert main(("--config", str(config_path))) == 2
     assert not (tmp_path / "inbox.db").exists()
     assert not (tmp_path / "history.db").exists()
     assert not (tmp_path / "status.json").exists()

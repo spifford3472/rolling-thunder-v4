@@ -1,6 +1,11 @@
-# This is a separate Forge-local worker. Both gates must be explicitly enabled.
+# This is a separate Forge-local service. Every capability is explicitly gated.
 enabled: false
+ingestion_enabled: false
 voacap_enabled: false
+bind_host: 127.0.0.1
+bind_port: 8790
+request_timeout_s: 10
+max_connections: 16
 worker_identity: forge-propagation-qso-worker-1
 inbox_database_path: data/forge-propagation-qso-inbox.db
 history_database_path: data/forge-propagation-history.db

@@ -20,11 +20,14 @@ The deployed-candidate environmental entry point wires only the hourly HamQSL an
 KC2G collection cycle. It does not ingest QSOs, schedule QSO correlation, or invoke
 VOACAP, weather enrichment, or PSK Reporter analytics. A separate Phase 2 entry
 point, `rolling-thunder-forge-propagation-qso-worker --config PATH [--once]`, now
-composes the durable completed-QSO inbox with bounded VOACAP correlation and local
-JSON status publication. Its process and VOACAP gates are independently false in
-its separate example configuration. No systemd unit, production configuration,
-authenticated ingestion transport, contact-log callback, or completed-QSO producer
-invokes it. PSK Reporter orchestration likewise has no production composition.
+composes an authenticated bounded ingestion API, the durable completed-QSO inbox,
+bounded VOACAP correlation, and local JSON status publication. Its process,
+ingestion, and VOACAP gates are independently false in the production template. A
+separate hardened systemd unit and typed producer client define the transport, but
+the client is deliberately not attached to local commit, contact sync, Wavelog, or
+any live contact store. An authorized source still needs its own durable outbound
+delivery/retry composition before automatic end-to-end production ingestion exists.
+PSK Reporter orchestration likewise has no production composition.
 
 ## Phase 1 deployment boundary
 
@@ -191,11 +194,12 @@ changing either migration lineage. The separate worker configuration deliberatel
 uses distinct inbox and history paths; neither may share the contact-sync or
 spot/weather database.
 
-The worker's disabled startup creates no database or status file. When both gates
-are deliberately enabled, one cycle is bounded by batch, lease, retry, and provider
-timeout controls. Every completed cycle atomically publishes versioned non-secret
+Fully disabled startup creates no database or status file. When `enabled` and
+`voacap_enabled` are deliberately true, one cycle is bounded by batch, lease, retry,
+and provider timeout controls. Every completed cycle atomically publishes versioned non-secret
 JSON containing worker identity, cycle result, per-QSO dispositions, queue counts,
-due count, dead letters, and timing. The entry point has no listener.
+due count, dead letters, and timing. The same entry point owns the independently
+gated authenticated listener described below.
 
 `VoacapCompletedQsoCorrelator` first archives the exact QSO through the propagation
 history repository and then invokes the existing VOACAP client. Eligible results
@@ -208,6 +212,106 @@ expiry.
 
 The inbox is not part of local QSO commit, ContactSyncService, or Wavelog upload.
 Those paths perform no VOACAP call and do not wait for propagation work.
+
+### Authenticated ingestion API
+
+When `enabled: true` and `ingestion_enabled: true`, the isolated service listens on
+the configured private address and accepts only `POST /api/v1/completed-qsos`.
+Requests must use `application/json`, carry the complete `Contact` JSON, supply an
+`Idempotency-Key` equal to `contact_id`, and authenticate with
+`Authorization: Bearer ...`. The independent secret comes only from
+`ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN`; it is never stored in YAML, status,
+logs, or the repository and must contain at least 32 characters. Disabled ingestion
+fails closed before authentication. Authentication is checked before the bounded
+request body is read. The bearer credential must travel only over the trusted
+private/WireGuard path; if that path cannot provide confidentiality, terminate TLS
+in front of the listener before activation. Bearer authentication alone does not
+make a public or sniffable network safe.
+
+Payloads are capped at 32 KiB, connections and request-body time are bounded, and
+the existing inbox transaction completes before an accepted response is returned.
+A new event returns HTTP 202, an exact replay returns HTTP 200, changed data under
+the same UUID returns HTTP 409, and storage failure returns HTTP 503. `GET /health`
+is provider-free and exposes only gates plus non-secret queue counts/times. It never
+calls VOACAP. The reusable `HttpCompletedQsoIngestionClient` implements this exact
+producer-side protocol but intentionally performs only one delivery attempt; the
+source owner must persist outbound state and retry independently.
+
+The service can run as ingestion-only with `voacap_enabled: false`, allowing the
+authenticated transport and durable inbox to be accepted without provider access.
+VOACAP work occurs only when both the process and VOACAP gates are true. `--once`
+runs only one bounded worker cycle and never starts the listener. `--check-config`
+validates and prints the non-secret plan without opening SQLite or contacting a
+provider. `--status` reads only the atomic local status file; a missing file reports
+`never_run` and does not create storage.
+
+### Completed-QSO service supervision (staged, disabled)
+
+The production assets are intentionally not installed or activated by code deploy:
+
+- unit: `rolling-thunder-forge-propagation-qso-worker.service`;
+- executable: the QSO entry point from the reviewed propagation exact-SHA release;
+- configuration: `/etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml`;
+- secret environment: `/etc/rolling-thunder-forge-propagation-qso-worker/ingestion.env`;
+- state: `/var/lib/rolling-thunder-forge-propagation-qso`;
+- private API: `192.168.9.170:8790` in the production example.
+
+The unit reuses the propagation release's read-only code and unprivileged service
+identity but has a separate unit lifecycle, config directory, StateDirectory,
+inbox, history database, and status file. Its sandbox makes the environmental
+collector state and the shared contact/Wavelog paths inaccessible. It does not
+restart or modify the hourly collector. Installation must copy the production
+example with all three gates false and replace the deliberately invalid `replace-me`
+secret with an independent random value before ingestion can start. Installing the
+unit must not enable or start it.
+
+After verifying that the reviewed exact-SHA propagation release contains the QSO
+launcher, an authorized Forge administrator can stage only the inactive assets with:
+
+```bash
+sudo install -d -o root -g rolling-thunder-propagation -m 0750 \
+  /etc/rolling-thunder-forge-propagation-qso-worker
+sudo install -o root -g rolling-thunder-propagation -m 0640 \
+  config/forge-propagation-qso-worker.production.example.yaml \
+  /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml
+sudo install -o root -g rolling-thunder-propagation -m 0640 \
+  deploy/systemd/forge-propagation-qso-worker.env.example \
+  /etc/rolling-thunder-forge-propagation-qso-worker/ingestion.env
+sudo install -o root -g root -m 0644 \
+  deploy/systemd/rolling-thunder-forge-propagation-qso-worker.service \
+  /etc/systemd/system/rolling-thunder-forge-propagation-qso-worker.service
+sudo systemctl daemon-reload
+```
+
+Stop there. Do not enable or start the unit. Replace the placeholder secret through
+the administrator's secret-generation and transfer procedure; never place the real
+value in shell history or Git. The unit's `StateDirectory` is created only when it is
+eventually started, so staging does not create or inspect contact/inbox databases.
+
+Provider-free inspection is:
+
+```bash
+/opt/rolling-thunder-forge-propagation/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker \
+  --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml \
+  --check-config
+/opt/rolling-thunder-forge-propagation/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker \
+  --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml \
+  --status
+systemctl is-enabled rolling-thunder-forge-propagation-qso-worker.service || true
+systemctl is-active rolling-thunder-forge-propagation-qso-worker.service || true
+```
+
+Do not enable the unit until an authorized source has a reviewed durable outbox,
+the bearer secret has been installed at both ends, private-network reachability has
+been restricted, and ingestion-only acceptance has succeeded with VOACAP still
+false. A later, separate approval is required to set `voacap_enabled: true` and run
+a bounded provider smoke test. No such live acceptance is performed by repository
+tests.
+
+Rollback is limited to stopping/disabling this one unit and restoring all three
+gates to false. Preserve its dedicated state for diagnosis; do not delete the inbox
+or history database. Rollback never restarts the environmental collector, contact
+sync, Wavelog, or any Pi service.
 
 ## Data model
 
@@ -254,7 +358,8 @@ and maps FT8 to `mode=FT8` even though its hardware setting is FT-891 HF/SSB pow
 Correlation is best-effort and belongs on a background worker, never the contact-
 sync request path. The environmental collector's `voacap_enabled` and
 `weather_enrichment_enabled` fields remain inactive reserved controls. The separate
-completed-QSO worker requires both its own `enabled` and `voacap_enabled` gates.
+completed-QSO provider worker requires both its own `enabled` and `voacap_enabled`
+gates; ingestion additionally requires `ingestion_enabled`.
 
 Read-only verification on 2026-10-07 confirmed that the documented Forge endpoint
 `http://192.168.9.170:8787/version` responded as `voacap-service` version `0.3.0`.

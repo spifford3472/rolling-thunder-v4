@@ -44,13 +44,17 @@ contact-sync, logging, radio, or transmit authority. Enqueue performs no provide
 I/O, and query work remains on an independent bounded worker. Invalid or mismatched
 terminal data must not enter the inbox or trigger a provider query.
 
-The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
+The disabled Forge propagation inbox accepts the complete frozen `Contact` under
 that same UUID without provider work. Exact replay is idempotent; changed frozen
 grids, coordinates, UTC start, frequency/mode, or power under the same UUID is a
 conflict. Provider correlation runs only from a separately scheduled bounded worker,
 so neither local durability nor Wavelog synchronization waits for VOACAP. The worker
 has separate disabled-by-default identity/configuration and publishes only
-non-secret Forge-local status. No completed-QSO producer is implied.
+non-secret Forge-local status. Its private HTTP ingestion contract requires a
+separate bearer secret, matching UUID idempotency key, bounded complete payload, and
+durable inbox commit before acknowledgement. The typed client does not imply that
+local logging or contact sync is a producer; source-side durable retry remains an
+explicit prerequisite.
 
 Forge selects the exact Wavelog station target for every upload through one shared
 boundary after receiving the immutable `Contact` and before claiming its UUID in
