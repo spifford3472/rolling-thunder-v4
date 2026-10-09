@@ -278,7 +278,10 @@ originates from one screen.
 - `src/rolling_thunder/forge_propagation_qso_worker_config.py` — Separate disabled service, authenticated-ingestion listener, worker identity, storage, polling, lease, retry, and VOACAP configuration.
 - `src/rolling_thunder/forge_propagation_qso_worker_main.py` — Independent completed-QSO ingestion/server and double-gated worker composition/lifecycle root with provider-free preflight/status commands.
 - `src/rolling_thunder/forge_pskreporter.py` — Official bounded PSK Reporter XML client, concurrency-safe five-minute etiquette gate, bounded FT8 completion-aware correlation, and repository-backed analytics service.
-- `src/rolling_thunder/forge_pskreporter_orchestration.py` — Production-inactive completed-FT8 event sink, durable global pacing/exact-window inbox, bounded PSK worker, and provider-free health contract.
+- `src/rolling_thunder/forge_pskreporter_orchestration.py` — Completed-FT8 event sink, durable global pacing/exact-window inbox, bounded PSK worker, and provider-free health contract.
+- `src/rolling_thunder/forge_pskreporter_worker.py` — Authenticated bounded event API, independent scheduler, atomic local status, and service diagnostics for PSK analytics.
+- `src/rolling_thunder/forge_pskreporter_worker_config.py` — Triple-gated PSK service/listener/storage/provider configuration with isolated path and cadence validation.
+- `src/rolling_thunder/forge_pskreporter_worker_main.py` — Disabled-by-default independent PSK service composition and provider-free preflight/status entry point.
 - `src/rolling_thunder/forge_location_client.py` — Forge backend module for location client; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_map.py` — Reusable typed configuration and bounded local style-aware map-renderer adapter.
 - `src/rolling_thunder/forge_map_api.py` — Optional map-tile route layer that delegates non-map requests to the existing Forge API application.

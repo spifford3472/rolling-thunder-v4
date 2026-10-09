@@ -136,14 +136,12 @@ Its typed producer client defines one authenticated delivery attempt, but no liv
 source or durable source outbox is composed. It is not composed into the environmental
 process, contact sync, Wavelog, or local logging.
 
-The production-inactive PSK orchestrator accepts a confirmed event containing the
+The disabled-by-default PSK service accepts a confirmed event containing the
 immutable FT8 contact and matching successful terminal attempt. It durably owns exact
 event replay, absolute request-window identity, a cross-process 300-second provider
 gate, bounded query batches, and provider-free health. Batched provider XML is stored
 once per query rather than copied into every QSO summary. It reuses the existing
-analytics/history contracts and adds no propagation engine. No PSK process,
-scheduler, authenticated ingestion transport, or production configuration is added.
-All ingestion, VOACAP, weather, and PSK controls remain disabled. See
+analytics/history contracts and adds no propagation engine. The separate PSK Reporter service has a bounded scheduler, authenticated private event ingestion, provider-free health/status, isolated databases and independently hardened systemd/sysusers/configuration templates. Process, ingestion and provider egress are separately gated and disabled by default. The VOACAP service independently provides authenticated completed-QSO ingestion and prediction through a disabled worker. Neither has an authorized durable source-side producer or is installed/activated; Phase 1 propagation, logging, contact-sync and Wavelog remain unchanged. See
 `docs/PROPAGATION_HISTORY.md`.
 
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application

@@ -1,0 +1,24 @@
+# Development example. The process, ingestion API, and provider are independent gates.
+enabled: false
+ingestion_enabled: false
+bearer_token_environment: ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN
+server:
+  bind_host: 127.0.0.1
+  bind_port: 8789
+  maximum_event_bytes: 131072
+orchestration_database_path: data/forge-pskreporter-orchestration.db
+history_database_path: data/forge-pskreporter-history.db
+status_path: data/forge-pskreporter-worker-status.json
+scheduler_interval_s: 30
+pskreporter:
+  enabled: false
+  sender_callsign: KI5VNB
+  mode: FT8
+  minimum_query_interval_s: 300
+  report_latency_s: 300
+  recent_window_s: 1800
+  correlation_window_s: 300
+  report_limit: 5000
+  timeout_s: 10
+  maximum_response_bytes: 2097152
+  maximum_qsos_per_query: 50

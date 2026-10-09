@@ -20,14 +20,7 @@ The deployed-candidate environmental entry point wires only the hourly HamQSL an
 KC2G collection cycle. It does not ingest QSOs, schedule QSO correlation, or invoke
 VOACAP, weather enrichment, or PSK Reporter analytics. A separate Phase 2 entry
 point, `rolling-thunder-forge-propagation-qso-worker --config PATH [--once]`, now
-composes an authenticated bounded ingestion API, the durable completed-QSO inbox,
-bounded VOACAP correlation, and local JSON status publication. Its process,
-ingestion, and VOACAP gates are independently false in the production template. A
-separate hardened systemd unit and typed producer client define the transport, but
-the client is deliberately not attached to local commit, contact sync, Wavelog, or
-any live contact store. An authorized source still needs its own durable outbound
-delivery/retry composition before automatic end-to-end production ingestion exists.
-PSK Reporter orchestration likewise has no production composition.
+composes an authenticated bounded ingestion API, the durable completed-QSO inbox, bounded VOACAP correlation, and local JSON status publication. Its process, ingestion, and VOACAP gates are independently false in the production template. A hardened systemd unit and typed producer client exist, but no authorized source-side durable delivery/retry producer is connected. PSK Reporter has its own independent production-candidate composition, authenticated ingress and scheduler, with process, ingestion, and provider gates all disabled by default. Neither service has been installed or activated, and neither is part of the Phase 1 collector.
 
 ## Phase 1 deployment boundary
 
@@ -370,7 +363,7 @@ No summary/prediction request was made and no service state was changed.
 The disabled-by-default PSK Reporter adapter uses the official
 `https://retrieve.pskreporter.info/query` XML endpoint. One adapter instance permits
 at most one network attempt per 300 seconds, including after a failed attempt and
-under concurrent calls. The production-inactive orchestration repository additionally
+under concurrent calls. The service-owned orchestration repository additionally
 makes that gate durable and global across workers sharing its dedicated database.
 Due FT8 QSOs are batched into one recent-window request using `senderCallsign`, `mode=FT8`,
 a negative `flowStartSeconds`, `rronly=1`, `noactive=1`, `nolocator=1`, a bounded
@@ -427,17 +420,81 @@ responses are terminal; provider and parse failures remain retryable and never
 become zero. Startup reconciles already-terminal history summaries before another
 reservation, closing the crash window after analytics persistence. Provider-free
 health reports pending, due, completed, expired, last/next attempt, window state,
-and error. There is no scheduler, service unit, producer, or enabled production
-configuration for this component.
+and error.
+
+### PSK worker service boundary
+
+`rolling-thunder-forge-pskreporter-worker --config PATH` is a separate composition
+root. It owns only:
+
+- one authenticated `POST /api/v1/completed-ft8-events` event endpoint;
+- a provider-free `GET /api/v1/health` endpoint;
+- one bounded scheduler using the existing orchestration worker;
+- `orchestration.sqlite3`, which owns event replay, absolute windows, and the durable
+  global provider gate;
+- `history.sqlite3`, which owns provider queries and per-QSO analytics; and
+- an atomically replaced, non-secret `status.json` diagnostic snapshot.
+
+The upload requires `application/json`, a bounded `Content-Length`, `Authorization:
+Bearer ...`, and `Idempotency-Key` equal to the shared contact/attempt UUID.
+Authentication is checked before the body is decoded or validated. The bearer value
+comes only from `ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN` (or the explicitly named
+environment variable), not YAML, Git, status, or logs. Exact event replay returns an
+accepted replay disposition; changed immutable data under the UUID returns conflict.
+The receiving API does not itself prove local durability: only the future authorized
+producer may attest that both the contact and successful terminal attempt are durable.
+
+The process, ingestion API, and provider query each have an independent false-by-
+default gate. A disabled process exits before reading the bearer environment, opening
+a listener, creating SQLite, writing status, or constructing a provider client. The
+database-free `--check-config` prints a non-secret plan; `--status` validates and
+prints the last local status file without database or provider access. `--once` runs
+one bounded scheduled cycle and never opens the ingestion listener. Enabling the
+process with provider querying still false is suitable only for supervised offline
+API/status acceptance; it cannot issue a PSK Reporter request.
+
+Production-candidate assets are isolated from the Phase 1 environmental collector:
+
+- unit: `rolling-thunder-forge-pskreporter.service`;
+- no-login identity: `rolling-thunder-pskreporter`;
+- application root: `/opt/rolling-thunder-forge-pskreporter`;
+- configuration and external secret environment:
+  `/etc/rolling-thunder-forge-pskreporter/`;
+- state: `/var/lib/rolling-thunder-forge-pskreporter`.
+
+The hardened unit cannot read the common Rolling Thunder, Phase 1 propagation, or
+contact-sync state/application paths. It is not enabled by installation and performs
+only provider-free `--check-config` in `ExecStartPre`. The production YAML leaves
+`enabled`, `ingestion_enabled`, and `pskreporter.enabled` false and preserves both
+300-second lower bounds. No rollout helper or central deployment-dispatch integration
+is included; those require a separately reviewed exact-SHA install plan and privileged
+inspection. Stopping/disabling this one unit is the service rollback and does not
+restart or modify FT8, logging, contact sync, Wavelog, spots, VOACAP, or the hourly
+environmental collector. Preserve both SQLite files during rollback.
 
 ## Remaining integration
 
 Phase 1 stages supervision only for the environmental HamQSL/KC2G collector. Phase 2
 provides a disabled VOACAP worker composition but no deployment assets or producer.
-The PSK component provides durable orchestration but no process composition. Before
-either QSO-analysis path can be deployed, define and authenticate a producer only
-after local QSO and terminal-attempt durability, add independent supervision and
-provider-free preflight/status acceptance, and preserve separate owned databases.
-Keep both paths outside the Phase 1 collector, FT8 execution, contact sync, Wavelog,
-and local QSO logging. Live-provider and crash-window acceptance for VOACAP and PSK
-Reporter remains required.
+The PSK component now provides production-candidate process/scheduler/API/config/unit
+composition, but it is not deployed and deliberately does not guess at producer
+authority. Before rollout, the repository owner must still:
+
+1. select and implement an authenticated, retry-safe producer that emits only after
+   both the local `Contact` and matching successful terminal attempt are durable,
+   without adding network work to local commit, the FT8 worker, contact sync, or
+   Wavelog;
+2. provision and rotate a distinct high-entropy bearer credential on the producer
+   and service, verify private-network/firewall reachability, and define replay retry
+   policy;
+3. review an exact-SHA installation/deployment/rollback procedure for the new unit,
+   application root, configuration, sysusers file, environment file, and two durable
+   databases; and
+4. complete staged acceptance: provider-disabled event/auth/restart tests first, then
+   separately authorized official-endpoint cadence, response-limit, failure, restart,
+   and post-provider/pre-finalization crash-window checks.
+
+Until those blockers are closed, keep all three PSK gates false. Keep both QSO paths
+outside the Phase 1 collector, FT8 execution, contact sync, Wavelog, and local QSO
+logging. Live-provider and crash-window acceptance for VOACAP and PSK Reporter remains
+required and was not performed by repository development or CI.

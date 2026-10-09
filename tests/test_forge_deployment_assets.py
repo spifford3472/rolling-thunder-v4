@@ -117,6 +117,62 @@ PROPAGATION_DISPATCH_EXAMPLE_PATH = (
 PROPAGATION_STAGE_PREPARER_PATH = (
     ROOT / "deploy/prepare-forge-propagation-stage"
 )
+PSKREPORTER_UNIT_PATH = (
+    ROOT / "deploy/systemd/rolling-thunder-forge-pskreporter.service"
+)
+PSKREPORTER_CONFIG_PATH = (
+    ROOT / "config/forge-pskreporter-worker.production.example.yaml"
+)
+PSKREPORTER_SYSUSERS_PATH = (
+    ROOT / "deploy/sysusers.d/rolling-thunder-forge-pskreporter.conf"
+)
+PSKREPORTER_ENV_PATH = (
+    ROOT / "deploy/systemd/forge-pskreporter-worker.env.example"
+)
+
+
+def test_pskreporter_service_is_independent_hardened_and_unprivileged() -> None:
+    unit = PSKREPORTER_UNIT_PATH.read_text(encoding="utf-8")
+    sysusers = PSKREPORTER_SYSUSERS_PATH.read_text(encoding="utf-8")
+
+    assert "User=rolling-thunder-pskreporter" in unit
+    assert "Group=rolling-thunder-pskreporter" in unit
+    assert "StateDirectory=rolling-thunder-forge-pskreporter" in unit
+    assert "NoNewPrivileges=true" in unit
+    assert "PrivateDevices=true" in unit
+    assert "CapabilityBoundingSet=" in unit
+    assert "rolling-thunder-forge-propagation.service" not in unit
+    assert "rolling-thunder-forge-contact-sync.service" not in unit
+    assert "/usr/sbin/nologin" in sysusers
+
+
+def test_pskreporter_production_template_is_triple_disabled_and_isolated() -> None:
+    config = yaml.safe_load(PSKREPORTER_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    assert config["enabled"] is False
+    assert config["ingestion_enabled"] is False
+    assert config["pskreporter"]["enabled"] is False
+    assert config["pskreporter"]["minimum_query_interval_s"] >= 300
+    assert config["pskreporter"]["report_latency_s"] >= 300
+    assert config["orchestration_database_path"] != config["history_database_path"]
+    assert "rolling-thunder-forge-pskreporter" in config["orchestration_database_path"]
+    assert "rolling-thunder-forge-pskreporter" in config["history_database_path"]
+
+
+def test_pskreporter_secret_is_external_and_preflight_is_provider_free() -> None:
+    unit = PSKREPORTER_UNIT_PATH.read_text(encoding="utf-8")
+    config_text = PSKREPORTER_CONFIG_PATH.read_text(encoding="utf-8")
+    environment = PSKREPORTER_ENV_PATH.read_text(encoding="utf-8")
+
+    assert (
+        "EnvironmentFile=-/etc/rolling-thunder-forge-pskreporter/"
+        "forge-pskreporter-worker.env"
+    ) in unit
+    assert "--check-config" in unit
+    assert "ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN=" not in unit
+    assert "ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN=" not in config_text
+    assert "ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN=" in environment
+
 PROPAGATION_QSO_UNIT_PATH = (
     ROOT / "deploy/systemd/rolling-thunder-forge-propagation-qso-worker.service"
 )
