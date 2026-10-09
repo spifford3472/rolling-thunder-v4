@@ -193,6 +193,11 @@ FT8 transmit authority is intentionally narrow. Do not generalize it into applic
 
 Read: `docs/FT8_ENGINEERING_GUIDE.md`, `docs/FT8_ARCHITECTURE.md`.
 
+The optional source-owned completed-QSO producer is a post-durability FT8 adapter
+with an independent local SQLite outbox and per-consumer retry state. It is not yet
+production-composed and must follow both receiver PRs. Read:
+`docs/COMPLETED_QSO_PRODUCER.md`.
+
 ### Browse
 
 Browse provides free-form receive tuning and contact logging. It uses shared radio state, callsign capture, contact logging, current GPS/grid, band advisory, and optional callsign intelligence. Browse does not own those shared services.

@@ -1,5 +1,6 @@
 """Application composition root for the first persistent Pi dashboard."""
 
+import logging
 import os
 from collections.abc import Callable
 from concurrent.futures import Executor
@@ -18,6 +19,10 @@ from rolling_thunder.clock_sync import (
     ClockSynchronizationService,
     ClockSyncState,
     SystemClockSetter,
+)
+from rolling_thunder.completed_qso_producer import (
+    CompletedQsoCapture,
+    CompletedQsoProducerError,
 )
 from rolling_thunder.config import (
     ApplicationConfig,
@@ -183,6 +188,7 @@ from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 GPSFactory = Callable[..., GPSReceiver]
 RadioFactory = Callable[..., Radio]
 _CLOCK_SYNC_ENV = "ROLLING_THUNDER_GPS_CLOCK_SYNC"
+_LOGGER = logging.getLogger("rolling_thunder.application_runtime")
 
 
 def _clock_sync_enabled_from_environment() -> bool:
@@ -266,6 +272,7 @@ class ApplicationRuntime:
         contact_qrz_enrichment_scheduler: PollScheduler | None = None,
         contact_sync_scheduler: PollScheduler | None = None,
         ft8_completed_contact_handler: Callable[[Contact], None] | None = None,
+        ft8_completed_qso_producer: CompletedQsoCapture | None = None,
         ft8_performance_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
@@ -798,12 +805,13 @@ class ApplicationRuntime:
                     ),
                     weather_notes_enabled=config.contact_logging.append_weather_notes,
                 )
+                terminal_attempt = None
                 if ft8_performance_recorder is not None:
                     meter_summary = None
                     meter_reader = getattr(resolved_ft8_executor, "meter_summary", None)
                     if callable(meter_reader):
                         meter_summary = meter_reader(result.context.qso_id)
-                    ft8_performance_recorder.record_qso_result(
+                    terminal_attempt = ft8_performance_recorder.record_qso_result(
                         result,
                         power_meter_raw=(
                             None if meter_summary is None else meter_summary.power_peak_raw
@@ -816,6 +824,21 @@ class ApplicationRuntime:
                         ),
                         tx_power_end_watts=tx_power_end_watts,
                     )
+                if (
+                    contact is not None
+                    and terminal_attempt is not None
+                    and ft8_completed_qso_producer is not None
+                ):
+                    try:
+                        ft8_completed_qso_producer.capture(contact, terminal_attempt)
+                    except (CompletedQsoProducerError, OSError, ValueError) as error:
+                        # Both authoritative source records are already durable. A
+                        # producer-outbox failure must not undo logging or alter the
+                        # terminal radio result.
+                        _LOGGER.error(
+                            "Completed-QSO analytics event could not be queued: %s",
+                            error,
+                        )
                 return contact
 
             ft8_qso = FT8OperatorQsoService(

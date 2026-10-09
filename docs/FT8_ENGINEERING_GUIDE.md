@@ -147,6 +147,13 @@ Non-successful attempt:
 
 The outbox is idempotent by stable attempt UUID and synchronizes to Forge for future AI/statistical analysis.
 
+Optional completed-QSO propagation analytics use a separate source outbox only after
+both the successful `Contact` and matching successful performance attempt have been
+durably written. The terminal callback may perform that short local enqueue but no
+network work. VOACAP and PSK delivery state/retry are independent and production
+composition remains deferred until both receiver PRs merge. See
+`COMPLETED_QSO_PRODUCER.md`.
+
 ## Operator-Authorization Semantics
 
 FT8 transmit authority is based on an explicit operator intent event, not on a

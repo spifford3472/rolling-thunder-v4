@@ -78,6 +78,7 @@ originates from one screen.
 - `src/rolling_thunder/contact_retry.py` — Durable retry metadata for remote contact synchronization.
 - `src/rolling_thunder/contact_sync.py` — Background synchronization orchestration for locally committed contacts.
 - `src/rolling_thunder/contact_weather.py` — Reusable Forge-side projection of shared normalized weather snapshots into immutable QSO weather fields; contact synchronization does not invoke it.
+- `src/rolling_thunder/completed_qso_producer.py` — Source-owned post-durability completed-FT8 event validation, standalone SQLite fan-out outbox, exact replay, and independent destination retry worker; production transport composition is deferred until both receiver PRs merge.
 - `src/rolling_thunder/log_panel.py` — Local contact-log panel repository/controller.
 - `src/rolling_thunder/log_panel_commands.py` — Module providing log panel commands behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/log_ui.py` — Tk presentation for recent local contacts.
