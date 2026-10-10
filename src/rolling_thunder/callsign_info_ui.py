@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from base64 import b64encode
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rolling_thunder.callsign_info import CallsignInfoResponse
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
@@ -75,8 +76,16 @@ def build_callsign_info_presentation(
         if profile.birth_year is not None:
             identity.append(f"Born: {profile.birth_year}")
 
-    clock = local_time or datetime.now().astimezone()
-    local_time_text = f"LOCAL {clock.strftime('%H:%M')}"
+    local_time_text = ""
+    timezone_name = None if response.weather is None else response.weather.timezone
+    if timezone_name is not None:
+        try:
+            target_timezone = ZoneInfo(timezone_name)
+        except (ValueError, ZoneInfoNotFoundError):
+            pass
+        else:
+            clock = local_time or datetime.now(UTC)
+            local_time_text = f"LOCAL {clock.astimezone(target_timezone).strftime('%H:%M')}"
 
     target: GeoPoint | None = None
     pin_visible = False

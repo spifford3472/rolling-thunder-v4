@@ -1,0 +1,12 @@
+[Unit]
+Description=Queue confirmed FT8 contacts for PSK analytics every minute
+# Installation does NOT enable this timer. Requires owner-authorized activation.
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+Unit=rolling-thunder-forge-psk-autoqueue.service
+
+[Install]
+WantedBy=timers.target

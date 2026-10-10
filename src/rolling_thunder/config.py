@@ -1,5 +1,6 @@
 """Typed YAML configuration for Rolling Thunder."""
 
+from datetime import time
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Self
@@ -17,6 +18,7 @@ from pydantic import (
 )
 
 from rolling_thunder.dmr_dashboard_config import DmrHotspotConfig
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.map_sources import (
     DEFAULT_MAP_ATTRIBUTION,
     MapPackageStyle,
@@ -404,6 +406,7 @@ class MapConfig(ConfigurationModel):
 
     enabled: bool = False
     tile_url_template: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    callsign_tile_url_template: str | None = None
     zoom: int = Field(default=17, ge=0, le=22)
     request_timeout_s: float = Field(default=4.0, gt=0, le=60)
     gps_stale_after_s: float = Field(default=10.0, gt=0, le=300)
@@ -414,10 +417,12 @@ class MapConfig(ConfigurationModel):
     style: MapPackageStyle = MapPackageStyle.DAY
     online_attribution: str = DEFAULT_MAP_ATTRIBUTION
 
-    @field_validator("tile_url_template")
+    @field_validator("tile_url_template", "callsign_tile_url_template")
     @classmethod
-    def validate_tile_url_template(cls, value: str) -> str:
+    def validate_tile_url_template(cls, value: str | None) -> str | None:
         """Require an HTTP URL containing all standard tile placeholders."""
+        if value is None:
+            return None
         normalized = value.strip()
         parsed = urlparse(normalized)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -597,19 +602,86 @@ class StorageConfig(ConfigurationModel):
         return value
 
 
+class ContactLoggingConfig(ConfigurationModel):
+    """Central controls for optional QSO snapshot and enrichment data."""
+
+    capture_tx_power: bool = True
+    append_weather_notes: bool = True
+
+
 class FT8QsoConfig(ConfigurationModel):
     """Hardware-independent FT8 QSO policy settings."""
 
     attempts_per_state: int = Field(default=6, ge=1, le=20)
 
 
+class CompletedQsoReceiverConfig(ConfigurationModel):
+    """One independently gated private completed-QSO receiver."""
+
+    enabled: bool = False
+    base_url: AnyHttpUrl | None = None
+    timeout_s: float = Field(default=5.0, gt=0, le=60)
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint(self) -> Self:
+        if self.enabled and self.base_url is None:
+            raise ValueError("base_url is required when the receiver is enabled")
+        return self
+
+
+class CompletedQsoDeliveryConfig(ConfigurationModel):
+    """Disabled source-side completed-FT8 analytics delivery."""
+
+    enabled: bool = False
+    database_path: Path = Path("data/completed-qso-outbox.db")
+    interval_s: float = Field(default=30.0, ge=1.0, le=3600.0)
+    batch_size: int = Field(default=25, ge=1, le=100)
+    retry_initial_delay_s: float = Field(default=5.0, gt=0, le=3600.0)
+    retry_maximum_delay_s: float = Field(default=300.0, gt=0, le=86400.0)
+    voacap: CompletedQsoReceiverConfig = CompletedQsoReceiverConfig()
+    psk_reporter: CompletedQsoReceiverConfig = CompletedQsoReceiverConfig()
+
+    @field_validator("database_path", mode="before")
+    @classmethod
+    def validate_database_path(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("must not be empty")
+        if isinstance(value, (str, Path)) and str(Path(value)) == ".":
+            raise ValueError("must name a database file")
+        return value
+
+    @model_validator(mode="after")
+    def validate_delivery(self) -> Self:
+        if self.retry_maximum_delay_s < self.retry_initial_delay_s:
+            raise ValueError(
+                "retry_maximum_delay_s must be at least retry_initial_delay_s"
+            )
+        if self.enabled and not (self.voacap.enabled or self.psk_reporter.enabled):
+            raise ValueError("at least one receiver must be enabled when delivery is enabled")
+        return self
+
+
+class FT8DecoderBackend(StrEnum):
+    """Supported receive decoder adapters."""
+
+    FT8_LIB = "ft8_lib"
+    FT8MON = "ft8mon"
+
+
 class FT8ReceiveConfig(ConfigurationModel):
     """Receive-only FT8 capture and decoder settings."""
 
     audio_device: str = "plughw:CARD=Device,DEV=0"
+    decoder_backend: FT8DecoderBackend = FT8DecoderBackend.FT8_LIB
     decoder_executable: Path | None = None
+    comparison_backend: FT8DecoderBackend | None = None
+    comparison_decoder_executable: Path | None = None
+    diagnostic_session_end_local: time | None = None
     decoder_timeout_s: float = Field(default=12.0, gt=0, le=60)
     reconnect_delay_s: float = Field(default=2.0, gt=0, le=60)
+    diagnostic_snapshot_path: Path | None = None
+    saved_pcm_directory: Path | None = None
+    saved_pcm_periods: int = Field(default=0, ge=0, le=3)
 
     @field_validator("audio_device")
     @classmethod
@@ -619,7 +691,13 @@ class FT8ReceiveConfig(ConfigurationModel):
             raise ValueError("must not be empty")
         return normalized
 
-    @field_validator("decoder_executable", mode="before")
+    @field_validator(
+        "decoder_executable",
+        "comparison_decoder_executable",
+        "diagnostic_snapshot_path",
+        "saved_pcm_directory",
+        mode="before",
+    )
     @classmethod
     def validate_decoder_executable(cls, value: object) -> object:
         if value is None:
@@ -633,6 +711,36 @@ class FT8ReceiveConfig(ConfigurationModel):
             if not path.is_absolute():
                 raise ValueError("must be an absolute path")
         return path
+
+    @model_validator(mode="after")
+    def validate_diagnostic_and_comparison_settings(self) -> Self:
+        if (self.comparison_backend is None) != (
+            self.comparison_decoder_executable is None
+        ):
+            raise ValueError(
+                "comparison_backend and comparison_decoder_executable must be configured together"
+            )
+        if (
+            self.comparison_backend is not None
+            and self.comparison_backend is self.decoder_backend
+        ):
+            raise ValueError("comparison_backend must differ from decoder_backend")
+        if (
+            self.comparison_backend is not None
+            and self.diagnostic_session_end_local is None
+        ):
+            raise ValueError(
+                "comparison decoder requires diagnostic_session_end_local"
+            )
+        if (self.saved_pcm_periods == 0) != (self.saved_pcm_directory is None):
+            raise ValueError(
+                "saved_pcm_directory is required only when saved_pcm_periods is 1..3"
+            )
+        if self.saved_pcm_periods and self.diagnostic_session_end_local is None:
+            raise ValueError(
+                "saved PCM capture requires diagnostic_session_end_local"
+            )
+        return self
 
 
 class FT8TransmitConfig(ConfigurationModel):
@@ -674,6 +782,8 @@ class FT8Config(ConfigurationModel):
     receive: FT8ReceiveConfig = FT8ReceiveConfig()
     transmit: FT8TransmitConfig = FT8TransmitConfig()
     qso: FT8QsoConfig = FT8QsoConfig()
+    power: FT8PowerPolicy = FT8PowerPolicy()
+    completed_qso_delivery: CompletedQsoDeliveryConfig = CompletedQsoDeliveryConfig()
 
     @model_validator(mode="after")
     def validate_enabled_resources(self) -> Self:
@@ -689,6 +799,8 @@ class FT8Config(ConfigurationModel):
                     "ft8.transmit.encoder_executable must be configured when "
                     "ft8.transmit.enabled is true"
                 )
+        if self.completed_qso_delivery.enabled and not self.enabled:
+            raise ValueError("ft8.completed_qso_delivery.enabled requires ft8.enabled")
         return self
 
 
@@ -709,6 +821,7 @@ class ApplicationConfig(ConfigurationModel):
     radar: RadarConfig = RadarConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     ft8: FT8Config = FT8Config()
+    contact_logging: ContactLoggingConfig = ContactLoggingConfig()
     storage: StorageConfig = StorageConfig()
 
     @model_validator(mode="after")
@@ -744,6 +857,17 @@ def resolve_database_path(
     if database_path.is_absolute():
         return database_path
 
+    return (config_path.parent / database_path).resolve()
+
+
+def resolve_completed_qso_outbox_path(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path:
+    """Resolve the optional completed-QSO outbox beside the active configuration."""
+    database_path = config.ft8.completed_qso_delivery.database_path
+    if database_path.is_absolute():
+        return database_path
     return (config_path.parent / database_path).resolve()
 
 
@@ -907,6 +1031,12 @@ def load_config(path: Path) -> ApplicationConfig:
             "installed_packages": resolve_map_package_paths(config, path),
         }
     )
+    resolved_completed_qso_delivery = config.ft8.completed_qso_delivery.model_copy(
+        update={"database_path": resolve_completed_qso_outbox_path(config, path)}
+    )
+    resolved_ft8 = config.ft8.model_copy(
+        update={"completed_qso_delivery": resolved_completed_qso_delivery}
+    )
     return config.model_copy(
         update={
             "storage": resolved_storage,
@@ -915,5 +1045,6 @@ def load_config(path: Path) -> ApplicationConfig:
             "pota_map": resolved_pota_map,
             "repeaters": resolved_repeaters,
             "map": resolved_map,
+            "ft8": resolved_ft8,
         }
     )

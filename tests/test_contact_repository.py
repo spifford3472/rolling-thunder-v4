@@ -16,6 +16,8 @@ from rolling_thunder.domain import (
     Contact,
     ContactEnrichmentState,
     ContactGridSource,
+    ContactSource,
+    ContactWeatherObservation,
     RadioMode,
     SynchronizationState,
 )
@@ -41,10 +43,17 @@ def make_contact(
         rst_sent="59",
         rst_received="57",
         grid="en80AA",
+        contact_latitude=41.25,
+        contact_longitude=-82.75,
         my_grid="em79XM",
         pota_reference="us-1234",
         grid_source="pota_park",
         enrichment_state="ready",
+        source="pota",
+        tx_power_watts=55,
+        contact_weather=ContactWeatherObservation(summary="Clear, 61 F"),
+        local_weather=ContactWeatherObservation(summary="Cloudy, 58 F"),
+        weather_notes_enabled=True,
         notes="Mobile contact",
         synchronization_state=synchronization_state,
     )
@@ -77,10 +86,16 @@ def test_repository_adds_and_retrieves_complete_contact(
     assert retrieved.mode is RadioMode.USB
     assert retrieved.started_at == datetime(2026, 7, 25, 0, 30, tzinfo=UTC)
     assert retrieved.grid == "EN80aa"
+    assert (retrieved.contact_latitude, retrieved.contact_longitude) == (41.25, -82.75)
     assert retrieved.my_grid == "EM79xm"
     assert retrieved.pota_reference == "US-1234"
     assert retrieved.grid_source is ContactGridSource.POTA_PARK
     assert retrieved.enrichment_state is ContactEnrichmentState.READY
+    assert retrieved.source is ContactSource.POTA
+    assert retrieved.tx_power_watts == 55
+    assert retrieved.contact_weather == ContactWeatherObservation(summary="Clear, 61 F")
+    assert retrieved.local_weather == ContactWeatherObservation(summary="Cloudy, 58 F")
+    assert retrieved.weather_notes_enabled
     assert retrieved.synchronization_state is SynchronizationState.FAILED
 
 
@@ -657,8 +672,10 @@ def test_repository_lists_only_synchronization_ready_contacts(
                 contact_id=UUID("00000000-0000-0000-0000-000000000102"),
                 synchronization_state=SynchronizationState.PENDING,
             ).model_dump(mode="python"),
-            "grid": None,
-            "grid_source": None,
+                "grid": None,
+                "contact_latitude": None,
+                "contact_longitude": None,
+                "grid_source": None,
             "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
         }
     )
@@ -680,6 +697,8 @@ def test_repository_lists_contacts_by_enrichment_state(
                 mode="python"
             ),
             "grid": None,
+            "contact_latitude": None,
+            "contact_longitude": None,
             "grid_source": None,
             "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
         }
@@ -701,6 +720,8 @@ def test_repository_completes_qrz_enrichment_atomically(
                 mode="python"
             ),
             "grid": None,
+            "contact_latitude": None,
+            "contact_longitude": None,
             "grid_source": None,
             "enrichment_state": ContactEnrichmentState.PENDING_QRZ,
         }

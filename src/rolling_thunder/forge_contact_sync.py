@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from threading import Lock
+from typing import Protocol
 from uuid import UUID
 
-from rolling_thunder.domain import Contact
+from rolling_thunder.domain import Contact, ContactSource, RadioMode
+from rolling_thunder.forge_contact_snapshots import ForgeContactSnapshotRepository
 from rolling_thunder.home_platform import (
     ContactUploadDisposition,
     ContactUploadResult,
@@ -19,13 +22,29 @@ from rolling_thunder.home_platform import (
     HomePlatformState,
 )
 from rolling_thunder.wavelog import (
-    WavelogClient,
     WavelogError,
+    WavelogStationBinding,
+    WavelogStationTarget,
     WavelogUploadDisposition,
     contact_to_adif,
 )
 
 Clock = Callable[[], datetime]
+
+
+class WavelogContactSync(Protocol):
+    """Narrow Forge station-routing and QSO-write boundary."""
+
+    def verify_health_target(self) -> None: ...
+
+    def resolve_station_target(self, contact: Contact) -> WavelogStationTarget: ...
+
+    def upload_contact(
+        self,
+        contact: Contact,
+        *,
+        target: WavelogStationTarget,
+    ) -> WavelogUploadDisposition: ...
 
 
 def _utc_now() -> datetime:
@@ -82,10 +101,90 @@ class ForgeContactSyncRepository:
                     ON forge_contact_sync_ledger (state, updated_at)
                     """
                 )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS forge_wavelog_station_bindings (
+                        station_name TEXT PRIMARY KEY CHECK(length(station_name) > 0),
+                        station_id INTEGER NOT NULL CHECK(station_id > 0),
+                        station_uuid TEXT NOT NULL CHECK(length(station_uuid) > 0),
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        verified_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
                 connection.commit()
         except (OSError, sqlite3.Error) as error:
             raise ForgeContactSyncStorageError(
                 f"Forge contact synchronization ledger could not be initialized: {database_path}"
+            ) from error
+
+    def get_station_binding(self, name: str) -> WavelogStationBinding | None:
+        """Return the durable recovery identity for one exact dynamic name."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                row = connection.execute(
+                    """
+                    SELECT station_name, station_id, station_uuid
+                    FROM forge_wavelog_station_bindings
+                    WHERE station_name = ?
+                    """,
+                    (name,),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise ForgeContactSyncStorageError(
+                f"Forge Wavelog station binding lookup failed: {name!r}"
+            ) from error
+        if row is None:
+            return None
+        station_name, station_id, station_uuid = row
+        if (
+            not isinstance(station_name, str)
+            or not isinstance(station_id, int)
+            or isinstance(station_id, bool)
+            or station_id <= 0
+            or not isinstance(station_uuid, str)
+            or not station_uuid
+        ):
+            raise ForgeContactSyncStorageError(
+                f"Forge Wavelog station binding is invalid: {name!r}"
+            )
+        return WavelogStationBinding(station_name, station_id, station_uuid)
+
+    def bind_station(self, binding: WavelogStationBinding) -> None:
+        """Transactionally establish or refresh one verified provider identity."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    """
+                    SELECT station_id, station_uuid
+                    FROM forge_wavelog_station_bindings
+                    WHERE station_name = ?
+                    """,
+                    (binding.name,),
+                ).fetchone()
+                if row is not None and row != (binding.station_id, binding.uuid):
+                    connection.rollback()
+                    raise ForgeContactSyncStorageError(
+                        "Verified Wavelog station identity conflicts with the durable "
+                        f"Forge binding: {binding.name!r}"
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO forge_wavelog_station_bindings (
+                        station_name, station_id, station_uuid
+                    ) VALUES (?, ?, ?)
+                    ON CONFLICT(station_name) DO UPDATE SET
+                        verified_at = CURRENT_TIMESTAMP
+                    """,
+                    (binding.name, binding.station_id, binding.uuid),
+                )
+                connection.commit()
+        except ForgeContactSyncStorageError:
+            raise
+        except sqlite3.Error as error:
+            raise ForgeContactSyncStorageError(
+                f"Forge Wavelog station binding update failed: {binding.name!r}"
             ) from error
 
     def claim(
@@ -192,20 +291,22 @@ class ForgeContactSyncService:
     def __init__(
         self,
         repository: ForgeContactSyncRepository,
-        wavelog: WavelogClient,
+        wavelog: WavelogContactSync,
         *,
         clock: Clock = _utc_now,
+        contact_snapshots: ForgeContactSnapshotRepository | None = None,
     ) -> None:
         self._repository = repository
         self._wavelog = wavelog
         self._clock = clock
+        self._contact_snapshots = contact_snapshots
         self._lock = Lock()
 
     def health(self) -> HomePlatformState:
         """Return a typed availability snapshot after verifying the configured location."""
         checked_at = self._timestamp()
         try:
-            self._wavelog.resolve_station_location(refresh=True)
+            self._wavelog.verify_health_target()
         except WavelogError as error:
             return HomePlatformState(
                 availability=HomePlatformAvailability.UNAVAILABLE,
@@ -220,30 +321,32 @@ class ForgeContactSyncService:
     def synchronize(self, contact: Contact) -> ContactUploadResult:
         """Synchronize one contact idempotently, retrying uncertain remote outcomes safely."""
         with self._lock:
-            location = self._wavelog.resolve_station_location()
+            target = self._wavelog.resolve_station_target(contact)
             payload_sha256 = _remote_payload_sha256(
                 contact,
-                station_profile_id=location.station_id,
+                station_profile_id=target.location.station_id,
             )
             claim = self._repository.claim(
                 contact.contact_id,
                 payload_sha256=payload_sha256,
-                station_profile_id=location.station_id,
+                station_profile_id=target.location.station_id,
             )
             received_at = self._timestamp()
             if claim is ForgeContactClaimDisposition.ALREADY_SYNCHRONIZED:
+                self._snapshot_after_sync(contact)
                 return ContactUploadResult(
                     contact_id=contact.contact_id,
                     disposition=ContactUploadDisposition.ALREADY_EXISTS,
                     received_at=received_at,
                 )
 
-            remote_disposition = self._wavelog.upload_contact(contact)
+            remote_disposition = self._wavelog.upload_contact(contact, target=target)
             self._repository.mark_synchronized(
                 contact.contact_id,
                 synchronized_at=received_at,
                 remote_disposition=remote_disposition,
             )
+            self._snapshot_after_sync(contact)
             disposition = (
                 ContactUploadDisposition.ALREADY_EXISTS
                 if remote_disposition is WavelogUploadDisposition.DUPLICATE
@@ -253,6 +356,23 @@ class ForgeContactSyncService:
                 contact_id=contact.contact_id,
                 disposition=disposition,
                 received_at=received_at,
+            )
+
+    def _snapshot_after_sync(self, contact: Contact) -> None:
+        """Secondary analytics must never affect the primary logging result."""
+        if (
+            self._contact_snapshots is None
+            or contact.mode is not RadioMode.FT8
+            or contact.source is not ContactSource.FT8
+        ):
+            return
+        try:
+            self._contact_snapshots.record(contact)
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Contact analytics snapshot failed for %s",
+                contact.contact_id,
+                exc_info=True,
             )
 
     def _timestamp(self) -> datetime:

@@ -195,9 +195,10 @@ The panel provides:
 - exact staged receive actions
 
 The supported mobile band filters for both POTA and DX are 80, 40, 20, 17, 15,
-12, and 10 meters. Both use SSB, CW, FT4, FT8, DATA, and ALL mode groups. DX
-starts in ALL; POTA starts in SSB. On provider activation the current FT-891 band
-is used when supported, otherwise 20 meters is used.
+12, and 10 meters. Both expose only ALL, SSB/PHONE, and CW mode groups; ALL is
+restricted to Phone/SSB/CW and excludes digital modes. Both providers start in ALL.
+On provider activation the current FT-891 band is used when supported, otherwise
+20 meters is used.
 
 Selection is preserved by stable identity, not row number. If a refresh or
 filter removes the selected identity, selection and staging clear with no

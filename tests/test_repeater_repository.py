@@ -25,7 +25,7 @@ def test_schema_migration_creates_repeater_override_table(tmp_path: Path) -> Non
             "PRAGMA table_info(repeater_active_overrides)"
         ).fetchall()
 
-    assert CURRENT_SCHEMA_VERSION == 17
+    assert CURRENT_SCHEMA_VERSION == 20
     assert {str(row[1]) for row in columns} == {
         "repeater_identity",
         "active",

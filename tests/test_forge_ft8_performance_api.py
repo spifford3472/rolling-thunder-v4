@@ -1,5 +1,6 @@
 """Tests for the private Forge FT8 performance API endpoint."""
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 from json import loads
 from pathlib import Path
@@ -13,19 +14,35 @@ from rolling_thunder.forge_ft8_performance import (
     ForgeFT8PerformanceService,
 )
 from rolling_thunder.ft8.performance import FT8AttemptOutcome, FT8PerformanceAttempt
-from rolling_thunder.wavelog import WavelogStationLocation, WavelogUploadDisposition
+from rolling_thunder.wavelog import (
+    WavelogStationLocation,
+    WavelogStationTarget,
+    WavelogUploadDisposition,
+)
 
 
 class FakeWavelog:
     def __init__(self) -> None:
         self.upload_count = 0
 
-    def resolve_station_location(self, *, refresh: bool = False) -> WavelogStationLocation:
-        del refresh
-        return WavelogStationLocation(42, "Mobile", "mobile")
+    def verify_health_target(self) -> None:
+        return None
 
-    def upload_contact(self, contact: Contact) -> WavelogUploadDisposition:
+    def resolve_station_target(self, contact: Contact) -> WavelogStationTarget:
         del contact
+        return WavelogStationTarget(
+            WavelogStationLocation(42, "Mobile", "mobile"),
+            dynamic=False,
+        )
+
+    def upload_contact(
+        self,
+        contact: Contact,
+        *,
+        target: WavelogStationTarget,
+    ) -> WavelogUploadDisposition:
+        del contact
+        del target
         self.upload_count += 1
         return WavelogUploadDisposition.IMPORTED
 
@@ -120,6 +137,33 @@ def test_performance_upload_requires_matching_attempt_id(tmp_path: Path) -> None
     assert mismatch.status_code == 409
     assert loads(mismatch.body)["error"] == "idempotency_key_mismatch"
     assert wavelog.upload_count == 0
+
+
+def test_invalid_performance_payload_is_logged_for_diagnosis(
+    tmp_path: Path,
+    caplog,
+) -> None:
+    application, _ = _app(tmp_path)
+    caplog.set_level(logging.WARNING, logger="rolling_thunder.forge_contact_sync")
+
+    response = application.handle(
+        "POST",
+        "/ft8-performance",
+        headers={
+            "Content-Type": "application/json",
+            "Idempotency-Key": str(_DEFAULT_ATTEMPT_ID),
+        },
+        body=(
+            b'{"attempt_id":"00000000-0000-0000-0000-000000000401",'
+            b'"callsign":"K1ABC"}'
+        ),
+    )
+
+    assert response.status_code == 422
+    payload = loads(response.body)
+    assert payload["error"] == "invalid_ft8_performance"
+    assert "Invalid FT8 performance field outcome" in payload["message"]
+    assert "Rejected FT8 performance upload: Invalid FT8 performance field outcome" in caplog.text
 
 
 def test_performance_endpoint_is_unavailable_when_not_composed(tmp_path: Path) -> None:

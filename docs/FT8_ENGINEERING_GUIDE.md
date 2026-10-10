@@ -44,29 +44,40 @@ For an existing CQ candidate:
 - `last_cq` records the most recent CQ period;
 - `last_any_decode` records the most recent decode of any type;
 - `cq_count` counts distinct CQ periods;
-- non-CQ traffic can mark the station active;
-- six periods without any traffic expire the row;
+- non-CQ traffic can update informational fields but does not refresh CQ eligibility;
+- the row expires when its most recent actual CQ reaches age six periods;
 - insertion order is preserved, so new CQs append at the bottom.
 
 ## CQ Presentation State
 
 Base presentation for an eligible CQ is:
 
-1. fresh CQ (CQ count 1-2) -> yellow;
-2. repeated CQ (CQ count 3+) -> white;
-3. recent non-CQ activity from an existing CQ candidate -> gray.
+1. actual-CQ age 0-1 periods -> yellow;
+2. actual-CQ age 2-3 periods -> white;
+3. actual-CQ age 4-5 periods -> gray;
+4. actual-CQ age 6+ periods -> absent.
+
+Presentation receives the published receive period explicitly and computes age
+from `last_cq`; `cq_count` and recent non-CQ activity do not change the normal
+row color.
 
 Persistent same-day attempt history has higher presentation precedence:
 
 1. failed/error/retry-exhausted/preparation-failed -> red + `!`;
 2. operator aborted -> blue + `■`;
-3. otherwise active non-CQ -> gray;
-4. otherwise repeated CQ -> white;
-5. otherwise fresh CQ -> yellow.
+3. otherwise the actual-CQ age mapping above applies.
 
 The selected row retains this callsign color and adds an independent high-contrast selection border/background.
 
-POTA is independent metadata: an explicit POTA CQ token adds the tree indicator and does not change eligibility or attempt outcome.
+POTA is independent metadata: an explicit POTA CQ token adds the green tree indicator
+and remains eligible. On successful logging, the current cached POTA records are
+consulted with the same callsign/frequency/mode ambiguity rules as ordinary POTA
+logging; exactly one matching park adds `POTA_REF`, while zero or multiple parks add
+nothing. A U.S. station explicitly calling `CQ DX` is filtered from the selectable CQ
+browser. The right side of the top FT8 title/status row shows `DECODE n` for the most
+recently completed decode cycle in the same 48-point bold type as the FT8 status. The
+field is absent when no count exists and is cleared in every non-FT8 context; there is
+no duplicate decode count in the FT8 footer.
 
 ## Attempt History
 
@@ -112,6 +123,20 @@ Successful, failed, aborted, retry-exhausted, and preparation-failed attempts ar
 
 The telemetry model includes structured UTC timing, callsign, band/frequency, local/remote Maidenhead grids, distance, signal reports/SNR, target power, available radio meter values (power/SWR/ALC), outcome, state, and terminal reason.
 
+`tx_power_target_watts` is the requested initial configured-power target and is
+retained for API compatibility. Nullable `tx_power_start_watts`,
+`tx_power_end_watts`, and `tx_power_max_watts` record actual FT-891 configured
+power readback; they are distinct from the raw RF power meter. End readback is
+best-effort in terminal/receive handling and can never change the QSO result.
+Old Pi payloads remain valid, and Forge schema v1 migrates additively to v2.
+
+For a completed QSO, the same terminal configured-power read is captured on the
+immutable Contact for Wavelog `TX_PWR`. A failed read leaves it null and never changes
+QSO completion. The coordinator invokes the terminal handler before the later
+operator/context exit restores normal 100 W operation, so the saved value is the
+final configured FT8 power rather than `FT8_EXIT_POWER_WATTS`. Propagation correlation identifies the operating mode as FT8 even
+though CAT power uses the FT-891 HF/SSB configured-power control.
+
 Successful QSO:
 - normal contact exactly once;
 - telemetry exactly once.
@@ -121,6 +146,14 @@ Non-successful attempt:
 - telemetry exactly once.
 
 The outbox is idempotent by stable attempt UUID and synchronizes to Forge for future AI/statistical analysis.
+
+Optional completed-QSO propagation analytics use a separate source outbox only after
+both the successful `Contact` and matching successful performance attempt have been
+durably written. The terminal callback may perform that short local enqueue but no
+network work. VOACAP and PSK delivery state/retry are independent. The production
+composition is explicitly disabled by default and schedules authenticated delivery
+outside FT8/UI execution only when configured. See
+`COMPLETED_QSO_PRODUCER.md`.
 
 ## Operator-Authorization Semantics
 
@@ -151,7 +184,46 @@ does not implicitly authorize a subsequent station.
 - CAT loss fails closed.
 - Receive-only configuration creates no physical transmit authority.
 - Local Maidenhead grid is frozen for the duration of one authorized QSO.
+- `local_grid6` is authoritative; `local_grid4` and the backward-compatible trusted
+  `logging_grid` view are derived and cannot drift.
 - Persistent continuous receive architecture remains independent of transmit execution.
+
+## October 6 drive-home behavior
+
+The receive pipeline retains the newest supported addressed-grid or signal-
+report decode whose destination is the configured local callsign and whose
+source callsign is present. Its immutable incoming-call record preserves the
+message kind, report, grid, timing, audio frequency, and raw message. The panel
+shows it only in BROWSE. Button 2 explicitly accepts that exact decode into the
+responder path, while Button 3 dismisses it; decoding alone never authorizes RF.
+Button 2 dismisses the alert only after responder start accepts it. When a
+completed QSO returns to BROWSE, addressed traffic from that same remote is
+treated as terminal continuation through the next six FT8 periods; other
+callsigns remain immediately eligible, and later calls from the worked remote
+can appear after the bounded cutoff. Failed, aborted, retry-exhausted, and error
+results do not install this continuation guard.
+An accepted grid message starts with REPORT and waits for R_REPORT. An accepted
+REPORT starts with R_REPORT, retaining the received report for telemetry, and
+waits for ACK_73. Both then send 73 and finish under the existing bounded retry,
+parity, CAT/PTT, abort, and fail-closed rules. The CQ-selected initiator path is
+unchanged.
+
+Initial QSO power is derived only from frozen local/remote Maidenhead grids:
+20 W through 3,000 km, then 25/30/35/40/45 W through 4,500/6,000/7,500/9,000/
+10,500 km, 50/55/60/65 W through 11,500/12,500/13,500/14,500 km, and 70 W
+beyond. Unknown/invalid distance uses 20 W. The target is applied once during
+preparation and is never continuously reasserted during the active QSO.
+
+CQ freshness is validated synchronously at the explicit operator selection
+against the period in the one immutable receive snapshot the operator saw. A
+receive snapshot at the wall-clock period or one period behind is allowed;
+two-period-stale or future receive state fails closed. The selected CQ must be
+age 0-5 relative to that frozen receive period. One encoder activation uses one
+panel snapshot and one exact activity object; a rejected authorization leaves
+the selection highlighted.
+The accepted selection remains valid across bounded CAT preparation delay;
+post-preparation authorization still checks all radio, mode, location, identity,
+and transmit-session gates without aging the already accepted selection again.
 
 
 ## CP9.1 Final Acceptance Record — 2026-10-03
@@ -232,6 +304,86 @@ sample is used for the next period rather than the previous start plus a fixed
 
 Operational expectation: FT8 receive must remain correctly aligned during
 30–90-day continuous Rolling Thunder uptime without requiring a service restart.
+
+## Receive-Loss Investigation Diagnostics
+
+Issue #237 distinguishes three different quantities that must not be conflated:
+
+1. all normalized FT8 messages decoded by a backend;
+2. the subset of those messages that are CQ messages; and
+3. CQ rows still eligible for the operator browser after activity expiry and
+   worked-today filtering.
+
+The earlier decoder bake-off already establishes a sensitivity limitation in
+the default backend. On the same five WAV periods, `ft8_lib` matched 62 of 88
+WSJT-X oracle messages while `ft8mon` matched 70 of 88. A lower Rolling Thunder
+count than iFTx is therefore not, by itself, evidence of audio loss or CQ
+filtering. The bounded diagnostic mode runs both configured adapters against
+the exact same immutable `FT8PcmPeriod` and retains independent ALL and CQ
+counts so the remaining gap can be localized.
+
+Adapter parsing also accepts leading whitespace, signed decimal DT/frequency
+values, and `ft8_lib` lines both with and without the optional `~` separator;
+decoder-looking lines that still fail normalization are counted as malformed
+instead of disappearing without evidence.
+
+The optional diagnostic session is deliberately temporary. Its configured
+local cutoff is interpreted in `America/New_York`; the issue-237 run uses
+`05:15`. A session started before the morning cutoff stops comparison at that
+cutoff. A session started after 18:00 runs only until the next morning cutoff,
+while one started after the cutoff during the day remains inactive. The primary
+decoder continues normally after the comparison session ends.
+
+The receive configuration shape for the planned run is:
+
+```yaml
+ft8:
+  receive:
+    decoder_backend: ft8_lib
+    decoder_executable: /absolute/path/to/decode_ft8
+    comparison_backend: ft8mon
+    comparison_decoder_executable: /absolute/path/to/ft8mon
+    diagnostic_session_end_local: "05:15"
+    diagnostic_snapshot_path: /absolute/bounded/path/ft8-diagnostics.json
+    saved_pcm_directory: /absolute/bounded/path/ft8-pcm
+    saved_pcm_periods: 3
+```
+
+Comparison and saved PCM configuration are rejected unless the local session
+cutoff is also present. Normal production configuration leaves these fields
+null/zero.
+
+PCM retention is capped at one to three stable WAV slots. Later process starts
+replace the same slot names rather than creating an unbounded period archive.
+The JSON diagnostic snapshot is also atomically replaced in place. Snapshot
+state includes capture/restart/drop counts, audio level/clipping, capture-boundary
+lateness, parser/malformed-line counts, primary and comparison decoder metrics,
+and the bounded session aggregate. Optional diagnostic I/O or clock-probe
+failure is reported in state but cannot stop receive.
+
+### Clock readiness
+
+FT8 UTC slicing now treats the host's normal chrony/NTP synchronization as the
+primary clock authority. A read-only `chronyc tracking` probe requires a normal
+leap state, a usable source, and stratum 1–15. It changes no service or clock
+configuration. When NTP is unavailable, already-published trusted GPS UTC is
+the fallback verifier. If both are available but disagree by more than one
+second, or either trusted source reports excessive offset, FT8 diagnostics fail
+safe to degraded rather than claiming readiness.
+
+GPS-assisted system-clock correction remains owned by the existing bounded
+`ClockSynchronizationService` and its explicit deployment enablement. This
+investigation does not alter sudoers, the privileged helper, chrony/systemd
+configuration, or production ALSA. Receive diagnostics do not gain clock-write,
+radio-control, or RF-transmit authority.
+
+### Capture-boundary correction
+
+Per-period UTC re-anchoring now back-projects from observed scheduler wake
+lateness instead of blindly treating the next buffered sample as the UTC
+boundary. The measured lateness travels with the exact PCM period for diagnosis.
+This closes a smaller per-period alignment error that could otherwise remain
+after the earlier long-run USB-clock drift fix.
 
 
 ## FT-891 context audio source

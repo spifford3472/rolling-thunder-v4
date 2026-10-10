@@ -408,7 +408,9 @@ class SqliteForgeSnapshotRepository:
         if provider is SpotProvider.POTA:
             if park_reference is None:
                 raise ValueError("stored POTA spot is missing its park reference")
+            legacy_key = f"pota:{park_reference}:{frequency.hz}"
             identity = PotaSpotIdentity(
+                callsign=None if row["stable_key"] == legacy_key else callsign,
                 park_reference=park_reference,
                 frequency=frequency,
             )
@@ -436,7 +438,12 @@ class SqliteForgeSnapshotRepository:
             pota=pota,
         )
         stable_key = cls._require_text(row["stable_key"], "stable_key")
-        if spot.stable_key != stable_key:
+        legacy_stable_key = (
+            f"pota:{spot.pota.park_reference}:{spot.frequency.hz}"
+            if spot.provider is SpotProvider.POTA and spot.pota is not None
+            else None
+        )
+        if stable_key not in {spot.stable_key, legacy_stable_key}:
             raise ValueError("stored spot stable identity does not match its fields")
         return spot
 

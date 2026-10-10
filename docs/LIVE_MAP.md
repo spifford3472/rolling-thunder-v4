@@ -12,6 +12,8 @@ no radio-control or transmit authority.
 map:
   enabled: true
   tile_url_template: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+  # Optional preferred style-aware worldwide source for the callsign mini-map.
+  callsign_tile_url_template: http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png
   zoom: 15
   request_timeout_s: 4.0
   gps_stale_after_s: 10.0
@@ -29,6 +31,16 @@ map:
 
 The cache directory is resolved relative to the active YAML file unless an
 absolute path is supplied.
+
+For provider-rendered callsign mini-map DAY/NIGHT pixels, the Pi may set
+`map.callsign_tile_url_template` to
+`http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png` or the equivalent
+trusted RadioLAN address. This is the optional route on the existing Forge
+spot/weather/radar listener, not a separate production map service. Forge map
+serving remains disabled by default and is not automatically enabled by the Pi
+setting. That route is suitable for this worldwide mini-map only when its backing
+renderer contains worldwide data. The existing I-71 corridor TileServer/Protomaps
+dataset is regional and must not be configured as the callsign-map dependency.
 
 ### Automatic DAY/NIGHT selection
 
@@ -51,9 +63,12 @@ packages that cover the operating area. If the requested style is not available
 from the installed package set, the existing map-style boundary rejects the
 switch rather than weakening installed-package authority.
 
-Settings Context Button #2 remains an immediate manual DAY/NIGHT override. A
-manual choice is retained through intermediate GPS movement and automatic mode
-resumes at the next real sunrise or sunset.
+Settings Context Button #2 remains an immediate manual DAY/NIGHT override. Both
+automatic and manual changes use one shared style target: the primary live map
+is authoritative, and the callsign mini-map mirrors every accepted style. Zoom
+commands still affect only the primary map. A manual choice is retained through
+intermediate GPS movement and automatic mode resumes at the next real sunrise
+or sunset.
 
 `cache_retention_days` cannot be less than seven days. The URL template must be
 an absolute HTTP or HTTPS URL containing `{z}`, `{x}`, and `{y}`.
@@ -75,6 +90,19 @@ SQLite work.
 
 `MapTileClient` and `MapTileCache` perform all HTTP and disk work. Tkinter only
 renders immutable state and never contacts the provider or cache directly.
+
+The callsign mini-map remains worldwide and online-only, with no installed
+regional packages. Its cache is isolated under `callsign-info` and partitions
+tile paths by `day` and `night`, while the primary map retains its existing
+cache layout. A configured callsign tile URL containing `{style}` can use the
+existing private Forge map route for provider-rendered DAY/NIGHT tiles and is
+preferred when it has worldwide coverage. When
+`map.callsign_tile_url_template` is omitted and the inherited worldwide online
+source has no `{style}` token, DAY bytes remain unchanged and the callsign-only
+client deterministically creates a validated dark PNG for NIGHT. Only the dark
+result enters the `night/` cache partition; raw DAY bytes are never relabeled or
+stored there. An explicitly configured non-style-aware callsign source remains
+fail-closed for NIGHT. None of this changes the primary live-map source path.
 
 The optional radar service is separately lifecycle-owned. The current visible
 map viewport is a moving window into a larger immutable radar coverage buffer;
@@ -324,6 +352,11 @@ or radio state polling.
     even though unavailable snapshots continue updating.
 19. Confirm logging, POTA/DX selection, physical controls, and radio polling
     remain usable throughout map/GPS/radar/network degradation.
+20. Open a callsign-information mini-map in DAY and NIGHT modes and confirm its
+    base map follows the primary-map style without showing a bright DAY rectangle
+    at night. With no dedicated callsign source configured, confirm the worldwide
+    online fallback remains available and is visibly dark in NIGHT. With an
+    explicit style-aware source, confirm its real NIGHT endpoint remains preferred.
 
 Record the visible results in the draft pull request before approval.
 

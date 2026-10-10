@@ -28,6 +28,7 @@ from rolling_thunder.map_tiles import (
     MapTileClient,
     MapTileError,
     MapTileKey,
+    StylePartitionedMapTileCache,
     tile_key_for_point,
     validate_map_tile_png,
 )
@@ -536,6 +537,8 @@ class MapTileResolver:
 
         if isinstance(online, MapTileClient):
             online.set_style(style.value)
+        if isinstance(cache, StylePartitionedMapTileCache):
+            cache.set_style(style.value)
         if (
             isinstance(cache, MapTileCache)
             and isinstance(online, MapTileClient)
@@ -583,6 +586,8 @@ class MapTileResolver:
         self._style = style
         if isinstance(self._online, MapTileClient):
             self._online.set_style(style.value)
+        if isinstance(self._cache, StylePartitionedMapTileCache):
+            self._cache.set_style(style.value)
         with self._gps_refresh_lock:
             self._last_gps_anchor = None
             self._last_gps_evaluation = 0.0
@@ -590,9 +595,10 @@ class MapTileResolver:
 
     def read_local(self, key: MapTileKey) -> ResolvedMapTile:
         """Resolve refreshed/installed package first, then the runtime cache."""
+        style = self._style
         installed = self._installed.lookup(
             key,
-            style=self._style,
+            style=style,
             refresh_store=self._refresh_store,
         )
         if installed.tile is not None:
@@ -612,7 +618,11 @@ class MapTileResolver:
             )
 
         online_refresh_allowed = installed.covering_package is None
-        cached = self._cache.read(key)
+        cached = (
+            self._cache.read_for_style(key, style.value)
+            if isinstance(self._cache, StylePartitionedMapTileCache)
+            else self._cache.read(key)
+        )
         if cached is None:
             return ResolvedMapTile(
                 png=None,
@@ -682,9 +692,17 @@ class MapTileResolver:
         """Refresh ordinary online/cache tiles while preserving local fallback."""
         if not fallback.online_refresh_allowed:
             return fallback
+        style = self._style
         try:
-            png = self._online.fetch(key)
-            self._cache.write(key, png)
+            png = (
+                self._online.fetch_for_style(key, style.value)
+                if isinstance(self._online, MapTileClient)
+                else self._online.fetch(key)
+            )
+            if isinstance(self._cache, StylePartitionedMapTileCache):
+                self._cache.write_for_style(key, png, style.value)
+            else:
+                self._cache.write(key, png)
             return ResolvedMapTile(
                 png=png,
                 source=MapTileSource.NETWORK,

@@ -1,7 +1,7 @@
 """Tests for immutable project-owned FT8 domain models."""
 
 from dataclasses import FrozenInstanceError
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -67,6 +67,8 @@ def test_qso_context_is_frozen_snapshot() -> None:
     assert context.local_callsign == "KI5VNB"
     assert context.remote_callsign == "K1ABC"
     assert context.local_grid == "EM79xm"
+    assert context.local_grid6 == "EM79xm"
+    assert context.local_grid4 == context.local_grid6[:4] == "EM79"
     assert context.latitude == 39.5
     assert context.longitude == -84.1
     assert context.signal_report_db == -12
@@ -102,4 +104,30 @@ def test_qso_context_rejects_out_of_range_signal_report(report: int) -> None:
             authorized_period=FT8Period(index=100),
             authorized_utc=datetime.fromtimestamp(1501, tz=UTC),
             signal_report_db=report,
+        )
+
+
+def test_qso_context_rejects_coarse_or_inconsistent_local_grid_state() -> None:
+    period = FT8Period(index=100)
+    common = {
+        "local_callsign": "KI5VNB",
+        "remote_callsign": "K1ABC",
+        "target_audio_frequency_hz": 1500,
+        "radio_frequency_hz": 14_074_000,
+        "radio_band": "20m",
+        "radio_mode": "DATA",
+        "tx_parity": FT8PeriodParity.ODD,
+        "authorized_period": period,
+        "authorized_utc": period.start_utc + timedelta(seconds=1),
+        "signal_report_db": -10,
+    }
+    with pytest.raises(ValueError, match="six-character"):
+        FT8QsoContext(local_grid="EM79", **common)
+    with pytest.raises(ValueError, match="must match"):
+        FT8QsoContext(
+            local_grid="EM79xm",
+            local_grid_trusted=False,
+            latitude=39.5,
+            longitude=-84.1,
+            **common,
         )

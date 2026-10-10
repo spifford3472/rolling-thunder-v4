@@ -42,7 +42,9 @@ class FT8AttemptSeed(DomainModel):
     remote_grid: MaidenheadGrid | None = None
     audio_frequency_hz: int = Field(gt=0)
     selected_snr_db: int = Field(ge=-50, le=49)
+    received_report_db: int | None = Field(default=None, ge=-50, le=49)
     pota_cq: bool = False
+    tx_power_target_watts: int = Field(default=20, ge=20, le=70, multiple_of=5)
 
     @field_validator("started_at_utc")
     @classmethod
@@ -74,6 +76,9 @@ class FT8PerformanceAttempt(DomainModel):
     dial_frequency_hz: int | None = Field(default=None, gt=0, le=300_000_000_000)
     mode: str = Field(default="FT8", pattern=r"^FT8$")
     tx_power_target_watts: int = Field(default=20, ge=1, le=100)
+    tx_power_start_watts: int | None = Field(default=None, ge=5, le=100)
+    tx_power_end_watts: int | None = Field(default=None, ge=5, le=100)
+    tx_power_max_watts: int | None = Field(default=None, ge=5, le=100)
 
     power_meter_raw: int | None = Field(default=None, ge=0, le=255)
     swr_meter_raw: int | None = Field(default=None, ge=0, le=255)

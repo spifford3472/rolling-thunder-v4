@@ -54,6 +54,17 @@ A completed contact is written to the local Rolling Thunder database before
 remote synchronization is considered complete. Loss of the home network or
 Wavelog does not make a locally committed contact disappear.
 
+New POTA, DX, Browse, and FT8 contacts retain their originating workflow and a
+best-effort configured transmit-power snapshot. When weather notes are enabled,
+synchronized Wavelog notes use weather already captured on the contact and explicitly
+show `N/A` when it is absent; contact synchronization never waits on public weather.
+Unavailable weather never prevents saving or synchronizing the QSO.
+The capture uses only fresh weather already published for the car and the exact
+contacted callsign/target. Retained car weather must also match the contact's frozen
+local coordinates or, when those are unavailable, its frozen local grid. Stale or
+mismatched endpoint weather remains `N/A`, and later
+retries retain the original snapshot rather than replacing it with newer conditions.
+
 ### Shared behavior stays consistent
 
 POTA, DX, Browse, FT8, DMR, and other screens share services such as GPS,
@@ -249,8 +260,10 @@ or park changes.
 - **Back** — clear the current selection.
 
 The supported shared mobile HF band cycle is 80, 40, 20, 17, 15, 12, and 10
-meters. POTA begins with SSB filtering and also supports CW, FT4, FT8, DATA, and
-ALL mode-group filtering.
+meters. POTA shows only Phone/SSB and CW spots. The mode cycle is ALL, SSB/PHONE,
+and CW; ALL means all of those allowed voice/CW modes and never includes digital
+spots. Distinct activators remain separate rows even when they share the same park
+and exact frequency, such as operators handing one microphone between contacts.
 
 ## Selection safety
 
@@ -316,8 +329,15 @@ serve the same backend data to other authorized applications in the future.
 - **Context Button #2** — cycle DX mode filter.
 - **Back** — clear selection.
 
-DX uses the same supported mobile HF bands as POTA. DX starts with ALL mode
-filtering.
+DX uses the same supported mobile HF bands as POTA. DX shows only Phone/SSB and
+CW spots. Its mode cycle is ALL, SSB/PHONE, and CW, with ALL limited to those
+allowed modes.
+
+After a DX contact is successfully committed to local storage, every DX spot
+for that callsign on the same amateur band is marked with the light-blue worked
+treatment and `— WORKED` for the rest of the current UTC day. Exact frequency
+and mode do not change the DX worked marker; a spot for the callsign on another
+band remains unworked. A failed or discarded contact is not marked worked.
 
 ## Health and freshness
 
@@ -377,21 +397,24 @@ operator workflow. It is not simply a general list of all decoded messages.
 ## CQ browser
 
 A station enters the browser when Rolling Thunder decodes it calling CQ.
-Subsequent activity can update its state while it remains inside the activity
-retention window.
+Subsequent non-CQ activity may update informational fields but cannot extend the
+six-period lifetime measured from the most recent actual CQ.
 
 Typical states include:
 
-- **yellow** — fresh CQ;
-- **white** — repeated CQ;
-- **gray** — previously called CQ but recent traffic indicates activity with
-  another station;
+- **yellow** — actual CQ age 0-1 periods;
+- **white** — actual CQ age 2-3 periods;
+- **gray** — actual CQ age 4-5 periods;
 - **red + !** — failed/exhausted attempt for that callsign/band today;
 - **blue + square marker** — operator-aborted attempt;
 - **tree/POTA marker** — CQ explicitly included a POTA indication.
 
 A successful callsign/band contact is removed from the eligible list for the
-rest of the UTC date.
+rest of the UTC date. A U.S. callsign explicitly calling `CQ DX` is not listed as
+an eligible FT8 target. An explicit `CQ POTA` remains eligible and carries the
+green tree marker. The far-right side of the FT8 status area shows the parsed
+decode count from the most recently completed decode cycle in the same large type as
+the FT8 header. It is hidden when no count is available and on every other screen.
 
 ## Controls
 
@@ -406,6 +429,22 @@ rest of the UTC date.
   depending on current FT8 state.
 - Leaving the FT8 context aborts active FT8 work before restoration.
 
+While the CQ browser is idle, a valid decode addressed to the configured local
+callsign opens a prominent incoming-call alert showing the caller, received SNR,
+and grid when known. **Context Button #2** explicitly answers that exact caller
+through the bounded responder workflow. A grid-bearing inbound starts with our
+signal report; an inbound signal report starts with our acknowledged report.
+Both continue to the normal final 73. **Context Button #3** ignores the caller.
+The alert never interrupts an active or terminal QSO, and a decode never grants
+transmit authority by itself.
+
+Button #2 leaves the alert present if the responder workflow cannot start. After
+a completed QSO, repeat addressed traffic from that same station is suppressed
+for the next six FT8 periods so the final exchange is not mistaken for a new
+call. Other callsigns appear immediately; the worked callsign can appear again
+after the bounded cutoff. Failed and aborted attempts are not suppressed this
+way.
+
 ## One authorization means one QSO
 
 Rolling Thunder never automatically moves from a completed/failed station to a
@@ -417,19 +456,28 @@ Each QSO requires a new explicit operator authorization for one selected target.
 
 Before transmit, Rolling Thunder prepares and verifies the approved FT-891 FT8
 state. The current operating design uses the documented FT8 dial frequency,
-20-watt output, and SSB-BFO USB preparation. Failure is fail-closed: no PTT and
-no transmit audio.
+SSB-BFO USB, and a one-time initial power target calculated from the frozen local
+and remote Maidenhead grids. Unknown distance and paths through 3,000 km start at
+20 W; increasingly long paths use documented 5 W steps and paths beyond 14,500
+km start at the hard 70 W maximum. Failure is fail-closed: no PTT and no
+transmit audio. Rolling Thunder does not continually reset power after QSO start,
+so a manual operator adjustment remains authoritative.
 
 Leaving FT8 restores the documented normal radio values.
 
 ## QSO grid behavior
 
-At the start of a QSO attempt, Rolling Thunder captures the current shared
-Maidenhead grid for that attempt. That grid remains fixed until that QSO
-succeeds, fails, is aborted, or otherwise ends.
+At the start of a QSO attempt, Rolling Thunder accepts GPS location for logging
+only when the latest position is no more than 120 seconds old. A trusted position
+freezes the full six-character Maidenhead grid plus coordinates and jurisdiction
+for that QSO; those values remain fixed until that QSO succeeds, fails, is aborted,
+or otherwise ends.
 
-The next QSO obtains the then-current grid. This prevents vehicle movement
-during one QSO sequence from changing the station location mid-contact.
+If GPS is missing or older than 120 seconds, FT8 may still use the configured home
+grid for the on-air protocol exchange, but the completed contact does not claim that
+grid as its mobile logging location. Forge routes that contact to `Mobile - Unknown
+Location`. The next QSO evaluates GPS freshness again and obtains the then-current
+location.
 
 ## Logging
 
@@ -438,9 +486,13 @@ Failed/aborted attempts are not logged as ordinary QSOs, but may be retained as
 performance/analysis telemetry.
 
 After local persistence, successful FT8 contacts request the same background
-Forge/Wavelog synchronization as ordinary contacts. Forge uses its configured
-Mobile station location. A local success or performance record does not prove
-remote upload: check the LOG row for SYNC. WAIT can include optional QRZ
+Forge/Wavelog synchronization as ordinary contacts. A trusted mobile grid routes to
+`Mobile - XXXX - YY`; an untrusted/missing mobile location routes to `Mobile - Unknown
+Location`. For an explicit `CQ POTA`, Rolling Thunder also checks the current cached
+POTA spots and records the park reference only when callsign/frequency/mode identify
+exactly one park; ambiguous matches are left blank rather than guessed. A local
+success or performance record does not prove remote upload: check the LOG row for
+SYNC. WAIT can include optional QRZ
 enrichment; Sync Now does not bypass that readiness gate. A failed optional QRZ
 lookup releases the contact without a remote grid. If WAIT persists, collect
 the contact/enrichment and sync evidence described in `FORGE_CONTACT_SYNC.md`.
@@ -597,7 +649,9 @@ The page displays the effective zoom and availability of the map/radar/callsign
 controls.
 
 A manual DAY/NIGHT selection can temporarily override automatic solar style
-selection until the next real solar transition.
+selection until the next real solar transition. The callsign-information
+mini-map follows the same accepted DAY/NIGHT selection; map zoom remains a
+primary-live-map-only setting.
 
 ---
 
@@ -730,8 +784,23 @@ Depending on available data, the overlay may include:
 - callsign/name/address identity;
 - a contact mini-map;
 - current target weather;
+- target local time when a reliable IANA timezone accompanies that weather;
 - prior-QSO summary;
 - FIRST CONTACT when no prior QSO is found.
+
+The contact mini-map follows the primary live map's DAY/NIGHT theme. A configured
+worldwide style-aware source supplies its own NIGHT tiles. When no dedicated
+callsign source is configured, the normal worldwide online source supplies DAY
+tiles and Rolling Thunder locally converts validated NIGHT requests into a
+genuinely dark raster. DAY tiles stay unchanged, and separate cache partitions
+prevent DAY pixels from being presented or stored as NIGHT.
+
+When configured for Forge tiles, that source is an optional disabled-by-default
+route on the existing private Forge spot/weather/radar service. A renderer or
+map-route failure affects only the mini-map; spots, health, weather, location,
+radar, local logging, and radio operation continue independently.
+The route must have worldwide backing data for callsign use; the regional I-71
+renderer is not worldwide coverage.
 
 ## Location priority
 
@@ -744,6 +813,10 @@ not presented as an exact station pin.
 
 The overlay follows the shared pending callsign. Callsign replacement, Commit,
 Discard, timeout, or disabling the feature invalidates the current overlay.
+
+`LOCAL` means the contacted target's time, including daylight-saving rules. If Forge
+cannot establish that timezone reliably, the field is left blank rather than showing
+the vehicle/operator timezone.
 
 If Forge/QRZ/Wavelog/weather is unavailable, contact logging and radio operation
 continue; an enrichment failure is not a Commit failure.
@@ -802,10 +875,12 @@ Forge centralizes:
 - heavier normalization/caching;
 - integration with home services such as Wavelog.
 
-## Spot/weather/radar service
+## Spot/weather/radar/map service
 
 The primary Forge service publishes retained spot, health, weather, alert,
-location, and radar capabilities.
+location, and radar capabilities. It can also expose optional on-demand
+style-aware map tiles through the same private listener; no second production
+map daemon or port is required.
 
 ### POTA
 
@@ -845,6 +920,54 @@ Keeping this separate also keeps provider credentials off the Pi.
 A separate Forge process accepts normalized contact synchronization requests and
 performs controlled Wavelog integration with idempotency safeguards.
 
+For a contact with complete frozen mobile grid/state/zone context, Forge routes the
+QSO to a verified Wavelog Station Location named `Mobile - XXXX - YY` (for example,
+`Mobile - EM79 - OH`) inside the configured station logbook. A contact without a
+trusted frozen mobile location is routed to `Mobile - Unknown Location`, which has
+no fabricated grid/state/CQ/ITU metadata. This routing uses the location captured
+with the contact; a later vehicle position cannot redirect a retry. Grid-based
+dynamic Station Locations keep a four-character grid, while the QSO keeps its full
+captured grid when available.
+
+The full local QSO grid is the sole Rolling Thunder grid identity; the four-character
+station profile grid is derived from it. Rolling Thunder submits the full grid in ADIF,
+but Wavelog 3.2.3 overwrites its stored QSO value from the grid4 station profile. This
+requires a separate Wavelog provider/API change; no station profile is moved among
+six-character subsquares as a workaround. Contact sync uses weather already present
+on the QSO, and missing contact or local weather is shown as `N/A`.
+
+If the contact has no operator notes, its Wavelog ADIF `NOTES` value is `Mobile QSO`.
+Existing notes are kept exactly and are not prefixed, appended, or replaced. Station
+creation/linking or Wavelog failures do not undo the local contact; the LOG retry
+path remains available.
+
+## Propagation environmental collector
+
+Forge has a separately supervised, disabled-by-default Phase 1 collector for hourly
+HamQSL solar and KC2G ionospheric snapshots. It has no dashboard control, radio or
+transmit authority, contact-log callback, Wavelog path, or effect on contact retry.
+Its failure therefore does not change radio operation, FT8, local logging, or contact
+synchronization. Forge administrators inspect and activate it separately; vehicle
+operators do not need to enable or acknowledge it.
+
+Its code-deployment path also remains separate: a reviewed, pushed exact 40-character
+commit selects an immutable propagation-only release and cannot select another
+service. The dispatcher adaptation is staged for an authorized Forge administrator;
+it validates the origin commit and exits into the isolated hook before any legacy
+shared-service deployment work. Fresh wheels must be built from that committed Git
+tree, checksum-manifested, reviewed, and separately promoted to root-owned staging.
+The older uncommitted wheelhouse is never deployment input. Code deployment does not
+activate the collector or authorize provider access.
+
+The deploy hook builds the propagation virtualenv at its final immutable SHA path
+and validates the real installed launcher before selecting it. An existing release
+with a broken launcher is not selected or repaired in place; Forge administrators use
+the separate broken-release recovery runbook and a fresh reviewed SHA. This recovery
+does not alter the original contact-sync, callsign-info, or spots services and does
+not authorize provider access.
+
+The release candidate contains two separately supervised, disabled QSO-analysis services. The completed-QSO VOACAP worker includes authenticated private ingestion and a durable inbox; the PSK Reporter FT8 worker includes authenticated private event ingestion, a scheduler and isolated databases. Both have hardened off-by-default units, dedicated identities, and reversible exact-SHA release selection. The Pi now has an independently gated durable delivery/retry outbox, but it has no dashboard control, contact-sync hook, Wavelog path, or effect on radio operation. Source delivery, receiver ingestion, and provider egress all remain disabled pending separately approved credentials, private ingestion acceptance, and bounded provider testing. Failure or absence never blocks local logging.
+
 ## Forge is reusable
 
 Forge is intentionally not a private helper for one Rolling Thunder screen.
@@ -878,6 +1001,10 @@ Examples:
   enrichment overlay simply does not become a prerequisite.
 - **FT8 preparation/transmit failure:** the FT8 attempt fails closed; unrelated
   dashboard functions continue.
+- **FT8 receive degraded:** the FT8 footer identifies clock, audio, dropped-slot,
+  decoder, or diagnostic-storage trouble. NTP is the primary readiness source;
+  trusted GPS verifies UTC when NTP is unavailable. Receive diagnostics never
+  authorize transmission.
 
 ---
 
@@ -904,7 +1031,7 @@ Rolling Thunder reduces workload but does not replace operator judgment.
 | POTA | Find/tune park activators | Encoder select; press tune; Button 1 band; Button 2 mode |
 | DX | Find/tune DX spots | Encoder select; press tune; Button 1 band; Button 2 mode |
 | Browse | Free-form receive/contact workflow | Encoder frequency; Button 2 step; Button 3 mode |
-| FT8 | Native CQ browser and bounded QSO | Encoder select; press start; Button 1 band; Button 3 abort/ack |
+| FT8 | Native CQ browser and bounded QSO | Encoder select; press start; Button 1 band; incoming Button 2 answer / Button 3 ignore; active Button 3 abort/ack |
 | Repeaters | Nearby 6 m repeater selection | Encoder select; press configure; Button 1 filter; Button 2 active toggle |
 | Weather | Conditions/forecast/alerts | Encoder scrolls long alert text |
 | Settings | Runtime display/preferences | Encoder zoom; Buttons 1 radar, 2 style, 3 callsign info |

@@ -1,0 +1,27 @@
+# Production template. Installation must preserve every gate as false. The owner
+# separately authorizes process activation, producer ingestion, and provider egress.
+enabled: false
+ingestion_enabled: false
+bearer_token_environment: ROLLING_THUNDER_PSKREPORTER_INGEST_TOKEN
+server:
+  bind_host: 192.168.9.170
+  bind_port: 8789
+  maximum_event_bytes: 131072
+orchestration_database_path: /var/lib/rolling-thunder-forge-pskreporter/orchestration.sqlite3
+history_database_path: /var/lib/rolling-thunder-forge-pskreporter/history.sqlite3
+status_path: /var/lib/rolling-thunder-forge-pskreporter/status.json
+scheduler_interval_s: 30
+pskreporter:
+  enabled: false
+  sender_callsign: KI5VNB
+  # Optional operator contact supplied voluntarily for provider support.
+  # appcontact: operator@example.org
+  mode: FT8
+  minimum_query_interval_s: 600
+  report_latency_s: 300
+  recent_window_s: 1800
+  correlation_window_s: 300
+  report_limit: 5000
+  timeout_s: 10
+  maximum_response_bytes: 2097152
+  maximum_qsos_per_query: 50

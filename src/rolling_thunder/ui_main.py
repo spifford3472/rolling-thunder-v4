@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
+from time import monotonic
 
 from rolling_thunder.active_panel_commands import (
     SharedSpotActivePanelCommandController,
@@ -42,13 +43,19 @@ from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
 from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
 from rolling_thunder.domain import Contact
+from rolling_thunder.dx_worked import DxWorkedRepository, DxWorkedTracker
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
 from rolling_thunder.ft8.status import operator_ft8_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
-from rolling_thunder.ft8_ui import build_ft8_browser_viewport
+from rolling_thunder.ft8_ui import (
+    build_ft8_browser_viewport,
+    format_ft8_receive_diagnostic,
+    present_ft8_incoming_call,
+)
 from rolling_thunder.ft8_widgets import FT8Widgets
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
@@ -134,6 +141,7 @@ _POTA_CARD_SELECTED_BORDER_PX = 6
 _POTA_VISIBLE_CARD_COUNT = 3
 _POTA_WORKED_BACKGROUND = "#b9ddf5"
 _POTA_WORKED_FOREGROUND = "#0b1f33"
+_CONTEXT_HEADER_FONT = ("DejaVu Sans", 48, "bold")
 
 
 def _indicator_color(value: str) -> str:
@@ -195,6 +203,16 @@ def _pota_card_colors(*, selected: bool, worked: bool) -> tuple[str, str]:
     if selected:
         return _CONTEXT_SELECTED, _BRIGHT
     return _PANEL_BACKGROUND, _BRIGHT
+
+
+def _context_decode_header_text(
+    context: ContextId,
+    decode_count: int | None,
+) -> str:
+    """Return decode text only for an FT8 context with an available count."""
+    if context is not ContextId.FT8 or decode_count is None:
+        return ""
+    return f"DECODE {decode_count}"
 
 
 def run_dashboard(
@@ -290,9 +308,11 @@ def run_dashboard(
     pota_worked = PotaWorkedTracker(
         PotaWorkedRepository(config.storage.database_path)
     )
+    dx_worked = DxWorkedTracker(DxWorkedRepository(config.storage.database_path))
     shared_spot_panel = SharedSpotPanelController(
         runtime,
         pota_worked_status=pota_worked,
+        dx_worked_status=dx_worked,
     )
     shared_spot_tuning = SharedSpotTuneController(ReceiveTuningService(runtime.radio))
     shared_spot_tune_status = SharedSpotTuneStatusController(
@@ -404,6 +424,7 @@ def run_dashboard(
         pota_context_provider=lambda: (
             context_navigation.state.selected is ContextId.POTA
         ),
+        dx_context_provider=lambda: context_navigation.state.selected is ContextId.DX,
         browse_context_provider=lambda: (
             context_navigation.state.selected is ContextId.BROWSE
         ),
@@ -411,13 +432,63 @@ def run_dashboard(
             shared_spot_panel.visible_spots
         ),
         pota_worked_tracker=pota_worked,
+        dx_worked_tracker=dx_worked,
+        tx_power_provider=(
+            runtime.read_tx_power_watts
+            if config.contact_logging.capture_tx_power
+            else None
+        ),
+        weather_notes_enabled=config.contact_logging.append_weather_notes,
     )
+    # Supervised visual acceptance uses an ISOLATED alarm instance. Never touches
+    # runtime.ft8_ptt_alarm, CAT, PTT, or the production transmit authorization.
+    visual_test = FT8PttAlarm()
+    visual_test_deadline = [0.0]
+    visual_test_file = Path('/home/geoff/rolling-thunder-h4-visual-test.trigger')
+
+    def visual_test_active() -> bool:
+        return visual_test_deadline[0] > monotonic()
+
+    def acknowledge_ptt_alarm() -> bool:
+        if visual_test_active():
+            if visual_test.active:
+                visual_test.voice_cancel()
+            return True
+        if not runtime.ft8_ptt_alarm.active:
+            return False
+        runtime.ft8_ptt_alarm.voice_cancel()
+        return True
+
+    def handle_ptt_unlock_action(action: ControlAction) -> bool:
+        if visual_test_active():
+            if (not visual_test.active and visual_test.tx_inhibited
+                    and visual_test.unlock_step(
+                        action, ft8_screen=context_navigation.state.selected is ContextId.FT8,
+                        radio_confirmed_receive=True,
+                    )):
+                visual_test_deadline[0] = 0.0
+            return True
+        alarm = runtime.ft8_ptt_alarm
+        if not alarm.tx_inhibited:
+            return False
+        # All command presses during a lock are consumed, even an incorrect step.
+        # The operator must have manually powered down/recovered the radio.
+        # The sequence acknowledges this; CAT status is not RF proof.
+        alarm.unlock_step(
+            action,
+            ft8_screen=context_navigation.state.selected is ContextId.FT8,
+            radio_confirmed_receive=True,
+        )
+        return True
+
     operator_commands = OperatorCommandController(
         capture,
         contact_commit,
         context_navigation,
         radio_state=lambda: runtime.latest_radio_state,
         active_panel=active_panel_commands,
+        cancel_ptt_alarm=acknowledge_ptt_alarm,
+        ptt_unlock_step=handle_ptt_unlock_action,
     )
 
     control_source: ControlSource | None = None
@@ -439,6 +510,24 @@ def run_dashboard(
     root.title("Rolling Thunder v4")
     root.configure(bg=_BACKGROUND, cursor="none")
     root.attributes("-fullscreen", True)
+    # Emergency warning overlays every dashboard context; stays until voice cancel.
+    ptt_alert = tk.Frame(root, bg="#fff000", highlightthickness=8,
+                         highlightbackground="#101010")
+    tk.Label(ptt_alert, text="WARNING: RADIO MAY BE STUCK TRANSMITTING",
+             bg="#fff000", fg="#000000", font=("DejaVu Sans", 26, "bold"),
+             wraplength=1200).pack(padx=22, pady=(16, 8))
+    tk.Label(ptt_alert, text="STOP SAFELY. POWER DOWN RADIO MANUALLY.\n"
+             "PRESS VOICE CANCEL TO ACKNOWLEDGE.",
+             bg="#fff000", fg="#000000", font=("DejaVu Sans", 23, "bold"),
+             justify="center").pack(padx=22, pady=(0, 16))
+    ptt_unlock = tk.Frame(root, bg="#148137", highlightthickness=5,
+                          highlightbackground="#ffffff")
+    tk.Label(
+        ptt_unlock,
+        text="Press command buttons in this order Command 1, Command 3, Command 1 to unlock",
+        bg="#148137", fg="#ffffff", font=("DejaVu Sans", 26, "bold"),
+        wraplength=1100, justify="center",
+    ).pack(padx=18, pady=22)
     root.grid_columnconfigure(0, weight=2, uniform="dashboard")
     root.grid_columnconfigure(1, weight=3, uniform="dashboard")
     root.grid_rowconfigure(0, weight=1)
@@ -587,16 +676,30 @@ def run_dashboard(
     context_content.grid_rowconfigure(1, weight=1)
     context_content.grid_rowconfigure(2, weight=0)
 
+    context_header = tk.Frame(context_content, bg=_SECONDARY_BACKGROUND)
+    context_header.grid(row=0, column=0, sticky="ew", pady=(2, 8))
+    context_header.grid_columnconfigure(0, weight=1)
+
     context_title_text = tk.StringVar(value="POTA")
     context_title_label = tk.Label(
-        context_content,
+        context_header,
         textvariable=context_title_text,
         bg=_SECONDARY_BACKGROUND,
         fg=_BRIGHT,
-        font=("DejaVu Sans", 48, "bold"),
+        font=_CONTEXT_HEADER_FONT,
         anchor="center",
     )
-    context_title_label.grid(row=0, column=0, sticky="ew", pady=(2, 8))
+    context_title_label.grid(row=0, column=0, sticky="ew")
+    context_decode_text = tk.StringVar(value="")
+    context_decode_label = tk.Label(
+        context_header,
+        textvariable=context_decode_text,
+        bg=_SECONDARY_BACKGROUND,
+        fg=_BRIGHT,
+        font=_CONTEXT_HEADER_FONT,
+        anchor="e",
+    )
+    context_decode_label.grid(row=0, column=1, sticky="e", padx=(12, 0))
 
     context_body_text = tk.StringVar(value="")
     context_body_label = tk.Label(
@@ -1130,6 +1233,28 @@ def run_dashboard(
         ft8_widgets.show()
 
     def refresh() -> None:
+        # SSH trigger is consumed only in receive-only mode while FT8 is visible.
+        # Never trigger the actual PTT alarm state or affect radio authority.
+        if visual_test_file.is_file():
+            visual_test_file.unlink(missing_ok=True)
+            if (not config.ft8.transmit.enabled
+                    and context_navigation.state.selected is ContextId.FT8
+                    and not runtime.ft8_ptt_alarm.tx_inhibited):
+                visual_test.trigger()
+                visual_test_deadline[0] = monotonic() + 90.0
+        if ((visual_test_active() and visual_test.tx_inhibited and not visual_test.active)
+                or (runtime.ft8_ptt_alarm.tx_inhibited and not runtime.ft8_ptt_alarm.active)) and (
+            context_navigation.state.selected is ContextId.FT8
+        ):
+            ptt_unlock.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
+            ptt_unlock.lift()
+        else:
+            ptt_unlock.place_forget()
+        if runtime.ft8_ptt_alarm.active or (visual_test_active() and visual_test.active):
+            ptt_alert.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
+            ptt_alert.lift()
+        else:
+            ptt_alert.place_forget()
         if control_dispatcher is not None:
             control_dispatcher.dispatch_available()
 
@@ -1283,7 +1408,6 @@ def run_dashboard(
                     pota_latitude=callsign_info_state.target_latitude,
                     pota_longitude=callsign_info_state.target_longitude,
                     target_grid=callsign_info_target_grid,
-                    local_time=datetime.now().astimezone(),
                 )
                 callsign_map_snapshot = None
                 if runtime.callsign_map is not None and callsign_presentation.target is not None:
@@ -1361,6 +1485,7 @@ def run_dashboard(
             and dmr_panel_runtime is not None
         )
 
+        context_decode_text.set("")
         if selected_context.selected in {ContextId.POTA, ContextId.DX}:
             health_frame.grid_remove()
             show_pota_context_body()
@@ -1444,7 +1569,7 @@ def run_dashboard(
             show_browse_context_body()
             health_frame.grid_remove()
             context_title_text.set("BROWSE")
-            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_title_label.configure(font=_CONTEXT_HEADER_FONT)
             browse_state = browse_controls.state
             browse_mode_text.set(browse_mode_label(radio_state.mode))
             browse_frequency_text.set(
@@ -1526,7 +1651,7 @@ def run_dashboard(
         elif selected_context.selected is ContextId.FT8:
             health_frame.grid_remove()
             context_title_text.set("FT8")
-            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_title_label.configure(font=_CONTEXT_HEADER_FONT)
             if runtime.ft8_panel is None:
                 show_standard_context_body()
                 context_body_label.configure(
@@ -1547,6 +1672,14 @@ def run_dashboard(
                     else receive_state.status.value.upper()
                 )
                 context_title_text.set(f"FT8  •  RX {receive_status}")
+                context_decode_text.set(
+                    _context_decode_header_text(
+                        selected_context.selected,
+                        None
+                        if receive_state is None or receive_state.last_decoder is None
+                        else receive_state.last_decoder.parsed_decode_count
+                    )
+                )
 
                 if ft8_snapshot.mode is FT8PanelMode.BROWSE:
                     show_ft8_context_body()
@@ -1563,10 +1696,15 @@ def run_dashboard(
                     }
                     viewport = build_ft8_browser_viewport(
                         ft8_snapshot.cq_activity,
+                        current_period=ft8_snapshot.receive_period,
                         selected_callsign=selected_callsign,
                         visible_rows=ft8_widgets.visible_rows,
                         attempt_states=attempt_states,
                         friends=friends,
+                        pending_ranking_callsigns=(
+                            frozenset() if runtime.ft8_browser_ranking is None
+                            else runtime.ft8_browser_ranking.pending_callsigns
+                        ),
                     )
                     selected_activity = next(
                         (row for row in ft8_snapshot.cq_activity if row.callsign == selected_callsign),
@@ -1587,6 +1725,12 @@ def run_dashboard(
                                 current_grid,
                                 selected_activity.grid,
                             )
+                        ),
+                        diagnostic_text=format_ft8_receive_diagnostic(
+                            receive_state
+                        ),
+                        incoming_call=present_ft8_incoming_call(
+                            ft8_snapshot.incoming_call
                         ),
                     )
                 else:

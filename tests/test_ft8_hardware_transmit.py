@@ -518,3 +518,225 @@ def test_qso_executor_collects_peak_meter_summary_while_keyed() -> None:
     assert summary.swr_peak_raw >= 6
     assert radio.ptt.events[0] == "key"
     assert radio.ptt.events[-1] == "release"
+
+
+def test_per_emission_telemetry_does_not_invent_power_when_unreadable() -> None:
+    radio = _MeterRadio(_connected_state())
+    audio = _BlockingAudioOutput()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, audio)
+    request = _qso_hardware_request()
+    worker = threading.Thread(target=lambda: executor.execute_qso(request))
+    worker.start()
+    assert audio.entered.wait(1)
+    audio.release.set()
+    worker.join(2)
+    assert not worker.is_alive()
+    records = executor.transmit_periods(request.authorization.context.qso_id)
+    assert len(records) == 1
+    assert records[0].configured_power_watts is None
+    assert records[0].power_readback_verified is False
+    assert records[0].ended_at_utc >= records[0].started_at_utc
+    assert records[0].frequency_hz == request.expected_radio_frequency_hz
+
+
+def test_failed_pre_ptt_intent_does_not_key_and_executor_recovers() -> None:
+    radio = _FakeRadio(_connected_state())
+    attempts = 0
+
+    def record_intent(_intent, _qso, _frequency, _power):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError('simulated SQLite disk write failure')
+
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), intent_started=record_intent,
+    )
+    request = _qso_hardware_request()
+    with pytest.raises(OSError, match='disk write failure'):
+        executor.execute_qso(request)
+    assert 'key' not in radio.ptt.events
+    executor.execute_qso(request)
+    assert radio.ptt.events.count('key') == 1
+
+
+def test_ptt_key_failure_preserves_uncertain_intent() -> None:
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = _FailingKeyPtt()
+    started = []
+    completed = []
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        intent_started=lambda *args: started.append(args),
+        intent_completed=lambda *args: completed.append(args),
+    )
+    with pytest.raises(RuntimeError):
+        executor.execute_qso(_qso_hardware_request())
+    assert len(started) == 1
+    assert completed == []
+    assert 'release' in radio.ptt.events
+
+
+def test_failed_intent_completion_clears_executor_active_state() -> None:
+    radio = _FakeRadio(_connected_state())
+    attempts = 0
+
+    def complete(_intent, _record):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError('simulated commit failure')
+
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        intent_started=lambda *_args: None,
+        intent_completed=complete,
+    )
+    request = _qso_hardware_request()
+    with pytest.raises(OSError, match='commit failure'):
+        executor.execute_qso(request)
+    executor.execute_qso(request)
+    assert attempts == 2
+    assert radio.ptt.events.count('key') == 2
+
+
+def test_final_qso_power_gate_rejects_manual_over_ceiling_and_unknown() -> None:
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+
+    class PowerRadio(_FakeRadio):
+        def __init__(self, watts):
+            super().__init__(_connected_state(frequency_hz=28_074_000))
+            self.watts = watts
+
+        def read_power_watts(self):
+            return self.watts
+
+    for watts in (35, None, 0, 101):
+        radio = PowerRadio(watts)
+        executor = BoundedFT8HardwareTransmitExecutor(
+            radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy(),
+        )
+        with pytest.raises(RuntimeError, match='power|CAT'):
+            executor._execute(
+                waveform=_waveform(), maximum_key_down_s=14.5,
+                expected_radio_frequency_hz=28_074_000,
+                expected_radio_mode='DATA', label='QSO transmit', qso_id=_qso_context().qso_id,
+            )
+        assert 'key' not in radio.ptt.events
+    radio = PowerRadio(30)
+    executor = BoundedFT8HardwareTransmitExecutor(radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy())
+    executor._execute(
+        waveform=_waveform(), maximum_key_down_s=14.5,
+        expected_radio_frequency_hz=28_074_000, expected_radio_mode='DATA',
+        label='QSO transmit', qso_id=_qso_context().qso_id,
+    )
+    assert radio.ptt.events.count('key') == 1
+
+
+def test_failed_normal_release_leaves_watchdog_armed_for_retry() -> None:
+    class RecoveringPtt(_FakePtt):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fail_next_release = True
+
+        def release(self) -> None:
+            self.events.append("release")
+            if self.fail_next_release:
+                self.fail_next_release = False
+                raise RuntimeError("CAT transmit-off failed")
+
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = RecoveringPtt()
+    watchdogs = _WatchdogFactory()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), watchdog_factory=watchdogs
+    )
+    with pytest.raises(RuntimeError, match="CAT transmit-off failed"):
+        executor.execute_test(_hardware_request())
+    assert watchdogs.timers[0].cancelled is False
+    watchdogs.timers[0].fire()
+    assert radio.ptt.events == ["key", "release", "release"]
+
+
+def test_ptt_alarm_inhibits_future_key_even_after_voice_acknowledgment() -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    alarm = FT8PttAlarm()
+    radio = _FakeRadio(_connected_state())
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        ptt_uncertain=alarm.trigger,
+        transmit_inhibited=lambda: alarm.tx_inhibited,
+    )
+    alarm.trigger()
+    alarm.voice_cancel()
+    with pytest.raises(RuntimeError, match='inhibited'):
+        executor.execute_test(_hardware_request())
+    assert 'key' not in radio.ptt.events
+
+
+def test_watchdog_cat_failure_triggers_ptt_warning() -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    class FailedReleasePtt(_FakePtt):
+        def release(self) -> None:
+            self.events.append('release')
+            raise RuntimeError('CAT release failure')
+
+    alarm = FT8PttAlarm()
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = FailedReleasePtt()
+    watchdogs = _WatchdogFactory()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        watchdog_factory=watchdogs, ptt_uncertain=alarm.trigger,
+    )
+    with pytest.raises(RuntimeError, match='CAT release failure'):
+        executor.execute_test(_hardware_request())
+    assert alarm.active
+    with pytest.raises(RuntimeError, match='CAT release failure'):
+        watchdogs.timers[0].fire()
+    assert alarm.tx_inhibited
+
+
+@pytest.mark.parametrize('method', ['cancel_test', 'cancel_qso', 'close'])
+def test_failed_abort_or_close_triggers_uncertain_ptt_alarm(method: str) -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    class FailingPtt(_FakePtt):
+        def cancel(self) -> None:
+            raise RuntimeError('CAT TX0 failed')
+
+        def close(self) -> None:
+            raise RuntimeError('CAT TX0 failed')
+
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = FailingPtt()
+    alarm = FT8PttAlarm()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), ptt_uncertain=alarm.trigger,
+    )
+    with pytest.raises(RuntimeError, match='CAT TX0 failed'):
+        getattr(executor, method)()
+    assert alarm.active and alarm.tx_inhibited
+
+
+@pytest.mark.parametrize('watts', [None, 0, 35, 101])
+def test_standalone_owner_test_enforces_power_policy_without_keying(watts: int | None) -> None:
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+
+    class PowerRadio(_FakeRadio):
+        def read_power_watts(self) -> int | None:
+            return watts
+
+    radio = PowerRadio(_connected_state(frequency_hz=28_074_000))
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy(),
+    )
+    with pytest.raises(RuntimeError, match='power|CAT'):
+        executor._execute(
+            waveform=_waveform(), maximum_key_down_s=2.0,
+            expected_radio_frequency_hz=28_074_000, expected_radio_mode='DATA',
+            label='hardware test', qso_id=None,
+        )
+    assert 'key' not in radio.ptt.events

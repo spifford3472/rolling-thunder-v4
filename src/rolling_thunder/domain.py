@@ -76,6 +76,17 @@ class ContactEnrichmentState(StrEnum):
     PENDING_QRZ = "pending_qrz"
 
 
+class ContactSource(StrEnum):
+    """Operator workflow that originated a contact snapshot."""
+
+    UNKNOWN = "unknown"
+    POTA = "pota"
+    DX = "dx"
+    BROWSE = "browse"
+    FT8 = "ft8"
+    DMR = "dmr"
+
+
 class DomainModel(BaseModel):
     """Base model shared by immutable Rolling Thunder domain objects."""
 
@@ -105,6 +116,50 @@ class Frequency(DomainModel):
     def serialize_frequency(self) -> int:
         """Serialize frequency values as integer hertz."""
         return self.hz
+
+
+class ContactWeatherObservation(DomainModel):
+    """Optional provider-neutral weather captured for one end of a QSO."""
+
+    summary: str = Field(min_length=1, max_length=240)
+    provider_id: str | None = Field(default=None, max_length=80)
+    provider_name: str | None = Field(default=None, max_length=128)
+    observed_at: datetime | None = None
+    fetched_at: datetime | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+    condition: str | None = Field(default=None, max_length=80)
+    temperature_c: float | None = Field(
+        default=None, ge=-100, le=80, allow_inf_nan=False
+    )
+    relative_humidity_percent: float | None = Field(
+        default=None, ge=0, le=100, allow_inf_nan=False
+    )
+
+    @field_validator("summary", "provider_id", "provider_name", "condition")
+    @classmethod
+    def normalize_weather_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("weather text must not be blank")
+        return normalized
+
+    @field_validator("observed_at", "fetched_at")
+    @classmethod
+    def normalize_weather_time(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("weather observation time must be timezone-aware")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def validate_weather_coordinates(self) -> "ContactWeatherObservation":
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("weather latitude and longitude must be present together")
+        return self
 
 
 class RadioState(DomainModel):
@@ -260,17 +315,44 @@ class Contact(DomainModel):
     rst_sent: str
     rst_received: str
     grid: MaidenheadGrid | None = None
+    contact_latitude: float | None = Field(default=None, ge=-90, le=90, strict=True)
+    contact_longitude: float | None = Field(default=None, ge=-180, le=180, strict=True)
     my_grid: MaidenheadGrid | None = None
     my_latitude: float | None = Field(default=None, ge=-90, le=90, strict=True)
     my_longitude: float | None = Field(default=None, ge=-180, le=180, strict=True)
     my_state: str | None = None
     my_cq_zone: int | None = Field(default=None, ge=1, le=40, strict=True)
     my_itu_zone: int | None = Field(default=None, ge=1, le=90, strict=True)
+    source: ContactSource = ContactSource.UNKNOWN
+    tx_power_watts: int | None = Field(default=None, ge=1, le=1_500, strict=True)
+    contact_weather: ContactWeatherObservation | None = None
+    local_weather: ContactWeatherObservation | None = None
+    weather_notes_enabled: bool = False
     pota_reference: PotaReference | None = None
     grid_source: ContactGridSource | None = None
     enrichment_state: ContactEnrichmentState = ContactEnrichmentState.READY
     notes: str | None = Field(default=None, max_length=2_000)
     synchronization_state: SynchronizationState = SynchronizationState.PENDING
+
+    @property
+    def my_grid6(self) -> MaidenheadGrid | None:
+        """Return the one authoritative six-character local QSO grid."""
+        return self.my_grid
+
+    @property
+    def my_grid4(self) -> str | None:
+        """Return the station-routing prefix derived from ``my_grid6``."""
+        return None if self.my_grid is None else str(self.my_grid)[:4]
+
+    @field_validator("my_grid")
+    @classmethod
+    def require_six_character_local_grid(
+        cls, value: MaidenheadGrid | None
+    ) -> MaidenheadGrid | None:
+        """Prevent independently supplied coarse/extended local-grid identities."""
+        if value is not None and len(str(value)) != 6:
+            raise ValueError("my_grid must be a six-character Maidenhead grid")
+        return value
 
     @field_validator("mode", mode="before")
     @classmethod
@@ -316,7 +398,7 @@ class Contact(DomainModel):
             raise ValueError("my_state must be a two-character code")
         return normalized
 
-    @field_validator("grid_source", "enrichment_state", mode="before")
+    @field_validator("grid_source", "enrichment_state", "source", mode="before")
     @classmethod
     def normalize_contact_enums(cls, value: object) -> object:
         """Normalize optional contact metadata enum strings."""
@@ -339,6 +421,12 @@ class Contact(DomainModel):
         """Reject contradictory contact-location metadata."""
         if (self.my_latitude is None) != (self.my_longitude is None):
             raise ValueError("my_latitude and my_longitude must be present together")
+        if (self.contact_latitude is None) != (self.contact_longitude is None):
+            raise ValueError(
+                "contact_latitude and contact_longitude must be present together"
+            )
+        if self.contact_latitude is not None and self.grid is None:
+            raise ValueError("contact coordinates require a contacted grid")
 
         jurisdiction_values = (self.my_state, self.my_cq_zone, self.my_itu_zone)
         if any(value is None for value in jurisdiction_values) and any(

@@ -9,7 +9,11 @@ from pathlib import Path
 from rolling_thunder.domain import Contact, RadioMode
 from rolling_thunder.forge_contact_sync import ForgeContactSyncRepository, ForgeContactSyncService
 from rolling_thunder.forge_contact_sync_api import ForgeContactSyncApiApplication
-from rolling_thunder.wavelog import WavelogStationLocation, WavelogUploadDisposition
+from rolling_thunder.wavelog import (
+    WavelogStationLocation,
+    WavelogStationTarget,
+    WavelogUploadDisposition,
+)
 
 
 class FakeWavelog:
@@ -17,11 +21,23 @@ class FakeWavelog:
         self.upload_count = 0
         self.contacts: list[Contact] = []
 
-    def resolve_station_location(self, *, refresh: bool = False) -> WavelogStationLocation:
-        del refresh
-        return WavelogStationLocation(42, "Mobile", "mobile")
+    def verify_health_target(self) -> None:
+        return None
 
-    def upload_contact(self, contact: Contact) -> WavelogUploadDisposition:
+    def resolve_station_target(self, contact: Contact) -> WavelogStationTarget:
+        del contact
+        return WavelogStationTarget(
+            WavelogStationLocation(42, "Mobile", "mobile"),
+            dynamic=False,
+        )
+
+    def upload_contact(
+        self,
+        contact: Contact,
+        *,
+        target: WavelogStationTarget,
+    ) -> WavelogUploadDisposition:
+        del target
         self.contacts.append(contact)
         self.upload_count += 1
         return WavelogUploadDisposition.IMPORTED
@@ -43,7 +59,7 @@ def app(tmp_path: Path) -> tuple[ForgeContactSyncApiApplication, FakeWavelog]:
     wavelog = FakeWavelog()
     service = ForgeContactSyncService(
         ForgeContactSyncRepository(tmp_path / "ledger.db"),
-        wavelog,  # type: ignore[arg-type]
+        wavelog,
     )
     return ForgeContactSyncApiApplication(service), wavelog
 
@@ -143,7 +159,7 @@ def test_coordinate_contact_is_accepted_and_preserved(tmp_path: Path) -> None:
     response = upload(application, qso, key=str(qso.contact_id))
     assert response.status_code == 200
     assert wavelog.contacts == [qso]
-    assert wavelog.resolve_station_location().name == "Mobile"
+    assert wavelog.resolve_station_target(qso).location.name == "Mobile"
 
 
 def test_legacy_contact_body_without_coordinates_is_accepted(tmp_path: Path) -> None:
@@ -166,7 +182,7 @@ def test_legacy_contact_body_without_coordinates_is_accepted(tmp_path: Path) -> 
 
 
 
-def test_jurisdiction_contact_does_not_change_legacy_mobile_target(tmp_path: Path) -> None:
+def test_jurisdiction_without_grid_does_not_change_legacy_mobile_target(tmp_path: Path) -> None:
     application, wavelog = app(tmp_path)
     qso = Contact.model_validate(
         {
@@ -181,4 +197,4 @@ def test_jurisdiction_contact_does_not_change_legacy_mobile_target(tmp_path: Pat
     response = upload(application, qso, key=str(qso.contact_id))
     assert response.status_code == 200
     assert wavelog.contacts == [qso]
-    assert wavelog.resolve_station_location().name == "Mobile"
+    assert wavelog.resolve_station_target(qso).location.name == "Mobile"

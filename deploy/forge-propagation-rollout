@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+service_name="rolling-thunder-forge-propagation.service"
+service_user="rolling-thunder-propagation"
+config_path="/etc/rolling-thunder-forge-propagation/forge-propagation.yaml"
+binary_path="/opt/rolling-thunder-forge-propagation/current/.venv/bin/rolling-thunder-forge-propagation"
+unit_path="/etc/systemd/system/${service_name}"
+state_path="/var/lib/rolling-thunder-forge-propagation"
+
+usage() {
+    echo "usage: $0 {status|dry-run|provider-status|network-smoke|activate|deactivate} [confirmation]" >&2
+    echo "  network-smoke requires: --confirm-hamqsl-kc2g-egress" >&2
+    echo "  activate requires:      --confirm-activate" >&2
+}
+
+require_root() {
+    if [[ ${EUID} -ne 0 ]]; then
+        echo "ERROR: this action requires root; rerun with sudo." >&2
+        exit 2
+    fi
+}
+
+require_installed_assets() {
+    local account_record account_name account_password account_uid account_gid
+    local account_gecos account_home account_shell
+
+    [[ -x "${binary_path}" ]] || { echo "ERROR: missing executable ${binary_path}" >&2; exit 2; }
+    [[ -f "${config_path}" ]] || { echo "ERROR: missing config ${config_path}" >&2; exit 2; }
+    [[ -f "${unit_path}" ]] || { echo "ERROR: missing unit ${unit_path}" >&2; exit 2; }
+    [[ -d "${state_path}" ]] || { echo "ERROR: missing state directory ${state_path}" >&2; exit 2; }
+    account_record="$(getent passwd "${service_user}")" || {
+        echo "ERROR: missing user ${service_user}" >&2
+        exit 2
+    }
+    IFS=: read -r account_name account_password account_uid account_gid \
+        account_gecos account_home account_shell <<< "${account_record}"
+    [[ "${account_name}" == "${service_user}" ]] || {
+        echo "ERROR: unexpected account record for ${service_user}" >&2
+        exit 2
+    }
+    [[ "$(id -gn "${service_user}")" == "${service_user}" ]] || {
+        echo "ERROR: ${service_user} must use its dedicated primary group" >&2
+        exit 2
+    }
+    [[ "${account_home}" == "${state_path}" && "${account_shell}" == "/usr/sbin/nologin" ]] || {
+        echo "ERROR: ${service_user} must use ${state_path} and /usr/sbin/nologin" >&2
+        exit 2
+    }
+    runuser --user "${service_user}" -- test -x "${binary_path}" || {
+        echo "ERROR: ${service_user} cannot execute ${binary_path}" >&2
+        exit 2
+    }
+    runuser --user "${service_user}" -- test -r "${config_path}" || {
+        echo "ERROR: ${service_user} cannot read ${config_path}" >&2
+        exit 2
+    }
+    runuser --user "${service_user}" -- test -w "${state_path}" || {
+        echo "ERROR: ${service_user} cannot write ${state_path}" >&2
+        exit 2
+    }
+}
+
+run_as_service() {
+    runuser --user "${service_user}" -- "${binary_path}" --config "${config_path}" "$@"
+}
+
+validate_phase1_plan() {
+    local plan required
+    plan="$(run_as_service --check-config)"
+    for required in \
+        '"database_path": "/var/lib/rolling-thunder-forge-propagation/propagation-history.sqlite3"' \
+        '"pskreporter_enabled": false' \
+        '"voacap_enabled": false' \
+        '"weather_enrichment_enabled": false'
+    do
+        if [[ "${plan}" != *"${required}"* ]]; then
+            echo "ERROR: installed config is outside the reviewed Phase 1 plan: ${required}" >&2
+            exit 2
+        fi
+    done
+    printf '%s\n' "${plan}"
+}
+
+is_config_enabled() {
+    local plan
+    plan="$(validate_phase1_plan)"
+    [[ "${plan}" == *'"enabled": true'* ]]
+}
+
+action="${1:-status}"
+confirmation="${2:-}"
+
+if (( $# > 2 )); then
+    usage
+    exit 2
+fi
+
+case "${action}" in
+    status)
+        [[ $# -le 1 ]] || { usage; exit 2; }
+        systemctl is-enabled "${service_name}" 2>/dev/null || true
+        systemctl is-active "${service_name}" 2>/dev/null || true
+        systemctl status --no-pager --lines=20 "${service_name}" 2>/dev/null || true
+        ;;
+    dry-run)
+        [[ $# -eq 1 ]] || { usage; exit 2; }
+        require_root
+        require_installed_assets
+        systemd-analyze verify "${unit_path}"
+        validate_phase1_plan
+        echo "Dry run complete: no database or provider was accessed."
+        ;;
+    provider-status)
+        [[ $# -eq 1 ]] || { usage; exit 2; }
+        require_root
+        require_installed_assets
+        run_as_service --status
+        echo "Provider status read complete: no provider request was made."
+        ;;
+    network-smoke)
+        [[ $# -eq 2 ]] || { usage; exit 2; }
+        require_root
+        require_installed_assets
+        [[ "${confirmation}" == "--confirm-hamqsl-kc2g-egress" ]] || {
+            echo "ERROR: network smoke requires --confirm-hamqsl-kc2g-egress" >&2
+            exit 2
+        }
+        systemctl is-active --quiet "${service_name}" && {
+            echo "ERROR: stop the collector before a one-shot smoke test." >&2
+            exit 2
+        }
+        is_config_enabled || {
+            echo "ERROR: the reviewed config must explicitly set enabled: true." >&2
+            exit 2
+        }
+        echo "Starting one bounded due check against HamQSL and the two KC2G endpoints."
+        run_as_service --once
+        ;;
+    activate)
+        [[ $# -eq 2 ]] || { usage; exit 2; }
+        require_root
+        require_installed_assets
+        [[ "${confirmation}" == "--confirm-activate" ]] || {
+            echo "ERROR: activation requires --confirm-activate" >&2
+            exit 2
+        }
+        is_config_enabled || {
+            echo "ERROR: the reviewed config must explicitly set enabled: true." >&2
+            exit 2
+        }
+        systemd-analyze verify "${unit_path}"
+        systemctl daemon-reload
+        systemctl enable --now "${service_name}"
+        systemctl status --no-pager --lines=20 "${service_name}"
+        ;;
+    deactivate)
+        [[ $# -eq 1 ]] || { usage; exit 2; }
+        require_root
+        systemctl disable --now "${service_name}"
+        if systemctl is-active --quiet "${service_name}"; then
+            echo "ERROR: ${service_name} is still active after deactivation." >&2
+            exit 3
+        fi
+        if systemctl is-enabled --quiet "${service_name}"; then
+            echo "ERROR: ${service_name} is still enabled after deactivation." >&2
+            exit 3
+        fi
+        echo "Collector disabled and stopped; dedicated configuration and database were preserved."
+        ;;
+    *)
+        usage
+        exit 2
+        ;;
+esac

@@ -86,8 +86,14 @@ def test_recent_valid_gps_populates_my_grid() -> None:
     assert metadata.grid is None
 
 
+def test_gps_at_120_seconds_is_still_accepted() -> None:
+    metadata = resolve(gps=gps_state(age_s=120), active=False)
+
+    assert metadata.my_grid == "EM79wm"
+
+
 def test_stale_gps_does_not_populate_my_grid() -> None:
-    metadata = resolve(gps=gps_state(age_s=11), active=False)
+    metadata = resolve(gps=gps_state(age_s=121), active=False)
 
     assert metadata.my_grid is None
 

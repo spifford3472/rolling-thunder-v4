@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from uuid import UUID
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
+from uuid import UUID, uuid4
 
 from rolling_thunder.domain import GPSFixState, RadioConnectionState, RadioMode, RadioState
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity, FT8QsoContext
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8Period,
+    FT8PeriodParity,
+    FT8QsoContext,
+)
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
@@ -15,6 +22,8 @@ from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_b
 from rolling_thunder.value_types import BaseCallsign, MaidenheadGrid
 
 FT8_CQ_MAX_AGE_PERIODS = 5
+FT8_RECEIVE_MAX_LAG_PERIODS = 1
+FT8_GPS_MAXIMUM_AGE = timedelta(seconds=120)
 FT8_QSO_ALLOWED_RADIO_MODES = frozenset({RadioMode.DATA, RadioMode.USB})
 
 
@@ -39,19 +48,22 @@ class FT8QsoAuthorizationService:
         gps_state: GPSState | None,
         qso_id: UUID | None = None,
         freshness_reference_period: FT8Period | None = None,
+        selection_freshness_validated: bool = False,
+        tx_power_target_watts: int = 20,
+        tx_power_start_watts: int | None = None,
     ) -> FT8QsoContext:
         """Freeze one selected CQ without tuning, keying, or starting a QSO."""
         current_period = self.clock.current_period()
-        freshness_period = freshness_reference_period or current_period
-        if freshness_period.index > current_period.index:
-            raise FT8QsoAuthorizationError(
-                "FT8 freshness reference period cannot be in the future"
+        if not selection_freshness_validated:
+            self.validate_selection_freshness(
+                activity,
+                selection_period=freshness_reference_period or current_period,
+                current_period=current_period,
             )
-        age_periods = freshness_period.index - activity.last_period.index
-        if age_periods < 0:
-            raise FT8QsoAuthorizationError("selected FT8 CQ is from a future period")
-        if age_periods > FT8_CQ_MAX_AGE_PERIODS:
-            raise FT8QsoAuthorizationError("selected FT8 CQ is stale")
+        if not 20 <= tx_power_target_watts <= 70 or tx_power_target_watts % 5:
+            raise FT8QsoAuthorizationError(
+                "FT8 initial power target must be a 5 W step between 20 and 70 W"
+            )
 
         if radio_state.connection_state is not RadioConnectionState.CONNECTED:
             raise FT8QsoAuthorizationError("FT8 QSO authorization requires a connected radio")
@@ -74,9 +86,11 @@ class FT8QsoAuthorizationService:
                 "selected CQ signal report is outside the FT8 report range"
             )
 
-        local_grid, latitude, longitude, location_label = freeze_ft8_location(
+        authorized_utc = self.clock.now_utc()
+        local_grid, local_grid_trusted, latitude, longitude, location_label = freeze_ft8_location(
             gps_state,
             self.home_grid,
+            reference_time=authorized_utc,
         )
         jurisdiction = (
             self.jurisdiction_resolver.resolve(latitude, longitude)
@@ -85,7 +99,6 @@ class FT8QsoAuthorizationService:
             and longitude is not None
             else None
         )
-        authorized_utc = self.clock.now_utc()
         if self.clock.current_period() != current_period:
             raise FT8QsoAuthorizationError("FT8 period changed during authorization")
 
@@ -97,6 +110,7 @@ class FT8QsoAuthorizationService:
             radio_band=band.value,
             radio_mode=radio_state.mode.value,
             local_grid=local_grid,
+            local_grid_trusted=local_grid_trusted,
             tx_parity=_opposite_parity(activity.last_period.parity),
             authorized_period=current_period,
             authorized_utc=authorized_utc,
@@ -109,14 +123,105 @@ class FT8QsoAuthorizationService:
             location_label=location_label,
             remote_grid=activity.grid,
             pota_cq=activity.pota_cq,
-            **({} if qso_id is None else {"qso_id": qso_id}),
+            tx_power_target_watts=tx_power_target_watts,
+            tx_power_start_watts=tx_power_start_watts,
+            qso_id=qso_id or uuid4(),
+        )
+
+    def authorize_incoming(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        radio_state: RadioState,
+        gps_state: GPSState | None,
+        qso_id: UUID | None = None,
+        freshness_reference_period: FT8Period | None = None,
+        selection_freshness_validated: bool = False,
+        tx_power_target_watts: int = 20,
+        tx_power_start_watts: int | None = None,
+    ) -> FT8QsoContext:
+        """Freeze an explicitly accepted addressed decode as a responder QSO."""
+        current_period = self.clock.current_period()
+        if not selection_freshness_validated:
+            self.validate_incoming_freshness(
+                incoming,
+                selection_period=freshness_reference_period or current_period,
+                current_period=current_period,
+            )
+        activity = FT8CQActivity(
+            callsign=incoming.callsign,
+            last_period=incoming.period,
+            snr_db=incoming.snr_db,
+            dt_seconds=incoming.dt_seconds,
+            audio_frequency_hz=incoming.audio_frequency_hz,
+            grid=incoming.grid,
+        )
+        context = self.authorize(
+            activity,
+            radio_state=radio_state,
+            gps_state=gps_state,
+            qso_id=qso_id,
+            selection_freshness_validated=True,
+            tx_power_target_watts=tx_power_target_watts,
+            tx_power_start_watts=tx_power_start_watts,
+        )
+        return replace(context, responder_inbound=incoming)
+
+    def validate_selection_freshness(
+        self,
+        activity: FT8CQActivity,
+        *,
+        selection_period: FT8Period,
+        current_period: FT8Period | None = None,
+    ) -> None:
+        """Fail closed at operator selection, before any CAT preparation delay."""
+        observed_current = current_period or self.clock.current_period()
+        if selection_period.index > observed_current.index:
+            raise FT8QsoAuthorizationError(
+                "FT8 freshness reference period cannot be in the future"
+            )
+        if observed_current.index - selection_period.index > FT8_RECEIVE_MAX_LAG_PERIODS:
+            raise FT8QsoAuthorizationError("FT8 receive state is stale")
+        age_periods = selection_period.index - activity.last_period.index
+        if age_periods < 0:
+            raise FT8QsoAuthorizationError("selected FT8 CQ is from a future period")
+        if age_periods > FT8_CQ_MAX_AGE_PERIODS:
+            raise FT8QsoAuthorizationError("selected FT8 CQ is stale")
+
+    def validate_incoming_freshness(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        selection_period: FT8Period,
+        current_period: FT8Period | None = None,
+    ) -> None:
+        """Apply the existing bounded freshness policy to an accepted caller."""
+        activity = FT8CQActivity(
+            callsign=incoming.callsign,
+            last_period=incoming.period,
+            snr_db=incoming.snr_db,
+            dt_seconds=incoming.dt_seconds,
+            audio_frequency_hz=incoming.audio_frequency_hz,
+            grid=incoming.grid,
+        )
+        self.validate_selection_freshness(
+            activity,
+            selection_period=selection_period,
+            current_period=current_period,
         )
 
 def freeze_ft8_location(
     gps_state: GPSState | None,
     home_grid: MaidenheadGrid,
-) -> tuple[str, float | None, float | None, str]:
-    """Freeze the current mobile grid or configured home-grid fallback."""
+    *,
+    reference_time: datetime,
+    maximum_age: timedelta = FT8_GPS_MAXIMUM_AGE,
+) -> tuple[str, bool, float | None, float | None, str]:
+    """Freeze fresh GPS for logging while retaining a valid on-air grid fallback."""
+    if reference_time.tzinfo is None or reference_time.utcoffset() is None:
+        raise ValueError("FT8 location reference time must be timezone-aware")
+    if maximum_age < timedelta(0):
+        raise ValueError("FT8 GPS maximum age must not be negative")
     if (
         gps_state is not None
         and gps_state.connection_state is GPSConnectionState.CONNECTED
@@ -125,15 +230,18 @@ def freeze_ft8_location(
         and gps_state.position.latitude is not None
         and gps_state.position.longitude is not None
     ):
-        latitude = gps_state.position.latitude
-        longitude = gps_state.position.longitude
-        return (
-            str(maidenhead_grid(latitude, longitude)),
-            latitude,
-            longitude,
-            "GPS",
+        age = max(timedelta(0), reference_time - gps_state.position.updated_at)
+        if age <= maximum_age:
+            latitude = gps_state.position.latitude
+            longitude = gps_state.position.longitude
+            grid = str(maidenhead_grid(latitude, longitude))
+            return grid, True, latitude, longitude, "GPS"
+    fallback = str(home_grid)
+    if len(fallback) != 6:
+        raise FT8QsoAuthorizationError(
+            "FT8 authorization requires a six-character configured home grid"
         )
-    return str(home_grid), None, None, "configured home grid"
+    return fallback, False, None, None, "unknown location"
 
 
 def _opposite_parity(parity: FT8PeriodParity) -> FT8PeriodParity:

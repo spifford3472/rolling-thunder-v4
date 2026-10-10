@@ -100,4 +100,13 @@ radar:
   maximum_cached_tiles: 256
   refresh_on_start: true
 
+map_tiles:
+  # Optional DAY/NIGHT route on this same Forge listener. The renderer is a
+  # local TileServer GL-compatible service; no public tile provider or key is used.
+  enabled: false
+  renderer_url_template: http://127.0.0.1:8080/styles/{style}/{z}/{x}/{y}.png
+  request_timeout_s: 10.0
+  minimum_request_interval_s: 0.05
+  attribution: © OpenStreetMap contributors · Protomaps
+
 logging_level: INFO

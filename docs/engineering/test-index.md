@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 283.**
+**Cataloged Python test modules: 296.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -112,9 +112,14 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_log_ui.py`
 - `tests/test_logging_setup.py`
 - `tests/test_wavelog.py`
+- `tests/test_wavelog.py` owns Wavelog station/logbook routing coverage: exact
+  dynamic reuse, active-log-only hidden creation and restart recovery, durable
+  binding identity/metadata rejection, recoverable and unrecoverable 409 cases,
+  ambiguity/incompatibility rejection, membership preservation/verification,
+  read-only health, legacy fallback/grid PATCH, dynamic no-PATCH behavior, and
+  blank-only ADIF `NOTES` defaulting.
 - `tests/test_wavelog_history.py`
 - `tests/test_wavelog_http_errors.py`
-
 ## Callsign intelligence
 
 - `tests/test_callsign_capture.py`
@@ -126,6 +131,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 
 ## POTA / DX / shared spots
 
+- `tests/test_dx_worked.py`
 - `tests/test_http_pota_spot_source.py`
 - `tests/test_pota_catalog.py`
 - `tests/test_pota_config.py`
@@ -164,8 +170,13 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_contact_sync.py` — composed dashboard completion notification
   and shared Pi/Forge/Wavelog Mobile path, including optional QRZ and replay.
 
-- `tests/test_forge_ft8_performance.py`
+- `tests/test_forge_ft8_performance.py` — structured configured-power fields, legacy replay, and additive Forge schema migration.
 - `tests/test_forge_ft8_performance_api.py`
+- `tests/test_forge_pskreporter.py` — bounded provider parsing, concurrency etiquette, terminal eligibility, correlation, restart-safe zero/failure distinctions, and raw-query archival.
+- `tests/test_forge_pskreporter_orchestration.py` — confirmed event validation, exact replay, terminal latency, durable global pacing, bounded batching, restart reconciliation, disabled behavior, and provider-free health.
+- `tests/test_completed_qso_producer.py` — matching post-durability event validation, exact replay/conflict, independent destination progress, retry timing, and restart recovery without provider I/O.
+- `tests/test_completed_ft8_ingestion_client.py` — authenticated PSK event transport, full immutable payload, idempotency key, receiver UUID acknowledgement, and retryable failure semantics.
+- `tests/test_forge_pskreporter_worker.py` — triple-gated configuration, database-free disabled/preflight behavior, authenticated idempotent event ingestion, latency preservation, disabled-provider scheduling, and atomic diagnostics.
 - `tests/test_ft891_cat.py`
 - `tests/test_ft891_fm_repeater_cat.py`
 - `tests/test_ft891_fm_repeater_radio.py`
@@ -177,19 +188,19 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_audio.py`
 - `tests/test_ft8_audio_buffer.py`
 - `tests/test_ft8_audio_output.py`
-- `tests/test_ft8_authorization.py`
+- `tests/test_ft8_authorization.py` — fail-closed selection freshness and preparation-delay regression coverage.
 - `tests/test_ft8_band_control.py`
 - `tests/test_ft8_bands.py`
 - `tests/test_ft8_config.py`
 - `tests/test_ft8_coordinator.py`
 - `tests/test_ft8_decoder.py`
-- `tests/test_ft8_distance.py`
+- `tests/test_ft8_distance.py` — Maidenhead distance and conservative adaptive initial-power thresholds.
 - `tests/test_ft8_domain.py`
 - `tests/test_ft8_encoder.py`
 - `tests/test_ft8_hardware_transmit.py`
 - `tests/test_ft8_logging.py`
 - `tests/test_ft8_operator_qso.py`
-- `tests/test_ft8_panel.py`
+- `tests/test_ft8_panel.py` — CQ selection plus explicit incoming-call answer/ignore/staleness behavior.
 - `tests/test_ft8_performance.py`
 - `tests/test_ft8_performance_http.py`
 - `tests/test_ft8_performance_outbox.py`
@@ -197,7 +208,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_physical_controls.py`
 - `tests/test_ft8_qso.py`
 - `tests/test_ft8_radio_preparation.py`
-- `tests/test_ft8_receive.py`
+- `tests/test_ft8_receive.py` — continuous capture plus addressed-call publication without changing diagnostics.
+- `tests/test_ft8_diagnostics.py` — NTP-primary/GPS-fallback readiness, audio health, and bounded 05:15 New York comparison-session accounting.
 - `tests/test_ft8_schema_migration.py`
 - `tests/test_ft8_session.py`
 - `tests/test_ft8_start_control.py`
@@ -251,6 +263,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_live_map_ui.py`
 - `tests/test_live_map_zoom.py`
 - `tests/test_live_radar_service.py`
+- `tests/test_forge_map_route.py`
 - `tests/test_map_solar.py`
 - `tests/test_map_sources.py`
 - `tests/test_map_tiles.py`
@@ -283,7 +296,12 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_config.py`
 - `tests/test_forge_contact_sync.py`
 - `tests/test_forge_contact_sync_api.py`
-- `tests/test_forge_deployment_assets.py`
+- `tests/test_forge_contact_sync_config.py`
+- `tests/test_forge_deployment_assets.py` — static production path, privilege,
+  disabled-default, rollout-confirmation, exact-SHA component-hook parameter and
+  path constraints, real pip-generated launcher final-path execution, broken-release
+  fail-closed activation, successful isolated stage preparation/cleanup, artifact
+  replacement refusal, and cross-service isolation checks.
 - `tests/test_forge_dx_spot_parser.py`
 - `tests/test_forge_dxspider_provider.py`
 - `tests/test_forge_dxsummit_irc_parser.py`
@@ -296,6 +314,20 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_nws_weather_alerts.py`
 - `tests/test_forge_open_meteo_weather.py`
 - `tests/test_forge_pota_provider.py`
+- `tests/test_forge_propagation_history.py` — offline collector/runtime behavior,
+  provider bounds, durable health, and database/provider-free config preflight.
+- `tests/test_forge_propagation_qso_ingestion.py` — immutable UUID replay,
+  schema coexistence/migration boundary, identified bounded leases, final-attempt
+  recovery, queue observation, retry/dead-letter isolation, and VOACAP provenance.
+- `tests/test_forge_propagation_qso_worker.py` — disabled startup, independent
+  configuration bounds, provider-free preflight/status, deterministic fake cycles,
+  and atomic versioned status.
+- `tests/test_forge_propagation_qso_api.py` — authentication-before-body,
+  UUID/idempotency validation, durable provider-free ingestion, health, disabled
+  behavior, and in-memory producer/consumer contract smoke coverage.
+- `tests/test_completed_qso_ingestion_client.py` — bearer/idempotency transport,
+  complete immutable payload, acknowledgement validation, and failure semantics.
+- `tests/test_forge_propagation_repository.py`
 - `tests/test_forge_qrz_enrichment.py`
 - `tests/test_forge_qrz_provider.py`
 - `tests/test_forge_radar.py`
@@ -398,6 +430,23 @@ and installed screen acceptance remains required; see `../KNOWN_CALLSIGNS.md`.
 
 `tests/test_contact_location.py` covers coordinate bounds/pairs/frozen models, all
 repository paths, retry/enrichment preservation, schema-15 migration integrity,
-complete-contact export/backup/import, legacy formats and unchanged ADIF/Forge
-hash. Existing contact-controller, logging, FT8 authorization/logging and HTTP/Forge
-API tests cover capture boundaries, movement and receiver compatibility.
+complete-contact export/backup/import, legacy formats, and the historical
+coordinate-independent ADIF baseline. Current Forge hash coverage additionally
+binds the exact selected station ID and Wavelog-bound ADIF. Existing
+contact-controller, logging, FT8 authorization/logging and HTTP/Forge API tests
+cover capture boundaries, movement and receiver compatibility.
+
+### Dynamic mobile Wavelog routing
+
+`tests/test_forge_contact_sync.py` owns ledger binding, uncertain duplicate replay,
+and changed-payload/changed-station conflict behavior after exact target selection.
+`tests/test_contact_weather.py` proves synchronization has no weather-enricher
+dependency, uploads the exact immutable payload, preserves weather already present,
+and formats absent requested weather as `N/A`. `tests/test_forge_contact_sync_config.py`
+rejects the removed contact-sync weather-provider configuration.
+`tests/test_wavelog.py` owns provider-adapter station creation and configured-logbook
+membership semantics. `tests/test_forge_contact_sync_api.py`,
+`tests/test_ft8_contact_sync.py`, and DMR/ADIF tests protect the one shared
+presentation-neutral sync boundary used by ordinary, POTA/DX, FT8, and DMR
+contacts. All provider writes are scripted fakes; installed Wavelog acceptance is
+still required.

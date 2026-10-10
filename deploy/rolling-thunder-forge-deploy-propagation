@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Propagation-only component hook for the root-owned Forge deployment dispatcher.
+# Its verified dispatcher interface and separately promoted staging contract are in
+# docs/FORGE_PROPAGATION_DEPLOYMENT_PROPOSAL.md.
+
+readonly service_name="rolling-thunder-forge-propagation.service"
+readonly service_user="rolling-thunder-propagation"
+readonly application_root="/opt/rolling-thunder-forge-propagation"
+readonly releases_root="${application_root}/releases"
+readonly current_link="${application_root}/current"
+readonly staging_root="/var/lib/rolling-thunder-forge-deploy/propagation"
+readonly lock_path="/run/lock/rolling-thunder-forge-propagation-deploy.lock"
+
+usage() {
+    echo "usage: $0 EXACT_40_CHARACTER_LOWERCASE_COMMIT_SHA" >&2
+}
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 2
+}
+
+validate_arguments() {
+    (( $# == 1 )) || { usage; exit 2; }
+    [[ "$1" =~ ^[0-9a-f]{40}$ ]] || die \
+        "commit must be exactly 40 lowercase hexadecimal characters"
+}
+
+require_root() {
+    (( EUID == 0 )) || die "propagation deployment requires root"
+}
+
+acquire_component_lock() {
+    exec 9>"${lock_path}"
+    flock --nonblock 9 || die "another propagation deployment is in progress"
+}
+
+require_safe_directory() {
+    local path="$1"
+    local owner mode
+
+    [[ -d "${path}" && ! -L "${path}" ]] || die \
+        "required directory is missing or is a symlink: ${path}"
+    owner="$(stat -c '%U' -- "${path}")"
+    mode="$(stat -c '%a' -- "${path}")"
+    [[ "${owner}" == "root" ]] || die "directory must be root-owned: ${path}"
+    (( (8#${mode} & 8#022) == 0 )) || die \
+        "directory must not be group/world writable: ${path}"
+}
+
+require_service_account() {
+    local record name password uid gid gecos home shell
+
+    record="$(getent passwd "${service_user}")" || die \
+        "missing dedicated account ${service_user}"
+    IFS=: read -r name password uid gid gecos home shell <<< "${record}"
+    [[ "${name}" == "${service_user}" ]] || die "unexpected service account record"
+    [[ "$(id -gn "${service_user}")" == "${service_user}" ]] || die \
+        "${service_user} must use its dedicated primary group"
+    [[ "${home}" == "/var/lib/rolling-thunder-forge-propagation" ]] || die \
+        "${service_user} has an unexpected home directory"
+    [[ "${shell}" == "/usr/sbin/nologin" ]] || die \
+        "${service_user} must use /usr/sbin/nologin"
+}
+
+validate_stage() {
+    local sha="$1"
+    local stage="$2"
+    local unsafe_entry line filename
+    local -a wheel_files=()
+    local -A manifested_wheels=()
+
+    require_safe_directory "${staging_root}"
+    require_safe_directory "${stage}"
+    require_safe_directory "${stage}/wheelhouse"
+    [[ -f "${stage}/COMMIT_SHA" && ! -L "${stage}/COMMIT_SHA" ]] || die \
+        "staged COMMIT_SHA is missing or is a symlink"
+    [[ -f "${stage}/wheelhouse/SHA256SUMS" && \
+       ! -L "${stage}/wheelhouse/SHA256SUMS" ]] || die \
+        "staged SHA256SUMS is missing or is a symlink"
+
+    unsafe_entry="$(find "${stage}" -xdev \
+        \( -type l -o ! -user root -o -perm /022 \) -print -quit)"
+    [[ -z "${unsafe_entry}" ]] || die \
+        "staged tree contains a symlink or unsafe ownership/mode: ${unsafe_entry}"
+
+    cmp --silent <(printf '%s\n' "${sha}") "${stage}/COMMIT_SHA" || die \
+        "staged COMMIT_SHA must contain exactly the requested commit and newline"
+
+    mapfile -t wheel_files < <(
+        find "${stage}/wheelhouse" -maxdepth 1 -type f -name '*.whl' \
+            -printf '%f\n' | sort
+    )
+    (( ${#wheel_files[@]} > 0 )) || die "staged wheelhouse contains no wheels"
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        [[ "${line}" =~ ^[0-9a-f]{64}[[:space:]]+([A-Za-z0-9_.+-]+\.whl)$ ]] || die \
+            "SHA256SUMS must contain only lowercase hashes and wheel basenames"
+        filename="${BASH_REMATCH[1]}"
+        [[ -z "${manifested_wheels[${filename}]:-}" ]] || die \
+            "SHA256SUMS contains a duplicate wheel: ${filename}"
+        manifested_wheels["${filename}"]=1
+    done < "${stage}/wheelhouse/SHA256SUMS"
+    (( ${#manifested_wheels[@]} == ${#wheel_files[@]} )) || die \
+        "SHA256SUMS must cover every staged wheel exactly once"
+    for filename in "${wheel_files[@]}"; do
+        [[ -n "${manifested_wheels[${filename}]:-}" ]] || die \
+            "SHA256SUMS does not cover staged wheel: ${filename}"
+    done
+
+    (
+        cd "${stage}/wheelhouse"
+        sha256sum --check --strict SHA256SUMS
+    ) || die "staged wheelhouse checksum verification failed"
+}
+
+find_project_wheel() {
+    local wheelhouse="$1"
+    local -a wheels=()
+
+    shopt -s nullglob
+    wheels=("${wheelhouse}"/rolling_thunder-*.whl)
+    shopt -u nullglob
+    (( ${#wheels[@]} == 1 )) || die \
+        "staged wheelhouse must contain exactly one rolling_thunder wheel"
+    printf '%s\n' "${wheels[0]}"
+}
+
+validate_release() {
+    local sha="$1"
+    local release_path="$2"
+    local entry_point="${release_path}/.venv/bin/rolling-thunder-forge-propagation"
+
+    [[ -d "${release_path}" && ! -L "${release_path}" ]] || die \
+        "installed release is missing or is a symlink"
+    [[ -f "${release_path}/COMMIT_SHA" && \
+       ! -L "${release_path}/COMMIT_SHA" ]] || die \
+        "installed release lacks a regular commit marker"
+    cmp --silent <(printf '%s\n' "${sha}") "${release_path}/COMMIT_SHA" || die \
+        "installed release commit marker does not match exactly"
+    [[ -f "${entry_point}" && ! -L "${entry_point}" && -x "${entry_point}" ]] || die \
+        "installed release lacks a regular propagation entry point"
+    runuser --user "${service_user}" -- "${entry_point}" --help >/dev/null || die \
+        "installed propagation entry point failed provider-free validation"
+}
+
+install_release() {
+    local sha="$1"
+    local stage="$2"
+    local release_path="${releases_root}/${sha}"
+    local project_wheel
+
+    if [[ -e "${release_path}" || -L "${release_path}" ]]; then
+        validate_release "${sha}" "${release_path}"
+        printf '%s\n' "${release_path}"
+        return
+    fi
+
+    project_wheel="$(find_project_wheel "${stage}/wheelhouse")"
+    mkdir --mode=0750 -- "${release_path}"
+    if ! (
+        set -e
+        chown root:"${service_user}" "${release_path}"
+        python3 -m venv "${release_path}/.venv"
+        "${release_path}/.venv/bin/pip" install \
+            --no-index --find-links "${stage}/wheelhouse" "${project_wheel}" >&2
+        install -o root -g "${service_user}" -m 0640 \
+            "${stage}/COMMIT_SHA" "${release_path}/COMMIT_SHA"
+        chown -R root:"${service_user}" "${release_path}"
+        chmod -R g-w,o-rwx "${release_path}"
+        validate_release "${sha}" "${release_path}"
+    ); then
+        rm -rf -- "${release_path}"
+        die "failed to install and validate propagation release"
+    fi
+    printf '%s\n' "${release_path}"
+}
+
+activate_release() {
+    local sha="$1"
+    local release_path="$2"
+    local previous_target=""
+    local next_link="${application_root}/.current.${sha}.next"
+    local was_active=false
+
+    validate_release "${sha}" "${release_path}"
+    if [[ -L "${current_link}" ]]; then
+        previous_target="$(readlink -- "${current_link}")"
+    elif [[ -e "${current_link}" ]]; then
+        die "current release path exists but is not a symlink"
+    fi
+
+    systemctl is-active --quiet "${service_name}" && was_active=true
+    ln -s -- "releases/${sha}" "${next_link}"
+    mv -T -- "${next_link}" "${current_link}"
+
+    if [[ "${was_active}" == true ]] && ! systemctl restart "${service_name}"; then
+        if [[ -n "${previous_target}" ]]; then
+            ln -s -- "${previous_target}" "${next_link}"
+            mv -T -- "${next_link}" "${current_link}"
+            systemctl restart "${service_name}" || true
+        else
+            rm -f -- "${current_link}"
+        fi
+        die "propagation restart failed; prior current link was restored when available"
+    fi
+}
+
+main() {
+    local sha stage release_path
+
+    validate_arguments "$@"
+    sha="$1"
+    require_root
+    acquire_component_lock
+    require_service_account
+    require_safe_directory "${application_root}"
+    require_safe_directory "${releases_root}"
+    stage="${staging_root}/${sha}"
+    validate_stage "${sha}" "${stage}"
+    release_path="$(install_release "${sha}" "${stage}")"
+    activate_release "${sha}" "${release_path}"
+    echo "Propagation release ${sha} is current."
+}
+
+main "$@"

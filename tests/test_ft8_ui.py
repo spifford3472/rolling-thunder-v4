@@ -1,26 +1,43 @@
 """Tests for mobile FT8 CQ browser presentation."""
 
+from datetime import UTC, datetime
+
 from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period
+from rolling_thunder.ft8.decoder import FT8DecoderDiagnostics
+from rolling_thunder.ft8.diagnostics import (
+    FT8AudioDiagnostics,
+    FT8AudioQuality,
+    FT8DiagnosticSessionState,
+)
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8MessageKind,
+    FT8Period,
+)
+from rolling_thunder.ft8.receive import FT8ReceiveState
 from rolling_thunder.ft8_ui import (
     FT8_BROWSER_HEADERS,
     FT8_POTA_TREE_GLYPH,
     FT8CallPresentation,
     build_ft8_browser_viewport,
+    format_ft8_receive_diagnostic,
+    present_ft8_incoming_call,
 )
 
 
 def _activity(
     callsign: str,
     *,
+    period: int = 100,
     cq_count: int = 1,
     active_non_cq: bool = False,
     pota: bool = False,
 ) -> FT8CQActivity:
     return FT8CQActivity(
         callsign=callsign,
-        last_period=FT8Period(100),
-        last_any_decode=FT8Period(101) if active_non_cq else FT8Period(100),
+        last_period=FT8Period(period),
+        last_any_decode=FT8Period(max(period, 101)) if active_non_cq else FT8Period(period),
         cq_count=cq_count,
         snr_db=-8,
         dt_seconds=0.1,
@@ -34,6 +51,7 @@ def _activity(
 def test_headers_are_explicit_and_mobile_columns_are_stable() -> None:
     viewport = build_ft8_browser_viewport(
         (_activity("K1ABC"),),
+        current_period=FT8Period(100),
         selected_callsign=None,
     )
 
@@ -41,14 +59,35 @@ def test_headers_are_explicit_and_mobile_columns_are_stable() -> None:
     assert viewport.headers == ("CALL", "SNR", "AUDIO", "GRID")
 
 
-def test_cq_lifecycle_maps_white_gray_yellow() -> None:
+def test_incoming_call_presentation_has_large_alert_content_and_explicit_controls() -> None:
+    presentation = present_ft8_incoming_call(
+        FT8IncomingCall(
+            callsign="W1XYZ",
+            period=FT8Period(105),
+            snr_db=-7,
+            dt_seconds=0.2,
+            audio_frequency_hz=1600,
+            kind=FT8MessageKind.REPORT,
+            grid="FN42",
+            report_db=-7,
+        )
+    )
+
+    assert presentation is not None
+    assert presentation.callsign == "W1XYZ"
+    assert presentation.snr_text == "SNR -7 dB"
+    assert presentation.grid_text == "GRID FN42"
+
+
+def test_cq_lifecycle_color_uses_actual_cq_age_only() -> None:
     viewport = build_ft8_browser_viewport(
         (
-            _activity("K1AAA", cq_count=1),
-            _activity("K2BBB", cq_count=2),
-            _activity("K3CCC", cq_count=3),
-            _activity("K4DDD", cq_count=7, active_non_cq=True),
+            _activity("K1AAA", period=105, cq_count=7, active_non_cq=True),
+            _activity("K2BBB", period=104, cq_count=1),
+            _activity("K3CCC", period=103, cq_count=1, active_non_cq=True),
+            _activity("K4DDD", period=101, cq_count=9),
         ),
+        current_period=FT8Period(105),
         selected_callsign=None,
     )
 
@@ -66,6 +105,7 @@ def test_pota_metadata_adds_tree_glyph_without_callsign_inference() -> None:
             _activity("K1POTA", pota=True),
             _activity("K2POTA", pota=False),
         ),
+        current_period=FT8Period(100),
         selected_callsign=None,
     )
 
@@ -81,6 +121,7 @@ def test_selected_station_remains_in_view_without_reordering_source() -> None:
 
     viewport = build_ft8_browser_viewport(
         activity,
+        current_period=FT8Period(100),
         selected_callsign="K7ABC",
         visible_rows=4,
     )
@@ -112,6 +153,7 @@ def test_failed_and_aborted_attempt_history_overrides_cq_lifecycle_color() -> No
             _activity("K1FAIL", cq_count=1),
             _activity("K2ABRT", cq_count=7, active_non_cq=True),
         ),
+        current_period=FT8Period(100),
         selected_callsign=None,
         attempt_states={
             "K1FAIL": FT8AttemptVisualState.FAILED,
@@ -129,6 +171,7 @@ def test_failed_and_aborted_attempt_history_overrides_cq_lifecycle_color() -> No
 def test_attempt_history_does_not_add_non_cq_rows() -> None:
     viewport = build_ft8_browser_viewport(
         (_activity("K1ABC"),),
+        current_period=FT8Period(100),
         selected_callsign=None,
         attempt_states={
             "K1ABC": FT8AttemptVisualState.FAILED,
@@ -144,10 +187,56 @@ def test_friend_marker_changes_only_decoration_not_ft8_identity_or_outcome() -> 
 
     activity = (_activity("W1ABC", pota=True), _activity("W2ABC"))
     states = {"W1ABC": FT8AttemptVisualState.FAILED}
-    ordinary = build_ft8_browser_viewport(activity, selected_callsign="W1ABC", attempt_states=states)
-    decorated = build_ft8_browser_viewport(activity, selected_callsign="W1ABC", attempt_states=states,
+    ordinary = build_ft8_browser_viewport(activity, current_period=FT8Period(100), selected_callsign="W1ABC", attempt_states=states)
+    decorated = build_ft8_browser_viewport(activity, current_period=FT8Period(100), selected_callsign="W1ABC", attempt_states=states,
                                           friends=frozenset({"W1ABC"}))
     assert decorated.rows[0].friend_marker == "★"
     assert decorated.rows[1] == ordinary.rows[1]
     assert replace(decorated.rows[0], friend_marker="") == ordinary.rows[0]
     assert activity[0].callsign == "W1ABC"
+
+
+def test_age_six_and_future_cqs_are_defensively_hidden() -> None:
+    viewport = build_ft8_browser_viewport(
+        (_activity("K1OLD", period=99), _activity("K2FUT", period=106)),
+        current_period=FT8Period(105),
+        selected_callsign=None,
+    )
+
+    assert viewport.rows == ()
+
+
+def test_receive_diagnostic_separately_presents_all_and_cq_session_counts() -> None:
+    state = FT8ReceiveState(
+        last_audio=FT8AudioDiagnostics(
+            sample_count=180_000,
+            peak_dbfs=-3.0,
+            rms_dbfs=-20.0,
+            clipped_samples=0,
+            quality=FT8AudioQuality.HEALTHY,
+        ),
+        last_decoder=FT8DecoderDiagnostics(
+            backend="ft8_lib",
+            runtime_seconds=0.1,
+            raw_line_count=7,
+            parsed_decode_count=6,
+            cq_decode_count=2,
+            malformed_line_count=1,
+        ),
+        diagnostic_session=FT8DiagnosticSessionState(
+            active=True,
+            started_at=datetime(2026, 10, 6, 5, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 10, 6, 9, 15, tzinfo=UTC),
+            periods_compared=10,
+            primary_all_decodes=40,
+            primary_cq_decodes=12,
+            comparison_all_decodes=53,
+            comparison_cq_decodes=17,
+        ),
+    )
+
+    text = format_ft8_receive_diagnostic(state)
+
+    assert "DIAG RUN" in text
+    assert "ALL 40/53" in text
+    assert "CQ 12/17" in text

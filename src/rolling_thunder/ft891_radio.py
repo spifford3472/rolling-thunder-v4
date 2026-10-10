@@ -165,11 +165,15 @@ class Ft891Radio:
             try:
                 self._transport.command(encode_cat_transmit_on())
             except RadioConnectionError:
+                # A failed TX-on write may still have reached the radio.
+                # Treat PTT as uncertain until transmit-off actually succeeds.
+                self._cp6_cat_ptt_asserted = True
                 try:
                     self._transport.command(encode_cat_transmit_off())
                 except RadioConnectionError:
                     pass
-                self._cp6_cat_ptt_asserted = False
+                else:
+                    self._cp6_cat_ptt_asserted = False
                 raise
             self._cp6_cat_ptt_asserted = True
 
@@ -178,10 +182,10 @@ class Ft891Radio:
             if not self._cp6_cat_ptt_asserted:
                 return
             self._require_connected()
-            try:
-                self._transport.command(encode_cat_transmit_off())
-            finally:
-                self._cp6_cat_ptt_asserted = False
+            # Preserve uncertain TX state if CAT release fails; a later
+            # cancel/release must retry rather than incorrectly no-op.
+            self._transport.command(encode_cat_transmit_off())
+            self._cp6_cat_ptt_asserted = False
 
     def read_cp6_tx_meters(self) -> tuple[int, int, int]:
         """Read raw ALC, power, and SWR meters for the supervised CP6 test."""
@@ -686,7 +690,7 @@ class Ft891CatPttCapability:
         """Release PTT before permanently closing this capability."""
         if self._closed:
             return
-        try:
-            self._radio._release_cp6_cat_ptt()
-        finally:
-            self._closed = True
+        # A failed release is an uncertain RF state: do not mark this
+        # capability closed or suppress a later manual retry.
+        self._radio._release_cp6_cat_ptt()
+        self._closed = True

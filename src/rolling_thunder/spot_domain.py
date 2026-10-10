@@ -48,16 +48,22 @@ class SpotSourceMetadataItem(DomainModel):
 
 
 class PotaSpotIdentity(DomainModel):
-    """Stable POTA identity independent of activator callsign or list position."""
+    """Stable POTA identity for one activator at one park and frequency."""
 
     provider: Literal[SpotProvider.POTA] = SpotProvider.POTA
+    callsign: Callsign | None = None
     park_reference: PotaReference
     frequency: Frequency
 
     @property
     def stable_key(self) -> str:
         """Return a deterministic serialized identity key."""
-        return f"{self.provider.value}:{self.park_reference}:{self.frequency.hz}"
+        if self.callsign is None:
+            return f"{self.provider.value}:{self.park_reference}:{self.frequency.hz}"
+        return (
+            f"{self.provider.value}:{self.callsign}:{self.park_reference}:"
+            f"{self.frequency.hz}"
+        )
 
 
 class DxSpotIdentity(DomainModel):
@@ -173,6 +179,11 @@ class SpotRecord(DomainModel):
                 raise ValueError("POTA spots require POTA park metadata")
             if self.pota.park_reference != self.identity.park_reference:
                 raise ValueError("POTA metadata must match the stable identity")
+            if (
+                self.identity.callsign is not None
+                and self.callsign != self.identity.callsign
+            ):
+                raise ValueError("POTA callsign must match the stable identity")
         else:
             if self.pota is not None:
                 raise ValueError("DX spots cannot contain POTA park metadata")

@@ -1,0 +1,51 @@
+[Unit]
+Description=Rolling Thunder Forge Propagation Environmental Collector
+Documentation=file:/opt/rolling-thunder-forge-propagation/docs/PROPAGATION_HISTORY.md
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=rolling-thunder-propagation
+Group=rolling-thunder-propagation
+WorkingDirectory=/opt/rolling-thunder-forge-propagation/current
+
+ExecStartPre=/opt/rolling-thunder-forge-propagation/current/.venv/bin/rolling-thunder-forge-propagation --config /etc/rolling-thunder-forge-propagation/forge-propagation.yaml --check-config
+ExecStart=/opt/rolling-thunder-forge-propagation/current/.venv/bin/rolling-thunder-forge-propagation --config /etc/rolling-thunder-forge-propagation/forge-propagation.yaml
+
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+
+StateDirectory=rolling-thunder-forge-propagation
+StateDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+InaccessiblePaths=-/etc/rolling-thunder -/var/lib/rolling-thunder -/opt/rolling-thunder-forge-contact-sync
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

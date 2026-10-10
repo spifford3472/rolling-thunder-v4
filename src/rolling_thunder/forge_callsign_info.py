@@ -15,6 +15,7 @@ from rolling_thunder.callsign_info import (
     CallsignInfoResponse,
     CallsignInfoWeather,
 )
+from rolling_thunder.contact_weather import weather_observation_from_snapshot
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
 from rolling_thunder.forge_weather import (
     ForgeWeatherProviderError,
@@ -273,6 +274,8 @@ class ForgeCallsignInfoService:
             ),
             location_source=source,
             attribution=snapshot.source.attribution_text,
+            timezone=snapshot.timezone,
+            observation=weather_observation_from_snapshot(snapshot),
         )
 
     @staticmethod

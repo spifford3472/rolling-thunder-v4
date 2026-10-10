@@ -7,6 +7,7 @@ from rolling_thunder.contact_commit_controller import ContactCommitController
 from rolling_thunder.contact_logging import ContactLoggingService
 from rolling_thunder.domain import (
     Contact,
+    ContactSource,
     Frequency,
     GPSFixState,
     GPSPosition,
@@ -158,6 +159,14 @@ class RecordingPotaWorkedTracker:
         self.records.append((contact, pota_spots))
 
 
+class RecordingDxWorkedTracker:
+    def __init__(self) -> None:
+        self.records: list[Contact] = []
+
+    def record_contact(self, contact: Contact) -> None:
+        self.records.append(contact)
+
+
 def test_controller_records_worked_pota_only_after_durable_commit() -> None:
     repository = BlockingRepository()
     succeeded = Event()
@@ -179,6 +188,8 @@ def test_controller_records_worked_pota_only_after_durable_commit() -> None:
         pota_context_provider=lambda: True,
         pota_spots_provider=lambda: (pota_spot,),
         pota_worked_tracker=tracker,
+        tx_power_provider=lambda: 55,
+        weather_notes_enabled=True,
     )
 
     assert controller.start_commit("KI5VNB", connected_radio()) is True
@@ -191,7 +202,52 @@ def test_controller_records_worked_pota_only_after_durable_commit() -> None:
     assert len(tracker.records) == 1
     committed, spots = tracker.records[0]
     assert committed.pota_reference == "US-1234"
+    assert committed.source is ContactSource.POTA
+    assert committed.tx_power_watts == 55
+    assert committed.weather_notes_enabled
     assert spots == (pota_spot,)
+
+
+def test_controller_records_worked_dx_only_after_durable_commit() -> None:
+    repository = BlockingRepository()
+    succeeded = Event()
+    tracker = RecordingDxWorkedTracker()
+    controller = ContactCommitController(
+        ContactLoggingService(repository, FixedClock()),
+        on_started=lambda callsign: None,
+        on_succeeded=lambda callsign: succeeded.set(),
+        on_failed=lambda message: None,
+        dx_context_provider=lambda: True,
+        dx_worked_tracker=tracker,
+    )
+
+    assert controller.start_commit("KI5VNB", connected_radio()) is True
+    assert repository.started.wait(timeout=2)
+    assert tracker.records == []
+
+    repository.release.set()
+    assert succeeded.wait(timeout=2)
+
+    assert [str(contact.callsign) for contact in tracker.records] == ["KI5VNB"]
+    assert tracker.records[0].source is ContactSource.DX
+
+
+def test_controller_does_not_record_worked_dx_after_failed_commit() -> None:
+    failed = Event()
+    tracker = RecordingDxWorkedTracker()
+    controller = ContactCommitController(
+        ContactLoggingService(FailingRepository(), FixedClock()),
+        on_started=lambda callsign: None,
+        on_succeeded=lambda callsign: None,
+        on_failed=lambda message: failed.set(),
+        dx_context_provider=lambda: True,
+        dx_worked_tracker=tracker,
+    )
+
+    assert controller.start_commit("KI5VNB", connected_radio()) is True
+    assert failed.wait(timeout=2)
+
+    assert tracker.records == []
 
 
 def test_controller_adds_browse_mobile_contact_note_from_current_gps() -> None:
@@ -226,6 +282,7 @@ def test_controller_adds_browse_mobile_contact_note_from_current_gps() -> None:
 
     contact = repository.contacts[0]
     assert contact.notes == "Mobile Contact from 39.530900, -84.086600 (EM79wm)"
+    assert contact.source is ContactSource.BROWSE
     assert contact.my_grid == "EM79wm"
     assert contact.pota_reference is None
 

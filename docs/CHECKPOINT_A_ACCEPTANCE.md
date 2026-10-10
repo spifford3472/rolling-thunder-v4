@@ -1,5 +1,11 @@
 # Checkpoint A owner acceptance and rollback
 
+> Historical checkpoint note: this runbook records Checkpoint A's scope. Checkpoints
+> B–E are now implemented in current code. Current Wavelog routing,
+> station/logbook management, and ADIF `NOTES` behavior are defined by
+> [Forge Contact Synchronization](FORGE_CONTACT_SYNC.md); the legacy-only
+> expectations below are not current acceptance criteria.
+
 Status: prepared procedure; not executed. Cloud does not deploy or merge.
 Wait for green Continuous Integration / Python quality checks on the exact PR SHA.
 Keep the PR draft until installed owner acceptance and explicit approval.
@@ -95,8 +101,9 @@ For installed end-to-end proof, use only an owner-approved legitimate contact/QS
 Inspect its local UUID/my_grid/my_latitude/my_longitude, move/change current GPS
 safely, and inspect the same row again. A subsequent approved contact may capture
 a different position. Confirm the row synchronizes through the installed Forge
-package; Wavelog shows exactly one QSO in legacy Mobile / KI5VNB Main, no new
-station, existing grid PATCH behavior and no new comment rule. Repeated manual
+package; the historical Checkpoint A expectation was exactly one QSO in legacy
+Mobile / KI5VNB Main, no new station, existing grid PATCH behavior and no new
+comment rule. Repeated manual
 sync/retry/restart must not duplicate that QSO. Verify FT8 immediate sync and
 friend, Browse/POTA/DX/DMR behavior. Record exact SHAs and results before approval.
 
@@ -115,5 +122,7 @@ Keep the current Forge ledger whenever possible to prevent duplicate Wavelog wri
 If rolling Forge back too, roll back the Pi sender first: old Forge rejects expanded
 Contact payloads. Never delete/recreate the ledger or improvise a schema downgrade.
 
-Checkpoint B remains separate: state/CQ/ITU derivation, dynamic station selection,
-station creation and the future Mobile QSO comment rule are not implemented here.
+At this historical checkpoint, later state/CQ/ITU derivation, dynamic station
+selection/creation, and the blank-only ADIF `NOTES=Mobile QSO` rule were outside
+scope. They are implemented by the current Checkpoints B–E code and documented in
+`FORGE_CONTACT_SYNC.md`.

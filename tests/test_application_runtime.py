@@ -1,17 +1,43 @@
 """Tests for the application composition root."""
 
-from datetime import UTC, datetime
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
+from json import dumps
 from pathlib import Path
+from uuid import UUID
 
 import pytest
+from pydantic import SecretStr
 
 from rolling_thunder.application_runtime import ApplicationRuntime
+from rolling_thunder.application_secrets import (
+    ApplicationSecrets,
+    CompletedQsoDeliveryCredentials,
+)
+from rolling_thunder.completed_qso_producer import (
+    CompletedQsoDeliveryState,
+    CompletedQsoDestination,
+    CompletedQsoProducerRepository,
+)
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import GPSFixState, RadioConnectionState
-from rolling_thunder.ft8.decoder import FT8PcmPeriod
-from rolling_thunder.ft8.domain import FT8Decode, FT8Period
+from rolling_thunder.ft8.audio import FT8AudioInputError
+from rolling_thunder.ft8.coordinator import FT8QsoResult
+from rolling_thunder.ft8.decoder import ComparingFT8Decoder, FT8PcmPeriod
+from rolling_thunder.ft8.domain import (
+    FT8CQActivity,
+    FT8Decode,
+    FT8IncomingCall,
+    FT8MessageKind,
+    FT8Period,
+    FT8PeriodParity,
+    FT8QsoContext,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.encoder import FT8Waveform
 from rolling_thunder.ft8.hardware_transmit import RecordingFT8HardwareTransmitExecutor
+from rolling_thunder.ft8.performance import FT8AttemptSeed
+from rolling_thunder.ft8.receive import FT8ReceiveState
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.gps import (
     GPSConnectionError,
@@ -47,6 +73,55 @@ class ManualScheduler:
         assert interval_s == 1.0
         self.poll = ManualScheduledPoll(callback)
         return self.poll
+
+
+class DeliveryScheduler:
+    def __init__(self) -> None:
+        self.poll: ManualScheduledPoll | None = None
+
+    def schedule_repeating(
+        self,
+        interval_s: float,
+        callback: PollCallback,
+    ) -> ManualScheduledPoll:
+        assert interval_s == 30
+        self.poll = ManualScheduledPoll(callback)
+        return self.poll
+
+
+class CompletedQsoReceiverTransport:
+    def __init__(self, *, wrong_psk_ack: bool = False) -> None:
+        self.wrong_psk_ack = wrong_psk_ack
+        self.calls: list[tuple[str, Mapping[str, str], bytes | None]] = []
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: Mapping[str, str],
+        body: bytes | None,
+        timeout_s: float,
+    ) -> "_HttpResponse":
+        _ = timeout_s
+        self.calls.append((url, headers, body))
+        contact_id = headers["Idempotency-Key"]
+        if self.wrong_psk_ack and url.endswith("/api/v1/completed-ft8-events"):
+            contact_id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        payload: dict[str, str] = {
+            "schema_version": "1",
+            "contact_id": contact_id,
+            "disposition": "accepted",
+        }
+        if url.endswith("/api/v1/completed-qsos"):
+            payload["received_at_utc"] = "2026-10-09T12:00:00Z"
+        return _HttpResponse(202, dumps(payload).encode())
+
+
+class _HttpResponse:
+    def __init__(self, status_code: int, body: bytes) -> None:
+        self.status_code = status_code
+        self.body = body
 
 
 class UnavailableGPSReceiver:
@@ -273,6 +348,7 @@ def test_runtime_rejects_repeated_start() -> None:
 
     with pytest.raises(RuntimeError, match="already started"):
         runtime.start()
+    runtime.stop()
 
 
 def test_runtime_stop_before_start_is_safe() -> None:
@@ -301,7 +377,7 @@ class _UnusedFT8AudioInput:
         return
 
     def read_period(self) -> FT8PcmPeriod:
-        raise RuntimeError("not used")
+        raise FT8AudioInputError("test capture intentionally unavailable")
 
     def stop(self) -> None:
         return
@@ -377,6 +453,41 @@ def test_runtime_ft8_receive_only_creates_no_transmit_authority() -> None:
     assert runtime.ft8_hardware_transmit is None
 
 
+def test_runtime_composes_bounded_same_pcm_diagnostic_session() -> None:
+    config = ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {"mock": True},
+            "ft8": {
+                "enabled": True,
+                "receive": {
+                    "decoder_backend": "ft8_lib",
+                    "decoder_executable": "/opt/ft8_lib/decode_ft8",
+                    "comparison_backend": "ft8mon",
+                    "comparison_decoder_executable": "/opt/ft8mon/ft8mon",
+                    "diagnostic_session_end_local": "05:15",
+                },
+            },
+        }
+    )
+    clock = FakeFT8Clock(datetime(2026, 10, 6, 5, 0, tzinfo=UTC))
+
+    runtime = ApplicationRuntime.from_config(
+        config,
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_clock=clock,
+    )
+
+    assert runtime.ft8_receive is not None
+    assert isinstance(runtime.ft8_receive._decoder, ComparingFT8Decoder)
+    session = runtime.ft8_receive.latest_state.diagnostic_session
+    assert session is not None
+    assert session.active is True
+    assert session.ends_at == datetime(2026, 10, 6, 9, 15, tzinfo=UTC)
+
+
 def test_runtime_ft8_transmit_requires_explicit_gate() -> None:
     executor = RecordingFT8HardwareTransmitExecutor()
     period = FT8Period(100)
@@ -395,6 +506,108 @@ def test_runtime_ft8_transmit_requires_explicit_gate() -> None:
     assert runtime.ft8_panel is not None
     assert runtime.ft8_qso is not None
     assert runtime.ft8_hardware_transmit is executor
+
+
+def test_completed_qso_delivery_is_scheduled_provider_free_and_ack_safe(
+    tmp_path: Path,
+) -> None:
+    qso_id = UUID("00000000-0000-4000-8000-000000000901")
+    outbox_path = tmp_path / "completed-qso.db"
+    config = ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {"mock": True},
+            "storage": {"database_path": tmp_path / "contacts.db"},
+            "ft8": {
+                "enabled": True,
+                "receive": {"decoder_executable": "/unused/decode_ft8"},
+                "transmit": {
+                    "enabled": True,
+                    "encoder_executable": "/unused/gen_ft8",
+                },
+                "completed_qso_delivery": {
+                    "enabled": True,
+                    "database_path": outbox_path,
+                    "voacap": {
+                        "enabled": True,
+                        "base_url": "http://forge.test:8790",
+                    },
+                    "psk_reporter": {
+                        "enabled": True,
+                        "base_url": "http://forge.test:8789",
+                    },
+                },
+            },
+        }
+    )
+    tokens = CompletedQsoDeliveryCredentials(
+        voacap_token=SecretStr("v" * 32),
+        psk_reporter_token=SecretStr("p" * 32),
+    )
+    voacap_transport = CompletedQsoReceiverTransport()
+    psk_transport = CompletedQsoReceiverTransport(wrong_psk_ack=True)
+    delivery_scheduler = DeliveryScheduler()
+    period = FT8Period(100)
+    runtime = ApplicationRuntime.from_config(
+        config,
+        secrets=ApplicationSecrets(completed_qso_delivery=tokens),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+        ft8_completed_qso_delivery_scheduler=delivery_scheduler,
+        ft8_completed_qso_voacap_transport=voacap_transport,
+        ft8_completed_qso_psk_transport=psk_transport,
+        ft8_audio_input=_UnusedFT8AudioInput(),
+        ft8_decoder=_UnusedFT8Decoder(),
+        ft8_encoder=_UnusedFT8Encoder(),
+        ft8_clock=FakeFT8Clock(period.start_utc),
+        ft8_hardware_executor=RecordingFT8HardwareTransmitExecutor(),
+    )
+    assert runtime.ft8_qso is not None
+    terminal_handler = runtime.ft8_qso._terminal_result_handler
+    assert terminal_handler is not None
+    terminal_handler(
+        FT8QsoResult(
+            status=FT8QsoState.COMPLETED,
+            context=FT8QsoContext(
+                local_callsign="KI5VNB",
+                remote_callsign="K1ABC",
+                target_audio_frequency_hz=1500,
+                radio_frequency_hz=14_074_000,
+                radio_band="20m",
+                radio_mode="USB",
+                local_grid="EM79xm",
+                remote_grid="FN31pr",
+                tx_parity=FT8PeriodParity.ODD,
+                authorized_period=period,
+                authorized_utc=period.start_utc,
+                signal_report_db=-10,
+                qso_id=qso_id,
+            ),
+            sent_report_db=-10,
+            received_report_db=-12,
+            started_utc=period.start_utc,
+            ended_utc=period.start_utc + timedelta(seconds=75),
+            terminal_reason=None,
+        )
+    )
+
+    assert voacap_transport.calls == []
+    assert psk_transport.calls == []
+    runtime.start()
+    assert delivery_scheduler.poll is not None
+    delivery_scheduler.poll.callback()
+    repository = CompletedQsoProducerRepository(outbox_path)
+
+    assert len(voacap_transport.calls) == 1
+    assert len(psk_transport.calls) == 1
+    assert repository.state_for(qso_id, CompletedQsoDestination.VOACAP) is (
+        CompletedQsoDeliveryState.DELIVERED
+    )
+    assert repository.state_for(qso_id, CompletedQsoDestination.PSK_REPORTER) is (
+        CompletedQsoDeliveryState.RETRY
+    )
+    runtime.ft8_completed_qso_delivery.stop()
+    runtime.stop()
 
 
 
@@ -492,3 +705,165 @@ def test_return_ft8_to_browser_clears_stale_start_status() -> None:
     assert result is not None
     assert qso.return_count == 1
     assert starter.reset_count == 1
+
+
+class _ResponderAuthorization:
+    def __init__(self, clock: FakeFT8Clock) -> None:
+        self.clock = clock
+        self.home_grid = "EM79xm"
+        self.validated: list[FT8IncomingCall] = []
+
+    def validate_incoming_freshness(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        selection_period: FT8Period,
+        current_period: FT8Period,
+    ) -> None:
+        assert selection_period == self.clock.current_period()
+        assert current_period == self.clock.current_period()
+        self.validated.append(incoming)
+
+
+class _PublishedFT8Receive:
+    def __init__(self, state: FT8ReceiveState) -> None:
+        self.latest_state = state
+
+
+class _IncomingStartRecorder:
+    def __init__(self) -> None:
+        self.started: list[tuple[FT8IncomingCall, FT8AttemptSeed]] = []
+
+    def start_incoming(
+        self,
+        incoming: FT8IncomingCall,
+        *,
+        attempt_seed: FT8AttemptSeed,
+    ) -> bool:
+        self.started.append((incoming, attempt_seed))
+        return True
+
+
+class _SelectionAuthorization:
+    def __init__(self, clock: FakeFT8Clock) -> None:
+        self.clock = clock
+        self.home_grid = "EM79xm"
+        self.validated: list[tuple[FT8CQActivity, FT8Period, FT8Period]] = []
+
+    def validate_selection_freshness(
+        self,
+        activity: FT8CQActivity,
+        *,
+        selection_period: FT8Period,
+        current_period: FT8Period,
+    ) -> None:
+        self.validated.append((activity, selection_period, current_period))
+
+
+class _SelectionStartRecorder:
+    def __init__(self) -> None:
+        self.started: list[tuple[FT8CQActivity, FT8AttemptSeed]] = []
+
+    def start(
+        self,
+        activity: FT8CQActivity,
+        *,
+        attempt_seed: FT8AttemptSeed,
+    ) -> bool:
+        self.started.append((activity, attempt_seed))
+        return True
+
+
+def test_runtime_validates_selection_against_one_period_lagged_receive_snapshot() -> None:
+    current_period = FT8Period(101)
+    receive_period = FT8Period(100)
+    activity = FT8CQActivity(
+        callsign="K1ABC",
+        last_period=FT8Period(95),
+        snr_db=-10,
+        dt_seconds=0.1,
+        audio_frequency_hz=1500,
+        grid="FN31",
+    )
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    authorization = _SelectionAuthorization(
+        FakeFT8Clock(current_period.start_utc)
+    )
+    starter = _SelectionStartRecorder()
+    runtime.ft8_authorization = authorization  # type: ignore[assignment]
+    runtime.ft8_qso = object()  # type: ignore[assignment]
+    runtime.ft8_qso_start = starter  # type: ignore[assignment]
+    runtime.ft8_receive = _PublishedFT8Receive(
+        FT8ReceiveState(last_period=receive_period, cq_activity=(activity,))
+    )  # type: ignore[assignment]
+
+    assert runtime.request_ft8_qso(activity) is True
+    assert authorization.validated == [
+        (activity, receive_period, current_period)
+    ]
+    assert starter.started[0][0] is activity
+
+
+@pytest.mark.parametrize(
+    ("incoming", "expected_report"),
+    [
+        (
+            FT8IncomingCall(
+                callsign="W4YRL",
+                period=FT8Period(100),
+                snr_db=-9,
+                dt_seconds=0.1,
+                audio_frequency_hz=1500,
+                kind=FT8MessageKind.ADDRESSED_GRID,
+                grid="EL99",
+                raw_message="KI5VNB W4YRL EL99",
+            ),
+            None,
+        ),
+        (
+            FT8IncomingCall(
+                callsign="K0BQB",
+                period=FT8Period(100),
+                snr_db=-3,
+                dt_seconds=0.1,
+                audio_frequency_hz=1600,
+                kind=FT8MessageKind.REPORT,
+                report_db=-3,
+                raw_message="KI5VNB K0BQB -03",
+            ),
+            -3,
+        ),
+    ],
+)
+def test_runtime_routes_explicit_incoming_acceptance_to_responder_start(
+    incoming: FT8IncomingCall,
+    expected_report: int | None,
+) -> None:
+    clock = FakeFT8Clock(incoming.period.start_utc)
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    authorization = _ResponderAuthorization(clock)
+    starter = _IncomingStartRecorder()
+    runtime.ft8_authorization = authorization  # type: ignore[assignment]
+    runtime.ft8_qso = object()  # type: ignore[assignment]
+    runtime.ft8_qso_start = starter  # type: ignore[assignment]
+    runtime.ft8_receive = _PublishedFT8Receive(
+        FT8ReceiveState(last_period=incoming.period, incoming_call=incoming)
+    )  # type: ignore[assignment]
+
+    assert runtime.request_ft8_response(incoming) is True
+
+    assert authorization.validated == [incoming]
+    assert len(starter.started) == 1
+    started_call, seed = starter.started[0]
+    assert started_call is incoming
+    assert seed.callsign == incoming.callsign
+    assert seed.remote_grid == incoming.grid
+    assert seed.received_report_db == expected_report

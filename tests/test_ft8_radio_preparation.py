@@ -202,6 +202,16 @@ def test_prepare_refuses_transmitting_radio_before_changes() -> None:
     assert radio.calls == ["refresh"]
 
 
+def test_prepare_applies_one_frozen_adaptive_power_target() -> None:
+    radio = FakePreparedRadio()
+
+    prepared = FT8RadioPreparationService(radio).prepare_for_qso(65)
+
+    assert prepared.power_watts == 65
+    assert radio.power_watts == 65
+    assert radio.calls.count("power:65") == 1
+
+
 def test_restore_forces_100w_and_auto() -> None:
     radio = FakePreparedRadio()
     radio.power_watts = 20
@@ -272,3 +282,17 @@ def test_normal_receive_restore_attempts_mic_even_with_bfo_failure() -> None:
     with pytest.raises(FT8RadioPreparationError, match="BFO failed"):
         restore_ft8_normal_receive_settings(radio)
     assert radio.ssb_mic_select is Ft891SsbMicSelect.MIC
+
+
+def test_final_preparation_boundary_blocks_band_cap_before_power_write() -> None:
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+    from rolling_thunder.ft8.radio_preparation import FT8RadioPreparationError
+
+    for mhz, cap in ((28_074_000, 30), (24_915_000, 40), (21_074_000, 40)):
+        radio = FakePreparedRadio()
+        radio.state = _state(frequency_hz=mhz)
+        with pytest.raises(FT8RadioPreparationError, match="safety ceiling"):
+            FT8RadioPreparationService(
+                radio, power_policy=FT8PowerPolicy()
+            ).prepare_for_qso(cap + 5)
+        assert not any(call.startswith("power:") for call in radio.calls)

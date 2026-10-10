@@ -2,9 +2,11 @@
 
 import pytest
 
+from rolling_thunder.context_navigation import ContextId
 from rolling_thunder.status_messages import StatusPresentation
 from rolling_thunder.ui_main import (
     _BRIGHT,
+    _CONTEXT_HEADER_FONT,
     _CONTEXT_SELECTED,
     _FAILURE,
     _MUTED,
@@ -13,6 +15,7 @@ from rolling_thunder.ui_main import (
     _POTA_WORKED_FOREGROUND,
     _SUCCESS,
     _WARNING,
+    _context_decode_header_text,
     _pota_card_colors,
     _status_foreground,
 )
@@ -50,3 +53,11 @@ def test_pota_card_colors_preserve_worked_background(
     expected: tuple[str, str],
 ) -> None:
     assert _pota_card_colors(selected=selected, worked=worked) == expected
+
+
+def test_ft8_decode_header_text_is_optional_and_uses_reviewed_copy() -> None:
+    assert _context_decode_header_text(ContextId.FT8, 17) == "DECODE 17"
+    assert _context_decode_header_text(ContextId.FT8, None) == ""
+    assert _context_decode_header_text(ContextId.POTA, 17) == ""
+    assert _context_decode_header_text(ContextId.BROWSE, 17) == ""
+    assert _CONTEXT_HEADER_FONT == ("DejaVu Sans", 48, "bold")

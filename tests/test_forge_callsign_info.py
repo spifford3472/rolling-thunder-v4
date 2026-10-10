@@ -1,8 +1,19 @@
 """Forge callsign-intelligence aggregation tests."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from rolling_thunder.forge_callsign_info import ForgeCallsignInfoService
+from rolling_thunder.forge_weather import (
+    WeatherConditionToken,
+    WeatherCurrent,
+    WeatherHourlyPoint,
+    WeatherIconToken,
+    WeatherSnapshot,
+    WeatherSolar,
+    WeatherSourceMetadata,
+)
 from rolling_thunder.qrz_xml import QrzCallsignProfile
 from rolling_thunder.wavelog import (
     WavelogConnectionError,
@@ -46,6 +57,45 @@ class FakeWavelog:
                 station_id=42,
                 name="Mobile",
                 gridsquare="EM79XM",
+            ),
+        )
+
+
+class FakeWeather:
+    def fetch_weather(self, location) -> WeatherSnapshot:
+        now = datetime(2026, 10, 7, 16, 0, tzinfo=UTC)
+        return WeatherSnapshot(
+            latitude=location.latitude,
+            longitude=location.longitude,
+            timezone="America/New_York",
+            source_at=now,
+            fetched_at=now,
+            current=WeatherCurrent(
+                temperature_c=20.0,
+                relative_humidity_percent=60.0,
+                condition=WeatherConditionToken.CLOUDY,
+                icon=WeatherIconToken.CLOUDY,
+                is_day=True,
+            ),
+            hourly=tuple(
+                WeatherHourlyPoint(
+                    forecast_at=now + timedelta(hours=hour),
+                    temperature_c=20.0,
+                    precipitation_probability_percent=0.0,
+                )
+                for hour in (1, 2, 3)
+            ),
+            solar=WeatherSolar(
+                sunrise_at=now + timedelta(hours=1),
+                sunset_at=now + timedelta(hours=10),
+            ),
+            source=WeatherSourceMetadata(
+                provider_id="open_meteo",
+                provider_name="Open-Meteo",
+                attribution_text="Weather data by Open-Meteo.com",
+                attribution_url="https://open-meteo.com/",
+                license_name="CC BY 4.0",
+                license_url="https://creativecommons.org/licenses/by/4.0/",
             ),
         )
 
@@ -99,6 +149,23 @@ def test_no_previous_qso_is_explicit_first_contact_state() -> None:
     result = service.lookup("W1AW")
 
     assert result.last_qso.exists is False
+
+
+def test_target_weather_carries_normalized_observation_and_iana_timezone() -> None:
+    service = ForgeCallsignInfoService(
+        FakeQrz(profile()),
+        FakeWavelog(None),
+        FakeWeather(),
+        utc_clock=lambda: datetime(2026, 10, 7, 16, 0, tzinfo=UTC),
+    )
+
+    result = service.lookup("W1AW")
+
+    assert result.weather is not None
+    assert result.weather.timezone == "America/New_York"
+    assert result.weather.observation is not None
+    assert result.weather.observation.summary == "Cloudy; 20.0 C; humidity 60%"
+    assert result.weather.observation.latitude == 41.7
 
 
 def test_previous_mobile_qso_uses_station_location_name() -> None:

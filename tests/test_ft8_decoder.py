@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 from rolling_thunder.ft8.decoder import (
+    ComparingFT8Decoder,
+    FT8DecoderDiagnostics,
     FT8DecoderError,
+    FT8DecoderResult,
     Ft8LibDecoder,
     Ft8monDecoder,
     FT8PcmPeriod,
@@ -29,6 +32,15 @@ def _pcm() -> FT8PcmPeriod:
     [
         ("CQ K1ABC EM79", FT8MessageKind.CQ, "K1ABC", None, "EM79", None, None),
         ("CQ DX K1ABC EM79", FT8MessageKind.CQ, "K1ABC", None, "EM79", None, "DX"),
+        (
+            "KI5VNB W4YRL EL99",
+            FT8MessageKind.ADDRESSED_GRID,
+            "W4YRL",
+            "KI5VNB",
+            "EL99",
+            None,
+            None,
+        ),
         ("W1AW K1ABC -10", FT8MessageKind.REPORT, "K1ABC", "W1AW", None, -10, None),
         ("W1AW K1ABC R-07", FT8MessageKind.R_REPORT, "K1ABC", "W1AW", None, -7, None),
         ("W1AW K1ABC RR73", FT8MessageKind.ACK_73, "K1ABC", "W1AW", None, None, None),
@@ -92,6 +104,18 @@ def test_ft8_lib_output_normalizes_required_metrics() -> None:
     assert decode.source_callsign == "K1ABC"
     assert decode.backend_metadata["decoder"] == "kgoba/ft8_lib"
     assert decode.backend_metadata["raw_snr"] == "+12.5"
+
+
+def test_ft8_lib_parser_accepts_observed_output_without_optional_tilde() -> None:
+    decode = Ft8LibDecoder("decode_ft8")._parse_line(
+        "  000000 -18 -.25 742.5 CQ W1AW FN31  ",
+        period=FT8Period(index=101),
+    )
+
+    assert decode is not None
+    assert decode.raw_message == "CQ W1AW FN31"
+    assert decode.audio_frequency_hz == 742
+    assert decode.dt_seconds == -0.25
 
 
 def test_malformed_backend_line_is_ignored() -> None:
@@ -163,3 +187,52 @@ def test_pcm_contract_rejects_partial_sample_bytes() -> None:
             sample_rate_hz=12_000,
             pcm_s16le=b"\x00",
         )
+
+
+class RecordingDiagnosticDecoder:
+    def __init__(self, backend: str, count: int) -> None:
+        self.backend = backend
+        self.count = count
+        self.pcm_ids: list[int] = []
+
+    def decode_with_diagnostics(self, pcm: FT8PcmPeriod) -> FT8DecoderResult:
+        self.pcm_ids.append(id(pcm))
+        diagnostics = FT8DecoderDiagnostics(
+            backend=self.backend,
+            runtime_seconds=0.1,
+            raw_line_count=self.count,
+            parsed_decode_count=self.count,
+            cq_decode_count=0,
+            malformed_line_count=0,
+        )
+        return FT8DecoderResult(decodes=(), primary=diagnostics)
+
+
+def test_comparison_decoder_uses_the_exact_same_pcm_for_both_backends() -> None:
+    primary = RecordingDiagnosticDecoder("ft8_lib", 2)
+    comparison = RecordingDiagnosticDecoder("ft8mon", 3)
+    pcm = _pcm()
+
+    result = ComparingFT8Decoder(primary, comparison).decode_with_diagnostics(pcm)
+
+    assert primary.pcm_ids == [id(pcm)]
+    assert comparison.pcm_ids == [id(pcm)]
+    assert result.primary.parsed_decode_count == 2
+    assert result.comparison is not None
+    assert result.comparison.parsed_decode_count == 3
+
+
+def test_comparison_decoder_stops_secondary_work_after_session_cutoff() -> None:
+    primary = RecordingDiagnosticDecoder("ft8_lib", 2)
+    comparison = RecordingDiagnosticDecoder("ft8mon", 3)
+    enabled = False
+
+    result = ComparingFT8Decoder(
+        primary,
+        comparison,
+        comparison_enabled=lambda: enabled,
+    ).decode_with_diagnostics(_pcm())
+
+    assert result.primary.parsed_decode_count == 2
+    assert result.comparison is None
+    assert comparison.pcm_ids == []

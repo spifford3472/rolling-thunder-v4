@@ -67,6 +67,30 @@ blend installed regional MBTiles into that viewport. This keeps worldwide contac
 maps visually consistent and avoids a viewport straddling the edge of a regional
 night-map package showing dark installed tiles beside light online tiles.
 
+The primary live map is the authoritative DAY/NIGHT style target. Solar changes
+and the Settings style button fan out each accepted primary-map style to the
+mini-map; the mini-map has no separate timer or style control. A style change
+invalidates its base-map snapshot so an open or subsequently opened overlay loads
+the new pixels.
+
+The dedicated cache stores identical tile coordinates in separate `day/` and
+`night/` partitions under `cache_directory/callsign-info`. Its retention,
+validation, and maximum-tile policy are unchanged and apply across both
+partitions. `map.callsign_tile_url_template` may point at the existing private
+Forge route `/api/v1/map/tiles/{style}/{z}/{x}/{y}.png`; when omitted, the main
+worldwide online tile URL is reused. If that inherited source has no `{style}`
+token, the callsign client leaves DAY responses byte-for-byte unchanged and
+deterministically transforms each validated NIGHT response into a validated dark
+PNG while preserving alpha and map detail. Only the transformed bytes are stored
+under `night/`; the raw response is not cached as NIGHT. An explicit
+`callsign_tile_url_template` containing `{style}` remains preferred and uses the
+provider's real style endpoint without a local transform. An explicitly configured
+callsign source without `{style}` remains fail-closed for NIGHT.
+
+The optional Forge route is a worldwide dependency only when its renderer has
+worldwide coverage. The existing I-71 corridor TileServer/Protomaps dataset does
+not, so it is not a valid callsign mini-map source.
+
 ## Location priority
 
 For the current contact:
@@ -81,7 +105,12 @@ The profile may still display textual information when no reliable coordinate ex
 
 ## Weather
 
-The QRZ photograph is deliberately not used by this feature. The current local QSO time is rendered in the upper-right of the mini-map rather than consuming identity-panel space.
+The QRZ photograph is deliberately not used by this feature. The contacted
+station/target's current local time is rendered in the upper-right of the mini-map
+rather than consuming identity-panel space. It is derived with the IANA timezone
+returned by the same target-weather response, so daylight-saving transitions remain
+correct. When that timezone is unavailable or invalid, the field is blank; the Pi's
+operator timezone is never presented as the target's time.
 
 Instead the overlay shows simple current weather:
 
@@ -92,6 +121,16 @@ Instead the overlay shows simple current weather:
 Open-Meteo is normalized on Forge. Weather failure is optional enrichment failure and must not suppress otherwise useful callsign/history information.
 
 Target weather is cached for 15 minutes by default.
+
+The compact response also carries the provider-neutral normalized observation used
+to render that target weather (timestamps, coordinates, condition, temperature,
+humidity, and provider identity). The Pi may freeze that already-resolved value into
+a contact only while the published callsign and target still match and the observation
+is fresh. No Commit-time provider request is made.
+
+The optional `timezone` and `observation` members require Pi-first deployment. New Pi
+readers accept older responses without them, but the shared strict response models
+reject unknown fields, so an older Pi must not receive the expanded Forge response.
 
 ## Previous contact
 

@@ -6,9 +6,11 @@ from collections.abc import Callable
 from threading import RLock
 
 from rolling_thunder.contact_logging import ContactLoggingService
-from rolling_thunder.domain import Contact, RadioMode
+from rolling_thunder.contact_metadata import unique_matching_pota_spot
+from rolling_thunder.domain import Contact, ContactSource, RadioMode
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.domain import FT8QsoState
+from rolling_thunder.pota_spots import PotaSpot
 from rolling_thunder.storage import StorageError
 
 
@@ -20,9 +22,11 @@ class FT8QsoLoggingService:
         contact_logging: ContactLoggingService,
         *,
         completed_contact_handler: Callable[[Contact], None] | None = None,
+        pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
     ) -> None:
         self._contact_logging = contact_logging
         self._completed_contact_handler = completed_contact_handler
+        self._pota_spots_provider = pota_spots_provider or (lambda: ())
         self._lock = RLock()
         self._latest_contact: Contact | None = None
         self._latest_error: str | None = None
@@ -37,7 +41,13 @@ class FT8QsoLoggingService:
         with self._lock:
             return self._latest_error
 
-    def handle_terminal_result(self, result: FT8QsoResult) -> Contact | None:
+    def handle_terminal_result(
+        self,
+        result: FT8QsoResult,
+        *,
+        tx_power_watts: int | None = None,
+        weather_notes_enabled: bool = False,
+    ) -> Contact | None:
         """Log COMPLETED exactly once by stable QSO UUID; ignore all other outcomes."""
         if result.status is not FT8QsoState.COMPLETED:
             return None
@@ -45,6 +55,21 @@ class FT8QsoLoggingService:
             with self._lock:
                 self._latest_error = "completed FT8 QSO is missing the received signal report"
             return None
+
+        pota_reference = None
+        contact_latitude = None
+        contact_longitude = None
+        if result.context.pota_cq:
+            spot = unique_matching_pota_spot(
+                callsign=result.context.remote_callsign,
+                frequency_hz=result.context.radio_frequency_hz,
+                mode=RadioMode.FT8,
+                pota_spots=self._pota_spots_provider(),
+            )
+            if spot is not None:
+                pota_reference = spot.park.reference
+                contact_latitude = spot.park.latitude
+                contact_longitude = spot.park.longitude
 
         try:
             contact = self._contact_logging.commit_completed(
@@ -55,13 +80,19 @@ class FT8QsoLoggingService:
                 started_at=result.started_utc,
                 rst_sent=_format_db_report(result.sent_report_db),
                 rst_received=_format_db_report(result.received_report_db),
-                my_grid=result.context.local_grid,
+                my_grid=result.context.logging_grid,
                 my_latitude=result.context.latitude,
                 my_longitude=result.context.longitude,
                 my_state=result.context.local_state,
                 my_cq_zone=result.context.local_cq_zone,
                 my_itu_zone=result.context.local_itu_zone,
                 grid=result.context.remote_grid,
+                contact_latitude=contact_latitude,
+                contact_longitude=contact_longitude,
+                pota_reference=pota_reference,
+                source=ContactSource.FT8,
+                tx_power_watts=tx_power_watts,
+                weather_notes_enabled=weather_notes_enabled,
             )
         except (StorageError, ValueError) as error:
             with self._lock:

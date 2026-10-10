@@ -229,6 +229,25 @@ def test_worked_pota_card_adds_label_and_presentation_flag() -> None:
     assert card.line1 == "K1POTA — WORKED"
 
 
+def test_worked_dx_card_matches_pota_label_and_presentation_flag() -> None:
+    state = panel_state(
+        (
+            row(
+                provider=SpotProvider.DX,
+                callsign="K1DX",
+                frequency_hz=14_020_000,
+                worked=True,
+            ),
+        ),
+        provider=SpotProvider.DX,
+    )
+
+    card = build_shared_spot_viewport(state).cards[0]
+
+    assert card.worked is True
+    assert card.line1 == "K1DX — WORKED"
+
+
 def test_friend_marker_preserves_pota_dx_selection_and_worked_semantics() -> None:
     from dataclasses import replace
 

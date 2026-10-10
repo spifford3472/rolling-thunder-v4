@@ -1,5 +1,6 @@
 """Tests for freezing one selected CQ into one QSO authorization."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -20,11 +21,20 @@ from rolling_thunder.ft8.authorization import (
     FT8QsoAuthorizationService,
 )
 from rolling_thunder.ft8.coordinator import FT8QsoResult
-from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8PeriodParity, FT8QsoState
+from rolling_thunder.ft8.domain import (
+    FT8_PERIOD_SECONDS,
+    FT8CQActivity,
+    FT8IncomingCall,
+    FT8MessageKind,
+    FT8Period,
+    FT8PeriodParity,
+    FT8QsoState,
+)
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver, StateBoundary
+from rolling_thunder.pota_spots import ParkReference, PotaSpot
 
 
 def _activity(*, period: int = 100, snr_db: int = -10) -> FT8CQActivity:
@@ -107,6 +117,49 @@ def test_authorization_freezes_selected_cq_radio_and_gps() -> None:
     assert context.location_label == "GPS"
 
 
+def test_ft8_gps_older_than_120_seconds_is_unknown_for_logging() -> None:
+    service = _service(100)
+    reference = service.clock.now_utc()
+    stale = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=GPSPosition(
+            fix_state=GPSFixState.THREE_DIMENSIONAL,
+            latitude=39.529,
+            longitude=-84.087,
+            updated_at=reference - timedelta(seconds=121),
+        ),
+        updated_at=reference - timedelta(seconds=121),
+    )
+
+    context = service.authorize(_activity(), radio_state=_radio(), gps_state=stale)
+
+    assert context.local_grid == "EM79xm"
+    assert context.logging_grid is None
+    assert context.latitude is None and context.longitude is None
+    assert context.location_label == "unknown location"
+
+
+def test_ft8_gps_at_120_seconds_is_trusted_for_logging() -> None:
+    service = _service(100)
+    reference = service.clock.now_utc()
+    fresh = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=GPSPosition(
+            fix_state=GPSFixState.THREE_DIMENSIONAL,
+            latitude=39.529,
+            longitude=-84.087,
+            updated_at=reference - timedelta(seconds=120),
+        ),
+        updated_at=reference - timedelta(seconds=120),
+    )
+
+    context = service.authorize(_activity(), radio_state=_radio(), gps_state=fresh)
+
+    assert context.logging_grid == context.local_grid
+    assert context.latitude == pytest.approx(39.529)
+    assert context.location_label == "GPS"
+
+
 def test_authorization_accepts_usb_and_freezes_mode() -> None:
     service = _service(100)
 
@@ -119,18 +172,79 @@ def test_authorization_accepts_usb_and_freezes_mode() -> None:
     assert context.radio_mode == "USB"
 
 
+@pytest.mark.parametrize(
+    "incoming",
+    [
+        FT8IncomingCall(
+            callsign="W4YRL",
+            period=FT8Period(100),
+            snr_db=-9,
+            dt_seconds=0.1,
+            audio_frequency_hz=1500,
+            kind=FT8MessageKind.ADDRESSED_GRID,
+            grid="EL99",
+            raw_message="KI5VNB W4YRL EL99",
+        ),
+        FT8IncomingCall(
+            callsign="K0BQB",
+            period=FT8Period(100),
+            snr_db=-3,
+            dt_seconds=0.1,
+            audio_frequency_hz=1600,
+            kind=FT8MessageKind.REPORT,
+            report_db=-3,
+            raw_message="KI5VNB K0BQB -03",
+        ),
+    ],
+)
+def test_responder_authorization_freezes_exact_inbound_and_opposite_parity(
+    incoming: FT8IncomingCall,
+) -> None:
+    context = _service(100).authorize_incoming(
+        incoming,
+        radio_state=_radio(),
+        gps_state=None,
+    )
+
+    assert context.remote_callsign == incoming.callsign
+    assert context.remote_grid == incoming.grid
+    assert context.responder_inbound is incoming
+    assert context.tx_parity is FT8PeriodParity.ODD
+
+
+def test_responder_authorization_rejects_stale_inbound_call() -> None:
+    incoming = FT8IncomingCall(
+        callsign="W4YRL",
+        period=FT8Period(100),
+        snr_db=-9,
+        dt_seconds=0.1,
+        audio_frequency_hz=1500,
+        kind=FT8MessageKind.ADDRESSED_GRID,
+        grid="EL99",
+        raw_message="KI5VNB W4YRL EL99",
+    )
+
+    with pytest.raises(FT8QsoAuthorizationError, match="stale"):
+        _service(106).authorize_incoming(
+            incoming,
+            radio_state=_radio(),
+            gps_state=None,
+        )
+
+
 def test_authorization_explicitly_falls_back_to_configured_home_grid() -> None:
     service = _service(100)
 
     context = service.authorize(_activity(), radio_state=_radio(), gps_state=None)
 
     assert context.local_grid == "EM79xm"
+    assert context.logging_grid is None
     assert context.latitude is None
     assert context.longitude is None
     assert context.local_state is None
     assert context.local_cq_zone is None
     assert context.local_itu_zone is None
-    assert context.location_label == "configured home grid"
+    assert context.location_label == "unknown location"
 
 
 @pytest.mark.parametrize(
@@ -169,6 +283,64 @@ def test_authorization_uses_frozen_selection_period_for_freshness() -> None:
     assert context.radio_mode == "USB"
 
 
+def test_one_period_receive_snapshot_lag_is_accepted() -> None:
+    service = _service(105)
+
+    service.validate_selection_freshness(
+        _activity(period=99),
+        selection_period=FT8Period(104),
+    )
+
+
+def test_two_period_receive_snapshot_lag_is_rejected() -> None:
+    service = _service(105)
+
+    with pytest.raises(FT8QsoAuthorizationError, match="receive state is stale"):
+        service.validate_selection_freshness(
+            _activity(period=100),
+            selection_period=FT8Period(103),
+        )
+
+
+def test_future_receive_snapshot_period_is_rejected() -> None:
+    service = _service(105)
+
+    with pytest.raises(FT8QsoAuthorizationError, match="future"):
+        service.validate_selection_freshness(
+            _activity(period=105),
+            selection_period=FT8Period(106),
+        )
+
+
+def test_valid_selection_remains_accepted_after_several_preparation_periods() -> None:
+    clock = FakeFT8Clock(FT8Period(104).start_utc + timedelta(seconds=1))
+    service = FT8QsoAuthorizationService(
+        local_callsign="KI5VNB",
+        home_grid="EM79xm",
+        clock=clock,
+    )
+    activity = _activity(period=100)
+    service.validate_selection_freshness(
+        activity,
+        selection_period=FT8Period(104),
+    )
+
+    clock.advance(FT8_PERIOD_SECONDS * 8)
+    context = service.authorize(
+        activity,
+        radio_state=_radio(mode=RadioMode.USB),
+        gps_state=None,
+        selection_freshness_validated=True,
+        tx_power_target_watts=35,
+        tx_power_start_watts=35,
+    )
+
+    assert context.remote_callsign == "K1ABC"
+    assert context.authorized_period == FT8Period(112)
+    assert context.tx_power_target_watts == 35
+    assert context.tx_power_start_watts == 35
+
+
 def test_authorization_accepts_cq_through_fifth_age_period() -> None:
     context = _service(105).authorize(
         _activity(period=100),
@@ -188,6 +360,76 @@ def test_authorization_rejects_report_outside_protocol_range() -> None:
     with pytest.raises(FT8QsoAuthorizationError, match="report range"):
         _service().authorize(_activity(snr_db=-51), radio_state=_radio(), gps_state=None)
 
+
+
+def test_completed_cq_pota_ft8_logs_unique_matching_park(tmp_path: Path) -> None:
+    service = _service(100)
+    activity = replace(_activity(), pota_cq=True)
+    context = service.authorize(activity, radio_state=_radio(mode=RadioMode.USB), gps_state=_gps())
+    spot = PotaSpot(
+        activator=context.remote_callsign,
+        park=ParkReference(reference="US-4242"),
+        frequency=Frequency(hz=context.radio_frequency_hz),
+        mode=RadioMode.FT8,
+        spotted_at=context.authorized_utc,
+        spot_mode="FT8",
+    )
+    logger = FT8QsoLoggingService(
+        ContactLoggingService(ContactRepository(tmp_path / "contacts.db")),
+        pota_spots_provider=lambda: (spot,),
+    )
+    result = FT8QsoResult(
+        status=FT8QsoState.COMPLETED,
+        context=context,
+        sent_report_db=12,
+        received_report_db=-8,
+        started_utc=context.authorized_utc,
+        ended_utc=context.authorized_utc + timedelta(seconds=75),
+        terminal_reason=None,
+    )
+
+    contact = logger.handle_terminal_result(result)
+
+    assert contact is not None
+    assert str(contact.pota_reference) == "US-4242"
+
+
+def test_completed_cq_pota_ft8_does_not_guess_between_multiple_parks(tmp_path: Path) -> None:
+    service = _service(100)
+    context = service.authorize(
+        replace(_activity(), pota_cq=True),
+        radio_state=_radio(mode=RadioMode.USB),
+        gps_state=_gps(),
+    )
+    spots = tuple(
+        PotaSpot(
+            activator=context.remote_callsign,
+            park=ParkReference(reference=reference),
+            frequency=Frequency(hz=context.radio_frequency_hz),
+            mode=RadioMode.FT8,
+            spotted_at=context.authorized_utc,
+            spot_mode="FT8",
+        )
+        for reference in ("US-4242", "US-4343")
+    )
+    logger = FT8QsoLoggingService(
+        ContactLoggingService(ContactRepository(tmp_path / "contacts.db")),
+        pota_spots_provider=lambda: spots,
+    )
+    result = FT8QsoResult(
+        status=FT8QsoState.COMPLETED,
+        context=context,
+        sent_report_db=12,
+        received_report_db=-8,
+        started_utc=context.authorized_utc,
+        ended_utc=context.authorized_utc + timedelta(seconds=75),
+        terminal_reason=None,
+    )
+
+    contact = logger.handle_terminal_result(result)
+
+    assert contact is not None
+    assert contact.pota_reference is None
 
 def test_authorized_location_survives_movement_and_next_qso(tmp_path: Path) -> None:
     service = _service()

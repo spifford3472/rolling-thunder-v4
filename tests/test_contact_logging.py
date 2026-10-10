@@ -5,9 +5,11 @@ from datetime import UTC, datetime
 import pytest
 
 from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingService
+from rolling_thunder.contact_weather import ContactWeatherSnapshot
 from rolling_thunder.domain import (
     Contact,
     ContactEnrichmentState,
+    ContactWeatherObservation,
     Frequency,
     GPSFixState,
     GPSPosition,
@@ -48,6 +50,15 @@ class FailingRepository:
         raise RuntimeError(f"storage failed for {contact.callsign}")
 
 
+class FixedWeatherSnapshots:
+    def capture(self, contact: Contact) -> ContactWeatherSnapshot:
+        del contact
+        return ContactWeatherSnapshot(
+            contact=ContactWeatherObservation(summary="Remote cloudy; 18.0 C"),
+            local=ContactWeatherObservation(summary="Local clear; 21.0 C"),
+        )
+
+
 def jurisdiction_resolver() -> LocalJurisdictionResolver:
     return LocalJurisdictionResolver(
         (
@@ -72,6 +83,28 @@ def connected_radio_state(*, transmitting: bool = False) -> RadioState:
         transmitting=transmitting,
         updated_at=datetime(2026, 7, 25, 14, 0, tzinfo=UTC),
     )
+
+
+def test_manual_commit_freezes_already_published_weather() -> None:
+    repository = RecordingRepository()
+    now = datetime(2026, 7, 25, 14, 5, tzinfo=UTC)
+    service = ContactLoggingService(
+        repository,
+        FixedClock(now),
+        weather_snapshot_provider=FixedWeatherSnapshots(),
+    )
+
+    contact = service.commit(
+        pending_callsign="K1ABC",
+        radio_state=connected_radio_state(),
+        weather_notes_enabled=True,
+    )
+
+    assert repository.contacts == [contact]
+    assert contact.contact_weather is not None
+    assert contact.contact_weather.summary == "Remote cloudy; 18.0 C"
+    assert contact.local_weather is not None
+    assert contact.local_weather.summary == "Local clear; 21.0 C"
 
 
 def test_commit_persists_normalized_contact_with_radio_state() -> None:

@@ -98,6 +98,7 @@ class AlsaArecordFT8AudioInput:
         self._buffer: FT8AudioBuffer | None = None
         self._next_period: FT8Period | None = None
         self._next_period_start_sample: int | None = None
+        self._next_period_lateness_ms = 0.0
         self._lock = threading.Lock()
 
     @property
@@ -112,6 +113,7 @@ class AlsaArecordFT8AudioInput:
             self._reader_error = None
             self._next_period = None
             self._next_period_start_sample = None
+            self._next_period_lateness_ms = 0.0
             buffer = FT8AudioBuffer()
 
         try:
@@ -153,6 +155,7 @@ class AlsaArecordFT8AudioInput:
             buffer = self._buffer
             period = self._next_period
             start_sample = self._next_period_start_sample
+            boundary_lateness_ms = self._next_period_lateness_ms
 
         if process is None or buffer is None:
             raise FT8AudioInputError("FT8 audio input is not started")
@@ -162,22 +165,15 @@ class AlsaArecordFT8AudioInput:
 
             now = self._clock.now_utc()
             current = FT8Period.from_utc(now)
-            period = FT8Period(current.index + 1)
-            wait_s = (period.start_utc - now).total_seconds()
-
-            if wait_s > 0 and self._stop_event.wait(wait_s):
-                raise FT8AudioInputError("FT8 audio capture cancelled")
-
-            if self._clock.current_period() != period:
-                raise FT8AudioInputError(
-                    "system clock changed while aligning FT8 capture"
-                )
-
-            start_sample = buffer.next_sample
+            period, start_sample, boundary_lateness_ms = self._align_boundary(
+                buffer,
+                FT8Period(current.index + 1),
+            )
 
             with self._lock:
                 self._next_period = period
                 self._next_period_start_sample = start_sample
+                self._next_period_lateness_ms = boundary_lateness_ms
 
         end_sample = start_sample + FT8_PERIOD_SAMPLES
         self._wait_for_samples(process, buffer, end_sample)
@@ -190,7 +186,7 @@ class AlsaArecordFT8AudioInput:
         except FT8AudioBufferError as exc:
             raise FT8AudioInputError(f"could not extract FT8 period: {exc}") from exc
 
-        next_period, next_start_sample = self._realign_next_period(
+        next_period, next_start_sample, next_lateness_ms = self._realign_next_period(
             buffer,
             completed_period=period,
         )
@@ -206,11 +202,13 @@ class AlsaArecordFT8AudioInput:
 
             self._next_period = next_period
             self._next_period_start_sample = next_start_sample
+            self._next_period_lateness_ms = next_lateness_ms
 
         return FT8PcmPeriod(
             period=period,
             sample_rate_hz=FT8_SAMPLE_RATE_HZ,
             pcm_s16le=pcm,
+            boundary_lateness_ms=boundary_lateness_ms,
         )
 
     def _realign_next_period(
@@ -218,7 +216,7 @@ class AlsaArecordFT8AudioInput:
         buffer: FT8AudioBuffer,
         *,
         completed_period: FT8Period,
-    ) -> tuple[FT8Period, int]:
+    ) -> tuple[FT8Period, int, float]:
         """Re-anchor the next PCM window to UTC so USB sample drift cannot accumulate.
 
         USB audio hardware and the Pi system clock are independent oscillators.
@@ -229,34 +227,45 @@ class AlsaArecordFT8AudioInput:
         across days or months.
         """
         next_period = FT8Period(completed_period.index + 1)
-        now = self._clock.now_utc()
-
-        if now < next_period.start_utc:
-            wait_s = (next_period.start_utc - now).total_seconds()
-            if wait_s > 0 and self._stop_event.wait(wait_s):
-                raise FT8AudioInputError("FT8 audio capture cancelled")
-
         current = self._clock.current_period()
-
-        if current.index < next_period.index:
-            raise FT8AudioInputError(
-                "system clock did not reach the expected FT8 boundary"
-            )
-
         if current.index > next_period.index:
             # A long scheduling/system stall crossed one or more complete slots.
             # Skip stale slots and align to the next future UTC boundary rather
             # than mislabeling late audio as an earlier FT8 period.
             next_period = FT8Period(current.index + 1)
-            wait_s = (next_period.start_utc - self._clock.now_utc()).total_seconds()
-            if wait_s > 0 and self._stop_event.wait(wait_s):
-                raise FT8AudioInputError("FT8 audio capture cancelled")
-            if self._clock.current_period() != next_period:
-                raise FT8AudioInputError(
-                    "system clock changed while re-aligning FT8 capture"
-                )
 
-        return next_period, buffer.next_sample
+        return self._align_boundary(buffer, next_period)
+
+    def _align_boundary(
+        self,
+        buffer: FT8AudioBuffer,
+        period: FT8Period,
+    ) -> tuple[FT8Period, int, float]:
+        """Estimate the captured sample at a UTC boundary, correcting wake latency.
+
+        The old implementation used ``buffer.next_sample`` after a slow sample
+        clock reached 180,000 samples. That point is already after the next UTC
+        boundary, so lateness accumulated every period. Back-projecting from the
+        observed wake time keeps both fast and slow USB clocks anchored.
+        """
+        now = self._clock.now_utc()
+        wait_s = (period.start_utc - now).total_seconds()
+        if wait_s > 0 and self._stop_event.wait(wait_s):
+            raise FT8AudioInputError("FT8 audio capture cancelled")
+
+        now = self._clock.now_utc()
+        current = FT8Period.from_utc(now)
+        if current != period:
+            raise FT8AudioInputError("system clock changed while aligning FT8 capture")
+
+        lateness_s = max(0.0, (now - period.start_utc).total_seconds())
+        samples_since_boundary = round(lateness_s * FT8_SAMPLE_RATE_HZ)
+        boundary_sample = buffer.next_sample - samples_since_boundary
+        if boundary_sample < buffer.first_sample or boundary_sample > buffer.next_sample:
+            raise FT8AudioInputError(
+                "FT8 boundary samples are no longer retained after a scheduling stall"
+            )
+        return period, boundary_sample, lateness_s * 1000.0
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -269,6 +278,7 @@ class AlsaArecordFT8AudioInput:
             self._buffer = None
             self._next_period = None
             self._next_period_start_sample = None
+            self._next_period_lateness_ms = 0.0
 
         if process is not None and process.poll() is None:
             process.terminate()

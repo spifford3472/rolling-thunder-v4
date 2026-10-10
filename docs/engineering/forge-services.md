@@ -10,7 +10,7 @@ Screen-specific presentation belongs on clients, not Forge.
 
 ## Current process families
 
-### Spot / weather / radar service
+### Spot / weather / radar / map service
 
 Entry point: `rolling-thunder-forge-spots` / `forge_spot_main.py`.
 
@@ -29,9 +29,20 @@ Responsibilities include:
 - retained weather;
 - weather alerts;
 - radar;
+- optional on-demand style-aware map tiles backed by a local TileServer
+  GL-compatible renderer;
 - HTTP publication of retained state.
 
 The service publishes retained state immediately and performs provider/network work in background lifecycles.
+
+The optional map route is the exception to retained/polled publication: one
+bounded tile request is rendered on demand from the local renderer. It is
+disabled by default, has no background lifecycle, and is layered into the same
+private port 8766 application as spots, weather, location, alerts, and radar.
+Map failure does not change those other routes. The standalone
+`rolling-thunder-forge-map` entry point remains useful for development/testing,
+defaults to port 8767, and must not be used as a second production service unless
+deliberately isolated.
 
 #### DX Summit
 
@@ -77,7 +88,9 @@ Responsibilities:
 
 - accept local contact synchronization requests over a private API;
 - enforce idempotency keyed by stable contact UUID;
-- resolve the exact approved Wavelog station location;
+- resolve, verify, and when necessary safely create the exact approved Wavelog
+  dynamic mobile station from immutable QSO-local routing fields;
+- route incomplete location data to verified `Mobile - Unknown Location` and preserve configured-logbook membership;
 - convert the normalized contact into deterministic Wavelog-bound data;
 - preserve uncertain outcomes safely;
 - publish health independently of Pi local logging success.
@@ -85,6 +98,81 @@ Responsibilities:
 The service contract is useful to any authorized client capable of providing the normalized contact payload and idempotency key. It must not depend on Rolling Thunder UI state.
 
 Read `docs/FORGE_CONTACT_SYNC.md`.
+
+Station/logbook management remains provider-adapter behavior on Forge. The adapter
+uses owner-scoped Wavelog v2 station/logbook resources, treats names as exact
+identities, never guesses numeric IDs, verifies canonical create/link results, and
+does no writes during health checks. Because Wavelog's station list can hide unlinked
+locations under `active_log_only`, the adapter uses a minimal durable name -> verified
+ID/UUID recovery binding in the contact-sync SQLite repository. A 201 result is bound
+before linking; hidden retries direct-fetch only that known ID and fail closed on any
+identity or metadata change. A hidden generic 409 without a prior binding is not
+recoverable and never triggers numeric-ID scanning. The application service resolves
+this exact target before its durable UUID claim and binds the target ID into the
+payload hash.
+
+The same private process can expose the presentation-neutral FT8 performance
+endpoint. Its additive API accepts old payloads without configured-power
+readbacks and new payloads with nullable `tx_power_start_watts`,
+`tx_power_end_watts`, and `tx_power_max_watts`. Forge's dedicated FT8 SQLite
+schema migrates v1 to v2 without rebuilding or discarding attempts; legacy
+payload hashes remain valid for idempotent replay.
+
+Contact sync performs no weather-provider work. It uploads the immutable contact it
+receives; existing structured weather is retained, while requested notes render
+missing weather as `N/A`. `contact_weather.py` and `OpenMeteoForgeWeatherProvider`
+remain reusable outside synchronization, including for a separate background
+propagation/history worker.
+
+### Propagation environmental history (Phase 1 assets staged, disabled)
+
+`forge_propagation_*` provides a separate disabled-by-default environmental entry
+point, typed collectors, and dedicated SQLite history. That Phase 1 process runs only
+the hourly HamQSL/KC2G cycle with provider-I/O-free status. A distinct double-gated,
+disabled completed-QSO entry point composes its durable UUID-idempotent inbox,
+identified bounded leases, retry/dead-letter processing, existing VOACAP summary
+client, authenticated bounded private listener, and atomic local status publication.
+Its typed producer client defines one authenticated delivery attempt. The optional
+Pi source outbox now composes that client behind disabled-by-default gates and an
+independent scheduler. It is not composed into the environmental process, contact
+sync, Wavelog, or local logging.
+
+The disabled-by-default PSK service accepts a confirmed event containing the
+immutable FT8 contact and matching successful terminal attempt. It durably owns exact
+event replay, absolute request-window identity, a cross-process 300-second provider
+gate, bounded query batches, and provider-free health. Batched provider XML is stored
+once per query rather than copied into every QSO summary. It reuses the existing
+analytics/history contracts and adds no propagation engine. The separate PSK Reporter service has a bounded scheduler, authenticated private event ingestion, provider-free health/status, isolated databases and independently hardened systemd/sysusers/configuration templates. Process, ingestion and provider egress are separately gated and disabled by default. The VOACAP service independently provides authenticated completed-QSO ingestion and prediction through a disabled worker. Both use isolated exact-SHA release trees and dedicated no-login identities. Optional Pi production delivery is also gated off by default; neither service is installed/activated by source composition. Phase 1 propagation, logging, contact-sync and Wavelog remain unchanged. See
+`docs/PROPAGATION_HISTORY.md`.
+
+Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application
+root, configuration, StateDirectory, and SQLite database. The systemd unit has no
+listener and is not enabled by installation. Its production template remains
+disabled, and its preflight `--check-config` performs neither database nor provider
+access. Activation and the bounded HamQSL/KC2G network smoke test require separate
+explicit confirmations. Stopping/disabling this unit is the complete operational
+rollback and never restarts or changes radio, FT8, spot, Wavelog, or contact-sync
+services.
+
+The staged deployment integration gives propagation its own exact-40-SHA component
+hook and immutable release/current-link layout. The verified central dispatcher uses
+`<component> <40hex>`, `SOURCE_REPO`, `run_as_geoff`, and
+`verify_remote_sha`. Its propagation branch must run immediately after common SHA
+syntax validation and before legacy `STATE_FILE`, virtualenv, database, stop, backup,
+or rollback work. It fetches and validates the pushed origin commit, then `exec`s the
+fixed propagation hook. The hook accepts no caller-controlled paths or service names
+and can restart only the propagation unit when it was already active. Exact-commit
+wheels are prepared separately from a Git archive, manifested, reviewed, and only
+then promoted into the root-owned staging contract. See
+`../FORGE_PROPAGATION_DEPLOYMENT_PROPOSAL.md`.
+
+The component hook creates each virtualenv at its immutable final SHA path so pip
+console launchers are not invalidated by directory relocation. Before selecting a
+release, it executes the installed propagation launcher with provider-free `--help`
+as the dedicated service identity. Broken existing releases fail closed without a
+`current` change; recovery uses a new reviewed SHA under
+`../FORGE_PROPAGATION_BROKEN_RELEASE_RECOVERY.md` rather than mutating an immutable
+release.
 
 ## Reusable service design rules
 

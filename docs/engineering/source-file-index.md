@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 264.**
+**Cataloged Python modules: 265.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -77,10 +77,13 @@ originates from one screen.
 - `src/rolling_thunder/contact_repository.py` — Local contact persistence repository.
 - `src/rolling_thunder/contact_retry.py` — Durable retry metadata for remote contact synchronization.
 - `src/rolling_thunder/contact_sync.py` — Background synchronization orchestration for locally committed contacts.
+- `src/rolling_thunder/contact_weather.py` — Reusable Forge-side projection of shared normalized weather snapshots into immutable QSO weather fields; contact synchronization does not invoke it.
+- `src/rolling_thunder/completed_qso_producer.py` — Source-owned post-durability completed-FT8 event validation, standalone SQLite fan-out outbox, exact replay, independent destination retry worker, and background delivery lifecycle.
+- `src/rolling_thunder/completed_ft8_ingestion_client.py` — Typed authenticated one-attempt PSK event-ingestion client with exact receiver UUID acknowledgement validation; source outbox owns retry.
 - `src/rolling_thunder/log_panel.py` — Local contact-log panel repository/controller.
 - `src/rolling_thunder/log_panel_commands.py` — Module providing log panel commands behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/log_ui.py` — Tk presentation for recent local contacts.
-- `src/rolling_thunder/wavelog.py` — Module providing wavelog behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/wavelog.py` — Forge-only typed Wavelog v2 adapter for strict owner-scoped station/logbook management, direct-ID recovery through durable verified bindings, deterministic ADIF conversion, legacy grid alignment, QSO import, and history reads.
 
 ## Callsign capture/intelligence
 
@@ -103,6 +106,10 @@ originates from one screen.
 - `src/rolling_thunder/shared_spot_ui.py` — Tk presentation for the shared POTA/DX panel.
 - `src/rolling_thunder/spot_domain.py` — Provider-neutral POTA/DX spot records, identity, metadata, snapshots, and validation.
 - `src/rolling_thunder/spot_selection.py` — Stable spot-selection state independent of row position.
+
+## DX
+
+- `src/rolling_thunder/dx_worked.py` — Durable UTC-day DX callsign-and-band worked markers and no-I/O panel lookup state.
 
 ## POTA
 
@@ -143,20 +150,21 @@ originates from one screen.
 - `src/rolling_thunder/ft8/bands.py` — FT8 subsystem module for bands; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/coordinator.py` — FT8 subsystem module for coordinator; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/decoder.py` — FT8 subsystem module for decoder; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/distance.py` — FT8 subsystem module for distance; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/diagnostics.py` — Bounded FT8 audio/clock/decoder diagnostics, NTP-primary readiness, and morning comparison-session accounting.
+- `src/rolling_thunder/ft8/distance.py` — Maidenhead distance plus deterministic 20–70 W initial-power thresholds.
 - `src/rolling_thunder/ft8/domain.py` — Core shared domain models used across application services.
 - `src/rolling_thunder/ft8/encoder.py` — FT8 subsystem module for encoder; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/hardware_transmit.py` — FT8 subsystem module for hardware transmit; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/logging.py` — FT8 subsystem module for logging; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/operator_qso.py` — FT8 subsystem module for operator qso; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/panel.py` — FT8 subsystem module for panel; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/performance.py` — FT8 subsystem module for performance; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/panel.py` — Presentation-safe CQ selection plus incoming-call answer/ignore state.
+- `src/rolling_thunder/ft8/performance.py` — Backward-compatible FT8 attempt telemetry including requested and configured-power readbacks.
 - `src/rolling_thunder/ft8/performance_outbox.py` — FT8 subsystem module for performance outbox; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/performance_recording.py` — FT8 subsystem module for performance recording; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/performance_sync.py` — FT8 subsystem module for performance sync; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/qso.py` — FT8 subsystem module for qso; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/radio_preparation.py` — FT8 subsystem module for radio preparation; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/receive.py` — FT8 subsystem module for receive; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/receive.py` — Continuous receive/diagnostics plus configured-local-callsign addressed-decode publication.
 - `src/rolling_thunder/ft8/session.py` — FT8 subsystem module for session; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/start_control.py` — FT8 subsystem module for start control; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/status.py` — FT8 subsystem module for status; see FT8 engineering documents before modifying its contract.
@@ -211,10 +219,10 @@ originates from one screen.
 - `src/rolling_thunder/live_map_service.py` — Background base-map viewport/tile service and immutable snapshot publication.
 - `src/rolling_thunder/live_map_ui.py` — Tk rendering for map, overlays, marker, and map status.
 - `src/rolling_thunder/map_refresh.py` — Primary-map subsystem module for refresh.
-- `src/rolling_thunder/map_solar.py` — Primary-map subsystem module for solar.
-- `src/rolling_thunder/map_sources.py` — Primary-map subsystem module for sources.
-- `src/rolling_thunder/map_tiles.py` — Primary-map subsystem module for tiles.
-- `src/rolling_thunder/map_zoom.py` — Primary-map subsystem module for zoom.
+- `src/rolling_thunder/map_solar.py` — GPS/solar DAY/NIGHT policy and shared primary-to-mirror style fan-out.
+- `src/rolling_thunder/map_sources.py` — Local-first installed/cache/online map resolution with style switching.
+- `src/rolling_thunder/map_tiles.py` — Validated tile HTTP/cache adapters, including callsign-only style-partitioned storage.
+- `src/rolling_thunder/map_zoom.py` — Primary-map zoom settings plus optional shared style-target dispatch.
 - `src/rolling_thunder/radar_coverage.py` — Radar domain/presentation module for coverage.
 - `src/rolling_thunder/radar_domain.py` — Radar domain/presentation module for domain.
 - `src/rolling_thunder/radar_tiles.py` — Radar domain/presentation module for tiles.
@@ -249,7 +257,7 @@ originates from one screen.
 - `src/rolling_thunder/forge_callsign_info_main.py` — Independent Forge callsign-intelligence process entry/composition.
 - `src/rolling_thunder/forge_client.py` — Forge backend module for client; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_config.py` — Forge backend module for config; keep provider/backend contracts reusable by non-UI clients.
-- `src/rolling_thunder/forge_contact_sync.py` — Forge contact-sync application service and Wavelog handoff.
+- `src/rolling_thunder/forge_contact_sync.py` — Forge contact-sync application service and SQLite repository for exact target selection, immutable received-payload upload, durable UUID claims, and verified dynamic-station recovery bindings.
 - `src/rolling_thunder/forge_contact_sync_api.py` — HTTP API contract for idempotent contact synchronization.
 - `src/rolling_thunder/forge_contact_sync_config.py` — Forge backend module for contact sync config; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_contact_sync_main.py` — Independent Forge contact-sync process entry/composition.
@@ -259,8 +267,26 @@ originates from one screen.
 - `src/rolling_thunder/forge_dxsummit_irc_parser.py` — Network-independent parser for DX Summit IRC messages.
 - `src/rolling_thunder/forge_dxsummit_provider.py` — Persistent DX Summit IRC provider lifecycle, cache, health, and reconnect behavior.
 - `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
+- `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
+- `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.
+- `src/rolling_thunder/forge_propagation_main.py` — Disabled-by-default supervised propagation environmental entry point with database/provider-free configuration preflight and provider-free durable status.
+- `src/rolling_thunder/forge_propagation_runtime.py` — Supervised lifecycle for the independent hourly propagation environmental collector.
+- `src/rolling_thunder/completed_qso_ingestion_client.py` — Typed authenticated one-attempt producer client for the UUID-idempotent Forge completed-QSO API; source owners retain durable retry responsibility.
+- `src/rolling_thunder/forge_propagation_qso_api.py` — Bounded bearer-authenticated private completed-QSO ingestion API and supervised HTTP server lifecycle.
+- `src/rolling_thunder/forge_propagation_qso_ingestion.py` — Durable UUID-idempotent completed-QSO inbox/source-sink contract, identified bounded leases, retry/dead-letter worker contract, and isolated VOACAP correlator.
+- `src/rolling_thunder/forge_propagation_qso_worker.py` — Deterministic one-cycle orchestration and versioned atomic Forge-local status publication.
+- `src/rolling_thunder/forge_propagation_qso_worker_config.py` — Separate disabled service, authenticated-ingestion listener, worker identity, storage, polling, lease, retry, and VOACAP configuration.
+- `src/rolling_thunder/forge_propagation_qso_worker_main.py` — Independent completed-QSO ingestion/server and double-gated worker composition/lifecycle root with provider-free preflight/status commands.
+- `src/rolling_thunder/forge_pskreporter.py` — Official bounded PSK Reporter XML client, concurrency-safe five-minute etiquette gate, bounded FT8 completion-aware correlation, and repository-backed analytics service.
+- `src/rolling_thunder/forge_pskreporter_orchestration.py` — Completed-FT8 event sink, durable global pacing/exact-window inbox, bounded PSK worker, and provider-free health contract.
+- `src/rolling_thunder/forge_pskreporter_worker.py` — Authenticated bounded event API, independent scheduler, atomic local status, and service diagnostics for PSK analytics.
+- `src/rolling_thunder/forge_pskreporter_worker_config.py` — Triple-gated PSK service/listener/storage/provider configuration with isolated path and cadence validation.
+- `src/rolling_thunder/forge_pskreporter_worker_main.py` — Disabled-by-default independent PSK service composition and provider-free preflight/status entry point.
 - `src/rolling_thunder/forge_location_client.py` — Forge backend module for location client; keep provider/backend contracts reusable by non-UI clients.
-- `src/rolling_thunder/forge_map_main.py` — Forge backend module for map main; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_map.py` — Reusable typed configuration and bounded local style-aware map-renderer adapter.
+- `src/rolling_thunder/forge_map_api.py` — Optional map-tile route layer that delegates non-map requests to the existing Forge API application.
+- `src/rolling_thunder/forge_map_main.py` — Standalone Forge map development/testing entry point; production map serving is composed into the spot listener.
 - `src/rolling_thunder/forge_mobile_location.py` — Forge backend module for mobile location; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_mobile_location_repository.py` — Forge backend module for mobile location repository; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_noaa_radar.py` — Forge backend module for noaa radar; keep provider/backend contracts reusable by non-UI clients.
@@ -373,3 +399,8 @@ presentation adapters consume its immutable classification only.
 - `contact_export.py`: complete-contact format 3; imports retain formats 1/2.
 
 Consumers and ownership remain unchanged.
+- `src/rolling_thunder/ft8/propagation_inputs.py` — inert typed future VOACAP/space-weather forecast metadata slots; no provider or FT8 scoring integration.
+- `src/rolling_thunder/ft8/ranking_cache.py` — standalone nonblocking FT8 CQ ranking cache with 30-minute TTL, stale-while-revalidate and pending-first presentation order; no runtime integration.
+- `src/rolling_thunder/ft8/browser_ranking.py` — local-only background FT8 CQ ordering adapter; wraps 30-minute ranking cache and pending state without CAT or provider access.
+- `src/rolling_thunder/forge_psk_path_evidence.py` — read-only bounded historical PSK Reporter outward-path reception evidence, not yet served to FT8 ranking.
+- `src/rolling_thunder/forge_psk_evidence_snapshot.py` — bounded read-only cached Forge PSK outbound-reception snapshot service; no network listener or Pi client.

@@ -1,7 +1,8 @@
 """Tests for confirmed POTA tuning through the ordered tuner."""
 
 from datetime import UTC, datetime
-from typing import get_protocol_members
+
+from typing_extensions import get_protocol_members
 
 from rolling_thunder.domain import (
     Frequency,

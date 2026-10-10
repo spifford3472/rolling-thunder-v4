@@ -70,7 +70,8 @@ class _LiveProcess:
 
 
 class _ReanchorBuffer:
-    def __init__(self, *, next_sample: int, pcm: bytes) -> None:
+    def __init__(self, *, next_sample: int, pcm: bytes, first_sample: int = 0) -> None:
+        self.first_sample = first_sample
         self.next_sample = next_sample
         self._pcm = pcm
 
@@ -141,7 +142,7 @@ def test_utc_reanchor_prevents_90_day_usb_sample_drift_accumulation() -> None:
         pcm=b"\x00\x00" * 180_000,
     )
 
-    next_period, next_start_sample = audio._realign_next_period(
+    next_period, next_start_sample, lateness_ms = audio._realign_next_period(
         cast(Any, buffer),
         completed_period=completed,
     )
@@ -151,3 +152,27 @@ def test_utc_reanchor_prevents_90_day_usb_sample_drift_accumulation() -> None:
     assert accumulated_error_samples > 180_000
     assert next_period == FT8Period(completed.index + 1)
     assert next_start_sample == boundary_sample
+    assert lateness_ms == 0.0
+
+
+def test_audio_boundary_back_projects_scheduler_wake_lateness() -> None:
+    period = FT8Period.from_utc(datetime(2026, 10, 4, 0, 0, 0, tzinfo=UTC))
+    clock = FakeFT8Clock(period.start_utc + timedelta(milliseconds=50))
+    audio = AlsaArecordFT8AudioInput(
+        "plughw:CARD=Device,DEV=0",
+        clock=clock,
+    )
+    buffer = _ReanchorBuffer(
+        next_sample=1_000_600,
+        first_sample=900_000,
+        pcm=b"\x00\x00" * 180_000,
+    )
+
+    aligned_period, boundary_sample, lateness_ms = audio._align_boundary(
+        cast(Any, buffer),
+        period,
+    )
+
+    assert aligned_period == period
+    assert boundary_sample == 1_000_000
+    assert lateness_ms == pytest.approx(50.0)

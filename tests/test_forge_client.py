@@ -184,7 +184,7 @@ def test_fetch_builds_expected_request_and_reconstructs_combined_snapshot() -> N
     assert dx.source_metadata[0].key == "spotter"
 
     assert isinstance(pota.identity, PotaSpotIdentity)
-    assert pota.identity.stable_key == "pota:US-1234:14250000"
+    assert pota.identity.stable_key == "pota:KI5VNB:US-1234:14250000"
     assert pota.operator_name == "Geoff Kline"
     assert pota.grid == "EM79xm"
     assert pota.pota is not None

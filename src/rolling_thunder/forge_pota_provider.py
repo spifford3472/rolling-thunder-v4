@@ -81,6 +81,7 @@ def map_pota_spot_to_shared(spot: PotaSpot) -> SpotRecord:
     )
 
     identity = PotaSpotIdentity(
+        callsign=spot.activator,
         park_reference=spot.park.reference,
         frequency=spot.frequency,
     )

@@ -7,7 +7,7 @@ Date: 2026-10-02
 
 Implementation state: native FT8 is end-to-end and remains protected by explicit
 configuration and operator-authorization gates. CP9.1 provides the mobile-readable
-browser and physical-control workflow, verified 20 W / FT8-frequency / SSB-BFO USB
+browser and physical-control workflow, verified adaptive 20–70 W / FT8-frequency / SSB-BFO USB
 preparation before a QSO, 100 W / SSB-BFO AUTO restoration when leaving FT8,
 Context Button 3 active-QSO abort, same-day per-band worked suppression, live-map
 FT8 state, and a separate schema-15 machine-analysis telemetry pipeline to Forge
@@ -65,15 +65,16 @@ transmit authority are never created accidentally.
 
 The mobile CQ browser intentionally shows only CQ candidates. A callsign enters
 the browser only after a decoded CQ. Non-CQ traffic from an unknown callsign
-does not create a row. Once a station has called CQ, subsequent traffic can
-refresh that existing row until it expires after six FT8 periods with no traffic.
+does not create a row. Once a station has called CQ, subsequent non-CQ traffic
+can update informational fields but cannot refresh eligibility. The row expires
+when the most recent actual CQ reaches age six periods.
 
 The current color model is intentionally redundant with symbols for color-vision
 accessibility:
 
-- fresh CQ (first or second CQ period): yellow;
-- repeated CQ (third or later CQ period): white;
-- recent non-CQ traffic from an existing CQ candidate: gray;
+- actual-CQ age 0-1 periods: yellow;
+- actual-CQ age 2-3 periods: white;
+- actual-CQ age 4-5 periods: gray;
 - failed/retry-exhausted/error/preparation-failed attempt: red plus `!`;
 - operator-aborted attempt: blue plus `■`;
 - explicit POTA CQ token: tree indicator independent of attempt state.
@@ -283,6 +284,15 @@ A browser-oriented immutable record derived from decodes:
 
 CQ activity is presentation/discovery state only. It has no transmit authority.
 
+### `FT8IncomingCall`
+
+The receive service publishes the most recent supported addressed-grid or
+signal-report decode addressed to the configured local callsign when a source
+callsign exists. The immutable record contains caller, message kind, period,
+SNR, DT, audio frequency, raw message, optional grid, and optional report. It is
+presentation state only: BROWSE may offer explicit Button 2 answer/Button 3
+ignore actions, while ACTIVE and TERMINAL never expose the alert.
+
 ### `FT8QsoContext`
 
 Created once when the operator authorizes one QSO. It freezes:
@@ -295,6 +305,8 @@ Created once when the operator authorizes one QSO. It freezes:
 - location metadata needed by logging
 - selected TX period parity
 - authorization timestamp/period
+- requested initial configured power and actual configured power at start
+- the exact accepted inbound record when the QSO uses responder semantics
 
 GPS movement after creation must not change the transmitted grid during that
 QSO.
@@ -1134,7 +1146,8 @@ optional report, optional CQ qualifier, and read-only backend metadata.
 `FT8CQActivityManager` accepts only normalized decodes. CQ entries are keyed by
 normalized callsign, repeated CQs refresh the latest signal details, older
 decodes cannot replace newer activity, and non-CQ traffic never becomes a
-browser entry. The default expiry is four FT8 periods (60 seconds). Snapshots
+browser entry. Non-CQ traffic does not extend eligibility; the default expiry is
+six FT8 periods (90 seconds) from the most recent actual CQ. Snapshots
 are immutable and carry no station-selection or transmit authority.
 
 ### Frozen QSO authorization context
@@ -1170,6 +1183,13 @@ and advances only on fresh expected normalized decodes from the authorized
 remote callsign. Traffic from another station, stale periods, duplicate periods,
 wrong receive parity, or unexpected message kinds cannot redirect or advance
 the QSO.
+
+CQ selection uses the unchanged initiator sequence: CALL, wait for REPORT,
+R_REPORT, wait for ACK_73, then 73. Explicit Button 2 acceptance uses responder
+semantics. An addressed-grid inbound starts at TX_REPORT and waits for R_REPORT;
+an inbound REPORT starts at TX_R_REPORT and waits for ACK_73. The accepted
+inbound report, when present, initializes result/performance telemetry. Neither
+responder sequence exists until the operator accepts the exact inbound decode.
 
 The six-attempt rule applies independently to each unchanged outbound
 state/message. A valid response resets the counter for the newly advanced
@@ -1493,6 +1513,9 @@ occurs at completion or synchronization. Each new QSO authorizes a fresh snapsho
 failed, aborted and retry-exhausted attempts remain outside the Contact path.
 Immediate post-commit synchronization and stable QSO UUID semantics are unchanged.
 Historical contacts and configured-home-grid fallback have no inferred coordinates.
-Wavelog still uses legacy Mobile routing and existing ADIF only. See
+The shared Forge sync boundary now uses complete frozen grid/state/CQ/ITU context
+for verified dynamic mobile routing and otherwise uses the verified `Mobile - Unknown
+Location` profile without inventing coordinates or jurisdiction; FT8 has no special
+routing path. See
 [contact contract](FORGE_CONTACT_SYNC.md#immutable-qso-location-checkpoint-a) and
 [owner acceptance](CHECKPOINT_A_ACCEPTANCE.md).

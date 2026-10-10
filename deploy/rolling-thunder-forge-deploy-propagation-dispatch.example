@@ -1,0 +1,19 @@
+# REVIEWED INSERTION FRAGMENT -- DO NOT REPLACE THE INSTALLED HELPER
+#
+# Insert this block in /usr/local/sbin/rolling-thunder-forge-deploy immediately
+# after its existing exact-lowercase-40-SHA argument validation and immediately
+# before its STATE_FILE prerequisite or any legacy venv/database/stop/backup logic.
+# Keep the existing contact-sync, callsign-info, and spots case branches unchanged.
+# The installed helper's public arguments are: <component> <40hex>.
+
+if [[ "$1" == "propagation" ]]; then
+    run_as_geoff git -C "${SOURCE_REPO}" fetch origin
+    verify_remote_sha "${SOURCE_REPO}" "$2"
+    exec /usr/local/libexec/rolling-thunder-forge-deploy-propagation "$2"
+fi
+
+# Why this is early: propagation has its own root-owned staging tree, release
+# layout, service identity, and rollback hook. It must not enter the legacy
+# STATE_FILE, shared VENV/database, service-stop, backup, or rollback path.
+# SOURCE_REPO is the verified /opt/rolling-thunder-forge-callsign-info checkout;
+# SPOTS_REPO and all three existing component branches remain untouched.

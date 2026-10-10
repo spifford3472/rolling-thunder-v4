@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from rolling_thunder.map_solar import SynchronizedMapStyleTarget
 from rolling_thunder.map_sources import InstalledMapMetadata, MapPackageStyle
 from rolling_thunder.map_zoom import (
     MapZoomBounds,
@@ -46,6 +47,45 @@ class FakeLiveMap:
             return False
         self._zoom = zoom
         self.changes.append(zoom)
+        return True
+
+
+class FakeStyledLiveMap(FakeLiveMap):
+    def __init__(self, zoom: int, style: MapPackageStyle) -> None:
+        super().__init__(zoom)
+        self._style = style
+        self.style_changes: list[MapPackageStyle] = []
+
+    @property
+    def style(self) -> MapPackageStyle:
+        return self._style
+
+    @property
+    def available_styles(self) -> tuple[MapPackageStyle, ...]:
+        return (MapPackageStyle.DAY, MapPackageStyle.NIGHT)
+
+    def set_style(self, style: MapPackageStyle) -> bool:
+        if style is self._style:
+            return False
+        self._style = style
+        self.style_changes.append(style)
+        return True
+
+
+class FakeStyleMirror:
+    def __init__(self, style: MapPackageStyle) -> None:
+        self._style = style
+        self.changes: list[MapPackageStyle] = []
+
+    @property
+    def style(self) -> MapPackageStyle:
+        return self._style
+
+    def set_style(self, style: MapPackageStyle) -> bool:
+        if style is self._style:
+            return False
+        self._style = style
+        self.changes.append(style)
         return True
 
 
@@ -109,6 +149,33 @@ def test_settings_encoder_changes_zoom_and_queues_persistence() -> None:
     assert settings.state.zoom == 15
     assert live_map.changes == [14, 15]
     assert persistence.values == [14, 15]
+
+
+def test_settings_style_fans_out_while_zoom_changes_only_primary() -> None:
+    live_map = FakeStyledLiveMap(13, MapPackageStyle.DAY)
+    callsign_map = FakeStyleMirror(MapPackageStyle.DAY)
+    style_target = SynchronizedMapStyleTarget(live_map, (callsign_map,))
+    persistence = FakePersistence()
+    settings = MapZoomSettingsController(
+        live_map,
+        MapZoomBounds(6, 15),
+        persistence,
+        style_target=style_target,
+    )
+
+    assert settings.toggle_style() is True
+    assert live_map.style is MapPackageStyle.NIGHT
+    assert callsign_map.style is MapPackageStyle.NIGHT
+    assert settings.state.style is MapPackageStyle.NIGHT
+    assert settings.state.available_styles == (
+        MapPackageStyle.DAY,
+        MapPackageStyle.NIGHT,
+    )
+
+    assert settings.zoom_in() is True
+    assert live_map.zoom == 14
+    assert persistence.values == [14]
+    assert callsign_map.changes == [MapPackageStyle.NIGHT]
 
 
 def test_settings_zoom_does_not_wrap_past_effective_bounds() -> None:

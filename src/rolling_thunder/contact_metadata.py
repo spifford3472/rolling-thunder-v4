@@ -16,7 +16,7 @@ from rolling_thunder.pota_spots import PotaSpot
 from rolling_thunder.value_types import MaidenheadGrid, PotaReference
 
 POTA_FREQUENCY_TOLERANCE_HZ = 250
-DEFAULT_GPS_MAXIMUM_AGE = timedelta(seconds=10)
+DEFAULT_GPS_MAXIMUM_AGE = timedelta(seconds=120)
 _PHONE_MODES = frozenset({RadioMode.LSB, RadioMode.USB})
 
 
@@ -25,6 +25,8 @@ class ContactMetadata:
     """Optional metadata captured for one committed contact."""
 
     grid: MaidenheadGrid | None = None
+    contact_latitude: float | None = None
+    contact_longitude: float | None = None
     my_grid: MaidenheadGrid | None = None
     my_latitude: float | None = None
     my_longitude: float | None = None
@@ -91,19 +93,15 @@ def resolve_contact_metadata(
             ),
         )
 
-    normalized_callsign = callsign.strip().upper()
-    matching_parks: dict[str, PotaSpot] = {}
+    spot = unique_matching_pota_spot(
+        callsign=callsign,
+        frequency_hz=frequency_hz,
+        mode=mode,
+        pota_spots=pota_spots,
+        frequency_tolerance_hz=frequency_tolerance_hz,
+    )
 
-    for spot in pota_spots:
-        if str(spot.activator) != normalized_callsign:
-            continue
-        if abs(spot.frequency.hz - frequency_hz) > frequency_tolerance_hz:
-            continue
-        if not _modes_compatible(mode, spot.mode):
-            continue
-        matching_parks.setdefault(spot.park.reference, spot)
-
-    if len(matching_parks) != 1:
+    if spot is None:
         return ContactMetadata(
             my_grid=my_grid,
             my_latitude=latitude,
@@ -117,7 +115,6 @@ def resolve_contact_metadata(
             ),
         )
 
-    spot = next(iter(matching_parks.values()))
     park_reference = spot.park.reference
     grid: MaidenheadGrid | None = None
     grid_source: ContactGridSource | None = None
@@ -131,6 +128,8 @@ def resolve_contact_metadata(
 
     return ContactMetadata(
         grid=grid,
+        contact_latitude=spot.park.latitude,
+        contact_longitude=spot.park.longitude,
         my_grid=my_grid,
         my_latitude=latitude,
         my_longitude=longitude,
@@ -155,6 +154,32 @@ def _enrichment_state(
     if grid is None and qrz_fallback_available:
         return ContactEnrichmentState.PENDING_QRZ
     return ContactEnrichmentState.READY
+
+
+def unique_matching_pota_spot(
+    *,
+    callsign: str,
+    frequency_hz: int,
+    mode: RadioMode,
+    pota_spots: tuple[PotaSpot, ...],
+    frequency_tolerance_hz: int = POTA_FREQUENCY_TOLERANCE_HZ,
+) -> PotaSpot | None:
+    """Return one unambiguous matching POTA activation or None."""
+    if frequency_tolerance_hz < 0:
+        raise ValueError("POTA frequency tolerance must not be negative.")
+    normalized_callsign = callsign.strip().upper()
+    matching_parks: dict[str, PotaSpot] = {}
+    for spot in pota_spots:
+        if str(spot.activator) != normalized_callsign:
+            continue
+        if abs(spot.frequency.hz - frequency_hz) > frequency_tolerance_hz:
+            continue
+        if not _modes_compatible(mode, spot.mode):
+            continue
+        matching_parks.setdefault(str(spot.park.reference), spot)
+    if len(matching_parks) != 1:
+        return None
+    return next(iter(matching_parks.values()))
 
 
 def _current_my_grid(

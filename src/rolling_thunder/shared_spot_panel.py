@@ -70,12 +70,9 @@ class SharedSpotModeFilter(StrEnum):
 
 
 _POTA_MODES: tuple[SharedSpotModeFilter, ...] = (
+    SharedSpotModeFilter.ALL,
     SharedSpotModeFilter.SSB,
     SharedSpotModeFilter.CW,
-    SharedSpotModeFilter.FT4,
-    SharedSpotModeFilter.FT8,
-    SharedSpotModeFilter.DATA,
-    SharedSpotModeFilter.ALL,
 )
 
 
@@ -100,6 +97,20 @@ class PotaWorkedStatusProvider(Protocol):
         reference_time: datetime | None = None,
     ) -> bool:
         """Return whether the exact callsign/mode/band combination is worked."""
+        ...
+
+
+class DxWorkedStatusProvider(Protocol):
+    """Provide a no-I/O worked lookup for one displayed DX combination."""
+
+    def is_worked(
+        self,
+        *,
+        callsign: str,
+        frequency: Frequency,
+        reference_time: datetime | None = None,
+    ) -> bool:
+        """Return whether the callsign-and-band combination is worked."""
         ...
 
 
@@ -212,6 +223,7 @@ class SharedSpotPanelController:
         clock: Clock | None = None,
         maximum_pota_age: timedelta = _DEFAULT_MAXIMUM_AGE,
         pota_worked_status: PotaWorkedStatusProvider | None = None,
+        dx_worked_status: DxWorkedStatusProvider | None = None,
     ) -> None:
         if maximum_pota_age < timedelta(0):
             raise ValueError("shared POTA maximum spot age must not be negative")
@@ -219,9 +231,10 @@ class SharedSpotPanelController:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._provider = SpotProvider.POTA
         self._pota_band = _DEFAULT_POTA_BAND
-        self._pota_mode_filter = SharedSpotModeFilter.SSB
+        self._pota_mode_filter = SharedSpotModeFilter.ALL
         self._pota_maximum_age = maximum_pota_age
         self._pota_worked_status = pota_worked_status
+        self._dx_worked_status = dx_worked_status
         self._dx_band = _DEFAULT_POTA_BAND
         self._dx_mode_filter = SharedSpotModeFilter.ALL
         now = self._aware_now()
@@ -371,7 +384,7 @@ class SharedSpotPanelController:
     def reset_pota_filters(self) -> SharedSpotPanelState:
         """Restore the current mobile 20-meter SSB POTA defaults."""
         self._pota_band = _DEFAULT_POTA_BAND
-        self._pota_mode_filter = SharedSpotModeFilter.SSB
+        self._pota_mode_filter = SharedSpotModeFilter.ALL
         return self.state
 
     def reset_dx_filters(self) -> SharedSpotPanelState:
@@ -428,9 +441,13 @@ class SharedSpotPanelController:
         spot: SpotRecord,
         mode_filter: SharedSpotModeFilter,
     ) -> bool:
-        if mode_filter is SharedSpotModeFilter.ALL:
-            return True
         display_mode = spot.display_mode
+        if mode_filter is SharedSpotModeFilter.ALL:
+            return display_mode in {"SSB", "PHONE", "LSB", "USB", "CW"} or spot.mode in {
+                RadioMode.LSB,
+                RadioMode.USB,
+                RadioMode.CW,
+            }
         if mode_filter is SharedSpotModeFilter.SSB:
             return display_mode in {"SSB", "PHONE", "LSB", "USB"} or spot.mode in {
                 RadioMode.LSB,
@@ -469,12 +486,20 @@ class SharedSpotPanelController:
         )
 
     def _spot_is_worked(self, spot: SpotRecord, *, now: datetime) -> bool:
-        if spot.provider is not SpotProvider.POTA or self._pota_worked_status is None:
+        if spot.provider is SpotProvider.POTA:
+            if self._pota_worked_status is None:
+                return False
+            return self._pota_worked_status.is_worked(
+                callsign=str(spot.callsign),
+                frequency=spot.frequency,
+                display_mode=spot.display_mode,
+                reference_time=now,
+            )
+        if self._dx_worked_status is None:
             return False
-        return self._pota_worked_status.is_worked(
+        return self._dx_worked_status.is_worked(
             callsign=str(spot.callsign),
             frequency=spot.frequency,
-            display_mode=spot.display_mode,
             reference_time=now,
         )
 

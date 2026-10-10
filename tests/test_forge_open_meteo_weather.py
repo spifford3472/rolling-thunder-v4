@@ -119,11 +119,12 @@ def test_provider_requests_bounded_fields_and_normalizes_snapshot() -> None:
     ]
     assert query["hourly"] == ["temperature_2m,precipitation_probability"]
     assert query["daily"] == ["sunrise,sunset"]
-    assert query["timezone"] == ["UTC"]
+    assert query["timezone"] == ["auto"]
     assert query["forecast_hours"] == ["6"]
 
     assert snapshot.latitude == 39.524492
     assert snapshot.longitude == -84.062475
+    assert snapshot.timezone == "GMT"
     assert snapshot.source_at == datetime(2026, 8, 9, 0, 30, tzinfo=UTC)
     assert snapshot.fetched_at == FETCHED_AT
     assert snapshot.current.temperature_c == 22.4
@@ -138,6 +139,22 @@ def test_provider_requests_bounded_fields_and_normalizes_snapshot() -> None:
     assert snapshot.source.provider_id == "open_meteo"
     assert snapshot.source.attribution_text == "Weather data by Open-Meteo.com"
     assert snapshot.source.license_name == "CC BY 4.0"
+
+
+def test_provider_uses_returned_iana_timezone_for_dst_aware_utc_normalization() -> None:
+    raw = __import__("json").loads(valid_payload())
+    raw["timezone"] = "America/Los_Angeles"
+    transport = RecordingTransport(FakeResponse(200, dumps(raw).encode("utf-8")))
+    provider = OpenMeteoForgeWeatherProvider(
+        transport=transport,
+        now=lambda: datetime(2026, 8, 9, 8, 0, tzinfo=UTC),
+    )
+
+    snapshot = provider.fetch_weather(location())
+
+    assert snapshot.timezone == "America/Los_Angeles"
+    assert snapshot.source_at == datetime(2026, 8, 9, 7, 30, tzinfo=UTC)
+    assert snapshot.hourly[0].forecast_at == datetime(2026, 8, 9, 8, 0, tzinfo=UTC)
 
 
 @pytest.mark.parametrize(

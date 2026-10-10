@@ -61,6 +61,18 @@ def test_valid_coordinates_are_frozen(latitude: float | None, longitude: float |
         qso.my_latitude = 1.0
 
 
+def test_local_grid_accessors_have_one_six_character_source_of_truth() -> None:
+    qso = contact(my_grid="em79XM")
+
+    assert qso.my_grid == "EM79xm"
+    assert qso.my_grid6 == "EM79xm"
+    assert qso.my_grid4 == qso.my_grid6[:4] == "EM79"
+
+    for invalid in ("EM79", "EM79xm12"):
+        with pytest.raises(ValidationError, match="six-character"):
+            contact(my_grid=invalid)
+
+
 @pytest.mark.parametrize(
     ("latitude", "longitude"),
     [
@@ -157,13 +169,15 @@ def test_schema_16_migration_preserves_all_existing_data(
         before = db.execute("SELECT * FROM contacts").fetchall()
         retry = db.execute("SELECT * FROM contact_sync_retries").fetchall()
         telemetry = db.execute("SELECT * FROM ft8_performance_outbox").fetchall()
-    assert storage.initialize_database(path) == 17
-    assert storage.initialize_database(path) == 17
+    assert storage.initialize_database(path) == 20
+    assert storage.initialize_database(path) == 20
     historical = ContactRepository(path).list_all()[0]
     assert historical.my_latitude is None and historical.my_longitude is None
     assert historical.my_state is None
     assert historical.my_cq_zone is None
     assert historical.my_itu_zone is None
+    assert historical.tx_power_watts is None
+    assert historical.weather_notes_enabled is False
     with sqlite3.connect(path) as db:
         assert db.execute(f"SELECT {', '.join(old_columns)} FROM contacts").fetchall() == before
         assert db.execute(
@@ -184,7 +198,7 @@ def test_export_and_verified_backup_round_trip_coordinates(tmp_path: Path) -> No
     repository.add(qso)
     export = tmp_path / "contacts.json"
     export_contacts_to_json(repository, export, exported_at=NOW)
-    assert json.loads(export.read_text())["format_version"] == 4
+    assert json.loads(export.read_text())["format_version"] == 5
     backup = create_contact_backup(
         repository, tmp_path / "backups", retention_count=2, created_at=NOW
     )

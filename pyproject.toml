@@ -23,6 +23,9 @@ rolling-thunder-forge-spots = "rolling_thunder.forge_spot_main:main"
 rolling-thunder-forge-map = "rolling_thunder.forge_map_main:main"
 rolling-thunder-forge-contact-sync = "rolling_thunder.forge_contact_sync_main:main"
 rolling-thunder-forge-callsign-info = "rolling_thunder.forge_callsign_info_main:main"
+rolling-thunder-forge-propagation = "rolling_thunder.forge_propagation_main:main"
+rolling-thunder-forge-propagation-qso-worker = "rolling_thunder.forge_propagation_qso_worker_main:main"
+rolling-thunder-forge-pskreporter-worker = "rolling_thunder.forge_pskreporter_worker_main:main"
 rolling-thunder-pota-catalog = "rolling_thunder.pota_catalog_main:main"
 
 [project.optional-dependencies]
@@ -36,7 +39,8 @@ development = [
     "pre-commit",
     "pytest",
     "pytest-asyncio",
-    "ruff",
+    "ruff==0.16.10",
+    "typing-extensions>=4.15; python_version < '3.13'",
     "pyshp>=2.3,<3",
 ]
 

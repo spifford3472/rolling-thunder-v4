@@ -12,17 +12,38 @@ A callsign appears only when:
 
 Non-CQ traffic from a station that has never appeared as a CQ candidate does not create a browser row.
 
-Once a station has entered the CQ browser, later non-CQ traffic may update its presentation and may extend its activity lifetime. A station is removed after six FT8 periods with no traffic of any kind.
+Once a station has entered the CQ browser, later non-CQ traffic may update
+informational fields but does not extend CQ eligibility. Ages 0 through 5 are
+visible; the station is removed when its most recent actual CQ reaches age six.
 
 New CQ stations are appended to the bottom of the existing list so the operator's selection does not jump unexpectedly.
+
+## Receive Diagnostics
+
+The footer reports receive health without changing radio or transmit authority.
+`RX OK` includes the most recent audio RMS level, raw decoder output-line count,
+all parsed FT8 decodes, CQ decodes, and decoder runtime. `RX DEGRADED` identifies
+unready/disagreeing clock sources, silence/very-low/clipping audio, dropped
+periods, or capture/decoder/diagnostic errors.
+
+During an explicitly configured bounded comparison session, a second line shows
+`DIAG RUN` or `DIAG DONE`. `ALL primary/comparison` counts every parsed FT8
+message from `ft8_lib` and `ft8mon` independently; `CQ primary/comparison` counts
+only CQ messages. These figures are intentionally different from visible CQ
+rows, which also follow CQ eligibility, expiry, and worked-today rules.
+
+For the issue-237 morning run, comparison and sample retention stop at 05:15
+America/New_York. Normal primary receive continues. At most three WAV samples
+are retained in stable slots, and both decoders receive the same captured PCM.
+The mode is receive-only and does not authorize or transmit RF.
 
 ## Callsign Colors and Markers
 
 The callsign color describes the most useful current/prior state while the station remains an eligible CQ candidate.
 
-- **Yellow** — fresh CQ. The station has been heard calling CQ once or twice.
-- **White** — repeated CQ. The station has been heard calling CQ three or more times.
-- **Gray** — the station previously called CQ but recent non-CQ traffic shows it is active with someone else.
+- **Yellow** — the most recent actual CQ is age 0 or 1 FT8 periods.
+- **White** — the most recent actual CQ is age 2 or 3 periods.
+- **Gray** — the most recent actual CQ is age 4 or 5 periods.
 - **Red + `!` marker** — Rolling Thunder attempted this callsign/band during the current UTC date and the attempt failed, timed out, exhausted retries, or ended in an execution/preparation error.
 - **Blue + `■` marker** — the operator intentionally aborted an FT8 attempt with this callsign/band during the current UTC date.
 - **Tree symbol** — the decoded CQ explicitly contained the POTA token.
@@ -77,12 +98,40 @@ a new explicit operator action.
 - Context Button 3 during an active QSO — immediately abort the current FT8 QSO.
 - Leaving the FT8 context aborts any active FT8 work before radio restoration.
 
+When a decoded FT8 message is addressed to the configured local callsign while
+the screen is in the browser, a large incoming-call alert replaces the CQ table.
+It shows the caller, received SNR, and grid when known. Button 2 answers exactly
+that caller; Button 3 ignores it. Repeated messages from an ignored or already
+accepted caller do not repeatedly authorize a QSO. Incoming messages do not
+interrupt active or terminal QSO screens.
+
+After a completed QSO, repeats from that just-worked callsign are treated as
+continuation traffic for the next six FT8 periods and do not immediately reopen
+the incoming-call alert. A different callsign still appears immediately, and a
+later genuinely new call from the worked station can appear after the cutoff.
+Failed or aborted attempts do not use this continuation guard. If Button 2
+cannot start the responder workflow, the alert remains visible.
+
+Button 2 starts a responder exchange, not a new CQ call. If the accepted message
+contains the caller's grid, Rolling Thunder's first transmission in the opposite
+slot is a signal report. If the accepted message already contains a signal
+report (for example `KI5VNB K0BQB -03`), Rolling Thunder retains that report and
+its first transmission is the acknowledged `R_REPORT`. The normal final 73 and
+bounded retry/safety checks still apply. Merely decoding either message never
+transmits.
+
 ## Radio Preparation
 
 Before an authorized FT8 QSO can transmit, Rolling Thunder prepares and verifies the FT-891:
 - FT8 dial frequency for the selected band;
-- 20 W output power;
+- one initial 20–70 W configured-power target derived from frozen local/remote
+  Maidenhead-grid distance;
 - SSB-BFO USB.
+
+Unknown distance and paths through 3,000 km use 20 W. The thresholds then use
+5 W steps at 4,500, 6,000, 7,500, 9,000, 10,500, 11,500, 12,500, 13,500, and
+14,500 km; longer paths use 70 W. Power is prepared once. The QSO controller
+does not continually overwrite an operator's later manual adjustment.
 
 A preparation failure is fail-closed: no PTT and no FT8 transmit audio.
 

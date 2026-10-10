@@ -80,7 +80,15 @@ class FT8QsoController:
         """Move an authorized QSO into slot-driven operation."""
         if self._state is not FT8QsoState.AUTHORIZED:
             raise RuntimeError("QSO start requires AUTHORIZED state")
-        self._state = FT8QsoState.WAIT_TX_CALL
+        inbound = self._require_context().responder_inbound
+        if inbound is None:
+            self._state = FT8QsoState.WAIT_TX_CALL
+        elif inbound.kind is FT8MessageKind.ADDRESSED_GRID:
+            self._state = FT8QsoState.TX_REPORT
+        elif inbound.kind is FT8MessageKind.REPORT:
+            self._state = FT8QsoState.TX_R_REPORT
+        else:
+            raise RuntimeError("unsupported FT8 responder start message")
 
     def on_period(self, period: FT8Period) -> None:
         """Handle one observed FT8 period without sleeping or touching hardware."""
@@ -126,6 +134,9 @@ class FT8QsoController:
             FT8QsoState.IDLE,
             FT8QsoState.AUTHORIZED,
             FT8QsoState.WAIT_TX_CALL,
+            FT8QsoState.TX_REPORT,
+            FT8QsoState.TX_R_REPORT,
+            FT8QsoState.TX_73,
         }:
             return
         context = self._require_context()
@@ -151,7 +162,7 @@ class FT8QsoController:
         self._attempt_count = 0
         if self._state is FT8QsoState.WAIT_REPORT:
             self._state = FT8QsoState.TX_R_REPORT
-        elif self._state is FT8QsoState.WAIT_73:
+        elif self._state in {FT8QsoState.WAIT_R_REPORT, FT8QsoState.WAIT_73}:
             self._state = FT8QsoState.TX_73
 
     def abort(self, *, session_already_cancelled: bool = False) -> None:
@@ -192,6 +203,12 @@ class FT8QsoController:
                 FT8QsoState.TX_CALL,
                 FT8QsoState.WAIT_REPORT,
             )
+        if self._state in {FT8QsoState.TX_REPORT, FT8QsoState.WAIT_R_REPORT}:
+            return (
+                FT8TransmitKind.REPORT,
+                FT8QsoState.TX_REPORT,
+                FT8QsoState.WAIT_R_REPORT,
+            )
         if self._state in {FT8QsoState.TX_R_REPORT, FT8QsoState.WAIT_73}:
             return (
                 FT8TransmitKind.R_REPORT,
@@ -209,6 +226,8 @@ class FT8QsoController:
     def _expected_decode_kind(self) -> FT8MessageKind | None:
         if self._state is FT8QsoState.WAIT_REPORT:
             return FT8MessageKind.REPORT
+        if self._state is FT8QsoState.WAIT_R_REPORT:
+            return FT8MessageKind.R_REPORT
         if self._state is FT8QsoState.WAIT_73:
             return FT8MessageKind.ACK_73
         return None

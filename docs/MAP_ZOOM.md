@@ -67,6 +67,11 @@ A zoom change updates `LiveMapService` in memory. The next normal map refresh
 requests the same current GPS position at the new zoom through the existing
 single background map worker.
 
+Map style is deliberately a separate target. Settings reads style and installed
+availability from the authoritative primary live map, then sends an accepted
+DAY/NIGHT change through the shared style fan-out so the callsign mini-map stays
+synchronized. Encoder zoom changes never alter the callsign mini-map zoom.
+
 ## anvilmobile acceptance
 
 1. Update `anvilmobile` to the exact PR head and start the dashboard normally.

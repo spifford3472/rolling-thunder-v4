@@ -124,13 +124,16 @@ def _card_from_row(row: SharedSpotPanelRow, friends: frozenset[str]) -> SharedSp
     metadata = "  ".join(
         f"{item.key.upper()} {item.value}" for item in row.source_metadata[:2]
     )
+    name_line = _name_line(row)
+    if row.worked:
+        name_line = f"{name_line} — WORKED"
     return SharedSpotCard(
-        line1=_name_line(row),
+        line1=name_line,
         line2=_frequency_line(row),
         line3=f"GRID {row.grid_text}",
         line4=metadata or "SOURCE <UNKNOWN>",
         selected=row.selected,
-        worked=False,
+        worked=row.worked,
         friend_marker=friend_marker(row.callsign, friends),
     )
 

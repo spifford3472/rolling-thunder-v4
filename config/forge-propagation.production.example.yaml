@@ -1,0 +1,17 @@
+# Phase 1 production template. Installation must preserve enabled: false until
+# the owner explicitly authorizes the bounded network smoke test and activation.
+enabled: false
+database_path: /var/lib/rolling-thunder-forge-propagation/propagation-history.sqlite3
+collection_interval_s: 3600
+scheduler_check_interval_s: 60.0
+retry_initial_backoff_s: 3600
+retry_maximum_backoff_s: 21600
+provider_timeout_s: 10.0
+
+# These belong to later, independently supervised phases. The environmental
+# collector does not invoke them, and Phase 1 must leave them disabled.
+voacap_enabled: false
+voacap_base_url: http://127.0.0.1:8787
+weather_enrichment_enabled: false
+pskreporter:
+  enabled: false

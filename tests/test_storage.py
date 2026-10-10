@@ -171,12 +171,19 @@ def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
         "rst_sent",
         "rst_received",
         "grid",
+        "contact_latitude",
+        "contact_longitude",
         "my_grid",
         "my_latitude",
         "my_longitude",
         "my_state",
         "my_cq_zone",
         "my_itu_zone",
+        "source",
+        "tx_power_watts",
+        "contact_weather_json",
+        "local_weather_json",
+        "weather_notes_enabled",
         "pota_reference",
         "grid_source",
         "enrichment_state",
@@ -193,6 +200,8 @@ def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
     assert columns["started_at"][3] == 1
     assert columns["synchronization_state"][4] == "'pending'"
     assert columns["enrichment_state"][4] == "'ready'"
+    assert columns["source"][4] == "'unknown'"
+    assert columns["weather_notes_enabled"][4] == "0"
 
 
 def test_initialize_database_creates_pota_cache_metadata_columns(
@@ -396,4 +405,26 @@ def test_initialize_database_creates_pota_worked_markers_table(
     assert "pota_worked_markers_day_index" in read_index_names(
         database_path,
         "pota_worked_markers",
+    )
+
+
+def test_initialize_database_creates_dx_worked_markers_table(tmp_path: Path) -> None:
+    database_path = tmp_path / "rolling-thunder.db"
+
+    initialize_database(database_path)
+
+    columns = read_table_columns(database_path, "dx_worked_markers")
+    assert set(columns) == {
+        "utc_date",
+        "callsign",
+        "band",
+        "worked_at",
+        "created_at",
+    }
+    assert columns["utc_date"][5] == 1
+    assert columns["callsign"][5] == 2
+    assert columns["band"][5] == 3
+    assert "dx_worked_markers_day_index" in read_index_names(
+        database_path,
+        "dx_worked_markers",
     )

@@ -133,6 +133,10 @@ repeaters:
 map:
   enabled: true
   tile_url_template: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+  # Optional worldwide callsign-map source. The private Forge map route supports
+  # real DAY/NIGHT pixels: http://forge:8766/api/v1/map/tiles/{style}/{z}/{x}/{y}.png
+  # Without {style}, callsign NIGHT tiles fail closed instead of showing DAY pixels.
+  callsign_tile_url_template: null
   zoom: 15
   request_timeout_s: 4.0
   gps_stale_after_s: 10.0
@@ -183,6 +187,15 @@ physical_controls:
     encoder-switch-long: back
 
 ft8:
+  # FT8-P1 recommendation-only power policy; NEVER authorizes CAT power changes.
+  power:
+    initial_power_watts: 20
+    adaptive_enabled: false
+    default_max_auto_watts: 70
+    max_auto_watts_by_band:
+      10m: 30
+      12m: 40
+      15m: 40
   # Experimental v4.3 native FT8 subsystem. Disabled means no FT8 capture
   # device, decoder process, receive worker, playback device, PTT capability,
   # physical transmit executor, or transmit worker is created.
@@ -190,13 +203,28 @@ ft8:
   receive:
     # DigiRig DR-891 C-Media capture. ALSA plug performs 44.1/48 kHz -> 12 kHz.
     audio_device: plughw:CARD=Device,DEV=0
+    # Primary decoder selected from ft8_lib or ft8mon.
+    decoder_backend: ft8_lib
     # Required only when ft8.enabled is true.
     decoder_executable: null
     decoder_timeout_s: 12.0
     reconnect_delay_s: 2.0
+    # Optional bounded same-PCM investigation. A session started before 05:15
+    # New York time stops comparison/recording at 05:15; one started during the
+    # prior evening runs only until the next 05:15. Leave null in normal use.
+    comparison_backend: null
+    comparison_decoder_executable: null
+    diagnostic_session_end_local: null
+    # The JSON file is atomically replaced; PCM uses at most three stable slots.
+    diagnostic_snapshot_path: null
+    saved_pcm_directory: null
+    saved_pcm_periods: 0
   transmit:
     # Independent RF gate. Keep false for receive-only FT8.
     enabled: false
+    # Initial configured power is not a setting: it is calculated once from the
+    # frozen local/remote Maidenhead grids, defaults to 20 W when unknown, and is
+    # hard-clamped to 20..70 W. Active QSOs do not overwrite manual adjustment.
     # Required only when ft8.transmit.enabled is true.
     encoder_executable: null
     # DigiRig DR-891 playback device; payload is left channel, right is silence.
@@ -206,6 +234,24 @@ ft8:
   qso:
     # Retry budget is per unchanged QSO transmit state/message, not per whole QSO.
     attempts_per_state: 6
+  completed_qso_delivery:
+    # Optional post-durability analytics fan-out. This never changes local logging,
+    # Wavelog sync, or radio behavior. Keep the global and receiver gates false
+    # until both private Forge ingestion services and protected tokens are approved.
+    enabled: false
+    database_path: data/completed-qso-outbox.db
+    interval_s: 30
+    batch_size: 25
+    retry_initial_delay_s: 5
+    retry_maximum_delay_s: 300
+    voacap:
+      enabled: false
+      base_url: http://192.168.9.170:8790
+      timeout_s: 5
+    psk_reporter:
+      enabled: false
+      base_url: http://192.168.9.170:8789
+      timeout_s: 5
 
 storage:
   database_path: data/rolling-thunder.db

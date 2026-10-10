@@ -1,6 +1,6 @@
 """Tests for FT8 CQ discovery activity without station selection authority."""
 
-from rolling_thunder.ft8.activity import FT8CQActivityManager
+from rolling_thunder.ft8.activity import FT8CQActivityManager, is_us_cq_dx
 from rolling_thunder.ft8.domain import FT8Decode, FT8MessageKind, FT8Period
 
 
@@ -107,7 +107,7 @@ def test_subsequent_cq_clears_non_cq_active_state() -> None:
     assert activity.cq_count == 2
 
 
-def test_activity_expires_after_six_periods_without_any_traffic() -> None:
+def test_activity_expires_after_six_periods_without_a_new_cq() -> None:
     manager = FT8CQActivityManager()
     manager.ingest(_decode(100))
 
@@ -115,14 +115,14 @@ def test_activity_expires_after_six_periods_without_any_traffic() -> None:
     assert manager.snapshot(current_period=FT8Period(index=106)) == ()
 
 
-def test_non_cq_traffic_extends_lifetime_without_changing_last_cq() -> None:
+def test_non_cq_traffic_does_not_extend_cq_lifetime() -> None:
     manager = FT8CQActivityManager()
     manager.ingest(_decode(100))
     manager.ingest(_decode(104, kind=FT8MessageKind.REPORT))
 
-    assert len(manager.snapshot(current_period=FT8Period(index=109))) == 1
     assert manager.snapshot()[0].last_cq == FT8Period(index=100)
-    assert manager.snapshot(current_period=FT8Period(index=110)) == ()
+    assert manager.snapshot(current_period=FT8Period(index=105))[0].last_any_decode == FT8Period(104)
+    assert manager.snapshot(current_period=FT8Period(index=106)) == ()
 
 
 def test_older_repeated_cq_does_not_replace_newer_signal_data() -> None:
@@ -168,3 +168,22 @@ def test_pota_metadata_requires_explicit_pota_token() -> None:
 
     assert activity["K1POTA"].pota_cq is True
     assert activity["K2ABC"].pota_cq is False
+
+
+def test_us_cq_dx_is_suppressed_but_non_us_cq_dx_is_not() -> None:
+    manager = FT8CQActivityManager()
+    manager.ingest(_decode(100, callsign="K1ABC", raw_message="CQ DX K1ABC FN31", qualifier="DX"))
+    manager.ingest(_decode(101, callsign="VE3ABC", raw_message="CQ DX VE3ABC FN03", qualifier="DX"))
+    activity = {item.callsign: item for item in manager.snapshot()}
+
+    assert is_us_cq_dx(activity["K1ABC"]) is True
+    assert is_us_cq_dx(activity["VE3ABC"]) is False
+
+
+def test_pota_cq_is_not_mistaken_for_dx_suppression() -> None:
+    manager = FT8CQActivityManager()
+    manager.ingest(_decode(100, callsign="K1POTA", raw_message="CQ POTA K1POTA FN31", qualifier="POTA"))
+    activity = manager.snapshot()[0]
+
+    assert activity.pota_cq is True
+    assert is_us_cq_dx(activity) is False

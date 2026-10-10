@@ -1,0 +1,52 @@
+[Unit]
+Description=Rolling Thunder Forge Completed-QSO Propagation Service
+Documentation=file:/opt/rolling-thunder-forge-propagation-qso-worker/current/docs/PROPAGATION_HISTORY.md
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=rolling-thunder-propagation-qso
+Group=rolling-thunder-propagation-qso
+WorkingDirectory=/opt/rolling-thunder-forge-propagation-qso-worker/current
+
+EnvironmentFile=-/etc/rolling-thunder-forge-propagation-qso-worker/ingestion.env
+ExecStartPre=/opt/rolling-thunder-forge-propagation-qso-worker/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml --check-config
+ExecStart=/opt/rolling-thunder-forge-propagation-qso-worker/current/.venv/bin/rolling-thunder-forge-propagation-qso-worker --config /etc/rolling-thunder-forge-propagation-qso-worker/worker.yaml
+
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+
+StateDirectory=rolling-thunder-forge-propagation-qso
+StateDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+InaccessiblePaths=-/etc/rolling-thunder -/var/lib/rolling-thunder -/var/lib/rolling-thunder-forge-propagation -/opt/rolling-thunder-forge-propagation -/opt/rolling-thunder-forge-contact-sync -/opt/rolling-thunder-forge-pskreporter
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

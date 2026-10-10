@@ -15,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from rolling_thunder.forge_map import ForgeMapRendererConfig
 from rolling_thunder.value_types import BaseCallsign
 
 
@@ -256,6 +257,12 @@ class ForgeRadarConfig(ForgeConfigurationModel):
         return value
 
 
+class ForgeMapTilesConfig(ForgeMapRendererConfig):
+    """Optional style-aware map route on the existing Forge listener."""
+
+    enabled: bool = False
+
+
 class ForgeApplicationConfig(ForgeConfigurationModel):
     """Complete independent Forge spot-service configuration."""
 
@@ -269,6 +276,7 @@ class ForgeApplicationConfig(ForgeConfigurationModel):
     weather: ForgeWeatherConfig = ForgeWeatherConfig()
     weather_alerts: ForgeWeatherAlertConfig = ForgeWeatherAlertConfig()
     radar: ForgeRadarConfig = ForgeRadarConfig()
+    map_tiles: ForgeMapTilesConfig = ForgeMapTilesConfig()
     logging_level: ForgeLogLevel = ForgeLogLevel.INFO
 
     @field_validator("logging_level", mode="before")

@@ -122,6 +122,29 @@ Entry point: `forge_contact_sync_main.py`.
 Accepts normalized contact synchronization work and performs controlled,
 idempotent Wavelog integration.
 
+### Propagation environmental collector
+
+Entry point: `forge_propagation_main.py`.
+
+The independently supervised Phase 1 process is disabled by default and owns only
+hourly HamQSL solar XML plus KC2G MUF(3000)/foF2 snapshot collection into its
+dedicated SQLite database. It has a separate service identity, application root,
+configuration, and StateDirectory. It has no API listener and no path to radio,
+contact logging, Wavelog, contact sync, VOACAP, weather enrichment, or PSK Reporter.
+Its staged deployment layout selects one immutable exact-40-SHA release through a
+root-managed `current` symlink. A propagation-only component hook cannot select or
+restart any other service. Its virtualenv is built at the final SHA path, and its
+real pip-generated launcher must execute provider-free as the service identity before
+`current` can change. Existing broken releases fail closed and are recovered with a
+new reviewed SHA rather than in-place mutation. Central deploy-helper integration is
+not installed and must wait for privileged inspection of the existing unreadable
+helper.
+
+### Propagation completed-QSO service (staged, disabled)
+
+Entry point: `forge_propagation_qso_worker_main.py` for the double-gated VOACAP
+worker and independently gated authenticated ingestion listener. It owns a durable inbox, separate history database, local status file, hardened systemd unit, isolated exact-SHA release tree, and private production paths. The separate PSK Reporter composition has an authenticated bounded FT8 event API, scheduler, isolated orchestration and history databases, provider-free local status, hardened service unit, and its own exact-SHA release tree. The Pi can optionally feed both through a distinct durable outbox and background scheduler, but every source, ingestion, and provider gate defaults off. Neither receiver is part of Phase 1, contact sync, Wavelog, local logging, or radio execution.
+
 ## Reusable backend boundary
 
 Forge is a backend platform, not a hidden extension of one Tkinter screen.

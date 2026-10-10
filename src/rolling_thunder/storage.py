@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 17
+CURRENT_SCHEMA_VERSION: Final = 20
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -629,6 +629,40 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         "ALTER TABLE contacts ADD COLUMN my_state TEXT",
         "ALTER TABLE contacts ADD COLUMN my_cq_zone INTEGER",
         "ALTER TABLE contacts ADD COLUMN my_itu_zone INTEGER",
+    ),
+    18: (
+        """
+        CREATE TABLE dx_worked_markers (
+            utc_date TEXT NOT NULL CHECK (length(utc_date) = 10),
+            callsign TEXT NOT NULL CHECK (
+                length(callsign) >= 3 AND length(callsign) <= 32
+            ),
+            band TEXT NOT NULL CHECK (
+                band IN (
+                    '160m', '80m', '60m', '40m', '30m', '20m',
+                    '17m', '15m', '12m', '10m', '6m'
+                )
+            ),
+            worked_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (utc_date, callsign, band)
+        )
+        """,
+        """
+        CREATE INDEX dx_worked_markers_day_index
+        ON dx_worked_markers (utc_date, worked_at)
+        """,
+    ),
+    19: (
+        "ALTER TABLE contacts ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown'",
+        "ALTER TABLE contacts ADD COLUMN tx_power_watts INTEGER",
+        "ALTER TABLE contacts ADD COLUMN contact_weather_json TEXT",
+        "ALTER TABLE contacts ADD COLUMN local_weather_json TEXT",
+        "ALTER TABLE contacts ADD COLUMN weather_notes_enabled INTEGER NOT NULL DEFAULT 0",
+    ),
+    20: (
+        "ALTER TABLE contacts ADD COLUMN contact_latitude REAL",
+        "ALTER TABLE contacts ADD COLUMN contact_longitude REAL",
     ),
 }
 

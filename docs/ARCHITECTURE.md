@@ -880,8 +880,9 @@ The native FT8 path now includes:
 - Context Button 3 as the visible one-shot active-QSO abort control;
 - one explicitly operator-authorized bounded QSO at a time;
 - a narrow FT-891/DigiRig transmit executor using serialized Enhanced CAT ownership;
-- verified FT-891 CAT preparation before each QSO: 20 W, the selected band's
-  standard FT8 dial frequency, and menu 11-07 SSB-BFO = USB;
+- verified FT-891 CAT preparation before each QSO: one frozen-grid-distance
+  initial target hard-clamped to 20–70 W, the selected band's standard FT8 dial
+  frequency, and menu 11-07 SSB-BFO = USB;
 - verified FT8-screen exit restoration: 100 W and menu 11-07 SSB-BFO = AUTO;
 - frozen QSO context, including local Maidenhead grid, frequency, parity,
   audio frequency, callsign, remote grid when known, POTA metadata, and stable
@@ -975,6 +976,18 @@ decode time and low memory/CPU footprint provide substantially more FT8 slot
 timing margin. The measured sensitivity deficit versus `ft8mon` is retained
 as an explicit architectural limitation, and `ft8mon` remains a comparison
 or fallback candidate. WSJT-X 3.0.2 is benchmark/oracle only.
+
+Issue #237 adds an explicitly bounded runtime comparison path around that
+limitation. When configured, `ft8_lib` and `ft8mon` receive the same immutable
+PCM period and publish independent all-message and CQ-message counts. Comparison
+stops at the configured America/New_York morning cutoff (05:15 for the planned
+run), while primary receive continues. PCM retention is capped at three stable
+WAV slots and diagnostic JSON is replaced atomically.
+
+FT8 period slicing treats local chrony/NTP health as its primary UTC-readiness
+signal and trusted published GPS UTC as fallback/independent verification.
+Readiness probing is read-only and does not alter NTP, systemd, the privileged
+GPS clock helper, ALSA, radio control, or transmit authority.
 
 ## Experimental v4.3 FT8 live receive composition
 

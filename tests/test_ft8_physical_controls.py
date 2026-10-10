@@ -99,9 +99,18 @@ class Panel:
         self.selected_callsign = None
         return changed
 
-    def activate_selection(self) -> bool:
+    def activate_selection(self, snapshot: FT8PanelSnapshot | None = None) -> bool:
+        del snapshot
         self.calls.append("activate")
         return self.selected_callsign is not None
+
+    def answer_incoming_call(self) -> bool:
+        self.calls.append("answer")
+        return False
+
+    def dismiss_incoming_call(self) -> bool:
+        self.calls.append("ignore")
+        return False
 
     def abort(self) -> None:
         self.calls.append("abort")

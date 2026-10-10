@@ -7,9 +7,11 @@ from typing import Protocol
 from uuid import UUID
 
 from rolling_thunder.contact_metadata import resolve_contact_metadata
+from rolling_thunder.contact_weather import ContactWeatherSnapshotProvider
 from rolling_thunder.domain import (
     Contact,
     ContactEnrichmentState,
+    ContactSource,
     RadioConnectionState,
     RadioMode,
     RadioState,
@@ -58,11 +60,13 @@ class ContactLoggingService:
         *,
         qrz_fallback_available: bool = False,
         jurisdiction_resolver: LocalJurisdictionResolver | None = None,
+        weather_snapshot_provider: ContactWeatherSnapshotProvider | None = None,
     ) -> None:
         self._repository = repository
         self._clock = clock or SystemClock()
         self._qrz_fallback_available = qrz_fallback_available
         self._jurisdiction_resolver = jurisdiction_resolver
+        self._weather_snapshot_provider = weather_snapshot_provider
 
     def commit(
         self,
@@ -75,6 +79,9 @@ class ContactLoggingService:
         pota_context_active: bool = False,
         pota_spots: tuple[PotaSpot, ...] = (),
         notes: str | None = None,
+        source: ContactSource = ContactSource.UNKNOWN,
+        tx_power_watts: int | None = None,
+        weather_notes_enabled: bool = False,
     ) -> Contact:
         """Persist one contact, returning it only after the durable write succeeds."""
         callsign = pending_callsign.strip().upper()
@@ -109,17 +116,23 @@ class ContactLoggingService:
             rst_sent=rst_sent,
             rst_received=rst_received,
             grid=metadata.grid,
+            contact_latitude=metadata.contact_latitude,
+            contact_longitude=metadata.contact_longitude,
             my_grid=metadata.my_grid,
             my_latitude=metadata.my_latitude,
             my_longitude=metadata.my_longitude,
             my_state=metadata.my_state,
             my_cq_zone=metadata.my_cq_zone,
             my_itu_zone=metadata.my_itu_zone,
+            source=source,
+            tx_power_watts=tx_power_watts,
+            weather_notes_enabled=weather_notes_enabled,
             pota_reference=metadata.pota_reference,
             grid_source=metadata.grid_source,
             enrichment_state=metadata.enrichment_state,
             notes=notes if notes is not None else metadata.notes,
         )
+        contact = self._with_weather_snapshot(contact)
         self._repository.add(contact)
         return contact
 
@@ -140,7 +153,13 @@ class ContactLoggingService:
         my_cq_zone: int | None = None,
         my_itu_zone: int | None = None,
         grid: str | None = None,
+        contact_latitude: float | None = None,
+        contact_longitude: float | None = None,
+        pota_reference: str | None = None,
         notes: str | None = None,
+        source: ContactSource = ContactSource.UNKNOWN,
+        tx_power_watts: int | None = None,
+        weather_notes_enabled: bool = False,
     ) -> Contact:
         """Persist an immutable completed-QSO snapshot without mutable radio/GPS state."""
         enrichment_state = (
@@ -157,13 +176,37 @@ class ContactLoggingService:
             rst_sent=rst_sent,
             rst_received=rst_received,
             grid=grid,
+            contact_latitude=contact_latitude,
+            contact_longitude=contact_longitude,
             my_grid=my_grid,
             my_latitude=my_latitude,
             my_longitude=my_longitude,
             my_state=my_state,
             my_cq_zone=my_cq_zone,
             my_itu_zone=my_itu_zone,
+            source=source,
+            tx_power_watts=tx_power_watts,
+            weather_notes_enabled=weather_notes_enabled,
+            pota_reference=pota_reference,
             enrichment_state=enrichment_state,
             notes=notes,
         )
+        contact = self._with_weather_snapshot(contact)
         return self._repository.add_idempotent(contact)
+
+    def _with_weather_snapshot(self, contact: Contact) -> Contact:
+        """Freeze published weather without allowing enrichment to fail the commit."""
+        provider = self._weather_snapshot_provider
+        if not contact.weather_notes_enabled or provider is None:
+            return contact
+        try:
+            snapshot = provider.capture(contact)
+        except (LookupError, OSError, RuntimeError, ValueError):
+            # This boundary is deliberately fail-open: weather is optional metadata.
+            return contact
+        return contact.model_copy(
+            update={
+                "contact_weather": snapshot.contact,
+                "local_weather": snapshot.local,
+            }
+        )

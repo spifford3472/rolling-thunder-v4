@@ -25,6 +25,8 @@ def test_ft8_defaults_disabled_when_section_is_absent(tmp_path: Path) -> None:
     assert config.ft8.enabled is False
     assert config.ft8.receive.audio_device == "plughw:CARD=Device,DEV=0"
     assert config.ft8.receive.decoder_executable is None
+    assert config.ft8.receive.diagnostic_session_end_local is None
+    assert config.ft8.receive.saved_pcm_periods == 0
     assert config.ft8.qso.attempts_per_state == 6
 
 
@@ -88,4 +90,44 @@ def test_ft8_receive_audio_device_must_not_be_blank(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ConfigurationValidationError, match="ft8.receive.audio_device"):
+        load_config(path)
+
+
+def test_bounded_same_pcm_decoder_comparison_configuration_parses(
+    tmp_path: Path,
+) -> None:
+    config = load_config(
+        _write(
+            tmp_path,
+            "ft8:\n"
+            "  enabled: true\n"
+            "  receive:\n"
+            "    decoder_backend: ft8_lib\n"
+            "    decoder_executable: /opt/ft8_lib/decode_ft8\n"
+            "    comparison_backend: ft8mon\n"
+            "    comparison_decoder_executable: /opt/ft8mon/ft8mon\n"
+            "    diagnostic_session_end_local: '05:15'\n"
+            "    diagnostic_snapshot_path: /tmp/ft8-diagnostics.json\n"
+            "    saved_pcm_directory: /tmp/ft8-pcm\n"
+            "    saved_pcm_periods: 3\n",
+        )
+    )
+
+    assert str(config.ft8.receive.diagnostic_session_end_local) == "05:15:00"
+    assert config.ft8.receive.saved_pcm_periods == 3
+
+
+def test_comparison_decoder_requires_bounded_session_end(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "ft8:\n"
+        "  receive:\n"
+        "    comparison_backend: ft8mon\n"
+        "    comparison_decoder_executable: /opt/ft8mon/ft8mon\n",
+    )
+
+    with pytest.raises(
+        ConfigurationValidationError,
+        match="diagnostic_session_end_local",
+    ):
         load_config(path)

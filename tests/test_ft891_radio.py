@@ -543,3 +543,68 @@ def test_ssb_mic_select_adapter_rejects_wrong_readback_and_disconnection() -> No
     transport.replies[b"EX1105;"] = b"EX11050;"
     with pytest.raises(RadioVerificationError, match="requested REAR but read back MIC"):
         radio.set_ssb_mic_select(Ft891SsbMicSelect.REAR)
+
+
+def test_cp6_failed_release_keeps_retryable_tx_state() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+    capability.key()
+    transport.command_errors[b"TX0;"] = RadioConnectionError("CAT release timeout")
+    with pytest.raises(RadioConnectionError):
+        capability.release()
+    del transport.command_errors[b"TX0;"]
+    capability.cancel()
+    assert transport.commands.count(b"TX0;") == 2
+
+
+def test_failed_key_and_failed_compensating_release_remain_retryable() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+    transport.command_errors[b"TX1;"] = RadioConnectionError("TX on uncertain")
+    transport.command_errors[b"TX0;"] = RadioConnectionError("TX off failed")
+    with pytest.raises(RadioConnectionError, match="TX on uncertain"):
+        ptt.key()
+    del transport.command_errors[b"TX0;"]
+    ptt.cancel()
+    assert transport.commands.count(b"TX0;") == 2
+
+
+def test_h3_disconnect_refuses_to_close_cat_on_uncertain_ptt() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+    ptt.key()
+    transport.command_errors[b"TX0;"] = RadioConnectionError("CAT timeout")
+
+    with pytest.raises(RadioConnectionError, match="CAT timeout"):
+        radio.disconnect()
+    # An unsuccessful TX0 cannot be treated as proof of receive.
+    assert transport.opened is True
+    assert radio.get_state().connection_state is RadioConnectionState.CONNECTED
+
+    del transport.command_errors[b"TX0;"]
+    radio.disconnect()
+    assert transport.commands.count(b"TX0;") == 2
+    assert transport.opened is False
+
+
+def test_h3_failed_release_cannot_authorize_second_cat_key() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+    ptt.key()
+    transport.command_errors[b"TX0;"] = RadioConnectionError("CAT write timeout")
+    with pytest.raises(RadioConnectionError):
+        ptt.release()
+    # Preserve uncertain TX state; never send another TX1 while unresolved.
+    ptt.key()
+    assert transport.commands.count(b"TX1;") == 1
+    del transport.command_errors[b"TX0;"]
+    ptt.cancel()
+    assert transport.commands.count(b"TX0;") == 2

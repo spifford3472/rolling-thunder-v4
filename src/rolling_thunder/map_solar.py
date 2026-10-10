@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
 from math import acos, asin, cos, degrees, pi, radians, sin, sqrt
 from threading import Lock
@@ -32,6 +32,49 @@ class MapStyleTarget(Protocol):
 
     def set_style(self, style: MapPackageStyle) -> bool:
         ...
+
+
+class PrimaryMapStyleTarget(MapStyleTarget, Protocol):
+    """Authoritative map style plus its operator-visible availability."""
+
+    @property
+    def available_styles(self) -> tuple[MapPackageStyle, ...]:
+        ...
+
+
+class SynchronizedMapStyleTarget:
+    """Apply accepted primary-map styles to zero or more mirror maps."""
+
+    def __init__(
+        self,
+        primary: PrimaryMapStyleTarget,
+        mirrors: Iterable[MapStyleTarget] = (),
+    ) -> None:
+        self._primary = primary
+        self._mirrors = tuple(mirrors)
+
+    @property
+    def style(self) -> MapPackageStyle:
+        """Return the authoritative primary-map style."""
+        return self._primary.style
+
+    @property
+    def available_styles(self) -> tuple[MapPackageStyle, ...]:
+        """Return only styles advertised by the primary live map."""
+        return self._primary.available_styles
+
+    def set_style(self, style: MapPackageStyle) -> bool:
+        """Apply one primary-accepted style to the primary and every mirror."""
+        available = self._primary.available_styles
+        if available and style not in available:
+            return False
+
+        changed = self._primary.set_style(style)
+        if self._primary.style is not style:
+            return False
+        for mirror in self._mirrors:
+            changed = mirror.set_style(style) or changed
+        return changed
 
 
 def _utc_now() -> datetime:

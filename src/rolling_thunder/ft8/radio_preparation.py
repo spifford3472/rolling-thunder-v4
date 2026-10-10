@@ -7,11 +7,15 @@ from typing import Protocol
 
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.ft891_cat import Ft891SsbBfo, Ft891SsbMicSelect
 from rolling_thunder.radio import RadioError
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 
-FT8_OPERATING_POWER_WATTS = 20
+FT8_MIN_OPERATING_POWER_WATTS = 20
+FT8_MAX_OPERATING_POWER_WATTS = 70
+# Backward-compatible name for the historical/default minimum.
+FT8_OPERATING_POWER_WATTS = FT8_MIN_OPERATING_POWER_WATTS
 FT8_EXIT_POWER_WATTS = 100
 
 
@@ -88,11 +92,24 @@ class FT8PreparedRadioState:
 class FT8RadioPreparationService:
     """Apply and verify required FT8 radio settings before transmit authority exists."""
 
-    def __init__(self, radio: FT8PreparedRadio) -> None:
+    def __init__(self, radio: FT8PreparedRadio, *, power_policy: FT8PowerPolicy | None = None) -> None:
         self._radio = radio
+        self._power_policy = power_policy or FT8PowerPolicy()
 
-    def prepare_for_qso(self) -> FT8PreparedRadioState:
-        """Force 20 W, the current band's FT8 dial frequency, and SSB-BFO USB."""
+    def prepare_for_qso(
+        self,
+        power_target_watts: int = FT8_OPERATING_POWER_WATTS,
+    ) -> FT8PreparedRadioState:
+        """Force the frozen initial power, FT8 dial frequency, and SSB-BFO USB."""
+        if (
+            not FT8_MIN_OPERATING_POWER_WATTS
+            <= power_target_watts
+            <= FT8_MAX_OPERATING_POWER_WATTS
+            or power_target_watts % 5
+        ):
+            raise FT8RadioPreparationError(
+                "FT8 initial power must be a 5 W step between 20 and 70 W."
+            )
         initial = self._radio.refresh_state()
         self._require_usable_receive_state(initial)
 
@@ -105,9 +122,15 @@ class FT8RadioPreparationService:
             ) from error
 
         target_frequency = ft8_frequency_for_band(band)
+        limit = self._power_policy.limit_for(band.value)
+        if power_target_watts > limit:
+            raise FT8RadioPreparationError(
+                f"FT8 requested {power_target_watts} W on {band.value} exceeds "
+                f"the configured automatic safety ceiling of {limit} W."
+            )
 
         try:
-            power_watts = self._radio.set_power_watts(FT8_OPERATING_POWER_WATTS)
+            power_watts = self._radio.set_power_watts(power_target_watts)
             if initial.frequency != target_frequency:
                 self._radio.set_frequency(target_frequency)
             self._radio.set_mode(RadioMode.USB)
@@ -129,10 +152,10 @@ class FT8RadioPreparationService:
             raise FT8RadioPreparationError(
                 f"FT8 radio preparation mode verification failed: expected USB, got {actual_mode}."
             )
-        if power_watts != FT8_OPERATING_POWER_WATTS:
+        if power_watts != power_target_watts:
             raise FT8RadioPreparationError(
                 "FT8 radio preparation power verification failed: "
-                f"expected {FT8_OPERATING_POWER_WATTS} W, got {power_watts} W."
+                f"expected {power_target_watts} W, got {power_watts} W."
             )
         if ssb_bfo is not Ft891SsbBfo.USB:
             raise FT8RadioPreparationError(

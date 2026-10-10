@@ -1,17 +1,23 @@
 """Deterministic tests for the Checkpoint 7 FT8 QSO coordinator."""
 
 import threading
+from dataclasses import replace
 from datetime import timedelta
+from pathlib import Path
 
+from rolling_thunder.contact_logging import ContactLoggingService
+from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.ft8.coordinator import FT8QsoCoordinator
 from rolling_thunder.ft8.domain import (
     FT8Decode,
+    FT8IncomingCall,
     FT8MessageKind,
     FT8Period,
     FT8PeriodParity,
     FT8QsoContext,
     FT8QsoState,
 )
+from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.timing import FakeFT8Clock
 from rolling_thunder.ft8.transmit import FT8TransmitKind, RecordingDigitalTransmitSession
 
@@ -33,15 +39,20 @@ def _context() -> FT8QsoContext:
     )
 
 
-def _decode(period: int, kind: FT8MessageKind) -> FT8Decode:
+def _decode(
+    period: int,
+    kind: FT8MessageKind,
+    *,
+    source: str = "K1ABC",
+) -> FT8Decode:
     return FT8Decode(
         period=FT8Period(period),
         snr_db=-8,
         dt_seconds=0.1,
         audio_frequency_hz=1500,
-        raw_message=f"KI5VNB K1ABC {kind.value}",
+        raw_message=f"KI5VNB {source} {kind.value}",
         kind=kind,
-        source_callsign="K1ABC",
+        source_callsign=source,
         destination_callsign="KI5VNB",
         report_db=-8 if kind is FT8MessageKind.REPORT else None,
     )
@@ -77,6 +88,87 @@ def test_coordinator_drives_one_complete_qso_without_selecting_another_station()
     assert coordinator.state is FT8QsoState.COMPLETED
     assert session.requests[-1].kind is FT8TransmitKind.SEVENTY_THREE
     assert coordinator.context == context
+
+
+def test_terminal_handler_captures_final_ft8_power_before_exit_restore(
+    tmp_path: Path,
+) -> None:
+    context = _context()
+    clock = FakeFT8Clock(context.authorized_utc)
+    session = RecordingDigitalTransmitSession()
+    repository = ContactRepository(tmp_path / "contacts.db")
+    logger = FT8QsoLoggingService(ContactLoggingService(repository))
+    configured_power = {"watts": 55}
+    lifecycle: list[tuple[str, int]] = []
+
+    def handle_terminal(result):  # type: ignore[no-untyped-def]
+        lifecycle.append(("terminal", configured_power["watts"]))
+        return logger.handle_terminal_result(
+            result,
+            tx_power_watts=configured_power["watts"],
+        )
+
+    coordinator = FT8QsoCoordinator(
+        session,
+        clock,
+        terminal_result_handler=handle_terminal,
+    )
+    coordinator.authorize(context)
+    coordinator.start_qso()
+    clock.advance(14)
+    coordinator.tick()
+    clock.advance(15)
+    coordinator.tick()
+    coordinator.on_decodes((_decode(102, FT8MessageKind.REPORT),))
+    clock.advance(15)
+    coordinator.tick()
+    clock.advance(15)
+    coordinator.tick()
+    coordinator.on_decodes((_decode(104, FT8MessageKind.ACK_73),))
+    clock.advance(15)
+    coordinator.tick()
+
+    configured_power["watts"] = 100
+    lifecycle.append(("exit_restore", configured_power["watts"]))
+
+    assert lifecycle == [("terminal", 55), ("exit_restore", 100)]
+    assert repository.list_all()[0].tx_power_watts == 55
+
+
+def test_responder_initial_report_is_retained_in_terminal_result() -> None:
+    context = replace(
+        _context(),
+        remote_callsign="K0BQB",
+        responder_inbound=FT8IncomingCall(
+            callsign="K0BQB",
+            period=FT8Period(100),
+            snr_db=-3,
+            dt_seconds=0.1,
+            audio_frequency_hz=1500,
+            kind=FT8MessageKind.REPORT,
+            report_db=-3,
+            raw_message="KI5VNB K0BQB -03",
+        ),
+    )
+    clock = FakeFT8Clock(context.authorized_utc)
+    session = RecordingDigitalTransmitSession()
+    coordinator = FT8QsoCoordinator(session, clock)
+    coordinator.authorize(context)
+    coordinator.start_qso()
+
+    clock.advance(14)
+    coordinator.tick()
+    assert session.requests[-1].kind is FT8TransmitKind.R_REPORT
+    clock.advance(15)
+    coordinator.tick()
+    coordinator.on_decodes(
+        (_decode(102, FT8MessageKind.ACK_73, source="K0BQB"),)
+    )
+    clock.advance(15)
+    coordinator.tick()
+
+    assert coordinator.result is not None
+    assert coordinator.result.received_report_db == -3
 
 
 def test_coordinator_fails_closed_on_receive_error() -> None:

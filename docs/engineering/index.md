@@ -68,6 +68,7 @@ Forge owns reusable backend services and provider-facing work that should not ru
 - mobile-location intake;
 - callsign/contact intelligence;
 - contact synchronization to Wavelog.
+- disabled-by-default, independently supervised HamQSL/KC2G environmental history.
 
 Forge services are backend capabilities, not Rolling-Thunder-screen implementations. Their APIs should remain usable by other authorized programs.
 
@@ -92,6 +93,28 @@ Independent Forge contact-sync process. It is intentionally deployment-isolated 
 ### `forge_callsign_info_main.py`
 
 Independent Forge callsign/contact-intelligence process. It keeps QRZ, Wavelog history, and target-weather provider work off the Pi UI process.
+
+### `forge_propagation_main.py`
+
+Independent disabled-by-default Forge HamQSL/KC2G environmental collector. It owns
+only its dedicated propagation database and has no radio, contact-sync, Wavelog, or
+QSO-ingestion path.
+
+### `forge_propagation_qso_worker_main.py`
+
+Independent disabled-by-default completed-QSO service. It owns an authenticated,
+bounded private ingestion listener, durable inbox, separate history/status paths,
+and double-gated VOACAP worker. A typed producer client defines the reusable
+transport, but no local-logging, contact-sync, Wavelog, or live-contact source is
+composed into it.
+
+### `forge_pskreporter_worker_main.py`
+
+Independent triple-gated completed-FT8 PSK Reporter service. It composes the
+existing durable orchestration and analytics contracts with an authenticated,
+bounded private event API, one scheduler, isolated orchestration/history databases,
+and atomic local diagnostics. Its process, ingestion, and provider gates default
+off; no completed-QSO producer is wired into the Pi or another Forge service.
 
 ## Feature ownership map
 
@@ -169,6 +192,12 @@ Primary code lives under `src/rolling_thunder/ft8/` plus:
 FT8 transmit authority is intentionally narrow. Do not generalize it into application-wide PTT authority.
 
 Read: `docs/FT8_ENGINEERING_GUIDE.md`, `docs/FT8_ARCHITECTURE.md`.
+
+The optional source-owned completed-QSO producer is a post-durability FT8 adapter
+with an independent local SQLite outbox and per-consumer retry state. It is inactive
+by default; production composition creates authenticated clients and a background
+scheduler only under explicit configuration. Read:
+`docs/COMPLETED_QSO_PRODUCER.md`.
 
 ### Browse
 
@@ -313,6 +342,7 @@ Do not duplicate protocol details unnecessarily. Use these documents for deeper 
 - `docs/SHARED_SPOT_DOMAIN.md`
 - `docs/FORGE_SPOT_SERVICE.md`
 - `docs/FORGE_CONTACT_SYNC.md`
+- `docs/WAVELOG_STATION_PROFILE_RESOLVER_DESIGN.md`
 - `docs/CALLSIGN_INFO.md`
 - `docs/LIVE_MAP.md`
 - `docs/WEATHER_PANEL.md`

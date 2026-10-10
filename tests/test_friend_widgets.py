@@ -62,6 +62,7 @@ def test_ft8_star_is_gold_and_failed_selected_cq_semantics_remain(monkeypatch) -
     )
     viewport = build_ft8_browser_viewport(
         activity,
+        current_period=FT8Period(100),
         selected_callsign="W1ABC",
         attempt_states={"W1ABC": FT8AttemptVisualState.FAILED},
         friends=frozenset({"W1ABC"}),
@@ -73,7 +74,12 @@ def test_ft8_star_is_gold_and_failed_selected_cq_semantics_remain(monkeypatch) -
     assert widgets._row_labels[0][0].options["fg"] == "#ff3b3b"
     assert widgets._row_frames[0].options["bg"] == "#315f73"
     widgets.update(
-        build_ft8_browser_viewport(activity, selected_callsign="W1ABC"), transmit_enabled=False
+        build_ft8_browser_viewport(
+            activity,
+            current_period=FT8Period(100),
+            selected_callsign="W1ABC",
+        ),
+        transmit_enabled=False,
     )
     assert widgets._friend_labels[0].options["text"] == ""
 

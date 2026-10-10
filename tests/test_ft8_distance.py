@@ -4,6 +4,7 @@ import pytest
 
 from rolling_thunder.ft8.distance import (
     format_maidenhead_distance,
+    initial_ft8_power_watts,
     maidenhead_distance_km,
     maidenhead_distance_miles,
 )
@@ -28,6 +29,26 @@ def test_distance_formatter_uses_operator_friendly_miles() -> None:
     assert text.startswith("DISTANCE ")
     assert text.endswith(" mi")
     assert "—" not in text
+
+
+def test_adaptive_initial_power_keeps_nearby_paths_low_and_extreme_paths_at_cap() -> None:
+    assert initial_ft8_power_watts("EM79xm", "FN31pr") == 20
+    assert initial_ft8_power_watts("EM79xm", "QF56") == 70
+
+
+@pytest.mark.parametrize(
+    ("distance_grid", "expected_watts"),
+    [
+        ("EM79xm", 20),
+        (None, 20),
+        ("INVALID", 20),
+    ],
+)
+def test_adaptive_initial_power_defaults_safely(
+    distance_grid: str | None,
+    expected_watts: int,
+) -> None:
+    assert initial_ft8_power_watts("EM79xm", distance_grid) == expected_watts
 
 
 @pytest.mark.parametrize(

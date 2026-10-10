@@ -34,7 +34,9 @@ class FT8PanelCommands(Protocol):
     def select_previous(self) -> str | None: ...
     def select_next(self) -> str | None: ...
     def clear_selection(self) -> bool: ...
-    def activate_selection(self) -> bool: ...
+    def activate_selection(self, snapshot: FT8PanelSnapshot | None = None) -> bool: ...
+    def answer_incoming_call(self) -> bool: ...
+    def dismiss_incoming_call(self) -> bool: ...
     def abort(self) -> None: ...
     def return_to_browser(self) -> object | None: ...
 
@@ -94,18 +96,26 @@ class FT8AwareActivePanelCommands:
         return True
 
     def secondary(self) -> bool:
-        return False if self._ft8_is_active() else self._delegate.secondary()
+        if not self._ft8_is_active():
+            return self._delegate.secondary()
+        snapshot = self._ft8_panel.snapshot()
+        if snapshot.mode is not FT8PanelMode.BROWSE or snapshot.incoming_call is None:
+            return False
+        return self._ft8_panel.answer_incoming_call()
 
     def tertiary(self) -> bool:
         if not self._ft8_is_active():
             return self._delegate.tertiary()
-        mode = self._ft8_panel.snapshot().mode
+        snapshot = self._ft8_panel.snapshot()
+        mode = snapshot.mode
         if mode is FT8PanelMode.ACTIVE:
             self._ft8_panel.abort()
             return True
         if mode is FT8PanelMode.TERMINAL:
             self._ft8_panel.return_to_browser()
             return True
+        if mode is FT8PanelMode.BROWSE and snapshot.incoming_call is not None:
+            return self._ft8_panel.dismiss_incoming_call()
         return False
 
     def tertiary_long(self) -> bool:
@@ -149,7 +159,7 @@ class FT8AwareActivePanelCommands:
             return True
         if snapshot.mode is not FT8PanelMode.BROWSE:
             return False
-        return self._ft8_panel.activate_selection()
+        return self._ft8_panel.activate_selection(snapshot)
 
     def back(self) -> bool:
         if not self._ft8_is_active():
