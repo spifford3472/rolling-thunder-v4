@@ -296,3 +296,28 @@ def _ack_ptt_alarm(alarm: object) -> bool:
         return False
     alarm.voice_cancel()
     return True
+
+
+def test_locked_command_buttons_route_to_unlock_without_normal_panel_actions() -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    alarm.voice_cancel()
+    panel = FakeActivePanel()
+
+    def handle_unlock(action: ControlAction) -> bool:
+        if not alarm.tx_inhibited:
+            return False
+        alarm.unlock_step(action, ft8_screen=True, radio_confirmed_receive=True)
+        return True
+
+    commands = OperatorCommandController(
+        FakeCapture(), FakeCommit(), ContextNavigationController(), connected_radio,
+        active_panel=panel, ptt_unlock_step=handle_unlock,
+    )
+    for action in (ControlAction.PANEL_PRIMARY, ControlAction.PANEL_TERTIARY,
+                   ControlAction.PANEL_PRIMARY):
+        assert commands.execute(action)
+    assert not alarm.tx_inhibited
+    assert panel.actions == []

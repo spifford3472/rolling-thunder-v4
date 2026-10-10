@@ -49,3 +49,17 @@ ALSA sink is not guaranteed to be HDMI on every Pi: confirm HDMI audio routing
 under stationary no-RF simulation before accepting this feature. Failure of the
 UI, speakers, Pi power, or the audio subsystem can prevent the warning entirely;
 these are notification aids, not a hard RF cutoff.
+
+## H4 FT8-only deliberate unlock sequence
+
+After manually powering down any radio believed to be stuck in TX, the operator
+acknowledges the yellow alarm using physical voice cancel (mapped to DISCARD).
+On the FT8 page a green panel, 26pt bold white type, instructs: "Press command
+buttons in this order Command 1, Command 3, Command 1 to unlock". The
+physical command actions must be delivered exactly in order; wrong order resets
+the sequence. While locked, they must not invoke normal FT8 panel functions.
+Completion clears the in-memory lock only after this explicit operator action.
+A button sequence cannot prove RF is absent, and it never bypasses FT8 power,
+frequency, radio connection, timing or other transmit gates. Never execute
+the sequence before independently checking that the radio is in receive and
+recovering the radio if needed. Repeated failures require stopping the radio.

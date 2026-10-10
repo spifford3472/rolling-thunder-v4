@@ -83,6 +83,7 @@ class OperatorCommandController:
         radio_state: Callable[[], RadioState],
         active_panel: ActivePanelCommands | None = None,
         cancel_ptt_alarm: Callable[[], bool] | None = None,
+        ptt_unlock_step: Callable[[ControlAction], bool] | None = None,
     ) -> None:
         self._capture = capture
         self._contact_commit = contact_commit
@@ -90,9 +91,14 @@ class OperatorCommandController:
         self._radio_state = radio_state
         self._active_panel = active_panel
         self._cancel_ptt_alarm = cancel_ptt_alarm
+        self._ptt_unlock_step = ptt_unlock_step
 
     def execute(self, action: ControlAction) -> bool:
         """Execute one approved action, returning whether it was accepted."""
+        if self._ptt_unlock_step is not None and action in (
+            ControlAction.PANEL_PRIMARY, ControlAction.PANEL_TERTIARY,
+        ) and self._ptt_unlock_step(action):
+            return True
         if action is ControlAction.VOICE:
             return self._capture.start_capture()
 

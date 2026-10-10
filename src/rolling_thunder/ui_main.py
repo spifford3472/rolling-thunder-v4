@@ -445,6 +445,20 @@ def run_dashboard(
         runtime.ft8_ptt_alarm.voice_cancel()
         return True
 
+    def handle_ptt_unlock_action(action: ControlAction) -> bool:
+        alarm = runtime.ft8_ptt_alarm
+        if not alarm.tx_inhibited:
+            return False
+        # All command presses during a lock are consumed, even an incorrect step.
+        # The operator must have manually powered down/recovered the radio.
+        # The sequence acknowledges this; CAT status is not RF proof.
+        alarm.unlock_step(
+            action,
+            ft8_screen=context_navigation.state.selected is ContextId.FT8,
+            radio_confirmed_receive=True,
+        )
+        return True
+
     operator_commands = OperatorCommandController(
         capture,
         contact_commit,
@@ -452,6 +466,7 @@ def run_dashboard(
         radio_state=lambda: runtime.latest_radio_state,
         active_panel=active_panel_commands,
         cancel_ptt_alarm=acknowledge_ptt_alarm,
+        ptt_unlock_step=handle_ptt_unlock_action,
     )
 
     control_source: ControlSource | None = None
@@ -483,6 +498,14 @@ def run_dashboard(
              "PRESS VOICE CANCEL TO ACKNOWLEDGE.",
              bg="#fff000", fg="#000000", font=("DejaVu Sans", 23, "bold"),
              justify="center").pack(padx=22, pady=(0, 16))
+    ptt_unlock = tk.Frame(root, bg="#148137", highlightthickness=5,
+                          highlightbackground="#ffffff")
+    tk.Label(
+        ptt_unlock,
+        text="Press command buttons in this order Command 1, Command 3, Command 1 to unlock",
+        bg="#148137", fg="#ffffff", font=("DejaVu Sans", 26, "bold"),
+        wraplength=1100, justify="center",
+    ).pack(padx=18, pady=22)
     ptt_klaxon = PttKlaxon(runtime.ft8_ptt_alarm)
     ptt_klaxon.start()
     root.grid_columnconfigure(0, weight=2, uniform="dashboard")
@@ -1190,6 +1213,13 @@ def run_dashboard(
         ft8_widgets.show()
 
     def refresh() -> None:
+        if runtime.ft8_ptt_alarm.tx_inhibited and not runtime.ft8_ptt_alarm.active and (
+            context_navigation.state.selected is ContextId.FT8
+        ):
+            ptt_unlock.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
+            ptt_unlock.lift()
+        else:
+            ptt_unlock.place_forget()
         if runtime.ft8_ptt_alarm.active:
             ptt_alert.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
             ptt_alert.lift()
