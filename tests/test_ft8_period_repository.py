@@ -74,3 +74,25 @@ def test_transmit_offset_survives_pi_restart_and_pending_delivery(tmp_path):
     reopened = FT8TransmitPeriodRepository(db)
     assert reopened.for_qso(qso) == (record,)
     assert reopened.pending()[0][2] == record
+
+
+def test_old_pi_period_schema_migrates_without_losing_evidence(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "pi.sqlite"
+    qso = uuid4()
+    now = datetime(2026, 10, 10, 12, tzinfo=UTC)
+    with sqlite3.connect(db) as con:
+        con.execute("""CREATE TABLE ft8_transmit_period (
+            qso_id TEXT NOT NULL, emission_index INTEGER NOT NULL,
+            started_at_utc TEXT NOT NULL, ended_at_utc TEXT NOT NULL,
+            configured_power_watts INTEGER,
+            power_readback_verified INTEGER NOT NULL,
+            frequency_hz INTEGER NOT NULL, transmitted INTEGER NOT NULL,
+            PRIMARY KEY(qso_id, emission_index))""")
+        con.execute("INSERT INTO ft8_transmit_period VALUES (?,?,?,?,?,?,?,?)",
+                    (str(qso), 1, now.isoformat(), now.isoformat(), 20, 1, 14074000, 1))
+    repo = FT8TransmitPeriodRepository(db)
+    assert repo.for_qso(qso)[0].transmit_audio_offset_hz is None
+    assert repo.pending()[0][1] == 1
+    assert FT8TransmitPeriodRepository(db).for_qso(qso) == repo.for_qso(qso)
