@@ -19,6 +19,10 @@ PREVIOUS=$(git rev-parse HEAD)
 git cat-file -e "${TARGET}^{commit}" || { echo 'Target commit not fetched'; exit 3; }
 git merge-base --is-ancestor "$TARGET" origin/main || { echo 'Target not in fetched origin/main'; exit 3; }
 [[ "$(systemctl is-active "$SERVICE")" == active ]] || { echo 'Production service not active'; exit 3; }
+if [[ "$MODE" == --deploy-approved ]]; then
+  sudo -n -l /usr/local/sbin/rolling-thunder-pi-service-control stop >/dev/null || exit 3
+  sudo -n -l /usr/local/sbin/rolling-thunder-pi-service-control start >/dev/null || exit 3
+fi
 # Preflight verifies the live configuration without changing it.
 "$APP/.venv/bin/python" - "$CONFIG" <<'PY'
 import sys,yaml
@@ -67,7 +71,7 @@ recover() {
     if [[ "$STOP_STARTED" -eq 1 ]]; then
       # If the new config was not yet made receive-only, do not silently start TX-enabled code.
       if grep -A12 -E "^  transmit:" "$CONFIG" | grep -q "enabled: false"; then
-        sudo -n systemctl start "$SERVICE" || true
+        sudo -n /usr/local/sbin/rolling-thunder-pi-service-control start || true
       else
         echo "RECOVERY HOLD: FT8 TX remains enabled; manual supervised service restoration required"
       fi
@@ -78,7 +82,7 @@ recover() {
 trap recover ERR
 STOP_STARTED=1
 ROLLED=1
-sudo -n systemctl stop "$SERVICE"
+sudo -n /usr/local/sbin/rolling-thunder-pi-service-control stop
 [[ "$(systemctl is-active "$SERVICE" || true)" != active ]] || { echo "Service did not stop"; false; }
 git checkout --detach --force "$TARGET"
 "$APP/.venv/bin/python" -m pip install --no-deps -e "$APP"
@@ -119,7 +123,7 @@ with sqlite3.connect(p) as db:
 assert version==20
 print('PASS: SQLite schema 20 and FT8 evidence initialization')
 PY
-sudo -n systemctl start "$SERVICE"
+sudo -n /usr/local/sbin/rolling-thunder-pi-service-control start
 sleep 3
 [[ "$(systemctl is-active "$SERVICE")" == active ]] || { echo 'service did not remain active'; false; }
 MAINPID=$(systemctl show --value -p MainPID "$SERVICE")
