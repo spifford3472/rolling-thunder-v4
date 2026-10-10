@@ -23,6 +23,7 @@ from rolling_thunder.ft8.performance import (
     FT8PerformanceAttempt,
 )
 from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.gps import GPSState
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 from rolling_thunder.value_types import MaidenheadGrid
@@ -43,6 +44,7 @@ def build_ft8_attempt_seed(
     home_grid: MaidenheadGrid,
     started_at_utc: datetime,
     attempt_id: UUID | None = None,
+    power_policy: FT8PowerPolicy | None = None,
 ) -> FT8AttemptSeed:
     """Freeze selection metadata before any CAT preparation changes the radio."""
     if started_at_utc.tzinfo is None or started_at_utc.utcoffset() is None:
@@ -76,7 +78,9 @@ def build_ft8_attempt_seed(
         audio_frequency_hz=activity.audio_frequency_hz,
         selected_snr_db=activity.snr_db,
         pota_cq=activity.pota_cq,
-        tx_power_target_watts=initial_ft8_power_watts(local_grid, activity.grid),
+        tx_power_target_watts=(power_policy or FT8PowerPolicy()).clamp(
+            band_text, initial_ft8_power_watts(local_grid, activity.grid)
+        ),
     )
 
 
@@ -88,6 +92,7 @@ def build_ft8_responder_attempt_seed(
     home_grid: MaidenheadGrid,
     started_at_utc: datetime,
     attempt_id: UUID | None = None,
+    power_policy: FT8PowerPolicy | None = None,
 ) -> FT8AttemptSeed:
     """Freeze an accepted inbound decode before responder radio preparation."""
     activity = FT8CQActivity(
@@ -105,6 +110,7 @@ def build_ft8_responder_attempt_seed(
         home_grid=home_grid,
         started_at_utc=started_at_utc,
         attempt_id=attempt_id,
+        power_policy=power_policy,
     )
     return seed.model_copy(update={"received_report_db": incoming.report_db})
 

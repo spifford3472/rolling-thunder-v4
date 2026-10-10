@@ -96,6 +96,7 @@ from rolling_thunder.ft8.performance_recording import (
     build_ft8_responder_attempt_seed,
 )
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
     configure_ft8_receive_settings,
@@ -260,6 +261,7 @@ class ApplicationRuntime:
     ft8_receive: FT8ReceiveService | None = None
     ft8_band_control: FT8BandController | None = None
     ft8_authorization: FT8QsoAuthorizationService | None = None
+    ft8_power_policy: FT8PowerPolicy = field(default_factory=FT8PowerPolicy)
     ft8_qso: FT8OperatorQsoService | None = None
     ft8_qso_start: FT8QsoStartController | None = None
     ft8_logging: FT8QsoLoggingService | None = None
@@ -1086,6 +1088,7 @@ class ApplicationRuntime:
             ft8_receive=ft8_receive,
             ft8_band_control=ft8_band_control,
             ft8_authorization=ft8_authorization,
+            ft8_power_policy=config.ft8.power,
             ft8_qso=ft8_qso,
             ft8_logging=ft8_logging,
             ft8_worked_today=ft8_worked_today,
@@ -1209,6 +1212,7 @@ class ApplicationRuntime:
                 gps_state=self.latest_gps_state,
                 home_grid=self.ft8_authorization.home_grid,
                 started_at_utc=selected_at_utc,
+                power_policy=self.ft8_power_policy,
             )
             return self.ft8_qso_start.start(activity, attempt_seed=seed)
         context = self.ft8_authorization.authorize(
@@ -1245,6 +1249,7 @@ class ApplicationRuntime:
                 gps_state=self.latest_gps_state,
                 home_grid=self.ft8_authorization.home_grid,
                 started_at_utc=selected_at_utc,
+                power_policy=self.ft8_power_policy,
             )
             return self.ft8_qso_start.start_incoming(incoming, attempt_seed=seed)
         context = self.ft8_authorization.authorize_incoming(

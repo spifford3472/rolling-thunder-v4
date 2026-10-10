@@ -18,6 +18,7 @@ from pydantic import (
 )
 
 from rolling_thunder.dmr_dashboard_config import DmrHotspotConfig
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.map_sources import (
     DEFAULT_MAP_ATTRIBUTION,
     MapPackageStyle,
@@ -781,6 +782,7 @@ class FT8Config(ConfigurationModel):
     receive: FT8ReceiveConfig = FT8ReceiveConfig()
     transmit: FT8TransmitConfig = FT8TransmitConfig()
     qso: FT8QsoConfig = FT8QsoConfig()
+    power: FT8PowerPolicy = FT8PowerPolicy()
     completed_qso_delivery: CompletedQsoDeliveryConfig = CompletedQsoDeliveryConfig()
 
     @model_validator(mode="after")
