@@ -690,7 +690,7 @@ class Ft891CatPttCapability:
         """Release PTT before permanently closing this capability."""
         if self._closed:
             return
-        try:
-            self._radio._release_cp6_cat_ptt()
-        finally:
-            self._closed = True
+        # A failed release is an uncertain RF state: do not mark this
+        # capability closed or suppress a later manual retry.
+        self._radio._release_cp6_cat_ptt()
+        self._closed = True

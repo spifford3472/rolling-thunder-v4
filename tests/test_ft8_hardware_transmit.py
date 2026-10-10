@@ -697,3 +697,25 @@ def test_watchdog_cat_failure_triggers_ptt_warning() -> None:
     with pytest.raises(RuntimeError, match='CAT release failure'):
         watchdogs.timers[0].fire()
     assert alarm.tx_inhibited
+
+
+@pytest.mark.parametrize('method', ['cancel_test', 'cancel_qso', 'close'])
+def test_failed_abort_or_close_triggers_uncertain_ptt_alarm(method: str) -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    class FailingPtt(_FakePtt):
+        def cancel(self) -> None:
+            raise RuntimeError('CAT TX0 failed')
+
+        def close(self) -> None:
+            raise RuntimeError('CAT TX0 failed')
+
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = FailingPtt()
+    alarm = FT8PttAlarm()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), ptt_uncertain=alarm.trigger,
+    )
+    with pytest.raises(RuntimeError, match='CAT TX0 failed'):
+        getattr(executor, method)()
+    assert alarm.active and alarm.tx_inhibited
