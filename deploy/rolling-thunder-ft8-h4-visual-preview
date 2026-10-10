@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Standalone visual preview of H4 alarm screens. Never creates radio runtime."""
+from __future__ import annotations
+
+import tkinter as tk
+from pathlib import Path
+
+from rolling_thunder.config import load_config
+from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+from rolling_thunder.physical_controls import ControlAction
+
+
+def main() -> None:
+    config = load_config(Path('/home/geoff/projects/rolling-thunder-v4/config/rolling-thunder.yaml'))
+    if not config.ft8.enabled or config.ft8.transmit.enabled:
+        raise SystemExit('H4 visual preview requires FT8 RX-only configuration')
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    root = tk.Tk()
+    root.title('H4 VISUAL PREVIEW — NO CAT OR RF')
+    root.configure(bg='#101010')
+    root.attributes('-fullscreen', True)
+    instructions = tk.Label(root, bg='#101010', fg='white', font=('DejaVu Sans', 18),
+        text='VISUAL PREVIEW ONLY — NO RADIO CONTROL\nV = simulate voice cancel; 1, 3, 1 = simulate command buttons; Esc = exit')
+    instructions.pack(side='bottom', pady=14)
+    banner = tk.Frame(root, bg='#fff000', highlightthickness=8, highlightbackground='#101010')
+    tk.Label(banner, text='WARNING: RADIO MAY BE STUCK TRANSMITTING',
+             bg='#fff000', fg='#000000', font=('DejaVu Sans', 26, 'bold'), wraplength=1200).pack(padx=22,pady=(16,8))
+    tk.Label(banner, text='STOP SAFELY. POWER DOWN RADIO MANUALLY.\nPRESS VOICE CANCEL TO ACKNOWLEDGE.',
+             bg='#fff000', fg='#000000', font=('DejaVu Sans', 23, 'bold'), justify='center').pack(padx=22,pady=(0,16))
+    unlock = tk.Frame(root, bg='#148137', highlightthickness=5, highlightbackground='#ffffff')
+    tk.Label(unlock, text='Press command buttons in this order Command 1, Command 3, Command 1 to unlock',
+             bg='#148137', fg='#ffffff', font=('DejaVu Sans',26,'bold'), wraplength=1100,
+             justify='center').pack(padx=18,pady=22)
+    complete = tk.Label(root, bg='#101010', fg='#ffffff', font=('DejaVu Sans', 28,'bold'),
+                        text='Software lock cleared in preview. FT8 TX remains DISABLED in production.')
+    def render() -> None:
+        banner.place_forget()
+        unlock.place_forget()
+        complete.place_forget()
+        if alarm.active:
+            banner.place(relx=.5,rely=.45,anchor='center',relwidth=.96)
+        elif alarm.tx_inhibited:
+            unlock.place(relx=.5,rely=.45,anchor='center',relwidth=.96)
+        else:
+            complete.place(relx=.5,rely=.45,anchor='center',relwidth=.96)
+    def press(event: tk.Event) -> None:
+        key = str(event.keysym).lower()
+        if key == 'escape':
+            root.destroy()
+        elif key == 'v' and alarm.active:
+            alarm.voice_cancel()
+        elif key in ('1','3'):
+            action=ControlAction.PANEL_PRIMARY if key=='1' else ControlAction.PANEL_TERTIARY
+            alarm.unlock_step(action, ft8_screen=True, radio_confirmed_receive=True)
+        render()
+    root.bind('<Key>',press)
+    render()
+    root.mainloop()
+
+
+if __name__ == '__main__':
+    main()
