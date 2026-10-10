@@ -98,6 +98,7 @@ from rolling_thunder.ft8.performance_recording import (
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
 from rolling_thunder.ft8.period_repository import FT8PeriodSyncService, FT8TransmitPeriodRepository
 from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
     configure_ft8_receive_settings,
@@ -273,6 +274,7 @@ class ApplicationRuntime:
     ft8_completed_qso_delivery: CompletedQsoDeliveryService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
+    ft8_ptt_alarm: FT8PttAlarm = field(default_factory=FT8PttAlarm)
     _started: bool = False
 
     @classmethod
@@ -827,6 +829,7 @@ class ApplicationRuntime:
         ft8_authorization: FT8QsoAuthorizationService | None = None
         ft8_qso: FT8OperatorQsoService | None = None
         resolved_ft8_executor: FT8QsoHardwareTransmitExecutor | None = None
+        ft8_ptt_alarm = FT8PttAlarm()
         if config.ft8.enabled:
             assert resolved_ft8_clock is not None
             ft8_authorization = FT8QsoAuthorizationService(
@@ -864,6 +867,8 @@ class ApplicationRuntime:
                     intent_started=period_store.begin_intent,
                     intent_completed=period_store.complete_intent,
                     power_policy=config.ft8.power,
+                    ptt_uncertain=ft8_ptt_alarm.trigger,
+                    transmit_inhibited=lambda: ft8_ptt_alarm.tx_inhibited,
                 )
 
             def build_ft8_session(
@@ -1106,6 +1111,7 @@ class ApplicationRuntime:
             ft8_performance_sync=ft8_performance_sync,
             ft8_completed_qso_delivery=completed_qso_delivery,
             ft8_hardware_transmit=resolved_ft8_executor,
+            ft8_ptt_alarm=ft8_ptt_alarm,
         )
         if (
             config.ft8.transmit.enabled

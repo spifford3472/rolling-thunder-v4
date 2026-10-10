@@ -82,12 +82,14 @@ class OperatorCommandController:
         context_navigation: ContextNavigationController,
         radio_state: Callable[[], RadioState],
         active_panel: ActivePanelCommands | None = None,
+        cancel_ptt_alarm: Callable[[], bool] | None = None,
     ) -> None:
         self._capture = capture
         self._contact_commit = contact_commit
         self._context_navigation = context_navigation
         self._radio_state = radio_state
         self._active_panel = active_panel
+        self._cancel_ptt_alarm = cancel_ptt_alarm
 
     def execute(self, action: ControlAction) -> bool:
         """Execute one approved action, returning whether it was accepted."""
@@ -95,6 +97,8 @@ class OperatorCommandController:
             return self._capture.start_capture()
 
         if action is ControlAction.DISCARD:
+            if self._cancel_ptt_alarm is not None and self._cancel_ptt_alarm():
+                return True
             before = self._capture.state
             after = self._capture.discard()
             return after != before

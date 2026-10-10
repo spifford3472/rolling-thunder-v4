@@ -32,3 +32,20 @@ Status: **software tests only; live FT8 TX disabled**. This document is not auth
 ## Gate
 
 Do not enable production FT8 transmit merely because simulated tests or CI pass. Hardware acceptance and any RF test require explicit operator approval and fail-safe assessment.
+
+## H4 uncertain-transmit operator alarm (software prototype)
+
+A failed CAT PTT release raises a prominent yellow dashboard warning with the
+instruction **POWER DOWN RADIO MANUALLY**, accompanied by a repeating klaxon on
+the configured ALSA default output. **The operator's voice-cancel/discard control
+is the sole acknowledgment path.** USB disappearance does NOT acknowledge or
+clear the warning. Verify that the voice-cancel physical input is actually mapped
+to `discard` on the deployed installation before deploying H4.
+
+The visual warning and klaxon end after voice-cancel acknowledgment, but FT8 TX
+remains inhibited in the alarm state for the rest of that runtime. Only a future,
+separately reviewed recovery procedure may restore authority. The `default`
+ALSA sink is not guaranteed to be HDMI on every Pi: confirm HDMI audio routing
+under stationary no-RF simulation before accepting this feature. Failure of the
+UI, speakers, Pi power, or the audio subsystem can prevent the warning entirely;
+these are notification aids, not a hard RF cutoff.

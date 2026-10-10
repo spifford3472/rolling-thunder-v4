@@ -231,6 +231,8 @@ class BoundedFT8HardwareTransmitExecutor:
         intent_finished: Callable[[UUID], None] | None = None,
         intent_completed: Callable[[UUID, FT8TransmitPeriodTelemetry], None] | None = None,
         power_policy: FT8PowerPolicy | None = None,
+        ptt_uncertain: Callable[[], None] | None = None,
+        transmit_inhibited: Callable[[], bool] | None = None,
     ) -> None:
         self._radio = radio
         self._audio_output = audio_output
@@ -241,6 +243,8 @@ class BoundedFT8HardwareTransmitExecutor:
         self._intent_finished = intent_finished
         self._intent_completed = intent_completed
         self._power_policy = power_policy
+        self._ptt_uncertain = ptt_uncertain
+        self._transmit_inhibited = transmit_inhibited
         self._lock = Lock()
         self._active = False
         self._closed = False
@@ -308,6 +312,8 @@ class BoundedFT8HardwareTransmitExecutor:
                 raise RuntimeError("FT8 hardware transmit executor is closed")
             if self._active:
                 raise RuntimeError("FT8 hardware transmit is already active")
+            if self._transmit_inhibited is not None and self._transmit_inhibited():
+                raise RuntimeError("FT8 transmission inhibited by unresolved PTT alarm")
             self._active = True
 
         watchdog: WatchdogTimer | None = None
@@ -355,9 +361,17 @@ class BoundedFT8HardwareTransmitExecutor:
             self._ptt.key()
             keyed = True
             emission_started = datetime.now(UTC)
+            def watchdog_release() -> None:
+                try:
+                    self._ptt.release()
+                except Exception:
+                    if self._ptt_uncertain is not None:
+                        self._ptt_uncertain()
+                    raise
+
             watchdog = self._watchdog_factory(
                 maximum_key_down_s,
-                self._ptt.release,
+                watchdog_release,
             )
             watchdog.start()
             if qso_id is not None:
@@ -371,7 +385,12 @@ class BoundedFT8HardwareTransmitExecutor:
                     meter_stop.set()
                 # Keep the independent timer armed until normal release
                 # succeeds. If CAT release raises, allow watchdog retry.
-                self._ptt.release()
+                try:
+                    self._ptt.release()
+                except Exception:
+                    if self._ptt_uncertain is not None:
+                        self._ptt_uncertain()
+                    raise
                 if watchdog is not None:
                     watchdog.cancel()
                 if qso_id is not None and keyed and emission_started is not None:

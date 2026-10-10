@@ -47,6 +47,7 @@ from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8.ptt_alarm_audio import PttKlaxon
 from rolling_thunder.ft8.status import operator_ft8_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import (
@@ -438,12 +439,19 @@ def run_dashboard(
         ),
         weather_notes_enabled=config.contact_logging.append_weather_notes,
     )
+    def acknowledge_ptt_alarm() -> bool:
+        if not runtime.ft8_ptt_alarm.active:
+            return False
+        runtime.ft8_ptt_alarm.voice_cancel()
+        return True
+
     operator_commands = OperatorCommandController(
         capture,
         contact_commit,
         context_navigation,
         radio_state=lambda: runtime.latest_radio_state,
         active_panel=active_panel_commands,
+        cancel_ptt_alarm=acknowledge_ptt_alarm,
     )
 
     control_source: ControlSource | None = None
@@ -465,6 +473,18 @@ def run_dashboard(
     root.title("Rolling Thunder v4")
     root.configure(bg=_BACKGROUND, cursor="none")
     root.attributes("-fullscreen", True)
+    # Emergency warning overlays every dashboard context; stays until voice cancel.
+    ptt_alert = tk.Frame(root, bg="#fff000", highlightthickness=8,
+                         highlightbackground="#101010")
+    tk.Label(ptt_alert, text="WARNING: RADIO MAY BE STUCK TRANSMITTING",
+             bg="#fff000", fg="#000000", font=("DejaVu Sans", 26, "bold"),
+             wraplength=1200).pack(padx=22, pady=(16, 8))
+    tk.Label(ptt_alert, text="STOP SAFELY. POWER DOWN RADIO MANUALLY.\n"
+             "PRESS VOICE CANCEL TO ACKNOWLEDGE.",
+             bg="#fff000", fg="#000000", font=("DejaVu Sans", 23, "bold"),
+             justify="center").pack(padx=22, pady=(0, 16))
+    ptt_klaxon = PttKlaxon(runtime.ft8_ptt_alarm)
+    ptt_klaxon.start()
     root.grid_columnconfigure(0, weight=2, uniform="dashboard")
     root.grid_columnconfigure(1, weight=3, uniform="dashboard")
     root.grid_rowconfigure(0, weight=1)
@@ -1170,6 +1190,11 @@ def run_dashboard(
         ft8_widgets.show()
 
     def refresh() -> None:
+        if runtime.ft8_ptt_alarm.active:
+            ptt_alert.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
+            ptt_alert.lift()
+        else:
+            ptt_alert.place_forget()
         if control_dispatcher is not None:
             control_dispatcher.dispatch_available()
 
@@ -1729,6 +1754,7 @@ def run_dashboard(
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:
+        ptt_klaxon.stop()
         control_close_error = close_control_source(control_source)
         if control_close_error is not None:
             print(f"Rolling Thunder physical controls shutdown error: {control_close_error}")
