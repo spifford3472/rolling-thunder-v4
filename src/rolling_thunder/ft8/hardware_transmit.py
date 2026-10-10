@@ -348,7 +348,7 @@ class BoundedFT8HardwareTransmitExecutor:
             # A missing/unreadable CAT power setting is unknown, NEVER inferred
             # from a raw power meter value or a previous QSO power target.
             reader = getattr(self._radio, "read_power_watts", None)
-            if qso_id is not None and callable(reader):
+            if callable(reader):
                 try:
                     value = reader()
                     if type(value) is int and 5 <= value <= 100:
@@ -356,7 +356,7 @@ class BoundedFT8HardwareTransmitExecutor:
                         power_readback_verified = True
                 except (RadioError, RuntimeError, ValueError, TypeError):
                     pass
-            if qso_id is not None and self._power_policy is not None:
+            if self._power_policy is not None:
                 # Final QSO transmit boundary: never reprogram a manual change.
                 # Unknown CAT settings or an exceeded cap require operator action.
                 try:

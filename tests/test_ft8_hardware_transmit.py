@@ -719,3 +719,24 @@ def test_failed_abort_or_close_triggers_uncertain_ptt_alarm(method: str) -> None
     with pytest.raises(RuntimeError, match='CAT TX0 failed'):
         getattr(executor, method)()
     assert alarm.active and alarm.tx_inhibited
+
+
+@pytest.mark.parametrize('watts', [None, 0, 35, 101])
+def test_standalone_owner_test_enforces_power_policy_without_keying(watts: int | None) -> None:
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+
+    class PowerRadio(_FakeRadio):
+        def read_power_watts(self) -> int | None:
+            return watts
+
+    radio = PowerRadio(_connected_state(frequency_hz=28_074_000))
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy(),
+    )
+    with pytest.raises(RuntimeError, match='power|CAT'):
+        executor._execute(
+            waveform=_waveform(), maximum_key_down_s=2.0,
+            expected_radio_frequency_hz=28_074_000, expected_radio_mode='DATA',
+            label='hardware test', qso_id=None,
+        )
+    assert 'key' not in radio.ptt.events
