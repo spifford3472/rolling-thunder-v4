@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Read-only standalone alarm state-machine acceptance. Does not import UI runtime.
+set -euo pipefail
+APP=/home/geoff/projects/rolling-thunder-v4
+EXPECTED=3232ded74e1910e71c3bc8ac141ead07f2462ea1
+cd "$APP"
+[[ "$(git rev-parse HEAD)" == "$EXPECTED" ]] || { echo 'FAIL: unexpected production release'; exit 1; }
+"$APP/.venv/bin/python" - <<'PY'
+from pathlib import Path
+from rolling_thunder.config import load_config
+from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+from rolling_thunder.physical_controls import ControlAction
+cfg = load_config(Path('config/rolling-thunder.yaml'))
+assert cfg.ft8.enabled and not cfg.ft8.transmit.enabled
+assert cfg.physical_controls.enabled
+mappings = cfg.physical_controls.mappings
+assert mappings['discard-button'] is ControlAction.DISCARD
+assert mappings['context-button-1-short'] is ControlAction.PANEL_PRIMARY
+assert mappings['context-button-3-short'] is ControlAction.PANEL_TERTIARY
+alarm = FT8PttAlarm()
+alarm.trigger()
+assert alarm.active and alarm.tx_inhibited
+assert not alarm.unlock_step(ControlAction.PANEL_PRIMARY, ft8_screen=True, radio_confirmed_receive=True)
+assert alarm.active and alarm.tx_inhibited
+alarm.voice_cancel()
+assert not alarm.active and alarm.tx_inhibited
+assert not alarm.unlock_step(ControlAction.PANEL_PRIMARY, ft8_screen=False, radio_confirmed_receive=True)
+assert not alarm.unlock_step(ControlAction.PANEL_PRIMARY, ft8_screen=True, radio_confirmed_receive=False)
+assert not alarm.unlock_step(ControlAction.PANEL_PRIMARY, ft8_screen=True, radio_confirmed_receive=True)
+assert not alarm.unlock_step(ControlAction.PANEL_TERTIARY, ft8_screen=True, radio_confirmed_receive=True)
+assert alarm.tx_inhibited
+assert alarm.unlock_step(ControlAction.PANEL_PRIMARY, ft8_screen=True, radio_confirmed_receive=True)
+assert not alarm.active and not alarm.tx_inhibited
+assert not Path('src/rolling_thunder/ft8/ptt_alarm_audio.py').exists()
+print('PASS: receive-only configuration and physical mapping')
+print('PASS: warning persists until voice cancel; TX lock remains after acknowledgment')
+print('PASS: off-FT8 and unconfirmed-RX unlock rejected')
+print('PASS: 1-3-1 deliberate unlock; silent alarm')
+print('NOTE: radio_confirmed_receive is simulated operator attestation, not RF hardware proof')
+print('PASS: NO-RF isolated acceptance; production application untouched')
+PY
