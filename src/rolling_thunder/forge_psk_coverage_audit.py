@@ -30,8 +30,8 @@ def audit_coverage(path: Path, *, sender: str, now: datetime) -> dict[str, objec
                 return {"status": "unavailable", "reason": "normalized_schema_missing"}
             summary: dict[str, object] = {"status": "ok", "sender": sender.upper().strip()}
             for minutes in (30, 120, 1440):
-                start = (now.astimezone(UTC) - timedelta(minutes=minutes)).isoformat()
-                end = now.astimezone(UTC).isoformat()
+                start = (now.astimezone(UTC) - timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
+                end = now.astimezone(UTC).isoformat().replace("+00:00", "Z")
                 count, receivers, with_grid = db.execute(
                     """SELECT count(*), count(DISTINCT receiver_callsign),
                        count(DISTINCT CASE WHEN receiver_locator_normalized IS NOT NULL

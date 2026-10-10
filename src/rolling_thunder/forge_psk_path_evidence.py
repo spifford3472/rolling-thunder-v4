@@ -60,8 +60,8 @@ def lookup_outbound_evidence(
     if not target_grid.strip():
         raise ValueError("target_grid required")
     empty = PskOutboundPathEvidence(sender, target_grid.upper(), frequency_hz, None, 0, 0, None)
-    cutoff = (now_utc.astimezone(UTC) - MAX_AGE).isoformat()
-    end = now_utc.astimezone(UTC).isoformat()
+    cutoff = (now_utc.astimezone(UTC) - MAX_AGE).isoformat().replace("+00:00", "Z")
+    end = now_utc.astimezone(UTC).isoformat().replace("+00:00", "Z")
     uri = f"file:{database_path.resolve().as_posix()}?mode=ro"
     try:
         with sqlite3.connect(uri, uri=True, timeout=0.2) as db:
