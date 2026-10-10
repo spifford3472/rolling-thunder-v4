@@ -178,10 +178,10 @@ class Ft891Radio:
             if not self._cp6_cat_ptt_asserted:
                 return
             self._require_connected()
-            try:
-                self._transport.command(encode_cat_transmit_off())
-            finally:
-                self._cp6_cat_ptt_asserted = False
+            # Preserve uncertain TX state if CAT release fails; a later
+            # cancel/release must retry rather than incorrectly no-op.
+            self._transport.command(encode_cat_transmit_off())
+            self._cp6_cat_ptt_asserted = False
 
     def read_cp6_tx_meters(self) -> tuple[int, int, int]:
         """Read raw ALC, power, and SWR meters for the supervised CP6 test."""

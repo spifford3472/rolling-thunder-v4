@@ -543,3 +543,17 @@ def test_ssb_mic_select_adapter_rejects_wrong_readback_and_disconnection() -> No
     transport.replies[b"EX1105;"] = b"EX11050;"
     with pytest.raises(RadioVerificationError, match="requested REAR but read back MIC"):
         radio.set_ssb_mic_select(Ft891SsbMicSelect.REAR)
+
+
+def test_cp6_failed_release_keeps_retryable_tx_state() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    capability = radio.create_cp6_cat_ptt_capability()
+    capability.key()
+    transport.command_errors[b"TX0;"] = RadioConnectionError("CAT release timeout")
+    with pytest.raises(RadioConnectionError):
+        capability.release()
+    del transport.command_errors[b"TX0;"]
+    capability.cancel()
+    assert transport.commands.count(b"TX0;") == 2

@@ -369,9 +369,11 @@ class BoundedFT8HardwareTransmitExecutor:
             try:
                 if meter_stop is not None:
                     meter_stop.set()
+                # Keep the independent timer armed until normal release
+                # succeeds. If CAT release raises, allow watchdog retry.
+                self._ptt.release()
                 if watchdog is not None:
                     watchdog.cancel()
-                self._ptt.release()
                 if qso_id is not None and keyed and emission_started is not None:
                     record = FT8TransmitPeriodTelemetry(
                         qso_id=qso_id,
