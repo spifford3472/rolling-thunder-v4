@@ -102,3 +102,15 @@ This checkpoint deliberately does not convert counts/SNR into an uncalibrated
 0–1 quality estimate, expose a network endpoint, or send evidence to the Pi.
 Provider provenance and sample freshness must be validated before connecting
 to the ranking model. This module never writes to production data.
+
+## CP2.4 Forge evidence snapshot cache (not yet live)
+
+`forge_psk_evidence_snapshot.py` wraps the read-only historical path adapter
+with a bounded 2-minute cache, up to 256 sender/target-grid/frequency keys,
+explicit observed/no-recent-evidence status and versioned JSON-compatible
+snapshot fields. These are **observations**, not predicted QSO probabilities.
+No listener, provider polling, secrets or production data modifications were
+added. The existing PSK ingestion API remains unchanged; wiring an authenticated
+private read endpoint and a Pi-side bounded background client requires another
+checkpoint and review. Existing normalized archives may be sparse before
+contact completion; do not advertise live reception coverage without evidence.
