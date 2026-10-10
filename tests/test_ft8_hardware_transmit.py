@@ -631,3 +631,28 @@ def test_final_qso_power_gate_rejects_manual_over_ceiling_and_unknown() -> None:
         label='QSO transmit', qso_id=_qso_context().qso_id,
     )
     assert radio.ptt.events.count('key') == 1
+
+
+def test_failed_normal_release_leaves_watchdog_armed_for_retry() -> None:
+    class RecoveringPtt(_FakePtt):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fail_next_release = True
+
+        def release(self) -> None:
+            self.events.append("release")
+            if self.fail_next_release:
+                self.fail_next_release = False
+                raise RuntimeError("CAT transmit-off failed")
+
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = RecoveringPtt()
+    watchdogs = _WatchdogFactory()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), watchdog_factory=watchdogs
+    )
+    with pytest.raises(RuntimeError, match="CAT transmit-off failed"):
+        executor.execute_test(_hardware_request())
+    assert watchdogs.timers[0].cancelled is False
+    watchdogs.timers[0].fire()
+    assert radio.ptt.events == ["key", "release", "release"]
