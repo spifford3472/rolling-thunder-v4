@@ -18,7 +18,8 @@ def test_rollback_does_not_restore_sqlite_or_drop_wal():
     assert 'ROLLBACK' not in source or 'database' in source
     assert 'cp -f "$BACKUP' not in source
     assert 'rm -f "${DB}' not in source
-    assert 'cp -p "$BACKUP/rolling-thunder.yaml" "$CONFIG"' in source
+    assert 'cp -p "$BACKUP/rolling-thunder.yaml" "$CONFIG"' not in source
+    assert "RECOVERY HOLD" in source
     assert 'git checkout --detach --force "$PREVIOUS"' in source
 
 
@@ -27,3 +28,5 @@ def test_ft8_transmit_is_disabled_before_restart():
     assert "obj['ft8']['transmit']['enabled']=False" in source
     assert "assert not cfg.ft8.transmit.enabled" in source
     assert source.index("assert not cfg.ft8.transmit.enabled") < source.rindex('sudo -n systemctl start "$SERVICE"')
+    assert "rolling-thunder-ui" in source
+    assert source.index("trap recover ERR") < source.index('sudo -n systemctl stop "$SERVICE"')

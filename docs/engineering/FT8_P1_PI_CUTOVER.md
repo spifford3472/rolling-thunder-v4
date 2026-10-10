@@ -16,3 +16,9 @@ The production database is `/home/geoff/projects/rolling-thunder-v4/config/data/
 - Deployed mobile UI remains operational with FT8 **receive-only** initially; later RF approval requires a stationary dummy load, PTT release/watchdog review, and decision regarding the legacy 100 W voice restore on FT8 exit.
 
 The script is an operator cutover aid, not a replacement for the existing production deploy helper; do not install it over that helper. Logs must exclude bearer credentials and any secret environment content.
+
+## Recovery and process verification amendments
+
+The error handler is installed **before** stopping the service. If failure occurs before the receive-only configuration is written, recovery intentionally holds the service stopped rather than automatically restarting a TX-enabled configuration. A human must inspect and restore safe service operation in that case. Once receive-only configuration has been verified, recovery can restart previous code without rolling back SQLite. The old RF-enabled config copy stays private in the backup directory and is **never** restored automatically.
+
+After start, the guard requires an active systemd unit, a live MainPID running `rolling-thunder-ui` (the autostart script uses `exec`), and configuration validation showing `ft8.transmit.enabled: false`. These checks do not constitute stationary PTT/watchdog acceptance or proof of decoder performance.

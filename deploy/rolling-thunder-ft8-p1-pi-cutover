@@ -53,8 +53,8 @@ print('PASS: three consistent SQLite backups')
 PY
 printf 'BACKUP=%s\n' "$BACKUP"
 # Stop application prior to checkout; do not disable FT8 in the currently running instance.
-sudo -n systemctl stop "$SERVICE"
 ROLLED=0
+STOP_STARTED=0
 recover() {
   local rc=$?
   trap - ERR
@@ -62,13 +62,24 @@ recover() {
     echo 'FAIL: restoring former code and config, preserving current databases and outboxes'
     git checkout --detach --force "$PREVIOUS" || true
     "$APP/.venv/bin/python" -m pip install --no-deps -e "$APP" || true
-    cp -p "$BACKUP/rolling-thunder.yaml" "$CONFIG"
-    sudo -n systemctl start "$SERVICE" || true
+    # Never restore an RF-enabled config automatically during no-RF acceptance.
+    # The existing config remains explicitly receive-only unless manual recovery is needed.
+    if [[ "$STOP_STARTED" -eq 1 ]]; then
+      # If the new config was not yet made receive-only, do not silently start TX-enabled code.
+      if grep -A12 -E "^  transmit:" "$CONFIG" | grep -q "enabled: false"; then
+        sudo -n systemctl start "$SERVICE" || true
+      else
+        echo "RECOVERY HOLD: FT8 TX remains enabled; manual supervised service restoration required"
+      fi
+    fi
   fi
   exit "$rc"
 }
 trap recover ERR
+STOP_STARTED=1
 ROLLED=1
+sudo -n systemctl stop "$SERVICE"
+[[ "$(systemctl is-active "$SERVICE" || true)" != active ]] || { echo "Service did not stop"; false; }
 git checkout --detach --force "$TARGET"
 "$APP/.venv/bin/python" -m pip install --no-deps -e "$APP"
 "$APP/.venv/bin/python" - "$CONFIG" <<'PY'
@@ -111,6 +122,18 @@ PY
 sudo -n systemctl start "$SERVICE"
 sleep 3
 [[ "$(systemctl is-active "$SERVICE")" == active ]] || { echo 'service did not remain active'; false; }
+MAINPID=$(systemctl show --value -p MainPID "$SERVICE")
+[[ "$MAINPID" =~ ^[0-9]+$ && "$MAINPID" -gt 1 && -r "/proc/$MAINPID/cmdline" ]] || { echo "Invalid service MainPID"; false; }
+tr "\0" " " < "/proc/$MAINPID/cmdline" | grep -q "rolling-thunder-ui" || { echo "Unexpected service process"; false; }
+"$APP/.venv/bin/python" - "$CONFIG" <<'PY'
+import sys
+from pathlib import Path
+from rolling_thunder.config import load_config
+cfg = load_config(Path(sys.argv[1]))
+assert cfg.ft8.enabled and not cfg.ft8.transmit.enabled
+print("PASS: post-start configuration FT8 TX disabled")
+PY
+[[ "$(systemctl show --value -p NRestarts "$SERVICE")" =~ ^[0-9]+$ ]] || { echo "Missing systemd restart counter"; false; }
 [[ "$(git rev-parse HEAD)" == "$TARGET" ]] || { echo 'Unexpected deployed SHA'; false; }
 ROLLED=0
 trap - ERR
