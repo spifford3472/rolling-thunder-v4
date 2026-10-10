@@ -406,3 +406,4 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/forge_psk_evidence_snapshot.py` — bounded read-only cached Forge PSK outbound-reception snapshot service; no network listener or Pi client.
 - `src/rolling_thunder/forge_psk_evidence_api.py` — authenticated private read-only PSK path-evidence API application boundary; no listener registered.
 - `src/rolling_thunder/ft8/psk_evidence_client.py` — bounded optional Pi-side private Forge observation client; no runtime connection yet.
+- `src/rolling_thunder/forge_psk_evidence_server.py` — standalone opt-in loopback PSK evidence listener with read-only normalized-history schema gate; not deployed.
