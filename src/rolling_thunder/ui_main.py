@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from time import monotonic
 
 from rolling_thunder.active_panel_commands import (
     SharedSpotActivePanelCommandController,
@@ -47,6 +48,7 @@ from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
 from rolling_thunder.ft8.status import operator_ft8_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import (
@@ -438,13 +440,34 @@ def run_dashboard(
         ),
         weather_notes_enabled=config.contact_logging.append_weather_notes,
     )
+    # Supervised visual acceptance uses an ISOLATED alarm instance. Never touches
+    # runtime.ft8_ptt_alarm, CAT, PTT, or the production transmit authorization.
+    visual_test = FT8PttAlarm()
+    visual_test_deadline = [0.0]
+    visual_test_file = Path('/home/geoff/rolling-thunder-h4-visual-test.trigger')
+
+    def visual_test_active() -> bool:
+        return visual_test_deadline[0] > monotonic()
+
     def acknowledge_ptt_alarm() -> bool:
+        if visual_test_active():
+            if visual_test.active:
+                visual_test.voice_cancel()
+            return True
         if not runtime.ft8_ptt_alarm.active:
             return False
         runtime.ft8_ptt_alarm.voice_cancel()
         return True
 
     def handle_ptt_unlock_action(action: ControlAction) -> bool:
+        if visual_test_active():
+            if (not visual_test.active and visual_test.tx_inhibited
+                    and visual_test.unlock_step(
+                        action, ft8_screen=context_navigation.state.selected is ContextId.FT8,
+                        radio_confirmed_receive=True,
+                    )):
+                visual_test_deadline[0] = 0.0
+            return True
         alarm = runtime.ft8_ptt_alarm
         if not alarm.tx_inhibited:
             return False
@@ -1210,14 +1233,24 @@ def run_dashboard(
         ft8_widgets.show()
 
     def refresh() -> None:
-        if runtime.ft8_ptt_alarm.tx_inhibited and not runtime.ft8_ptt_alarm.active and (
+        # SSH trigger is consumed only in receive-only mode while FT8 is visible.
+        # Never trigger the actual PTT alarm state or affect radio authority.
+        if visual_test_file.is_file():
+            visual_test_file.unlink(missing_ok=True)
+            if (not config.ft8.transmit.enabled
+                    and context_navigation.state.selected is ContextId.FT8
+                    and not runtime.ft8_ptt_alarm.tx_inhibited):
+                visual_test.trigger()
+                visual_test_deadline[0] = monotonic() + 90.0
+        if ((visual_test_active() and visual_test.tx_inhibited and not visual_test.active)
+                or (runtime.ft8_ptt_alarm.tx_inhibited and not runtime.ft8_ptt_alarm.active)) and (
             context_navigation.state.selected is ContextId.FT8
         ):
             ptt_unlock.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
             ptt_unlock.lift()
         else:
             ptt_unlock.place_forget()
-        if runtime.ft8_ptt_alarm.active:
+        if runtime.ft8_ptt_alarm.active or (visual_test_active() and visual_test.active):
             ptt_alert.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
             ptt_alert.lift()
         else:
