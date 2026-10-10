@@ -115,6 +115,7 @@ def build_ft8_browser_viewport(
     visible_rows: int = 5,
     attempt_states: dict[str, FT8AttemptVisualState] | None = None,
     friends: frozenset[str] = frozenset(),
+    pending_ranking_callsigns: frozenset[str] = frozenset(),
 ) -> FT8BrowserViewport:
     """Build a stable-order viewport that always keeps selection visible."""
     if visible_rows < 1:
@@ -144,6 +145,7 @@ def build_ft8_browser_viewport(
             item,
             selected=item.callsign == selected_callsign,
             friends=friends,
+            pending_rank=item.callsign in pending_ranking_callsigns,
             attempt_state=state_map.get(item.callsign),
             current_period=current_period,
         )
@@ -163,6 +165,7 @@ def _row(
     selected: bool,
     attempt_state: FT8AttemptVisualState | None,
     friends: frozenset[str],
+    pending_rank: bool,
     current_period: FT8Period,
 ) -> FT8BrowserRow:
     if attempt_state is FT8AttemptVisualState.FAILED:
@@ -184,7 +187,7 @@ def _row(
     return FT8BrowserRow(
         callsign=activity.callsign,
         friend_marker=friend_marker(activity.callsign, friends),
-        call_text=call_text,
+        call_text=f"NEW {call_text}" if pending_rank else call_text,
         pota_cq=activity.pota_cq,
         snr_text=f"{activity.snr_db:+d}",
         audio_text=str(activity.audio_frequency_hz),

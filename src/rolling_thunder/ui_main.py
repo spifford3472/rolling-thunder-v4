@@ -1701,6 +1701,10 @@ def run_dashboard(
                         visible_rows=ft8_widgets.visible_rows,
                         attempt_states=attempt_states,
                         friends=friends,
+                        pending_ranking_callsigns=(
+                            frozenset() if runtime.ft8_browser_ranking is None
+                            else runtime.ft8_browser_ranking.pending_callsigns
+                        ),
                     )
                     selected_activity = next(
                         (row for row in ft8_snapshot.cq_activity if row.callsign == selected_callsign),

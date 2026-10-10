@@ -61,6 +61,7 @@ from rolling_thunder.ft8.authorization import (
     FT8QsoAuthorizationService,
 )
 from rolling_thunder.ft8.band_control import FT8BandController
+from rolling_thunder.ft8.browser_ranking import FT8BrowserRanking
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.decoder import (
     ComparingFT8Decoder,
@@ -130,6 +131,7 @@ from rolling_thunder.known_callsign_client import (
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
 from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
+from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.map_solar import MapSolarStyleService, SynchronizedMapStyleTarget
 from rolling_thunder.map_sources import (
     InstalledMapRegistry,
@@ -273,6 +275,7 @@ class ApplicationRuntime:
     ft8_performance_sync: FT8PerformanceSyncService | None = None
     ft8_completed_qso_delivery: CompletedQsoDeliveryService | None = None
     ft8_panel: FT8PanelController | None = None
+    ft8_browser_ranking: FT8BrowserRanking | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
     ft8_ptt_alarm: FT8PttAlarm = field(default_factory=FT8PttAlarm)
     _started: bool = False
@@ -1175,6 +1178,25 @@ class ApplicationRuntime:
             return not worked.is_suppressed(activity.callsign, band)
 
         if ft8_receive is not None:
+            runtime.ft8_browser_ranking = FT8BrowserRanking()
+
+            def ft8_ranked_order(activity: tuple[FT8CQActivity, ...]) -> tuple[FT8CQActivity, ...]:
+                ranker = runtime.ft8_browser_ranking
+                radio_state = runtime.latest_radio_state
+                if ranker is None or radio_state.frequency is None:
+                    return activity
+                try:
+                    band = resolve_radio_band(radio_state.frequency).value
+                except RadioBandResolutionError:
+                    return activity
+                gps = runtime.latest_gps_state
+                local_grid = str(config.operator.home_grid)
+                if gps is not None and gps.position is not None:
+                    pos = gps.position
+                    if pos.latitude is not None and pos.longitude is not None:
+                        local_grid = str(maidenhead_grid(pos.latitude, pos.longitude))
+                return ranker.order(activity, local_grid=local_grid, band=band)
+
             runtime.ft8_panel = FT8PanelController(
                 receive_state=lambda: runtime.latest_ft8_receive_state,
                 qso_state=lambda: runtime.latest_ft8_qso_state,
@@ -1191,6 +1213,7 @@ class ApplicationRuntime:
                 ),
                 authorization_enabled=lambda: runtime.ft8_qso is not None,
                 activity_filter=ft8_activity_visible,
+                activity_order=ft8_ranked_order,
                 respond=runtime.request_ft8_response,
             )
         return runtime
@@ -1566,6 +1589,9 @@ class ApplicationRuntime:
 
     def stop(self) -> RadioState:
         """Stop polling and disconnect configured hardware safely."""
+        if self.ft8_browser_ranking is not None:
+            self.ft8_browser_ranking.close()
+            self.ft8_browser_ranking = None
         if not self._started:
             if self.ft8_qso is not None:
                 self.ft8_qso.close()
