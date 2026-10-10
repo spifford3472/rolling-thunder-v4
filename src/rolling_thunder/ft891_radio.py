@@ -165,11 +165,15 @@ class Ft891Radio:
             try:
                 self._transport.command(encode_cat_transmit_on())
             except RadioConnectionError:
+                # A failed TX-on write may still have reached the radio.
+                # Treat PTT as uncertain until transmit-off actually succeeds.
+                self._cp6_cat_ptt_asserted = True
                 try:
                     self._transport.command(encode_cat_transmit_off())
                 except RadioConnectionError:
                     pass
-                self._cp6_cat_ptt_asserted = False
+                else:
+                    self._cp6_cat_ptt_asserted = False
                 raise
             self._cp6_cat_ptt_asserted = True
 

@@ -557,3 +557,17 @@ def test_cp6_failed_release_keeps_retryable_tx_state() -> None:
     del transport.command_errors[b"TX0;"]
     capability.cancel()
     assert transport.commands.count(b"TX0;") == 2
+
+
+def test_failed_key_and_failed_compensating_release_remain_retryable() -> None:
+    transport = FakeTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+    transport.command_errors[b"TX1;"] = RadioConnectionError("TX on uncertain")
+    transport.command_errors[b"TX0;"] = RadioConnectionError("TX off failed")
+    with pytest.raises(RadioConnectionError, match="TX on uncertain"):
+        ptt.key()
+    del transport.command_errors[b"TX0;"]
+    ptt.cancel()
+    assert transport.commands.count(b"TX0;") == 2
