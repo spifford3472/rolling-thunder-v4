@@ -162,3 +162,23 @@ normalized data ingest or a scheduled poll. The production worker's own
 history database is not interchangeable with a normalized `psk_reception`
 table. Before enabling evidence-backed ranking, an authorized operator must
 identify the normalized database and verify sufficient pre-contact coverage.
+
+## CP2.4 reuse of PSK-N2 acceptance — no duplicate testing
+
+The earlier PSK-N2 implementation (see
+`docs/engineering/PSK_NORMALIZED_HISTORY_V4.md`) stores normalized
+`psk_reception` **inside the existing PSK history SQLite database** after its
+additive schema-v5 migration/backfill. A distinct database is not required.
+Do not rerun collector pacing, provider 403/429 handling, QSO ingestion,
+normalization integrity, or mobile CAT/PTT/dummy-load acceptance solely for
+this new read-only consumer. Previous rollout evidence remains applicable.
+
+Before enabling evidence-backed ranking, verify *only the new conditions*:
+(1) the deployed history SQLite includes `psk_reception` and is readable by
+the proposed evidence service without broadening existing permissions;
+(2) KI5VNB outbound FT8 observations include recent, valid receiver grids;
+(3) historical timestamp encoding matches the new bounded query;
+(4) direction, target-path filtering and offline fallback behave as expected.
+If no recent reports exist, ranking falls back neutrally and no additional PSK
+Reporter query is generated. A dry-run audit must not start or restart workers,
+migrate/modify production SQLite, or disturb FT8 TX.

@@ -39,3 +39,13 @@ python -m rolling_thunder.forge_psk_normalized_history --database /path/to/histo
 ## Rollback
 
 Rollback the application package to the previous exact SHA. Additive schema v4/v5 tables remain dormant; do **not** downgrade or delete them automatically. Existing Wavelog, contact-sync, FT8 and offline feeder processes must remain untouched.
+
+## CP2.4 read-only consumer
+
+The newer CP2.4 outbound evidence reader and coverage audit use the same
+`psk_reception` table in the schema-v5 PSK history database; they do not imply
+an additional database or a second PSK Reporter provider. Existing PSK-N2
+rollout evidence should be reused. The only additional acceptance gate is
+current read-only table availability, outbound sample freshness, correct
+receiver-grid/direction matching, and the evidence API's fail-neutral behavior.
+This section does not authorize migrations, backfill, pruning or deployment.
