@@ -1223,6 +1223,10 @@ class ApplicationRuntime:
                 power_policy=self.ft8_power_policy,
             )
             return self.ft8_qso_start.start(activity, attempt_seed=seed)
+        # Real hardware must pass the supervised power/frequency preparation boundary.
+        # This legacy path remains only for injected test-radio runtimes.
+        if isinstance(self.radio, Ft891Radio):
+            return False
         context = self.ft8_authorization.authorize(
             activity,
             radio_state=self.latest_radio_state,
@@ -1260,6 +1264,8 @@ class ApplicationRuntime:
                 power_policy=self.ft8_power_policy,
             )
             return self.ft8_qso_start.start_incoming(incoming, attempt_seed=seed)
+        if isinstance(self.radio, Ft891Radio):
+            return False
         context = self.ft8_authorization.authorize_incoming(
             incoming,
             radio_state=self.latest_radio_state,

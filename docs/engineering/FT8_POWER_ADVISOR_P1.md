@@ -63,3 +63,7 @@ PSK Reporter documents the `frequency` field in hertz and `flowStartSeconds` as 
 ## P1.10 — immutable band safety maximums
 
 The 10 m (30 W), 12 m (40 W), and 15 m (40 W) upper bounds are enforced by `FT8PowerPolicy.limit_for` even when the operator configuration omits a band key or supplies a higher value. Lower configured limits remain effective. The unknown-band advice path uses the strictest fixed ceiling. This hardens policy enforcement in the existing preparation and attempt-seed paths; it does **not** activate adaptive CAT power, discover physical front-panel overrides, or authorize direct legacy QSO fallback transmit paths. The 100 W restore-on-exit behavior remains separately documented and unchanged pending operator review.
+
+## P1.11 — production legacy-authorization fallback guard
+
+Both selected-CQ and inbound-response `ApplicationRuntime` entry points now refuse their legacy direct-QSO fallback when the radio adapter is the real `Ft891Radio` and the supervised `ft8_qso_start` preparation controller is absent. Injected test adapters retain the former fallback for hardware-free tests. The guard prevents bypassing the power/frequency safety ceiling due to missing runtime composition, but does not replace the required front-panel override audit. The existing 100 W voice restore on FT8 exit is unchanged and remains an explicit operator-review item.
