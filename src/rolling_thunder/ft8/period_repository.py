@@ -41,6 +41,8 @@ class FT8TransmitPeriodRepository:
                 PRIMARY KEY (qso_id, emission_index),
                 FOREIGN KEY(qso_id,emission_index) REFERENCES ft8_transmit_period(qso_id,emission_index)
             )""")
+            if not any(row[1] == "transmit_audio_offset_hz" for row in db.execute("PRAGMA table_info(ft8_transmit_period)")):
+                db.execute("ALTER TABLE ft8_transmit_period ADD COLUMN transmit_audio_offset_hz INTEGER")
             db.execute("CREATE INDEX IF NOT EXISTS idx_ft8_transmit_period_time ON ft8_transmit_period(started_at_utc, frequency_hz)")
 
     def begin_intent(self, intent_id: UUID, qso_id: UUID, frequency_hz: int,
@@ -80,11 +82,11 @@ class FT8TransmitPeriodRepository:
                 "SELECT COALESCE(MAX(emission_index),0)+1 FROM ft8_transmit_period WHERE qso_id=?",
                 (qso,),
             ).fetchone()[0]
-            db.execute("INSERT INTO ft8_transmit_period VALUES (?,?,?,?,?,?,?,?)", (
+            db.execute("INSERT INTO ft8_transmit_period (qso_id,emission_index,started_at_utc,ended_at_utc,configured_power_watts,power_readback_verified,frequency_hz,transmitted,transmit_audio_offset_hz) VALUES (?,?,?,?,?,?,?,?,?)", (
                 qso, index, record.started_at_utc.astimezone(UTC).isoformat(),
                 record.ended_at_utc.astimezone(UTC).isoformat(),
                 record.configured_power_watts, int(record.power_readback_verified),
-                record.frequency_hz, int(record.transmitted),
+                record.frequency_hz, int(record.transmitted), record.transmit_audio_offset_hz,
             ))
             db.execute("UPDATE ft8_transmit_intent SET state='completed' WHERE intent_id=?", (str(intent_id),))
 
@@ -94,6 +96,8 @@ class FT8TransmitPeriodRepository:
             raise ValueError("transmission timestamps require timezones")
         if record.ended_at_utc < record.started_at_utc:
             raise ValueError("transmission end precedes start")
+        if record.transmit_audio_offset_hz is not None and not 200 <= record.transmit_audio_offset_hz <= 3500:
+            raise ValueError("invalid transmit audio offset")
         if record.power_readback_verified != (record.configured_power_watts is not None):
             raise ValueError("CAT power provenance must match recorded setting")
 
@@ -110,24 +114,24 @@ class FT8TransmitPeriodRepository:
                 "SELECT COALESCE(MAX(emission_index),0)+1 FROM ft8_transmit_period WHERE qso_id=?",
                 (str(record.qso_id),),
             ).fetchone()[0]
-            db.execute("""INSERT INTO ft8_transmit_period VALUES (?,?,?,?,?,?,?,?)""", (
+            db.execute("""INSERT INTO ft8_transmit_period (qso_id,emission_index,started_at_utc,ended_at_utc,configured_power_watts,power_readback_verified,frequency_hz,transmitted,transmit_audio_offset_hz) VALUES (?,?,?,?,?,?,?,?,?)""", (
                 str(record.qso_id), index,
                 record.started_at_utc.astimezone(UTC).isoformat(),
                 record.ended_at_utc.astimezone(UTC).isoformat(),
                 record.configured_power_watts, int(record.power_readback_verified),
-                record.frequency_hz, int(record.transmitted),
+                record.frequency_hz, int(record.transmitted), record.transmit_audio_offset_hz,
             ))
 
     def for_qso(self, qso_id: UUID) -> tuple[FT8TransmitPeriodTelemetry, ...]:
         with sqlite3.connect(self._path) as db:
             rows=db.execute("""SELECT started_at_utc,ended_at_utc,configured_power_watts,
-                     power_readback_verified,frequency_hz,transmitted
+                     power_readback_verified,frequency_hz,transmitted,transmit_audio_offset_hz
                      FROM ft8_transmit_period WHERE qso_id=? ORDER BY emission_index""",
                      (str(qso_id),)).fetchall()
         return tuple(FT8TransmitPeriodTelemetry(
             qso_id, datetime.fromisoformat(start),datetime.fromisoformat(end),
-            power,bool(verified),freq,bool(transmitted)
-        ) for start,end,power,verified,freq,transmitted in rows)
+            power,bool(verified),freq,bool(transmitted),offset
+        ) for start,end,power,verified,freq,transmitted,offset in rows)
 
     def pending(self, *, limit: int = 50) -> tuple[tuple[UUID, int, FT8TransmitPeriodTelemetry], ...]:
         """Read unacknowledged periods in stable order; never delete source evidence."""
@@ -136,15 +140,15 @@ class FT8TransmitPeriodRepository:
         with sqlite3.connect(self._path) as db:
             rows = db.execute("""SELECT p.qso_id,p.emission_index,p.started_at_utc,
                 p.ended_at_utc,p.configured_power_watts,p.power_readback_verified,
-                p.frequency_hz,p.transmitted
+                p.frequency_hz,p.transmitted,p.transmit_audio_offset_hz
                 FROM ft8_transmit_period p LEFT JOIN ft8_transmit_period_delivery d
                   ON p.qso_id=d.qso_id AND p.emission_index=d.emission_index
                 WHERE d.qso_id IS NULL
                 ORDER BY p.started_at_utc,p.qso_id,p.emission_index LIMIT ?""",(limit,)).fetchall()
         return tuple((UUID(qso),idx,FT8TransmitPeriodTelemetry(
             UUID(qso),datetime.fromisoformat(start),datetime.fromisoformat(end),
-            power,bool(verified),frequency,bool(transmitted)))
-            for qso,idx,start,end,power,verified,frequency,transmitted in rows)
+            power,bool(verified),frequency,bool(transmitted),offset))
+            for qso,idx,start,end,power,verified,frequency,transmitted,offset in rows)
 
     def acknowledge(self, qso_id: UUID, emission_index: int) -> None:
         """Only call after Forge confirms durable acceptance or identical replay."""

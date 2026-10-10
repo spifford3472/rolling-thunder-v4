@@ -191,9 +191,12 @@ class ForgeContactSyncApiApplication:
             if type(index) is not int or index < 1:
                 raise ValueError("invalid emission index")
             value = obj["record"]
-            if not isinstance(value, dict) or set(value) != {
+            if not isinstance(value, dict) or not {
                 "qso_id","started_at_utc","ended_at_utc","configured_power_watts",
                 "power_readback_verified","frequency_hz","transmitted"
+            } <= set(value) or set(value) - {
+                "qso_id","started_at_utc","ended_at_utc","configured_power_watts",
+                "power_readback_verified","frequency_hz","transmitted","transmit_audio_offset_hz"
             }:
                 raise ValueError("invalid transmission payload")
             if type(value["power_readback_verified"]) is not bool or type(value["transmitted"]) is not bool:
@@ -204,11 +207,14 @@ class ForgeContactSyncApiApplication:
             freq = value["frequency_hz"]
             if type(freq) is not int or not 1_000_000 <= freq <= 300_000_000:
                 raise ValueError("invalid frequency")
+            offset = value.get("transmit_audio_offset_hz")
+            if offset is not None and (type(offset) is not int or not 200 <= offset <= 3500):
+                raise ValueError("invalid transmit audio offset")
             from datetime import datetime
             record = FT8TransmitPeriodTelemetry(
                 UUID(value["qso_id"]), datetime.fromisoformat(value["started_at_utc"]),
                 datetime.fromisoformat(value["ended_at_utc"]), power,
-                value["power_readback_verified"], freq, value["transmitted"]
+                value["power_readback_verified"], freq, value["transmitted"], offset
             )
             key = self._header_value(headers, "Idempotency-Key")
             if key != f"{qso_id}:{index}" or qso_id != record.qso_id:

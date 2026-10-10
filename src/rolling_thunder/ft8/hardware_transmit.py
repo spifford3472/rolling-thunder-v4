@@ -44,6 +44,7 @@ class FT8TransmitPeriodTelemetry:
     power_readback_verified: bool
     frequency_hz: int
     transmitted: bool
+    transmit_audio_offset_hz: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,6 +363,7 @@ class BoundedFT8HardwareTransmitExecutor:
                         power_readback_verified=power_readback_verified,
                         frequency_hz=expected_radio_frequency_hz,
                         transmitted=True,
+                        transmit_audio_offset_hz=waveform.base_frequency_hz,
                     )
                     if intent_id is not None and self._intent_completed is not None:
                         self._intent_completed(intent_id, record)

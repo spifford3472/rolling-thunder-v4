@@ -32,6 +32,8 @@ class ForgeFT8PeriodRepository:
                 transmitted INTEGER NOT NULL,
                 PRIMARY KEY(qso_id, emission_index)
             )""")
+            if not any(row[1] == "transmit_audio_offset_hz" for row in db.execute("PRAGMA table_info(forge_ft8_transmit_period)")):
+                db.execute("ALTER TABLE forge_ft8_transmit_period ADD COLUMN transmit_audio_offset_hz INTEGER")
             db.execute(
                 "CREATE INDEX IF NOT EXISTS forge_ft8_transmit_period_time "
                 "ON forge_ft8_transmit_period(started_at_utc, frequency_hz)"
@@ -52,12 +54,16 @@ class ForgeFT8PeriodRepository:
             raise ValueError("end timestamp precedes start")
         if record.power_readback_verified != (record.configured_power_watts is not None):
             raise ValueError("configured power provenance conflict")
+        if record.transmit_audio_offset_hz is not None and not 200 <= record.transmit_audio_offset_hz <= 3500:
+            raise ValueError("invalid transmit audio offset")
         payload = {
             **asdict(record),
             "qso_id": str(record.qso_id),
             "started_at_utc": record.started_at_utc.isoformat(),
             "ended_at_utc": record.ended_at_utc.isoformat(),
         }
+        if record.transmit_audio_offset_hz is None:
+            payload.pop("transmit_audio_offset_hz")  # preserve legacy replay digests
         digest = hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
@@ -73,7 +79,7 @@ class ForgeFT8PeriodRepository:
                     raise ForgeFT8PeriodConflict("emission replay changed immutable telemetry")
                 return False
             db.execute(
-                "INSERT INTO forge_ft8_transmit_period VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO forge_ft8_transmit_period (qso_id,emission_index,payload_sha256,started_at_utc,ended_at_utc,frequency_hz,configured_power_watts,power_readback_verified,transmitted,transmit_audio_offset_hz) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
                     str(qso_id), emission_index, digest,
                     record.started_at_utc.isoformat(),
@@ -81,7 +87,7 @@ class ForgeFT8PeriodRepository:
                     record.frequency_hz,
                     record.configured_power_watts,
                     int(record.power_readback_verified),
-                    int(record.transmitted),
+                    int(record.transmitted), record.transmit_audio_offset_hz,
                 ),
             )
             return True

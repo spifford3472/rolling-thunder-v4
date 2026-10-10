@@ -61,3 +61,16 @@ def test_complete_intent_atomically_persists_matching_emission(tmp_path):
     with pytest.raises(ValueError, match='already completed'):
         repo.complete_intent(intent, record)
     assert len(repo.for_qso(qso)) == 1
+
+
+def test_transmit_offset_survives_pi_restart_and_pending_delivery(tmp_path):
+    db = tmp_path / 'pi.sqlite'
+    repo = FT8TransmitPeriodRepository(db)
+    qso, intent = uuid4(), uuid4()
+    now = datetime(2026, 10, 10, 12, tzinfo=UTC)
+    record = FT8TransmitPeriodTelemetry(qso, now, now + timedelta(seconds=12), 20, True, 14074000, True, 1500)
+    repo.begin_intent(intent, qso, 14074000, 20)
+    repo.complete_intent(intent, record)
+    reopened = FT8TransmitPeriodRepository(db)
+    assert reopened.for_qso(qso) == (record,)
+    assert reopened.pending()[0][2] == record

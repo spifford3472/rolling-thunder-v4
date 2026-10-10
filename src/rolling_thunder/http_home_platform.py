@@ -192,6 +192,8 @@ class HttpHomePlatformClient(HomePlatformClient):
         from dataclasses import asdict
 
         obj = asdict(record)
+        if record.transmit_audio_offset_hz is None:
+            obj.pop("transmit_audio_offset_hz")
         obj["qso_id"] = str(record.qso_id)
         obj["started_at_utc"] = record.started_at_utc.isoformat()
         obj["ended_at_utc"] = record.ended_at_utc.isoformat()
