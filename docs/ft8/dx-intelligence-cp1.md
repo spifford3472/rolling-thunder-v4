@@ -38,3 +38,22 @@ coverage, missingness and weighting must be validated before use.
 No forecast is consulted by `rank_cqs`, and no automatic radio power
 adjustment follows from these extension contracts. An absent, stale or
 temporarily unreachable feed must never force a closed-band determination.
+
+## Async ranking cache checkpoint (not wired to live CQ browser)
+
+`FT8RankingCache` accepts a caller-owned executor and callable. Missing
+stations return immediately as `pending`, display as **NEW** above ranked
+entries, and are never hidden due to a 1-second backend timeout. The UI
+should render pending feedback promptly; it must not block for that second.
+Cached station rankings have a 30-minute monotonic TTL, scoped by callsign,
+band, local grid, and remote grid. Expired entries remain visible with their
+previous score while refreshing in the background (stale-while-revalidate).
+Worker failure leaves unranked stations visible and never blocks FT8 receive.
+
+Ranking updates are advisory and must not move the highlighted/selected
+station under an encoder press or during a QSO. The eventual UI consumer
+must freeze browse ordering during active selection, coalesce refreshes,
+and avoid oscillating rows. Cache currently has no disk persistence, no
+worker scheduling/timeout policy, and no live UI integration. Future work
+should introduce bounded retry backoff on provider outages, bounded worker
+queue, maximum entries/eviction and clear source-data age semantics.

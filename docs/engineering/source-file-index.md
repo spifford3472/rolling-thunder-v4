@@ -400,3 +400,4 @@ presentation adapters consume its immutable classification only.
 
 Consumers and ownership remain unchanged.
 - `src/rolling_thunder/ft8/propagation_inputs.py` — inert typed future VOACAP/space-weather forecast metadata slots; no provider or FT8 scoring integration.
+- `src/rolling_thunder/ft8/ranking_cache.py` — standalone nonblocking FT8 CQ ranking cache with 30-minute TTL, stale-while-revalidate and pending-first presentation order; no runtime integration.
