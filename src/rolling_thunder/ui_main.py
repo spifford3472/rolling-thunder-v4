@@ -47,7 +47,6 @@ from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
-from rolling_thunder.ft8.ptt_alarm_audio import PttKlaxon
 from rolling_thunder.ft8.status import operator_ft8_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import (
@@ -506,8 +505,6 @@ def run_dashboard(
         bg="#148137", fg="#ffffff", font=("DejaVu Sans", 26, "bold"),
         wraplength=1100, justify="center",
     ).pack(padx=18, pady=22)
-    ptt_klaxon = PttKlaxon(runtime.ft8_ptt_alarm)
-    ptt_klaxon.start()
     root.grid_columnconfigure(0, weight=2, uniform="dashboard")
     root.grid_columnconfigure(1, weight=3, uniform="dashboard")
     root.grid_rowconfigure(0, weight=1)
@@ -1784,7 +1781,6 @@ def run_dashboard(
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:
-        ptt_klaxon.stop()
         control_close_error = close_control_source(control_source)
         if control_close_error is not None:
             print(f"Rolling Thunder physical controls shutdown error: {control_close_error}")
