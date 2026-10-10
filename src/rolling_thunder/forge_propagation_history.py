@@ -15,8 +15,9 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from rolling_thunder.domain import Contact, DomainModel
+from rolling_thunder.forge_psk_normalized_history import create_schema, normalize_summary
 
-PROPAGATION_HISTORY_SCHEMA_VERSION = 3
+PROPAGATION_HISTORY_SCHEMA_VERSION = 4
 
 
 class PropagationHistoryStorageError(RuntimeError):
@@ -572,6 +573,20 @@ class ForgePropagationHistoryRepository:
                             summary.last_error,
                         ),
                     )
+                    if summary.status in (
+                        PskReporterCollectionStatus.QUERIED_WITH_REPORTS,
+                        PskReporterCollectionStatus.QUERIED_ZERO_REPORTS,
+                    ):
+                        reports = (summary.raw_response_json or {}).get("matched_reports", [])
+                        if not isinstance(reports, list):
+                            raise ValueError("matched_reports must be a list")
+                        normalize_summary(
+                            connection,
+                            contact_id=str(summary.contact_id),
+                            query_id=str(query.query_id),
+                            matched_reports=reports,
+                            raw_xml=query.raw_xml,
+                        )
                 connection.commit()
         except sqlite3.Error as error:
             raise PropagationHistoryStorageError(
@@ -945,6 +960,13 @@ class ForgePropagationHistoryRepository:
                         "WHERE singleton_id = 1"
                     )
                     version = (3,)
+                if version == (3,):
+                    create_schema(connection)
+                    connection.execute(
+                        "UPDATE propagation_schema_metadata SET schema_version = 4 "
+                        "WHERE singleton_id = 1"
+                    )
+                    version = (4,)
                 if version != (PROPAGATION_HISTORY_SCHEMA_VERSION,):
                     raise PropagationHistoryStorageError("unsupported propagation schema version")
                 connection.commit()
