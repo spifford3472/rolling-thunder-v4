@@ -57,3 +57,16 @@ and avoid oscillating rows. Cache currently has no disk persistence, no
 worker scheduling/timeout policy, and no live UI integration. Future work
 should introduce bounded retry backoff on provider outages, bounded worker
 queue, maximum entries/eviction and clear source-data age semantics.
+
+## CP2.3 browser ordering boundary
+
+The panel controller now accepts an optional, pure activity-order callback after
+worked-today and other eligibility filters have removed suppressed CQs. No
+ranking can reintroduce a filtered successful QSO. The controller holds the
+current callsign sequence while the operator highlights a station or a QSO is
+active. New stations remain available, appended until the selection clears.
+
+This is a guarded **integration seam**, not yet an enabled ranking UI:
+production composition does not yet supply the cache-backed callback.
+The existing yellow/white/gray/red/blue status colors, green POTA tree,
+friend markers, selected-row highlight, and QSO workflows are untouched.
