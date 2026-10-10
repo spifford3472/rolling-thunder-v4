@@ -16,6 +16,7 @@ This guide describes the implemented repository rather than an aspirational arch
 - `source-file-index.md` — exhaustive catalog of all Python source modules.
 - `test-index.md` — test ownership and validation/live-acceptance guidance.
 - `AGENTS.md` — maintenance rules for this documentation.
+- `codex-deployment-workflow.md` — Codex branch discipline, explicit merge/deploy authorization and guarded release paths.
 
 ## How to use this guide
 

@@ -36,9 +36,9 @@ Before beginning new work:
 
 Never push directly to `main`.
 
-Never merge without explicit Geoffrey approval.
+Never merge without explicit repository-owner approval.
 
-Never deploy without explicit Geoffrey approval.
+Never deploy without explicit repository-owner approval.
 
 Merge approval and deployment approval are separate decisions.
 
@@ -57,7 +57,7 @@ Allowed components:
 The target SHA must be an exact 40-character commit available on a pushed
 origin branch.
 
-The wrapper performs component-specific validation, database backup, package or
+The wrapper is expected to perform component-specific validation, database backup, package or
 checkout installation, service restart, health validation, deployment-state
 tracking, and rollback handling.
 
@@ -108,7 +108,7 @@ The spots service owns the persistent DX Summit IRC connection.
 
 Do not restart, reinstall, or otherwise disturb spots while deploying another
 Forge component. Do not deploy spots unless the assigned change actually
-requires a spots deployment or Geoffrey explicitly authorizes it.
+requires a spots deployment or the repository owner explicitly authorizes it.
 
 ## anvilmobile Deployment
 
@@ -122,11 +122,11 @@ Approved Forge-to-anvilmobile command:
 
 The dedicated SSH key is constrained by a forced command on anvilmobile.
 
-Do not use Geoffrey's ordinary SSH account to bypass the deployment gate.
+Do not use the operator's ordinary SSH account to bypass the deployment gate.
 
 Do not manually copy code into the anvilmobile production checkout.
 
-The anvilmobile deployment wrapper validates the requested pushed SHA, backs up
+The anvilmobile deployment wrapper is expected to validate the requested pushed SHA, backs up
 the production database, checks out the exact requested commit, refreshes the
 editable install, runs database initialization/migrations, verifies database
 integrity, restarts the Rolling Thunder service, and performs rollback on
@@ -165,3 +165,14 @@ Prefer, in order where appropriate:
 
 Existing CAT/PTT/transmit interlocks must fail closed and must not be weakened
 as part of unrelated work.
+
+## Current component limitations
+
+The generic Forge wrapper documents contact-sync, callsign-info and spots only.
+Newer PSK Reporter, propagation and FT8 intelligence services have separate
+release gates and must **not** be deployed using an undocumented component
+argument or inferred wrapper support. Check the deployed wrapper and the
+service-specific rollout instructions before any authorized cutover.
+
+An approved merge is not approval to deploy. A CI pass does not replace
+operator acceptance or authorize live RF.

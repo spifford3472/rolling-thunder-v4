@@ -203,7 +203,7 @@ anvilmobile production checkout.
 ### Merge approval
 
 Never merge a pull request or feature branch without explicit repository-owner
-approval. Geoffrey normally expresses this as an explicit `merge` instruction.
+approval. The repository owner may authorize merge explicitly in natural language, including approving a named PR after green CI.
 
 Approval to implement, commit, push, create a PR, continue testing, or deploy
 does not imply approval to merge.
@@ -211,7 +211,7 @@ does not imply approval to merge.
 ### Deployment approval
 
 Never deploy to Forge or anvilmobile without explicit deployment approval from
-Geoffrey.
+the repository owner.
 
 Approval to implement, commit, push, create a PR, or merge does not imply
 approval to deploy.
