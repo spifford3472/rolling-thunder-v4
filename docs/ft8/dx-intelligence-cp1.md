@@ -138,6 +138,19 @@ synchronous network request. The client is not yet configured or called at
 runtime; evidence-to-quality calibration and authenticated listener rollout
 remain distinct gated checkpoints. No transmit behavior changes.
 
+## CP2.4 standalone loopback evidence listener (disabled by default)
+
+`forge_psk_evidence_server.py` provides an explicit opt-in loopback-only
+HTTP adapter for the independent evidence API. It does not modify or restart
+the existing Forge PSK worker. Before starting, the server verifies that the
+operator-supplied normalized history database exists and includes the
+`psk_reception` columns needed for directional observations. The PSK worker's
+`history.sqlite3` is **not assumed** to be this database; its schema and
+coverage must be audited independently. Missing/incorrect data aborts startup.
+The separate token is loaded from an environment variable. No systemd unit,
+listener activation, external address binding or production config is included.
+Pi client remains unconfigured, and the observation-to-ranking evidence
+calibration remains pending. No RF/power changes.
 ## CP2.4 normalized history coverage audit
 
 `forge_psk_coverage_audit.py` is an operator-run read-only diagnostic: it
