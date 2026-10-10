@@ -15,9 +15,13 @@ from uuid import UUID
 from pydantic import Field, field_validator
 
 from rolling_thunder.domain import Contact, DomainModel
-from rolling_thunder.forge_psk_normalized_history import create_schema, normalize_summary
+from rolling_thunder.forge_psk_normalized_history import (
+    create_schema,
+    normalize_provider_query,
+    normalize_summary,
+)
 
-PROPAGATION_HISTORY_SCHEMA_VERSION = 4
+PROPAGATION_HISTORY_SCHEMA_VERSION = 5
 
 
 class PropagationHistoryStorageError(RuntimeError):
@@ -544,6 +548,13 @@ class ForgePropagationHistoryRepository:
                         query.error,
                     ),
                 )
+                if query.status == "succeeded" and query.raw_xml is not None:
+                    normalize_provider_query(
+                        connection,
+                        query_id=str(query.query_id),
+                        raw_xml=query.raw_xml,
+                        skipped_expected=query.skipped_record_count,
+                    )
                 for summary in summaries:
                     connection.execute(
                         """
@@ -967,6 +978,13 @@ class ForgePropagationHistoryRepository:
                         "WHERE singleton_id = 1"
                     )
                     version = (4,)
+                if version == (4,):
+                    create_schema(connection)
+                    connection.execute(
+                        "UPDATE propagation_schema_metadata SET schema_version = 5 "
+                        "WHERE singleton_id = 1"
+                    )
+                    version = (5,)
                 if version != (PROPAGATION_HISTORY_SCHEMA_VERSION,):
                     raise PropagationHistoryStorageError("unsupported propagation schema version")
                 connection.commit()

@@ -244,7 +244,7 @@ def test_queue_observation_is_read_only_and_reports_due_and_terminal_counts(
     assert repository.read(contact.contact_id).attempt_count == 0  # type: ignore[union-attr]
 
 
-def test_inbox_schema_v2_coexists_with_propagation_history_schema_v4(
+def test_inbox_schema_v2_coexists_with_propagation_history_schema_v5(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "propagation.sqlite3"
@@ -255,7 +255,7 @@ def test_inbox_schema_v2_coexists_with_propagation_history_schema_v4(
     with sqlite3.connect(database) as connection:
         assert connection.execute(
             "SELECT schema_version FROM propagation_schema_metadata"
-        ).fetchone() == (4,)
+        ).fetchone() == (5,)
         assert connection.execute(
             "SELECT schema_version FROM qso_ingestion_schema_metadata"
         ).fetchone() == (2,)
