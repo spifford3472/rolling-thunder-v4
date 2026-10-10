@@ -254,3 +254,21 @@ def test_dx_intelligence_recommendation_uses_rank_and_prefix_without_probability
     assert "TOP DL1ABC" in viewport.recommendation_text
     assert "MEDIUM CONFIDENCE" in viewport.recommendation_text
     assert "%" not in viewport.recommendation_text
+
+
+
+def test_ten_visible_cqs_and_overflow_indicators():
+    items = tuple(_activity(f"K{i}ABC") for i in range(12))
+    viewport = build_ft8_browser_viewport(
+        items, current_period=FT8Period(100), selected_callsign=None,
+    )
+    assert len(viewport.rows) == 10
+    assert viewport.hidden_above == 0
+    assert viewport.hidden_below == 2
+    selected = build_ft8_browser_viewport(
+        items, current_period=FT8Period(100), selected_callsign="K11ABC",
+    )
+    assert len(selected.rows) == 10
+    assert any(row.callsign == "K11ABC" and row.selected for row in selected.rows)
+    assert selected.hidden_above == 2
+    assert selected.hidden_below == 0

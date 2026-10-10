@@ -28,7 +28,7 @@ _MUTED = "#a8a8a8"
 class FT8Widgets:
     """Large, glance-readable CQ table for the in-vehicle display."""
 
-    def __init__(self, parent: tk.Misc, *, visible_rows: int = 5) -> None:
+    def __init__(self, parent: tk.Misc, *, visible_rows: int = 10) -> None:
         self.visible_rows = visible_rows
         self.frame = tk.Frame(parent, bg=_BACKGROUND)
         self.frame.grid_columnconfigure(0, weight=1)
@@ -37,16 +37,16 @@ class FT8Widgets:
         self.recommendation = tk.StringVar(value="DX INTELLIGENCE • WAITING FOR CQ")
         tk.Label(
             self.frame, textvariable=self.recommendation,
-            bg=_BORDER, fg=_YELLOW, font=("DejaVu Sans", 20, "bold"),
-            anchor="w", padx=12, pady=7,
+            bg=_BORDER, fg=_YELLOW, font=("DejaVu Sans", 30, "bold"),
+            anchor="w", padx=8, pady=2,
         ).grid(row=0, column=0, sticky="ew", pady=(0, 2))
         self.more_above = tk.StringVar(value="")
         tk.Label(
             self.frame,
             textvariable=self.more_above,
             bg=_BACKGROUND,
-            fg=_MUTED,
-            font=("DejaVu Sans", 18, "bold"),
+            fg=_WHITE,
+            font=("DejaVu Sans", 22, "bold"),
             anchor="center",
         ).grid(row=1, column=0, sticky="ew")
 
@@ -61,10 +61,10 @@ class FT8Widgets:
                 text=header_text,
                 bg=_BORDER,
                 fg=_WHITE,
-                font=("DejaVu Sans", 24, "bold"),
+                font=("DejaVu Sans", 20, "bold"),
                 anchor="center",
-                padx=4,
-                pady=5,
+                padx=3,
+                pady=2,
             ).grid(row=0, column=column, sticky="nsew")
 
         self.rows_frame = tk.Frame(self.frame, bg=_BACKGROUND)
@@ -83,7 +83,7 @@ class FT8Widgets:
                 highlightthickness=2,
                 highlightbackground=_BORDER,
             )
-            row.grid(row=index, column=0, sticky="ew", padx=2, pady=3)
+            row.grid(row=index, column=0, sticky="ew", padx=2, pady=1)
             values: list[tk.Label] = []
             for column, weight in enumerate((5, 3, 3, 3)):
                 row.grid_columnconfigure(column, weight=weight, uniform="ft8")
@@ -96,10 +96,10 @@ class FT8Widgets:
                         text="",
                         bg=_ROW_BACKGROUND,
                         fg=_POTA_GREEN,
-                        font=("DejaVu Sans", 24, "bold"),
+                        font=("DejaVu Sans", 22, "bold"),
                         anchor="center",
-                        padx=3,
-                        pady=7,
+                        padx=2,
+                        pady=2,
                     )
                     pota_label.grid(row=0, column=0, sticky="nsw")
                     row_label = tk.Label(
@@ -107,10 +107,10 @@ class FT8Widgets:
                         text="",
                         bg=_ROW_BACKGROUND,
                         fg=_WHITE,
-                        font=("DejaVu Sans", 27, "bold"),
+                        font=("DejaVu Sans", 22, "bold"),
                         anchor="w",
-                        padx=3,
-                        pady=7,
+                        padx=2,
+                        pady=2,
                     )
                     row_label.grid(row=0, column=2, sticky="nsew")
                     friend_label = tk.Label(call_cell, text="", bg=_ROW_BACKGROUND,
@@ -125,10 +125,10 @@ class FT8Widgets:
                         text="",
                         bg=_ROW_BACKGROUND,
                         fg=_WHITE,
-                        font=("DejaVu Sans", 27, "bold"),
+                        font=("DejaVu Sans", 22, "bold"),
                         anchor="center",
-                        padx=7,
-                        pady=7,
+                        padx=3,
+                        pady=2,
                     )
                     row_label.grid(row=0, column=column, sticky="nsew")
                 values.append(row_label)
@@ -141,8 +141,8 @@ class FT8Widgets:
             self.frame,
             textvariable=self.more_below,
             bg=_BACKGROUND,
-            fg=_MUTED,
-            font=("DejaVu Sans", 18, "bold"),
+            fg=_WHITE,
+            font=("DejaVu Sans", 22, "bold"),
             anchor="center",
         ).grid(row=4, column=0, sticky="ew")
 

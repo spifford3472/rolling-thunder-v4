@@ -117,7 +117,7 @@ def build_ft8_browser_viewport(
     *,
     current_period: FT8Period | None,
     selected_callsign: str | None,
-    visible_rows: int = 5,
+    visible_rows: int = 10,
     attempt_states: dict[str, FT8AttemptVisualState] | None = None,
     friends: frozenset[str] = frozenset(),
     pending_ranking_callsigns: frozenset[str] = frozenset(),
