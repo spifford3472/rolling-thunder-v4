@@ -56,7 +56,7 @@ def test_headers_are_explicit_and_mobile_columns_are_stable() -> None:
     )
 
     assert viewport.headers == FT8_BROWSER_HEADERS
-    assert viewport.headers == ("CALL", "SNR", "AUDIO", "GRID")
+    assert viewport.headers == ("CALL", "COUNTRY", "GRID", "REACH")
 
 
 def test_incoming_call_presentation_has_large_alert_content_and_explicit_controls() -> None:
@@ -240,3 +240,17 @@ def test_receive_diagnostic_separately_presents_all_and_cq_session_counts() -> N
     assert "DIAG RUN" in text
     assert "ALL 40/53" in text
     assert "CQ 12/17" in text
+
+
+def test_dx_intelligence_recommendation_uses_rank_and_prefix_without_probability():
+    from rolling_thunder.ft8.dx_ranking import RankedCQ
+    ranked = RankedCQ("DL1ABC", 67.5, 7000.0, "medium", "reachability unverified")
+    viewport = build_ft8_browser_viewport(
+        (_activity("DL1ABC"),), current_period=FT8Period(100),
+        selected_callsign="DL1ABC", rankings={"DL1ABC": ranked},
+    )
+    assert viewport.rows[0].country_text == "DEU"
+    assert viewport.rows[0].reach_text == "MEDIUM"
+    assert "TOP DL1ABC" in viewport.recommendation_text
+    assert "MEDIUM CONFIDENCE" in viewport.recommendation_text
+    assert "%" not in viewport.recommendation_text

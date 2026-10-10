@@ -32,8 +32,14 @@ class FT8Widgets:
         self.visible_rows = visible_rows
         self.frame = tk.Frame(parent, bg=_BACKGROUND)
         self.frame.grid_columnconfigure(0, weight=1)
-        self.frame.grid_rowconfigure(2, weight=1)
+        self.frame.grid_rowconfigure(3, weight=1)
 
+        self.recommendation = tk.StringVar(value="DX INTELLIGENCE • WAITING FOR CQ")
+        tk.Label(
+            self.frame, textvariable=self.recommendation,
+            bg=_BORDER, fg=_YELLOW, font=("DejaVu Sans", 20, "bold"),
+            anchor="w", padx=12, pady=7,
+        ).grid(row=0, column=0, sticky="ew", pady=(0, 2))
         self.more_above = tk.StringVar(value="")
         tk.Label(
             self.frame,
@@ -42,12 +48,12 @@ class FT8Widgets:
             fg=_MUTED,
             font=("DejaVu Sans", 18, "bold"),
             anchor="center",
-        ).grid(row=0, column=0, sticky="ew")
+        ).grid(row=1, column=0, sticky="ew")
 
         header = tk.Frame(self.frame, bg=_BORDER)
-        header.grid(row=1, column=0, sticky="ew", padx=2, pady=(0, 3))
+        header.grid(row=2, column=0, sticky="ew", padx=2, pady=(0, 3))
         for column, (header_text, weight) in enumerate(
-            (("CALL", 5), ("SNR", 2), ("AUDIO", 3), ("GRID", 3))
+            (("CALL", 5), ("COUNTRY", 3), ("GRID", 3), ("REACH", 3))
         ):
             header.grid_columnconfigure(column, weight=weight, uniform="ft8")
             tk.Label(
@@ -62,7 +68,7 @@ class FT8Widgets:
             ).grid(row=0, column=column, sticky="nsew")
 
         self.rows_frame = tk.Frame(self.frame, bg=_BACKGROUND)
-        self.rows_frame.grid(row=2, column=0, sticky="nsew")
+        self.rows_frame.grid(row=3, column=0, sticky="nsew")
         self.rows_frame.grid_columnconfigure(0, weight=1)
 
         self._row_frames: list[tk.Frame] = []
@@ -79,7 +85,7 @@ class FT8Widgets:
             )
             row.grid(row=index, column=0, sticky="ew", padx=2, pady=3)
             values: list[tk.Label] = []
-            for column, weight in enumerate((5, 2, 3, 3)):
+            for column, weight in enumerate((5, 3, 3, 3)):
                 row.grid_columnconfigure(column, weight=weight, uniform="ft8")
                 if column == 0:
                     call_cell = tk.Frame(row, bg=_ROW_BACKGROUND)
@@ -138,10 +144,10 @@ class FT8Widgets:
             fg=_MUTED,
             font=("DejaVu Sans", 18, "bold"),
             anchor="center",
-        ).grid(row=3, column=0, sticky="ew")
+        ).grid(row=4, column=0, sticky="ew")
 
         footer_frame = tk.Frame(self.frame, bg=_BACKGROUND)
-        footer_frame.grid(row=4, column=0, sticky="ew", pady=(4, 0))
+        footer_frame.grid(row=5, column=0, sticky="ew", pady=(4, 0))
         footer_frame.grid_columnconfigure(0, weight=1)
         self.footer = tk.StringVar(value="")
         tk.Label(
@@ -226,6 +232,7 @@ class FT8Widgets:
             self.incoming_frame.tkraise()
             return
         self.incoming_frame.grid_remove()
+        self.recommendation.set(viewport.recommendation_text)
         self.more_above.set("▲ MORE ▲" if viewport.hidden_above else "")
         self.more_below.set("▼ MORE ▼" if viewport.hidden_below else "")
 
@@ -260,7 +267,7 @@ class FT8Widgets:
 
             self._friend_labels[index].configure(text=row.friend_marker, bg=background)
 
-            texts = (row.call_text, row.snr_text, row.audio_text, row.grid_text)
+            texts = (row.call_text, row.country_text, row.grid_text, row.reach_text)
             for column, label in enumerate(self._row_labels[index]):
                 label.configure(
                     text=texts[column],
