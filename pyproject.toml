@@ -39,7 +39,7 @@ development = [
     "pre-commit",
     "pytest",
     "pytest-asyncio",
-    "ruff",
+    "ruff==0.16.10",
     "typing-extensions>=4.15; python_version < '3.13'",
     "pyshp>=2.3,<3",
 ]
