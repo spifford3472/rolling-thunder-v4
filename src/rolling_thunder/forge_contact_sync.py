@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -12,7 +13,8 @@ from threading import Lock
 from typing import Protocol
 from uuid import UUID
 
-from rolling_thunder.domain import Contact
+from rolling_thunder.domain import Contact, ContactSource, RadioMode
+from rolling_thunder.forge_contact_snapshots import ForgeContactSnapshotRepository
 from rolling_thunder.home_platform import (
     ContactUploadDisposition,
     ContactUploadResult,
@@ -292,10 +294,12 @@ class ForgeContactSyncService:
         wavelog: WavelogContactSync,
         *,
         clock: Clock = _utc_now,
+        contact_snapshots: ForgeContactSnapshotRepository | None = None,
     ) -> None:
         self._repository = repository
         self._wavelog = wavelog
         self._clock = clock
+        self._contact_snapshots = contact_snapshots
         self._lock = Lock()
 
     def health(self) -> HomePlatformState:
@@ -329,6 +333,7 @@ class ForgeContactSyncService:
             )
             received_at = self._timestamp()
             if claim is ForgeContactClaimDisposition.ALREADY_SYNCHRONIZED:
+                self._snapshot_after_sync(contact)
                 return ContactUploadResult(
                     contact_id=contact.contact_id,
                     disposition=ContactUploadDisposition.ALREADY_EXISTS,
@@ -341,6 +346,7 @@ class ForgeContactSyncService:
                 synchronized_at=received_at,
                 remote_disposition=remote_disposition,
             )
+            self._snapshot_after_sync(contact)
             disposition = (
                 ContactUploadDisposition.ALREADY_EXISTS
                 if remote_disposition is WavelogUploadDisposition.DUPLICATE
@@ -350,6 +356,23 @@ class ForgeContactSyncService:
                 contact_id=contact.contact_id,
                 disposition=disposition,
                 received_at=received_at,
+            )
+
+    def _snapshot_after_sync(self, contact: Contact) -> None:
+        """Secondary analytics must never affect the primary logging result."""
+        if (
+            self._contact_snapshots is None
+            or contact.mode is not RadioMode.FT8
+            or contact.source is not ContactSource.FT8
+        ):
+            return
+        try:
+            self._contact_snapshots.record(contact)
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Contact analytics snapshot failed for %s",
+                contact.contact_id,
+                exc_info=True,
             )
 
     def _timestamp(self) -> datetime:
