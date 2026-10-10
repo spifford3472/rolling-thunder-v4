@@ -1,0 +1,22 @@
+[Unit]
+Description=Rolling Thunder Forge FT8-to-PSK offline queue feeder
+After=local-fs.target
+ConditionPathExists=/var/lib/rolling-thunder/forge-contact-sync.db
+ConditionPathExists=/var/lib/rolling-thunder/forge-contact-sync-contact-snapshots.db
+ConditionPathExists=/var/lib/rolling-thunder-forge-pskreporter/orchestration.sqlite3
+
+[Service]
+Type=oneshot
+User=rolling-thunder-pskreporter
+Group=rolling-thunder-pskreporter
+WorkingDirectory=/opt/rolling-thunder-forge-pskreporter/current
+ExecStart=/opt/rolling-thunder-forge-pskreporter/current/.venv/bin/python -m rolling_thunder.forge_psk_autoqueue --sync-db /var/lib/rolling-thunder/forge-contact-sync.db --snapshots-db /var/lib/rolling-thunder/forge-contact-sync-contact-snapshots.db --queue-db /var/lib/rolling-thunder-forge-pskreporter/orchestration.sqlite3 --batch-size 50 --enqueue
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/rolling-thunder-forge-pskreporter
+UMask=0027
+TimeoutStartSec=30
