@@ -70,3 +70,20 @@ This is a guarded **integration seam**, not yet an enabled ranking UI:
 production composition does not yet supply the cache-backed callback.
 The existing yellow/white/gray/red/blue status colors, green POTA tree,
 friend markers, selected-row highlight, and QSO workflows are untouched.
+
+## CP2.3 local-first runtime activation
+
+FT8 runtime now constructs a local-only, bounded-thread FT8 browser ranker.
+The existing CQ suppression filter runs first; the panel's ordering callback
+scores callsigns and grids on a background executor. Unranked stations display
+`NEW` in their **existing callsign color**, sorted ahead of scored stations;
+the existing green POTA tree and friends are unchanged. A station remains
+selectable even when no score exists. Cache freshness is 30 minutes, separated
+by callsign, band, local/remote grid; mobile GPS Maidenhead is used when
+available, otherwise configured operator home grid is used.
+
+This is *local DX-opportunity ordering*, NOT evidence-backed reachability or a
+calibrated QSO probability. No Forge provider is queried. The operator's
+highlight locks ordering; the FT8 authorization/QSO/RF sequence is unchanged.
+The scoring executor closes without waiting on shutdown. Future pre-contact
+PSK enrichment must use bounded/coalesced provider retries before activation.
