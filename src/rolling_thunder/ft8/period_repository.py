@@ -8,6 +8,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 from uuid import UUID
 
 from rolling_thunder.ft8.hardware_transmit import FT8TransmitPeriodTelemetry
@@ -27,6 +28,12 @@ class FT8TransmitPeriodRepository:
                 frequency_hz INTEGER NOT NULL,
                 transmitted INTEGER NOT NULL CHECK(transmitted IN (0,1)),
                 PRIMARY KEY(qso_id, emission_index)
+            )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS ft8_transmit_period_delivery (
+                qso_id TEXT NOT NULL, emission_index INTEGER NOT NULL,
+                synchronized_at_utc TEXT NOT NULL,
+                PRIMARY KEY (qso_id, emission_index),
+                FOREIGN KEY(qso_id,emission_index) REFERENCES ft8_transmit_period(qso_id,emission_index)
             )""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_ft8_transmit_period_time ON ft8_transmit_period(started_at_utc, frequency_hz)")
 
@@ -61,3 +68,62 @@ class FT8TransmitPeriodRepository:
             qso_id, datetime.fromisoformat(start),datetime.fromisoformat(end),
             power,bool(verified),freq,bool(transmitted)
         ) for start,end,power,verified,freq,transmitted in rows)
+
+    def pending(self, *, limit: int = 50) -> tuple[tuple[UUID, int, FT8TransmitPeriodTelemetry], ...]:
+        """Read unacknowledged periods in stable order; never delete source evidence."""
+        if not 1 <= limit <= 500:
+            raise ValueError("limit out of bounds")
+        with sqlite3.connect(self._path) as db:
+            rows = db.execute("""SELECT p.qso_id,p.emission_index,p.started_at_utc,
+                p.ended_at_utc,p.configured_power_watts,p.power_readback_verified,
+                p.frequency_hz,p.transmitted
+                FROM ft8_transmit_period p LEFT JOIN ft8_transmit_period_delivery d
+                  ON p.qso_id=d.qso_id AND p.emission_index=d.emission_index
+                WHERE d.qso_id IS NULL
+                ORDER BY p.started_at_utc,p.qso_id,p.emission_index LIMIT ?""",(limit,)).fetchall()
+        return tuple((UUID(qso),idx,FT8TransmitPeriodTelemetry(
+            UUID(qso),datetime.fromisoformat(start),datetime.fromisoformat(end),
+            power,bool(verified),frequency,bool(transmitted)))
+            for qso,idx,start,end,power,verified,frequency,transmitted in rows)
+
+    def acknowledge(self, qso_id: UUID, emission_index: int) -> None:
+        """Only call after Forge confirms durable acceptance or identical replay."""
+        with sqlite3.connect(self._path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            exists=db.execute(
+                "SELECT 1 FROM ft8_transmit_period WHERE qso_id=? AND emission_index=?",
+                (str(qso_id), emission_index)).fetchone()
+            if exists is None:
+                raise ValueError("cannot acknowledge missing emission")
+            db.execute("""INSERT OR IGNORE INTO ft8_transmit_period_delivery
+                VALUES (?,?,?)""",(str(qso_id),emission_index,datetime.now(UTC).isoformat()))
+
+
+
+class FT8PeriodUploadClient(Protocol):
+    def upload_ft8_period(
+        self, qso_id: UUID, emission_index: int, record: FT8TransmitPeriodTelemetry
+    ) -> None: ...
+
+
+class FT8PeriodSyncService:
+    """Retry pending emissions without deleting local records or forging acks."""
+
+    def __init__(self, repository: FT8TransmitPeriodRepository, client: FT8PeriodUploadClient) -> None:
+        self._repository = repository
+        self._client = client
+
+    def synchronize_once(self, *, limit: int = 25) -> tuple[int, int]:
+        from rolling_thunder.home_platform import HomePlatformError
+
+        sent = failed = 0
+        for qso_id, index, record in self._repository.pending(limit=limit):
+            try:
+                upload = self._client.upload_ft8_period
+                upload(qso_id, index, record)
+                self._repository.acknowledge(qso_id, index)
+                sent += 1
+            except (HomePlatformError, OSError, sqlite3.Error):
+                failed += 1
+                # Fail closed: next scheduled cycle retries with identical identity.
+        return sent, failed

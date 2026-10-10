@@ -12,6 +12,7 @@ from pydantic import Field
 from rolling_thunder.domain import DomainModel
 from rolling_thunder.ft8.performance import FT8PerformanceAttempt, FT8PerformanceUploadResult
 from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
+from rolling_thunder.ft8.period_repository import FT8PeriodSyncService
 from rolling_thunder.home_platform import HomePlatformError
 from rolling_thunder.radio_polling import PollScheduler, ScheduledPoll
 
@@ -57,6 +58,7 @@ class FT8PerformanceSyncService:
         retry_initial_delay_s: float = 5.0,
         retry_max_delay_s: float = 300.0,
         clock: Clock = _utc_now,
+        period_sync: FT8PeriodSyncService | None = None,
     ) -> None:
         if interval_s <= 0:
             raise ValueError("FT8 performance synchronization interval must be positive")
@@ -75,6 +77,7 @@ class FT8PerformanceSyncService:
         self._retry_initial_delay_s = retry_initial_delay_s
         self._retry_max_delay_s = retry_max_delay_s
         self._clock = clock
+        self._period_sync = period_sync
         self._scheduled_poll: ScheduledPoll | None = None
         self._sync_lock = Lock()
         self._latest_result = FT8PerformanceSyncResult(
@@ -133,6 +136,12 @@ class FT8PerformanceSyncService:
             attempts = self._repository.list_ready(now, limit=self._batch_size)
         except Exception as error:  # noqa: BLE001 - publish repository health failure
             return self._record_run_failure(error, attempted_at=now)
+        if self._period_sync is not None:
+            try:
+                self._period_sync.synchronize_once(limit=self._batch_size)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("FT8 transmission period sync failed")
         attempted = 0
         synchronized = 0
         failed = 0

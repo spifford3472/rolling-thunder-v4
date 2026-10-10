@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +24,8 @@ from rolling_thunder.forge_ft8_performance import (
     ForgeFT8PerformanceService,
     ForgeFT8PerformanceStorageError,
 )
+from rolling_thunder.forge_ft8_periods import ForgeFT8PeriodConflict, ForgeFT8PeriodRepository
+from rolling_thunder.ft8.hardware_transmit import FT8TransmitPeriodTelemetry
 from rolling_thunder.ft8.performance import FT8PerformanceAttempt
 from rolling_thunder.wavelog import WavelogError
 
@@ -48,9 +51,11 @@ class ForgeContactSyncApiApplication:
         service: ForgeContactSyncService,
         *,
         ft8_performance_service: ForgeFT8PerformanceService | None = None,
+        ft8_period_repository: ForgeFT8PeriodRepository | None = None,
     ) -> None:
         self._service = service
         self._ft8_performance_service = ft8_performance_service
+        self._ft8_period_repository = ft8_period_repository
 
     def handle(
         self,
@@ -69,6 +74,9 @@ class ForgeContactSyncApiApplication:
                 return self._error(405, "method_not_allowed", "Only GET is supported.")
             state = self._service.health()
             return self._json(200, state.model_dump(mode="json"))
+
+        if normalized_target == "/ft8-period":
+            return self._handle_ft8_period(normalized_method, request_headers, body)
 
         if normalized_target == "/ft8-performance":
             return self._handle_ft8_performance(
@@ -153,6 +161,60 @@ class ForgeContactSyncApiApplication:
             return self._error(503, "wavelog_unavailable", str(error))
 
         return self._json(200, result.model_dump(mode="json"))
+
+    def _handle_ft8_period(
+        self, method: str, headers: Mapping[str, str], body: bytes | None
+    ) -> ForgeContactHttpResponse:
+        """Strict private-network ingestion; deploy behind the existing access boundary."""
+        repo = self._ft8_period_repository
+        if repo is None:
+            return self._error(503, "ft8_period_unavailable", "Emission repository unavailable")
+        if method != "POST":
+            return self._error(405, "method_not_allowed", "Only POST is supported")
+        content_type = self._header_value(headers, "Content-Type")
+        if content_type is None or content_type.split(";", 1)[0].strip().lower() != "application/json":
+            return self._error(415, "unsupported_media_type", "JSON required")
+        if body is None or not body or len(body) > MAX_CONTACT_PAYLOAD_BYTES:
+            return self._error(400, "invalid_body", "Valid bounded JSON body required")
+        try:
+            obj = loads(body.decode("utf-8"))
+            if not isinstance(obj, dict) or set(obj) != {"qso_id","emission_index","record"}:
+                raise ValueError("invalid envelope")
+            qso_id = UUID(obj["qso_id"])
+            index = obj["emission_index"]
+            if type(index) is not int or index < 1:
+                raise ValueError("invalid emission index")
+            value = obj["record"]
+            if not isinstance(value, dict) or set(value) != {
+                "qso_id","started_at_utc","ended_at_utc","configured_power_watts",
+                "power_readback_verified","frequency_hz","transmitted"
+            }:
+                raise ValueError("invalid transmission payload")
+            if type(value["power_readback_verified"]) is not bool or type(value["transmitted"]) is not bool:
+                raise ValueError("invalid flags")
+            power = value["configured_power_watts"]
+            if power is not None and (type(power) is not int or not 5 <= power <= 100):
+                raise ValueError("invalid power setting")
+            freq = value["frequency_hz"]
+            if type(freq) is not int or not 1_000_000 <= freq <= 300_000_000:
+                raise ValueError("invalid frequency")
+            from datetime import datetime
+            record = FT8TransmitPeriodTelemetry(
+                UUID(value["qso_id"]), datetime.fromisoformat(value["started_at_utc"]),
+                datetime.fromisoformat(value["ended_at_utc"]), power,
+                value["power_readback_verified"], freq, value["transmitted"]
+            )
+            key = self._header_value(headers, "Idempotency-Key")
+            if key != f"{qso_id}:{index}" or qso_id != record.qso_id:
+                return self._error(409, "idempotency_mismatch", "Emission identity mismatch")
+            inserted = repo.persist(qso_id, index, record)
+        except (ValueError, TypeError, KeyError, JSONDecodeError, UnicodeDecodeError):
+            return self._error(422, "invalid_ft8_period", "Malformed emission record")
+        except ForgeFT8PeriodConflict:
+            return self._error(409, "idempotency_conflict", "Changed emission replay")
+        except sqlite3.Error:
+            return self._error(503, "storage_unavailable", "Emission persistence failed")
+        return self._json(200, {"status": "accepted" if inserted else "already_exists"})
 
     def _handle_ft8_performance(
         self,
@@ -330,7 +392,7 @@ def make_forge_contact_request_handler(
         def _dispatch(self) -> None:
             body: bytes | None = None
             upload_path = self.path.split("?", 1)[0].rstrip("/")
-            if self.command == "POST" and upload_path in {"/contacts", "/ft8-performance"}:
+            if self.command == "POST" and upload_path in {"/contacts", "/ft8-performance", "/ft8-period"}:
                 body_or_error = self._read_upload_body(upload_path)
                 if isinstance(body_or_error, ForgeContactHttpResponse):
                     self._send_response(body_or_error)

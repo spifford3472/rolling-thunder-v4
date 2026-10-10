@@ -34,6 +34,7 @@ from rolling_thunder.forge_ft8_performance import (
     ForgeFT8PerformanceService,
     ForgeFT8PerformanceStorageError,
 )
+from rolling_thunder.forge_ft8_periods import ForgeFT8PeriodRepository
 from rolling_thunder.wavelog import WavelogClient
 
 DEFAULT_CONFIG_PATH = Path("config/forge-contact-sync.yaml")
@@ -114,6 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         application = ForgeContactSyncApiApplication(
             service,
             ft8_performance_service=ft8_performance_service,
+            ft8_period_repository=ForgeFT8PeriodRepository(config.storage.database_path),
         )
         server = ForgeContactHttpServer(
             config.server.bind_host,

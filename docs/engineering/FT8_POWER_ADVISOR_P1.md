@@ -21,3 +21,11 @@ For physical FT8 QSO transmissions the executor now reads configured CAT power b
 ## P1.3 second slice — Forge persistence and correlation primitives
 
 The independent `ForgeFT8PeriodRepository` stores individually sequenced emission records, returning an idempotent replay acknowledgement and rejecting changed replays. This is a storage contract and is **not yet connected** to the Forge HTTP endpoint or the Pi sync schedule. The read-only time/frequency attribution function requires an explicitly dial-aligned reception frequency, a unique bounded time match and verified CAT power. Real PSK Reporter records commonly report RF signal frequency rather than dial frequency, so frequency normalization and uncertainty analysis are required before production association. No quantitative reception percentages or automatic power changes are authorized by these primitives.
+
+## P1.3 third slice — opt-in Pi-to-Forge emission delivery (development only)
+
+The FT8 period repository now tracks per-emission acknowledgements independently of source records. An unacknowledged emission remains eligible for retry after connectivity loss or process restart. The existing FT8 performance sync scheduler invokes a bounded period upload pass. Each record uses a stable (QSO UUID, emission sequence) identity and receives an explicit accepted/already_exists response before marking local delivery complete.
+
+The contact-sync application exposes POST /ft8-period and stores immutable observations in the separate Forge emission repository. It validates a bounded strict JSON envelope and idempotency key; mismatched or changed replays are rejected. **The route inherits the existing private-network Forge contact service's access assumptions; it does not implement new bearer-token authentication.** Do not expose this route on a public listener. Upgrade and smoke-test Forge first, then anvilmobile, as older Forge releases do not recognize /ft8-period.
+
+Known rollout gates: review endpoint authentication and access controls; extend network integration tests; ensure persistent pre-key intention / crash-aborted emission state; test physical override and final RF safety boundary; validate PSK frequency attribution (provider RF frequency is not FT8 dial frequency); acceptance test on anvilmobile without transmitting. Adaptive CAT power remains disabled.

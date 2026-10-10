@@ -96,7 +96,7 @@ from rolling_thunder.ft8.performance_recording import (
     build_ft8_responder_attempt_seed,
 )
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
-from rolling_thunder.ft8.period_repository import FT8TransmitPeriodRepository
+from rolling_thunder.ft8.period_repository import FT8PeriodSyncService, FT8TransmitPeriodRepository
 from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
@@ -647,6 +647,10 @@ class ApplicationRuntime:
                 ft8_performance_sync_scheduler or ThreadingPollScheduler(),
                 interval_s=platform_config.contact_sync_interval_s,
                 batch_size=platform_config.contact_sync_batch_size,
+                period_sync=FT8PeriodSyncService(
+                    FT8TransmitPeriodRepository(config.storage.database_path),
+                    home_platform_client,
+                ),
             )
 
         resolved_completed_qso_producer = ft8_completed_qso_producer

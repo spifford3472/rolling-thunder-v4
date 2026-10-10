@@ -7,9 +7,11 @@ from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+from uuid import UUID
 
 from pydantic import ValidationError
 
+from rolling_thunder.ft8.hardware_transmit import FT8TransmitPeriodTelemetry
 from rolling_thunder.ft8.performance import (
     FT8PerformanceAttempt,
     FT8PerformanceUploadResult,
@@ -181,6 +183,36 @@ class HttpHomePlatformClient(HomePlatformClient):
                 "Home Station Platform upload response returned a different contact ID."
             )
         return result
+
+    def upload_ft8_period(
+        self, qso_id: UUID, emission_index: int, record: FT8TransmitPeriodTelemetry
+    ) -> None:
+        """Send one immutable FT8 emission through the private Forge upload path."""
+        from dataclasses import asdict
+
+        obj = asdict(record)
+        obj["qso_id"] = str(record.qso_id)
+        obj["started_at_utc"] = record.started_at_utc.isoformat()
+        obj["ended_at_utc"] = record.ended_at_utc.isoformat()
+        response = self._request(
+            "POST", "/ft8-period",
+            headers={
+                "Accept": _JSON_CONTENT_TYPE, "Content-Type": _JSON_CONTENT_TYPE,
+                "Idempotency-Key": f"{qso_id}:{emission_index}",
+            },
+            body=dumps({"qso_id": str(qso_id), "emission_index": emission_index, "record": obj},
+                       separators=(",", ":")).encode("utf-8"),
+            operation="FT8 transmission period upload",
+        )
+        if response.status_code != 200:
+            raise HomePlatformUploadError(
+                f"FT8 emission upload returned HTTP {response.status_code}"
+            )
+        payload = self._decode_json(response.body, operation="FT8 period upload")
+        if not isinstance(payload, dict) or payload.get("status") not in {
+            "accepted", "already_exists"
+        }:
+            raise HomePlatformUploadError("FT8 emission upload acknowledgement invalid")
 
     def upload_ft8_performance(
         self,
