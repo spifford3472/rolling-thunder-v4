@@ -32,6 +32,7 @@ from rolling_thunder.maidenhead import maidenhead_grid_center
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 
 PSK_REPORTER_QUERY_URL = "https://retrieve.pskreporter.info/query"
+PSK_REPORTER_USER_AGENT = "RollingThunder/4.4 (+https://github.com/spifford3472/rolling-thunder-v4)"
 PSK_REPORTER_CORRELATION_POLICY = "rolling_thunder_ft8_time_frequency_v1"
 _MAX_PROVIDER_WINDOW_S = 86_400
 _FREQUENCY_TOLERANCE_HZ = 10_000
@@ -163,8 +164,7 @@ class PskReporterHttpClient:
         with self._retrieval_gate:
             if (
                 self._last_network_retrieval_at is not None
-                and now_utc - self._last_network_retrieval_at
-                < self._config.minimum_query_interval
+                and now_utc - self._last_network_retrieval_at < self._config.minimum_query_interval
             ):
                 return PskReporterQueryResult(
                     status=PskReporterQueryStatus.NOT_DUE,
@@ -179,7 +179,10 @@ class PskReporterHttpClient:
             response = self._transport.request(
                 "GET",
                 url,
-                headers={"Accept": "application/xml, text/xml"},
+                headers={
+                    "Accept": "application/xml, text/xml",
+                    "User-Agent": PSK_REPORTER_USER_AGENT,
+                },
                 body=None,
                 timeout_s=self._config.timeout_s,
             )
@@ -341,9 +344,7 @@ class PskReporterAnalyticsService:
                 )
                 batch = self._summaries_for_query(due, query, eligibility_by_contact)
                 if query.query_id is not None and query.queried_at_utc is not None:
-                    self._repository.save_pskreporter_batch(
-                        _provider_query_archive(query), batch
-                    )
+                    self._repository.save_pskreporter_batch(_provider_query_archive(query), batch)
                 else:
                     for outcome in batch:
                         self._repository.save_pskreporter(outcome)
@@ -403,15 +404,12 @@ class PskReporterAnalyticsService:
         except (OSError, RuntimeError, TypeError, ValueError) as error:
             return None, _invalid_eligibility_audit(None, _bounded_error(error))
         if completion is None:
-            reference = contact.started_at + timedelta(
-                seconds=self._config.correlation_window_s
-            )
+            reference = contact.started_at + timedelta(seconds=self._config.correlation_window_s)
             return (
                 _Eligibility(
                     reference_source="conservative_start_fallback",
                     reference_at_utc=reference,
-                    eligible_at_utc=reference
-                    + timedelta(seconds=self._config.report_latency_s),
+                    eligible_at_utc=reference + timedelta(seconds=self._config.report_latency_s),
                 ),
                 None,
             )
@@ -428,8 +426,7 @@ class PskReporterAnalyticsService:
             _Eligibility(
                 reference_source="ft8_terminal_end",
                 reference_at_utc=completion_utc,
-                eligible_at_utc=completion_utc
-                + timedelta(seconds=self._config.report_latency_s),
+                eligible_at_utc=completion_utc + timedelta(seconds=self._config.report_latency_s),
             ),
             None,
         )
@@ -690,9 +687,7 @@ def _provider_query_archive(query: PskReporterQueryResult) -> PskReporterProvide
     )
 
 
-def _invalid_eligibility_audit(
-    value: object, error: str
-) -> dict[str, str | None]:
+def _invalid_eligibility_audit(value: object, error: str) -> dict[str, str | None]:
     if isinstance(value, datetime):
         reference = value.isoformat()
     elif value is None:

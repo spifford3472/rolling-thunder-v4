@@ -34,9 +34,11 @@ class Transport:
     def __init__(self, responses: list[UrllibHttpResponse | BaseException]) -> None:
         self.responses = responses
         self.requests: list[tuple[str, str, float]] = []
+        self.headers: list[dict[str, str]] = []
 
     def request(self, method, url, *, headers, body, timeout_s):  # type: ignore[no-untyped-def]
-        del headers, body
+        del body
+        self.headers.append(dict(headers))
         self.requests.append((method, url, timeout_s))
         response = self.responses.pop(0)
         if isinstance(response, BaseException):
@@ -79,6 +81,8 @@ def test_http_query_uses_official_encoded_bounded_parameters() -> None:
         "frange": ["14064000-14084000"],
     }
     assert timeout == config.timeout_s
+    assert transport.headers[0]["User-Agent"].startswith("RollingThunder/")
+    assert transport.headers[0]["Accept"] == "application/xml, text/xml"
 
 
 def test_client_rate_limits_successes_and_failures_for_ten_minutes() -> None:
@@ -103,16 +107,12 @@ def test_client_rate_limits_successes_and_failures_for_ten_minutes() -> None:
 def test_client_allows_only_one_concurrent_network_attempt_per_interval() -> None:
     caller_count = 16
     start = Barrier(caller_count)
-    transport = Transport(
-        [UrllibHttpResponse(200, b"<receptionReports/>")] * caller_count
-    )
+    transport = Transport([UrllibHttpResponse(200, b"<receptionReports/>")] * caller_count)
     client = PskReporterHttpClient(PskReporterConfig(enabled=True), transport=transport)
 
     def query() -> PskReporterQueryStatus:
         start.wait()
-        return client.query(
-            now=NOW, window_s=300, frequency_range_hz=None
-        ).status
+        return client.query(now=NOW, window_s=300, frequency_range_hz=None).status
 
     with ThreadPoolExecutor(max_workers=caller_count) as executor:
         statuses = list(executor.map(lambda _: query(), range(caller_count)))
@@ -212,8 +212,7 @@ def test_conservative_fallback_batches_due_qsos_and_distinguishes_zero_from_fail
             "SELECT count(*), count(raw_xml) FROM pskreporter_query"
         ).fetchone() == (1, 1)
         per_qso_payloads = connection.execute(
-            "SELECT raw_response_json FROM qso_pskreporter_summary "
-            "WHERE query_id IS NOT NULL"
+            "SELECT raw_response_json FROM qso_pskreporter_summary WHERE query_id IS NOT NULL"
         ).fetchall()
     assert len(per_qso_payloads) == 2
     assert all("<receptionReports" not in row[0] for row in per_qso_payloads)
@@ -268,9 +267,7 @@ def test_completion_end_plus_300_is_not_due_one_second_early(tmp_path: Path) -> 
     assert outcome.status is PskReporterCollectionStatus.NOT_DUE
     assert transport.requests == []
     assert outcome.summary_json is not None
-    assert outcome.summary_json["eligibility"]["eligible_at_utc"] == (
-        "2026-10-07T02:00:01Z"
-    )
+    assert outcome.summary_json["eligibility"]["eligible_at_utc"] == ("2026-10-07T02:00:01Z")
 
 
 @pytest.mark.parametrize(
@@ -319,11 +316,7 @@ def test_terminal_summary_is_restart_safe_before_completion_lookup(tmp_path: Pat
     ).collect_recent([contact], now=NOW)[0]
     restarted_transport = Transport([])
     restarted_provider = CompletionTimes(
-        {
-            contact.contact_id: datetime(2026, 10, 7, 1, 30, tzinfo=UTC).replace(
-                tzinfo=None
-            )
-        }
+        {contact.contact_id: datetime(2026, 10, 7, 1, 30, tzinfo=UTC).replace(tzinfo=None)}
     )
 
     repeated = PskReporterAnalyticsService(
