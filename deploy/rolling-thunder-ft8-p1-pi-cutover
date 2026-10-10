@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Operator-run, no-RF Pi deployment. No automatic database restoration.
+set -Eeuo pipefail
+umask 077
+APP=/home/geoff/projects/rolling-thunder-v4
+SERVICE=rolling-thunder.service
+CONFIG="$APP/config/rolling-thunder.yaml"
+DB="$APP/config/data/rolling-thunder.db"
+BACKUP_ROOT=/home/geoff/rolling-thunder-backups
+TARGET=c16e015051e29b92a5f773d594ad1cafd5c70c02
+MODE="${1:-}"
+[[ "$#" -eq 1 && ( "$MODE" == --preflight || "$MODE" == --deploy-approved ) ]] || { echo 'Usage: bash rolling-thunder-ft8-p1-pi-cutover --preflight|--deploy-approved'; exit 2; }
+[[ "$(id -un)" == geoff ]] || { echo 'Run as geoff; service control requires preauthorized sudo'; exit 2; }
+[[ -f "$CONFIG" && -f "$DB" && -x "$APP/.venv/bin/python" ]] || { echo 'Missing runtime prerequisites'; exit 3; }
+cd "$APP"
+[[ -z "$(git status --porcelain)" ]] || { echo 'Production Git worktree not clean'; exit 3; }
+PREVIOUS=$(git rev-parse HEAD)
+[[ "$PREVIOUS" != "$TARGET" ]] || { echo 'Already at target; no operation'; exit 3; }
+git cat-file -e "${TARGET}^{commit}" || { echo 'Target commit not fetched'; exit 3; }
+git merge-base --is-ancestor "$TARGET" origin/main || { echo 'Target not in fetched origin/main'; exit 3; }
+[[ "$(systemctl is-active "$SERVICE")" == active ]] || { echo 'Production service not active'; exit 3; }
+# Preflight verifies the live configuration without changing it.
+"$APP/.venv/bin/python" - "$CONFIG" <<'PY'
+import sys,yaml
+from pathlib import Path
+config=yaml.safe_load(Path(sys.argv[1]).read_text())
+assert config['ft8']['enabled'] is True
+assert config['ft8']['transmit']['enabled'] is True
+print('PASS: current FT8 transmission enabled; cutover will explicitly disable it')
+PY
+if [[ "$MODE" == --preflight ]]; then
+  echo "PASS: source, service, and config preflight; previous=$PREVIOUS target=$TARGET"
+  echo 'No production changes made.'
+  exit 0
+fi
+# Approval flag is for a separately approved operational cutover, not permission to key the radio.
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+BACKUP="$BACKUP_ROOT/ft8-p1-pi-cutover-$STAMP"
+mkdir -m 700 -p "$BACKUP"
+printf '%s\n' "$PREVIOUS" > "$BACKUP/previous-sha"
+cp -p "$CONFIG" "$BACKUP/rolling-thunder.yaml"
+"$APP/.venv/bin/python" - "$APP" "$BACKUP" <<'PY'
+import sqlite3,sys
+from pathlib import Path
+root,backup=map(Path,sys.argv[1:])
+for rel in ('config/data/rolling-thunder.db','data/rolling-thunder.db','data/contacts.db'):
+ src=root/rel; dst=backup/rel.replace('/','__')
+ with sqlite3.connect(f'file:{src}?mode=ro',uri=True) as a, sqlite3.connect(dst) as b:
+  a.backup(b)
+  assert b.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
+ dst.chmod(0o600)
+print('PASS: three consistent SQLite backups')
+PY
+printf 'BACKUP=%s\n' "$BACKUP"
+# Stop application prior to checkout; do not disable FT8 in the currently running instance.
+sudo -n systemctl stop "$SERVICE"
+ROLLED=0
+recover() {
+  local rc=$?
+  trap - ERR
+  if [[ "$ROLLED" -eq 1 ]]; then
+    echo 'FAIL: restoring former code and config, preserving current databases and outboxes'
+    git checkout --detach --force "$PREVIOUS" || true
+    "$APP/.venv/bin/python" -m pip install --no-deps -e "$APP" || true
+    cp -p "$BACKUP/rolling-thunder.yaml" "$CONFIG"
+    sudo -n systemctl start "$SERVICE" || true
+  fi
+  exit "$rc"
+}
+trap recover ERR
+ROLLED=1
+git checkout --detach --force "$TARGET"
+"$APP/.venv/bin/python" -m pip install --no-deps -e "$APP"
+"$APP/.venv/bin/python" - "$CONFIG" <<'PY'
+from pathlib import Path
+import sys,yaml
+path=Path(sys.argv[1]); obj=yaml.safe_load(path.read_text())
+obj['ft8']['transmit']['enabled']=False
+# Preserve the operator's other settings. Changes are limited to this one YAML key.
+lines=path.read_text().splitlines(keepends=True)
+start=next(i for i,s in enumerate(lines) if s.startswith('ft8:'))
+end=next((i for i in range(start+1,len(lines)) if lines[i] and not lines[i][0].isspace() and not lines[i].startswith('#')),len(lines))
+for i in range(start+1,end):
+ if lines[i].startswith('  transmit:'):
+  for j in range(i+1,end):
+   if lines[j].startswith('  ') and not lines[j].startswith('    ') and j>i+1: break
+   if lines[j].startswith('    enabled:'):
+    lines[j]=lines[j].replace('enabled: true','enabled: false',1)
+    break
+  else: raise SystemExit('missing transmit.enabled')
+  break
+else: raise SystemExit('missing transmit section')
+path.write_text(''.join(lines))
+from rolling_thunder.config import load_config
+cfg=load_config(path)
+assert not cfg.ft8.transmit.enabled
+print('PASS: no-RF production config enforced')
+PY
+"$APP/.venv/bin/python" - "$DB" <<'PY'
+import sqlite3,sys
+from pathlib import Path
+from rolling_thunder.storage import initialize_database
+from rolling_thunder.ft8.period_repository import FT8TransmitPeriodRepository
+p=Path(sys.argv[1]); version=initialize_database(p); FT8TransmitPeriodRepository(p)
+with sqlite3.connect(p) as db:
+ assert db.execute('PRAGMA integrity_check').fetchone()==('ok',)
+ assert db.execute('PRAGMA foreign_key_check').fetchall()==[]
+assert version==20
+print('PASS: SQLite schema 20 and FT8 evidence initialization')
+PY
+sudo -n systemctl start "$SERVICE"
+sleep 3
+[[ "$(systemctl is-active "$SERVICE")" == active ]] || { echo 'service did not remain active'; false; }
+[[ "$(git rev-parse HEAD)" == "$TARGET" ]] || { echo 'Unexpected deployed SHA'; false; }
+ROLLED=0
+trap - ERR
+echo "PASS: NO-RF PI DEPLOYMENT target=$TARGET backup=$BACKUP"
