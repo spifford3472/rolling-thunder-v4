@@ -283,11 +283,21 @@ class BoundedFT8HardwareTransmitExecutor:
 
     def cancel_test(self) -> None:
         """Force receive even when no owner test is currently active."""
-        self._ptt.cancel()
+        try:
+            self._ptt.cancel()
+        except Exception:
+            if self._ptt_uncertain is not None:
+                self._ptt_uncertain()
+            raise
 
     def cancel_qso(self) -> None:
         """Force receive even when no QSO transmit is currently active."""
-        self._ptt.cancel()
+        try:
+            self._ptt.cancel()
+        except Exception:
+            if self._ptt_uncertain is not None:
+                self._ptt_uncertain()
+            raise
 
     def close(self) -> None:
         """Force receive and permanently close the executor."""
@@ -295,7 +305,12 @@ class BoundedFT8HardwareTransmitExecutor:
             if self._closed:
                 return
             self._closed = True
-        self._ptt.close()
+        try:
+            self._ptt.close()
+        except Exception:
+            if self._ptt_uncertain is not None:
+                self._ptt_uncertain()
+            raise
 
     def _execute(
         self,
