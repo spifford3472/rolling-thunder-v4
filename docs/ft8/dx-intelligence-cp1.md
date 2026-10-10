@@ -137,3 +137,15 @@ It MUST run only in a background worker: no UI or radio callback may make a
 synchronous network request. The client is not yet configured or called at
 runtime; evidence-to-quality calibration and authenticated listener rollout
 remain distinct gated checkpoints. No transmit behavior changes.
+
+## CP2.4 normalized history coverage audit
+
+`forge_psk_coverage_audit.py` is an operator-run read-only diagnostic: it
+reports aggregate KI5VNB outbound FT8 receptions, independent receivers and
+receiver-grid availability over the last 30 minutes, two hours and day. It
+fails explicitly for missing/inaccessible or incompatible databases, and never
+changes service permissions or discloses receiver identities. It is not a
+normalized data ingest or a scheduled poll. The production worker's own
+history database is not interchangeable with a normalized `psk_reception`
+table. Before enabling evidence-backed ranking, an authorized operator must
+identify the normalized database and verify sufficient pre-contact coverage.
