@@ -403,3 +403,4 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/ft8/ranking_cache.py` — standalone nonblocking FT8 CQ ranking cache with 30-minute TTL, stale-while-revalidate and pending-first presentation order; no runtime integration.
 - `src/rolling_thunder/ft8/browser_ranking.py` — local-only background FT8 CQ ordering adapter; wraps 30-minute ranking cache and pending state without CAT or provider access.
 - `src/rolling_thunder/forge_psk_path_evidence.py` — read-only bounded historical PSK Reporter outward-path reception evidence, not yet served to FT8 ranking.
+- `src/rolling_thunder/forge_psk_evidence_snapshot.py` — bounded read-only cached Forge PSK outbound-reception snapshot service; no network listener or Pi client.
