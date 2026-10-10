@@ -537,3 +537,64 @@ def test_per_emission_telemetry_does_not_invent_power_when_unreadable() -> None:
     assert records[0].power_readback_verified is False
     assert records[0].ended_at_utc >= records[0].started_at_utc
     assert records[0].frequency_hz == request.expected_radio_frequency_hz
+
+
+def test_failed_pre_ptt_intent_does_not_key_and_executor_recovers() -> None:
+    radio = _FakeRadio(_connected_state())
+    attempts = 0
+
+    def record_intent(_intent, _qso, _frequency, _power):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError('simulated SQLite disk write failure')
+
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), intent_started=record_intent,
+    )
+    request = _qso_hardware_request()
+    with pytest.raises(OSError, match='disk write failure'):
+        executor.execute_qso(request)
+    assert 'key' not in radio.ptt.events
+    executor.execute_qso(request)
+    assert radio.ptt.events.count('key') == 1
+
+
+def test_ptt_key_failure_preserves_uncertain_intent() -> None:
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = _FailingKeyPtt()
+    started = []
+    completed = []
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        intent_started=lambda *args: started.append(args),
+        intent_completed=lambda *args: completed.append(args),
+    )
+    with pytest.raises(RuntimeError):
+        executor.execute_qso(_qso_hardware_request())
+    assert len(started) == 1
+    assert completed == []
+    assert 'release' in radio.ptt.events
+
+
+def test_failed_intent_completion_clears_executor_active_state() -> None:
+    radio = _FakeRadio(_connected_state())
+    attempts = 0
+
+    def complete(_intent, _record):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError('simulated commit failure')
+
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        intent_started=lambda *_args: None,
+        intent_completed=complete,
+    )
+    request = _qso_hardware_request()
+    with pytest.raises(OSError, match='commit failure'):
+        executor.execute_qso(request)
+    executor.execute_qso(request)
+    assert attempts == 2
+    assert radio.ptt.events.count('key') == 2
