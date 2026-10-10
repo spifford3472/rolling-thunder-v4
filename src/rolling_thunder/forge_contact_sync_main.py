@@ -12,6 +12,10 @@ from rolling_thunder.application_secrets import (
     SecretConfigurationError,
     load_application_secrets,
 )
+from rolling_thunder.forge_contact_snapshots import (
+    ContactSnapshotError,
+    ForgeContactSnapshotRepository,
+)
 from rolling_thunder.forge_contact_sync import (
     ForgeContactSyncRepository,
     ForgeContactSyncService,
@@ -96,13 +100,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             timeout_s=config.wavelog.request_timeout_s,
             station_binding_store=repository,
         )
-        service = ForgeContactSyncService(repository, wavelog)
-        ft8_performance_repository = ForgeFT8PerformanceRepository(
-            config.storage.database_path
+        snapshot_path = config.storage.database_path.with_name(
+            f"{config.storage.database_path.stem}-contact-snapshots.db"
         )
-        ft8_performance_service = ForgeFT8PerformanceService(
-            ft8_performance_repository
-        )
+        try:
+            snapshots = ForgeContactSnapshotRepository(snapshot_path)
+        except ContactSnapshotError:
+            logger.warning("Optional contact snapshot store unavailable", exc_info=True)
+            snapshots = None
+        service = ForgeContactSyncService(repository, wavelog, contact_snapshots=snapshots)
+        ft8_performance_repository = ForgeFT8PerformanceRepository(config.storage.database_path)
+        ft8_performance_service = ForgeFT8PerformanceService(ft8_performance_repository)
         application = ForgeContactSyncApiApplication(
             service,
             ft8_performance_service=ft8_performance_service,
