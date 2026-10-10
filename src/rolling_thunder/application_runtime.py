@@ -96,6 +96,8 @@ from rolling_thunder.ft8.performance_recording import (
     build_ft8_responder_attempt_seed,
 )
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
+from rolling_thunder.ft8.period_repository import FT8PeriodSyncService, FT8TransmitPeriodRepository
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
     configure_ft8_receive_settings,
@@ -260,6 +262,7 @@ class ApplicationRuntime:
     ft8_receive: FT8ReceiveService | None = None
     ft8_band_control: FT8BandController | None = None
     ft8_authorization: FT8QsoAuthorizationService | None = None
+    ft8_power_policy: FT8PowerPolicy = field(default_factory=FT8PowerPolicy)
     ft8_qso: FT8OperatorQsoService | None = None
     ft8_qso_start: FT8QsoStartController | None = None
     ft8_logging: FT8QsoLoggingService | None = None
@@ -644,6 +647,10 @@ class ApplicationRuntime:
                 ft8_performance_sync_scheduler or ThreadingPollScheduler(),
                 interval_s=platform_config.contact_sync_interval_s,
                 batch_size=platform_config.contact_sync_batch_size,
+                period_sync=FT8PeriodSyncService(
+                    FT8TransmitPeriodRepository(config.storage.database_path),
+                    home_platform_client,
+                ),
             )
 
         resolved_completed_qso_producer = ft8_completed_qso_producer
@@ -850,9 +857,13 @@ class ApplicationRuntime:
                     ft8_audio_output
                     or AlsaAplayFT8AudioOutput(config.ft8.transmit.audio_device)
                 )
+                period_store = FT8TransmitPeriodRepository(config.storage.database_path)
                 resolved_ft8_executor = BoundedFT8HardwareTransmitExecutor(
                     radio,
                     resolved_ft8_audio_output,
+                    intent_started=period_store.begin_intent,
+                    intent_completed=period_store.complete_intent,
+                    power_policy=config.ft8.power,
                 )
 
             def build_ft8_session(
@@ -1086,6 +1097,7 @@ class ApplicationRuntime:
             ft8_receive=ft8_receive,
             ft8_band_control=ft8_band_control,
             ft8_authorization=ft8_authorization,
+            ft8_power_policy=config.ft8.power,
             ft8_qso=ft8_qso,
             ft8_logging=ft8_logging,
             ft8_worked_today=ft8_worked_today,
@@ -1101,7 +1113,7 @@ class ApplicationRuntime:
             and runtime.ft8_authorization is not None
             and runtime.ft8_qso is not None
         ):
-            preparation = FT8RadioPreparationService(radio)
+            preparation = FT8RadioPreparationService(radio, power_policy=config.ft8.power)
 
             def start_prepared_ft8_qso(
                 candidate: FT8CQActivity | FT8IncomingCall,
@@ -1209,8 +1221,13 @@ class ApplicationRuntime:
                 gps_state=self.latest_gps_state,
                 home_grid=self.ft8_authorization.home_grid,
                 started_at_utc=selected_at_utc,
+                power_policy=self.ft8_power_policy,
             )
             return self.ft8_qso_start.start(activity, attempt_seed=seed)
+        # Real hardware must pass the supervised power/frequency preparation boundary.
+        # This legacy path remains only for injected test-radio runtimes.
+        if isinstance(self.radio, Ft891Radio):
+            return False
         context = self.ft8_authorization.authorize(
             activity,
             radio_state=self.latest_radio_state,
@@ -1245,8 +1262,11 @@ class ApplicationRuntime:
                 gps_state=self.latest_gps_state,
                 home_grid=self.ft8_authorization.home_grid,
                 started_at_utc=selected_at_utc,
+                power_policy=self.ft8_power_policy,
             )
             return self.ft8_qso_start.start_incoming(incoming, attempt_seed=seed)
+        if isinstance(self.radio, Ft891Radio):
+            return False
         context = self.ft8_authorization.authorize_incoming(
             incoming,
             radio_state=self.latest_radio_state,

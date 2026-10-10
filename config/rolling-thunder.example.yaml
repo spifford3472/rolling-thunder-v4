@@ -187,6 +187,15 @@ physical_controls:
     encoder-switch-long: back
 
 ft8:
+  # FT8-P1 recommendation-only power policy; NEVER authorizes CAT power changes.
+  power:
+    initial_power_watts: 20
+    adaptive_enabled: false
+    default_max_auto_watts: 70
+    max_auto_watts_by_band:
+      10m: 30
+      12m: 40
+      15m: 40
   # Experimental v4.3 native FT8 subsystem. Disabled means no FT8 capture
   # device, decoder process, receive worker, playback device, PTT capability,
   # physical transmit executor, or transmit worker is created.

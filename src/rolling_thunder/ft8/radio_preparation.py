@@ -7,6 +7,7 @@ from typing import Protocol
 
 from rolling_thunder.domain import Frequency, RadioConnectionState, RadioMode, RadioState
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.ft891_cat import Ft891SsbBfo, Ft891SsbMicSelect
 from rolling_thunder.radio import RadioError
 from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
@@ -91,8 +92,9 @@ class FT8PreparedRadioState:
 class FT8RadioPreparationService:
     """Apply and verify required FT8 radio settings before transmit authority exists."""
 
-    def __init__(self, radio: FT8PreparedRadio) -> None:
+    def __init__(self, radio: FT8PreparedRadio, *, power_policy: FT8PowerPolicy | None = None) -> None:
         self._radio = radio
+        self._power_policy = power_policy or FT8PowerPolicy()
 
     def prepare_for_qso(
         self,
@@ -120,6 +122,12 @@ class FT8RadioPreparationService:
             ) from error
 
         target_frequency = ft8_frequency_for_band(band)
+        limit = self._power_policy.limit_for(band.value)
+        if power_target_watts > limit:
+            raise FT8RadioPreparationError(
+                f"FT8 requested {power_target_watts} W on {band.value} exceeds "
+                f"the configured automatic safety ceiling of {limit} W."
+            )
 
         try:
             power_watts = self._radio.set_power_watts(power_target_watts)

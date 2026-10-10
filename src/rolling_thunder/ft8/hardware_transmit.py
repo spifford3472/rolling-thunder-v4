@@ -14,13 +14,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Event, Lock, Thread, Timer
 from typing import Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from rolling_thunder.domain import RadioConnectionState, RadioState
+from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
 from rolling_thunder.ft8.audio_output import FT8AudioOutput
 from rolling_thunder.ft8.domain import FT8QsoContext
 from rolling_thunder.ft8.encoder import FT8_SAMPLE_RATE_HZ, FT8Waveform
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.radio import RadioError
+from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +33,20 @@ class FT8TransmitMeterSummary:
     alc_peak_raw: int | None = None
     power_peak_raw: int | None = None
     swr_peak_raw: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FT8TransmitPeriodTelemetry:
+    """Per-emission CAT power readback; raw RF meter is not calibrated watts."""
+
+    qso_id: UUID
+    started_at_utc: datetime
+    ended_at_utc: datetime
+    configured_power_watts: int | None
+    power_readback_verified: bool
+    frequency_hz: int
+    transmitted: bool
+    transmit_audio_offset_hz: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,15 +226,26 @@ class BoundedFT8HardwareTransmitExecutor:
         audio_output: FT8AudioOutput,
         *,
         watchdog_factory: WatchdogFactory = _threading_watchdog,
+        period_recorder: Callable[[FT8TransmitPeriodTelemetry], None] | None = None,
+        intent_started: Callable[[UUID, UUID, int, int | None], None] | None = None,
+        intent_finished: Callable[[UUID], None] | None = None,
+        intent_completed: Callable[[UUID, FT8TransmitPeriodTelemetry], None] | None = None,
+        power_policy: FT8PowerPolicy | None = None,
     ) -> None:
         self._radio = radio
         self._audio_output = audio_output
         self._ptt = radio.create_cp6_cat_ptt_capability()
         self._watchdog_factory = watchdog_factory
+        self._period_recorder = period_recorder
+        self._intent_started = intent_started
+        self._intent_finished = intent_finished
+        self._intent_completed = intent_completed
+        self._power_policy = power_policy
         self._lock = Lock()
         self._active = False
         self._closed = False
         self._meter_summaries: dict[UUID, FT8TransmitMeterSummary] = {}
+        self._transmit_periods: dict[UUID, list[FT8TransmitPeriodTelemetry]] = {}
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
         self._execute(
@@ -244,6 +271,11 @@ class BoundedFT8HardwareTransmitExecutor:
         """Return the peak meter summary collected for one QSO UUID."""
         with self._lock:
             return self._meter_summaries.get(qso_id)
+
+    def transmit_periods(self, qso_id: UUID) -> tuple[FT8TransmitPeriodTelemetry, ...]:
+        """Return bounded in-memory emission records, not yet persisted."""
+        with self._lock:
+            return tuple(self._transmit_periods.get(qso_id, ()))
 
     def cancel_test(self) -> None:
         """Force receive even when no owner test is currently active."""
@@ -281,13 +313,48 @@ class BoundedFT8HardwareTransmitExecutor:
         watchdog: WatchdogTimer | None = None
         meter_stop: Event | None = None
         meter_thread: Thread | None = None
+        emission_started: datetime | None = None
+        verified_power: int | None = None
+        power_readback_verified = False
+        keyed = False
+        intent_id: UUID | None = None
         try:
             self._verify_radio(
                 expected_radio_frequency_hz=expected_radio_frequency_hz,
                 expected_radio_mode=expected_radio_mode,
                 label=label,
             )
+            # A missing/unreadable CAT power setting is unknown, NEVER inferred
+            # from a raw power meter value or a previous QSO power target.
+            reader = getattr(self._radio, "read_power_watts", None)
+            if qso_id is not None and callable(reader):
+                try:
+                    value = reader()
+                    if type(value) is int and 5 <= value <= 100:
+                        verified_power = value
+                        power_readback_verified = True
+                except (RadioError, RuntimeError, ValueError, TypeError):
+                    pass
+            if qso_id is not None and self._power_policy is not None:
+                # Final QSO transmit boundary: never reprogram a manual change.
+                # Unknown CAT settings or an exceeded cap require operator action.
+                try:
+                    band = resolve_radio_band(Frequency(hz=expected_radio_frequency_hz))
+                except RadioBandResolutionError as exc:
+                    raise RuntimeError("FT8 transmit band is unrecognized") from exc
+                if verified_power is None:
+                    raise RuntimeError("FT8 transmit requires verified CAT power readback")
+                cap = self._power_policy.limit_for(band.value)
+                if verified_power > cap:
+                    raise RuntimeError(
+                        f"FT8 CAT power {verified_power} W exceeds {band.value} ceiling {cap} W"
+                    )
+            if qso_id is not None and self._intent_started is not None:
+                intent_id = uuid4()
+                self._intent_started(intent_id, qso_id, expected_radio_frequency_hz, verified_power)
             self._ptt.key()
+            keyed = True
+            emission_started = datetime.now(UTC)
             watchdog = self._watchdog_factory(
                 maximum_key_down_s,
                 self._ptt.release,
@@ -297,12 +364,35 @@ class BoundedFT8HardwareTransmitExecutor:
                 meter_stop, meter_thread = self._start_meter_sampling(qso_id)
             self._audio_output.play(waveform)
         finally:
-            if meter_stop is not None:
-                meter_stop.set()
-            if watchdog is not None:
-                watchdog.cancel()
+            # Even release, journal, or meter cleanup failures must not strand
+            # the executor in a permanently active state.
             try:
+                if meter_stop is not None:
+                    meter_stop.set()
+                if watchdog is not None:
+                    watchdog.cancel()
                 self._ptt.release()
+                if qso_id is not None and keyed and emission_started is not None:
+                    record = FT8TransmitPeriodTelemetry(
+                        qso_id=qso_id,
+                        started_at_utc=emission_started,
+                        ended_at_utc=datetime.now(UTC),
+                        configured_power_watts=verified_power,
+                        power_readback_verified=power_readback_verified,
+                        frequency_hz=expected_radio_frequency_hz,
+                        transmitted=True,
+                        transmit_audio_offset_hz=waveform.base_frequency_hz,
+                    )
+                    if intent_id is not None and self._intent_completed is not None:
+                        self._intent_completed(intent_id, record)
+                    else:
+                        if self._period_recorder is not None:
+                            self._period_recorder(record)
+                        if intent_id is not None and self._intent_finished is not None:
+                            self._intent_finished(intent_id)
+                    with self._lock:
+                        self._transmit_periods.setdefault(qso_id, []).append(record)
+                        self._transmit_periods[qso_id] = self._transmit_periods[qso_id][-64:]
             finally:
                 if meter_thread is not None:
                     meter_thread.join(timeout=1.0)
