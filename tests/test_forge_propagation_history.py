@@ -279,7 +279,7 @@ def test_voacap_uses_full_grid_actual_power_ft8_mode_and_actual_hour() -> None:
 
 
 def test_pskreporter_defaults_enforce_provider_etiquette() -> None:
-    assert PskReporterConfig().minimum_query_interval_s == 300
+    assert PskReporterConfig().minimum_query_interval_s == 600
     assert PskReporterConfig().report_latency_s == 300
     assert PskReporterConfig(enabled=True).enabled
 

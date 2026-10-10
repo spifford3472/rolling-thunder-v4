@@ -14,7 +14,7 @@ pskreporter:
   enabled: false
   sender_callsign: KI5VNB
   mode: FT8
-  minimum_query_interval_s: 300
+  minimum_query_interval_s: 600
   report_latency_s: 300
   recent_window_s: 1800
   correlation_window_s: 300
