@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# One-time physical RF acceptance. Always restore receive-only dashboard.
+set -Eeuo pipefail
+APP=/home/geoff/projects/rolling-thunder-v4
+SERVICE=rolling-thunder.service
+CONTROL=/usr/local/sbin/rolling-thunder-pi-service-control
+H6_BASE=fec7e973e924b9e94047b6b79d20afb3723b3d96
+[[ "$(id -un)" == geoff ]] || { echo 'FAIL: run as geoff'; exit 2; }
+[[ "$#" -eq 1 && "$1" == --one-supervised-2s-test ]] || { echo 'Use --one-supervised-2s-test'; exit 2; }
+cd "$APP"
+git merge-base --is-ancestor "$H6_BASE" HEAD || { echo 'FAIL: H6 safety base missing'; exit 2; }
+[[ -f src/rolling_thunder/ft8/first_rf_test.py ]] || { echo 'FAIL: runner not installed'; exit 2; }
+[[ -z "$(git status --porcelain)" ]] || { echo 'FAIL: production tree dirty'; exit 2; }
+[[ "$(systemctl is-active "$SERVICE")" == active ]] || { echo 'FAIL: service not active'; exit 2; }
+"$APP/.venv/bin/python" - <<'PY'
+from pathlib import Path
+import yaml
+cfg=yaml.safe_load(Path('config/rolling-thunder.yaml').read_text())
+assert cfg['ft8']['enabled'] is True
+assert cfg['ft8']['transmit']['enabled'] is False
+assert cfg['hardware']['radio_device']
+assert cfg['ft8']['transmit'].get('audio_device')
+print('PASS: RX-only configuration and CAT/audio devices',flush=True)
+PY
+sudo -n -l "$CONTROL" stop >/dev/null
+sudo -n -l "$CONTROL" start >/dev/null
+cleanup() {
+ rc=$?
+ trap - EXIT ERR INT TERM
+ echo '===== RESTORING RECEIVE-ONLY DASHBOARD ====='
+ if sudo -n "$CONTROL" start && systemctl is-active --quiet "$SERVICE"; then
+   echo 'PASS: dashboard service active'
+ else
+   echo 'FAIL: service recovery needs manual attention' >&2
+   rc=1
+ fi
+ exit "$rc"
+}
+trap cleanup EXIT
+trap 'echo "INTERRUPTED: check radio manually for RX" >&2; exit 130' INT TERM
+sudo -n "$CONTROL" stop
+[[ "$(systemctl is-active "$SERVICE" || true)" != active ]] || { echo 'FAIL: service not stopped'; exit 2; }
+echo 'CAUTION: THIS WILL KEY THE FT-891 INTO THE DUMMY LOAD ONCE, FOR ~2 SECONDS.'
+echo 'If it remains transmitting: POWER OFF THE RADIO MANUALLY.'
+"$APP/.venv/bin/python" -m rolling_thunder.ft8.first_rf_test \
+ --config "$APP/config/rolling-thunder.yaml" \
+ --authorization I-AM-PARKED-DUMMY-LOAD-5W-ONE-TEST
