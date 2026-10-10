@@ -1,4 +1,4 @@
-# Forge PSK Reporter normalized history — schema v4
+# Forge PSK Reporter normalized history — schema v5 (PSK-N2)
 
 Scope: additive normalized reception and QSO-association storage. **Not approved for production deployment or raw-data deletion.** The PSK Reporter collector, global ten-minute pacing and HTTP 403/429 provider block are unchanged. No new provider requests are made by normalization.
 
@@ -7,6 +7,7 @@ Scope: additive normalized reception and QSO-association storage. **Not approved
 - `psk_reception`: stable fingerprint of source facts plus an occurrence index to retain repeated identical records within one query. One row per distinguishable reception, plus explicit duplicate occurrences where source fields collide. Original locator and quality flags are retained; missing/malformed grids never get invented coordinates.
 - `psk_qso_reception`: the contact-to-reception many-to-many relationship. One reception can be associated with multiple contacts.
 - `psk_normalization_audit`: per-contact reconciliation of matched-report counts and source SHA-256, including normalization version.
+- `psk_query_normalization_audit`: independent full-provider query reconciliation, parsed/skipped counts and SHA-256. Unlinked observations are persisted even when no QSO can be identified.
 
 These tables coexist with `pskreporter_query` (original XML + request metadata) and `qso_pskreporter_summary` (matched JSON + existing derived statistics). Existing clients remain unchanged.
 
@@ -20,14 +21,21 @@ python -m rolling_thunder.forge_psk_normalized_history --database /path/to/histo
 python -m rolling_thunder.forge_psk_normalized_history --database /path/to/history.sqlite3 --retention-preview
 ```
 
-The dry-run does not modify the database. The `--apply` mode inserts normalized rows but does not delete raw data or query providers. Repeat applying must not double-count. Reconcile the audit's counts against original per-QSO matched reports.
+The dry-run does not modify the database. Backfill processes **all** provider XML receptions and preserves those unrelated to QSO matches. Query-to-QSO matches remain separate. For schema-v4 databases, normal repository initialization upgrades to v5 additively. The `--apply` mode inserts normalized rows but does not delete raw data or query providers. Repeat applying must not double-count. Reconcile the audit's counts against original per-QSO matched reports.
 
-## Retention selection: **90 days**
+## Retention selection: **90 days**, disabled on production
 
-Retention is a policy decision, **not an activated deletion operation**. The preview lists raw provider XML older than 90 days. All XML and matched JSON remain stored until a separate guarded cleanup implementation/review.
+The 90-day preview enumerates candidate XML older than the threshold; no background deletion job is scheduled. A separate operator-only `--prune-raw --apply` command is implemented, **NOT enabled or approved for production**. It requires an independent *existing* SQLite backup of the source containing byte-identical original XML, valid SQLite integrity check, full per-query normalization and reconciliation audit, zero skipped provider records, and verified QSO audit completeness. An audit failure aborts the entire transaction.
 
-Future cleanup implementation must require explicit operator authorization, normalized/audit reconciliation for every affected query, verified backups, a grace period, and an independent dry-run. It must preserve query row IDs, query parameters, fingerprints, normalized receptions, associations, and summaries. An empty provider reply counts as success with zero reports; a failed reply must never be interpreted as zero reception.
+After a future production acceptance and **separate cleanup authorization**, the operator can run on a vetted database copy:
+
+```bash
+python -m rolling_thunder.forge_psk_normalized_history --database /path/to/history.sqlite3 --retention-preview
+python -m rolling_thunder.forge_psk_normalized_history --database /path/to/history.sqlite3 --prune-raw --apply --backup-evidence /path/to/independent-sqlite-backup.sqlite3
+```
+
+**Do not run prune against production until separately approved.** The command clears provider `raw_xml` only; redundant matched-report JSON remains for backwards-compatible readers. Query records, hashes, observation rows, associations, and summaries are retained permanently. For a response with malformed/skipped records, pruning is blocked until a separately reviewed lossless quarantine design exists. No live PSK Reporter network retrieval is performed by either command.
 
 ## Rollback
 
-Rollback the application package to the previous exact SHA. Additive schema v4 tables remain dormant; do **not** downgrade or delete them automatically. Existing Wavelog, contact-sync, FT8 and offline feeder processes must remain untouched.
+Rollback the application package to the previous exact SHA. Additive schema v4/v5 tables remain dormant; do **not** downgrade or delete them automatically. Existing Wavelog, contact-sync, FT8 and offline feeder processes must remain untouched.
