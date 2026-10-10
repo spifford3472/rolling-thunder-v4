@@ -114,3 +114,14 @@ added. The existing PSK ingestion API remains unchanged; wiring an authenticated
 private read endpoint and a Pi-side bounded background client requires another
 checkpoint and review. Existing normalized archives may be sparse before
 contact completion; do not advertise live reception coverage without evidence.
+
+## CP2.4 guarded Pi evidence client (not yet wired to ranking)
+
+`ft8/psk_evidence_client.py` provides a bounded read-only authenticated client
+for the planned Forge endpoint. It validates directional outbound sender,
+receiver area, band frequency, schema, nonfuture age <=30 min, and receiver
+count; all network, stale, malformed and auth failures return no evidence.
+It MUST run only in a background worker: no UI or radio callback may make a
+synchronous network request. The client is not yet configured or called at
+runtime; evidence-to-quality calibration and authenticated listener rollout
+remain distinct gated checkpoints. No transmit behavior changes.
