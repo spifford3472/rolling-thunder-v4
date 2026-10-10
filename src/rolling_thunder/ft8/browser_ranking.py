@@ -44,6 +44,7 @@ class FT8BrowserRanking:
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="ft8-rank")
         self._cache = FT8RankingCache(self._executor)
         self._pending: frozenset[str] = frozenset()
+        self._latest_rankings: dict[str, RankedCQ] = {}
         self._evidence_reader = evidence_reader
         self._sender_callsign = sender_callsign
         # Never queue an unbounded number of HTTP lookups behind the GUI.
@@ -52,6 +53,11 @@ class FT8BrowserRanking:
     @property
     def pending_callsigns(self) -> frozenset[str]:
         return self._pending
+
+    @property
+    def latest_rankings(self) -> dict[str, RankedCQ]:
+        """Visible computed priorities, not probabilities."""
+        return dict(self._latest_rankings)
 
     def order(
         self,
@@ -97,6 +103,10 @@ class FT8BrowserRanking:
             rankings.append(
                 self._cache.view(item.callsign, band, local_grid, item.grid, calculate)
             )
+        self._latest_rankings = {
+            entry.callsign: entry.ranking
+            for entry in rankings if entry.ranking is not None
+        }
         self._pending = frozenset(
             entry.callsign for entry in rankings if entry.ranking is None
         )

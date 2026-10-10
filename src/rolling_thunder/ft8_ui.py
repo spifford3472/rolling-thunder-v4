@@ -5,13 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from rolling_thunder.callsign_country import callsign_country_abbreviation
 from rolling_thunder.friend_presentation import friend_marker
 from rolling_thunder.ft8.attempt_history import FT8AttemptVisualState
 from rolling_thunder.ft8.diagnostics import FT8ClockQuality
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8IncomingCall, FT8Period
+from rolling_thunder.ft8.dx_ranking import RankedCQ
 from rolling_thunder.ft8.receive import FT8ReceiveState
 
-FT8_BROWSER_HEADERS = ("CALL", "SNR", "AUDIO", "GRID")
+FT8_BROWSER_HEADERS = ("CALL", "COUNTRY", "GRID", "REACH")
 FT8_POTA_TREE_GLYPH = "🌲"
 
 
@@ -77,6 +79,8 @@ class FT8BrowserRow:
     call_presentation: FT8CallPresentation
     friend_marker: str = ""
     attempt_state: FT8AttemptVisualState | None = None
+    country_text: str = "—"
+    reach_text: str = "UNKNOWN"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +89,7 @@ class FT8BrowserViewport:
     rows: tuple[FT8BrowserRow, ...]
     hidden_above: int = 0
     hidden_below: int = 0
+    recommendation_text: str = "DX INTELLIGENCE • WAITING FOR CQ"
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +121,7 @@ def build_ft8_browser_viewport(
     attempt_states: dict[str, FT8AttemptVisualState] | None = None,
     friends: frozenset[str] = frozenset(),
     pending_ranking_callsigns: frozenset[str] = frozenset(),
+    rankings: dict[str, RankedCQ] | None = None,
 ) -> FT8BrowserViewport:
     """Build a stable-order viewport that always keeps selection visible."""
     if visible_rows < 1:
@@ -140,20 +146,33 @@ def build_ft8_browser_viewport(
 
     visible = visible_activity[start : start + visible_rows]
     state_map = attempt_states or {}
+    ranking_map = rankings or {}
     rows = tuple(
         _row(
             item,
             selected=item.callsign == selected_callsign,
             friends=friends,
             pending_rank=item.callsign in pending_ranking_callsigns,
+            ranking=ranking_map.get(item.callsign),
             attempt_state=state_map.get(item.callsign),
             current_period=current_period,
         )
         for item in visible
     )
+    top = visible_activity[0] if visible_activity else None
+    best = ranking_map.get(top.callsign) if top is not None else None
+    if top is None:
+        recommendation = "DX INTELLIGENCE • WAITING FOR CQ"
+    else:
+        confidence = f"{best.confidence.upper()} CONFIDENCE" if best else "RANKING PENDING"
+        recommendation = (
+            f"TOP {top.callsign} • {callsign_country_abbreviation(top.callsign)} • "
+            f"{top.grid or 'GRID UNKNOWN'} • {confidence}"
+        )
     return FT8BrowserViewport(
         headers=FT8_BROWSER_HEADERS,
         rows=rows,
+        recommendation_text=recommendation,
         hidden_above=start,
         hidden_below=max(0, len(visible_activity) - (start + len(visible))),
     )
@@ -166,6 +185,7 @@ def _row(
     attempt_state: FT8AttemptVisualState | None,
     friends: frozenset[str],
     pending_rank: bool,
+    ranking: RankedCQ | None,
     current_period: FT8Period,
 ) -> FT8BrowserRow:
     if attempt_state is FT8AttemptVisualState.FAILED:
@@ -195,4 +215,6 @@ def _row(
         selected=selected,
         call_presentation=presentation,
         attempt_state=attempt_state,
+        country_text=callsign_country_abbreviation(activity.callsign),
+        reach_text=(ranking.confidence.upper() if ranking is not None else "PENDING"),
     )

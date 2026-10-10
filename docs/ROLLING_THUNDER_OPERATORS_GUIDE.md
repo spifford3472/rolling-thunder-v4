@@ -389,6 +389,17 @@ the appropriate contact lifecycle point.
 
 # 8. FT8 Screen
 
+The FT8 DX Intelligence browser shows CALL, COUNTRY (conservative callsign-prefix
+abbreviation), GRID, and REACH (LOW/MEDIUM/HIGH ranking confidence or PENDING).
+A compact TOP recommendation summarizes the first currently ranked CQ.
+REACH is **not** a numerical probability of making a contact. Unknown propagation
+or missing Forge observations result in neutral ranking, not a claim the path is closed.
+The old SNR/audio diagnostic values remain in the receive diagnostics and
+underlying CQ data, but no longer occupy browser table columns. Encoder selection,
+receive-only operation, and incoming call presentation remain unchanged.
+
+
+
 ## Purpose
 
 The FT8 screen is a native Rolling Thunder FT8 CQ browser and bounded one-QSO
