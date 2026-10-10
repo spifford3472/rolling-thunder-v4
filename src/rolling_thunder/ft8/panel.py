@@ -57,6 +57,7 @@ class FT8PanelController:
         attempts_per_state: Callable[[], int] | None = None,
         authorization_enabled: Callable[[], bool] | None = None,
         activity_filter: Callable[[FT8CQActivity], bool] | None = None,
+        activity_order: Callable[[tuple[FT8CQActivity, ...]], tuple[FT8CQActivity, ...]] | None = None,
         respond: Callable[[FT8IncomingCall], bool] | None = None,
     ) -> None:
         self._receive_state = receive_state
@@ -70,6 +71,8 @@ class FT8PanelController:
         self._attempts_per_state = attempts_per_state or (lambda: 0)
         self._authorization_enabled = authorization_enabled or (lambda: True)
         self._activity_filter = activity_filter or (lambda _activity: True)
+        self._activity_order = activity_order
+        self._held_order: tuple[str, ...] = ()
         self._respond = respond
         self._selected_callsign: str | None = None
         self._dismissed_incoming_callsign: str | None = None
@@ -83,6 +86,18 @@ class FT8PanelController:
         cq_activity = tuple(
             activity for activity in raw_activity if self._activity_filter(activity)
         )
+        # Filter suppression FIRST; rankings must never resurrect completed QSOs.
+        # Freeze the ordering while an operator highlights a CQ or negotiates.
+        if self._activity_order is not None:
+            if self._selected_callsign is None and self._qso_state() is FT8QsoState.IDLE:
+                cq_activity = self._activity_order(cq_activity)
+                self._held_order = tuple(item.callsign for item in cq_activity)
+            elif self._held_order:
+                prior = {call: index for index, call in enumerate(self._held_order)}
+                cq_activity = tuple(sorted(
+                    cq_activity,
+                    key=lambda item: prior.get(item.callsign, len(prior)),
+                ))
         state = self._qso_state()
         result = self._qso_result()
         context = self._qso_context()

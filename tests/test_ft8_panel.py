@@ -542,3 +542,33 @@ def test_noncompleted_qso_does_not_suppress_same_remote(status: FT8QsoState) -> 
 
     panel.return_to_browser()
     assert panel.snapshot().incoming_call is incoming
+
+
+def test_order_callback_only_applies_while_unselected_and_respects_filter() -> None:
+    activity = (_activity("K1AAA"), _activity("K2BBB"), _activity("K3CCC"))
+    receive = FT8ReceiveState(last_period=FT8Period(100), cq_activity=activity)
+    ordered = ["K3CCC", "K2BBB", "K1AAA"]
+    selected = []
+
+    def ranking(rows):
+        by_call = {row.callsign: row for row in rows}
+        return tuple(by_call[call] for call in ordered if call in by_call)
+
+    panel = FT8PanelController(
+        receive_state=lambda: receive,
+        qso_state=lambda: FT8QsoState.IDLE,
+        qso_context=lambda: None,
+        qso_result=lambda: None,
+        authorize=lambda row: selected.append(row.callsign) is None,
+        abort=lambda: None,
+        return_to_browser=lambda: None,
+        activity_filter=lambda row: row.callsign != "K2BBB",
+        activity_order=ranking,
+    )
+    assert [x.callsign for x in panel.snapshot().cq_activity] == ["K3CCC", "K1AAA"]
+    assert panel.select_next() == "K3CCC"
+    ordered[:] = ["K1AAA", "K2BBB", "K3CCC"]
+    assert [x.callsign for x in panel.snapshot().cq_activity] == ["K3CCC", "K1AAA"]
+    assert panel.activate_selection() is True
+    assert selected == ["K3CCC"]
+    assert [x.callsign for x in panel.snapshot().cq_activity] == ["K1AAA", "K3CCC"]
