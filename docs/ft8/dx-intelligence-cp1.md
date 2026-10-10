@@ -87,3 +87,18 @@ calibrated QSO probability. No Forge provider is queried. The operator's
 highlight locks ordering; the FT8 authorization/QSO/RF sequence is unchanged.
 The scoring executor closes without waiting on shutdown. Future pre-contact
 PSK enrichment must use bounded/coalesced provider retries before activation.
+
+## CP2.4 outbound PSK evidence read adapter (not connected to live ranking)
+
+`forge_psk_path_evidence.py` provides bounded, read-only access to existing
+normalized PSK Reporter history. It requires **our callsign as the sender**, FT8
+mode, frequency neighborhood, the last 30 minutes, and receiver grids within
+600 km of the prospective DX station. It deduplicates receivers by callsign
+and returns observation counts, latest time and median nearby-receiver SNR.
+Missing history returns empty neutral evidence, not a closed-band prediction.
+The historical per-QSO query pipeline may have little pre-QSO coverage.
+
+This checkpoint deliberately does not convert counts/SNR into an uncalibrated
+0–1 quality estimate, expose a network endpoint, or send evidence to the Pi.
+Provider provenance and sample freshness must be validated before connecting
+to the ranking model. This module never writes to production data.
