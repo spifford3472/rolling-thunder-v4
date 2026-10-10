@@ -32,3 +32,34 @@ Status: **software tests only; live FT8 TX disabled**. This document is not auth
 ## Gate
 
 Do not enable production FT8 transmit merely because simulated tests or CI pass. Hardware acceptance and any RF test require explicit operator approval and fail-safe assessment.
+
+## H4 uncertain-transmit operator alarm (software prototype)
+
+A failed CAT PTT release raises a prominent yellow dashboard warning with the
+instruction **POWER DOWN RADIO MANUALLY**, accompanied by a repeating klaxon on
+the configured ALSA default output. **The operator's voice-cancel/discard control
+is the sole acknowledgment path.** USB disappearance does NOT acknowledge or
+clear the warning. Verify that the voice-cancel physical input is actually mapped
+to `discard` on the deployed installation before deploying H4.
+
+The visual warning and klaxon end after voice-cancel acknowledgment, but FT8 TX
+remains inhibited in the alarm state for the rest of that runtime. Only a future,
+separately reviewed recovery procedure may restore authority. The `default`
+ALSA sink is not guaranteed to be HDMI on every Pi: confirm HDMI audio routing
+under stationary no-RF simulation before accepting this feature. Failure of the
+UI, speakers, Pi power, or the audio subsystem can prevent the warning entirely;
+these are notification aids, not a hard RF cutoff.
+
+## H4 FT8-only deliberate unlock sequence
+
+After manually powering down any radio believed to be stuck in TX, the operator
+acknowledges the yellow alarm using physical voice cancel (mapped to DISCARD).
+On the FT8 page a green panel, 26pt bold white type, instructs: "Press command
+buttons in this order Command 1, Command 3, Command 1 to unlock". The
+physical command actions must be delivered exactly in order; wrong order resets
+the sequence. While locked, they must not invoke normal FT8 panel functions.
+Completion clears the in-memory lock only after this explicit operator action.
+A button sequence cannot prove RF is absent, and it never bypasses FT8 power,
+frequency, radio connection, timing or other transmit gates. Never execute
+the sequence before independently checking that the radio is in receive and
+recovering the radio if needed. Repeated failures require stopping the radio.

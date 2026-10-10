@@ -656,3 +656,44 @@ def test_failed_normal_release_leaves_watchdog_armed_for_retry() -> None:
     assert watchdogs.timers[0].cancelled is False
     watchdogs.timers[0].fire()
     assert radio.ptt.events == ["key", "release", "release"]
+
+
+def test_ptt_alarm_inhibits_future_key_even_after_voice_acknowledgment() -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    alarm = FT8PttAlarm()
+    radio = _FakeRadio(_connected_state())
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        ptt_uncertain=alarm.trigger,
+        transmit_inhibited=lambda: alarm.tx_inhibited,
+    )
+    alarm.trigger()
+    alarm.voice_cancel()
+    with pytest.raises(RuntimeError, match='inhibited'):
+        executor.execute_test(_hardware_request())
+    assert 'key' not in radio.ptt.events
+
+
+def test_watchdog_cat_failure_triggers_ptt_warning() -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    class FailedReleasePtt(_FakePtt):
+        def release(self) -> None:
+            self.events.append('release')
+            raise RuntimeError('CAT release failure')
+
+    alarm = FT8PttAlarm()
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = FailedReleasePtt()
+    watchdogs = _WatchdogFactory()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(),
+        watchdog_factory=watchdogs, ptt_uncertain=alarm.trigger,
+    )
+    with pytest.raises(RuntimeError, match='CAT release failure'):
+        executor.execute_test(_hardware_request())
+    assert alarm.active
+    with pytest.raises(RuntimeError, match='CAT release failure'):
+        watchdogs.timers[0].fire()
+    assert alarm.tx_inhibited

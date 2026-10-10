@@ -271,3 +271,53 @@ def test_active_panel_rejection_is_preserved() -> None:
 
     assert commands.execute(ControlAction.ACTIVATE_SELECTION) is False
     assert active_panel.actions == ["activate_selection"]
+
+
+def test_ptt_voice_cancel_uses_discard_control_and_does_not_clear_tx_inhibit() -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    capture = FakeCapture()
+    commands = OperatorCommandController(
+        capture, FakeCommit(), ContextNavigationController(), connected_radio,
+        cancel_ptt_alarm=lambda: _ack_ptt_alarm(alarm),
+    )
+    assert commands.execute(ControlAction.DISCARD) is True
+    assert not alarm.active and alarm.tx_inhibited
+    assert capture.discard_calls == 0
+
+
+def _ack_ptt_alarm(alarm: object) -> bool:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    assert isinstance(alarm, FT8PttAlarm)
+    if not alarm.active:
+        return False
+    alarm.voice_cancel()
+    return True
+
+
+def test_locked_command_buttons_route_to_unlock_without_normal_panel_actions() -> None:
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    alarm.voice_cancel()
+    panel = FakeActivePanel()
+
+    def handle_unlock(action: ControlAction) -> bool:
+        if not alarm.tx_inhibited:
+            return False
+        alarm.unlock_step(action, ft8_screen=True, radio_confirmed_receive=True)
+        return True
+
+    commands = OperatorCommandController(
+        FakeCapture(), FakeCommit(), ContextNavigationController(), connected_radio,
+        active_panel=panel, ptt_unlock_step=handle_unlock,
+    )
+    for action in (ControlAction.PANEL_PRIMARY, ControlAction.PANEL_TERTIARY,
+                   ControlAction.PANEL_PRIMARY):
+        assert commands.execute(action)
+    assert not alarm.tx_inhibited
+    assert panel.actions == []
