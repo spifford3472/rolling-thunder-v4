@@ -44,3 +44,15 @@ def test_missing_database_is_neutral(tmp_path):
     assert not result.has_relevant_evidence
     assert result.latest_reception_utc is None
     assert not (tmp_path / "missing.db").exists()
+
+
+def test_existing_psk_n2_z_timestamps_are_included(tmp_path):
+    path = tmp_path / "history.db"
+    with sqlite3.connect(path) as db:
+        db.execute("""CREATE TABLE psk_reception (sender_callsign TEXT, receiver_callsign TEXT, receiver_locator_normalized TEXT, flow_start_utc TEXT, snr_db INTEGER, frequency_hz INTEGER, mode TEXT)""")
+        # The existing PSK-N2 normalizer emits the literal Z suffix.
+        db.execute("INSERT INTO psk_reception VALUES (?,?,?,?,?,?,?)",
+                   ("KI5VNB", "DL1ABC", "JN58", "2026-10-10T17:59:00Z", -11, 14074000, "FT8"))
+    result = lookup_outbound_evidence(path, sender_callsign="KI5VNB",
+       target_grid="JN58", frequency_hz=14074000, now_utc=NOW)
+    assert result.nearby_receivers == 1

@@ -38,3 +38,13 @@ def test_outbound_only_aggregates_no_receiver_names(tmp_path):
     }
     assert result["last_120m"]["independent_receivers"] == 2
     assert "DL1ABC" not in str(result)
+
+
+def test_n2_z_timestamp_is_counted(tmp_path):
+    path = tmp_path / "normalized.db"
+    with sqlite3.connect(path) as db:
+        db.execute("""CREATE TABLE psk_reception (sender_callsign TEXT, receiver_callsign TEXT, receiver_locator_normalized TEXT, frequency_hz INTEGER, flow_start_utc TEXT, mode TEXT, snr_db INTEGER)""")
+        db.execute("INSERT INTO psk_reception VALUES (?,?,?,?,?,?,?)",
+                   ("KI5VNB", "JA1XYZ", "PM95", 14074000, "2026-10-10T22:59:00Z", "FT8", -13))
+    result = audit_coverage(path, sender="KI5VNB", now=NOW)
+    assert result["last_30m"]["receptions"] == 1
