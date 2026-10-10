@@ -44,3 +44,13 @@ Do not provision a Forge-only token and assume the Pi has it; deliver the same d
 - Forge installation/restart: pending
 - Pi installation/restart: pending
 - Any RF tests: pending
+
+## Post-cutover finding (2026-10-10): root-only wheel installation permissions
+
+The Forge-only approved `4a9a547c30e8184d4a355db18554328648d46651` wheel was installed from a root-run operator script with a restrictive umask. Although the wheel contained the expected modules, the installed `rolling_thunder/` and distribution metadata directories were `0700 root:root`. The `rollingthunder` unit could not import its entrypoint and repeatedly restarted. Recovery required granting group read/traverse access and a controlled contact-sync restart. Health and authenticated FT8 API acceptance then passed; no database rollback was performed.
+
+For any subsequent Forge contact-sync installation, **before restarting the service**, execute `scripts/forge-contact-sync-package-permissions.sh` as root from the same reviewed checkout. The script restricts its changes to the installed distribution directories, grants `rollingthunder` group read/traverse permissions, and invokes `scripts/verify-forge-python-access.py` with the **deployed** venv Python as the **service account**. A failing import probe must block restart. Do not assume an import run as root proves service-user access.
+
+The current shared `/usr/local/sbin/rolling-thunder-forge-deploy` helper is **not** approved for FT8-P1 deployment: its deployment state file identified `a2eb092` while the installed runtime was `b6ad4b2`, and its rollback overwrites the live SQLite database. Preserve new contacts and FT8 telemetry during rollback; restore the previously known-good package/config only, with explicit operator review if a schema downgrade is necessary. Do not edit the deployment state merely to bypass this mismatch.
+
+Forge evidence acceptance included unauthenticated 401 after credential provisioning, authenticated 200 accepted, replay 200 already_exists, modified replay 409, and a single persisted *non-transmitted* synthetic test record (`9ad2f0c2-ed0e-4ba7-8b03-732d8aa8c339`). Pi has **not** received the credential; no mobile production deployment or RF tests are authorized by this checkpoint.
