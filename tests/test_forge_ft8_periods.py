@@ -1,0 +1,20 @@
+from datetime import UTC, datetime
+from uuid import uuid4
+
+import pytest
+
+from rolling_thunder.forge_ft8_periods import ForgeFT8PeriodConflict, ForgeFT8PeriodRepository
+from rolling_thunder.ft8.hardware_transmit import FT8TransmitPeriodTelemetry
+
+
+def test_exactly_once_and_conflicting_replay(tmp_path):
+    repo = ForgeFT8PeriodRepository(tmp_path / "forge.sqlite")
+    qso = uuid4()
+    time = datetime(2026, 10, 10, 12, tzinfo=UTC)
+    record = FT8TransmitPeriodTelemetry(qso, time, time, 20, True, 14074000, True)
+    assert repo.persist(qso, 1, record)
+    assert not ForgeFT8PeriodRepository(tmp_path / "forge.sqlite").persist(qso, 1, record)
+    changed = FT8TransmitPeriodTelemetry(qso, time, time, 25, True, 14074000, True)
+    with pytest.raises(ForgeFT8PeriodConflict):
+        repo.persist(qso, 1, changed)
+    assert repo.persist(qso, 2, record)
