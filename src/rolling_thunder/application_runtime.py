@@ -99,6 +99,7 @@ from rolling_thunder.ft8.performance_recording import (
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
 from rolling_thunder.ft8.period_repository import FT8PeriodSyncService, FT8TransmitPeriodRepository
 from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+from rolling_thunder.ft8.psk_evidence_client import HttpPskEvidenceClient
 from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
@@ -1178,7 +1179,24 @@ class ApplicationRuntime:
             return not worked.is_suppressed(activity.callsign, band)
 
         if ft8_receive is not None:
-            runtime.ft8_browser_ranking = FT8BrowserRanking()
+            # Explicit opt-in. Empty configuration preserves offline ranking and
+            # never touches the network, radio or PSK ingestion worker.
+            evidence_url = os.environ.get("ROLLING_THUNDER_FT8_EVIDENCE_URL", "").strip()
+            evidence_token = os.environ.get("ROLLING_THUNDER_FT8_EVIDENCE_TOKEN", "")
+            evidence_reader = None
+            if evidence_url and evidence_token:
+                try:
+                    evidence_reader = HttpPskEvidenceClient(
+                        evidence_url, bearer_token=evidence_token, timeout_s=1.0,
+                    )
+                except ValueError:
+                    logging.getLogger(__name__).warning(
+                        "Optional FT8 outbound evidence configuration invalid; using offline ranking"
+                    )
+            runtime.ft8_browser_ranking = FT8BrowserRanking(
+                evidence_reader=evidence_reader,
+                sender_callsign=str(config.operator.callsign),
+            )
 
             def ft8_ranked_order(activity: tuple[FT8CQActivity, ...]) -> tuple[FT8CQActivity, ...]:
                 ranker = runtime.ft8_browser_ranking
