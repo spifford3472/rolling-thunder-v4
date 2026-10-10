@@ -21,7 +21,11 @@ def audit_coverage(path: Path, *, sender: str, now: datetime) -> dict[str, objec
         raise ValueError("now must be timezone-aware")
     if not sender.strip():
         raise ValueError("sender must be nonempty")
-    if not path.is_file():
+    try:
+        exists = path.is_file()
+    except PermissionError:
+        return {"status": "unavailable", "reason": "database_inaccessible_or_invalid"}
+    if not exists:
         return {"status": "unavailable", "reason": "database_missing"}
     try:
         with sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=0.2) as db:

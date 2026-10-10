@@ -48,3 +48,15 @@ def test_n2_z_timestamp_is_counted(tmp_path):
                    ("KI5VNB", "JA1XYZ", "PM95", 14074000, "2026-10-10T22:59:00Z", "FT8", -13))
     result = audit_coverage(path, sender="KI5VNB", now=NOW)
     assert result["last_30m"]["receptions"] == 1
+
+
+def test_unreadable_path_reports_unavailable(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    def forbidden(_path):
+        raise PermissionError("restricted service directory")
+
+    monkeypatch.setattr(Path, "is_file", forbidden)
+    assert audit_coverage(tmp_path / "history.sqlite3", sender="KI5VNB", now=NOW) == {
+        "status": "unavailable", "reason": "database_inaccessible_or_invalid",
+    }
