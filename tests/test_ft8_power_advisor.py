@@ -65,3 +65,13 @@ def test_config_model_round_trip_and_custom_limit() -> None:
     })
     assert config.power.clamp('10m',70)==25
     assert config.power.clamp('12m',70)==35
+
+
+def test_fixed_band_safety_ceilings_survive_missing_or_relaxed_config() -> None:
+    policy = FT8PowerPolicy(max_auto_watts_by_band={}, default_max_auto_watts=100)
+    assert [policy.limit_for(band) for band in ("10m", "12m", "15m")] == [30, 40, 40]
+    assert policy.limit_for(None) == 30
+    relaxed = FT8PowerPolicy(max_auto_watts_by_band={"10m": 90, "12m": 100, "15m": 70})
+    assert [relaxed.limit_for(band) for band in ("10m", "12m", "15m")] == [30, 40, 40]
+    stricter = FT8PowerPolicy(max_auto_watts_by_band={"10m": 25})
+    assert stricter.limit_for("10m") == 25

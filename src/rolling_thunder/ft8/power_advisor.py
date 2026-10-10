@@ -37,8 +37,10 @@ class FT8PowerPolicy(BaseModel):
     def limit_for(self, band: str | None) -> int:
         # Unknown band cannot bypass the strictest configured safety ceiling.
         if band is None:
-            return min(self.default_max_auto_watts, *self.max_auto_watts_by_band.values())
-        return self.max_auto_watts_by_band.get(band.lower(), self.default_max_auto_watts)
+            return min(self.default_max_auto_watts, *_DEFAULT_MAX_AUTO_WATTS.values(), *self.max_auto_watts_by_band.values())
+        configured = self.max_auto_watts_by_band.get(band.lower(), self.default_max_auto_watts)
+        fixed_ceiling = _DEFAULT_MAX_AUTO_WATTS.get(band.lower())
+        return min(configured, fixed_ceiling) if fixed_ceiling is not None else configured
 
     def clamp(self, band: str | None, proposed_watts: int) -> int:
         return min(max(5, proposed_watts), self.limit_for(band))
