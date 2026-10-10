@@ -115,6 +115,18 @@ private read endpoint and a Pi-side bounded background client requires another
 checkpoint and review. Existing normalized archives may be sparse before
 contact completion; do not advertise live reception coverage without evidence.
 
+## CP2.4 private evidence API boundary (not deployed)
+
+`forge_psk_evidence_api.py` adds a pure private HTTP request/response boundary
+for `GET /api/v1/ft8/outbound-psk-evidence` with sender, target grid, and
+frequency. It requires a separate long bearer token, does no writes or provider
+polling, and emits the versioned cached snapshot without storage locations or
+credentials. Unsupported methods, missing authorization and malformed requests
+fail closed. **No network listener, environment secret, route registration, or
+production service enablement is included in this checkpoint.** A later gated
+composition step and Pi-side bounded background client are required before
+mobile FT8 receives these snapshots. Data remains observational, not a QSO
+success probability.
 ## CP2.4 guarded Pi evidence client (not yet wired to ranking)
 
 `ft8/psk_evidence_client.py` provides a bounded read-only authenticated client
