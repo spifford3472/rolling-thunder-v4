@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Read-only gate; run locally as geoff on anvilmobile. NEVER starts/stops service.
+set -euo pipefail
+APP=/home/geoff/projects/rolling-thunder-v4
+TARGET=4a75ff456323c387ca0668d7d9c882f2d803a23c
+cd "$APP"
+echo '===== H4 RECEIVE-ONLY PREFLIGHT ====='
+[[ "$(git rev-parse HEAD)" == c16e015051e29b92a5f773d594ad1cafd5c70c02 ]] || { echo 'FAIL: unexpected installed commit'; exit 1; }
+[[ -z "$(git status --porcelain)" ]] || { echo 'FAIL: dirty production worktree'; exit 1; }
+git cat-file -e "$TARGET^{commit}"
+git merge-base --is-ancestor "$TARGET" origin/main
+[[ "$(systemctl is-active rolling-thunder.service)" == active ]]
+"$APP/.venv/bin/python" - <<'PY'
+from pathlib import Path
+from rolling_thunder.config import load_config
+import sqlite3
+cfg=load_config(Path('config/rolling-thunder.yaml'))
+assert cfg.ft8.enabled and not cfg.ft8.transmit.enabled, 'FAIL: expected FT8 RX-only'
+print('PASS: RX enabled and TX disabled')
+print('CAT timeout (seconds):', cfg.hardware.radio_timeout_s)
+print('Radio device:', cfg.hardware.radio_device)
+print('Physical control mappings:', {k:str(v) for k,v in cfg.physical_controls.mappings.items() if ('discard' in k or 'voice' in k or 'context-button-1' in k or 'context-button-3' in k)})
+with sqlite3.connect('file:config/data/rolling-thunder.db?mode=ro',uri=True) as db:
+ assert db.execute('pragma quick_check').fetchone()[0]=='ok'
+ print('PASS: live SQLite quick_check')
+PY
+printf '\nALSA sinks (read-only):\n'
+command -v aplay >/dev/null && aplay -L | grep -E -A2 '^(default|hdmi|sysdefault)' | head -35 || true
+printf '\nUSB audio devices (read-only):\n'
+command -v aplay >/dev/null && aplay -l || true
+printf '\nService state:\n'
+systemctl show rolling-thunder.service -p ActiveState -p MainPID -p NRestarts
+printf '\nPASS: H4 PREFLIGHT READ ONLY; NO DEPLOYMENT PERFORMED\n'
