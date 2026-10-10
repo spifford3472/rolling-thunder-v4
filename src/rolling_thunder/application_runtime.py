@@ -96,6 +96,7 @@ from rolling_thunder.ft8.performance_recording import (
     build_ft8_responder_attempt_seed,
 )
 from rolling_thunder.ft8.performance_sync import FT8PerformanceSyncService
+from rolling_thunder.ft8.period_repository import FT8TransmitPeriodRepository
 from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.ft8.radio_preparation import (
     FT8RadioPreparationService,
@@ -852,9 +853,11 @@ class ApplicationRuntime:
                     ft8_audio_output
                     or AlsaAplayFT8AudioOutput(config.ft8.transmit.audio_device)
                 )
+                period_store = FT8TransmitPeriodRepository(config.storage.database_path)
                 resolved_ft8_executor = BoundedFT8HardwareTransmitExecutor(
                     radio,
                     resolved_ft8_audio_output,
+                    period_recorder=period_store.append,
                 )
 
             def build_ft8_session(

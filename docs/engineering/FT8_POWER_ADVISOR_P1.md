@@ -11,3 +11,9 @@ Initial slice adds a configuration-backed per-band power ceiling and a read-only
 - RF exposure limits depend on antenna/vehicle configuration. Do not interpret an advisor output as an RF compliance assessment.
 
 No production deployments or raw XML cleanup in this checkpoint.
+
+## P1.3 local durability checkpoint
+
+For physical FT8 QSO transmissions the executor now reads configured CAT power before keying, records exact UTC keyed intervals, and appends each completed period to `ft8_transmit_period` in the Pi's existing SQLite storage database. Each QSO may contain multiple distinct emission rows. A readback failure is stored as unknown rather than guessed from an RF meter; the value is a *CAT configured setting*, not a calibrated wattage measurement. This is written after PTT release, is local only, and the existing per-QSO bounded in-memory records remain available.
+
+**Still missing:** Crash-proof recording of an emission whose process dies before unkey, explicit operator physical-control override detection, reliable attachment of PSK Reporter observations to a specific emitted period, transfer of individual period records to Forge, and receiver-path calibration. These are rollout blockers for any adaptive power control. No live radio/Forge deployment is authorized by this checkpoint.

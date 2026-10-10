@@ -223,11 +223,13 @@ class BoundedFT8HardwareTransmitExecutor:
         audio_output: FT8AudioOutput,
         *,
         watchdog_factory: WatchdogFactory = _threading_watchdog,
+        period_recorder: Callable[[FT8TransmitPeriodTelemetry], None] | None = None,
     ) -> None:
         self._radio = radio
         self._audio_output = audio_output
         self._ptt = radio.create_cp6_cat_ptt_capability()
         self._watchdog_factory = watchdog_factory
+        self._period_recorder = period_recorder
         self._lock = Lock()
         self._active = False
         self._closed = False
@@ -350,6 +352,8 @@ class BoundedFT8HardwareTransmitExecutor:
                         frequency_hz=expected_radio_frequency_hz,
                         transmitted=True,
                     )
+                    if self._period_recorder is not None:
+                        self._period_recorder(record)
                     with self._lock:
                         # Keep bounded history even for a pathological QSO.
                         self._transmit_periods.setdefault(qso_id, []).append(record)
