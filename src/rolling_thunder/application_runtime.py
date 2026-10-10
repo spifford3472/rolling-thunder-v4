@@ -863,6 +863,7 @@ class ApplicationRuntime:
                     resolved_ft8_audio_output,
                     intent_started=period_store.begin_intent,
                     intent_completed=period_store.complete_intent,
+                    power_policy=config.ft8.power,
                 )
 
             def build_ft8_session(

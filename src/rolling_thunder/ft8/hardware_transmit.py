@@ -16,11 +16,13 @@ from threading import Event, Lock, Thread, Timer
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from rolling_thunder.domain import RadioConnectionState, RadioState
+from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
 from rolling_thunder.ft8.audio_output import FT8AudioOutput
 from rolling_thunder.ft8.domain import FT8QsoContext
 from rolling_thunder.ft8.encoder import FT8_SAMPLE_RATE_HZ, FT8Waveform
+from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
 from rolling_thunder.radio import RadioError
+from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +230,7 @@ class BoundedFT8HardwareTransmitExecutor:
         intent_started: Callable[[UUID, UUID, int, int | None], None] | None = None,
         intent_finished: Callable[[UUID], None] | None = None,
         intent_completed: Callable[[UUID, FT8TransmitPeriodTelemetry], None] | None = None,
+        power_policy: FT8PowerPolicy | None = None,
     ) -> None:
         self._radio = radio
         self._audio_output = audio_output
@@ -237,6 +240,7 @@ class BoundedFT8HardwareTransmitExecutor:
         self._intent_started = intent_started
         self._intent_finished = intent_finished
         self._intent_completed = intent_completed
+        self._power_policy = power_policy
         self._lock = Lock()
         self._active = False
         self._closed = False
@@ -331,6 +335,20 @@ class BoundedFT8HardwareTransmitExecutor:
                         power_readback_verified = True
                 except (RadioError, RuntimeError, ValueError, TypeError):
                     pass
+            if qso_id is not None and self._power_policy is not None:
+                # Final QSO transmit boundary: never reprogram a manual change.
+                # Unknown CAT settings or an exceeded cap require operator action.
+                try:
+                    band = resolve_radio_band(Frequency(hz=expected_radio_frequency_hz))
+                except RadioBandResolutionError as exc:
+                    raise RuntimeError("FT8 transmit band is unrecognized") from exc
+                if verified_power is None:
+                    raise RuntimeError("FT8 transmit requires verified CAT power readback")
+                cap = self._power_policy.limit_for(band.value)
+                if verified_power > cap:
+                    raise RuntimeError(
+                        f"FT8 CAT power {verified_power} W exceeds {band.value} ceiling {cap} W"
+                    )
             if qso_id is not None and self._intent_started is not None:
                 intent_id = uuid4()
                 self._intent_started(intent_id, qso_id, expected_radio_frequency_hz, verified_power)

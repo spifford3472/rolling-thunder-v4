@@ -598,3 +598,36 @@ def test_failed_intent_completion_clears_executor_active_state() -> None:
     executor.execute_qso(request)
     assert attempts == 2
     assert radio.ptt.events.count('key') == 2
+
+
+def test_final_qso_power_gate_rejects_manual_over_ceiling_and_unknown() -> None:
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+
+    class PowerRadio(_FakeRadio):
+        def __init__(self, watts):
+            super().__init__(_connected_state(frequency_hz=28_074_000))
+            self.watts = watts
+
+        def read_power_watts(self):
+            return self.watts
+
+    for watts in (35, None, 0, 101):
+        radio = PowerRadio(watts)
+        executor = BoundedFT8HardwareTransmitExecutor(
+            radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy(),
+        )
+        with pytest.raises(RuntimeError, match='power|CAT'):
+            executor._execute(
+                waveform=_waveform(), maximum_key_down_s=14.5,
+                expected_radio_frequency_hz=28_074_000,
+                expected_radio_mode='DATA', label='QSO transmit', qso_id=_qso_context().qso_id,
+            )
+        assert 'key' not in radio.ptt.events
+    radio = PowerRadio(30)
+    executor = BoundedFT8HardwareTransmitExecutor(radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy())
+    executor._execute(
+        waveform=_waveform(), maximum_key_down_s=14.5,
+        expected_radio_frequency_hz=28_074_000, expected_radio_mode='DATA',
+        label='QSO transmit', qso_id=_qso_context().qso_id,
+    )
+    assert radio.ptt.events.count('key') == 1
