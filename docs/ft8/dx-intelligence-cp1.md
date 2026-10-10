@@ -151,3 +151,14 @@ The separate token is loaded from an environment variable. No systemd unit,
 listener activation, external address binding or production config is included.
 Pi client remains unconfigured, and the observation-to-ranking evidence
 calibration remains pending. No RF/power changes.
+## CP2.4 normalized history coverage audit
+
+`forge_psk_coverage_audit.py` is an operator-run read-only diagnostic: it
+reports aggregate KI5VNB outbound FT8 receptions, independent receivers and
+receiver-grid availability over the last 30 minutes, two hours and day. It
+fails explicitly for missing/inaccessible or incompatible databases, and never
+changes service permissions or discloses receiver identities. It is not a
+normalized data ingest or a scheduled poll. The production worker's own
+history database is not interchangeable with a normalized `psk_reception`
+table. Before enabling evidence-backed ranking, an authorized operator must
+identify the normalized database and verify sufficient pre-contact coverage.
