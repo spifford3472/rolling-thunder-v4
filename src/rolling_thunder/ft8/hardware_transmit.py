@@ -34,6 +34,19 @@ class FT8TransmitMeterSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class FT8TransmitPeriodTelemetry:
+    """Per-emission CAT power readback; raw RF meter is not calibrated watts."""
+
+    qso_id: UUID
+    started_at_utc: datetime
+    ended_at_utc: datetime
+    configured_power_watts: int | None
+    power_readback_verified: bool
+    frequency_hz: int
+    transmitted: bool
+
+
+@dataclass(frozen=True, slots=True)
 class FT8HardwareTestAuthorization:
     """One explicit owner authorization for a supervised hardware test."""
 
@@ -219,6 +232,7 @@ class BoundedFT8HardwareTransmitExecutor:
         self._active = False
         self._closed = False
         self._meter_summaries: dict[UUID, FT8TransmitMeterSummary] = {}
+        self._transmit_periods: dict[UUID, list[FT8TransmitPeriodTelemetry]] = {}
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
         self._execute(
@@ -244,6 +258,11 @@ class BoundedFT8HardwareTransmitExecutor:
         """Return the peak meter summary collected for one QSO UUID."""
         with self._lock:
             return self._meter_summaries.get(qso_id)
+
+    def transmit_periods(self, qso_id: UUID) -> tuple[FT8TransmitPeriodTelemetry, ...]:
+        """Return bounded in-memory emission records, not yet persisted."""
+        with self._lock:
+            return tuple(self._transmit_periods.get(qso_id, ()))
 
     def cancel_test(self) -> None:
         """Force receive even when no owner test is currently active."""
@@ -281,13 +300,30 @@ class BoundedFT8HardwareTransmitExecutor:
         watchdog: WatchdogTimer | None = None
         meter_stop: Event | None = None
         meter_thread: Thread | None = None
+        emission_started: datetime | None = None
+        verified_power: int | None = None
+        power_readback_verified = False
+        keyed = False
         try:
             self._verify_radio(
                 expected_radio_frequency_hz=expected_radio_frequency_hz,
                 expected_radio_mode=expected_radio_mode,
                 label=label,
             )
+            # A missing/unreadable CAT power setting is unknown, NEVER inferred
+            # from a raw power meter value or a previous QSO power target.
+            reader = getattr(self._radio, "read_power_watts", None)
+            if qso_id is not None and callable(reader):
+                try:
+                    value = reader()
+                    if type(value) is int and 5 <= value <= 100:
+                        verified_power = value
+                        power_readback_verified = True
+                except (RadioError, RuntimeError, ValueError, TypeError):
+                    pass
             self._ptt.key()
+            keyed = True
+            emission_started = datetime.now(UTC)
             watchdog = self._watchdog_factory(
                 maximum_key_down_s,
                 self._ptt.release,
@@ -304,6 +340,20 @@ class BoundedFT8HardwareTransmitExecutor:
             try:
                 self._ptt.release()
             finally:
+                if qso_id is not None and keyed and emission_started is not None:
+                    record = FT8TransmitPeriodTelemetry(
+                        qso_id=qso_id,
+                        started_at_utc=emission_started,
+                        ended_at_utc=datetime.now(UTC),
+                        configured_power_watts=verified_power,
+                        power_readback_verified=power_readback_verified,
+                        frequency_hz=expected_radio_frequency_hz,
+                        transmitted=True,
+                    )
+                    with self._lock:
+                        # Keep bounded history even for a pathological QSO.
+                        self._transmit_periods.setdefault(qso_id, []).append(record)
+                        self._transmit_periods[qso_id] = self._transmit_periods[qso_id][-64:]
                 if meter_thread is not None:
                     meter_thread.join(timeout=1.0)
                 with self._lock:

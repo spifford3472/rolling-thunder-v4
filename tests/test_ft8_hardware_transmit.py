@@ -518,3 +518,22 @@ def test_qso_executor_collects_peak_meter_summary_while_keyed() -> None:
     assert summary.swr_peak_raw >= 6
     assert radio.ptt.events[0] == "key"
     assert radio.ptt.events[-1] == "release"
+
+
+def test_per_emission_telemetry_does_not_invent_power_when_unreadable() -> None:
+    radio = _MeterRadio(_connected_state())
+    audio = _BlockingAudioOutput()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, audio)
+    request = _qso_hardware_request()
+    worker = threading.Thread(target=lambda: executor.execute_qso(request))
+    worker.start()
+    assert audio.entered.wait(1)
+    audio.release.set()
+    worker.join(2)
+    assert not worker.is_alive()
+    records = executor.transmit_periods(request.authorization.context.qso_id)
+    assert len(records) == 1
+    assert records[0].configured_power_watts is None
+    assert records[0].power_readback_verified is False
+    assert records[0].ended_at_utc >= records[0].started_at_utc
+    assert records[0].frequency_hz == request.expected_radio_frequency_hz
