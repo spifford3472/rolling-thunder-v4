@@ -3,10 +3,11 @@ from datetime import UTC, datetime
 from json import dumps, loads
 from uuid import uuid4
 
+from test_forge_contact_sync_api import app
+
 from rolling_thunder.forge_ft8_periods import ForgeFT8PeriodRepository
 from rolling_thunder.ft8.hardware_transmit import FT8TransmitPeriodTelemetry
 from rolling_thunder.ft8.period_repository import FT8PeriodSyncService, FT8TransmitPeriodRepository
-from tests.test_forge_contact_sync_api import app
 
 
 def test_retry_ack_and_forge_duplicate_replay(tmp_path):
