@@ -82,19 +82,14 @@ def test_adapter_is_exactly_idempotent_and_uses_terminal_end_plus_five_minutes(
 ) -> None:
     database = tmp_path / "orchestration.sqlite3"
     repository = PskReporterOrchestrationRepository(database)
-    adapter = PskReporterCompletedEventAdapter(
-        repository, PskReporterConfig(enabled=True)
-    )
+    adapter = PskReporterCompletedEventAdapter(repository, PskReporterConfig(enabled=True))
     event = _event(2, ended_at=NOW - timedelta(minutes=5))
 
     assert (
         adapter.enqueue(event, received_at_utc=NOW - timedelta(minutes=4))
         is CompletedFt8EventDisposition.ACCEPTED
     )
-    assert (
-        adapter.enqueue(event, received_at_utc=NOW)
-        is CompletedFt8EventDisposition.REPLAYED
-    )
+    assert adapter.enqueue(event, received_at_utc=NOW) is CompletedFt8EventDisposition.REPLAYED
     with sqlite3.connect(database) as connection:
         row = connection.execute(
             "SELECT eligible_at_utc, state FROM pskreporter_completed_ft8_event"
@@ -167,8 +162,7 @@ def test_global_pacing_survives_restart_and_failed_query_is_not_zero(
     assert due.disposition is PskReporterWorkerDisposition.SUCCEEDED
     with sqlite3.connect(database) as connection:
         windows = connection.execute(
-            "SELECT window_key, state FROM pskreporter_request_window "
-            "ORDER BY reserved_at_utc"
+            "SELECT window_key, state FROM pskreporter_request_window ORDER BY reserved_at_utc"
         ).fetchall()
     assert len(windows) == 2
     assert windows[0][0] != windows[1][0]
@@ -249,9 +243,7 @@ def test_restart_reconciles_durable_terminal_summary_before_reserving_provider(
 
 
 def test_disabled_worker_never_reserves_or_calls_provider(tmp_path: Path) -> None:
-    orchestration, history, _config, transport, _worker_instance = _worker(
-        tmp_path, responses=[]
-    )
+    orchestration, history, _config, transport, _worker_instance = _worker(tmp_path, responses=[])
     disabled = PskReporterOrchestrationWorker(
         orchestration,
         history,
@@ -275,13 +267,9 @@ def _worker(
     Transport,
     PskReporterOrchestrationWorker,
 ]:
-    orchestration = PskReporterOrchestrationRepository(
-        tmp_path / "orchestration.sqlite3"
-    )
+    orchestration = PskReporterOrchestrationRepository(tmp_path / "orchestration.sqlite3")
     history = ForgePropagationHistoryRepository(tmp_path / "history.sqlite3")
-    config = PskReporterConfig(
-        enabled=True, maximum_qsos_per_query=maximum_qsos_per_query
-    )
+    config = PskReporterConfig(enabled=True, maximum_qsos_per_query=maximum_qsos_per_query)
     transport = Transport(responses)
     worker = PskReporterOrchestrationWorker(
         orchestration,
@@ -332,3 +320,38 @@ def _event(
         contact=contact,
         terminal_attempt=FT8PerformanceAttempt.model_validate(attempt_values),
     )
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_provider_access_denial_persistently_blocks_future_windows(
+    tmp_path: Path, status: int
+) -> None:
+    """A provider denial must survive restart rather than retry after ten minutes."""
+    database = tmp_path / "orchestration.sqlite3"
+    history = ForgePropagationHistoryRepository(tmp_path / "history.sqlite3")
+    config = PskReporterConfig(enabled=True)
+    repository = PskReporterOrchestrationRepository(database)
+    adapter = PskReporterCompletedEventAdapter(repository, config)
+    adapter.enqueue(
+        _event(91, ended_at=NOW - timedelta(minutes=10)), received_at_utc=NOW - timedelta(minutes=9)
+    )
+    failing_transport = Transport([UrllibHttpResponse(status, b"blocked")])
+    failure = PskReporterOrchestrationWorker(
+        repository,
+        history,
+        config,
+        client=PskReporterHttpClient(config, transport=failing_transport),
+    ).run_once(now_utc=NOW)
+    assert failure.disposition is PskReporterWorkerDisposition.FAILED
+    with sqlite3.connect(database) as connection:
+        blocked = connection.execute(
+            "SELECT reason FROM pskreporter_provider_block WHERE singleton_id=1"
+        ).fetchone()
+    assert blocked is not None and f"HTTP {status}" in blocked[0]
+    restarted = PskReporterOrchestrationRepository(database)
+    retry_transport = Transport([UrllibHttpResponse(200, b"<receptionReports/>")])
+    future = PskReporterOrchestrationWorker(
+        restarted, history, config, client=PskReporterHttpClient(config, transport=retry_transport)
+    ).run_once(now_utc=NOW + timedelta(minutes=30))
+    assert future.disposition is PskReporterWorkerDisposition.IDLE
+    assert retry_transport.requests == []

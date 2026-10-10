@@ -14,6 +14,8 @@ scheduler_interval_s: 30
 pskreporter:
   enabled: false
   sender_callsign: KI5VNB
+  # Optional operator contact supplied voluntarily for provider support.
+  # appcontact: operator@example.org
   mode: FT8
   minimum_query_interval_s: 600
   report_latency_s: 300

@@ -250,9 +250,14 @@ class PskReporterOrchestrationRepository:
         try:
             with sqlite3.connect(self._database_path) as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                block = connection.execute(
+                    "SELECT reason FROM pskreporter_provider_block WHERE singleton_id=1"
+                ).fetchone()
+                if block is not None:
+                    connection.commit()
+                    return None
                 gate = connection.execute(
-                    "SELECT last_attempt_at_utc FROM pskreporter_provider_gate "
-                    "WHERE singleton_id=1"
+                    "SELECT last_attempt_at_utc FROM pskreporter_provider_gate WHERE singleton_id=1"
                 ).fetchone()
                 if gate is not None and gate[0] is not None:
                     last_attempt = _parse_time(str(gate[0]))
@@ -409,6 +414,14 @@ class PskReporterOrchestrationRepository:
                             str(event.contact.contact_id),
                         ),
                     )
+                if error is not None and any(
+                    marker in error for marker in ("HTTP 403", "HTTP 429")
+                ):
+                    connection.execute(
+                        "INSERT OR REPLACE INTO pskreporter_provider_block "
+                        "(singleton_id, reason) VALUES (1, ?)",
+                        (error,),
+                    )
                 connection.commit()
         except PskReporterOrchestrationError:
             raise
@@ -423,8 +436,7 @@ class PskReporterOrchestrationRepository:
             with sqlite3.connect(self._database_path) as connection:
                 counts = dict(
                     connection.execute(
-                        "SELECT state, COUNT(*) FROM pskreporter_completed_ft8_event "
-                        "GROUP BY state"
+                        "SELECT state, COUNT(*) FROM pskreporter_completed_ft8_event GROUP BY state"
                     ).fetchall()
                 )
                 due = connection.execute(
@@ -433,8 +445,7 @@ class PskReporterOrchestrationRepository:
                     (_time(now),),
                 ).fetchone()
                 gate = connection.execute(
-                    "SELECT last_attempt_at_utc FROM pskreporter_provider_gate "
-                    "WHERE singleton_id=1"
+                    "SELECT last_attempt_at_utc FROM pskreporter_provider_gate WHERE singleton_id=1"
                 ).fetchone()
                 latest = connection.execute(
                     "SELECT state, last_error FROM pskreporter_request_window "
@@ -513,6 +524,10 @@ class PskReporterOrchestrationRepository:
                         last_attempt_at_utc TEXT
                     );
                     INSERT OR IGNORE INTO pskreporter_provider_gate VALUES (1, NULL);
+                    CREATE TABLE IF NOT EXISTS pskreporter_provider_block (
+                        singleton_id INTEGER PRIMARY KEY CHECK(singleton_id=1),
+                        reason TEXT NOT NULL
+                    );
                     """
                 )
                 version = connection.execute(
@@ -582,9 +597,7 @@ class PskReporterOrchestrationWorker:
     def run_once(self, *, now_utc: datetime) -> PskReporterWorkerResult:
         now = _utc(now_utc)
         if not self._config.enabled:
-            return PskReporterWorkerResult(
-                disposition=PskReporterWorkerDisposition.DISABLED
-            )
+            return PskReporterWorkerResult(disposition=PskReporterWorkerDisposition.DISABLED)
         self._repository.reconcile_terminal(self._history)
         health = self._repository.health(
             now_utc=now,
