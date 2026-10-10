@@ -1104,7 +1104,7 @@ class ApplicationRuntime:
             and runtime.ft8_authorization is not None
             and runtime.ft8_qso is not None
         ):
-            preparation = FT8RadioPreparationService(radio)
+            preparation = FT8RadioPreparationService(radio, power_policy=config.ft8.power)
 
             def start_prepared_ft8_qso(
                 candidate: FT8CQActivity | FT8IncomingCall,
