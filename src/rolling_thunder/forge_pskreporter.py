@@ -45,7 +45,7 @@ class PskReporterConfig(DomainModel):
     enabled: bool = False
     sender_callsign: str = Field(default="KI5VNB", min_length=3, max_length=32)
     mode: str = Field(default="FT8", pattern=r"^FT8$")
-    minimum_query_interval_s: int = Field(default=300, ge=300)
+    minimum_query_interval_s: int = Field(default=600, ge=300)
     report_latency_s: int = Field(default=300, ge=300, le=3600)
     recent_window_s: int = Field(default=1800, ge=300, le=_MAX_PROVIDER_WINDOW_S)
     correlation_window_s: int = Field(default=300, ge=60, le=1800)

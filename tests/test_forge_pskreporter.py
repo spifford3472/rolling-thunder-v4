@@ -81,7 +81,7 @@ def test_http_query_uses_official_encoded_bounded_parameters() -> None:
     assert timeout == config.timeout_s
 
 
-def test_client_rate_limits_successes_and_failures_for_five_minutes() -> None:
+def test_client_rate_limits_successes_and_failures_for_ten_minutes() -> None:
     transport = Transport(
         [
             OSError("offline"),
@@ -91,8 +91,8 @@ def test_client_rate_limits_successes_and_failures_for_five_minutes() -> None:
     client = PskReporterHttpClient(PskReporterConfig(enabled=True), transport=transport)
 
     first = client.query(now=NOW, window_s=300, frequency_range_hz=None)
-    early = client.query(now=NOW + timedelta(seconds=299), window_s=300, frequency_range_hz=None)
-    due = client.query(now=NOW + timedelta(seconds=300), window_s=300, frequency_range_hz=None)
+    early = client.query(now=NOW + timedelta(seconds=599), window_s=300, frequency_range_hz=None)
+    due = client.query(now=NOW + timedelta(seconds=600), window_s=300, frequency_range_hz=None)
 
     assert first.status is PskReporterQueryStatus.QUERY_FAILED
     assert early.status is PskReporterQueryStatus.NOT_DUE

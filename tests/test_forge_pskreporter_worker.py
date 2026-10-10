@@ -52,6 +52,7 @@ def test_configuration_defaults_examples_and_cadence_are_safe() -> None:
         assert config.ingestion_enabled is False
         assert config.pskreporter.enabled is False
         assert config.pskreporter.minimum_query_interval_s >= 300
+        assert config.pskreporter.minimum_query_interval_s == 600
         assert config.pskreporter.report_latency_s >= 300
         assert config.orchestration_database_path != config.history_database_path
         assert config.status_path not in {

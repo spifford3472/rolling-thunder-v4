@@ -157,8 +157,8 @@ def test_global_pacing_survives_restart_and_failed_query_is_not_zero(
         config.model_copy(update={"maximum_qsos_per_query": 1}),
         client=PskReporterHttpClient(config, transport=succeeding_transport),
     )
-    paced = restarted.run_once(now_utc=NOW + timedelta(seconds=299))
-    due = restarted.run_once(now_utc=NOW + timedelta(seconds=300))
+    paced = restarted.run_once(now_utc=NOW + timedelta(seconds=599))
+    due = restarted.run_once(now_utc=NOW + timedelta(seconds=600))
 
     assert failed.disposition is PskReporterWorkerDisposition.FAILED
     assert failed.outcomes[0].status is PskReporterCollectionStatus.QUERY_FAILED
@@ -197,15 +197,15 @@ def test_batch_is_bounded_and_remaining_event_waits_for_next_global_slot(
         )
 
     first = worker.run_once(now_utc=NOW)
-    paced = worker.run_once(now_utc=NOW + timedelta(seconds=299))
-    second = worker.run_once(now_utc=NOW + timedelta(seconds=300))
+    paced = worker.run_once(now_utc=NOW + timedelta(seconds=599))
+    second = worker.run_once(now_utc=NOW + timedelta(seconds=600))
 
     assert len(first.contact_ids) == 2
     assert paced.disposition is PskReporterWorkerDisposition.PACED
     assert len(second.contact_ids) == 1
     assert len(transport.requests) == 2
     health = orchestration.health(
-        now_utc=NOW + timedelta(seconds=300),
+        now_utc=NOW + timedelta(seconds=600),
         enabled=True,
         minimum_interval=config.minimum_query_interval,
     )
