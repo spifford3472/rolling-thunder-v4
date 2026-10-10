@@ -42,3 +42,22 @@ def test_pre_key_intent_survives_restart_and_remains_uncertain(tmp_path):
     assert reopened.for_qso(qso) == ()
     reopened.finish_intent(intent)
     assert FT8TransmitPeriodRepository(db).uncertain_intents() == ()
+
+
+def test_complete_intent_atomically_persists_matching_emission(tmp_path):
+    db = tmp_path / 'pi.sqlite'
+    repo = FT8TransmitPeriodRepository(db)
+    qso, intent = uuid4(), uuid4()
+    now = datetime(2026, 10, 10, 12, tzinfo=UTC)
+    record = FT8TransmitPeriodTelemetry(qso, now, now + timedelta(seconds=12), 20, True, 14074000, True)
+    repo.begin_intent(intent, qso, 14074000, 20)
+    with pytest.raises(ValueError, match='immutable intent'):
+        repo.complete_intent(intent, FT8TransmitPeriodTelemetry(qso, now, now, 30, True, 14074000, True))
+    assert FT8TransmitPeriodRepository(db).uncertain_intents() == (intent,)
+    assert repo.for_qso(qso) == ()
+    repo.complete_intent(intent, record)
+    assert FT8TransmitPeriodRepository(db).uncertain_intents() == ()
+    assert repo.for_qso(qso) == (record,)
+    with pytest.raises(ValueError, match='already completed'):
+        repo.complete_intent(intent, record)
+    assert len(repo.for_qso(qso)) == 1

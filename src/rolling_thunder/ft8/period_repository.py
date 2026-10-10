@@ -60,18 +60,50 @@ class FT8TransmitPeriodRepository:
             if cursor.rowcount != 1:
                 raise ValueError("intent not found or already completed")
 
-    def uncertain_intents(self) -> tuple[UUID, ...]:
+    def complete_intent(self, intent_id: UUID, record: FT8TransmitPeriodTelemetry) -> None:
+        """Atomically write one emission and complete its matching pre-key intent."""
+        self._validate_record(record)
         with sqlite3.connect(self._path) as db:
-            rows=db.execute("SELECT intent_id FROM ft8_transmit_intent WHERE state='uncertain'").fetchall()
-        return tuple(UUID(row[0]) for row in rows)
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT qso_id,frequency_hz,configured_power_watts,state "
+                "FROM ft8_transmit_intent WHERE intent_id=?", (str(intent_id),)
+            ).fetchone()
+            if row is None:
+                raise ValueError("unknown transmission intent")
+            qso, frequency, power, state = row
+            if qso != str(record.qso_id) or frequency != record.frequency_hz or power != record.configured_power_watts:
+                raise ValueError("transmission does not match its immutable intent")
+            if state != "uncertain":
+                raise ValueError("transmission intent already completed")
+            index = db.execute(
+                "SELECT COALESCE(MAX(emission_index),0)+1 FROM ft8_transmit_period WHERE qso_id=?",
+                (qso,),
+            ).fetchone()[0]
+            db.execute("INSERT INTO ft8_transmit_period VALUES (?,?,?,?,?,?,?,?)", (
+                qso, index, record.started_at_utc.astimezone(UTC).isoformat(),
+                record.ended_at_utc.astimezone(UTC).isoformat(),
+                record.configured_power_watts, int(record.power_readback_verified),
+                record.frequency_hz, int(record.transmitted),
+            ))
+            db.execute("UPDATE ft8_transmit_intent SET state='completed' WHERE intent_id=?", (str(intent_id),))
 
-    def append(self, record: FT8TransmitPeriodTelemetry) -> None:
+    @staticmethod
+    def _validate_record(record: FT8TransmitPeriodTelemetry) -> None:
         if record.started_at_utc.tzinfo is None or record.ended_at_utc.tzinfo is None:
             raise ValueError("transmission timestamps require timezones")
         if record.ended_at_utc < record.started_at_utc:
             raise ValueError("transmission end precedes start")
         if record.power_readback_verified != (record.configured_power_watts is not None):
             raise ValueError("CAT power provenance must match recorded setting")
+
+    def uncertain_intents(self) -> tuple[UUID, ...]:
+        with sqlite3.connect(self._path) as db:
+            rows=db.execute("SELECT intent_id FROM ft8_transmit_intent WHERE state='uncertain'").fetchall()
+        return tuple(UUID(row[0]) for row in rows)
+
+    def append(self, record: FT8TransmitPeriodTelemetry) -> None:
+        self._validate_record(record)
         with sqlite3.connect(self._path) as db:
             db.execute("BEGIN IMMEDIATE")
             index = db.execute(

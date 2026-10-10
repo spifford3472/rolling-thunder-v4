@@ -226,6 +226,7 @@ class BoundedFT8HardwareTransmitExecutor:
         period_recorder: Callable[[FT8TransmitPeriodTelemetry], None] | None = None,
         intent_started: Callable[[UUID, UUID, int, int | None], None] | None = None,
         intent_finished: Callable[[UUID], None] | None = None,
+        intent_completed: Callable[[UUID, FT8TransmitPeriodTelemetry], None] | None = None,
     ) -> None:
         self._radio = radio
         self._audio_output = audio_output
@@ -234,6 +235,7 @@ class BoundedFT8HardwareTransmitExecutor:
         self._period_recorder = period_recorder
         self._intent_started = intent_started
         self._intent_finished = intent_finished
+        self._intent_completed = intent_completed
         self._lock = Lock()
         self._active = False
         self._closed = False
@@ -343,13 +345,14 @@ class BoundedFT8HardwareTransmitExecutor:
                 meter_stop, meter_thread = self._start_meter_sampling(qso_id)
             self._audio_output.play(waveform)
         finally:
-            if meter_stop is not None:
-                meter_stop.set()
-            if watchdog is not None:
-                watchdog.cancel()
+            # Even release, journal, or meter cleanup failures must not strand
+            # the executor in a permanently active state.
             try:
+                if meter_stop is not None:
+                    meter_stop.set()
+                if watchdog is not None:
+                    watchdog.cancel()
                 self._ptt.release()
-            finally:
                 if qso_id is not None and keyed and emission_started is not None:
                     record = FT8TransmitPeriodTelemetry(
                         qso_id=qso_id,
@@ -360,14 +363,17 @@ class BoundedFT8HardwareTransmitExecutor:
                         frequency_hz=expected_radio_frequency_hz,
                         transmitted=True,
                     )
-                    if self._period_recorder is not None:
-                        self._period_recorder(record)
-                    if intent_id is not None and self._intent_finished is not None:
-                        self._intent_finished(intent_id)
+                    if intent_id is not None and self._intent_completed is not None:
+                        self._intent_completed(intent_id, record)
+                    else:
+                        if self._period_recorder is not None:
+                            self._period_recorder(record)
+                        if intent_id is not None and self._intent_finished is not None:
+                            self._intent_finished(intent_id)
                     with self._lock:
-                        # Keep bounded history even for a pathological QSO.
                         self._transmit_periods.setdefault(qso_id, []).append(record)
                         self._transmit_periods[qso_id] = self._transmit_periods[qso_id][-64:]
+            finally:
                 if meter_thread is not None:
                     meter_thread.join(timeout=1.0)
                 with self._lock:
