@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -116,6 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             service,
             ft8_performance_service=ft8_performance_service,
             ft8_period_repository=ForgeFT8PeriodRepository(config.storage.database_path),
+            ft8_period_token=os.environ.get("ROLLING_THUNDER_FT8_PERIOD_TOKEN") or None,
         )
         server = ForgeContactHttpServer(
             config.server.bind_host,

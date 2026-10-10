@@ -1,5 +1,6 @@
 """HTTP transport implementation for the Home Station Platform boundary."""
 
+import os
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from json import JSONDecodeError, dumps, loads
@@ -194,11 +195,15 @@ class HttpHomePlatformClient(HomePlatformClient):
         obj["qso_id"] = str(record.qso_id)
         obj["started_at_utc"] = record.started_at_utc.isoformat()
         obj["ended_at_utc"] = record.ended_at_utc.isoformat()
+        token = os.environ.get("ROLLING_THUNDER_FT8_PERIOD_TOKEN")
+        if not token:
+            raise HomePlatformUploadError("FT8 period upload not configured")
         response = self._request(
             "POST", "/ft8-period",
             headers={
                 "Accept": _JSON_CONTENT_TYPE, "Content-Type": _JSON_CONTENT_TYPE,
                 "Idempotency-Key": f"{qso_id}:{emission_index}",
+                "Authorization": f"Bearer {token}",
             },
             body=dumps({"qso_id": str(qso_id), "emission_index": emission_index, "record": obj},
                        separators=(",", ":")).encode("utf-8"),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
 import sqlite3
 from collections.abc import Mapping
@@ -52,10 +53,12 @@ class ForgeContactSyncApiApplication:
         *,
         ft8_performance_service: ForgeFT8PerformanceService | None = None,
         ft8_period_repository: ForgeFT8PeriodRepository | None = None,
+        ft8_period_token: str | None = None,
     ) -> None:
         self._service = service
         self._ft8_performance_service = ft8_performance_service
         self._ft8_period_repository = ft8_period_repository
+        self._ft8_period_token = ft8_period_token
 
     def handle(
         self,
@@ -167,8 +170,11 @@ class ForgeContactSyncApiApplication:
     ) -> ForgeContactHttpResponse:
         """Strict private-network ingestion; deploy behind the existing access boundary."""
         repo = self._ft8_period_repository
-        if repo is None:
-            return self._error(503, "ft8_period_unavailable", "Emission repository unavailable")
+        if repo is None or not self._ft8_period_token:
+            return self._error(503, "ft8_period_unavailable", "Emission ingestion disabled")
+        auth = self._header_value(headers, "Authorization")
+        if auth is None or not hmac.compare_digest(auth, f"Bearer {self._ft8_period_token}"):
+            return self._error(401, "unauthorized", "Invalid FT8 emission credentials")
         if method != "POST":
             return self._error(405, "method_not_allowed", "Only POST is supported")
         content_type = self._header_value(headers, "Content-Type")

@@ -14,6 +14,7 @@ def test_retry_ack_and_forge_duplicate_replay(tmp_path):
     forge = ForgeFT8PeriodRepository(tmp_path / "forge.db")
     api, _ = app(tmp_path)
     api._ft8_period_repository = forge
+    api._ft8_period_token = "test-secret"
     qso = uuid4()
     now = datetime(2026, 10, 10, 12, tzinfo=UTC)
     record = FT8TransmitPeriodTelemetry(qso, now, now, 20, True, 14074000, True)
@@ -42,6 +43,7 @@ def test_retry_ack_and_forge_duplicate_replay(tmp_path):
             result = api.handle("POST", "/ft8-period", headers={
                 "Content-Type": "application/json",
                 "Idempotency-Key": f"{qso_id}:{index}",
+                "Authorization": "Bearer test-secret",
             }, body=body)
             assert result.status_code == 200, result.body
             assert loads(result.body)["status"] in {"accepted", "already_exists"}
@@ -62,8 +64,17 @@ def test_validation_no_storage_side_effects(tmp_path):
     forge = ForgeFT8PeriodRepository(tmp_path / "forge.db")
     api, _ = app(tmp_path)
     api._ft8_period_repository = forge
+    api._ft8_period_token = "test-secret"
     no_key = api.handle("POST", "/ft8-period",
-                        headers={"Content-Type": "application/json"},
+                        headers={"Content-Type": "application/json", "Authorization": "Bearer test-secret"},
                         body=b"{}")
     assert no_key.status_code == 422
-    assert api.handle("GET", "/ft8-period").status_code == 405
+    assert api.handle("GET", "/ft8-period", headers={"Authorization": "Bearer test-secret"}).status_code == 405
+
+
+def test_endpoint_denies_without_token(tmp_path):
+    api, _ = app(tmp_path)
+    api._ft8_period_repository = ForgeFT8PeriodRepository(tmp_path / "forge.db")
+    assert api.handle("POST", "/ft8-period", body=b"{}").status_code == 503
+    api._ft8_period_token = "test-secret"
+    assert api.handle("POST", "/ft8-period", body=b"{}").status_code == 401
