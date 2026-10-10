@@ -27,6 +27,15 @@ def test_ft8_transmit_is_disabled_before_restart():
     source = SCRIPT.read_text()
     assert "obj['ft8']['transmit']['enabled']=False" in source
     assert "assert not cfg.ft8.transmit.enabled" in source
-    assert source.index("assert not cfg.ft8.transmit.enabled") < source.rindex('sudo -n systemctl start "$SERVICE"')
+    assert source.index("assert not cfg.ft8.transmit.enabled") < source.rindex('sudo -n /usr/local/sbin/rolling-thunder-pi-service-control start')
     assert "rolling-thunder-ui" in source
-    assert source.index("trap recover ERR") < source.index('sudo -n systemctl stop "$SERVICE"')
+    assert source.index("trap recover ERR") < source.index('sudo -n /usr/local/sbin/rolling-thunder-pi-service-control stop')
+
+
+def test_restricted_service_control():
+    wrapper = (SCRIPT.parent / "rolling-thunder-pi-service-control").read_text()
+    cutover = SCRIPT.read_text()
+    assert "rolling-thunder.service" in wrapper
+    assert "start|stop" in wrapper
+    assert "sudo -n systemctl" not in cutover
+    assert "sudo -n -l /usr/local/sbin/rolling-thunder-pi-service-control stop" in cutover
