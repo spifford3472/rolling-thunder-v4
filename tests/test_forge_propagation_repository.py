@@ -70,6 +70,9 @@ def test_schema_tables_integrity_and_version_are_exact(
             "qso_voacap_prediction",
             "pskreporter_query",
             "qso_pskreporter_summary",
+            "psk_reception",
+            "psk_qso_reception",
+            "psk_normalization_audit",
         }
     )
 
@@ -78,7 +81,7 @@ def test_schema_tables_integrity_and_version_are_exact(
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute(
             "SELECT singleton_id, schema_version FROM propagation_schema_metadata"
-        ).fetchall() == [(1, 3)]
+        ).fetchall() == [(1, 4)]
 
 
 def test_v1_schema_migrates_without_losing_existing_psk_summary(database: Path) -> None:
@@ -108,7 +111,7 @@ def test_v1_schema_migrates_without_losing_existing_psk_summary(database: Path) 
     with sqlite3.connect(database) as connection:
         assert connection.execute(
             "SELECT schema_version FROM propagation_schema_metadata"
-        ).fetchone() == (3,)
+        ).fetchone() == (4,)
         columns = {
             row[1]
             for row in connection.execute("PRAGMA table_info(qso_pskreporter_summary)")
