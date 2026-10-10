@@ -30,3 +30,15 @@ def test_unknown_power_never_converted_to_verified_value(tmp_path):
     assert repo.for_qso(qso)[0].configured_power_watts is None
     with pytest.raises(ValueError,match='provenance'):
         repo.append(FT8TransmitPeriodTelemetry(qso,now,now,20,False,7074000,True))
+
+
+def test_pre_key_intent_survives_restart_and_remains_uncertain(tmp_path):
+    db = tmp_path / 'pi.sqlite'
+    qso = uuid4()
+    intent = uuid4()
+    FT8TransmitPeriodRepository(db).begin_intent(intent, qso, 14074000, 20)
+    reopened = FT8TransmitPeriodRepository(db)
+    assert reopened.uncertain_intents() == (intent,)
+    assert reopened.for_qso(qso) == ()
+    reopened.finish_intent(intent)
+    assert FT8TransmitPeriodRepository(db).uncertain_intents() == ()

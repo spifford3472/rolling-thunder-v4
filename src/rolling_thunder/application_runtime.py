@@ -862,6 +862,8 @@ class ApplicationRuntime:
                     radio,
                     resolved_ft8_audio_output,
                     period_recorder=period_store.append,
+                    intent_started=period_store.begin_intent,
+                    intent_finished=period_store.finish_intent,
                 )
 
             def build_ft8_session(

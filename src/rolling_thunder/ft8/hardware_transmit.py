@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Event, Lock, Thread, Timer
 from typing import Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.ft8.audio_output import FT8AudioOutput
@@ -224,12 +224,16 @@ class BoundedFT8HardwareTransmitExecutor:
         *,
         watchdog_factory: WatchdogFactory = _threading_watchdog,
         period_recorder: Callable[[FT8TransmitPeriodTelemetry], None] | None = None,
+        intent_started: Callable[[UUID, UUID, int, int | None], None] | None = None,
+        intent_finished: Callable[[UUID], None] | None = None,
     ) -> None:
         self._radio = radio
         self._audio_output = audio_output
         self._ptt = radio.create_cp6_cat_ptt_capability()
         self._watchdog_factory = watchdog_factory
         self._period_recorder = period_recorder
+        self._intent_started = intent_started
+        self._intent_finished = intent_finished
         self._lock = Lock()
         self._active = False
         self._closed = False
@@ -306,6 +310,7 @@ class BoundedFT8HardwareTransmitExecutor:
         verified_power: int | None = None
         power_readback_verified = False
         keyed = False
+        intent_id: UUID | None = None
         try:
             self._verify_radio(
                 expected_radio_frequency_hz=expected_radio_frequency_hz,
@@ -323,6 +328,9 @@ class BoundedFT8HardwareTransmitExecutor:
                         power_readback_verified = True
                 except (RadioError, RuntimeError, ValueError, TypeError):
                     pass
+            if qso_id is not None and self._intent_started is not None:
+                intent_id = uuid4()
+                self._intent_started(intent_id, qso_id, expected_radio_frequency_hz, verified_power)
             self._ptt.key()
             keyed = True
             emission_started = datetime.now(UTC)
@@ -354,6 +362,8 @@ class BoundedFT8HardwareTransmitExecutor:
                     )
                     if self._period_recorder is not None:
                         self._period_recorder(record)
+                    if intent_id is not None and self._intent_finished is not None:
+                        self._intent_finished(intent_id)
                     with self._lock:
                         # Keep bounded history even for a pathological QSO.
                         self._transmit_periods.setdefault(qso_id, []).append(record)

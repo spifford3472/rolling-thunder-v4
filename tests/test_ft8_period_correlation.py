@@ -17,3 +17,14 @@ def test_unique_window_and_verified_cat_power():
     assert attribute_reception(FT8ReceptionObservation(now, 7074000, "W1XYZ"), (emission,)).reason == "no_matching_period"
     unverified = FT8TransmitPeriodTelemetry(qso, now, now + timedelta(seconds=12), None, False, 14074000, True)
     assert attribute_reception(reception, (unverified,)).reason == "power_unverified"
+
+
+def test_explicit_rf_frequency_requires_known_audio_offset():
+    now = datetime(2026, 10, 10, 12, tzinfo=UTC)
+    record = FT8TransmitPeriodTelemetry(uuid4(), now, now + timedelta(seconds=12), 20, True, 14074000, True)
+    good = FT8ReceptionObservation(now, 14075500, 'W1XYZ', audio_offset_hz=1500, frequency_is_rf=True)
+    assert attribute_reception(good, (record,)).transmission == record
+    missing = FT8ReceptionObservation(now, 14075500, 'W1XYZ', frequency_is_rf=True)
+    assert attribute_reception(missing, (record,)).reason == 'missing_or_invalid_audio_offset'
+    wrong = FT8ReceptionObservation(now, 14075500, 'W1XYZ', audio_offset_hz=1600, frequency_is_rf=True)
+    assert attribute_reception(wrong, (record,)).reason == 'no_matching_period'

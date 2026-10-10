@@ -12,6 +12,8 @@ class FT8ReceptionObservation:
     observed_at_utc: datetime
     dial_frequency_hz: int
     receiver_callsign: str
+    audio_offset_hz: int | None = None
+    frequency_is_rf: bool = False
 
 
 @dataclass(frozen=True)
@@ -36,12 +38,18 @@ def attribute_reception(
         raise ValueError("reception timestamps require timezone")
     if not 0 <= tolerance_seconds <= 10:
         raise ValueError("tolerance_seconds must be between 0 and 10")
+    if reception.frequency_is_rf:
+        if reception.audio_offset_hz is None or not 200 <= reception.audio_offset_hz <= 3500:
+            return FT8PeriodAttribution(None, "missing_or_invalid_audio_offset")
+        dial_frequency = reception.dial_frequency_hz - reception.audio_offset_hz
+    else:
+        dial_frequency = reception.dial_frequency_hz
     candidates = []
     margin = timedelta(seconds=tolerance_seconds)
     for record in transmissions:
         if not record.transmitted or record.started_at_utc.tzinfo is None:
             continue
-        if record.frequency_hz != reception.dial_frequency_hz:
+        if record.frequency_hz != dial_frequency:
             continue
         if record.started_at_utc - margin <= reception.observed_at_utc <= record.ended_at_utc + margin:
             candidates.append(record)

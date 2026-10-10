@@ -29,6 +29,12 @@ class FT8TransmitPeriodRepository:
                 transmitted INTEGER NOT NULL CHECK(transmitted IN (0,1)),
                 PRIMARY KEY(qso_id, emission_index)
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS ft8_transmit_intent (
+                intent_id TEXT PRIMARY KEY, qso_id TEXT NOT NULL,
+                created_at_utc TEXT NOT NULL, frequency_hz INTEGER NOT NULL,
+                configured_power_watts INTEGER,
+                state TEXT NOT NULL CHECK(state IN ('uncertain','completed'))
+            )""")
             db.execute("""CREATE TABLE IF NOT EXISTS ft8_transmit_period_delivery (
                 qso_id TEXT NOT NULL, emission_index INTEGER NOT NULL,
                 synchronized_at_utc TEXT NOT NULL,
@@ -36,6 +42,28 @@ class FT8TransmitPeriodRepository:
                 FOREIGN KEY(qso_id,emission_index) REFERENCES ft8_transmit_period(qso_id,emission_index)
             )""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_ft8_transmit_period_time ON ft8_transmit_period(started_at_utc, frequency_hz)")
+
+    def begin_intent(self, intent_id: UUID, qso_id: UUID, frequency_hz: int,
+                     configured_power_watts: int | None) -> None:
+        """Durably register an uncertain attempt before PTT is keyed."""
+        if frequency_hz <= 0:
+            raise ValueError("frequency must be positive")
+        with sqlite3.connect(self._path) as db:
+            db.execute("INSERT INTO ft8_transmit_intent VALUES (?,?,?,?,?,'uncertain')",
+                       (str(intent_id), str(qso_id), datetime.now(UTC).isoformat(),
+                        frequency_hz, configured_power_watts))
+
+    def finish_intent(self, intent_id: UUID) -> None:
+        with sqlite3.connect(self._path) as db:
+            cursor = db.execute("UPDATE ft8_transmit_intent SET state='completed' "
+                                "WHERE intent_id=? AND state='uncertain'",(str(intent_id),))
+            if cursor.rowcount != 1:
+                raise ValueError("intent not found or already completed")
+
+    def uncertain_intents(self) -> tuple[UUID, ...]:
+        with sqlite3.connect(self._path) as db:
+            rows=db.execute("SELECT intent_id FROM ft8_transmit_intent WHERE state='uncertain'").fetchall()
+        return tuple(UUID(row[0]) for row in rows)
 
     def append(self, record: FT8TransmitPeriodTelemetry) -> None:
         if record.started_at_utc.tzinfo is None or record.ended_at_utc.tzinfo is None:
