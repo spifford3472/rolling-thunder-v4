@@ -85,6 +85,18 @@ def test_http_query_uses_official_encoded_bounded_parameters() -> None:
     assert transport.headers[0]["Accept"] == "application/xml, text/xml"
 
 
+def test_optional_appcontact_identifies_operator_when_configured() -> None:
+    transport = Transport([UrllibHttpResponse(200, b"<receptionReports/>")])
+    config = PskReporterConfig(enabled=True, appcontact="operator@example.org")
+    result = PskReporterHttpClient(config, transport=transport).query(
+        now=NOW, window_s=300, frequency_range_hz=None
+    )
+    assert result.status is PskReporterQueryStatus.SUCCEEDED
+    assert parse_qs(urlparse(transport.requests[0][1]).query)["appcontact"] == [
+        "operator@example.org"
+    ]
+
+
 def test_client_rate_limits_successes_and_failures_for_ten_minutes() -> None:
     transport = Transport(
         [

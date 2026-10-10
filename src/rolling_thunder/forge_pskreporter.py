@@ -45,6 +45,7 @@ class PskReporterConfig(DomainModel):
 
     enabled: bool = False
     sender_callsign: str = Field(default="KI5VNB", min_length=3, max_length=32)
+    appcontact: str | None = Field(default=None, max_length=254)
     mode: str = Field(default="FT8", pattern=r"^FT8$")
     minimum_query_interval_s: int = Field(default=600, ge=300)
     report_latency_s: int = Field(default=300, ge=300, le=3600)
@@ -490,6 +491,8 @@ def build_pskreporter_query_parameters(
         "nolocator": 1,
         "rptlimit": config.report_limit,
     }
+    if config.appcontact:
+        parameters["appcontact"] = config.appcontact
     if frequency_range_hz is not None:
         lower, upper = frequency_range_hz
         parameters["frange"] = f"{lower}-{upper}"
