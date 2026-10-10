@@ -399,3 +399,4 @@ presentation adapters consume its immutable classification only.
 - `contact_export.py`: complete-contact format 3; imports retain formats 1/2.
 
 Consumers and ownership remain unchanged.
+- `src/rolling_thunder/ft8/propagation_inputs.py` — inert typed future VOACAP/space-weather forecast metadata slots; no provider or FT8 scoring integration.
