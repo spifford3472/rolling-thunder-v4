@@ -88,20 +88,22 @@ separately approves provider egress and the provider exposure/root-cause questio
 
 Live real-provider acceptance: **BLOCKED / not performed**.
 
-## C5 read-only shadow advisory interface design (design only)
+## C5 read-only shadow advisory handoff
 
-A future C5 consumer may accept a frozen choice timestamp, origin/grid provenance,
-candidate targets and the latest C4 slot available at or before that timestamp. Its
-versioned response should return separate modeled circuit suitability fields,
-coverage/age/status, plan/model/service identities, uncertainty and an explicit
-`shadow_only=true`, `training_eligible=false` decision. Missing, late, backfill,
-failed, unsupported and stale evidence remain explicit and fail neutral.
+C5 now implements an offline Forge-only contract accepting a frozen choice
+timestamp, explicit provenance and prospective forecast evidence available at or
+before that choice. Its versioned response returns separate modeled-circuit/ranking
+suitability fields, coverage/age/status, model/service identities, uncertainty and
+hardcoded `shadow_only=true`, `apply_allowed=false`, `may_transmit=false`. Missing,
+late, backfill, retrospective, failed, unsupported and stale evidence remain explicit
+and fail closed for readiness.
 
 C5 must not reorder the production UI, claim calibrated QSO probability, recommend
 or command power, invoke CAT/PTT, authorize FT8, create contacts, alter Wavelog, or
 query a provider. Evaluation must be time-blocked and region-held-out, with selection
 bias and busy-target censoring addressed, before any later operator-visible proposal.
-No Pi interface or C5 implementation is included in C4.
+No Pi interface or runtime composition is added. See `voacap-ft8-phase-c5.md` for
+the implemented contract, evaluation and readiness-only policy.
 
 ## Offline acceptance
 

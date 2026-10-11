@@ -179,6 +179,13 @@ read-only diagnostics. No production composition constructs it; all activation g
 default false and no network adapter exists. It owns no attempt provenance, Pi, UI,
 ranking, ML, power, CAT/PTT, contact, Wavelog or RF path.
 
+Phase C5 adds a separate uncomposed Forge scientific-evaluation and shadow-advisory
+boundary. It owns strict prospective as-of pairing, immutable candidate/spec/result
+artifacts, grouped chronological holdouts, explanatory non-actuating advisories and
+readiness-only policy state. It consumes no live provider and has no Pi, UI, CQ
+sorting, retry, power, CAT/PTT, contact, Wavelog or RF authority. The operational
+baseline remains 20 W. `armed_when_ready` is a readiness label only.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder

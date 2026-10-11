@@ -524,6 +524,13 @@ There is no operator control, AI recommendation, band ranking, power advice, rad
 command or active scheduler. Any stored 20-W value is a model reference, not a
 measurement or instruction, and VOACAP reliability is not QSO success probability.
 
+Phase C5 adds offline Forge evaluation and a shadow-only explanatory data contract.
+It still adds no dashboard control or displayed recommendation and cannot reorder a
+CQ, set power, authorize a QSO, key PTT or transmit. The configuration term
+`armed_when_ready` means scientific readiness only in this phase. Normal FT8 starts
+remain at the current 20-W baseline under the existing operator-approved policy;
+Forge loss or a failed readiness check cannot change radio operation.
+
 After local persistence, successful FT8 contacts request the same background
 Forge/Wavelog synchronization as ordinary contacts. A trusted mobile grid routes to
 `Mobile - XXXX - YY`; an untrusted/missing mobile location routes to `Mobile - Unknown

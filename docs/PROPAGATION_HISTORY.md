@@ -410,6 +410,15 @@ systemd unit, migration command or Pi consumer is composed. All gates default fa
 and live real-provider acceptance remains blocked. See
 `engineering/voacap-ft8-phase-c4.md`.
 
+Phase C5 adds no deployed process or provider work. Its Forge-only contracts pair
+only prospective evidence available by the frozen choice time, preserve provenance,
+grid/frequency/unit distinctions and evaluate grouped forward holdouts offline. The
+shadow advisory cannot apply power or transmit. Its YAML `armed_when_ready` mode
+calculates readiness only, fails closed on scientific/health/version/freshness
+checks, and retains the 20-W operational fallback. The C4 pilot remains unscheduled
+and needs separate approvals, backups, budgets, monitoring and rollback. See
+`engineering/voacap-ft8-phase-c5.md`.
+
 Read-only verification on 2026-10-07 confirmed that the documented Forge endpoint
 `http://192.168.9.170:8787/version` responded as `voacap-service` version `0.3.0`.
 No summary/prediction request was made and no service state was changed.
