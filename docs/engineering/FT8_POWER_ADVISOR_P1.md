@@ -71,3 +71,24 @@ Both selected-CQ and inbound-response `ApplicationRuntime` entry points now refu
 ## P1.12 — final CAT readback gate before PTT
 
 The production-wired FT-891 hardware executor now receives the configured power policy and, after radio state verification and immediately before durable intent/PTT, requires a valid CAT configured-power readback. It rejects an unreadable/unknown setting, unsupported band, or a configured power above the band-specific policy ceiling without keying. This detects some front-panel overrides that raise configured power above the ceiling; it cannot detect a permitted-range front-panel adjustment or prove RF output watts, and it must not silently reset operator settings. Injection-only hardware-free executors retain compatibility without the optional policy. All such checks occur before PTT; no new automated power-changing code is enabled. The 100 W voice-mode restore on FT8 exit remains unchanged and requires separate operator acceptance. Watchdog release during physical radio fault or sudden host failure still requires a dedicated hardware acceptance gate.
+
+## CP3 bounded automatic retry-power pilot
+
+The first QSO attempt starts at configured initial power (20 W by default)
+instead of distance-based initial-power thresholds. Every new attempt begins
+with this conservative baseline, including the first attempt each local day.
+
+When ft8.power.adaptive_enabled is true, the existing authorized QSO executor
+may raise power in 5 W increments between repeated, identical grid-bearing
+call messages. Report and 73 phases never trigger an increase. CAT readback
+must confirm every power change before PTT. Manual power changes suspend
+automation for the rest of the QSO, and all existing band caps and abort
+protections remain in force. Default adaptive_enabled remains false pending
+supervised operator-authorized configuration.
+
+Evidence caveat: the DX ranking currently consumes Forge directional PSK
+reports, but this pilot power controller does not yet consume directional PSK
+measurements for calibrated target-specific wattage. Initial tuning is based
+on unanswered repeated calls, not a contact probability. Gather several QSOs
+and verified per-period power records to evaluate performance before enabling
+broader power intelligence.
