@@ -14,6 +14,10 @@ from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 from rolling_thunder.domain import Contact, DomainModel, Frequency, RadioMode
+from rolling_thunder.forge_ft8_attempt_correlation import (
+    VoacapModelInput,
+    VoacapProviderResult,
+)
 from rolling_thunder.forge_mobile_location import MobileLocationRecord
 from rolling_thunder.forge_propagation_history import (
     ForgePropagationHistoryRepository,
@@ -325,6 +329,31 @@ class VoacapSummaryClient:
             actual_hour_reliability=_optional_number(entry, "reliability"),
             actual_hour_rating=_optional_text(entry, "rating"),
             actual_hour_snr_db=_optional_number(entry, "snr_db"),
+        )
+
+    def predict_attempt_input(
+        self, model_input: VoacapModelInput
+    ) -> VoacapProviderResult:
+        """Evaluate a canonical Phase-B attempt input without contact fabrication."""
+        request_json = model_input.provider_request()
+        if request_json is None:
+            raise ValueError("VOACAP attempt input is incomplete")
+        version = self._json_request("GET", "/version", None)
+        response = self._json_request("POST", "/api/v1/summary", request_json)
+        band = model_input.band
+        assert band is not None
+        entry = _actual_hour_entry(
+            response,
+            hour_utc=model_input.event_hour_utc.hour,
+            band_m=int(band.removesuffix("m")),
+        )
+        return VoacapProviderResult(
+            service_version=_version_text(version),
+            response_json=response,
+            reliability_fraction=_optional_number(entry, "reliability"),
+            snr_db_hz=_optional_number(entry, "snr_db"),
+            muf_mhz=_optional_number(entry, "muf_mhz"),
+            rating=_optional_text(entry, "rating"),
         )
 
     def _json_request(self, method: str, path: str, payload: dict[str, Any] | None) -> dict[str, Any]:

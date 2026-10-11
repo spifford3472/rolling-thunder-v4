@@ -252,6 +252,18 @@ ft8:
       enabled: false
       base_url: http://192.168.9.170:8789
       timeout_s: 5
+  attempt_delivery:
+    # Every terminal outcome is already captured locally. This optional private
+    # store-forward path is independent of contacts, Wavelog and radio operation.
+    enabled: false
+    base_url: http://192.168.9.170:8790
+    timeout_s: 5
+    interval_s: 30
+    batch_size: 25
+    lease_duration_s: 120
+    max_attempts: 8
+    retry_initial_delay_s: 30
+    retry_maximum_delay_s: 3600
 
 storage:
   database_path: data/rolling-thunder.db

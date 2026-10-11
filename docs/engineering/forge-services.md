@@ -145,6 +145,14 @@ once per query rather than copied into every QSO summary. It reuses the existing
 analytics/history contracts and adds no propagation engine. The separate PSK Reporter service has a bounded scheduler, authenticated private event ingestion, provider-free health/status, isolated databases and independently hardened systemd/sysusers/configuration templates. Process, ingestion and provider egress are separately gated and disabled by default. The VOACAP service independently provides authenticated completed-QSO ingestion and prediction through a disabled worker. Both use isolated exact-SHA release trees and dedicated no-login identities. Optional Pi production delivery is also gated off by default; neither service is installed/activated by source composition. Phase 1 propagation, logging, contact-sync and Wavelog remain unchanged. See
 `docs/PROPAGATION_HISTORY.md`.
 
+Phase B extends only the disabled propagation-QSO service with an authenticated
+all-terminal FT8 attempt inbox and read-only per-attempt diagnostics. Ingestion
+commits before provider work. The bounded worker uses identified leases,
+retry/dead-letter isolation, immutable full-input hashes and append-only runs/links.
+It preserves direction, event-hour UTC, per-period verified configured power, grid
+precision, dB-Hz units, missing values and retrospective availability. It does not
+create contacts or affect the completed-QSO/Wavelog path.
+
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application
 root, configuration, StateDirectory, and SQLite database. The systemd unit has no
 listener and is not enabled by installation. Its production template remains

@@ -147,6 +147,15 @@ Non-successful attempt:
 
 The outbox is idempotent by stable attempt UUID and synchronizes to Forge for future AI/statistical analysis.
 
+Phase B additionally snapshots every durable terminal performance record into an
+all-outcome attempt event with frozen coordinates, directional decoder reports and
+the existing per-emission configured-power evidence. Its optional authenticated
+Forge delivery is separately gated, leased/retried and cannot block terminal
+handling. Forge correlations use immutable full-input hashes and retain VOACAP
+reliability, dB-Hz, missingness, direction and retrospective availability without
+claiming QSO odds or pre-choice knowledge. See
+`engineering/voacap-ft8-phase-b.md`.
+
 Optional completed-QSO propagation analytics use a separate source outbox only after
 both the successful `Contact` and matching successful performance attempt have been
 durably written. The terminal callback may perform that short local enqueue but no

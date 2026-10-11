@@ -39,12 +39,20 @@ class FT8AttemptSeed(DomainModel):
     band: str | None = Field(default=None, max_length=16)
     dial_frequency_hz: int | None = Field(default=None, gt=0, le=300_000_000_000)
     local_grid: MaidenheadGrid | None = None
+    local_latitude: float | None = Field(default=None, ge=-90, le=90)
+    local_longitude: float | None = Field(default=None, ge=-180, le=180)
     remote_grid: MaidenheadGrid | None = None
     audio_frequency_hz: int = Field(gt=0)
     selected_snr_db: int = Field(ge=-50, le=49)
     received_report_db: int | None = Field(default=None, ge=-50, le=49)
     pota_cq: bool = False
     tx_power_target_watts: int = Field(default=20, ge=20, le=70, multiple_of=5)
+
+    @model_validator(mode="after")
+    def validate_coordinates(self) -> FT8AttemptSeed:
+        if (self.local_latitude is None) != (self.local_longitude is None):
+            raise ValueError("local latitude and longitude must be present together")
+        return self
 
     @field_validator("started_at_utc")
     @classmethod
@@ -87,6 +95,8 @@ class FT8PerformanceAttempt(DomainModel):
     sent_report_db: int | None = Field(default=None, ge=-50, le=49)
     received_report_db: int | None = Field(default=None, ge=-50, le=49)
     local_grid: MaidenheadGrid | None = None
+    local_latitude: float | None = Field(default=None, ge=-90, le=90)
+    local_longitude: float | None = Field(default=None, ge=-180, le=180)
     remote_grid: MaidenheadGrid | None = None
     distance_km: float | None = Field(default=None, ge=0)
     audio_frequency_hz: int | None = Field(default=None, gt=0)
@@ -127,6 +137,8 @@ class FT8PerformanceAttempt(DomainModel):
             raise ValueError("success must be true only for completed attempts")
         if self.outcome is not FT8AttemptOutcome.COMPLETED and self.terminal_reason is None:
             raise ValueError("non-completed attempts require terminal_reason")
+        if (self.local_latitude is None) != (self.local_longitude is None):
+            raise ValueError("local latitude and longitude must be present together")
         return self
 
     @field_serializer("started_at_utc", "ended_at_utc")

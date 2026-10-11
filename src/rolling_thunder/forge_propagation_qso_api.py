@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -16,6 +17,10 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from rolling_thunder.domain import Contact
+from rolling_thunder.forge_ft8_attempt_api import (
+    MAX_ATTEMPT_PAYLOAD_BYTES,
+    FT8AttemptApiApplication,
+)
 from rolling_thunder.forge_propagation_qso_ingestion import (
     CompletedQsoEnqueueResult,
     CompletedQsoIdempotencyConflict,
@@ -50,6 +55,7 @@ class CompletedQsoIngestionApiApplication:
         ingestion_enabled: bool,
         voacap_enabled: bool,
         clock: Clock = lambda: datetime.now(UTC),
+        attempt_application: FT8AttemptApiApplication | None = None,
     ) -> None:
         if len(bearer_token) < 32:
             raise ValueError("completed-QSO ingestion bearer token must be at least 32 characters")
@@ -58,6 +64,7 @@ class CompletedQsoIngestionApiApplication:
         self._ingestion_enabled = ingestion_enabled
         self._voacap_enabled = voacap_enabled
         self._clock = clock
+        self._attempt_application = attempt_application
 
     def handle(
         self,
@@ -71,6 +78,21 @@ class CompletedQsoIngestionApiApplication:
         normalized_target = target.split("?", 1)[0].rstrip("/") or "/"
         request_headers = headers or {}
 
+        if normalized_target == "/api/v1/ft8-attempts" or normalized_target.startswith(
+            "/api/v1/ft8-attempts/"
+        ):
+            if self._attempt_application is None:
+                return self._error(404, "not_found", "The requested path does not exist.")
+            response = self._attempt_application.handle(
+                normalized_method,
+                normalized_target,
+                headers=request_headers,
+                body=body,
+            )
+            return CompletedQsoHttpResponse(
+                response.status_code, response.headers, response.body
+            )
+
         if normalized_target == "/health":
             if normalized_method not in {"GET", "HEAD"}:
                 return self._error(405, "method_not_allowed", "Only GET is supported.")
@@ -82,16 +104,25 @@ class CompletedQsoIngestionApiApplication:
                     "ingestion_storage_unavailable",
                     "Completed-QSO ingestion storage is unavailable.",
                 )
-            return self._json(
-                200,
-                {
-                    "schema_version": "1",
-                    "service": "rolling-thunder-forge-propagation-qso",
-                    "ingestion_enabled": self._ingestion_enabled,
-                    "voacap_enabled": self._voacap_enabled,
-                    "queue": queue.model_dump(mode="json"),
-                },
-            )
+            payload: dict[str, object] = {
+                "schema_version": "1",
+                "service": "rolling-thunder-forge-propagation-qso",
+                "ingestion_enabled": self._ingestion_enabled,
+                "voacap_enabled": self._voacap_enabled,
+                "queue": queue.model_dump(mode="json"),
+            }
+            if self._attempt_application is not None:
+                try:
+                    payload["attempts"] = self._attempt_application.health(
+                        now_utc=self._now()
+                    )
+                except (OSError, RuntimeError, sqlite3.Error, ValueError):
+                    return self._error(
+                        503,
+                        "attempt_storage_unavailable",
+                        "FT8 attempt ingestion storage is unavailable.",
+                    )
+            return self._json(200, payload)
 
         if normalized_target != _INGESTION_PATH:
             return self._error(404, "not_found", "The requested path does not exist.")
@@ -302,14 +333,39 @@ def make_completed_qso_request_handler(
         def _dispatch(self) -> None:
             body: bytes | None = None
             request_path = self.path.split("?", 1)[0].rstrip("/")
-            if self.command == "POST" and request_path == _INGESTION_PATH:
+            is_attempt_upload = (
+                self.command == "POST" and request_path == "/api/v1/ft8-attempts"
+            )
+            if self.command == "POST" and (
+                request_path == _INGESTION_PATH or is_attempt_upload
+            ):
                 request_headers = {name: value for name, value in self.headers.items()}
-                preflight_error = application.preflight_upload(request_headers)
+                if is_attempt_upload and application._attempt_application is not None:
+                    attempt_error = application._attempt_application.preflight(
+                        request_headers, require_enabled=True
+                    )
+                    preflight_error = (
+                        None
+                        if attempt_error is None
+                        else CompletedQsoHttpResponse(
+                            attempt_error.status_code,
+                            attempt_error.headers,
+                            attempt_error.body,
+                        )
+                    )
+                else:
+                    preflight_error = application.preflight_upload(request_headers)
                 if preflight_error is not None:
                     self.close_connection = True
                     self._send_response(preflight_error)
                     return
-                body_or_error = self._read_body()
+                body_or_error = self._read_body(
+                    maximum_bytes=(
+                        MAX_ATTEMPT_PAYLOAD_BYTES
+                        if is_attempt_upload
+                        else MAX_COMPLETED_QSO_PAYLOAD_BYTES
+                    )
+                )
                 if isinstance(body_or_error, CompletedQsoHttpResponse):
                     self._send_response(body_or_error)
                     return
@@ -326,7 +382,7 @@ def make_completed_qso_request_handler(
             )
             self._send_response(response)
 
-        def _read_body(self) -> bytes | CompletedQsoHttpResponse:
+        def _read_body(self, *, maximum_bytes: int) -> bytes | CompletedQsoHttpResponse:
             raw_length = self.headers.get("Content-Length")
             if raw_length is None:
                 return application._error(
@@ -344,7 +400,7 @@ def make_completed_qso_request_handler(
                 return application._error(
                     400, "invalid_content_length", "Content-Length must be non-negative."
                 )
-            if length > MAX_COMPLETED_QSO_PAYLOAD_BYTES:
+            if length > maximum_bytes:
                 self.close_connection = True
                 return application._error(
                     413, "payload_too_large", "Completed-QSO upload is too large."

@@ -12,6 +12,7 @@ _COMPLETED_QSO_VOACAP_TOKEN_ENV = "ROLLING_THUNDER_COMPLETED_QSO_VOACAP_TOKEN"
 _COMPLETED_QSO_PSKREPORTER_TOKEN_ENV = (
     "ROLLING_THUNDER_COMPLETED_QSO_PSKREPORTER_TOKEN"
 )
+_FT8_ATTEMPT_TOKEN_ENV = "ROLLING_THUNDER_FT8_ATTEMPT_TOKEN"
 
 
 class SecretConfigurationError(Exception):
@@ -87,6 +88,19 @@ class ApplicationSecrets(SecretModel):
     qrz: QrzCredentials | None = None
     wavelog: WavelogCredentials | None = None
     completed_qso_delivery: CompletedQsoDeliveryCredentials | None = None
+    ft8_attempt_token: SecretStr | None = None
+
+    @field_validator("ft8_attempt_token")
+    @classmethod
+    def validate_ft8_attempt_token(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        token = value.get_secret_value()
+        if len(token) < 32 or any(character.isspace() for character in token):
+            raise ValueError(
+                "must contain at least 32 non-whitespace characters with no whitespace"
+            )
+        return value
 
 
 def load_application_secrets(
@@ -103,6 +117,7 @@ def load_application_secrets(
     completed_qso_pskreporter_token = source.get(
         _COMPLETED_QSO_PSKREPORTER_TOKEN_ENV, ""
     ).strip()
+    ft8_attempt_token = source.get(_FT8_ATTEMPT_TOKEN_ENV, "").strip()
 
     if bool(username) != bool(password):
         raise SecretConfigurationError(
@@ -140,4 +155,5 @@ def load_application_secrets(
         qrz=qrz,
         wavelog=wavelog,
         completed_qso_delivery=completed_qso_delivery,
+        ft8_attempt_token=(SecretStr(ft8_attempt_token) if ft8_attempt_token else None),
     )

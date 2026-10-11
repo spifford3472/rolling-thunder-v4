@@ -7,12 +7,21 @@ import json
 import logging
 import os
 import signal
+import sqlite3
 import sys
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event, Thread
 
+from rolling_thunder.forge_ft8_attempt_api import FT8AttemptApiApplication
+from rolling_thunder.forge_ft8_attempt_correlation import (
+    AttemptInboxRepository,
+    FT8AttemptCorrelationWorker,
+    VoacapAttemptHistoryRepository,
+    VoacapModelInput,
+    VoacapProviderResult,
+)
 from rolling_thunder.forge_propagation_collectors import VoacapSummaryClient
 from rolling_thunder.forge_propagation_history import (
     ForgePropagationHistoryRepository,
@@ -44,6 +53,14 @@ EXIT_CONFIGURATION_ERROR = 2
 EXIT_RUNTIME_ERROR = 3
 _LOGGER_NAME = "rolling_thunder.forge_propagation_qso_worker"
 _INGESTION_TOKEN_ENV = "ROLLING_THUNDER_PROPAGATION_QSO_INGEST_TOKEN"
+
+
+class _AttemptVoacapClient:
+    def __init__(self, client: VoacapSummaryClient) -> None:
+        self._client = client
+
+    def predict(self, model_input: VoacapModelInput) -> VoacapProviderResult:
+        return self._client.predict_attempt_input(model_input)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -183,7 +200,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         inbox = build_inbox(config)
         orchestrator = build_orchestrator(config, inbox) if config.voacap_enabled else None
-    except (CompletedQsoIngestionError, PropagationHistoryStorageError, OSError, ValueError) as error:
+        attempt_inbox = AttemptInboxRepository(
+            config.inbox_database_path,
+            max_attempts=config.max_attempts,
+            retry_base=timedelta(seconds=config.retry_base_s),
+            retry_max=timedelta(seconds=config.retry_max_s),
+        )
+        attempt_history = VoacapAttemptHistoryRepository(config.history_database_path)
+        attempt_worker = (
+            FT8AttemptCorrelationWorker(
+                attempt_inbox,
+                attempt_history,
+                _AttemptVoacapClient(
+                    VoacapSummaryClient(
+                        str(config.voacap_base_url), timeout_s=config.provider_timeout_s
+                    )
+                ),
+                worker_id=f"{config.worker_identity}-attempts",
+                batch_size=config.batch_limit,
+                lease_duration=timedelta(seconds=config.lease_duration_s),
+            )
+            if config.voacap_enabled
+            else None
+        )
+    except (
+        CompletedQsoIngestionError,
+        PropagationHistoryStorageError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        sqlite3.Error,
+    ) as error:
         logger.error("Completed-QSO worker could not start: %s", error)
         return EXIT_RUNTIME_ERROR
 
@@ -206,6 +253,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 bearer_token=ingestion_token,
                 ingestion_enabled=True,
                 voacap_enabled=config.voacap_enabled,
+                attempt_application=FT8AttemptApiApplication(
+                    attempt_inbox,
+                    attempt_history,
+                    bearer_token=ingestion_token,
+                    ingestion_enabled=True,
+                ),
             )
             server = CompletedQsoHttpServer(
                 config.bind_host,
@@ -260,6 +313,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     snapshot.queue.pending_count,
                     snapshot.queue.retry_count,
                     snapshot.queue.dead_letter_count,
+                )
+            if attempt_worker is not None:
+                attempt_completed, attempt_failed = attempt_worker.run_once(
+                    now_utc=datetime.now(UTC)
+                )
+                logger.info(
+                    "attempts_completed=%s attempts_failed=%s",
+                    attempt_completed,
+                    attempt_failed,
                 )
             if args.once or stop_event.wait(config.poll_interval_s):
                 break

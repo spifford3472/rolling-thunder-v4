@@ -66,6 +66,7 @@ class ForgeFT8PerformanceRepository:
                 if row is not None:
                     if row[0] not in {
                         payload_sha256,
+                        _pre_phase_b_payload_sha256(attempt),
                         _legacy_payload_sha256(attempt),
                         _previous_payload_sha256(attempt),
                     }:
@@ -425,6 +426,8 @@ def _legacy_payload_sha256(attempt: FT8PerformanceAttempt) -> str:
         "tx_power_end_watts",
         "tx_power_max_watts",
         "busy_extension_attempts",
+        "local_latitude",
+        "local_longitude",
     ):
         payload_value.pop(field_name, None)
     payload = dumps(
@@ -441,5 +444,16 @@ def _previous_payload_sha256(attempt: FT8PerformanceAttempt) -> str:
         return ""
     payload_value = attempt.model_dump(mode="json")
     payload_value.pop("busy_extension_attempts", None)
+    payload_value.pop("local_latitude", None)
+    payload_value.pop("local_longitude", None)
+    payload = dumps(payload_value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _pre_phase_b_payload_sha256(attempt: FT8PerformanceAttempt) -> str:
+    """Accept exact replay of schema-3 payloads that predate frozen coordinates."""
+    payload_value = attempt.model_dump(mode="json")
+    payload_value.pop("local_latitude", None)
+    payload_value.pop("local_longitude", None)
     payload = dumps(payload_value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()

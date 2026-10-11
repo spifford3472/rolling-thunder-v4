@@ -512,6 +512,13 @@ A successful FT8 QSO enters the normal Rolling Thunder local contact path.
 Failed/aborted attempts are not logged as ordinary QSOs, but may be retained as
 performance/analysis telemetry.
 
+Phase B retains every terminal FT8 attempt locally for later diagnostics, including
+success, no answer, busy-target exhaustion, abort, interruption and equipment/
+preparation faults. This adds no screen or control and does not change selection,
+power policy, transmit authority, contact logging or Wavelog. Optional Forge
+delivery and VOACAP processing are off by default; network/provider loss leaves the
+local attempt queued and never turns missing data into a propagation failure.
+
 After local persistence, successful FT8 contacts request the same background
 Forge/Wavelog synchronization as ordinary contacts. A trusted mobile grid routes to
 `Mobile - XXXX - YY`; an untrusted/missing mobile location routes to `Mobile - Unknown

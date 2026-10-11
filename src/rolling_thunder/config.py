@@ -661,6 +661,30 @@ class CompletedQsoDeliveryConfig(ConfigurationModel):
         return self
 
 
+class FT8AttemptDeliveryConfig(ConfigurationModel):
+    """Disabled-by-default independent delivery of all terminal FT8 attempts."""
+
+    enabled: bool = False
+    base_url: AnyHttpUrl | None = None
+    timeout_s: float = Field(default=5.0, gt=0, le=60)
+    interval_s: float = Field(default=30.0, ge=1.0, le=3600.0)
+    batch_size: int = Field(default=25, ge=1, le=100)
+    lease_duration_s: float = Field(default=120.0, ge=10.0, le=3600.0)
+    max_attempts: int = Field(default=8, ge=1, le=100)
+    retry_initial_delay_s: float = Field(default=30.0, gt=0, le=3600.0)
+    retry_maximum_delay_s: float = Field(default=3600.0, gt=0, le=86400.0)
+
+    @model_validator(mode="after")
+    def validate_delivery(self) -> Self:
+        if self.enabled and self.base_url is None:
+            raise ValueError("base_url is required when attempt delivery is enabled")
+        if self.retry_maximum_delay_s < self.retry_initial_delay_s:
+            raise ValueError(
+                "retry_maximum_delay_s must be at least retry_initial_delay_s"
+            )
+        return self
+
+
 class FT8DecoderBackend(StrEnum):
     """Supported receive decoder adapters."""
 
@@ -784,6 +808,7 @@ class FT8Config(ConfigurationModel):
     qso: FT8QsoConfig = FT8QsoConfig()
     power: FT8PowerPolicy = FT8PowerPolicy()
     completed_qso_delivery: CompletedQsoDeliveryConfig = CompletedQsoDeliveryConfig()
+    attempt_delivery: FT8AttemptDeliveryConfig = FT8AttemptDeliveryConfig()
 
     @model_validator(mode="after")
     def validate_enabled_resources(self) -> Self:
@@ -801,6 +826,8 @@ class FT8Config(ConfigurationModel):
                 )
         if self.completed_qso_delivery.enabled and not self.enabled:
             raise ValueError("ft8.completed_qso_delivery.enabled requires ft8.enabled")
+        if self.attempt_delivery.enabled and not self.enabled:
+            raise ValueError("ft8.attempt_delivery.enabled requires ft8.enabled")
         return self
 
 
