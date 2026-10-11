@@ -402,3 +402,23 @@ def test_cp31_busy_extension_rejects_stale_wrong_target_and_resets_on_phase() ->
     assert controller2.state is FT8QsoState.RETRY_EXHAUSTED
     assert len(session2.requests) == 7  # 1 call + 6 post-transition R-reports.
     assert controller2.busy_extension_attempts == 0
+
+
+def test_cp31_retry_display_budget_follows_granted_extension_and_resets() -> None:
+    from rolling_thunder.ft8.target_activity import TargetActivity, TargetActivityKind
+
+    controller, _ = _started()
+    assert controller.effective_attempt_limit == 6
+    controller.observe_target_activity(
+        TargetActivity("K1ABC", TargetActivityKind.OTHER_QSO, "W1XYZ",
+                       FT8MessageKind.REPORT, FT8Period(102), True), FT8Period(103),
+    )
+    assert controller.effective_attempt_limit == 8
+    for period in (101, 103, 105, 107, 109, 111, 113, 115):
+        controller.on_period(FT8Period(period))
+        assert controller.effective_attempt_limit == 8
+    assert controller.attempt_count == 8
+    controller.on_period(FT8Period(117))
+    assert controller.state is FT8QsoState.RETRY_EXHAUSTED
+    controller.reset()
+    assert controller.effective_attempt_limit == 6

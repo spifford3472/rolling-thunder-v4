@@ -367,3 +367,41 @@ def test_cp31_integrated_coordinator_busy_target_periods_and_terminal_telemetry(
     assert coordinator.result.transmit_attempt_count == 8
     coordinator.reset()
     assert coordinator.state is FT8QsoState.IDLE
+
+
+def test_cp31_ui_read_during_synchronous_transmit_never_waits_for_qso_slot() -> None:
+    """UI needs to see TX state while the worker owns the tick lock."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingSession(RecordingDigitalTransmitSession):
+        def request(self, request: object) -> None:
+            entered.set()
+            assert release.wait(timeout=5)
+            super().request(request)  # type: ignore[arg-type]
+
+    context = _context()
+    clock = FakeFT8Clock(context.authorized_utc)
+    session = BlockingSession()
+    coordinator = FT8QsoCoordinator(session, clock)
+    coordinator.authorize(context)
+    coordinator.start_qso()
+    clock.advance(14)
+    worker = threading.Thread(target=coordinator.tick)
+    worker.start()
+    assert entered.wait(timeout=2)
+    observed: list[object] = []
+    reader = threading.Thread(target=lambda: observed.append((
+        coordinator.state, coordinator.context, coordinator.attempt_count,
+        coordinator.attempts_per_state, coordinator.result,
+    )))
+    try:
+        reader.start()
+        reader.join(timeout=0.5)
+        assert not reader.is_alive(), "UI read blocked for length of FT8 transmit"
+        assert observed == [(FT8QsoState.TX_CALL, context, 1, 6, None)]
+    finally:
+        release.set()
+        worker.join(timeout=3)
+        reader.join(timeout=3)
+    assert not worker.is_alive()
