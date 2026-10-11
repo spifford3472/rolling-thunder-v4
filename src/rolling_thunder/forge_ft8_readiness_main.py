@@ -15,10 +15,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
+from rolling_thunder.forge_ft8_c4_asof import audit_c4_choice_pairs
 from rolling_thunder.forge_ft8_power_advisor_config import (
     PowerAdvisorMode,
     load_ft8_power_advisor_policy,
 )
+from rolling_thunder.forge_ft8_prospective_inventory import audit_prospective_inbox
 
 
 def inspect_c4(path: Path) -> dict[str, object]:
@@ -49,7 +51,10 @@ def inspect_c4(path: Path) -> dict[str, object]:
                 "stored_slots": 0, "independent_requests": 0}
 
 
-def evaluate_once(policy_path: Path, c4_path: Path, *, now: datetime | None = None) -> dict[str, object]:
+def evaluate_once(
+    policy_path: Path, c4_path: Path, *, now: datetime | None = None,
+    inbox_path: Path | None = None, history_path: Path | None = None,
+) -> dict[str, object]:
     now = now or datetime.now(UTC)
     status: dict[str, object] = {
         "schema_version": 1, "observed_at_utc": now.isoformat(),
@@ -75,6 +80,11 @@ def evaluate_once(policy_path: Path, c4_path: Path, *, now: datetime | None = No
         status["policy_mode"] = "invalid"
         status["reason_codes"] = ["configuration_unavailable_or_invalid", type(exc).__name__]
     status["c4_inventory"] = inspect_c4(c4_path)
+    if inbox_path is not None and history_path is not None:
+        status["prospective_inventory"] = audit_prospective_inbox(inbox_path, history_path)
+        status["regional_c4_asof_inventory"] = audit_c4_choice_pairs(
+            inbox_path, history_path, c4_path,
+        )
     return status
 
 
@@ -132,9 +142,13 @@ def main() -> None:
     parser.add_argument("--policy", type=Path, required=True)
     parser.add_argument("--c4-db", type=Path, required=True)
     parser.add_argument("--status-path", type=Path)
+    parser.add_argument("--inbox-db", type=Path)
+    parser.add_argument("--history-db", type=Path)
     args = parser.parse_args()
     # Never open privileged configuration or write to live Forge history.
-    status = evaluate_once(args.policy, args.c4_db)
+    status = evaluate_once(
+        args.policy, args.c4_db, inbox_path=args.inbox_db, history_path=args.history_db,
+    )
     if args.status_path is not None:
         persist_status(args.status_path, status)
     print(json.dumps(status, sort_keys=True))

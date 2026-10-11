@@ -88,3 +88,14 @@ def test_atomic_status_snapshot_and_transition_audit(tmp_path: Path, capsys: obj
     changed = dict(sample, readiness="INSUFFICIENT_EVIDENCE/COLLECTING")
     assert persist_status(path, changed)
     assert json.loads(path.read_text())["readiness"] == changed["readiness"]
+
+
+def test_systemd_requires_reviewed_three_source_paths() -> None:
+    root = Path(__file__).resolve().parents[1]
+    unit = (root / "deploy/systemd/rolling-thunder-forge-ft8-readiness.service").read_text()
+    example = (root / "deploy/systemd/forge-ft8-readiness.paths.env.example").read_text()
+    assert "EnvironmentFile=/etc/rolling-thunder-forge-ft8-readiness/paths.env" in unit
+    for variable in ("C3_INBOX_DB_PATH", "C3_HISTORY_DB_PATH", "C4_DB_PATH"):
+        assert "${" + variable + "}" in unit
+        assert variable + "=/REVIEW_REQUIRED/" in example
+    assert "IPAddressDeny=any" in unit

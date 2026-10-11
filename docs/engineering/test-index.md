@@ -487,3 +487,7 @@ still required.
 - `tests/test_forge_ft8_power_statistics.py` — synthetic fake-only balanced trial and failed-trial confidence bounds, grouping/dedup/provenance/exclusion tests.
 
 - `tests/test_ft8_attempt_ledger.py` — v1 payload/hash invariance and v2 frozen-choice round-trip compatibility.
+
+- `tests/test_forge_ft8_prospective_inventory.py` — isolated v2 event, missing provenance, retrospective link, read-only rejection tests.
+
+- `tests/test_forge_ft8_c4_asof.py` — valid synthetic as-of regional join, after-choice rejection and absent-source fail-closed acceptance.
