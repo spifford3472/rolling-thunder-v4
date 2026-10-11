@@ -46,14 +46,14 @@ class FT8Widgets:
             textvariable=self.more_above,
             bg=_BACKGROUND,
             fg=_WHITE,
-            font=("DejaVu Sans", 22, "bold"),
+            font=("DejaVu Sans", 30, "bold"),
             anchor="center",
         ).grid(row=1, column=0, sticky="ew")
 
         header = tk.Frame(self.frame, bg=_BORDER)
         header.grid(row=2, column=0, sticky="ew", padx=2, pady=(0, 3))
         for column, (header_text, weight) in enumerate(
-            (("CALL", 5), ("COUNTRY", 3), ("GRID", 3), ("REACH", 3))
+            (("CALL", 3), ("COUNTRY", 3), ("GRID", 3), ("REACH", 3))
         ):
             header.grid_columnconfigure(column, weight=weight, uniform="ft8")
             tk.Label(
@@ -85,7 +85,7 @@ class FT8Widgets:
             )
             row.grid(row=index, column=0, sticky="ew", padx=2, pady=1)
             values: list[tk.Label] = []
-            for column, weight in enumerate((5, 3, 3, 3)):
+            for column, weight in enumerate((3, 3, 3, 3)):
                 row.grid_columnconfigure(column, weight=weight, uniform="ft8")
                 if column == 0:
                     call_cell = tk.Frame(row, bg=_ROW_BACKGROUND)
@@ -96,7 +96,7 @@ class FT8Widgets:
                         text="",
                         bg=_ROW_BACKGROUND,
                         fg=_POTA_GREEN,
-                        font=("DejaVu Sans", 22, "bold"),
+                        font=("DejaVu Sans", 30, "bold"),
                         anchor="center",
                         padx=2,
                         pady=2,
@@ -107,14 +107,14 @@ class FT8Widgets:
                         text="",
                         bg=_ROW_BACKGROUND,
                         fg=_WHITE,
-                        font=("DejaVu Sans", 22, "bold"),
+                        font=("DejaVu Sans", 30, "bold"),
                         anchor="w",
                         padx=2,
                         pady=2,
                     )
                     row_label.grid(row=0, column=2, sticky="nsew")
                     friend_label = tk.Label(call_cell, text="", bg=_ROW_BACKGROUND,
-                                            fg=FRIEND_COLOR, font=("DejaVu Sans", 24, "bold"))
+                                            fg=FRIEND_COLOR, font=("DejaVu Sans", 30, "bold"))
                     friend_label.grid(row=0, column=1, sticky="nsw")
                     self._friend_labels.append(friend_label)
                     self._pota_labels.append(pota_label)
@@ -125,7 +125,7 @@ class FT8Widgets:
                         text="",
                         bg=_ROW_BACKGROUND,
                         fg=_WHITE,
-                        font=("DejaVu Sans", 22, "bold"),
+                        font=("DejaVu Sans", 30, "bold"),
                         anchor="center",
                         padx=3,
                         pady=2,
@@ -142,7 +142,7 @@ class FT8Widgets:
             textvariable=self.more_below,
             bg=_BACKGROUND,
             fg=_WHITE,
-            font=("DejaVu Sans", 22, "bold"),
+            font=("DejaVu Sans", 30, "bold"),
             anchor="center",
         ).grid(row=4, column=0, sticky="ew")
 
@@ -195,7 +195,7 @@ class FT8Widgets:
             text="BUTTON 2 ANSWER   •   BUTTON 3 IGNORE",
             bg="#421515",
             fg=_YELLOW,
-            font=("DejaVu Sans", 24, "bold"),
+            font=("DejaVu Sans", 30, "bold"),
         ).grid(row=3, column=0, sticky="ew", pady=(8, 20))
         self.incoming_frame.grid_remove()
 

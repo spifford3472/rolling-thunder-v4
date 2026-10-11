@@ -391,11 +391,14 @@ the appropriate contact lifecycle point.
 
 The FT8 DX Intelligence screen displays up to ten CQ rows at once. Above and
 below overflow indicators are bright white and match the CQ callsign font size.
+FT8 station rows use 30-point bold text, matching the top DX recommendation,
+and CALL receives one-quarter of the table width for a denser display.
 The top DX recommendation uses larger lettering. Compact row spacing preserves
 the mobile view; actual legibility requires operator visual acceptance.
 
 The FT8 DX Intelligence browser shows CALL, COUNTRY (conservative callsign-prefix
-abbreviation), GRID, and REACH (LOW/MEDIUM/HIGH ranking confidence or PENDING).
+abbreviation from the offline prefix table, expanded with selected ARRL/ITU allocations;
+unknown prefixes display a dash, not a guessed country), GRID, and REACH (LOW/MEDIUM/HIGH ranking confidence or PENDING).
 A compact TOP recommendation summarizes the first currently ranked CQ.
 REACH is **not** a numerical probability of making a contact. Unknown propagation
 or missing Forge observations result in neutral ranking, not a claim the path is closed.
