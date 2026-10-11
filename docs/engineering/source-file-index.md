@@ -151,7 +151,7 @@ originates from one screen.
 - `src/rolling_thunder/ft8/coordinator.py` — FT8 subsystem module for coordinator; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/decoder.py` — FT8 subsystem module for decoder; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/diagnostics.py` — Bounded FT8 audio/clock/decoder diagnostics, NTP-primary readiness, and morning comparison-session accounting.
-- `src/rolling_thunder/ft8/distance.py` — Maidenhead distance plus deterministic 20–70 W initial-power thresholds.
+- `src/rolling_thunder/ft8/distance.py` — Maidenhead distance plus legacy deterministic 20–70 W initial-power thresholds (no longer the FT8 attempt baseline).
 - `src/rolling_thunder/ft8/domain.py` — Core shared domain models used across application services.
 - `src/rolling_thunder/ft8/encoder.py` — FT8 subsystem module for encoder; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/hardware_transmit.py` — FT8 subsystem module for hardware transmit; see FT8 engineering documents before modifying its contract.

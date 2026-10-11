@@ -10,7 +10,7 @@ from rolling_thunder.domain import RadioState
 from rolling_thunder.ft8.authorization import freeze_ft8_location
 from rolling_thunder.ft8.bands import ft8_frequency_for_band
 from rolling_thunder.ft8.coordinator import FT8QsoResult
-from rolling_thunder.ft8.distance import initial_ft8_power_watts, maidenhead_distance_km
+from rolling_thunder.ft8.distance import maidenhead_distance_km
 from rolling_thunder.ft8.domain import (
     FT8CQActivity,
     FT8IncomingCall,
@@ -79,7 +79,7 @@ def build_ft8_attempt_seed(
         selected_snr_db=activity.snr_db,
         pota_cq=activity.pota_cq,
         tx_power_target_watts=(power_policy or FT8PowerPolicy()).clamp(
-            band_text, initial_ft8_power_watts(local_grid, activity.grid)
+            band_text, (power_policy or FT8PowerPolicy()).initial_power_watts
         ),
     )
 

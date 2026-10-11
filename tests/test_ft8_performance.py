@@ -161,7 +161,7 @@ def test_attempt_seed_freezes_extreme_grid_power_before_preparation() -> None:
 
     assert seed.local_grid == "EM79xm"
     assert seed.remote_grid == "QF56"
-    assert seed.tx_power_target_watts == 70
+    assert seed.tx_power_target_watts == 20
 
 
 def test_responder_seed_and_preparation_failure_preserve_initial_report(

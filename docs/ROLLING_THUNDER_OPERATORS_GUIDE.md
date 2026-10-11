@@ -389,6 +389,14 @@ the appropriate contact lifecycle point.
 
 # 8. FT8 Screen
 
+CP3 supervised power pilot: new FT8 QSO attempts start at 20 W. When enabled
+by operator-approved power configuration, repeated unanswered grid calls may
+raise CAT power in verified 5 W steps under the existing band ceilings.
+Report/73 messages do not trigger increases. Manual power changes suspend
+automatic control for the current QSO; abort remains available. Directional
+PSK observations currently rank DX opportunities, not calibrated wattage.
+
+
 The FT8 DX Intelligence screen displays up to ten CQ rows at once. Above and
 below overflow indicators are bright white and match the CQ callsign font size.
 FT8 station rows use 30-point bold text, matching the top DX recommendation,

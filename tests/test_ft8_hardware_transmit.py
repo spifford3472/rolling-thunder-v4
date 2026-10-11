@@ -740,3 +740,95 @@ def test_standalone_owner_test_enforces_power_policy_without_keying(watts: int |
             label='hardware test', qso_id=None,
         )
     assert 'key' not in radio.ptt.events
+
+
+def test_cp3_adaptive_power_steps_only_for_repeated_grid_message() -> None:
+    from dataclasses import replace
+
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+
+    class PowerRadio(_FakeRadio):
+        def __init__(self):
+            super().__init__(_connected_state())
+            self.watts = 20
+            self.setting_history = []
+
+        def read_power_watts(self):
+            return self.watts
+
+        def set_power_watts(self, power_watts):
+            self.watts = power_watts
+            self.setting_history.append(power_watts)
+            return self.watts
+
+    radio = PowerRadio()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy(adaptive_enabled=True),
+    )
+    context = _qso_context()
+    authorization = FT8QsoHardwareTransmitAuthorization(
+        authorization_id="cp3-unit", authorized_at_utc=context.authorized_utc,
+        context=context,
+    )
+
+    def send(message: str) -> None:
+        waveform = replace(
+            _waveform(), encoded=replace(_waveform().encoded, message=message),
+        )
+        executor.execute_qso(FT8QsoHardwareTransmitRequest(
+            authorization=authorization, waveform=waveform,
+            maximum_key_down_s=14.5, expected_radio_frequency_hz=14_074_000,
+            expected_radio_mode="DATA",
+        ))
+
+    send("K1ABC KI5VNB EM79")
+    assert radio.watts == 20
+    send("K1ABC KI5VNB EM79")
+    assert radio.watts == 25
+    send("K1ABC KI5VNB -10")
+    send("K1ABC KI5VNB -10")
+    assert radio.watts == 25
+    radio.watts = 15  # Operator changed the power at the front panel.
+    send("K1ABC KI5VNB EM79")
+    send("K1ABC KI5VNB EM79")
+    assert radio.watts == 15
+    assert radio.setting_history == [25]
+
+
+def test_cp3_power_readback_mismatch_inhibits_next_ptt() -> None:
+    from dataclasses import replace
+
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+
+    class PowerRadio(_FakeRadio):
+        def __init__(self):
+            super().__init__(_connected_state())
+            self.watts = 20
+
+        def read_power_watts(self):
+            return self.watts
+
+        def set_power_watts(self, power_watts):
+            return power_watts  # Command echo but actual CAT power stays 20.
+
+    radio = PowerRadio()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy(adaptive_enabled=True),
+    )
+    context = _qso_context()
+    authorization = FT8QsoHardwareTransmitAuthorization(
+        authorization_id="cp3-unit", authorized_at_utc=context.authorized_utc,
+        context=context,
+    )
+    waveform = replace(
+        _waveform(), encoded=replace(_waveform().encoded, message="K1ABC KI5VNB EM79"),
+    )
+    request = FT8QsoHardwareTransmitRequest(
+        authorization=authorization, waveform=waveform,
+        maximum_key_down_s=14.5, expected_radio_frequency_hz=14_074_000,
+        expected_radio_mode="DATA",
+    )
+    executor.execute_qso(request)
+    with pytest.raises(RuntimeError, match="readback mismatch"):
+        executor.execute_qso(request)
+    assert radio.ptt.events.count("key") == 1

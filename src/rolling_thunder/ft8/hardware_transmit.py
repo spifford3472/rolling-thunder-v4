@@ -9,6 +9,7 @@ API is a general-purpose application PTT surface.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -250,6 +251,9 @@ class BoundedFT8HardwareTransmitExecutor:
         self._closed = False
         self._meter_summaries: dict[UUID, FT8TransmitMeterSummary] = {}
         self._transmit_periods: dict[UUID, list[FT8TransmitPeriodTelemetry]] = {}
+        # Per-QSO state is local to the existing authorized transmit executor.
+        self._auto_power_last: dict[UUID, tuple[str, int]] = {}
+        self._auto_power_suspended: set[UUID] = set()
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
         self._execute(
@@ -269,6 +273,7 @@ class BoundedFT8HardwareTransmitExecutor:
             expected_radio_mode=request.expected_radio_mode,
             label="QSO transmit",
             qso_id=request.authorization.context.qso_id,
+            power_message=request.waveform.encoded.message,
         )
 
     def meter_summary(self, qso_id: UUID) -> FT8TransmitMeterSummary | None:
@@ -321,6 +326,7 @@ class BoundedFT8HardwareTransmitExecutor:
         expected_radio_mode: str,
         label: str,
         qso_id: UUID | None,
+        power_message: str | None = None,
     ) -> None:
         with self._lock:
             if self._closed:
@@ -370,6 +376,40 @@ class BoundedFT8HardwareTransmitExecutor:
                     raise RuntimeError(
                         f"FT8 CAT power {verified_power} W exceeds {band.value} ceiling {cap} W"
                     )
+            # Only a repeated, identical unanswered call may step upward.
+            # A newly changed message (report/73) holds the existing power.
+            # Manual CAT changes suspend automation rather than being overwritten.
+            policy = self._power_policy
+            if (
+                qso_id is not None and policy is not None and policy.adaptive_enabled
+                and power_message is not None and verified_power is not None
+            ):
+                history = self._auto_power_last.get(qso_id)
+                if history is not None:
+                    previous_message, previous_power = history
+                    if verified_power != previous_power:
+                        # An operator changed RF power: suspend this attempt.
+                        self._auto_power_suspended.add(qso_id)
+                    elif (
+                        qso_id not in self._auto_power_suspended
+                        and previous_message == power_message
+                        and re.fullmatch(r"[A-R]{2}[0-9]{2}(?:[A-X]{2})?", power_message.split()[-1])
+                        and verified_power < cap
+                    ):
+                        setter = getattr(self._radio, "set_power_watts", None)
+                        if not callable(setter):
+                            raise RuntimeError("FT8 auto power needs CAT setting capability")
+                        requested = min(cap, verified_power + 5)
+                        try:
+                            programmed = setter(requested)
+                            observed = reader() if callable(reader) else None
+                        except (RadioError, ValueError, RuntimeError, TypeError) as exc:
+                            raise RuntimeError("FT8 automatic CAT power change failed") from exc
+                        if programmed != requested or observed != requested:
+                            raise RuntimeError("FT8 automatic power readback mismatch")
+                        verified_power = requested
+                if qso_id not in self._auto_power_suspended:
+                    self._auto_power_last[qso_id] = (power_message, verified_power)
             if qso_id is not None and self._intent_started is not None:
                 intent_id = uuid4()
                 self._intent_started(intent_id, qso_id, expected_radio_frequency_hz, verified_power)
