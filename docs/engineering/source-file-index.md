@@ -446,3 +446,5 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/ft8/performance.py`, `ft8/performance_recording.py`, and `application_runtime.py` — carry optional v2 choice instant from existing selection seed into terminal analytics, without changing radio authority.
 
 - `src/rolling_thunder/forge_ft8_prospective_inventory.py` — read-only source/provenance/as-of audit of C3 v2 FT8 events; no modeled success estimates or wattage control.
+
+- `src/rolling_thunder/forge_ft8_c4_asof.py` — read-only C4 regional forecast to v2 FT8 operator-choice as-of comparison; validates plan and request/response identities.

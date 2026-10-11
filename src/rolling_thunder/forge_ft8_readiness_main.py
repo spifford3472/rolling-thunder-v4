@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
+from rolling_thunder.forge_ft8_c4_asof import audit_c4_choice_pairs
 from rolling_thunder.forge_ft8_power_advisor_config import (
     PowerAdvisorMode,
     load_ft8_power_advisor_policy,
@@ -81,6 +82,9 @@ def evaluate_once(
     status["c4_inventory"] = inspect_c4(c4_path)
     if inbox_path is not None and history_path is not None:
         status["prospective_inventory"] = audit_prospective_inbox(inbox_path, history_path)
+        status["regional_c4_asof_inventory"] = audit_c4_choice_pairs(
+            inbox_path, history_path, c4_path,
+        )
     return status
 
 

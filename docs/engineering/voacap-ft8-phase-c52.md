@@ -31,3 +31,38 @@ the Pi v2 event stream.
 See issue #312 for mandatory end-to-end scientific calibration and service
 automation gates. Without those, a boot-started timer will report
 COLLECTING forever and is not an acceptable completed power optimizer.
+
+## Separate C4 regional as-of join
+
+The C3 history per-attempt VOACAP link primarily describes retrospective or
+post-attempt calculations, which are **not** the same as C4's provider-neutral,
+pre-choice regional research forecasts. The independent
+`forge_ft8_c4_asof.audit_c4_choice_pairs` reader now joins only explicitly
+matching local 6-character grid, remote target-grid prefix, band, fixed C4
+six-hour forecast window, and a verifiably earlier generated provider result.
+It also checks the immutable plan identity, provider/model versions, request
+and response SHA256, SSN timestamps and the v2 selection time. This returns
+**regional as-of inventory counts**, not calibrated success odds. It correctly
+rejects missing source paths or late provider predictions. Region-grid
+resolution is deliberately limited to the exact cataloged target grid:
+neither location inference nor extrapolation is permitted. These regional
+forecasts are insufficient to establish a minimum wattage by themselves.
+
+The optional readiness CLI inputs expose both the C3 attempt-link audit and
+the C4 regional-as-of join under separate output keys to prevent mixing
+retrospective and prospective evidence. Even when a regional join is valid,
+the learned-power readiness remains COLLECTING until independently validated
+holdout calibration and a real bounded 20 W control-vs-lower-power trial exist.
+
+### Readiness unit path validation
+
+The candidate timer's service now loads three explicit data-source paths from
+a root-managed `/etc/rolling-thunder-forge-ft8-readiness/paths.env` instead
+of embedding an unverified C4 SQLite filename. See
+`deploy/systemd/forge-ft8-readiness.paths.env.example`. Its
+`ConditionPathExists` requires both policy and paths configuration. The
+non-networked dynamic service account has a supplemental C3 read group but
+should not be started until operators verify actual C3/C4 database paths,
+directory traversal permissions, SELinux/AppArmor if applicable, SQLite
+WAL read access, and the isolated status-state directory in a staging run.
+No live unit was installed or activated in this branch.
