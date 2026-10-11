@@ -49,7 +49,7 @@ from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
 from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
-from rolling_thunder.ft8.status import operator_ft8_status
+from rolling_thunder.ft8.status import operator_ft8_status, target_activity_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import (
     build_ft8_browser_viewport,
@@ -1308,18 +1308,41 @@ def run_dashboard(
         ):
             runtime.live_radar.request_viewport(live_map_snapshot.viewport)
         ft8_map_status: str | None = None
+        ft8_remote_status: str | None = None
         if (
             context_navigation.state.selected is ContextId.FT8
             and runtime.ft8_panel is not None
         ):
             map_ft8_snapshot = runtime.ft8_panel.snapshot()
             start_status = runtime.latest_ft8_qso_start_status
+            selected_target = (
+                map_ft8_snapshot.active_context.remote_callsign
+                if map_ft8_snapshot.active_context is not None
+                else runtime.ft8_panel.selected_callsign
+            )
+            if runtime.ft8_receive is not None:
+                runtime.ft8_receive.select_activity_target(selected_target)
+                receive_snapshot = runtime.latest_ft8_receive_state
+                ft8_remote_status = target_activity_status(
+                    None if receive_snapshot is None else receive_snapshot.target_activity
+                )
+            if map_ft8_snapshot.active_context is not None:
+                tries = map_ft8_snapshot.attempt_count
+                allowed = map_ft8_snapshot.attempts_per_state
+            else:
+                tries = allowed = 0
             ft8_map_status = operator_ft8_status(
                 panel_mode=map_ft8_snapshot.mode,
                 qso_state=map_ft8_snapshot.qso_state,
                 selected_callsign=runtime.ft8_panel.selected_callsign,
                 start_state=None if start_status is None else start_status.state,
             ).value
+            if selected_target is not None:
+                ft8_map_status += f"  {selected_target}"
+            if tries and allowed:
+                ft8_map_status += f"  TRY {tries}/{allowed}"
+        elif runtime.ft8_receive is not None:
+            runtime.ft8_receive.select_activity_target(None)
 
         live_map_widgets.update(
             live_map_presentation,
@@ -1328,6 +1351,7 @@ def run_dashboard(
             runtime.latest_pota_map_marker_state,
             weather_presentation,
             ft8_status=ft8_map_status,
+            ft8_remote_status=ft8_remote_status,
         )
 
         connectivity = build_runtime_connectivity_status(

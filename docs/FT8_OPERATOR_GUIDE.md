@@ -166,3 +166,7 @@ context exit skips that recovery. CAT-safe shutdown performs serialized normal
 receive cleanup before disconnect. With CAT unavailable, restoration cannot be
 confirmed: check 11-05 manually before voice operation. Hardware acceptance of
 this change is still required.
+
+### Selected-station activity in map status strip (CP3.1 Step 2)
+
+While viewing FT8, the existing cyan-outlined map status strip displays the local QSO phase in white, including the selected or active callsign and per-phase attempt count when available. A green second line reflects only fresh decoder-attributed transmissions **from** that target: CQ, third-party directed exchange, report, or sign-off. Calls to the target from other stations do not prove the target is replying. The green line disappears when activity becomes stale or unknown; observed 73 is not proof of a completed QSO. The strip has no new controls and does not change retries, power, or transmit authorization.

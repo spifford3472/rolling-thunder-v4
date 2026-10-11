@@ -367,3 +367,7 @@ Before changing code, answer:
 - Which targeted tests prove the behavior?
 - Which cross-feature regression tests are required?
 - Which engineering and operator documents must be updated?
+
+### FT8 selected-target status (CP3.1 Step 2)
+
+The FT8 map banner consumes the existing read-only target activity snapshot from `FT8ReceiveService`, synchronized to the highlighted browser target or active QSO remote callsign on the UI refresh path. `ft8.status.target_activity_status` formats fresh decoder-attributed remote observations separately from the white local operator status. The live map paints a green second line inside the unchanged banner bounds; it does not own decode, selection, RF authority, or retry policy.

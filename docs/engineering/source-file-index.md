@@ -139,6 +139,7 @@ originates from one screen.
 
 ## FT8
 
+- `src/rolling_thunder/ft8/target_activity.py` — Read-only selected-target FT8 CQ/third-party QSO observation with source attribution and freshness; no transmit authority.
 - `src/rolling_thunder/ft8/__init__.py` — Package marker/export boundary.
 - `src/rolling_thunder/ft8/activity.py` — FT8 subsystem module for activity; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/attempt_history.py` — FT8 subsystem module for attempt history; see FT8 engineering documents before modifying its contract.
