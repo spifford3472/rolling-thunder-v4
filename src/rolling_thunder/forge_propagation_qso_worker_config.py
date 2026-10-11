@@ -40,6 +40,9 @@ class ForgePropagationQsoWorkerConfig(ConfigurationModel):
     retry_max_s: int = Field(default=3600, ge=1, le=604_800)
     provider_timeout_s: float = Field(default=10.0, gt=0, le=60)
     voacap_base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8787")
+    voacap_model_service_version: str | None = Field(
+        default=None, min_length=1, max_length=120
+    )
 
     @field_validator("worker_identity", mode="before")
     @classmethod
@@ -49,6 +52,11 @@ class ForgePropagationQsoWorkerConfig(ConfigurationModel):
     @field_validator("bind_host", mode="before")
     @classmethod
     def normalize_bind_host(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("voacap_model_service_version", mode="before")
+    @classmethod
+    def normalize_voacap_model_service_version(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
     @field_validator(

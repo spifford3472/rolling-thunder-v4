@@ -1,9 +1,11 @@
-# VOACAP / FT8 Phase C — C1 provenance safety and baseline gates
+# VOACAP / FT8 Phase C — provenance safety and retrospective coverage
 
-Status: **Phase C1 implemented offline only.** This slice adds an auditable
-synthetic/test exclusion boundary and specifies baseline activation and coverage
-reporting. It does not implement or activate scheduled baseline sampling, enable a
-provider, migrate production data, change ranking/training, deploy, or authorize RF.
+Status: **Phases C1 and C2 implemented offline only.** C1 adds an auditable
+synthetic/test exclusion boundary. C2 adds a scoped, deterministic, read-only
+coverage artifact over existing retrospective attempt/VOACAP history and closes the
+retry-exhaustion directional-status gap in the existing worker. Neither slice
+implements or activates scheduled baseline sampling, enables a provider, migrates
+production data, changes ranking/training, deploys, or authorizes RF.
 
 ## C1 provenance contract
 
@@ -34,9 +36,64 @@ VOACAP run. Before any production migration, the coverage report must identify a
 excluded UUID that already has model history; reconciliation must preserve that
 history and add an exclusion annotation rather than destroy evidence.
 
+The UUID `938620bb-b4ff-40b2-9493-081b56bb038c` remains provenance `unknown`.
+Neither its UUID nor the associated AA4NP callsign is authorized evidence of a
+field-observed attempt. It remains training-ineligible unless a later separately
+audited evidence record is approved.
+
+## C2 scoped retrospective coverage contract
+
+`build_retrospective_coverage_report` opens a declared attempt-inbox snapshot and
+attempt-history snapshot with SQLite read-only/query-only connections. Its caller
+must provide the exact release identifier, generation UTC, half-open query window,
+and stable backup/fingerprint identifiers. The reusable result is versioned JSON-
+serializable data; it does not claim leases, initialize/migrate a database, call
+VOACAP, or expose callsigns, raw payloads, or exact coordinates.
+
+The scoped artifact reports separate event, transmitted-period, and modeled-input
+denominators. It partitions events by UTC day, band, terminal classification,
+provenance, remote-grid precision, and queue state; reports missing/present event
+coverage; partitions existing immutable inputs, runs, relations, versions, and
+training eligibility; and publishes expected-versus-stored input/terminal-run,
+unknown-remote-power reverse-skip, unlinked-input/run, and excluded-after-history
+reconciliation counts. Known synthetic/test attempts are not expected model work.
+Missing values remain `missing`, never zero or failure.
+
+The worker records deterministic missing-input directions before any provider
+attempt. Unknown remote power therefore always produces an immutable reverse
+`skipped` run even when the forward request exhausts its retry budget. Four-/six-
+character Maidenhead inputs are normalized and structurally validated; malformed or
+unsupported grids remain missing. A successful response lacking the existing
+adapter's requested UTC-hour/band values is `unavailable`, not `ready`. Availability
+cannot precede request time, and no provider response field is synthesized.
+Each transmitted-period input uses that period's UTC start, frequency-derived band,
+exact frequency, and only power explicitly marked as verified configured CAT
+readback. A declared model service version is bound into canonical input identity
+before provider work, so terminal replay is checked before egress. A later declared
+service version or changed modeled assumption therefore creates a distinct append-only
+input/run; it never overwrites or suppresses the historical version. When no version
+is available before the call, a matching durable terminal input suppresses eager
+re-query; legacy unversioned hashes remain stable.
+
+Generation fails closed when required schemas are absent, foreign keys fail, seeded
+exclusion evidence changes, an inbox UUID/hash disagrees with its validated immutable
+event, a model-input hash/identity disagrees with its canonical value, history names
+an attempt absent from the inbox snapshot, link/input identities disagree, enum
+values or raw response digests are invalid, or a training-eligible link violates
+field-provenance, ready-run, pre-choice, and availability-cutoff invariants.
+Persistence now also requires a ready result with parsed modeled values before any
+new pre-choice link can be training-eligible.
+
+C2 is deliberately not the complete field coverage report required by baseline gate
+3 below. It does not emit CSV drill-down, suppress/coarsen small cells, inventory
+independent replay/conflict counters, partition every denominator by every dimension,
+or compute daily/7/30/90-day or seasonal comparison views. Those additions require
+privacy-threshold and output-retention approval. No C2 result is training evidence or
+authorization to enable the baseline scheduler/provider.
+
 ## Phase C baseline activation gates
 
-All gates remain closed after C1. Before implementing or enabling the daily baseline
+All gates remain closed after C2. Before implementing or enabling the daily baseline
 pilot described in Phase A:
 
 1. Review and approve the exact release SHA, service account, private network path,
@@ -102,14 +159,22 @@ the minimum fields needed to reproduce aggregates. Callsigns, raw payloads and e
 coordinates are excluded from the aggregate report by default; access to a protected
 diagnostic drill-down remains a separate authorization.
 
-## C1 offline acceptance
+## C1/C2 offline acceptance
 
 - Exact synthetic UUID: raw payload/hash and exact replay remain unchanged; changed
   replay still conflicts; provider calls, inputs, runs and links are zero.
 - Unknown UUID: Phase B correlation remains available, provenance is explicitly
   unknown, and every link remains training-ineligible.
+- AA4NP UUID `938620bb-b4ff-40b2-9493-081b56bb038c` remains unknown and
+  training-ineligible; identity alone does not create provenance.
 - Mixed-release database: legacy tables and rows remain, the additive provenance
   table is seeded exactly once, and SQLite integrity/foreign-key checks pass.
+- C2: declared snapshot/window metadata is retained; denominators and partitions
+  reconcile; sensitive fields are absent; logical database contents remain unchanged;
+  UUID/hash, response-digest, provenance seed and training-invariant corruption fail
+  closed; exhausted forward retries still retain the reverse unknown-power skip;
+  terminal replay causes zero additional provider calls, while distinct declared
+  model versions append distinct immutable results.
 - Full repository Ruff, strict MyPy, pytest and `git diff --check` pass before commit.
 
 No live provider, production database, deployed service, operator identity claim, or

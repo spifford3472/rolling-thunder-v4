@@ -176,7 +176,13 @@ Live acceptance should use an exact commit SHA and record rollback information.
   idempotent acceptance, disabled ingestion and read-only diagnostics.
 - `tests/test_forge_ft8_attempt_correlation.py` — replay conflicts,
   direction/grid/power/missing semantics, provider retry, leases/dead letters and
-  immutable retrospective diagnostics.
+  immutable retrospective diagnostics, including retry-exhaustion reverse skips,
+  zero-egress terminal replay, distinct declared model-version identities, safe
+  legacy fallback, grid normalization, unavailable status, as-of bounds, provenance
+  and ready-result training eligibility.
+- `tests/test_forge_ft8_attempt_coverage.py` — read-only scoped C2 denominators,
+  privacy-minimized partitions, logical non-mutation and fail-closed UUID/hash/
+  training-invariant reconciliation.
 - `tests/test_forge_pskreporter.py` — bounded provider parsing, concurrency etiquette, terminal eligibility, correlation, restart-safe zero/failure distinctions, and raw-query archival.
 - `tests/test_forge_pskreporter_orchestration.py` — confirmed event validation, exact replay, terminal latency, durable global pacing, bounded batching, restart reconciliation, disabled behavior, and provider-free health.
 - `tests/test_completed_qso_producer.py` — matching post-durability event validation, exact replay/conflict, independent destination progress, retry timing, and restart recovery without provider I/O.

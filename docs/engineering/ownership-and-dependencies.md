@@ -155,6 +155,15 @@ training exclusions. Unknown provenance preserves Phase B processing compatibili
 but is not training evidence. No Pi producer, contact, Wavelog, ranking, UI or radio
 ownership changes.
 
+Phase C2 adds a Forge-owned read-only consumer of declared inbox/history snapshots.
+It reconciles existing immutable retrospective VOACAP evidence into a privacy-
+minimized versioned coverage artifact and fails closed on identity, provenance,
+foreign-key, or training-invariant violations. It owns no provider, scheduler,
+provenance classification, lease, Pi, UI, contact, Wavelog, ranking, or radio path.
+The existing Forge worker remains the sole correlation owner; it records deterministic
+missing-input directions before provider work so forward retry exhaustion cannot
+erase the reverse unknown-power skip.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder

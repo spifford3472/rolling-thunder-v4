@@ -347,3 +347,22 @@ and replay behavior remain unchanged. An absent record means provenance is unkno
 not field-observed; unknown rows may retain Phase B retrospective processing but are
 training-ineligible. Retrospective availability remains training-ineligible even for
 later audited field observations. See `voacap-ft8-phase-c.md`.
+
+Phase C2 coverage consumes declared snapshots through read-only/query-only SQLite
+connections. It never claims leases, calls a provider, changes provenance, or emits
+callsigns, raw payloads, or exact coordinates. It fails closed on immutable identity/
+hash disagreement, changed documented exclusions, cross-database UUID mismatch,
+foreign-key errors, and any training-eligible link that is not an audited field,
+ready, pre-choice result available by its cutoff. A ready provider result is required
+when persisting any new training-eligible link.
+
+Deterministic missing-input directions are persisted before provider work. Unknown
+remote power remains an explicit reverse-direction `skipped` run even when forward
+work retries or dead-letters. A response with no parsed requested-hour/band value is
+`unavailable`; it is not zero and is not training evidence.
+Historical forward correlation uses each transmitted period's UTC, exact frequency,
+frequency-derived band, and only CAT-verified configured power. A declared model
+service version and modeled assumptions are canonical input identity before provider
+egress: terminal replay performs no request, while changed versions append new runs
+without mutating older evidence. With no pre-call version, matching durable terminal
+history suppresses eager re-query. Version-unknown legacy input hashes remain stable.

@@ -272,8 +272,12 @@ originates from one screen.
 - `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_ft8_attempt_api.py` — authenticated bounded attempt ingestion and read-only per-attempt diagnostics application.
 - `src/rolling_thunder/forge_ft8_attempt_correlation.py` — durable attempt inbox,
-  leased retry/dead-letter worker, immutable full-input-hash VOACAP history, and
-  UUID-keyed audited synthetic/test processing/training exclusions.
+  leased retry/dead-letter worker, deterministic directional skip/status handling,
+  pre-egress terminal replay checks, immutable versioned full-input-hash VOACAP
+  history, safe legacy fallback, and UUID-keyed audited synthetic/test processing/
+  training exclusions.
+- `src/rolling_thunder/forge_ft8_attempt_coverage.py` — provider-free, read-only
+  Phase-C retrospective coverage and fail-closed snapshot reconciliation.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.
@@ -283,7 +287,7 @@ originates from one screen.
 - `src/rolling_thunder/forge_propagation_qso_api.py` — Bounded bearer-authenticated private completed-QSO ingestion API and supervised HTTP server lifecycle.
 - `src/rolling_thunder/forge_propagation_qso_ingestion.py` — Durable UUID-idempotent completed-QSO inbox/source-sink contract, identified bounded leases, retry/dead-letter worker contract, and isolated VOACAP correlator.
 - `src/rolling_thunder/forge_propagation_qso_worker.py` — Deterministic one-cycle orchestration and versioned atomic Forge-local status publication.
-- `src/rolling_thunder/forge_propagation_qso_worker_config.py` — Separate disabled service, authenticated-ingestion listener, worker identity, storage, polling, lease, retry, and VOACAP configuration.
+- `src/rolling_thunder/forge_propagation_qso_worker_config.py` — Separate disabled service, authenticated-ingestion listener, worker identity, storage, polling, lease, retry, and optional declared VOACAP model-version configuration.
 - `src/rolling_thunder/forge_propagation_qso_worker_main.py` — Independent completed-QSO ingestion/server and double-gated worker composition/lifecycle root with provider-free preflight/status commands.
 - `src/rolling_thunder/forge_pskreporter.py` — Official bounded PSK Reporter XML client, concurrency-safe five-minute etiquette gate, bounded FT8 completion-aware correlation, and repository-backed analytics service.
 - `src/rolling_thunder/forge_pskreporter_orchestration.py` — Completed-FT8 event sink, durable global pacing/exact-window inbox, bounded PSK worker, and provider-free health contract.

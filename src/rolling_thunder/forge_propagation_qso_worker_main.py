@@ -148,6 +148,7 @@ def _execution_plan(config: ForgePropagationQsoWorkerConfig) -> dict[str, object
         "history_database_path": str(config.history_database_path),
         "status_path": str(config.status_path),
         "worker_identity": config.worker_identity,
+        "voacap_model_service_version": config.voacap_model_service_version,
         "ingestion_token_environment": _INGESTION_TOKEN_ENV,
     }
 
@@ -219,6 +220,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 worker_id=f"{config.worker_identity}-attempts",
                 batch_size=config.batch_limit,
                 lease_duration=timedelta(seconds=config.lease_duration_s),
+                model_service_version=config.voacap_model_service_version,
             )
             if config.voacap_enabled
             else None

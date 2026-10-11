@@ -160,6 +160,24 @@ Unknown provenance remains explicit and training-ineligible. Raw payloads, hashe
 replay, legacy completed-QSO correlation and all disabled activation gates are
 unchanged. See `engineering/voacap-ft8-phase-c.md`.
 
+Phase C2 adds only a reusable provider-free report function over explicitly declared
+read-only inbox/history snapshots. It returns privacy-minimized, versioned
+retrospective coverage and reconciliation data, fails closed on source/invariant
+corruption, and has no listener, provider, scheduler, lease, activation, or UI
+contract. It is a scoped prerequisite artifact, not completion of the full baseline
+field-coverage gate.
+
+The same slice persists deterministic missing-input directions before provider work,
+so unknown remote power retains a reverse skipped run even if forward retries
+dead-letter. Structurally invalid grids are not sent, and an existing-adapter response
+without requested hour/band values is unavailable rather than ready.
+Forward model identity uses each transmitted period's UTC/frequency-derived band and
+strictly verified configured-power evidence. An explicitly configured model service
+version is included in canonical input hashes before egress, allowing terminal replay
+to avoid provider calls while upgraded models or changed assumptions append distinct
+evidence. If no version is known before the call, matching durable terminal history
+fails safe by suppressing eager re-query; legacy runs and hashes are not rewritten.
+
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application
 root, configuration, StateDirectory, and SQLite database. The systemd unit has no
 listener and is not enabled by installation. Its production template remains

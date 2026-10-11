@@ -162,6 +162,20 @@ reach VOACAP or training; absent provenance stays explicitly unknown and is not
 training evidence. No FT8 UI, logging or radio behavior changes. See
 `engineering/voacap-ft8-phase-c.md`.
 
+Phase C2 adds a provider-free, read-only Forge coverage consumer for declared
+attempt/history snapshots. Its versioned aggregate omits callsigns, payloads and
+exact coordinates and cannot change provenance, leases, FT8 behavior, or training
+eligibility. It is not the scheduled baseline or the complete field report.
+Forge correlation also records deterministic missing-input directions before
+provider work; unknown remote power remains a reverse skip after forward retry
+exhaustion. This changes no Pi or RF behavior.
+Forward retrospective inputs use the individual transmitted period's UTC, exact
+frequency/frequency-derived band, and only verified configured-power readback.
+Declared model service versions and assumptions are pre-call hash identity, so replay
+performs no duplicate provider request and upgraded models append history without
+changing prior evidence. Version-unknown legacy durable inputs are not eagerly
+re-requested.
+
 Optional completed-QSO propagation analytics use a separate source outbox only after
 both the successful `Contact` and matching successful performance attempt have been
 durably written. The terminal callback may perform that short local enqueue but no

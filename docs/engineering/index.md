@@ -11,9 +11,9 @@ This guide describes the implemented repository rather than an aspirational arch
 - `voacap-ft8-phase-a.md` — VOACAP/FT8 Phase A as-built audit, schema decisions, and review gates (design only).
 - `voacap-ft8-phase-b.md` — additive attempt ledger, Forge inbox, immutable
   VOACAP correlation, migration/rollback, and offline acceptance.
-- `voacap-ft8-phase-c.md` — Phase C1 UUID-keyed synthetic/test exclusion,
-  conservative provenance, baseline activation gates, and field coverage report
-  design (no scheduler or activation).
+- `voacap-ft8-phase-c.md` — Phase C1 UUID-keyed synthetic/test exclusion, C2
+  read-only retrospective coverage, conservative provenance, baseline activation
+  gates, and full field-report design (no scheduler or activation).
 
 - `system-architecture.md` — deployed topology, process/lifecycle, local-first and recovery boundaries.
 - `ownership-and-dependencies.md` — feature ownership and dependency graph.
