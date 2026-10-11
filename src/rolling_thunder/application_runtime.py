@@ -1013,6 +1013,13 @@ class ApplicationRuntime:
                                 else meter_summary.alc_peak_raw
                             ),
                             tx_power_end_watts=tx_power_end_watts,
+                            choice_at_utc=(
+                                None if runtime.ft8_qso_start is None
+                                or runtime.ft8_qso_start.status.attempt_seed is None
+                                or runtime.ft8_qso_start.status.attempt_seed.attempt_id
+                                != result.context.qso_id
+                                else runtime.ft8_qso_start.status.attempt_seed.started_at_utc
+                            ),
                         )
                     finally:
                         durable_ft8_contact_ids.discard(result.context.qso_id)

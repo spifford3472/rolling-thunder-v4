@@ -278,3 +278,9 @@ The callsign-info process also owns the optional SQLite known-callsign directory
 private browser admin, bounded active snapshot and batch classification routes.
 Comments stay on Forge; clients receive only classification. No new process or
 port is introduced. See `../KNOWN_CALLSIGNS.md` for contracts and deployment.
+
+C5.1 includes a **candidate** separate Forge readiness timer and one-shot CLI.
+It is not deployed; the existing approved generic Forge deploy helper has no
+readiness component. No listener, provider egress, Pi dependency or radio control.
+The C4 inventory count is not a qualified prospective C5 calibration cohort.
+See `voacap-ft8-phase-c51.md`.

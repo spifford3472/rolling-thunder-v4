@@ -27,6 +27,7 @@ rolling-thunder-forge-propagation = "rolling_thunder.forge_propagation_main:main
 rolling-thunder-forge-propagation-qso-worker = "rolling_thunder.forge_propagation_qso_worker_main:main"
 rolling-thunder-forge-pskreporter-worker = "rolling_thunder.forge_pskreporter_worker_main:main"
 rolling-thunder-forge-ft8-historical-replay = "rolling_thunder.forge_ft8_historical_replay_main:main"
+rolling-thunder-forge-ft8-readiness = "rolling_thunder.forge_ft8_readiness_main:main"
 rolling-thunder-pota-catalog = "rolling_thunder.pota_catalog_main:main"
 
 [project.optional-dependencies]

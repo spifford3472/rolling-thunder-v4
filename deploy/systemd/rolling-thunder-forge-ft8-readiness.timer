@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic Forge C5.1 FT8 readiness checks (never actuates)
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=15min
+AccuracySec=1min
+Persistent=true
+Unit=rolling-thunder-forge-ft8-readiness.service
+
+[Install]
+WantedBy=timers.target

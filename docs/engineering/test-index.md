@@ -477,3 +477,13 @@ membership semantics. `tests/test_forge_contact_sync_api.py`,
 presentation-neutral sync boundary used by ordinary, POTA/DX, FT8, and DMR
 contacts. All provider writes are scripted fakes; installed Wavelog acceptance is
 still required.
+
+- `tests/test_forge_ft8_readiness_main.py` — missing C4, OFF/armed/no-calibration, read-only dedup and fail-closed output.
+
+- `tests/test_forge_ft8_power_experiment.py` — fail-closed randomized trial assignment, repeatability, bounded wattage and no RF authority.
+
+- `tests/test_forge_ft8_qualification.py` — certificate fail-closed controls, provenance and confidence-bound rejection.
+
+- `tests/test_forge_ft8_power_statistics.py` — synthetic fake-only balanced trial and failed-trial confidence bounds, grouping/dedup/provenance/exclusion tests.
+
+- `tests/test_ft8_attempt_ledger.py` — v1 payload/hash invariance and v2 frozen-choice round-trip compatibility.

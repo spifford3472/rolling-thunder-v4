@@ -433,3 +433,14 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/ft8/psk_evidence_client.py` — bounded optional Pi-side private Forge observation client; no runtime connection yet.
 - `src/rolling_thunder/forge_psk_evidence_server.py` — standalone opt-in loopback PSK evidence listener with read-only normalized-history schema gate; not deployed.
 - `src/rolling_thunder/forge_psk_coverage_audit.py` — operator-run read-only normalized FT8 outbound-data coverage counts, no secrets or service changes.
+
+- `src/rolling_thunder/forge_ft8_readiness_main.py` — C5.1 Forge-only, read-only C4 inventory CLI; never actuates, never upgrades inventory into calibrated evidence.
+
+- `src/rolling_thunder/forge_ft8_power_experiment.py` — disabled, non-actuating Forge experiment allocation contract; no CAT/PTT/UI integration.
+
+- `src/rolling_thunder/forge_ft8_qualification.py` — immutable non-actuating C5 scientific qualification certificate, hash and human-readable justification.
+
+- `src/rolling_thunder/forge_ft8_power_statistics.py` — offline, non-actuating chronological grouped randomized 20 W-vs-lower-power holdout noninferiority evaluation.
+
+- `src/rolling_thunder/ft8/attempt_ledger.py` — now supports immutable v1/v2 FT8 attempt event wire format; v2 includes frozen pre-preparation operator selection UTC.
+- `src/rolling_thunder/ft8/performance.py`, `ft8/performance_recording.py`, and `application_runtime.py` — carry optional v2 choice instant from existing selection seed into terminal analytics, without changing radio authority.

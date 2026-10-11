@@ -133,3 +133,34 @@ def _attempt(
         busy_extension_attempts=extensions,
         attempt_count=6 + extensions,
     )
+
+
+def test_v2_carries_frozen_selection_and_v1_wire_hash_is_unchanged() -> None:
+    """Schema-1 events must not gain a null field or change their source hash."""
+    import hashlib
+    import json
+
+    from rolling_thunder.ft8.attempt_ledger import FT8AttemptEvent
+
+    legacy = build_attempt_event(_attempt(), (), created_at_utc=NOW)
+    legacy_json = legacy.model_dump(mode="json")
+    assert legacy.schema_version == 1
+    assert "choice_at_utc" not in legacy_json
+    expected = hashlib.sha256(
+        json.dumps(legacy_json, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert legacy.payload_sha256 == expected
+    assert FT8AttemptEvent.model_validate_json(
+        json.dumps(legacy_json)
+    ).payload_sha256 == expected
+
+    prospective = _attempt().model_copy(
+        update={"choice_at_utc": _attempt().started_at_utc}
+    )
+    new_event = build_attempt_event(prospective, (), created_at_utc=NOW)
+    assert new_event.schema_version == 2
+    assert new_event.choice_at_utc == prospective.started_at_utc
+    assert new_event.model_dump(mode="json")["choice_at_utc"] is not None
+    assert FT8AttemptEvent.model_validate_json(
+        new_event.model_dump_json()
+    ).payload_sha256 == new_event.payload_sha256
