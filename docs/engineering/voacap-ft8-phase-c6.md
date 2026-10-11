@@ -8,7 +8,7 @@ source-identified `EnvironmentSnapshot` (captured within 24h) must be
 supplied explicitly; stale solar evidence fails closed.
 
 The worker idempotently schedules 00/06/12/18 UTC slots from the frozen plan,
-one to three days forward, and invokes the existing bounded lease, replay,
+one to three complete future UTC days, beginning tomorrow, and invokes the existing bounded lease, replay,
 retry and per-day/provider-call/storage budgets. The provider adapter maps
 the canonical C4 request to the VOACAP summary API, keeping immutable model
 and service version identity. Provider calls are **zero** unless all three

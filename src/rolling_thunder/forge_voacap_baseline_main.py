@@ -91,7 +91,7 @@ def run_once(config: SamplingRuntime, *, now: datetime | None = None) -> dict[st
     repo = BaselineRepository(config.database_path)
     slots = 0
     for offset in range(config.future_days_to_schedule):
-        day = (moment + timedelta(days=offset)).date()
+        day = (moment + timedelta(days=offset + 1)).date()
         slots += repo.schedule_day(plan, day, environment, scheduled_at_utc=moment)
     provider = LocalVoacapProvider(
         config.provider_base_url, service_version=plan.service_version,
