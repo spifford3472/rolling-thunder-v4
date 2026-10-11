@@ -388,6 +388,19 @@ replay makes no duplicate request; a new declared version or assumption appends 
 evidence while historical hashes/runs remain unchanged. Without a pre-call version,
 matching durable legacy input suppresses eager re-query.
 
+Phase C3 adds no deployed provider or process. The
+`rolling-thunder-forge-ft8-historical-replay` CLI is an explicit offline audit tool:
+it requires copied/fixture inbox and history SQLite paths, a new output history path,
+the exact approved AA4NP UUID/payload SHA, the already-existing audited
+`field_observed` provenance row, an explicit timestamp/release identity, and a
+schema-1 deterministic fake-provider JSON fixture. It opens both sources query-only,
+never inserts or changes provenance, never imports a network transport, caps calls
+to the one UUID, and writes retrospective/training-ineligible runs only to the new
+copy. Its JSON report contains model input and response hashes, provider request
+year/month with hour/band selection, power provenance, terminal dedup evidence,
+version-fork counts, source/lease non-mutation, and the C2 coverage result. The tool
+is not installed, scheduled, deployed, or authorized against production databases.
+
 Read-only verification on 2026-10-07 confirmed that the documented Forge endpoint
 `http://192.168.9.170:8787/version` responded as `voacap-service` version `0.3.0`.
 No summary/prediction request was made and no service state was changed.
