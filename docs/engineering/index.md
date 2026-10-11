@@ -395,3 +395,5 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - [C5.3 Forge readiness preflight / commissioning gates](voacap-ft8-phase-c53.md) — protected source paths, read-only schema checks and service rollout conditions.
 
 - [C5.4 proposed Forge readiness service installer](voacap-ft8-phase-c54.md) — pinned offline packaging, private source preflight, component-only rollback and commissioning gates (not deployed).
+
+- [C6 Forge C4 bounded baseline sampler](voacap-ft8-phase-c6.md) — three-gate prospective provider worker and staged 6-hour timer; no production activation.

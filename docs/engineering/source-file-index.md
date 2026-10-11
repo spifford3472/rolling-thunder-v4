@@ -450,3 +450,5 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/forge_ft8_c4_asof.py` — read-only C4 regional forecast to v2 FT8 operator-choice as-of comparison; validates plan and request/response identities.
 
 - `src/rolling_thunder/forge_ft8_readiness_preflight.py` — C5.3 no-egress read-only source integrity/required-table checker, fail closed.
+
+- `src/rolling_thunder/forge_voacap_baseline_main.py` — C6 one-shot bounded Forge C4 sampler, loopback provider adapter and independent configuration.
