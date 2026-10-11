@@ -519,6 +519,11 @@ power policy, transmit authority, contact logging or Wavelog. Optional Forge
 delivery and VOACAP processing are off by default; network/provider loss leaves the
 local attempt queued and never turns missing data into a propagation failure.
 
+Phase C4 forecast sampling exists only as disabled, offline Forge development code.
+There is no operator control, AI recommendation, band ranking, power advice, radio
+command or active scheduler. Any stored 20-W value is a model reference, not a
+measurement or instruction, and VOACAP reliability is not QSO success probability.
+
 After local persistence, successful FT8 contacts request the same background
 Forge/Wavelog synchronization as ordinary contacts. A trusted mobile grid routes to
 `Mobile - XXXX - YY`; an untrusted/missing mobile location routes to `Mobile - Unknown

@@ -15,6 +15,9 @@ This guide describes the implemented repository rather than an aspirational arch
   read-only retrospective coverage, C3 copied-database audited historical replay,
   conservative provenance, baseline activation gates, and full field-report design
   (no scheduler or activation).
+- `voacap-ft8-phase-c4.md` — disabled/uncomposed Forge baseline sampling domain,
+  immutable plans and response deduplication, bounded offline acceptance, Gate 0
+  gaps, blocked live smoke runbook, and C5 read-only shadow design.
 
 - `system-architecture.md` — deployed topology, process/lifecycle, local-first and recovery boundaries.
 - `ownership-and-dependencies.md` — feature ownership and dependency graph.

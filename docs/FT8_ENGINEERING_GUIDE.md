@@ -183,6 +183,13 @@ history copy, and emits a versioned report with hashes and C2 reconciliation. It
 does not seed provenance, call a live provider, claim inbox leases, create training
 evidence, or affect FT8, UI, logging, ranking, power, CAT, PTT, or RF behavior.
 
+Phase C4 adds an offline-only Forge baseline sampler with immutable versioned plans,
+curated grid targets, fixed supported bands/UTC slots/20-W model reference, exact
+monthly response deduplication and bounded leases/retries/budgets. It is uncomposed,
+all gates default false, no provider transport exists, diagnostics are read-only and
+training eligibility is false. It changes no FT8 selection, power or RF behavior.
+See `engineering/voacap-ft8-phase-c4.md`.
+
 Optional completed-QSO propagation analytics use a separate source outbox only after
 both the successful `Contact` and matching successful performance attempt have been
 durably written. The terminal callback may perform that short local enqueue but no
