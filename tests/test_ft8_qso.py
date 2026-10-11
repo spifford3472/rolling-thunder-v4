@@ -341,3 +341,64 @@ def test_missing_destination_decode_cannot_advance_qso() -> None:
     controller.on_decode(_decode(102, FT8MessageKind.REPORT, destination=None))
 
     assert controller.state is FT8QsoState.WAIT_REPORT
+
+
+def test_cp31_busy_target_integrated_exchange_and_bound() -> None:
+    """Only source-attributed third-party replies grant two fixed, power-neutral calls."""
+    from rolling_thunder.ft8.target_activity import FT8TargetActivityTracker
+
+    tracker = FT8TargetActivityTracker(local_callsign="KI5VNB")
+    tracker.select("K1ABC")
+    controller, session = _started()  # Explicit selection/authorization is separate.
+    cq = _decode(100, FT8MessageKind.CQ, destination=None)
+    tracker.observe((cq,), FT8Period(100))
+    controller.observe_target_activity(tracker.snapshot(FT8Period(101)), FT8Period(101))
+    caller = _decode(102, FT8MessageKind.ADDRESSED_GRID, source="W1XYZ", destination="K1ABC")
+    tracker.observe((caller,), FT8Period(102))
+    controller.observe_target_activity(tracker.snapshot(FT8Period(103)), FT8Period(103))
+    for index in (101, 103):
+        controller.on_period(FT8Period(index))
+    assert controller.busy_extension_attempts == 0
+    for kind, index in ((FT8MessageKind.ADDRESSED_GRID, 104), (FT8MessageKind.REPORT, 106),
+                        (FT8MessageKind.R_REPORT, 108), (FT8MessageKind.ACK_73, 110)):
+        reply = _decode(index, kind, source="K1ABC", destination="W1XYZ")
+        tracker.observe((reply,), FT8Period(index))
+        controller.observe_target_activity(tracker.snapshot(FT8Period(index + 1)), FT8Period(index + 1))
+        controller.on_period(FT8Period(index + 1))
+    assert controller.state is FT8QsoState.WAIT_REPORT  # Third-party 73 is not our completion.
+    controller.on_period(FT8Period(113))  # Stale activity cannot revoke earned allowance.
+    controller.on_period(FT8Period(115))
+    assert [request.attempt for request in session.requests] == list(range(1, 9))
+    assert [request.busy_extension for request in session.requests] == [False] * 6 + [True, True]
+    assert controller.busy_extension_attempts == 2
+    controller.on_period(FT8Period(117))
+    assert controller.state is FT8QsoState.RETRY_EXHAUSTED
+    assert len(session.requests) == 8  # No ninth transmission.
+
+
+def test_cp31_busy_extension_rejects_stale_wrong_target_and_resets_on_phase() -> None:
+    from rolling_thunder.ft8.target_activity import TargetActivity, TargetActivityKind
+
+    controller, session = _started()
+    def activity(callsign: str, period: int, source: bool = True) -> TargetActivity:
+        return TargetActivity(callsign, TargetActivityKind.OTHER_QSO, "W1XYZ",
+                              FT8MessageKind.REPORT, FT8Period(period), source)
+    controller.observe_target_activity(activity("W2ZZZ", 102), FT8Period(103))
+    controller.observe_target_activity(activity("K1ABC", 102, False), FT8Period(103))
+    controller.observe_target_activity(activity("K1ABC", 98), FT8Period(103))
+    for index in (101, 103, 105, 107, 109, 111):
+        controller.on_period(FT8Period(index))
+    controller.on_period(FT8Period(113))
+    assert controller.state is FT8QsoState.RETRY_EXHAUSTED
+    assert len(session.requests) == 6
+
+    controller2, session2 = _started()
+    controller2.observe_target_activity(activity("K1ABC", 102), FT8Period(103))
+    controller2.on_period(FT8Period(101))
+    controller2.on_decode(_decode(102, FT8MessageKind.REPORT))
+    for index in (103, 105, 107, 109, 111, 113):
+        controller2.on_period(FT8Period(index))
+    controller2.on_period(FT8Period(115))
+    assert controller2.state is FT8QsoState.RETRY_EXHAUSTED
+    assert len(session2.requests) == 7  # 1 call + 6 post-transition R-reports.
+    assert controller2.busy_extension_attempts == 0

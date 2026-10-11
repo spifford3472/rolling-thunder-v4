@@ -797,6 +797,42 @@ def test_cp3_adaptive_power_steps_only_for_repeated_grid_message() -> None:
     assert radio.setting_history == [25]
 
 
+def test_cp31_busy_extension_does_not_raise_adaptive_power() -> None:
+    from dataclasses import replace
+
+    from rolling_thunder.ft8.power_advisor import FT8PowerPolicy
+
+    class PowerRadio(_FakeRadio):
+        def __init__(self):
+            super().__init__(_connected_state())
+            self.watts = 20
+            self.changes = []
+        def read_power_watts(self):
+            return self.watts
+        def set_power_watts(self, watts):
+            self.watts = watts
+            self.changes.append(watts)
+            return watts
+
+    radio = PowerRadio()
+    executor = BoundedFT8HardwareTransmitExecutor(
+        radio, _FakeAudioOutput(), power_policy=FT8PowerPolicy(adaptive_enabled=True),
+    )
+    context = _qso_context()
+    authorization = FT8QsoHardwareTransmitAuthorization(
+        authorization_id="busy-ext", authorized_at_utc=context.authorized_utc, context=context,
+    )
+    waveform = replace(_waveform(), encoded=replace(_waveform().encoded, message="K1ABC KI5VNB EM79"))
+    for extension in (False, False, True, True):
+        executor.execute_qso(FT8QsoHardwareTransmitRequest(
+            authorization=authorization, waveform=waveform, maximum_key_down_s=14.5,
+            expected_radio_frequency_hz=14_074_000, expected_radio_mode="DATA",
+            busy_extension=extension,
+        ))
+    assert radio.watts == 25
+    assert radio.changes == [25]
+
+
 def test_cp3_power_readback_mismatch_inhibits_next_ptt() -> None:
     from dataclasses import replace
 

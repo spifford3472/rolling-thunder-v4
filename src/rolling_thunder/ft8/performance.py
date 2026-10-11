@@ -93,6 +93,7 @@ class FT8PerformanceAttempt(DomainModel):
     pota_cq: bool = False
 
     attempt_count: int = Field(default=0, ge=0)
+    busy_extension_attempts: int = Field(default=0, ge=0, le=2)
     last_qso_state: str | None = Field(default=None, max_length=64)
 
     # Reserved, nullable extension points for future propagation correlation.

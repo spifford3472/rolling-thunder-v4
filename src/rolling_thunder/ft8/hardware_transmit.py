@@ -113,6 +113,7 @@ class FT8QsoHardwareTransmitRequest:
     maximum_key_down_s: float
     expected_radio_frequency_hz: int
     expected_radio_mode: str
+    busy_extension: bool = False
 
     def __post_init__(self) -> None:
         _validate_physical_request(
@@ -281,6 +282,7 @@ class BoundedFT8HardwareTransmitExecutor:
             label="QSO transmit",
             qso_id=request.authorization.context.qso_id,
             power_message=request.waveform.encoded.message,
+            busy_extension=request.busy_extension,
         )
 
     def meter_summary(self, qso_id: UUID) -> FT8TransmitMeterSummary | None:
@@ -334,6 +336,7 @@ class BoundedFT8HardwareTransmitExecutor:
         label: str,
         qso_id: UUID | None,
         power_message: str | None = None,
+        busy_extension: bool = False,
     ) -> None:
         with self._lock:
             if self._closed:
@@ -399,6 +402,7 @@ class BoundedFT8HardwareTransmitExecutor:
                         self._auto_power_suspended.add(qso_id)
                     elif (
                         qso_id not in self._auto_power_suspended
+                        and not busy_extension
                         and previous_message == power_message
                         and re.fullmatch(r"[A-R]{2}[0-9]{2}(?:[A-X]{2})?", power_message.split()[-1])
                         and verified_power < cap
