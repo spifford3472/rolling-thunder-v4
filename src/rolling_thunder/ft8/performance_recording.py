@@ -61,7 +61,7 @@ def build_ft8_attempt_seed(
             band_text = band.value
             frequency_hz = ft8_frequency_for_band(band).hz
 
-    local_grid, _logging_grid, _latitude, _longitude, _label = freeze_ft8_location(
+    local_grid, _logging_grid, latitude, longitude, _label = freeze_ft8_location(
         gps_state,
         home_grid,
         reference_time=started_at_utc,
@@ -74,6 +74,8 @@ def build_ft8_attempt_seed(
         band=band_text,
         dial_frequency_hz=frequency_hz,
         local_grid=local_grid,
+        local_latitude=latitude,
+        local_longitude=longitude,
         remote_grid=activity.grid,
         audio_frequency_hz=activity.audio_frequency_hz,
         selected_snr_db=activity.snr_db,
@@ -158,6 +160,8 @@ class FT8PerformanceRecorder:
             sent_report_db=seed.selected_snr_db,
             received_report_db=seed.received_report_db,
             local_grid=seed.local_grid,
+            local_latitude=seed.local_latitude,
+            local_longitude=seed.local_longitude,
             remote_grid=seed.remote_grid,
             distance_km=_distance_km(seed.local_grid, seed.remote_grid),
             audio_frequency_hz=seed.audio_frequency_hz,
@@ -220,6 +224,8 @@ class FT8PerformanceRecorder:
             sent_report_db=result.sent_report_db,
             received_report_db=result.received_report_db,
             local_grid=context.local_grid,
+            local_latitude=context.latitude,
+            local_longitude=context.longitude,
             remote_grid=context.remote_grid,
             distance_km=_distance_km(context.local_grid, context.remote_grid),
             audio_frequency_hz=context.target_audio_frequency_hz,

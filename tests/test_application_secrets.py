@@ -54,6 +54,19 @@ def test_completed_qso_credentials_reject_short_or_whitespace_tokens() -> None:
         )
 
 
+def test_ft8_attempt_token_is_independent_and_redacted() -> None:
+    token = "a" * 32
+    secrets = load_application_secrets({"ROLLING_THUNDER_FT8_ATTEMPT_TOKEN": token})
+
+    assert secrets.ft8_attempt_token == SecretStr(token)
+    assert token not in repr(secrets)
+
+
+def test_ft8_attempt_token_rejects_short_values() -> None:
+    with pytest.raises(ValueError, match="at least 32"):
+        load_application_secrets({"ROLLING_THUNDER_FT8_ATTEMPT_TOKEN": "short"})
+
+
 @pytest.mark.parametrize(
     "environment",
     [

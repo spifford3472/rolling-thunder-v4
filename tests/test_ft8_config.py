@@ -28,6 +28,28 @@ def test_ft8_defaults_disabled_when_section_is_absent(tmp_path: Path) -> None:
     assert config.ft8.receive.diagnostic_session_end_local is None
     assert config.ft8.receive.saved_pcm_periods == 0
     assert config.ft8.qso.attempts_per_state == 6
+    assert config.ft8.attempt_delivery.enabled is False
+
+
+def test_ft8_attempt_delivery_requires_ft8_and_endpoint(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "ft8:\n"
+        "  attempt_delivery:\n"
+        "    enabled: true\n",
+    )
+    with pytest.raises(ConfigurationValidationError, match="base_url"):
+        load_config(path)
+
+    path = _write(
+        tmp_path,
+        "ft8:\n"
+        "  attempt_delivery:\n"
+        "    enabled: true\n"
+        "    base_url: http://forge.test:8790\n",
+    )
+    with pytest.raises(ConfigurationValidationError, match="requires ft8.enabled"):
+        load_config(path)
 
 
 def test_explicit_ft8_disabled_parses(tmp_path: Path) -> None:

@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 296.**
+**Cataloged Python test modules: 333.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -172,6 +172,11 @@ Live acceptance should use an exact commit SHA and record rollback information.
 
 - `tests/test_forge_ft8_performance.py` — structured configured-power fields, legacy replay, and additive Forge schema migration.
 - `tests/test_forge_ft8_performance_api.py`
+- `tests/test_forge_ft8_attempt_api.py` — authentication-before-ingestion,
+  idempotent acceptance, disabled ingestion and read-only diagnostics.
+- `tests/test_forge_ft8_attempt_correlation.py` — replay conflicts,
+  direction/grid/power/missing semantics, provider retry, leases/dead letters and
+  immutable retrospective diagnostics.
 - `tests/test_forge_pskreporter.py` — bounded provider parsing, concurrency etiquette, terminal eligibility, correlation, restart-safe zero/failure distinctions, and raw-query archival.
 - `tests/test_forge_pskreporter_orchestration.py` — confirmed event validation, exact replay, terminal latency, durable global pacing, bounded batching, restart reconciliation, disabled behavior, and provider-free health.
 - `tests/test_completed_qso_producer.py` — matching post-durability event validation, exact replay/conflict, independent destination progress, retry timing, and restart recovery without provider I/O.
@@ -185,6 +190,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_active_panel_commands.py`
 - `tests/test_ft8_activity.py`
 - `tests/test_ft8_attempt_history.py`
+- `tests/test_ft8_attempt_ledger.py` — terminal classifications, frozen UTC/grid/
+  coordinates, report directions, per-period power, replay and offline retry.
 - `tests/test_ft8_audio.py`
 - `tests/test_ft8_audio_buffer.py`
 - `tests/test_ft8_audio_output.py`

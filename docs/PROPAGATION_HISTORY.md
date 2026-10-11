@@ -354,6 +354,14 @@ sync request path. The environmental collector's `voacap_enabled` and
 completed-QSO provider worker requires both its own `enabled` and `voacap_enabled`
 gates; ingestion additionally requires `ingestion_enabled`.
 
+The same disabled process now supports the additive Phase-B FT8 attempt contract.
+`POST /api/v1/ft8-attempts` accepts all terminal outcomes without provider I/O;
+authenticated `GET /api/v1/ft8-attempts/{uuid}` returns read-only inbox and
+immutable VOACAP diagnostics. Each transmitted period with verified CAT power has
+a distinct full-input hash. Reverse direction with unknown remote power is skipped
+as missing rather than evaluated at zero. Runs are append-only and retrospective;
+existing completed-QSO and legacy VOACAP tables remain unchanged.
+
 Read-only verification on 2026-10-07 confirmed that the documented Forge endpoint
 `http://192.168.9.170:8787/version` responded as `voacap-service` version `0.3.0`.
 No summary/prediction request was made and no service state was changed.

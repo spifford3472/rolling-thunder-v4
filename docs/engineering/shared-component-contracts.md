@@ -59,6 +59,14 @@ Wavelog synchronization. Production composition remains disabled by default, run
 on a separate scheduler, and validates each receiver's acknowledged UUID before
 advancing only that destination.
 
+The Phase-B attempt ledger is separate from that successful-QSO event. Every
+durable terminal performance attempt is captured, including non-successes, without
+fabricating a Contact. It reads period powers only from the existing transmit-period
+owner. Exact replay is accepted; changed replay conflicts. Delivery/provider work
+are independently scheduled and disabled by default. VOACAP reliability is not QSO
+probability, dB-Hz is not decoder dB, missing is not zero, and retrospective results
+are not pre-choice evidence.
+
 The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
 
 The disabled Forge propagation inbox accepts the complete frozen `Contact` under

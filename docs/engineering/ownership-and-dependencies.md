@@ -141,6 +141,14 @@ global and receiver gates default off, credentials come from protected environme
 state, and each receiver must acknowledge the exact UUID before its destination
 advances.
 
+Phase B adds a separate all-terminal-attempt ledger after existing performance
+durability. It snapshots frozen location/reports plus per-emission CAT configured
+power from their existing owners, then optionally delivers through an independent
+disabled scheduler. Forge commits the authenticated attempt before provider work;
+its leased worker records append-only full-input-hash VOACAP inputs/runs/links and
+read-only diagnostics. This path has no contact, Wavelog, ranking, UI, radio, or
+transmit authority.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder

@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 265.**
+**Cataloged Python modules: 314.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -80,6 +80,7 @@ originates from one screen.
 - `src/rolling_thunder/contact_weather.py` — Reusable Forge-side projection of shared normalized weather snapshots into immutable QSO weather fields; contact synchronization does not invoke it.
 - `src/rolling_thunder/completed_qso_producer.py` — Source-owned post-durability completed-FT8 event validation, standalone SQLite fan-out outbox, exact replay, independent destination retry worker, and background delivery lifecycle.
 - `src/rolling_thunder/completed_ft8_ingestion_client.py` — Typed authenticated one-attempt PSK event-ingestion client with exact receiver UUID acknowledgement validation; source outbox owns retry.
+- `src/rolling_thunder/ft8_attempt_ingestion_client.py` — bounded authenticated client for the UUID-idempotent Forge all-terminal-attempt inbox.
 - `src/rolling_thunder/log_panel.py` — Local contact-log panel repository/controller.
 - `src/rolling_thunder/log_panel_commands.py` — Module providing log panel commands behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/log_ui.py` — Tk presentation for recent local contacts.
@@ -143,6 +144,7 @@ originates from one screen.
 - `src/rolling_thunder/ft8/__init__.py` — Package marker/export boundary.
 - `src/rolling_thunder/ft8/activity.py` — FT8 subsystem module for activity; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/attempt_history.py` — FT8 subsystem module for attempt history; see FT8 engineering documents before modifying its contract.
+- `src/rolling_thunder/ft8/attempt_ledger.py` — durable all-terminal attempt event, local WAL ledger and independent leased store-forward delivery.
 - `src/rolling_thunder/ft8/audio.py` — FT8 subsystem module for audio; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/audio_buffer.py` — FT8 subsystem module for audio buffer; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/audio_output.py` — FT8 subsystem module for audio output; see FT8 engineering documents before modifying its contract.
@@ -268,6 +270,8 @@ originates from one screen.
 - `src/rolling_thunder/forge_dxsummit_irc_parser.py` — Network-independent parser for DX Summit IRC messages.
 - `src/rolling_thunder/forge_dxsummit_provider.py` — Persistent DX Summit IRC provider lifecycle, cache, health, and reconnect behavior.
 - `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_ft8_attempt_api.py` — authenticated bounded attempt ingestion and read-only per-attempt diagnostics application.
+- `src/rolling_thunder/forge_ft8_attempt_correlation.py` — durable attempt inbox, leased retry/dead-letter worker and immutable full-input-hash VOACAP history.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.

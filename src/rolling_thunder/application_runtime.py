@@ -2,13 +2,14 @@
 
 import logging
 import os
+import sqlite3
 from collections.abc import Callable
 from concurrent.futures import Executor
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from time import monotonic
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from rolling_thunder.application_secrets import ApplicationSecrets
 from rolling_thunder.callsign_info_client import HttpCallsignInfoClient
@@ -54,6 +55,12 @@ from rolling_thunder.ft8.attempt_history import (
     FT8AttemptHistoryService,
     FT8AttemptVisualState,
 )
+from rolling_thunder.ft8.attempt_ledger import (
+    FT8AttemptDeliveryService,
+    FT8AttemptDeliveryWorker,
+    FT8AttemptLedgerRepository,
+    build_attempt_event,
+)
 from rolling_thunder.ft8.audio import AlsaArecordFT8AudioInput, FT8AudioInput
 from rolling_thunder.ft8.audio_output import AlsaAplayFT8AudioOutput, FT8AudioOutput
 from rolling_thunder.ft8.authorization import (
@@ -89,7 +96,7 @@ from rolling_thunder.ft8.hardware_transmit import (
 from rolling_thunder.ft8.logging import FT8QsoLoggingService
 from rolling_thunder.ft8.operator_qso import FT8OperatorQsoService
 from rolling_thunder.ft8.panel import FT8PanelController
-from rolling_thunder.ft8.performance import FT8AttemptSeed
+from rolling_thunder.ft8.performance import FT8AttemptSeed, FT8PerformanceAttempt
 from rolling_thunder.ft8.performance_outbox import FT8PerformanceOutboxRepository
 from rolling_thunder.ft8.performance_recording import (
     FT8PerformanceRecorder,
@@ -118,6 +125,10 @@ from rolling_thunder.ft8.session import (
 from rolling_thunder.ft8.start_control import FT8QsoStartController, FT8QsoStartStatus
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 from rolling_thunder.ft8.worked_today import FT8WorkedTodayService
+from rolling_thunder.ft8_attempt_ingestion_client import (
+    AttemptHttpTransport,
+    HttpFT8AttemptIngestionClient,
+)
 from rolling_thunder.ft891_radio import Ft891Radio
 from rolling_thunder.gps import GPSReceiver, GPSState
 from rolling_thunder.gps_polling import GPSPollingService
@@ -275,6 +286,7 @@ class ApplicationRuntime:
     ft8_attempt_history: FT8AttemptHistoryService | None = None
     ft8_performance_sync: FT8PerformanceSyncService | None = None
     ft8_completed_qso_delivery: CompletedQsoDeliveryService | None = None
+    ft8_attempt_delivery: FT8AttemptDeliveryService | None = None
     ft8_panel: FT8PanelController | None = None
     ft8_browser_ranking: FT8BrowserRanking | None = None
     ft8_hardware_transmit: FT8QsoHardwareTransmitExecutor | None = None
@@ -298,6 +310,8 @@ class ApplicationRuntime:
         ft8_completed_qso_delivery_scheduler: PollScheduler | None = None,
         ft8_completed_qso_voacap_transport: CompletedQsoHttpTransport | None = None,
         ft8_completed_qso_psk_transport: CompletedFt8HttpTransport | None = None,
+        ft8_attempt_delivery_scheduler: PollScheduler | None = None,
+        ft8_attempt_transport: AttemptHttpTransport | None = None,
         ft8_performance_sync_scheduler: PollScheduler | None = None,
         network_keepalive_scheduler: PollScheduler | None = None,
         forge_scheduler: PollScheduler | None = None,
@@ -630,16 +644,52 @@ class ApplicationRuntime:
             if ft8_performance_outbox is None
             else FT8AttemptHistoryService(ft8_performance_outbox)
         )
+        ft8_period_store = (
+            FT8TransmitPeriodRepository(config.storage.database_path)
+            if config.ft8.enabled
+            else None
+        )
+        attempt_delivery_config = config.ft8.attempt_delivery
+        ft8_attempt_ledger = (
+            None
+            if not config.ft8.enabled
+            else FT8AttemptLedgerRepository(
+                config.storage.database_path,
+                max_attempts=attempt_delivery_config.max_attempts,
+                retry_base=timedelta(
+                    seconds=attempt_delivery_config.retry_initial_delay_s
+                ),
+                retry_max=timedelta(
+                    seconds=attempt_delivery_config.retry_maximum_delay_s
+                ),
+            )
+        )
+        durable_ft8_contact_ids: set[UUID] = set()
+
+        def record_ft8_attempt(attempt: FT8PerformanceAttempt) -> None:
+            if ft8_attempt_history is not None:
+                ft8_attempt_history.record(attempt)
+            if ft8_attempt_ledger is None or ft8_period_store is None:
+                return
+            try:
+                event = build_attempt_event(
+                    attempt,
+                    ft8_period_store.for_qso(attempt.attempt_id),
+                    created_at_utc=attempt.ended_at_utc,
+                    contact_is_durable=attempt.attempt_id in durable_ft8_contact_ids,
+                )
+                ft8_attempt_ledger.capture(event)
+            except (OSError, RuntimeError, ValueError, sqlite3.Error) as error:
+                # Performance durability is already authoritative. Analytics
+                # capture must never change the terminal radio result.
+                _LOGGER.error("FT8 attempt event could not be queued: %s", error)
+
         ft8_performance_recorder = (
             None
             if ft8_performance_outbox is None
             else FT8PerformanceRecorder(
                 ft8_performance_outbox,
-                attempt_handler=(
-                    None
-                    if ft8_attempt_history is None
-                    else ft8_attempt_history.record
-                ),
+                attempt_handler=record_ft8_attempt,
             )
         )
         ft8_performance_sync = None
@@ -647,6 +697,7 @@ class ApplicationRuntime:
             home_platform_client,
             HttpHomePlatformClient,
         ):
+            assert ft8_period_store is not None
             ft8_performance_sync = FT8PerformanceSyncService(
                 ft8_performance_outbox,
                 home_platform_client,
@@ -654,9 +705,38 @@ class ApplicationRuntime:
                 interval_s=platform_config.contact_sync_interval_s,
                 batch_size=platform_config.contact_sync_batch_size,
                 period_sync=FT8PeriodSyncService(
-                    FT8TransmitPeriodRepository(config.storage.database_path),
+                    ft8_period_store,
                     home_platform_client,
                 ),
+            )
+
+        ft8_attempt_delivery: FT8AttemptDeliveryService | None = None
+        if attempt_delivery_config.enabled:
+            token = resolved_secrets.ft8_attempt_token
+            if token is None:
+                raise ValueError(
+                    "FT8 attempt delivery requires ROLLING_THUNDER_FT8_ATTEMPT_TOKEN"
+                )
+            assert ft8_attempt_ledger is not None
+            assert attempt_delivery_config.base_url is not None
+            sink = HttpFT8AttemptIngestionClient(
+                str(attempt_delivery_config.base_url),
+                bearer_token=token.get_secret_value(),
+                timeout_s=attempt_delivery_config.timeout_s,
+                transport=ft8_attempt_transport,
+            )
+            ft8_attempt_delivery = FT8AttemptDeliveryService(
+                FT8AttemptDeliveryWorker(
+                    ft8_attempt_ledger,
+                    sink,
+                    worker_id="anvilmobile-ft8-attempt-delivery",
+                    batch_size=attempt_delivery_config.batch_size,
+                    lease_duration=timedelta(
+                        seconds=attempt_delivery_config.lease_duration_s
+                    ),
+                ),
+                ft8_attempt_delivery_scheduler or ThreadingPollScheduler(),
+                interval_s=attempt_delivery_config.interval_s,
             )
 
         resolved_completed_qso_producer = ft8_completed_qso_producer
@@ -864,12 +944,12 @@ class ApplicationRuntime:
                     ft8_audio_output
                     or AlsaAplayFT8AudioOutput(config.ft8.transmit.audio_device)
                 )
-                period_store = FT8TransmitPeriodRepository(config.storage.database_path)
+                assert ft8_period_store is not None
                 resolved_ft8_executor = BoundedFT8HardwareTransmitExecutor(
                     radio,
                     resolved_ft8_audio_output,
-                    intent_started=period_store.begin_intent,
-                    intent_completed=period_store.complete_intent,
+                    intent_started=ft8_period_store.begin_intent,
+                    intent_completed=ft8_period_store.complete_intent,
                     power_policy=config.ft8.power,
                     ptt_uncertain=ft8_ptt_alarm.trigger,
                     transmit_inhibited=lambda: ft8_ptt_alarm.tx_inhibited,
@@ -912,19 +992,30 @@ class ApplicationRuntime:
                     meter_reader = getattr(resolved_ft8_executor, "meter_summary", None)
                     if callable(meter_reader):
                         meter_summary = meter_reader(result.context.qso_id)
-                    terminal_attempt = ft8_performance_recorder.record_qso_result(
-                        result,
-                        power_meter_raw=(
-                            None if meter_summary is None else meter_summary.power_peak_raw
-                        ),
-                        swr_meter_raw=(
-                            None if meter_summary is None else meter_summary.swr_peak_raw
-                        ),
-                        alc_meter_raw=(
-                            None if meter_summary is None else meter_summary.alc_peak_raw
-                        ),
-                        tx_power_end_watts=tx_power_end_watts,
-                    )
+                    if contact is not None:
+                        durable_ft8_contact_ids.add(contact.contact_id)
+                    try:
+                        terminal_attempt = ft8_performance_recorder.record_qso_result(
+                            result,
+                            power_meter_raw=(
+                                None
+                                if meter_summary is None
+                                else meter_summary.power_peak_raw
+                            ),
+                            swr_meter_raw=(
+                                None
+                                if meter_summary is None
+                                else meter_summary.swr_peak_raw
+                            ),
+                            alc_meter_raw=(
+                                None
+                                if meter_summary is None
+                                else meter_summary.alc_peak_raw
+                            ),
+                            tx_power_end_watts=tx_power_end_watts,
+                        )
+                    finally:
+                        durable_ft8_contact_ids.discard(result.context.qso_id)
                 if (
                     contact is not None
                     and terminal_attempt is not None
@@ -1114,6 +1205,7 @@ class ApplicationRuntime:
             ft8_attempt_history=ft8_attempt_history,
             ft8_performance_sync=ft8_performance_sync,
             ft8_completed_qso_delivery=completed_qso_delivery,
+            ft8_attempt_delivery=ft8_attempt_delivery,
             ft8_hardware_transmit=resolved_ft8_executor,
             ft8_ptt_alarm=ft8_ptt_alarm,
         )
@@ -1593,6 +1685,8 @@ class ApplicationRuntime:
             self.ft8_performance_sync.start()
         if self.ft8_completed_qso_delivery is not None:
             self.ft8_completed_qso_delivery.start()
+        if self.ft8_attempt_delivery is not None:
+            self.ft8_attempt_delivery.start()
         if self.network_keepalive is not None:
             self.network_keepalive.start()
         if self.pi_forge_spot_polling is not None:
@@ -1636,6 +1730,8 @@ class ApplicationRuntime:
             self.network_keepalive.stop()
         if self.ft8_completed_qso_delivery is not None:
             self.ft8_completed_qso_delivery.stop()
+        if self.ft8_attempt_delivery is not None:
+            self.ft8_attempt_delivery.stop()
         if self.ft8_performance_sync is not None:
             self.ft8_performance_sync.stop()
         if self.contact_sync is not None:

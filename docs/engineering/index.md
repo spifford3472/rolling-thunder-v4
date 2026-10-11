@@ -9,6 +9,8 @@ This guide describes the implemented repository rather than an aspirational arch
 ## Engineering document set
 
 - `voacap-ft8-phase-a.md` — VOACAP/FT8 Phase A as-built audit, schema decisions, and review gates (design only).
+- `voacap-ft8-phase-b.md` — additive attempt ledger, Forge inbox, immutable
+  VOACAP correlation, migration/rollback, and offline acceptance.
 
 - `system-architecture.md` — deployed topology, process/lifecycle, local-first and recovery boundaries.
 - `ownership-and-dependencies.md` — feature ownership and dependency graph.
