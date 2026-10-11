@@ -266,7 +266,9 @@ originates from one screen.
 - `src/rolling_thunder/forge_dxspider_provider.py` — Persistent disabled-by-default DXSpider fallback provider.
 - `src/rolling_thunder/forge_dxsummit_irc_parser.py` — Network-independent parser for DX Summit IRC messages.
 - `src/rolling_thunder/forge_dxsummit_provider.py` — Persistent DX Summit IRC provider lifecycle, cache, health, and reconnect behavior.
+- `src/rolling_thunder/voacap_forecast_trends.py` — Pure apples-to-apples local-day VOACAP comparison with explicit unavailable/DST states.
 - `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_voacap_forecast_archive.py` — Opt-in append-only provenance-rich forecast history and idempotent immutable event writer; not wired to production polling.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.
