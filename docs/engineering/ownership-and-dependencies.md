@@ -172,6 +172,13 @@ deterministic local fake. Its versioned report owns no production database,
 provider transport, lease, scheduler, provenance insertion, training, Pi, UI,
 ranking, power-control, logging, Wavelog, or radio path.
 
+Phase C4 adds a separate Forge baseline-sampling domain/repository/service boundary.
+It owns immutable versioned plans, curated target inventories, fixed UTC/band/20-W
+slots, canonical monthly-response reuse, safe leases/retries/budgets and provider-free
+read-only diagnostics. No production composition constructs it; all activation gates
+default false and no network adapter exists. It owns no attempt provenance, Pi, UI,
+ranking, ML, power, CAT/PTT, contact, Wavelog or RF path.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder

@@ -189,6 +189,10 @@ Live acceptance should use an exact commit SHA and record rollback information.
   bounded fake success/malformed/timeout/unavailable/unsupported behavior, zero-call
   deduplication, append-only model-version forks, C2 coverage, lease preservation,
   source non-mutation, and fixed-audit CLI refusal.
+- `tests/test_forge_voacap_baseline.py` — C4 immutable plan/lineage and target-grid
+  identity, four UTC slots, monthly response dedup, disabled/unsupported behavior,
+  provider failure bounds, call/concurrency/lease/restart protection, additive legacy
+  preservation, deterministic read-only diagnostics, audit UUIDs and no network path.
 - `tests/test_forge_pskreporter.py` — bounded provider parsing, concurrency etiquette, terminal eligibility, correlation, restart-safe zero/failure distinctions, and raw-query archival.
 - `tests/test_forge_pskreporter_orchestration.py` — confirmed event validation, exact replay, terminal latency, durable global pacing, bounded batching, restart reconciliation, disabled behavior, and provider-free health.
 - `tests/test_completed_qso_producer.py` — matching post-durability event validation, exact replay/conflict, independent destination progress, retry timing, and restart recovery without provider I/O.

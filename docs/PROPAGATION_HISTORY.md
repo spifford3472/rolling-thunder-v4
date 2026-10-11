@@ -401,6 +401,15 @@ year/month with hour/band selection, power provenance, terminal dedup evidence,
 version-fork counts, source/lease non-mutation, and the C2 coverage result. The tool
 is not installed, scheduled, deployed, or authorized against production databases.
 
+Phase C4 adds a separate additive SQLite baseline boundary, not a change to the
+environmental or attempt databases. It freezes versioned plans, target grids and
+bounded monthly/hourly slots; reuses responses only by canonical request SHA-256;
+records SSN source/version/times, timing class, failures and budgets; and publishes
+query-only deterministic diagnostics. No main process, network provider adapter,
+systemd unit, migration command or Pi consumer is composed. All gates default false
+and live real-provider acceptance remains blocked. See
+`engineering/voacap-ft8-phase-c4.md`.
+
 Read-only verification on 2026-10-07 confirmed that the documented Forge endpoint
 `http://192.168.9.170:8787/version` responded as `voacap-service` version `0.3.0`.
 No summary/prediction request was made and no service state was changed.

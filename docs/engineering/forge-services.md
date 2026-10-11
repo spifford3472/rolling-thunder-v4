@@ -179,6 +179,14 @@ missing/unsupported/provider failures, C2 reconciliation, and source/lease
 non-mutation. It is not a service, scheduled worker, production migration, or
 baseline activation path.
 
+Phase C4 adds a reusable but uncomposed baseline-sampling service boundary in
+`forge_voacap_baseline.py`. It persists immutable plan lineage, fixed bounded slots,
+canonical monthly provider responses, leases/retries/budget activity and deterministic
+read-only diagnostics. Its process, scheduler and provider configuration gates all
+default false; no provider HTTP adapter, daemon, unit, port or Pi consumer is added.
+All C4 tests use an injected fake and all results are training-ineligible. See
+`engineering/voacap-ft8-phase-c4.md`.
+
 The same slice persists deterministic missing-input directions before provider work,
 so unknown remote power retains a reverse skipped run even if forward retries
 dead-letter. Structurally invalid grids are not sent, and an existing-adapter response

@@ -284,6 +284,9 @@ originates from one screen.
 - `src/rolling_thunder/forge_ft8_historical_replay_main.py` — fake-only offline C3
   CLI requiring copied/fixture acknowledgement, explicit audit identity, new output
   paths, and no production provider or socket composition.
+- `src/rolling_thunder/forge_voacap_baseline.py` — disabled/uncomposed Phase-C4
+  reusable Forge baseline domain, additive SQLite plan/slot/response/ledger storage,
+  bounded single-concurrency worker contract and provider-free read-only diagnostics.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.

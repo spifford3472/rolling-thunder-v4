@@ -386,3 +386,13 @@ training-ineligible even for audited field evidence. Immutable input and respons
 hashes, zero-call terminal deduplication, append-only model-version forks, missing/
 unsupported results, C2 reconciliation, and source non-mutation are part of the
 versioned report.
+
+Phase C4 baseline evidence is independent of attempt correlation. Immutable plans
+freeze origin grid6, curated versioned target cells, supported bands, UTC slots,
+20-W reference, SSN provenance and model/service identity. A monthly provider
+response may be reused only under the exact canonical request SHA-256; individual
+hour/band slots remain distinct. Every result preserves scheduled, forecast and
+generation times plus pre-choice/late/backfill/missed status. Baseline diagnostics
+are read-only and all C4 data is training-ineligible. No baseline result may imply
+decoder dB equals VOACAP dB-Hz, configured/model watts equals measured RF watts, or
+modeled circuit reliability equals QSO success probability.
