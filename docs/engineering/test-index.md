@@ -493,3 +493,5 @@ still required.
 - `tests/test_forge_ft8_c4_asof.py` — valid synthetic as-of regional join, after-choice rejection and absent-source fail-closed acceptance.
 
 - `tests/test_forge_ft8_readiness_preflight.py` — read-only source byte preservation, missing source and malformed schema rejection.
+
+- `tests/test_forge_ft8_readiness_installer.py` — candidate root-helper safety scoping and shell syntax; offline wheel staging and CLI installation additionally smoke-tested on Forge.
