@@ -84,7 +84,9 @@ class FT8AttemptApiApplication:
             return self._json(400, {"error": "missing_body"})
         if len(body) > MAX_ATTEMPT_PAYLOAD_BYTES:
             return self._json(413, {"error": "payload_too_large"})
-        if (_header(request_headers, "Content-Type") or "").split(";", 1)[0].lower() != "application/json":
+        if (_header(request_headers, "Content-Type") or "").split(";", 1)[
+            0
+        ].lower() != "application/json":
             return self._json(415, {"error": "unsupported_media_type"})
         try:
             payload = loads(body)
@@ -139,8 +141,8 @@ class FT8AttemptApiApplication:
     def _authorized(self, headers: Mapping[str, str]) -> bool:
         value = _header(headers, "Authorization") or ""
         scheme, separator, supplied = value.partition(" ")
-        return bool(separator) and scheme.lower() == "bearer" and compare_digest(
-            supplied, self._token
+        return (
+            bool(separator) and scheme.lower() == "bearer" and compare_digest(supplied, self._token)
         )
 
     @staticmethod
@@ -149,7 +151,11 @@ class FT8AttemptApiApplication:
         return AttemptApiResponse(
             status,
             body,
-            (("Content-Type", "application/json; charset=utf-8"), ("Cache-Control", "no-store")),
+            (
+                ("Content-Type", "application/json; charset=utf-8"),
+                ("Content-Length", str(len(body))),
+                ("Cache-Control", "no-store"),
+            ),
         )
 
 

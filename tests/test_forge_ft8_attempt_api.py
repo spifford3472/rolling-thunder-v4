@@ -73,9 +73,7 @@ def test_api_authenticates_before_ingestion_and_serves_read_only_diagnostics(
     replay = api.handle(
         "POST", "/api/v1/ft8-attempts", headers=headers, body=event.model_dump_json().encode()
     )
-    diagnostics = api.handle(
-        "GET", f"/api/v1/ft8-attempts/{ATTEMPT}", headers=headers
-    )
+    diagnostics = api.handle("GET", f"/api/v1/ft8-attempts/{ATTEMPT}", headers=headers)
     assert accepted.status_code == 202
     assert replay.status_code == 200
     assert loads(diagnostics.body)["attempt"]["event"]["attempt_uuid"] == str(ATTEMPT)
@@ -149,3 +147,62 @@ def test_shared_listener_health_reports_attempt_queue_without_provider_work(
 
     assert health["attempts"]["queue"]["pending_count"] == 1
     assert health["attempts"]["queue"]["due_count"] == 1
+
+
+def test_real_http_framing_completes_without_waiting_for_connection_close(
+    tmp_path: Path,
+) -> None:
+    """A persistent HTTP/1.1 peer must not hang on attempt API responses."""
+    from http.client import HTTPConnection
+    from threading import Thread
+
+    from rolling_thunder.forge_propagation_qso_api import CompletedQsoHttpServer
+
+    inbox = AttemptInboxRepository(tmp_path / "attempt-inbox.sqlite")
+    history = VoacapAttemptHistoryRepository(tmp_path / "attempt-history.sqlite")
+    app = CompletedQsoIngestionApiApplication(
+        CompletedQsoIngestionRepository(tmp_path / "qso-inbox.sqlite"),
+        bearer_token=TOKEN,
+        ingestion_enabled=True,
+        voacap_enabled=False,
+        attempt_application=FT8AttemptApiApplication(
+            inbox, history, bearer_token=TOKEN, ingestion_enabled=True
+        ),
+    )
+    server = CompletedQsoHttpServer("127.0.0.1", 0, app, request_timeout_s=2, max_connections=4)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = HTTPConnection(*server.server_address, timeout=1)
+    try:
+        event = _event()
+        payload = event.model_dump_json().encode()
+        headers = {
+            "Authorization": f"Bearer {TOKEN}",
+            "Content-Type": "application/json",
+            "Idempotency-Key": str(event.attempt_uuid),
+        }
+        for method, path, data, request_headers, expected in (
+            ("GET", "/api/v1/ft8-attempts", None, {}, 401),
+            ("POST", "/api/v1/ft8-attempts", payload, headers, 202),
+            ("POST", "/api/v1/ft8-attempts", payload, headers, 200),
+            (
+                "POST",
+                "/api/v1/ft8-attempts",
+                event.model_copy(update={"terminal_reason": "changed"}).model_dump_json().encode(),
+                headers,
+                409,
+            ),
+            ("GET", f"/api/v1/ft8-attempts/{event.attempt_uuid}", None, headers, 200),
+        ):
+            connection.request(method, path, body=data, headers=request_headers)
+            response = connection.getresponse()
+            assert response.status == expected
+            raw_length = response.getheader("Content-Length")
+            assert raw_length is not None
+            body = response.read()  # Would time out with the former missing length.
+            assert len(body) == int(raw_length)
+    finally:
+        connection.close()
+        server.shutdown()
+        server.close()
+        thread.join(timeout=3)
