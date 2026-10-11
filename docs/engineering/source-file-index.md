@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 314.**
+**Cataloged Python modules: 317.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -274,10 +274,16 @@ originates from one screen.
 - `src/rolling_thunder/forge_ft8_attempt_correlation.py` — durable attempt inbox,
   leased retry/dead-letter worker, deterministic directional skip/status handling,
   pre-egress terminal replay checks, immutable versioned full-input-hash VOACAP
-  history, safe legacy fallback, and UUID-keyed audited synthetic/test processing/
-  training exclusions.
+  history, safe legacy fallback, optional deterministic offline run identity, and
+  UUID-keyed audited synthetic/test processing/training exclusions.
 - `src/rolling_thunder/forge_ft8_attempt_coverage.py` — provider-free, read-only
   Phase-C retrospective coverage and fail-closed snapshot reconciliation.
+- `src/rolling_thunder/forge_ft8_historical_replay.py` — Phase-C3 copied-SQLite,
+  single-UUID audited retrospective replay using only a bounded deterministic fake,
+  with strict event/provenance checks and a versioned hashed report.
+- `src/rolling_thunder/forge_ft8_historical_replay_main.py` — fake-only offline C3
+  CLI requiring copied/fixture acknowledgement, explicit audit identity, new output
+  paths, and no production provider or socket composition.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.

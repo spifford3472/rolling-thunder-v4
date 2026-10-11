@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 333.**
+**Cataloged Python test modules: 335.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -183,6 +183,12 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_forge_ft8_attempt_coverage.py` — read-only scoped C2 denominators,
   privacy-minimized partitions, logical non-mutation and fail-closed UUID/hash/
   training-invariant reconciliation.
+- `tests/test_forge_ft8_historical_replay.py` — C3 exact UUID/SHA and existing
+  field-provenance gates, immutable synthetic exclusions, grid4/grid6 and dial/audio
+  frequency semantics, UTC rollover, twelve-period power/report interpretation,
+  bounded fake success/malformed/timeout/unavailable/unsupported behavior, zero-call
+  deduplication, append-only model-version forks, C2 coverage, lease preservation,
+  source non-mutation, and fixed-audit CLI refusal.
 - `tests/test_forge_pskreporter.py` — bounded provider parsing, concurrency etiquette, terminal eligibility, correlation, restart-safe zero/failure distinctions, and raw-query archival.
 - `tests/test_forge_pskreporter_orchestration.py` — confirmed event validation, exact replay, terminal latency, durable global pacing, bounded batching, restart reconciliation, disabled behavior, and provider-free health.
 - `tests/test_completed_qso_producer.py` — matching post-durability event validation, exact replay/conflict, independent destination progress, retry timing, and restart recovery without provider I/O.

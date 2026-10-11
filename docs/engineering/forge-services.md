@@ -167,6 +167,18 @@ corruption, and has no listener, provider, scheduler, lease, activation, or UI
 contract. It is a scoped prerequisite artifact, not completion of the full baseline
 field-coverage gate.
 
+Phase C3 adds an operator-run fake-only CLI and reusable offline replay function for
+the approved AA4NP historical event. Source inbox/history snapshots are query-only;
+the function requires the exact UUID/payload SHA and the already-present audited
+`field_observed` row, then writes only to a newly created history copy. It neither
+inserts nor changes provenance. The local fake fixture is strictly versioned and
+keyed by the real provider's year/month plus selected hour/band/mode/watts semantics;
+there is no HTTP client or socket path. The report records immutable input/response
+hashes, bounded calls, zero-call terminal replay, append-only version forks, explicit
+missing/unsupported/provider failures, C2 reconciliation, and source/lease
+non-mutation. It is not a service, scheduled worker, production migration, or
+baseline activation path.
+
 The same slice persists deterministic missing-input directions before provider work,
 so unknown remote power retains a reverse skipped run even if forward retries
 dead-letter. Structurally invalid grids are not sent, and an existing-adapter response

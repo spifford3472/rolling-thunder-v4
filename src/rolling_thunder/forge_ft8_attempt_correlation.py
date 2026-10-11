@@ -453,6 +453,7 @@ class VoacapAttemptHistoryRepository:
         relation: VoacapRelation,
         result: VoacapProviderResult | None = None,
         failure_reason: str | None = None,
+        prediction_uuid: UUID | None = None,
     ) -> UUID:
         requested_at = _utc(requested_at_utc)
         available_at = _utc(available_at_utc)
@@ -476,7 +477,7 @@ class VoacapAttemptHistoryRepository:
             elif model_input.model_service_version != result.service_version:
                 raise ValueError("VOACAP input and result service versions must match")
         input_hash = self.record_input(model_input)
-        run_uuid = uuid4()
+        run_uuid = prediction_uuid or uuid4()
         request_json = model_input.provider_request()
         response_json = None if result is None else result.response_json
         response_digest = (

@@ -366,3 +366,23 @@ service version and modeled assumptions are canonical input identity before prov
 egress: terminal replay performs no request, while changed versions append new runs
 without mutating older evidence. With no pre-call version, matching durable terminal
 history suppresses eager re-query. Version-unknown legacy input hashes remain stable.
+
+Phase C3 historical replay is allowed only against declared copied/fixture SQLite
+inputs. The source connections are query-only and their logical contents and lease
+state must remain unchanged; a new history output is required. The approved AA4NP
+event is identified by UUID `938620bb-b4ff-40b2-9493-081b56bb038c` and immutable
+payload SHA-256
+`9de70a6c8d131500cefa580465bfe1033a87f558e3c655fac511443320288cab`.
+Replay requires its independently verified production provenance row to already be
+`field_observed`; code must never seed, replace, or reclassify that row. The two C1
+synthetic exclusions remain exact and immutable.
+
+The C3 CLI has no network provider adapter. Its only provider is a bounded,
+versioned local fake fixture keyed by year, month, selected UTC hour, band, mode,
+and configured watts. Provider requests retain the real summary contract (year and
+month in the request; hour selected from the response) and never fabricate
+second-specific prediction inputs. Every result is `retrospective` and therefore
+training-ineligible even for audited field evidence. Immutable input and response
+hashes, zero-call terminal deduplication, append-only model-version forks, missing/
+unsupported results, C2 reconciliation, and source non-mutation are part of the
+versioned report.

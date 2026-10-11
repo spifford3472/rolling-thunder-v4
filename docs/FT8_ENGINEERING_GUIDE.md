@@ -176,6 +176,13 @@ performs no duplicate provider request and upgraded models append history withou
 changing prior evidence. Version-unknown legacy durable inputs are not eagerly
 re-requested.
 
+Phase C3 provides a fake-only, operator-run historical replay for the single audited
+AA4NP UUID. It verifies the exact immutable event hash and an existing
+`field_observed` provenance row from query-only copied databases, writes only a new
+history copy, and emits a versioned report with hashes and C2 reconciliation. It
+does not seed provenance, call a live provider, claim inbox leases, create training
+evidence, or affect FT8, UI, logging, ranking, power, CAT, PTT, or RF behavior.
+
 Optional completed-QSO propagation analytics use a separate source outbox only after
 both the successful `Contact` and matching successful performance attempt have been
 durably written. The terminal callback may perform that short local enqueue but no

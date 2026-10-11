@@ -164,6 +164,14 @@ The existing Forge worker remains the sole correlation owner; it records determi
 missing-input directions before provider work so forward retry exhaustion cannot
 erase the reverse unknown-power skip.
 
+Phase C3 adds a separate operator-run offline audit boundary for one approved
+historical UUID. It opens declared inbox/history copies query-only, requires the
+exact immutable event SHA and an already-existing audited `field_observed`
+provenance row, copies history to a new output, and can invoke only an injected
+deterministic local fake. Its versioned report owns no production database,
+provider transport, lease, scheduler, provenance insertion, training, Pi, UI,
+ranking, power-control, logging, Wavelog, or radio path.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder
