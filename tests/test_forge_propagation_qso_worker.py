@@ -37,9 +37,11 @@ def test_worker_configuration_and_example_are_disabled_by_default() -> None:
     assert defaults.enabled is False
     assert defaults.ingestion_enabled is False
     assert defaults.voacap_enabled is False
+    assert defaults.voacap_model_service_version is None
     assert example.enabled is False
     assert example.ingestion_enabled is False
     assert example.voacap_enabled is False
+    assert example.voacap_model_service_version is None
     assert example.inbox_database_path != example.history_database_path
     assert example.worker_identity == "forge-propagation-qso-worker-1"
 
@@ -99,6 +101,7 @@ def test_check_config_and_missing_status_are_storage_and_provider_free(
     assert plan["enabled"] is False
     assert plan["ingestion_enabled"] is False
     assert plan["voacap_enabled"] is False
+    assert plan["voacap_model_service_version"] is None
     assert "token" not in plan
 
     assert main(("--config", str(config_path), "--status")) == 0

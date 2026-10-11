@@ -12,15 +12,18 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 from uuid import UUID, uuid4
 
-from pydantic import Field, field_validator
+from pydantic import Field, TypeAdapter, ValidationError, field_validator
 
-from rolling_thunder.domain import DomainModel
+from rolling_thunder.domain import DomainModel, Frequency
 from rolling_thunder.ft8.attempt_ledger import FT8AttemptEvent
+from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_band
+from rolling_thunder.value_types import MaidenheadGrid
 
 FORGE_ATTEMPT_SCHEMA_VERSION = 1
 MODEL_INPUT_SCHEMA_VERSION = 1
 _MAX_BATCH = 100
-_DOCUMENTED_SYNTHETIC_ATTEMPTS = (
+_GRID_ADAPTER = TypeAdapter(MaidenheadGrid)
+DOCUMENTED_SYNTHETIC_ATTEMPTS = (
     (
         UUID("9ad2f0c2-ed0e-4ba7-8b03-732d8aa8c339"),
         "synthetic_test",
@@ -100,6 +103,7 @@ class VoacapModelInput(DomainModel):
     solar_index: float | None = None
     model_path: str | None = Field(default=None, max_length=64)
     service_contract_version: Literal["voacap-summary-v1"] = "voacap-summary-v1"
+    model_service_version: str | None = Field(default=None, min_length=1, max_length=120)
 
     @field_validator("event_hour_utc")
     @classmethod
@@ -114,7 +118,7 @@ class VoacapModelInput(DomainModel):
 
     @property
     def input_hash(self) -> str:
-        return hashlib.sha256(_canonical(self.model_dump(mode="json")).encode()).hexdigest()
+        return hashlib.sha256(_canonical(_model_input_payload(self)).encode()).hexdigest()
 
     def provider_request(self) -> dict[str, Any] | None:
         """Return the existing service shape only when every required input exists."""
@@ -417,7 +421,7 @@ class VoacapAttemptHistoryRepository:
 
     def record_input(self, model_input: VoacapModelInput) -> str:
         input_hash = model_input.input_hash
-        payload = _canonical(model_input.model_dump(mode="json"))
+        payload = _canonical(_model_input_payload(model_input))
         with self._connect() as db:
             db.execute(
                 """INSERT OR IGNORE INTO voacap_prediction_input_v1
@@ -450,6 +454,27 @@ class VoacapAttemptHistoryRepository:
         result: VoacapProviderResult | None = None,
         failure_reason: str | None = None,
     ) -> UUID:
+        requested_at = _utc(requested_at_utc)
+        available_at = _utc(available_at_utc)
+        if available_at < requested_at:
+            raise ValueError("VOACAP availability cannot precede its request")
+        if status is VoacapRunStatus.READY:
+            if result is None or not _has_modeled_values(result) or failure_reason is not None:
+                raise ValueError("ready VOACAP run requires modeled values and no failure")
+        elif status is VoacapRunStatus.UNAVAILABLE:
+            if result is None or _has_modeled_values(result):
+                raise ValueError("unavailable VOACAP run requires a response without modeled values")
+        elif result is not None:
+            raise ValueError(f"{status.value} VOACAP run cannot contain a provider result")
+        if status is not VoacapRunStatus.READY and not (failure_reason or "").strip():
+            raise ValueError(f"{status.value} VOACAP run requires a reason")
+        if result is not None:
+            if model_input.model_service_version is None:
+                model_input = model_input.model_copy(
+                    update={"model_service_version": result.service_version}
+                )
+            elif model_input.model_service_version != result.service_version:
+                raise ValueError("VOACAP input and result service versions must match")
         input_hash = self.record_input(model_input)
         run_uuid = uuid4()
         request_json = model_input.provider_request()
@@ -470,8 +495,8 @@ class VoacapAttemptHistoryRepository:
                 (
                     str(run_uuid),
                     input_hash,
-                    _time(requested_at_utc),
-                    _time(available_at_utc),
+                    _time(requested_at),
+                    _time(available_at),
                     status.value,
                     failure_reason,
                     None if request_json is None else _canonical(request_json),
@@ -497,16 +522,18 @@ class VoacapAttemptHistoryRepository:
                     relation.value,
                     _time(model_input.choice_at_utc),
                     int(
-                        self.provenance(model_input.attempt_uuid)["training_eligible"]
+                        status is VoacapRunStatus.READY
+                        and result is not None
+                        and self.provenance(model_input.attempt_uuid)["training_eligible"]
                         and relation is VoacapRelation.PRE_CHOICE
-                        and _utc(available_at_utc) <= model_input.choice_at_utc
+                        and available_at <= model_input.choice_at_utc
                     ),
                 ),
             )
         return run_uuid
 
     def has_terminal_run(self, input_hash: str) -> bool:
-        """Reconcile a lease replay without repeating already-durable provider work."""
+        """Return whether this exact versioned scientific input is terminal."""
         with self._connect() as db:
             row = db.execute(
                 """SELECT 1 FROM voacap_prediction_run_v1
@@ -515,6 +542,48 @@ class VoacapAttemptHistoryRepository:
                 (input_hash,),
             ).fetchone()
         return row is not None
+
+    def has_terminal_run_for_input(self, model_input: VoacapModelInput) -> bool:
+        """Check exact identity, with a no-egress fallback for legacy identities."""
+        if self.has_terminal_run(model_input.input_hash):
+            return True
+        requested_version = model_input.model_service_version
+        requested_legacy_payload = _canonical(
+            _model_input_payload(
+                model_input.model_copy(update={"model_service_version": None})
+            )
+        )
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT i.input_json,r.service_version
+                FROM voacap_prediction_input_v1 i
+                JOIN voacap_prediction_run_v1 r ON r.input_hash=i.input_hash
+                WHERE i.attempt_uuid=? AND i.direction=?
+                AND i.period_sequence IS ?
+                AND r.status IN ('ready','unavailable','skipped')""",
+                (
+                    str(model_input.attempt_uuid),
+                    model_input.direction.value,
+                    model_input.period_sequence,
+                ),
+            ).fetchall()
+        for input_json, run_service_version in rows:
+            stored_input = VoacapModelInput.model_validate_json(input_json)
+            stored_legacy_payload = _canonical(
+                _model_input_payload(
+                    stored_input.model_copy(update={"model_service_version": None})
+                )
+            )
+            if stored_legacy_payload != requested_legacy_payload:
+                continue
+            if requested_version is None:
+                return True
+            if (
+                stored_input.model_service_version is None
+                and run_service_version == requested_version
+            ):
+                return True
+        return False
 
     def diagnostics(self, attempt_uuid: UUID) -> dict[str, Any]:
         provenance = self.provenance(attempt_uuid)
@@ -595,7 +664,7 @@ class VoacapAttemptHistoryRepository:
                 """
             )
             for attempt_uuid, provenance, reason, evidence, evidence_date in (
-                _DOCUMENTED_SYNTHETIC_ATTEMPTS
+                DOCUMENTED_SYNTHETIC_ATTEMPTS
             ):
                 db.execute(
                     """INSERT OR IGNORE INTO ft8_attempt_provenance_v1
@@ -645,14 +714,24 @@ class FT8AttemptCorrelationWorker:
         worker_id: str,
         batch_size: int = 20,
         lease_duration: timedelta = timedelta(minutes=5),
+        model_service_version: str | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
+        if not 1 <= batch_size <= _MAX_BATCH:
+            raise ValueError(f"batch_size must be between 1 and {_MAX_BATCH}")
+        if lease_duration <= timedelta(0):
+            raise ValueError("lease_duration must be positive")
+        if model_service_version is not None:
+            model_service_version = model_service_version.strip()
+            if not 1 <= len(model_service_version) <= 120:
+                raise ValueError("model_service_version must contain 1..120 characters")
         self._inbox = inbox
         self._history = history
         self._client = client
         self._worker_id = worker_id
         self._batch_size = batch_size
         self._lease_duration = lease_duration
+        self._model_service_version = model_service_version
         self._clock = clock
 
     def run_once(self, *, now_utc: datetime) -> tuple[int, int]:
@@ -664,17 +743,25 @@ class FT8AttemptCorrelationWorker:
             limit=self._batch_size,
         )
         for lease in leases:
-            results_by_request: dict[str, VoacapProviderResult] = {}
             try:
                 if self._history.processing_exclusion(lease.event.attempt_uuid) is not None:
                     self._inbox.finish(lease, completed_at_utc=self._now())
                     completed += 1
                     continue
-                for model_input in model_inputs_for_attempt(lease.event):
-                    if self._history.has_terminal_run(model_input.input_hash):
-                        continue
+                model_inputs = tuple(
+                    model_input.model_copy(
+                        update={"model_service_version": self._model_service_version}
+                    )
+                    for model_input in model_inputs_for_attempt(lease.event)
+                )
+                # Persist deterministic missing-input directions before any provider
+                # request.  A forward outage must not erase the scientific fact that
+                # reverse correlation was skipped because remote power is unknown.
+                for model_input in model_inputs:
                     request = model_input.provider_request()
-                    if request is None:
+                    if request is None and not self._history.has_terminal_run_for_input(
+                        model_input
+                    ):
                         self._history.record_run(
                             model_input,
                             requested_at_utc=now_utc,
@@ -683,33 +770,49 @@ class FT8AttemptCorrelationWorker:
                             relation=VoacapRelation.RETROSPECTIVE,
                             failure_reason="required model input missing",
                         )
+                for model_input in model_inputs:
+                    request = model_input.provider_request()
+                    if request is None:
                         continue
-                    requested_at = now_utc
-                    request_hash = hashlib.sha256(_canonical(request).encode()).hexdigest()
-                    result = results_by_request.get(request_hash)
-                    if result is None:
-                        try:
-                            result = self._client.predict(model_input)
-                        except Exception as error:
-                            self._history.record_run(
-                                model_input,
-                                requested_at_utc=requested_at,
-                                available_at_utc=self._now(),
-                                status=VoacapRunStatus.FAILED,
-                                relation=VoacapRelation.RETROSPECTIVE,
-                                failure_reason=(
-                                    str(error) or error.__class__.__name__
-                                )[:1000],
-                            )
-                            raise
-                        results_by_request[request_hash] = result
+                    if self._history.has_terminal_run_for_input(model_input):
+                        continue
+                    requested_at = self._now()
+                    try:
+                        result = self._client.predict(model_input)
+                    except Exception as error:
+                        self._history.record_run(
+                            model_input,
+                            requested_at_utc=requested_at,
+                            available_at_utc=self._now(),
+                            status=VoacapRunStatus.FAILED,
+                            relation=VoacapRelation.RETROSPECTIVE,
+                            failure_reason=(str(error) or error.__class__.__name__)[:1000],
+                        )
+                        raise
+                    versioned_input = (
+                        model_input.model_copy(
+                            update={"model_service_version": result.service_version}
+                        )
+                        if model_input.model_service_version is None
+                        else model_input
+                    )
+                    status = (
+                        VoacapRunStatus.READY
+                        if _has_modeled_values(result)
+                        else VoacapRunStatus.UNAVAILABLE
+                    )
                     self._history.record_run(
-                        model_input,
+                        versioned_input,
                         requested_at_utc=requested_at,
                         available_at_utc=self._now(),
-                        status=VoacapRunStatus.READY,
+                        status=status,
                         relation=VoacapRelation.RETROSPECTIVE,
                         result=result,
+                        failure_reason=(
+                            None
+                            if status is VoacapRunStatus.READY
+                            else "provider response has no modeled values for requested UTC hour/band"
+                        ),
                     )
                 self._inbox.finish(lease, completed_at_utc=self._now())
                 completed += 1
@@ -727,12 +830,11 @@ class FT8AttemptCorrelationWorker:
 
 
 def model_inputs_for_attempt(event: FT8AttemptEvent) -> tuple[VoacapModelInput, ...]:
+    local_grid = _model_grid(event.local_grid)
+    remote_grid = _model_grid(event.remote_grid)
     common: dict[str, Any] = {
         "attempt_uuid": event.attempt_uuid,
         "choice_at_utc": event.started_at_utc,
-        "event_hour_utc": event.started_at_utc,
-        "frequency_hz": event.dial_frequency_hz,
-        "band": event.band,
     }
     forward_periods = tuple(period for period in event.tx_periods if period.transmitted)
     if not forward_periods:
@@ -740,11 +842,14 @@ def model_inputs_for_attempt(event: FT8AttemptEvent) -> tuple[VoacapModelInput, 
             VoacapModelInput(
                 **common,
                 direction=VoacapDirection.LOCAL_TO_REMOTE,
-                tx_grid=event.local_grid,
-                rx_grid=event.remote_grid,
-                tx_grid_precision=_precision(event.local_grid),
-                rx_grid_precision=_precision(event.remote_grid),
-                grid_point_assumption=_grid_assumption(event.local_grid, event.remote_grid),
+                event_hour_utc=event.started_at_utc,
+                frequency_hz=event.dial_frequency_hz,
+                band=event.band,
+                tx_grid=local_grid,
+                rx_grid=remote_grid,
+                tx_grid_precision=_precision(local_grid),
+                rx_grid_precision=_precision(remote_grid),
+                grid_point_assumption=_grid_assumption(local_grid, remote_grid),
             ),
         )
     else:
@@ -753,29 +858,53 @@ def model_inputs_for_attempt(event: FT8AttemptEvent) -> tuple[VoacapModelInput, 
                 **common,
                 direction=VoacapDirection.LOCAL_TO_REMOTE,
                 period_sequence=period.sequence,
-                tx_grid=event.local_grid,
-                rx_grid=event.remote_grid,
-                tx_grid_precision=_precision(event.local_grid),
-                rx_grid_precision=_precision(event.remote_grid),
-                grid_point_assumption=_grid_assumption(event.local_grid, event.remote_grid),
-                tx_power_watts=period.configured_power_watts,
-                tx_power_source=period.power_source,
+                event_hour_utc=period.started_at_utc,
+                frequency_hz=period.frequency_hz,
+                band=_band_for_frequency(period.frequency_hz),
+                tx_grid=local_grid,
+                rx_grid=remote_grid,
+                tx_grid_precision=_precision(local_grid),
+                rx_grid_precision=_precision(remote_grid),
+                grid_point_assumption=_grid_assumption(local_grid, remote_grid),
+                tx_power_watts=(
+                    period.configured_power_watts
+                    if period.power_source == "cat_configured_readback"
+                    else None
+                ),
+                tx_power_source=(
+                    "cat_configured_readback"
+                    if period.power_source == "cat_configured_readback"
+                    else None
+                ),
             )
             for period in forward_periods
         )
     reverse = VoacapModelInput(
         **common,
         direction=VoacapDirection.REMOTE_TO_LOCAL,
-        tx_grid=event.remote_grid,
-        rx_grid=event.local_grid,
-        tx_grid_precision=_precision(event.remote_grid),
-        rx_grid_precision=_precision(event.local_grid),
-        grid_point_assumption=_grid_assumption(event.remote_grid, event.local_grid),
+        event_hour_utc=event.started_at_utc,
+        frequency_hz=event.dial_frequency_hz,
+        band=event.band,
+        tx_grid=remote_grid,
+        rx_grid=local_grid,
+        tx_grid_precision=_precision(remote_grid),
+        rx_grid_precision=_precision(local_grid),
+        grid_point_assumption=_grid_assumption(remote_grid, local_grid),
         # Remote station power is not observed by Rolling Thunder.
         tx_power_watts=None,
         tx_power_source=None,
     )
     return forward + (reverse,)
+
+
+def _model_grid(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        normalized = str(_GRID_ADAPTER.validate_python(value))
+    except ValidationError:
+        return None
+    return normalized if len(normalized) in (4, 6) else None
 
 
 def _precision(grid: str | None) -> int | None:
@@ -788,8 +917,35 @@ def _grid_assumption(
     return None if tx_grid is None or rx_grid is None else "maidenhead_cell_center"
 
 
+def _band_for_frequency(frequency_hz: int) -> str | None:
+    try:
+        return resolve_radio_band(Frequency(hz=frequency_hz)).value
+    except RadioBandResolutionError:
+        return None
+
+
 def _canonical(value: object) -> str:
     return dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _model_input_payload(model_input: VoacapModelInput) -> dict[str, Any]:
+    """Preserve legacy hashes while binding known service versions going forward."""
+    payload = model_input.model_dump(mode="json")
+    if model_input.model_service_version is None:
+        payload.pop("model_service_version")
+    return payload
+
+
+def _has_modeled_values(result: VoacapProviderResult) -> bool:
+    return any(
+        value is not None
+        for value in (
+            result.reliability_fraction,
+            result.snr_db_hz,
+            result.muf_mhz,
+            result.rating,
+        )
+    )
 
 
 def _utc(value: datetime) -> datetime:

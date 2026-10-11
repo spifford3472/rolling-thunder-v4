@@ -371,6 +371,23 @@ legacy tables and disabled provider gates remain unchanged. Baseline activation
 gates and the field coverage report design are in
 `engineering/voacap-ft8-phase-c.md`; no baseline scheduler is implemented or active.
 
+Phase C2 provides a scoped programmatic report over declared read-only attempt inbox
+and history snapshots. It reconciles existing retrospective model inputs/runs/links,
+publishes separate event/transmitted-period/modeled-input denominators, excludes
+sensitive payload fields, and fails closed on immutable identity, seeded provenance,
+foreign-key and training-eligibility violations. It performs no provider request or
+lease mutation and does not complete or authorize the full baseline coverage gate.
+The attempt worker persists unknown-remote-power reverse skips before forward
+provider work, so retry exhaustion cannot leave that direction unstated. Malformed
+grids are not requested, and responses without requested hour/band values are stored
+as unavailable using only the existing adapter fields.
+Forward history is period-specific for UTC and frequency-derived band and accepts
+power only with verified configured-CAT provenance. An explicitly declared model
+service version is bound into canonical identity before provider egress, so terminal
+replay makes no duplicate request; a new declared version or assumption appends new
+evidence while historical hashes/runs remain unchanged. Without a pre-call version,
+matching durable legacy input suppresses eager re-query.
+
 Read-only verification on 2026-10-07 confirmed that the documented Forge endpoint
 `http://192.168.9.170:8787/version` responded as `voacap-service` version `0.3.0`.
 No summary/prediction request was made and no service state was changed.

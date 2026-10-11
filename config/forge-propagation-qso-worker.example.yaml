@@ -18,3 +18,5 @@ retry_base_s: 60
 retry_max_s: 3600
 provider_timeout_s: 10
 voacap_base_url: http://127.0.0.1:8787
+# Pin the exact deployed model version before enabling provider work when known.
+voacap_model_service_version: null
