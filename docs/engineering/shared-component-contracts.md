@@ -306,3 +306,7 @@ QRZ enrichment never derive historical coordinates from current GPS. Local UUID
 replay compares coordinates; Forge retains its existing ADIF/profile hash. Upgrade
 the receiving Forge package before the expanded Pi sender. See
 [contact synchronization](../FORGE_CONTACT_SYNC.md#immutable-qso-location-checkpoint-a).
+
+## FT8 selected-target activity (CP3.1 Step 1)
+
+The receive service owns the optional selected-target activity observation. It uses immutable normalized decoded traffic, and never changes selection eligibility, QSO authorization, retry policy, or CAT power. Activity involving another callsign is reported only when the selected station is **the decoded source**, and excludes exchanges addressed to the configured local station. No decoded traffic is never proof the target is idle or available. Freshness expires after four 15-second periods; selecting a different station or changing the receive band clears the observation. UI wiring, green/white status-strip presentation, and busy-station retry extensions are separate future steps.

@@ -41,6 +41,7 @@ from rolling_thunder.ft8.domain import (
     FT8MessageKind,
     FT8Period,
 )
+from rolling_thunder.ft8.target_activity import FT8TargetActivityTracker, TargetActivity
 from rolling_thunder.ft8.timing import FT8Clock, SystemFT8Clock
 from rolling_thunder.gps import GPSUTCObservation
 from rolling_thunder.value_types import BaseCallsign
@@ -91,6 +92,7 @@ class FT8ReceiveState:
     diagnostic_session: FT8DiagnosticSessionState | None = None
     last_diagnostic_error: str | None = None
     incoming_call: FT8IncomingCall | None = None
+    target_activity: TargetActivity | None = None
 
 
 class BoundedFT8PeriodRecorder:
@@ -164,6 +166,9 @@ class FT8ReceiveService:
         self._capture_thread: threading.Thread | None = None
         self._decode_thread: threading.Thread | None = None
         self._state_lock = threading.Lock()
+        self._target_activity_tracker = FT8TargetActivityTracker(
+            local_callsign=None if local_callsign is None else str(local_callsign)
+        )
         self._capture_healthy = False
         device = getattr(audio_input, "device", None)
         self._state = FT8ReceiveState(
@@ -189,12 +194,22 @@ class FT8ReceiveService:
         with self._observer_lock:
             self._observer = observer
 
+    def select_activity_target(self, callsign: str | None) -> None:
+        """Set the target for read-only decoder activity; independent of QSO selection."""
+        with self._state_lock:
+            self._target_activity_tracker.select(callsign)
+            self._state = replace(
+                self._state,
+                target_activity=self._target_activity_tracker.snapshot(self._state.last_period),
+            )
+
     def clear_cq_activity(self) -> None:
         """Drop accumulated CQ rows when the active FT8 receive band changes."""
         self._activity_manager.clear()
         with self._state_lock:
             state = self._state
-            self._state = replace(state, cq_activity=(), incoming_call=None)
+            self._target_activity_tracker.select(None)
+            self._state = replace(state, cq_activity=(), incoming_call=None, target_activity=None)
 
     def start(self) -> None:
         if self._capture_thread is not None:
@@ -301,6 +316,7 @@ class FT8ReceiveService:
                     result.comparison,
                 )
             with self._state_lock:
+                self._target_activity_tracker.observe(decodes, period.period)
                 state = self._state
                 recovered_status = (
                     FT8ReceiveStatus.RUNNING
@@ -331,6 +347,7 @@ class FT8ReceiveService:
                     ),
                     diagnostic_session=session_state,
                     incoming_call=incoming_call,
+                    target_activity=self._target_activity_tracker.snapshot(period.period),
                 )
             self._write_diagnostic_snapshot()
 

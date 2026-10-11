@@ -15,3 +15,7 @@ Observed: 16 attempts (20m: 4; 40m: 12), 109 transmit periods, all join by attem
 ### Scope and release gate
 
 This commit provides read-only cohort diagnostics. It changes no live services, power policy, CAT, PTT, RF capability, database schema or deployment artifacts. Future PSK-informed recommendations must remain shadow-only until separately approved. Preserve 20 W starting policy, 5 W bounded steps, ceilings, and CAT verification.
+
+### Selected-target receive observation — Step 1
+
+The optional receive-service method `select_activity_target(callsign)` selects a callsign for purely observational tracking. `FT8ReceiveState.target_activity` publishes immutable activity snapshots, including unknown, CQ, directed exchange with another callsign and sign-off observed, with decoded FT8 message class and period. A stale observation (four 15-second periods), target change, or band change invalidates it. This implementation does not attach the UI selected row to the tracker yet (Step 2), change QSO controls or extend retries (Step 3). Never interpret a decoded message **to** the target as a transmission **from** it, or a sign-off as verified QSO completion.
