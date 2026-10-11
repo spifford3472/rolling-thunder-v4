@@ -389,3 +389,5 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - [VOACAP/FT8 Phase C5.1 scheduled readiness inventory candidate](voacap-ft8-phase-c51.md) — offline read-only, non-actuating, requires separate deployment helper and verified evidence adapter.
 
 - [FT8 scientific power-experiment protocol](voacap-ft8-power-experiments.md) — pre-registered control/lower-power trial, future qualification certificate, and strict RF/UI safeguards (disabled).
+
+- [C5.2 Forge prospective source-audit checkpoint](voacap-ft8-phase-c52.md) — read-only v2 FT8 evidence inventory and as-of exclusion checks; not an auto-qualifying service.
