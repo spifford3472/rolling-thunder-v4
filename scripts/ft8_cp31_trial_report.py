@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Read-only, reproducible CP3.1 FT8 trial cohort report (CAT watts, not RF)."""
 from __future__ import annotations
 
