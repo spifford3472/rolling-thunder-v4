@@ -1,0 +1,23 @@
+[Unit]
+Description=Forge C4 bounded VOACAP baseline sampler (disabled by default)
+After=local-fs.target
+ConditionPathExists=/etc/rolling-thunder-forge-voacap-baseline/config.json
+
+[Service]
+Type=oneshot
+User=rolling-thunder-propagation
+Group=rolling-thunder-propagation
+ExecStart=/opt/rolling-thunder-forge-voacap-baseline/current/.venv/bin/rolling-thunder-forge-voacap-baseline --config /etc/rolling-thunder-forge-voacap-baseline/config.json
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/rolling-thunder-forge-propagation
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressAllow=localhost
+IPAddressDeny=any
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+TimeoutStartSec=180s

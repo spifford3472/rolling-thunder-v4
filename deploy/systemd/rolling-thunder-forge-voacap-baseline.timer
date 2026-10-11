@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic Forge C4 prospective baseline scheduling
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=6h
+AccuracySec=5min
+Persistent=true
+Unit=rolling-thunder-forge-voacap-baseline.service
+
+[Install]
+WantedBy=timers.target

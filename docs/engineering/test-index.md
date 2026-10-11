@@ -495,3 +495,5 @@ still required.
 - `tests/test_forge_ft8_readiness_preflight.py` — read-only source byte preservation, missing source and malformed schema rejection.
 
 - `tests/test_forge_ft8_readiness_installer.py` — candidate root-helper safety scoping and shell syntax; offline wheel staging and CLI installation additionally smoke-tested on Forge.
+
+- `tests/test_forge_voacap_baseline_main.py` — C6 disabled/no-I/O gate, idempotent day scheduling and loopback restriction.
