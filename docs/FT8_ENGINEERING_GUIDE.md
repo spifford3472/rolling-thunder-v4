@@ -485,3 +485,18 @@ service deployment/migration needs separate authorization and verified backup.
 DigiRig, PTT, antenna, Forge production DB, or anvilmobile runtime was touched.
 Operators must separately authorize any staged installation, hardware/RF
 acceptance, and production cutover.
+
+## CP3.1 post-deployment UI follow-up — retry denominator and TX activity
+
+The operator-visible TRY and ATTEMPT denominators are derived from the live
+controller's effective phase budget: six normally, eight only after qualifying
+selected-target third-party activity. The underlying configured retry baseline
+stays six, and no additional transmissions become authorized by rendering.
+
+The FT8 coordinator exposes simple read-only presentation properties without
+acquiring its transmit-slot lock. An entire synchronous physical FT8 playback
+can hold that lock; blocking the UI on it previously prevented a screen refresh
+while PTT was keyed. Mutation, session cancellation, terminal capture and
+transmit authorization continue using the existing synchronized paths.
+This is a read-path-only fix: UI sampling may see a transient snapshot of a
+state transition, but it never gains control of transmission.

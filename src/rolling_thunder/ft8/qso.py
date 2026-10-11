@@ -68,6 +68,13 @@ class FT8QsoController:
         return self._attempts_per_state
 
     @property
+    def effective_attempt_limit(self) -> int:
+        """Current-phase presentation limit; never changes the TX retry policy."""
+        if self._busy_extension_granted and self._attempts_per_state == 6:
+            return 8
+        return self._attempts_per_state
+
+    @property
     def busy_extension_attempts(self) -> int:
         """Number of seventh/eighth transmissions, never reachability failures."""
         return self._busy_extension_attempts
@@ -144,7 +151,7 @@ class FT8QsoController:
             return
 
         kind, tx_state, wait_state = self._transmit_plan()
-        limit = min(8, self._attempts_per_state + 2) if self._busy_extension_granted and self._attempts_per_state == 6 else self._attempts_per_state
+        limit = self.effective_attempt_limit
         if self._attempt_count >= limit:
             self._enter_terminal(FT8QsoState.RETRY_EXHAUSTED)
             return

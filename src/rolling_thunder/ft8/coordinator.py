@@ -68,37 +68,34 @@ class FT8QsoCoordinator:
         self._terminal_result_handler = terminal_result_handler
         self._activity_provider = activity_provider
 
+    # Presentation-only reads intentionally do not acquire the coordinator lock.
+    # The worker holds it while playing up to a complete FT8 transmit slot;
+    # blocking the UI on it hides TX RUNNING until PTT has already released.
+    # Mutating operations and transmit authorization remain locked.
     @property
     def state(self) -> FT8QsoState:
-        with self._lock:
-            return self._controller.state
+        return self._controller.state
 
     @property
     def context(self) -> FT8QsoContext | None:
-        with self._lock:
-            return self._controller.context
+        return self._controller.context
 
     @property
     def attempt_count(self) -> int:
-        """Return attempts used for the current unchanged QSO state."""
-        with self._lock:
-            return self._controller.attempt_count
+        return self._controller.attempt_count
 
     @property
     def attempts_per_state(self) -> int:
-        """Return the bounded retry budget for each unchanged QSO state."""
-        with self._lock:
-            return self._controller.attempts_per_state
+        """Current effective retry limit for the UI, including busy extension."""
+        return self._controller.effective_attempt_limit
 
     @property
     def terminal_reason(self) -> str | None:
-        with self._lock:
-            return self._terminal_reason
+        return self._terminal_reason
 
     @property
     def result(self) -> FT8QsoResult | None:
-        with self._lock:
-            return self._result
+        return self._result
 
     def authorize(self, context: FT8QsoContext) -> None:
         """Freeze exactly one operator-selected station into this coordinator."""
