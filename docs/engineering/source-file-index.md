@@ -435,3 +435,7 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/forge_psk_coverage_audit.py` — operator-run read-only normalized FT8 outbound-data coverage counts, no secrets or service changes.
 
 - `src/rolling_thunder/forge_ft8_readiness_main.py` — C5.1 Forge-only, read-only C4 inventory CLI; never actuates, never upgrades inventory into calibrated evidence.
+
+- `src/rolling_thunder/forge_ft8_power_experiment.py` — disabled, non-actuating Forge experiment allocation contract; no CAT/PTT/UI integration.
+
+- `src/rolling_thunder/forge_ft8_qualification.py` — immutable non-actuating C5 scientific qualification certificate, hash and human-readable justification.

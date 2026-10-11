@@ -479,3 +479,7 @@ contacts. All provider writes are scripted fakes; installed Wavelog acceptance i
 still required.
 
 - `tests/test_forge_ft8_readiness_main.py` — missing C4, OFF/armed/no-calibration, read-only dedup and fail-closed output.
+
+- `tests/test_forge_ft8_power_experiment.py` — fail-closed randomized trial assignment, repeatability, bounded wattage and no RF authority.
+
+- `tests/test_forge_ft8_qualification.py` — certificate fail-closed controls, provenance and confidence-bound rejection.
