@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 317.**
+**Cataloged Python modules: 320.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -287,6 +287,11 @@ originates from one screen.
 - `src/rolling_thunder/forge_voacap_baseline.py` — disabled/uncomposed Phase-C4
   reusable Forge baseline domain, additive SQLite plan/slot/response/ledger storage,
   bounded single-concurrency worker contract and provider-free read-only diagnostics.
+- `src/rolling_thunder/forge_ft8_power_advisor.py` — offline-only Phase-C5 strict
+  as-of evidence/pairing, leakage-resistant descriptive evaluation, immutable
+  shadow-advisory contract and non-actuating readiness state machine.
+- `src/rolling_thunder/forge_ft8_power_advisor_config.py` — strict Forge C5 YAML
+  readiness policy and validate-before-publish atomic reload holder.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.

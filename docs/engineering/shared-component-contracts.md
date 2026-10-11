@@ -396,3 +396,18 @@ generation times plus pre-choice/late/backfill/missed status. Baseline diagnosti
 are read-only and all C4 data is training-ineligible. No baseline result may imply
 decoder dB equals VOACAP dB-Hz, configured/model watts equals measured RF watts, or
 modeled circuit reliability equals QSO success probability.
+
+Phase C5 may pair only audited field observations with forecasts generated and
+available at or before the frozen choice time. Late, backfill, retrospective,
+synthetic and unknown-provenance evidence is never prospective training evidence;
+future SSN values are forbidden. Attempt UUID/QSO groups and independent forecast
+inputs have separate denominators, and reused hourly cells from one monthly input do
+not become independent forecasts. Grid precision/uncertainty, 7.2-MHz modeled band
+center versus 7.074-MHz dial, VOACAP dB-Hz versus decoder dB, and missingness remain
+explicit.
+
+Every C5 advisory is Forge-only and immutable with `shadow_only=true`,
+`apply_allowed=false`, `may_transmit=false`, and the current 20-W operational
+baseline. It must not alter live CQ order, the existing retry ladder or configured
+power. `armed_when_ready` computes only future readiness. Any future actuation or
+operator-visible use requires a separate contract, approval and regression review.

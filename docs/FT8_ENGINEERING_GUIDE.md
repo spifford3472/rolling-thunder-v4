@@ -190,6 +190,14 @@ all gates default false, no provider transport exists, diagnostics are read-only
 training eligibility is false. It changes no FT8 selection, power or RF behavior.
 See `engineering/voacap-ft8-phase-c4.md`.
 
+Phase C5 adds an offline Forge scientific calibration boundary and explanatory
+shadow power-advisory contract. It uses strict pre-choice as-of joins, independent
+attempt/QSO/forecast denominators and grouped forward holdouts; late, retrospective,
+synthetic and unknown evidence is excluded. Every advisory prohibits application and
+transmission. Readiness mode, including `armed_when_ready`, is non-actuating and
+does not change the 20-W current baseline, existing CQ sorting, retry ladder, Pi
+configuration, CAT/PTT or RF behavior. See `engineering/voacap-ft8-phase-c5.md`.
+
 Optional completed-QSO propagation analytics use a separate source outbox only after
 both the successful `Contact` and matching successful performance attempt have been
 durably written. The terminal callback may perform that short local enqueue but no

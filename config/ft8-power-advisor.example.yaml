@@ -1,0 +1,16 @@
+schema_version: 1
+mode: off
+minimum_independent_forecast_cells: 20000
+minimum_real_transmitted_attempts: 2000
+minimum_attempts_per_operating_segment: 100
+minimum_forward_holdout_days: 30
+minimum_forward_holdout_attempts: 200
+maximum_calibration_error_percentage_points: 10
+require_heldout_noninferiority_vs_20w: true
+require_fresh_prospective_forecast: true
+require_valid_asof_provenance: true
+pinned_model_version: replace-with-reviewed-version
+fallback_start_watts: 20
+qualification_hysteresis_evaluations: 2
+maximum_forecast_age_seconds: 21600
+maximum_forge_latency_seconds: 5

@@ -187,6 +187,15 @@ default false; no provider HTTP adapter, daemon, unit, port or Pi consumer is ad
 All C4 tests use an injected fake and all results are training-ineligible. See
 `engineering/voacap-ft8-phase-c4.md`.
 
+Phase C5 adds reusable but uncomposed offline contracts in
+`forge_ft8_power_advisor.py` and a strict atomic YAML policy loader. It performs
+prospective as-of pairing and grouped chronological descriptive evaluation, stores
+immutable hashed audit artifacts, emits only explanatory shadow advisories, and
+computes readiness states. It contains no provider/network adapter, listener,
+scheduler, Pi client, radio import or production migration. Advisory flags prohibit
+application and transmission; armed mode is readiness-only and the fallback/current
+baseline is 20 W. See `engineering/voacap-ft8-phase-c5.md`.
+
 The same slice persists deterministic missing-input directions before provider work,
 so unknown remote power retains a reverse skipped run even if forward retries
 dead-letter. Structurally invalid grids are not sent, and an existing-adapter response
