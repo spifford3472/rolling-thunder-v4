@@ -8,6 +8,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `voacap-ft8-phase-a.md` — VOACAP/FT8 Phase A as-built audit, schema decisions, and review gates (design only).
+
 - `system-architecture.md` — deployed topology, process/lifecycle, local-first and recovery boundaries.
 - `ownership-and-dependencies.md` — feature ownership and dependency graph.
 - `shared-component-contracts.md` — cross-feature invariants that feature agents must not casually change.
