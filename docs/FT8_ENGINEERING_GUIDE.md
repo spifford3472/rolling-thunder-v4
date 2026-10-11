@@ -461,3 +461,27 @@ extensions as additional independent reachability failures. No logging,
 provider, Wavelog, RF configuration or UI layout changes are made.
 
 Acceptance remains simulation-only until explicitly authorized live validation.
+
+## CP3.1 Step 4 — offline integrated acceptance review (2026-10-11)
+
+Step 3 was merged as `21cc542ba2eae4f50b729d887483dfcb9b2918c6`.
+Hardware-independent simulations now exercise the coordinator's real period ticks,
+immutable published third-party tracker snapshot, authorized single-target state,
+retry ceiling, no ninth transmission, terminal result and extension telemetry.
+Existing tests exercise CQ/third-party report/R-report/73 interpretation,
+phase transition and normal six-attempt exhaustion; extended calls explicitly
+suppress adaptive CAT power step-up without disabling normal power limits.
+
+A release blocker was identified in review: `FT8PerformanceAttempt` contained
+`busy_extension_attempts`, but Forge's structured performance SQLite schema 2
+silently omitted it. The Step 4 follow-up introduces Forge schema 3 with a
+transactional `busy_extension_attempts` column (zero for historical rows),
+updates inserts, and preserves old schema-2 attempt-UUID idempotent replay when
+the extension value is zero. A changed nonzero replay remains a conflict.
+Local Pi outbox already serializes the complete typed attempt payload. Forge
+service deployment/migration needs separate authorization and verified backup.
+
+**Acceptance boundary:** all current tests are offline fakes. No real FT-891,
+DigiRig, PTT, antenna, Forge production DB, or anvilmobile runtime was touched.
+Operators must separately authorize any staged installation, hardware/RF
+acceptance, and production cutover.

@@ -17,7 +17,7 @@ from rolling_thunder.ft8.performance import (
 )
 
 Clock = Callable[[], datetime]
-_FORGE_FT8_SCHEMA_VERSION = 2
+_FORGE_FT8_SCHEMA_VERSION = 3
 
 
 def _utc_now() -> datetime:
@@ -67,6 +67,7 @@ class ForgeFT8PerformanceRepository:
                     if row[0] not in {
                         payload_sha256,
                         _legacy_payload_sha256(attempt),
+                        _previous_payload_sha256(attempt),
                     }:
                         connection.rollback()
                         raise ForgeFT8PerformanceConflictError(
@@ -107,6 +108,7 @@ class ForgeFT8PerformanceRepository:
                         audio_frequency_hz,
                         pota_cq,
                         attempt_count,
+                        busy_extension_attempts,
                         last_qso_state,
                         voacap_probability,
                         voacap_predicted_snr_db,
@@ -142,6 +144,7 @@ class ForgeFT8PerformanceRepository:
                         :audio_frequency_hz,
                         :pota_cq,
                         :attempt_count,
+                        :busy_extension_attempts,
                         :last_qso_state,
                         :voacap_probability,
                         :voacap_predicted_snr_db,
@@ -182,6 +185,7 @@ class ForgeFT8PerformanceRepository:
                         "audio_frequency_hz": attempt.audio_frequency_hz,
                         "pota_cq": int(attempt.pota_cq),
                         "attempt_count": attempt.attempt_count,
+                        "busy_extension_attempts": attempt.busy_extension_attempts,
                         "last_qso_state": attempt.last_qso_state,
                         "voacap_probability": attempt.voacap_probability,
                         "voacap_predicted_snr_db": attempt.voacap_predicted_snr_db,
@@ -360,6 +364,18 @@ class ForgeFT8PerformanceRepository:
                     """
                 )
 
+            if current_version < 3:
+                connection.execute("""
+                    ALTER TABLE ft8_performance_attempts
+                    ADD COLUMN busy_extension_attempts INTEGER NOT NULL DEFAULT 0
+                    CHECK(busy_extension_attempts BETWEEN 0 AND 2)
+                """)
+                connection.execute("""
+                    UPDATE forge_ft8_performance_schema
+                    SET schema_version = 3, updated_at = CURRENT_TIMESTAMP
+                    WHERE singleton_id = 1
+                """)
+
             connection.commit()
         except sqlite3.Error:
             connection.rollback()
@@ -401,11 +417,14 @@ def _payload_sha256(attempt: FT8PerformanceAttempt) -> str:
 
 def _legacy_payload_sha256(attempt: FT8PerformanceAttempt) -> str:
     """Hash the pre-power-telemetry API shape for idempotent old-row replay."""
+    if attempt.busy_extension_attempts != 0:
+        return ""
     payload_value = attempt.model_dump(mode="json")
     for field_name in (
         "tx_power_start_watts",
         "tx_power_end_watts",
         "tx_power_max_watts",
+        "busy_extension_attempts",
     ):
         payload_value.pop(field_name, None)
     payload = dumps(
@@ -413,4 +432,14 @@ def _legacy_payload_sha256(attempt: FT8PerformanceAttempt) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _previous_payload_sha256(attempt: FT8PerformanceAttempt) -> str:
+    """Accept exact zero-extension replay of old schema-2 payloads."""
+    if attempt.busy_extension_attempts != 0:
+        return ""
+    payload_value = attempt.model_dump(mode="json")
+    payload_value.pop("busy_extension_attempts", None)
+    payload = dumps(payload_value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()

@@ -331,3 +331,39 @@ def test_coordinator_fails_closed_when_utc_and_monotonic_diverge() -> None:
     assert coordinator.terminal_reason == "system UTC and monotonic clocks diverged"
     assert session.requests == []
     assert session.cancel_count == 1
+
+
+def test_cp31_integrated_coordinator_busy_target_periods_and_terminal_telemetry() -> None:
+    from rolling_thunder.ft8.target_activity import FT8TargetActivityTracker
+
+    context = _context()
+    clock = FakeFT8Clock(context.authorized_utc)
+    session = RecordingDigitalTransmitSession()
+    tracker = FT8TargetActivityTracker(local_callsign=context.local_callsign)
+    tracker.select(context.remote_callsign)
+    activity = lambda: tracker.snapshot(clock.current_period())
+    coordinator = FT8QsoCoordinator(session, clock, activity_provider=activity)
+    coordinator.authorize(context)
+    coordinator.start_qso()
+
+    # Source-attributed third-party report arriving during our authorized session.
+    other_reply = FT8Decode(
+        period=FT8Period(102), snr_db=-7, dt_seconds=0.1, audio_frequency_hz=1500,
+        raw_message="W1XYZ K1ABC -07", kind=FT8MessageKind.REPORT,
+        source_callsign="K1ABC", destination_callsign="W1XYZ", report_db=-7,
+    )
+    for index in range(101, 118):
+        clock.advance(15)
+        if index == 102:
+            tracker.observe((other_reply,), FT8Period(index))
+            coordinator.on_decodes((other_reply,))  # Does not advance our phase.
+        coordinator.tick()
+    assert coordinator.state is FT8QsoState.RETRY_EXHAUSTED
+    assert len(session.requests) == 8
+    assert [r.attempt for r in session.requests] == list(range(1, 9))
+    assert [r.busy_extension for r in session.requests] == [False] * 6 + [True] * 2
+    assert coordinator.result is not None
+    assert coordinator.result.busy_extension_attempts == 2
+    assert coordinator.result.transmit_attempt_count == 8
+    coordinator.reset()
+    assert coordinator.state is FT8QsoState.IDLE
