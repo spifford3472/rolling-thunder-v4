@@ -477,3 +477,5 @@ membership semantics. `tests/test_forge_contact_sync_api.py`,
 presentation-neutral sync boundary used by ordinary, POTA/DX, FT8, and DMR
 contacts. All provider writes are scripted fakes; installed Wavelog acceptance is
 still required.
+
+- `tests/test_forge_ft8_readiness_main.py` — missing C4, OFF/armed/no-calibration, read-only dedup and fail-closed output.

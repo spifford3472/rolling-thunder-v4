@@ -1,0 +1,23 @@
+[Unit]
+Description=Rolling Thunder Forge C5.1 non-actuating FT8 readiness audit
+After=local-fs.target
+ConditionPathExists=/etc/rolling-thunder-forge-ft8-readiness/policy.yaml
+
+[Service]
+Type=oneshot
+User=rollingthunder
+Group=rollingthunder
+ExecStart=/opt/rolling-thunder-forge-ft8-readiness/current/bin/rolling-thunder-forge-ft8-readiness --policy /etc/rolling-thunder-forge-ft8-readiness/policy.yaml --c4-db /var/lib/rolling-thunder-forge-propagation-qso/c4-baseline.sqlite3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
+UMask=0077
+StandardOutput=journal
+StandardError=journal

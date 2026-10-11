@@ -385,3 +385,5 @@ Before changing code, answer:
 ### FT8 selected-target status (CP3.1 Step 2)
 
 The FT8 map banner consumes the existing read-only target activity snapshot from `FT8ReceiveService`, synchronized to the highlighted browser target or active QSO remote callsign on the UI refresh path. `ft8.status.target_activity_status` formats fresh decoder-attributed remote observations separately from the white local operator status. The live map paints a green second line inside the unchanged banner bounds; it does not own decode, selection, RF authority, or retry policy.
+
+- [VOACAP/FT8 Phase C5.1 scheduled readiness inventory candidate](voacap-ft8-phase-c51.md) — offline read-only, non-actuating, requires separate deployment helper and verified evidence adapter.
