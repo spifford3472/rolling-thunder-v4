@@ -499,3 +499,5 @@ still required.
 - `tests/test_forge_voacap_baseline_main.py` — C6 disabled/no-I/O gate, idempotent day scheduling and loopback restriction.
 
 - `tests/test_forge_voacap_baseline_deploy.py` — C6.1 installer shell integrity and fail-closed three-gate checks.
+
+- `tests/test_forge_voacap_baseline_provider_contract.py` — fake-HTTP real VOACAP summary request body and version drift rejection.
