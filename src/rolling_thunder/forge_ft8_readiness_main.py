@@ -6,8 +6,11 @@ C5 calibration labels from historical model forecasts or retrospective QSOs.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import sqlite3
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -75,13 +78,66 @@ def evaluate_once(policy_path: Path, c4_path: Path, *, now: datetime | None = No
     return status
 
 
+
+def persist_status(status_path: Path, status: dict[str, object]) -> bool:
+    """Atomically publish bounded status, append transition-only hash-linked audit."""
+    status_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    encoded = json.dumps(status, sort_keys=True, separators=(",", ":")) + "\n"
+    if len(encoded) > 16384:
+        raise ValueError("readiness status exceeds size budget")
+    previous = None
+    if status_path.is_file():
+        try:
+            previous = json.loads(status_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeError):
+            previous = None
+    changed = (
+        previous is None
+        or previous.get("readiness") != status.get("readiness")
+        or previous.get("reason_codes") != status.get("reason_codes")
+        or previous.get("policy_mode") != status.get("policy_mode")
+    )
+    temporary: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=status_path.parent,
+            prefix=".readiness-", delete=False,
+        ) as handle:
+            temporary = handle.name
+            os.fchmod(handle.fileno(), 0o600)
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, status_path)
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            os.unlink(temporary)
+    if changed:
+        # Journal remains the durable transition log. Only an observation digest
+        # is recorded; no remote callsigns, GPS or raw payloads are emitted.
+        transition = {
+            "event": "readiness_transition",
+            "observed_at_utc": status["observed_at_utc"],
+            "previous_state": None if previous is None else previous.get("readiness"),
+            "new_state": status["readiness"],
+            "reason_codes": status["reason_codes"],
+            "snapshot_sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+        }
+        print(json.dumps(transition, sort_keys=True))
+    return changed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Forge C5.1 safe readiness snapshot (no RF authority)")
     parser.add_argument("--policy", type=Path, required=True)
     parser.add_argument("--c4-db", type=Path, required=True)
+    parser.add_argument("--status-path", type=Path)
     args = parser.parse_args()
     # Never open privileged configuration or write to live Forge history.
-    print(json.dumps(evaluate_once(args.policy, args.c4_db), sort_keys=True))
+    status = evaluate_once(args.policy, args.c4_db)
+    if args.status_path is not None:
+        persist_status(args.status_path, status)
+    print(json.dumps(status, sort_keys=True))
 
 
 if __name__ == "__main__":

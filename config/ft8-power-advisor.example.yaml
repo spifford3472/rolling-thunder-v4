@@ -1,5 +1,5 @@
 schema_version: 1
-mode: off
+mode: "off"
 minimum_independent_forecast_cells: 20000
 minimum_real_transmitted_attempts: 2000
 minimum_attempts_per_operating_segment: 100
