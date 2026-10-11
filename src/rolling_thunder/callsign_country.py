@@ -10,6 +10,13 @@ from typing import Final
 _PREFIX_COUNTRIES: Final[tuple[tuple[str, str], ...]] = tuple(
     sorted(
         (
+            # Additional unambiguous ITU series, per ARRL allocation table.
+            # Prefix alone is an advisory allocation, never a verified QTH.
+            ("A2", "BWA"), ("A3", "TON"), ("A4", "OMN"),
+            ("A5", "BTN"), ("A6", "ARE"), ("A7", "QAT"),
+            ("A8", "LBR"), ("A9", "BHR"), ("8P", "BRB"),
+            ("9H", "MLT"), ("4X", "ISR"), ("4Z", "ISR"),
+            ("5B", "CYP"), ("ZP", "PRY"), ("YV", "VEN"),
             ("AA", "USA"), ("AB", "USA"), ("AC", "USA"), ("AD", "USA"),
             ("AE", "USA"), ("AF", "USA"), ("AG", "USA"), ("AH", "USA"),
             ("AI", "USA"), ("AJ", "USA"), ("AK", "USA"), ("AL", "USA"),
