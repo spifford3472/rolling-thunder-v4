@@ -77,3 +77,24 @@ def test_preparation_and_restore_failures_map_failed(
         qso_state=FT8QsoState.IDLE,
         start_state=start_state,
     ) is FT8OperatorStatus.FAILED
+
+
+def test_ft8_banner_measured_width_narrow_long_callsigns() -> None:
+    """One-line left/right status never overlaps even on a tight viewport."""
+    from rolling_thunder.live_map_ui import fit_ft8_banner_text
+
+    measure = lambda value: len(value) * 15
+    own = "FT8 • CALLING LONGPORTABLECALL/P TRY 6/6"
+    remote = "LONGPORTABLECALL/P → VERYLONGPORTABLECALL/M R-REPORT"
+    for width in (900, 1100, 1400):
+        left_x, right_x, gap = 28, width - 28, 28
+        own_available = int((right_x - left_x) * 0.58)
+        displayed_own = fit_ft8_banner_text(own, measure, own_available)
+        displayed_remote = fit_ft8_banner_text(
+            remote, measure, right_x - left_x - measure(displayed_own) - gap,
+        )
+        assert measure(displayed_own) <= own_available
+        assert measure(displayed_own) + gap + measure(displayed_remote) <= right_x - left_x
+        assert displayed_own
+    assert fit_ft8_banner_text(remote, measure, 0) == ""
+    assert fit_ft8_banner_text(remote, measure, 2) == ""

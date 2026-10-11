@@ -93,6 +93,7 @@ class FT8ReceiveState:
     last_diagnostic_error: str | None = None
     incoming_call: FT8IncomingCall | None = None
     target_activity: TargetActivity | None = None
+    decoding: bool = False
 
 
 class BoundedFT8PeriodRecorder:
@@ -241,7 +242,7 @@ class FT8ReceiveService:
         self._capture_thread = None
         self._decode_thread = None
         self._drain_queue()
-        self._set_state(status=FT8ReceiveStatus.STOPPED)
+        self._set_state(status=FT8ReceiveStatus.STOPPED, decoding=False)
         if self._diagnostic_session is not None:
             session_state = self._diagnostic_session.latest_state
             with self._state_lock:
@@ -268,7 +269,7 @@ class FT8ReceiveService:
                 if self._stop_event.is_set():
                     break
                 detail = str(exc)
-                self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=detail)
+                self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=detail, decoding=False)
                 with self._state_lock:
                     self._state = replace(
                         self._state,
@@ -290,6 +291,8 @@ class FT8ReceiveService:
                 period = self._periods.get(timeout=0.2)
             except queue.Empty:
                 continue
+            with self._state_lock:
+                self._state = replace(self._state, decoding=True)
             try:
                 result = self._decode_period(period)
                 decodes = result.decodes
@@ -348,6 +351,7 @@ class FT8ReceiveService:
                     diagnostic_session=session_state,
                     incoming_call=incoming_call,
                     target_activity=self._target_activity_tracker.snapshot(period.period),
+                    decoding=False,
                 )
             self._write_diagnostic_snapshot()
 
@@ -465,6 +469,7 @@ class FT8ReceiveService:
         *,
         status: FT8ReceiveStatus,
         last_error: str | None | object = ...,
+        decoding: bool = False,
     ) -> None:
         with self._state_lock:
             state = self._state
@@ -472,6 +477,7 @@ class FT8ReceiveService:
             self._state = replace(
                 state,
                 status=status,
+                decoding=decoding,
                 last_error=error if isinstance(error, str) or error is None else None,
             )
 

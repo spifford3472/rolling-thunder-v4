@@ -170,3 +170,7 @@ this change is still required.
 ### Selected-station activity in map status strip (CP3.1 Step 2)
 
 While viewing FT8, the existing cyan-outlined map status strip displays the local QSO phase in white, including the selected or active callsign and per-phase attempt count when available. A green second line reflects only fresh decoder-attributed transmissions **from** that target: CQ, third-party directed exchange, report, or sign-off. Calls to the target from other stations do not prove the target is replying. The green line disappears when activity becomes stale or unknown; observed 73 is not proof of a completed QSO. The strip has no new controls and does not change retries, power, or transmit authorization.
+
+### FT8 activity indicator and map banner (CP3.1 Step 2A)
+
+The left FT8 header reports **RX RUNNING** while capturing, **DECODING** while the decoder is working, and **TX RUNNING** only during active FT8 executor PTT. Transmitting takes precedence over decoding. Stopped/degraded receiver states remain visible. The cyan map status banner now shows own-state white text to the left and fresh remote-station evidence in green to the right, on a single line. IDLE stays centered. Width budgeting keeps both messages separate without changing the banner dimensions.
