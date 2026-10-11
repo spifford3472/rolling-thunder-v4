@@ -20,6 +20,22 @@ from rolling_thunder.ft8.attempt_ledger import FT8AttemptEvent
 FORGE_ATTEMPT_SCHEMA_VERSION = 1
 MODEL_INPUT_SCHEMA_VERSION = 1
 _MAX_BATCH = 100
+_DOCUMENTED_SYNTHETIC_ATTEMPTS = (
+    (
+        UUID("9ad2f0c2-ed0e-4ba7-8b03-732d8aa8c339"),
+        "synthetic_test",
+        "non-transmitted Forge FT8-P1 API acceptance record",
+        "docs/engineering/FT8_P1_FORGE_STAGE_CUTOVER.md",
+        "2026-10-10",
+    ),
+    (
+        UUID("1d99bba6-0f38-4069-a706-77f9a90d4a8c"),
+        "synthetic_test",
+        "synthetic authenticated ingestion acceptance record; not real RF",
+        "docs/engineering/voacap-ft8-phase-c.md",
+        "2026-10-11",
+    ),
+)
 
 
 class AttemptInboxConflict(RuntimeError):
@@ -50,6 +66,14 @@ class VoacapRelation(StrEnum):
     PRE_CHOICE = "pre_choice"
     POST_ATTEMPT = "post_attempt"
     RETROSPECTIVE = "retrospective"
+
+
+class AttemptProvenance(StrEnum):
+    """Independent analytics provenance; absence never implies field evidence."""
+
+    UNKNOWN = "unknown"
+    FIELD_OBSERVED = "field_observed"
+    SYNTHETIC_TEST = "synthetic_test"
 
 
 class VoacapModelInput(DomainModel):
@@ -358,6 +382,39 @@ class VoacapAttemptHistoryRepository:
         self._path = path
         self._initialize()
 
+    def provenance(self, attempt_uuid: UUID) -> dict[str, Any]:
+        """Return conservative provenance without modifying the source event."""
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT provenance,reason,evidence_reference,evidence_date
+                FROM ft8_attempt_provenance_v1 WHERE attempt_uuid=?""",
+                (str(attempt_uuid),),
+            ).fetchone()
+        if row is None:
+            return {
+                "classification": AttemptProvenance.UNKNOWN.value,
+                "reason": "no audited provenance classification",
+                "evidence_reference": None,
+                "evidence_date": None,
+                "voacap_processing_eligible": True,
+                "training_eligible": False,
+            }
+        classification = AttemptProvenance(row[0])
+        return {
+            "classification": classification.value,
+            "reason": row[1],
+            "evidence_reference": row[2],
+            "evidence_date": row[3],
+            "voacap_processing_eligible": (
+                classification is not AttemptProvenance.SYNTHETIC_TEST
+            ),
+            "training_eligible": classification is AttemptProvenance.FIELD_OBSERVED,
+        }
+
+    def processing_exclusion(self, attempt_uuid: UUID) -> dict[str, Any] | None:
+        provenance = self.provenance(attempt_uuid)
+        return None if provenance["voacap_processing_eligible"] else provenance
+
     def record_input(self, model_input: VoacapModelInput) -> str:
         input_hash = model_input.input_hash
         payload = _canonical(model_input.model_dump(mode="json"))
@@ -440,7 +497,8 @@ class VoacapAttemptHistoryRepository:
                     relation.value,
                     _time(model_input.choice_at_utc),
                     int(
-                        relation is VoacapRelation.PRE_CHOICE
+                        self.provenance(model_input.attempt_uuid)["training_eligible"]
+                        and relation is VoacapRelation.PRE_CHOICE
                         and _utc(available_at_utc) <= model_input.choice_at_utc
                     ),
                 ),
@@ -459,6 +517,7 @@ class VoacapAttemptHistoryRepository:
         return row is not None
 
     def diagnostics(self, attempt_uuid: UUID) -> dict[str, Any]:
+        provenance = self.provenance(attempt_uuid)
         with self._connect() as db:
             rows = db.execute(
                 """SELECT l.direction,l.relation,l.as_of_cutoff_utc,l.training_eligible,
@@ -490,6 +549,7 @@ class VoacapAttemptHistoryRepository:
         return {
             "schema_version": "1",
             "attempt_uuid": str(attempt_uuid),
+            "provenance": provenance,
             "semantic_notes": {
                 "reliability_fraction": "modeled-day circuit reliability, not QSO odds",
                 "snr_db_hz": "VOACAP dB-Hz; not FT8 decoder dB",
@@ -526,8 +586,39 @@ class VoacapAttemptHistoryRepository:
                 relation TEXT NOT NULL,as_of_cutoff_utc TEXT NOT NULL,
                 training_eligible INTEGER NOT NULL CHECK(training_eligible IN(0,1)),
                 PRIMARY KEY(attempt_uuid,direction,input_hash,prediction_uuid));
+                CREATE TABLE IF NOT EXISTS ft8_attempt_provenance_v1(
+                attempt_uuid TEXT PRIMARY KEY,
+                provenance TEXT NOT NULL CHECK(provenance IN
+                ('field_observed','synthetic_test')),
+                reason TEXT NOT NULL,evidence_reference TEXT NOT NULL,
+                evidence_date TEXT NOT NULL);
                 """
             )
+            for attempt_uuid, provenance, reason, evidence, evidence_date in (
+                _DOCUMENTED_SYNTHETIC_ATTEMPTS
+            ):
+                db.execute(
+                    """INSERT OR IGNORE INTO ft8_attempt_provenance_v1
+                    (attempt_uuid,provenance,reason,evidence_reference,evidence_date)
+                    VALUES (?,?,?,?,?)""",
+                    (
+                        str(attempt_uuid),
+                        provenance,
+                        reason,
+                        evidence,
+                        evidence_date,
+                    ),
+                )
+                stored = db.execute(
+                    """SELECT provenance,reason,evidence_reference,evidence_date
+                    FROM ft8_attempt_provenance_v1 WHERE attempt_uuid=?""",
+                    (str(attempt_uuid),),
+                ).fetchone()
+                expected = (provenance, reason, evidence, evidence_date)
+                if stored != expected:
+                    raise RuntimeError(
+                        f"documented attempt provenance conflict: {attempt_uuid}"
+                    )
             version = db.execute(
                 "SELECT schema_version FROM voacap_attempt_schema_metadata "
                 "WHERE singleton_id=1"
@@ -575,6 +666,10 @@ class FT8AttemptCorrelationWorker:
         for lease in leases:
             results_by_request: dict[str, VoacapProviderResult] = {}
             try:
+                if self._history.processing_exclusion(lease.event.attempt_uuid) is not None:
+                    self._inbox.finish(lease, completed_at_utc=self._now())
+                    completed += 1
+                    continue
                 for model_input in model_inputs_for_attempt(lease.event):
                     if self._history.has_terminal_run(model_input.input_hash):
                         continue

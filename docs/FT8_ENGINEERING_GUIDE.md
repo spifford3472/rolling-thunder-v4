@@ -156,6 +156,12 @@ reliability, dB-Hz, missingness, direction and retrospective availability withou
 claiming QSO odds or pre-choice knowledge. See
 `engineering/voacap-ft8-phase-b.md`.
 
+Phase C1 keeps those immutable payload/replay semantics and adds an independent
+Forge UUID-keyed provenance boundary. Documented synthetic/test attempts do not
+reach VOACAP or training; absent provenance stays explicitly unknown and is not
+training evidence. No FT8 UI, logging or radio behavior changes. See
+`engineering/voacap-ft8-phase-c.md`.
+
 Optional completed-QSO propagation analytics use a separate source outbox only after
 both the successful `Contact` and matching successful performance attempt have been
 durably written. The terminal callback may perform that short local enqueue but no

@@ -362,6 +362,15 @@ a distinct full-input hash. Reverse direction with unknown remote power is skipp
 as missing rather than evaluated at zero. Runs are append-only and retrospective;
 existing completed-QSO and legacy VOACAP tables remain unchanged.
 
+Phase C1 places analytics provenance in an additive UUID-keyed table rather than the
+immutable attempt payload. The repository-documented non-transmitted synthetic
+acceptance UUID is excluded before attempt VOACAP processing and from future
+training. Unknown provenance remains visible, retains Phase B processing
+compatibility, and is training-ineligible. The raw inbox payload/hash, exact replay,
+legacy tables and disabled provider gates remain unchanged. Baseline activation
+gates and the field coverage report design are in
+`engineering/voacap-ft8-phase-c.md`; no baseline scheduler is implemented or active.
+
 Read-only verification on 2026-10-07 confirmed that the documented Forge endpoint
 `http://192.168.9.170:8787/version` responded as `voacap-service` version `0.3.0`.
 No summary/prediction request was made and no service state was changed.

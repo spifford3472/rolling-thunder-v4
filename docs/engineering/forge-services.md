@@ -153,6 +153,13 @@ It preserves direction, event-hour UTC, per-period verified configured power, gr
 precision, dB-Hz units, missing values and retrospective availability. It does not
 create contacts or affect the completed-QSO/Wavelog path.
 
+Phase C1 adds a separate UUID-keyed provenance table to that attempt history.
+Documented synthetic/test UUIDs finish their durable queue lifecycle without a
+VOACAP request or training link; diagnostics publish the evidence-backed exclusion.
+Unknown provenance remains explicit and training-ineligible. Raw payloads, hashes,
+replay, legacy completed-QSO correlation and all disabled activation gates are
+unchanged. See `engineering/voacap-ft8-phase-c.md`.
+
 Phase 1 uses its own no-login `rolling-thunder-propagation` identity, application
 root, configuration, StateDirectory, and SQLite database. The systemd unit has no
 listener and is not enabled by installation. Its production template remains

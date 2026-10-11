@@ -336,3 +336,14 @@ CP3.1 Step 4 Forge performance schema version 3 durably records
 zero extensions, and exact replay of legacy payloads is still idempotent.
 Additional target-busy attempts must remain distinguishable from reachability
 failures in any future model training or analytic aggregate.
+
+## FT8 attempt analytics provenance
+
+The immutable attempt payload, canonical SHA-256 and UUID replay decision are not
+provenance labels and must not be rewritten to classify test data. Forge owns a
+separate auditable UUID-keyed provenance record. A documented synthetic/test UUID is
+excluded before VOACAP provider processing and from training while its raw inbox row
+and replay behavior remain unchanged. An absent record means provenance is unknown,
+not field-observed; unknown rows may retain Phase B retrospective processing but are
+training-ineligible. Retrospective availability remains training-ineligible even for
+later audited field observations. See `voacap-ft8-phase-c.md`.
