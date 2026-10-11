@@ -322,3 +322,9 @@ authorization: source-attributed third-party replies may latch at most two
 additional unchanged-phase transmissions, never beyond eight. Extended
 transmit requests suppress automatic power step-up and carry separate
 `busy_extension_attempts` telemetry (backward-compatible default zero).
+
+CP3.1 Step 4 Forge performance schema version 3 durably records
+`busy_extension_attempts` (0–2). Historical schema-2 attempts migrate with
+zero extensions, and exact replay of legacy payloads is still idempotent.
+Additional target-busy attempts must remain distinguishable from reachability
+failures in any future model training or analytic aggregate.

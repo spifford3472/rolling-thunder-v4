@@ -78,7 +78,7 @@ def test_forge_schema_creation_preserves_existing_database_data(tmp_path: Path) 
             WHERE singleton_id = 1
             """
         ).fetchone()
-    assert version == (2,)
+    assert version == (3,)
 
 def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None:
     repository = ForgeFT8PerformanceRepository(tmp_path / "forge.db")
@@ -97,6 +97,7 @@ def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None
     assert row["tx_power_start_watts"] == 20
     assert row["tx_power_end_watts"] == 25
     assert row["tx_power_max_watts"] == 25
+    assert row["busy_extension_attempts"] == 0
     assert row["power_meter_raw"] == 1
     assert row["swr_meter_raw"] == 2
     assert row["alc_meter_raw"] == 3
@@ -126,6 +127,7 @@ def test_v1_schema_migrates_power_columns_without_losing_attempts(tmp_path: Path
         connection.execute(
             "ALTER TABLE ft8_performance_attempts DROP COLUMN tx_power_max_watts"
         )
+        connection.execute("ALTER TABLE ft8_performance_attempts DROP COLUMN busy_extension_attempts")
         connection.commit()
 
     migrated = ForgeFT8PerformanceRepository(database)
@@ -195,3 +197,25 @@ def test_service_returns_typed_utc_acknowledgement(tmp_path: Path) -> None:
 
     assert result.disposition is FT8PerformanceUploadDisposition.ACCEPTED
     assert result.received_at_utc == now
+
+
+def test_cp31_busy_extension_persists_and_v2_migration_preserves_history(tmp_path: Path) -> None:
+    from rolling_thunder.forge_ft8_performance import _previous_payload_sha256
+
+    database = tmp_path / "forge.db"
+    repository = ForgeFT8PerformanceRepository(database)
+    old_attempt = _attempt()
+    repository.persist(old_attempt)
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE forge_ft8_performance_schema SET schema_version = 2")
+        connection.execute("ALTER TABLE ft8_performance_attempts DROP COLUMN busy_extension_attempts")
+        connection.execute("UPDATE ft8_performance_attempts SET payload_sha256=? WHERE attempt_id=?",
+                           (_previous_payload_sha256(old_attempt), str(old_attempt.attempt_id)))
+        connection.commit()
+
+    repository = ForgeFT8PerformanceRepository(database)
+    assert repository.get_row(str(old_attempt.attempt_id))["busy_extension_attempts"] == 0
+    assert repository.persist(old_attempt) is FT8PerformanceUploadDisposition.ALREADY_EXISTS
+    new_attempt = old_attempt.model_copy(update={"attempt_id": UUID("00000000-0000-0000-0000-000000009999"), "busy_extension_attempts": 2})
+    assert repository.persist(new_attempt) is FT8PerformanceUploadDisposition.ACCEPTED
+    assert repository.get_row(str(new_attempt.attempt_id))["busy_extension_attempts"] == 2
