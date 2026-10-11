@@ -7,7 +7,7 @@ ConditionPathExists=/etc/rolling-thunder-forge-ft8-readiness/paths.env
 [Service]
 Type=oneshot
 DynamicUser=yes
-SupplementaryGroups=rolling-thunder-propagation-qso
+SupplementaryGroups=rolling-thunder-propagation-qso rolling-thunder-propagation
 EnvironmentFile=/etc/rolling-thunder-forge-ft8-readiness/paths.env
 ExecStart=/opt/rolling-thunder-forge-ft8-readiness/current/.venv/bin/rolling-thunder-forge-ft8-readiness --policy /etc/rolling-thunder-forge-ft8-readiness/policy.yaml --c4-db ${C4_DB_PATH} --inbox-db ${C3_INBOX_DB_PATH} --history-db ${C3_HISTORY_DB_PATH} --status-path /var/lib/rolling-thunder-forge-ft8-readiness/status.json
 StateDirectory=rolling-thunder-forge-ft8-readiness
