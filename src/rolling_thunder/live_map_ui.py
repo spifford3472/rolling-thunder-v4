@@ -50,6 +50,21 @@ _RADAR_PHOTO_CACHE_LIMIT = 128
 _POTA_MARKER_FILL = "#ffd400"
 _POTA_MARKER_OUTLINE = "#000000"
 _POTA_MARKER_TEXT = "#000000"
+def fit_ft8_banner_text(text: str, measure: Any, available: int) -> str:
+    """Bound presentation text by actual pixel width without a nonterminating trim."""
+    if available <= 0:
+        return ""
+    if measure(text) <= available:
+        return text
+    if measure("…") > available:
+        return ""
+    for length in range(len(text) - 1, -1, -1):
+        candidate = text[:length].rstrip() + "…"
+        if measure(candidate) <= available:
+            return candidate
+    return ""
+
+
 _INFO_FONT_SIZE = 40
 _INFO_BOX_RIGHT = 680
 _INFO_BOX_BOTTOM = 306
@@ -1064,36 +1079,37 @@ class LiveMapWidgets:
         )
 
         if ft8_status is not None:
+            from tkinter import font as tkfont
+
             banner_top = _INFO_BOX_BOTTOM + 14
             banner_bottom = banner_top + 70
             canvas.create_rectangle(
-                12,
-                banner_top,
-                width - 12,
-                banner_bottom,
-                fill=_STATUS_BACKGROUND,
-                outline=_HEALTHY,
-                width=4,
+                12, banner_top, width - 12, banner_bottom,
+                fill=_STATUS_BACKGROUND, outline=_HEALTHY, width=4,
                 tags="map-overlay",
             )
+            center_y = (banner_top + banner_bottom) / 2
+            main_font = tkfont.Font(family="DejaVu Sans", size=24, weight="bold")
+            remote_font = tkfont.Font(family="DejaVu Sans", size=23, weight="bold")
+            left_x, right_x = 28, width - 28
+            remote = ft8_remote_status or ""
+            # Reserve the readable own-state zone before allocating any remote width.
+            own = f"FT8  •  {ft8_status}"
+            min_gap = 28
+            max_own_width = max(160, int((right_x - left_x) * 0.58)) if remote else right_x - left_x
+            own = fit_ft8_banner_text(own, main_font.measure, max_own_width)
+            remaining = right_x - left_x - main_font.measure(own) - min_gap
+            remote = fit_ft8_banner_text(remote, remote_font.measure, remaining)
             canvas.create_text(
-                width / 2,
-                (banner_top + banner_bottom) / 2 - (12 if ft8_remote_status else 0),
-                text=f"FT8  •  {ft8_status[:42]}",
-                fill=_MARKER_OUTLINE,
-                font=("DejaVu Sans", 28 if not ft8_remote_status else 22, "bold"),
-                anchor="center",
+                width / 2 if not ft8_status or (ft8_status == "IDLE" and not remote) else left_x,
+                center_y, text=own, fill=_MARKER_OUTLINE,
+                font=main_font, anchor="center" if ft8_status == "IDLE" and not remote else "w",
                 tags="map-overlay",
             )
-            if ft8_remote_status:
+            if remote:
                 canvas.create_text(
-                    width / 2,
-                    (banner_top + banner_bottom) / 2 + 18,
-                    text=ft8_remote_status[:44],
-                    fill=_HEALTHY,
-                    font=("DejaVu Sans", 18, "bold"),
-                    anchor="center",
-                    tags="map-overlay",
+                    right_x, center_y, text=remote, fill=_READY,
+                    font=remote_font, anchor="e", tags="map-overlay",
                 )
 
         if radar is not None and radar.attribution is not None:

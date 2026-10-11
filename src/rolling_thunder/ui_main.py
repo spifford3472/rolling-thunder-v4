@@ -1695,7 +1695,23 @@ def run_dashboard(
                     if receive_state is None
                     else receive_state.status.value.upper()
                 )
-                context_title_text.set(f"FT8  •  RX {receive_status}")
+                transmitting = bool(
+                    getattr(runtime.ft8_hardware_transmit, "transmitting", False)
+                )
+                if transmitting:
+                    activity_text = "TX RUNNING"
+                    activity_color = "#ffae66"
+                elif receive_state is not None and receive_state.decoding:
+                    activity_text = "DECODING"
+                    activity_color = "#66ccff"
+                elif receive_status == "RUNNING":
+                    activity_text = "RX RUNNING"
+                    activity_color = _BRIGHT
+                else:
+                    activity_text = f"RX {receive_status}"
+                    activity_color = _BRIGHT
+                context_title_text.set(f"FT8  •  {activity_text}")
+                context_title_label.configure(fg=activity_color)
                 context_decode_text.set(
                     _context_decode_header_text(
                         selected_context.selected,

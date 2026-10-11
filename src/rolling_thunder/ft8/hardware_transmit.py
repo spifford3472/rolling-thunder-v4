@@ -248,12 +248,19 @@ class BoundedFT8HardwareTransmitExecutor:
         self._transmit_inhibited = transmit_inhibited
         self._lock = Lock()
         self._active = False
+        self._keyed = False
         self._closed = False
         self._meter_summaries: dict[UUID, FT8TransmitMeterSummary] = {}
         self._transmit_periods: dict[UUID, list[FT8TransmitPeriodTelemetry]] = {}
         # Per-QSO state is local to the existing authorized transmit executor.
         self._auto_power_last: dict[UUID, tuple[str, int]] = {}
         self._auto_power_suspended: set[UUID] = set()
+
+    @property
+    def transmitting(self) -> bool:
+        """Read-only indication of PTT asserted by this executor."""
+        with self._lock:
+            return self._keyed
 
     def execute_test(self, request: FT8HardwareTestRequest) -> None:
         self._execute(
@@ -415,10 +422,14 @@ class BoundedFT8HardwareTransmitExecutor:
                 self._intent_started(intent_id, qso_id, expected_radio_frequency_hz, verified_power)
             self._ptt.key()
             keyed = True
+            with self._lock:
+                self._keyed = True
             emission_started = datetime.now(UTC)
             def watchdog_release() -> None:
                 try:
                     self._ptt.release()
+                    with self._lock:
+                        self._keyed = False
                 except Exception:
                     if self._ptt_uncertain is not None:
                         self._ptt_uncertain()
@@ -442,6 +453,8 @@ class BoundedFT8HardwareTransmitExecutor:
                 # succeeds. If CAT release raises, allow watchdog retry.
                 try:
                     self._ptt.release()
+                    with self._lock:
+                        self._keyed = False
                 except Exception:
                     if self._ptt_uncertain is not None:
                         self._ptt_uncertain()
@@ -473,6 +486,7 @@ class BoundedFT8HardwareTransmitExecutor:
                 if meter_thread is not None:
                     meter_thread.join(timeout=1.0)
                 with self._lock:
+                    self._keyed = False
                     self._active = False
 
     def _start_meter_sampling(self, qso_id: UUID) -> tuple[Event, Thread] | tuple[None, None]:

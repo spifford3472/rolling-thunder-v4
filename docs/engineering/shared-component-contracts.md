@@ -314,3 +314,5 @@ The receive service owns the optional selected-target activity observation. It u
 ## Live map FT8 banner input
 
 `LiveMapWidgets.update` accepts optional `ft8_status` (own operator phase, white) and `ft8_remote_status` (fresh, source-attributed selected-target decode evidence, green). Other map consumers omit both and retain the same layout. Both are presentation-only strings; remote evidence does not authorize RF, alter retries, or establish QSO completion. The FT8 caller clears its observation selection when leaving the FT8 context.
+
+Step 2A renders these two strings on one baseline, with measured font widths and own-state priority, without changing map dimensions. FT8 decode-in-progress is a read-only published receive-state flag; TX-running is a read-only property of the bounded hardware executor keyed-PTT interval. No observer, radio-control, or transmission authority is added to presentation.

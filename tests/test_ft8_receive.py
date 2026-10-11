@@ -431,3 +431,23 @@ def test_clock_diagnostic_failure_does_not_interrupt_receive_capture() -> None:
     assert state.last_diagnostic_error == (
         "clock readiness diagnostic failed: synthetic chrony failure"
     )
+
+
+def test_decode_in_progress_is_published_and_cleared() -> None:
+    """One blocked decode exposes truthful progress without a second observer."""
+    decoder = SlowDecoder()
+    service = FT8ReceiveService(
+        FakeAudioInput([_period(900)]), decoder, FT8CQActivityManager(),
+        reconnect_delay_s=0.01,
+    )
+    service.start()
+    try:
+        _wait_until(lambda: decoder.calls > 0)
+        assert service.latest_state.decoding
+        decoder.release.set()
+        _wait_until(lambda: not service.latest_state.decoding)
+        assert service.latest_state.decoder_runs >= 1
+    finally:
+        decoder.release.set()
+        service.stop()
+    assert not service.latest_state.decoding
