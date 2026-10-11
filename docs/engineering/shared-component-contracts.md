@@ -310,3 +310,7 @@ the receiving Forge package before the expanded Pi sender. See
 ## FT8 selected-target activity (CP3.1 Step 1)
 
 The receive service owns the optional selected-target activity observation. It uses immutable normalized decoded traffic, and never changes selection eligibility, QSO authorization, retry policy, or CAT power. Activity involving another callsign is reported only when the selected station is **the decoded source**, and excludes exchanges addressed to the configured local station. No decoded traffic is never proof the target is idle or available. Freshness expires after four 15-second periods; selecting a different station or changing the receive band clears the observation. UI wiring, green/white status-strip presentation, and busy-station retry extensions are separate future steps.
+
+## Live map FT8 banner input
+
+`LiveMapWidgets.update` accepts optional `ft8_status` (own operator phase, white) and `ft8_remote_status` (fresh, source-attributed selected-target decode evidence, green). Other map consumers omit both and retain the same layout. Both are presentation-only strings; remote evidence does not authorize RF, alter retries, or establish QSO completion. The FT8 caller clears its observation selection when leaving the FT8 context.

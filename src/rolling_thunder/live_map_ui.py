@@ -355,6 +355,7 @@ class LiveMapWidgets:
         pota_snapshot: PotaMapMarkerSnapshot | None = None,
         weather: WeatherPanelPresentation | None = None,
         ft8_status: str | None = None,
+        ft8_remote_status: str | None = None,
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
@@ -400,6 +401,7 @@ class LiveMapWidgets:
             radar_snapshot,
             weather,
             ft8_status=ft8_status,
+            ft8_remote_status=ft8_remote_status,
         )
 
     def _draw_base(
@@ -995,6 +997,7 @@ class LiveMapWidgets:
         weather: WeatherPanelPresentation | None,
         *,
         ft8_status: str | None = None,
+        ft8_remote_status: str | None = None,
     ) -> None:
         info = self._info_controller.update(presentation, snapshot, weather)
         lines = live_map_info_lines(info)
@@ -1075,13 +1078,23 @@ class LiveMapWidgets:
             )
             canvas.create_text(
                 width / 2,
-                (banner_top + banner_bottom) / 2,
-                text=f"FT8  •  {ft8_status}",
+                (banner_top + banner_bottom) / 2 - (12 if ft8_remote_status else 0),
+                text=f"FT8  •  {ft8_status[:42]}",
                 fill=_MARKER_OUTLINE,
-                font=("DejaVu Sans", 28, "bold"),
+                font=("DejaVu Sans", 28 if not ft8_remote_status else 22, "bold"),
                 anchor="center",
                 tags="map-overlay",
             )
+            if ft8_remote_status:
+                canvas.create_text(
+                    width / 2,
+                    (banner_top + banner_bottom) / 2 + 18,
+                    text=ft8_remote_status[:44],
+                    fill=_HEALTHY,
+                    font=("DejaVu Sans", 18, "bold"),
+                    anchor="center",
+                    tags="map-overlay",
+                )
 
         if radar is not None and radar.attribution is not None:
             observed = (
