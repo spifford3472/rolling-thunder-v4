@@ -96,6 +96,7 @@ class HardwareDigitalTransmitSession(DigitalTransmitSession):
             maximum_key_down_s=maximum_key_down_s,
             expected_radio_frequency_hz=context.radio_frequency_hz,
             expected_radio_mode=radio_mode,
+            busy_extension=request.busy_extension,
         )
         try:
             self._executor.execute_qso(hardware_request)

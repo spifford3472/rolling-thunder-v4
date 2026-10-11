@@ -15,6 +15,7 @@ from rolling_thunder.ft8.domain import (
     FT8QsoState,
 )
 from rolling_thunder.ft8.qso import FT8QsoController
+from rolling_thunder.ft8.target_activity import TargetActivity
 from rolling_thunder.ft8.timing import FT8Clock
 from rolling_thunder.ft8.transmit import DigitalTransmitSession
 
@@ -31,6 +32,7 @@ class FT8QsoResult:
     ended_utc: datetime
     terminal_reason: str | None = None
     transmit_attempt_count: int = 0
+    busy_extension_attempts: int = 0
 
 
 class FT8QsoCoordinator:
@@ -43,6 +45,7 @@ class FT8QsoCoordinator:
         *,
         attempts_per_state: int = 6,
         terminal_result_handler: Callable[[FT8QsoResult], object] | None = None,
+        activity_provider: Callable[[], TargetActivity | None] | None = None,
     ) -> None:
         self._transmit_session = transmit_session
         self._controller = FT8QsoController(
@@ -63,6 +66,7 @@ class FT8QsoCoordinator:
         self._received_report_db: int | None = None
         self._result: FT8QsoResult | None = None
         self._terminal_result_handler = terminal_result_handler
+        self._activity_provider = activity_provider
 
     @property
     def state(self) -> FT8QsoState:
@@ -151,6 +155,8 @@ class FT8QsoCoordinator:
                     return
             self._last_observed_period = period
             try:
+                if self._activity_provider is not None:
+                    self._controller.observe_target_activity(self._activity_provider(), period)
                 self._controller.on_period(period)
             except (OSError, RuntimeError, ValueError) as exc:
                 self._fail_locked(str(exc))
@@ -320,6 +326,7 @@ class FT8QsoCoordinator:
             ended_utc=self._clock.now_utc(),
             terminal_reason=self._terminal_reason,
             transmit_attempt_count=self._controller.total_transmit_attempts,
+            busy_extension_attempts=self._controller.busy_extension_attempts,
         )
         self._result = result
         if self._terminal_result_handler is not None:

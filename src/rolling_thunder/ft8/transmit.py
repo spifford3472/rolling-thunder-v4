@@ -24,6 +24,7 @@ class FT8TransmitRequest:
     kind: FT8TransmitKind
     period: FT8Period
     attempt: int
+    busy_extension: bool = False
 
     def __post_init__(self) -> None:
         if self.attempt < 1:

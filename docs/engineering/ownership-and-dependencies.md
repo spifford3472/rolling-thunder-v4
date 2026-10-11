@@ -312,3 +312,8 @@ classification. Presentation consumes immutable status through
 `friend_presentation.py`; it never changes canonical identities or commands.
 Consumers are POTA/DX, FT8 CQ, shared pending/Browse callsign, contact overlay,
 DMR audio/history and LOG. See `../KNOWN_CALLSIGNS.md`.
+
+CP3.1 retry extensions consume the published FT8 receive target-activity state
+inside the coordinator; no additional receive observer or UI policy is created.
+The bounded hardware transmit executor suppresses adaptive power increases on
+explicit extension periods, independently of the display banner.

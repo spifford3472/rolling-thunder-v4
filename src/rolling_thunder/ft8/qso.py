@@ -7,6 +7,7 @@ from rolling_thunder.ft8.domain import (
     FT8QsoContext,
     FT8QsoState,
 )
+from rolling_thunder.ft8.target_activity import TargetActivity, TargetActivityKind
 from rolling_thunder.ft8.transmit import (
     DigitalTransmitSession,
     FT8TransmitKind,
@@ -37,6 +38,8 @@ class FT8QsoController:
         self._state = FT8QsoState.IDLE
         self._context: FT8QsoContext | None = None
         self._attempt_count = 0
+        self._busy_extension_granted = False
+        self._busy_extension_attempts = 0
         self._total_transmit_attempts = 0
         self._last_tx_period_index: int | None = None
         self._last_consumed_decode_period_index: int | None = None
@@ -64,12 +67,47 @@ class FT8QsoController:
         """Return the immutable retry budget for the current controller."""
         return self._attempts_per_state
 
+    @property
+    def busy_extension_attempts(self) -> int:
+        """Number of seventh/eighth transmissions, never reachability failures."""
+        return self._busy_extension_attempts
+
+    def observe_target_activity(self, activity: TargetActivity | None, period: FT8Period) -> None:
+        """Latch an eligible extension for the current phase only.
+
+        Evidence is rechecked by the caller against the current period; a
+        previously granted allowance stays fixed until phase transition.
+        """
+        context = self._context
+        if context is None or self._state in _TERMINAL_STATES:
+            return
+        if activity is None or activity.callsign != context.remote_callsign:
+            return
+        if not activity.observed_source or activity.kind not in {
+            TargetActivityKind.OTHER_QSO, TargetActivityKind.SIGNOFF,
+        }:
+            return
+        if activity.other_callsign is None or activity.other_callsign in {
+            context.local_callsign, context.remote_callsign,
+        }:
+            return
+        if activity.last_period is None or not 0 <= period.index - activity.last_period.index < 4:
+            return
+        if activity.message_kind not in {
+            FT8MessageKind.ADDRESSED_GRID, FT8MessageKind.REPORT,
+            FT8MessageKind.R_REPORT, FT8MessageKind.ACK_73,
+        }:
+            return
+        self._busy_extension_granted = True
+
     def authorize(self, context: FT8QsoContext) -> None:
         """Authorize exactly one remote station from the idle state."""
         if self._state is not FT8QsoState.IDLE:
             raise RuntimeError("a QSO can only be authorized from IDLE")
         self._context = context
         self._attempt_count = 0
+        self._busy_extension_granted = False
+        self._busy_extension_attempts = 0
         self._total_transmit_attempts = 0
         self._last_tx_period_index = None
         self._last_consumed_decode_period_index = context.authorized_period.index
@@ -106,12 +144,16 @@ class FT8QsoController:
             return
 
         kind, tx_state, wait_state = self._transmit_plan()
-        if self._attempt_count >= self._attempts_per_state:
+        limit = min(8, self._attempts_per_state + 2) if self._busy_extension_granted and self._attempts_per_state == 6 else self._attempts_per_state
+        if self._attempt_count >= limit:
             self._enter_terminal(FT8QsoState.RETRY_EXHAUSTED)
             return
 
         self._attempt_count += 1
         self._total_transmit_attempts += 1
+        busy_extension = self._attempt_count > self._attempts_per_state
+        if busy_extension:
+            self._busy_extension_attempts += 1
         self._state = tx_state
         self._transmit_session.request(
             FT8TransmitRequest(
@@ -119,6 +161,7 @@ class FT8QsoController:
                 kind=kind,
                 period=period,
                 attempt=self._attempt_count,
+                busy_extension=busy_extension,
             )
         )
         self._last_tx_period_index = period.index
@@ -160,6 +203,7 @@ class FT8QsoController:
 
         self._last_consumed_decode_period_index = decode.period.index
         self._attempt_count = 0
+        self._busy_extension_granted = False
         if self._state is FT8QsoState.WAIT_REPORT:
             self._state = FT8QsoState.TX_R_REPORT
         elif self._state in {FT8QsoState.WAIT_R_REPORT, FT8QsoState.WAIT_73}:
@@ -191,6 +235,8 @@ class FT8QsoController:
         self._state = FT8QsoState.IDLE
         self._context = None
         self._attempt_count = 0
+        self._busy_extension_granted = False
+        self._busy_extension_attempts = 0
         self._total_transmit_attempts = 0
         self._last_tx_period_index = None
         self._last_consumed_decode_period_index = None

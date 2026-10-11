@@ -225,6 +225,7 @@ class FT8PerformanceRecorder:
             audio_frequency_hz=context.target_audio_frequency_hz,
             pota_cq=context.pota_cq,
             attempt_count=result.transmit_attempt_count,
+            busy_extension_attempts=result.busy_extension_attempts,
             last_qso_state=result.status.value,
         )
         stored = self._repository.add_idempotent(attempt)

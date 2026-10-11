@@ -87,6 +87,7 @@ class FT8OperatorQsoService:
                 self._clock,
                 attempts_per_state=self._attempts_per_state,
                 terminal_result_handler=self._terminal_result_handler,
+                activity_provider=lambda: self._receive_service.latest_state.target_activity,
             )
             coordinator.authorize(context)
             coordinator.start_qso()

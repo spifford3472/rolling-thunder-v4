@@ -174,3 +174,33 @@ While viewing FT8, the existing cyan-outlined map status strip displays the loca
 ### FT8 activity indicator and map banner (CP3.1 Step 2A)
 
 The left FT8 header reports **RX RUNNING** while capturing, **DECODING** while the decoder is working, and **TX RUNNING** only during active FT8 executor PTT. Transmitting takes precedence over decoding. Stopped/degraded receiver states remain visible. The cyan map status banner now shows own-state white text to the left and fresh remote-station evidence in green to the right, on a single line. IDLE stays centered. Width budgeting keeps both messages separate without changing the banner dimensions.
+
+## CP3.1 Step 3 — busy-target retry extension (2026-10-11)
+
+The already-selected and explicitly authorized QSO normally has six attempts for
+each unchanged phase. The QSO coordinator reads the existing immutable receive
+`target_activity` snapshot once per observed period, **without** a second decode
+observer. Only source-attributed, fresh (age 0–3 FT8 periods) messages **from**
+the exact authorized target **to a third-party callsign** qualify: addressed
+grid, report, R-report, or 73. A CQ, third-party traffic **to** the target,
+unknown/stale/ambiguous attribution, or messages to KI5VNB never qualify.
+
+An eligible observation grants exactly two extra attempts (7 and 8 maximum)
+for the **current unchanged phase**, with a fixed, latched allowance. Once
+granted it is not revoked solely because the message ages out; a valid QSO
+phase transition clears the allowance, requiring new evidence for that phase.
+Selection changes, band change, browser cleanup, and termination leave no
+permission to transmit another QSO. An observed third-party 73 does not count
+as our QSO completion. No ninth attempt is possible.
+
+The extended request carries `busy_extension=True` through the existing
+transmit-session/hardware boundary; attempts 7 and 8 skip automatic CAT power
+step-up, while retaining the existing CAT readback, manual override and band
+power ceiling enforcement. Earlier attempts retain the pre-existing power
+policy. Terminal attempt performance records add optional-compatible
+`busy_extension_attempts` (default 0; max 2), separate from ordinary total
+transmit attempts and reachability evidence; consumers must not interpret those
+extensions as additional independent reachability failures. No logging,
+provider, Wavelog, RF configuration or UI layout changes are made.
+
+Acceptance remains simulation-only until explicitly authorized live validation.
