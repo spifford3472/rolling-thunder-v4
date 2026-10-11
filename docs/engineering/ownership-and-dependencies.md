@@ -149,6 +149,12 @@ its leased worker records append-only full-input-hash VOACAP inputs/runs/links a
 read-only diagnostics. This path has no contact, Wavelog, ranking, UI, radio, or
 transmit authority.
 
+Phase C1 adds Forge-owned analytics provenance beside, not inside, the immutable
+attempt payload. Documented synthetic/test UUIDs are auditable processing and
+training exclusions. Unknown provenance preserves Phase B processing compatibility
+but is not training evidence. No Pi producer, contact, Wavelog, ranking, UI or radio
+ownership changes.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder

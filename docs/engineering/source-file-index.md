@@ -271,7 +271,9 @@ originates from one screen.
 - `src/rolling_thunder/forge_dxsummit_provider.py` — Persistent DX Summit IRC provider lifecycle, cache, health, and reconnect behavior.
 - `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_ft8_attempt_api.py` — authenticated bounded attempt ingestion and read-only per-attempt diagnostics application.
-- `src/rolling_thunder/forge_ft8_attempt_correlation.py` — durable attempt inbox, leased retry/dead-letter worker and immutable full-input-hash VOACAP history.
+- `src/rolling_thunder/forge_ft8_attempt_correlation.py` — durable attempt inbox,
+  leased retry/dead-letter worker, immutable full-input-hash VOACAP history, and
+  UUID-keyed audited synthetic/test processing/training exclusions.
 - `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
 - `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
 - `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.

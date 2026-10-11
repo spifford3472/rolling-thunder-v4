@@ -4,6 +4,10 @@ Status: implemented in source, disabled for network/provider delivery by default
 No production migration, service activation, provider request, deployment, or RF
 test is part of this change.
 
+Phase C1 subsequently adds a separate UUID-keyed synthetic/test exclusion and
+conservative provenance diagnostics without changing this phase's raw event or
+replay contract. See `voacap-ft8-phase-c.md`.
+
 ## Ownership and data flow
 
 The Pi remains authoritative for FT8 observations. After the existing
