@@ -24,10 +24,10 @@ def test_armed_with_many_rows_still_not_eligible(tmp_path: Path) -> None:
     dbfile = tmp_path / "baseline.sqlite"
     with sqlite3.connect(dbfile) as db:
         db.execute("CREATE TABLE baseline_slot_v1(status TEXT, canonical_request_sha256 TEXT)")
-        db.executemany("INSERT INTO baseline_slot_v1 VALUES (?,?)", [("generated", "same")] * 20001)
+        db.executemany("INSERT INTO baseline_slot_v1 VALUES (?,?)", [("ready", "same")] * 20001)
     before = dbfile.read_bytes()
     result = evaluate_once(config, dbfile)
-    assert result["readiness"] == "INSUFFICIENT_EVIDENCE/COLLECTING"
+    assert result["readiness"] == "DEGRADED/SUSPENDED"
     assert result["c4_inventory"]["stored_slots"] == 20001
     assert result["c4_inventory"]["independent_requests"] == 1
     assert result["suggested_start_watts"] is None
@@ -99,3 +99,16 @@ def test_systemd_requires_reviewed_three_source_paths() -> None:
         assert "${" + variable + "}" in unit
         assert variable + "=/REVIEW_REQUIRED/" in example
     assert "IPAddressDeny=any" in unit
+
+
+def test_armed_missing_source_data_reports_degraded(tmp_path: Path) -> None:
+    policy = tmp_path / "policy.yaml"
+    policy.write_text("schema_version: 1\nmode: armed_when_ready\npinned_model_version: m\n")
+    status = evaluate_once(
+        policy, tmp_path / "missing-c4.sqlite", inbox_path=tmp_path / "missing-inbox.sqlite",
+        history_path=tmp_path / "missing-history.sqlite",
+    )
+    assert status["readiness"] == "DEGRADED/SUSPENDED"
+    assert "missing_unreadable_or_invalid_evidence_sources" in status["reason_codes"]
+    assert status["suggested_start_watts"] is None
+    assert status["apply_allowed"] is False

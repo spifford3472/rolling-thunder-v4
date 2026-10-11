@@ -391,3 +391,5 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - [FT8 scientific power-experiment protocol](voacap-ft8-power-experiments.md) — pre-registered control/lower-power trial, future qualification certificate, and strict RF/UI safeguards (disabled).
 
 - [C5.2 Forge prospective source-audit checkpoint](voacap-ft8-phase-c52.md) — read-only v2 FT8 evidence inventory and as-of exclusion checks; not an auto-qualifying service.
+
+- [C5.3 Forge readiness preflight / commissioning gates](voacap-ft8-phase-c53.md) — protected source paths, read-only schema checks and service rollout conditions.

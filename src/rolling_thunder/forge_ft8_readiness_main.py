@@ -37,11 +37,11 @@ def inspect_c4(path: Path) -> dict[str, object]:
             if "baseline_slot_v1" not in existing:
                 return {"available": False, "reason": "c4_schema_missing", "stored_slots": 0, "independent_requests": 0}
             slots = db.execute(
-                "SELECT COUNT(*) FROM baseline_slot_v1 WHERE status='generated'"
+                "SELECT COUNT(*) FROM baseline_slot_v1 WHERE status='ready'"
             ).fetchone()[0]
             requests = db.execute(
                 """SELECT COUNT(DISTINCT canonical_request_sha256)
-                   FROM baseline_slot_v1 WHERE status='generated'
+                   FROM baseline_slot_v1 WHERE status='ready'
                    AND canonical_request_sha256 IS NOT NULL"""
             ).fetchone()[0]
             return {"available": True, "reason": "inventory_only_not_qualified_prospective_evidence",
@@ -85,6 +85,18 @@ def evaluate_once(
         status["regional_c4_asof_inventory"] = audit_c4_choice_pairs(
             inbox_path, history_path, c4_path,
         )
+        if status["policy_mode"] != "off":
+            sources = (
+                status["c4_inventory"],
+                status["prospective_inventory"],
+                status["regional_c4_asof_inventory"],
+            )
+            if any(not isinstance(source, dict) or not source.get("available") for source in sources):
+                status["readiness"] = "DEGRADED/SUSPENDED"
+                status["reason_codes"] = ["missing_unreadable_or_invalid_evidence_sources"]
+    elif status.get("policy_mode") != "off":
+        status["readiness"] = "DEGRADED/SUSPENDED"
+        status["reason_codes"] = ["prospective_evidence_paths_not_configured"]
     return status
 
 

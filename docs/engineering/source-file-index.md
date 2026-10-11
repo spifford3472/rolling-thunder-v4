@@ -448,3 +448,5 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/forge_ft8_prospective_inventory.py` — read-only source/provenance/as-of audit of C3 v2 FT8 events; no modeled success estimates or wattage control.
 
 - `src/rolling_thunder/forge_ft8_c4_asof.py` — read-only C4 regional forecast to v2 FT8 operator-choice as-of comparison; validates plan and request/response identities.
+
+- `src/rolling_thunder/forge_ft8_readiness_preflight.py` — C5.3 no-egress read-only source integrity/required-table checker, fail closed.

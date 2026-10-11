@@ -491,3 +491,5 @@ still required.
 - `tests/test_forge_ft8_prospective_inventory.py` — isolated v2 event, missing provenance, retrospective link, read-only rejection tests.
 
 - `tests/test_forge_ft8_c4_asof.py` — valid synthetic as-of regional join, after-choice rejection and absent-source fail-closed acceptance.
+
+- `tests/test_forge_ft8_readiness_preflight.py` — read-only source byte preservation, missing source and malformed schema rejection.
