@@ -206,3 +206,39 @@ def test_real_http_framing_completes_without_waiting_for_connection_close(
         server.shutdown()
         server.close()
         thread.join(timeout=3)
+
+
+def test_v2_frozen_selection_prospective_event_ingests_without_rewriting_v1(
+    tmp_path: Path,
+) -> None:
+    v1 = _event()
+    assert "choice_at_utc" not in v1.model_dump(mode="json")
+    v2 = v1.model_copy(
+        update={
+            "schema_version": 2,
+            "choice_at_utc": NOW - timedelta(minutes=1),
+        }
+    )
+    api = FT8AttemptApiApplication(
+        AttemptInboxRepository(tmp_path / "inbox.sqlite"),
+        VoacapAttemptHistoryRepository(tmp_path / "history.sqlite"),
+        bearer_token=TOKEN,
+        ingestion_enabled=True,
+        clock=lambda: NOW,
+    )
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": "application/json",
+        "Idempotency-Key": str(ATTEMPT),
+    }
+    first = api.handle(
+        "POST", "/api/v1/ft8-attempts", headers=headers, body=v2.model_dump_json().encode()
+    )
+    assert first.status_code == 202
+    retained = loads(
+        api.handle(
+            "GET", f"/api/v1/ft8-attempts/{ATTEMPT}", headers=headers
+        ).body
+    )["attempt"]["event"]
+    assert retained["schema_version"] == 2
+    assert retained["choice_at_utc"] == v2.choice_at_utc.isoformat().replace("+00:00", "Z")

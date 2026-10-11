@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
-from pydantic import Field, field_serializer, field_validator, model_validator
+from pydantic import Field, field_serializer, field_validator, model_serializer, model_validator
 
 from rolling_thunder.domain import DomainModel
 from rolling_thunder.value_types import Callsign, MaidenheadGrid
@@ -79,6 +80,7 @@ class FT8PerformanceAttempt(DomainModel):
     started_at_utc: datetime
     ended_at_utc: datetime
     utc_date: date
+    choice_at_utc: datetime | None = None
 
     band: str | None = Field(default=None, max_length=16)
     dial_frequency_hz: int | None = Field(default=None, gt=0, le=300_000_000_000)
@@ -112,9 +114,11 @@ class FT8PerformanceAttempt(DomainModel):
     voacap_path: str | None = Field(default=None, max_length=64)
     analysis_schema_version: int = Field(default=1, ge=1)
 
-    @field_validator("started_at_utc", "ended_at_utc")
+    @field_validator("started_at_utc", "ended_at_utc", "choice_at_utc")
     @classmethod
-    def normalize_time(cls, value: datetime) -> datetime:
+    def normalize_time(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("must be timezone-aware")
         return value.astimezone(UTC)
@@ -129,6 +133,8 @@ class FT8PerformanceAttempt(DomainModel):
 
     @model_validator(mode="after")
     def validate_consistency(self) -> FT8PerformanceAttempt:
+        if self.choice_at_utc is not None and self.choice_at_utc > self.started_at_utc:
+            raise ValueError("choice_at_utc cannot follow attempt start")
         if self.ended_at_utc < self.started_at_utc:
             raise ValueError("ended_at_utc cannot precede started_at_utc")
         if self.utc_date != self.started_at_utc.date():
@@ -141,9 +147,16 @@ class FT8PerformanceAttempt(DomainModel):
             raise ValueError("local latitude and longitude must be present together")
         return self
 
-    @field_serializer("started_at_utc", "ended_at_utc")
-    def serialize_time(self, value: datetime) -> str:
-        return value.isoformat().replace("+00:00", "Z")
+    @model_serializer(mode="wrap")
+    def legacy_wire_compatibility(self, handler: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = handler(self)
+        if self.choice_at_utc is None:
+            payload.pop("choice_at_utc", None)
+        return payload
+
+    @field_serializer("started_at_utc", "ended_at_utc", "choice_at_utc")
+    def serialize_time(self, value: datetime | None) -> str | None:
+        return None if value is None else value.isoformat().replace("+00:00", "Z")
 
     @field_serializer("utc_date")
     def serialize_date(self, value: date) -> str:

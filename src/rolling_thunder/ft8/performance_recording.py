@@ -146,6 +146,7 @@ class FT8PerformanceRecorder:
             terminal_state="preparation_failed",
             terminal_reason=reason,
             started_at_utc=seed.started_at_utc,
+            choice_at_utc=seed.started_at_utc,
             ended_at_utc=ended,
             utc_date=seed.started_at_utc.date(),
             band=seed.band,
@@ -182,6 +183,7 @@ class FT8PerformanceRecorder:
         swr_meter_raw: int | None = None,
         alc_meter_raw: int | None = None,
         tx_power_end_watts: int | None = None,
+        choice_at_utc: datetime | None = None,
     ) -> FT8PerformanceAttempt:
         """Persist terminal QSO telemetry with optional peak transmit-meter values."""
         outcome = {
@@ -207,6 +209,7 @@ class FT8PerformanceRecorder:
             terminal_state=result.status.value,
             terminal_reason=terminal_reason,
             started_at_utc=result.started_utc,
+            choice_at_utc=choice_at_utc,
             ended_at_utc=result.ended_utc,
             utc_date=result.started_utc.astimezone(UTC).date(),
             band=context.radio_band,

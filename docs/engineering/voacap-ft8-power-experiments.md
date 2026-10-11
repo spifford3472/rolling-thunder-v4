@@ -120,3 +120,57 @@ operational or statistical analysis producer. Its example minimum totals
 remain policy-dependent in the live gate: the service must also compare
 against the currently loaded policy and raised thresholds, never just these
 schema minimums. Certificates still cannot actuate RF under any circumstances.
+
+## Pre-registered offline two-arm noninferiority calculation
+
+`forge_ft8_power_statistics.py` now implements a conservative offline
+two-arm comparison for externally verified prospectively assigned real FT8
+attempt observations. Each observation requires frozen choice and forecast
+availability UTC, independently identified forecast families, QSO and
+callsign-group identities, immutable source/assignment digests, 20 W control or
+sub-20 W randomized assignment, and actual power readback. It refuses
+retrospective, synthetic, missing-power, misordered and unverified rows.
+Busy/fault/abort are censored explicitly instead of being labeled propagation
+failures. No-answer is a separate failure outcome under a registered bounded
+protocol, not a proxy for a received SNR report.
+
+The confidence test uses a Bonferroni-conservative combination of
+two-sided 97.5% per-arm Wilson intervals, giving at least approximately 95%
+simultaneous interval coverage for binomial trials under independent
+randomization. It considers the lower bound on (test exchange rate minus
+20 W exchange rate); a result below the pre-registered 5 percentage point
+illustrative margin fails. Neither the confidence level nor the margin is
+automatically an approved operating protocol: preregister a clinically/
+operationally acceptable margin and collect enough *independent* grouped
+samples for it. Correct for within-callsign/path/time correlation in the
+future full statistical approval. The current per-arm minimum 100 is only a
+developer fixture; production eligibility must also pass the separate full
+policy, holdout days/attempts, data-quality and per-segment tests. A model
+probability calibration and energy-optimality claim require additional
+science beyond this causal arm comparison.
+
+**Critical temporal dependency:** Real controlled lower-power trials must be
+collected under a separately authorized, visible, opt-in study before a
+scientifically honest claim that 15 W performs noninferiorly to 20 W is
+possible. Passive 20 W-only logs and C4 forecasts cannot establish this
+counterfactual, regardless of how many months elapse. The program must never
+auto-start experiments or apply reduced power solely because its baseline
+sample-count thresholds have been met.
+
+## FT8 immutable event v2 — prospective operator selection UTC
+
+The Pi's existing FT8 selection seed captures `selected_at_utc` before CAT
+radio preparation. Development now forwards that timestamp through the
+terminal performance record into a **new v2 FT8 analytics event**. Legacy
+v1 event serialization expressly omits the new field, preserving unchanged
+historical payload identity and avoiding reinterpretation of AA4NP.
+
+If the seed is unavailable or does not belong to the terminal QSO UUID,
+the event remains v1 with missing choice metadata and is ineligible for
+prospective C5 joins. Preparation failure carries the seed selection time,
+but remains an excluded/nontransmitted record for propagation learning.
+A v2 event is valid only if its frozen selection UTC is no later than
+QSO start; future Forge C5 pairing must use that time, not RX/first PTT or
+Forge receipt. This does not initiate power experiments or authorize RF.
+It is additive in the feature branch only, and requires Pi-to-Forge staged
+compatibility/deployment acceptance before live telemetry can accumulate.

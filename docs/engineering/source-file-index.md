@@ -439,3 +439,8 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/forge_ft8_power_experiment.py` — disabled, non-actuating Forge experiment allocation contract; no CAT/PTT/UI integration.
 
 - `src/rolling_thunder/forge_ft8_qualification.py` — immutable non-actuating C5 scientific qualification certificate, hash and human-readable justification.
+
+- `src/rolling_thunder/forge_ft8_power_statistics.py` — offline, non-actuating chronological grouped randomized 20 W-vs-lower-power holdout noninferiority evaluation.
+
+- `src/rolling_thunder/ft8/attempt_ledger.py` — now supports immutable v1/v2 FT8 attempt event wire format; v2 includes frozen pre-preparation operator selection UTC.
+- `src/rolling_thunder/ft8/performance.py`, `ft8/performance_recording.py`, and `application_runtime.py` — carry optional v2 choice instant from existing selection seed into terminal analytics, without changing radio authority.

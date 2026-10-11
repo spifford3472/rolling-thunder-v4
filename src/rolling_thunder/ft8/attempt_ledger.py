@@ -14,17 +14,17 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from json import dumps
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID, uuid4
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_serializer, model_validator
 
 from rolling_thunder.domain import DomainModel
 from rolling_thunder.ft8.hardware_transmit import FT8TransmitPeriodTelemetry
 from rolling_thunder.ft8.performance import FT8AttemptOutcome, FT8PerformanceAttempt
 from rolling_thunder.radio_polling import PollScheduler, ScheduledPoll
 
-ATTEMPT_EVENT_SCHEMA_VERSION = 1
+ATTEMPT_EVENT_SCHEMA_VERSION = 2
 _MAX_BATCH = 100
 _MAX_ERROR = 1_000
 _LOGGER = logging.getLogger("rolling_thunder.ft8.attempt_ledger")
@@ -64,8 +64,8 @@ class FT8AttemptTxPeriod(DomainModel):
 
     @field_validator("started_at_utc", "ended_at_utc")
     @classmethod
-    def normalize_time(cls, value: datetime) -> datetime:
-        return _utc(value)
+    def normalize_time(cls, value: datetime | None) -> datetime | None:
+        return None if value is None else _utc(value)
 
     @model_validator(mode="after")
     def validate_period(self) -> FT8AttemptTxPeriod:
@@ -79,10 +79,11 @@ class FT8AttemptTxPeriod(DomainModel):
 class FT8AttemptEvent(DomainModel):
     """Complete immutable source event for one terminal FT8 attempt."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     attempt_uuid: UUID
     contact_uuid: UUID | None = None
     source_event_created_utc: datetime
+    choice_at_utc: datetime | None = None
     started_at_utc: datetime
     ended_at_utc: datetime
     classification: FT8AttemptClassification
@@ -106,13 +107,19 @@ class FT8AttemptEvent(DomainModel):
     transmit_attempt_count: int = Field(ge=0)
     busy_extension_attempts: int = Field(ge=0, le=2)
 
-    @field_validator("source_event_created_utc", "started_at_utc", "ended_at_utc")
+    @field_validator("source_event_created_utc", "choice_at_utc", "started_at_utc", "ended_at_utc")
     @classmethod
-    def normalize_time(cls, value: datetime) -> datetime:
-        return _utc(value)
+    def normalize_time(cls, value: datetime | None) -> datetime | None:
+        return None if value is None else _utc(value)
 
     @model_validator(mode="after")
     def validate_event(self) -> FT8AttemptEvent:
+        if self.schema_version == 2 and self.choice_at_utc is None:
+            raise ValueError("v2 attempt requires frozen operator-choice UTC")
+        if self.schema_version == 1 and self.choice_at_utc is not None:
+            raise ValueError("v1 attempt cannot contain v2 operator-choice UTC")
+        if self.choice_at_utc is not None and self.choice_at_utc > self.started_at_utc:
+            raise ValueError("choice cannot follow attempt start")
         if self.ended_at_utc < self.started_at_utc:
             raise ValueError("attempt end cannot precede start")
         if (self.local_latitude is None) != (self.local_longitude is None):
@@ -128,6 +135,13 @@ class FT8AttemptEvent(DomainModel):
         if sequences != tuple(range(1, len(sequences) + 1)):
             raise ValueError("transmit period sequences must be contiguous from one")
         return self
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_wire(self, handler: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = handler(self)
+        if self.schema_version == 1:
+            payload.pop("choice_at_utc", None)
+        return payload
 
     @property
     def payload_sha256(self) -> str:
@@ -173,6 +187,8 @@ def build_attempt_event(
         for index, period in enumerate(periods, start=1)
     )
     return FT8AttemptEvent(
+        schema_version=2 if attempt.choice_at_utc is not None else 1,
+        choice_at_utc=attempt.choice_at_utc,
         attempt_uuid=attempt.attempt_id,
         contact_uuid=attempt.attempt_id if contact_is_durable else None,
         source_event_created_utc=created_at_utc,
