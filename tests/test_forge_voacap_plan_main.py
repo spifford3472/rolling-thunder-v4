@@ -97,3 +97,32 @@ def test_apply_creates_new_artifacts_and_registers_plan_explicitly(tmp_path: Pat
     assert plan_output.exists() and environment_output.exists()
     with sqlite3.connect(database) as db:
         assert db.execute("SELECT COUNT(*) FROM baseline_plan_v1").fetchone() == (1,)
+
+
+def test_plan_accepts_15_geographic_cells_and_preserves_one_post_limits() -> None:
+    base = _manifest().model_dump(mode="json")
+    base["targets"] = [
+        {"region_id": f"region-{index}", "grid": "PM95",
+         "uncertainty": "representative grid4 cell"}
+        for index in range(15)
+    ]
+    manifest = InitialPlanManifest.model_validate(base)
+    plan, _, audit = build_artifacts(manifest, _snapshot())
+    assert len(plan.targets) == audit["target_count"] == 15
+    assert plan.max_provider_calls_per_cycle == 1
+    assert plan.max_provider_calls_per_day == 1
+    assert plan.max_slots_per_cycle == 1
+
+
+def test_plan_rejects_more_than_16_regions() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    base = _manifest().model_dump(mode="json")
+    base["targets"] = [
+        {"region_id": f"region-{index}", "grid": "PM95",
+         "uncertainty": "representative grid4 cell"}
+        for index in range(17)
+    ]
+    with pytest.raises(ValidationError):
+        InitialPlanManifest.model_validate(base)

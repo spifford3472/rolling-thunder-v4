@@ -33,7 +33,7 @@ class InitialPlanManifest(DomainModel):
     created_at_utc: datetime
     origin_uncertainty: str = Field(min_length=1, max_length=160)
     target_inventory_version: str = Field(min_length=1, max_length=80)
-    targets: tuple[TargetGrid, ...] = Field(min_length=1, max_length=8)
+    targets: tuple[TargetGrid, ...] = Field(min_length=1, max_length=16)
     model_version: str = Field(min_length=1, max_length=120)
     service_version: str = Field(min_length=1, max_length=120)
     forecast_target_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
