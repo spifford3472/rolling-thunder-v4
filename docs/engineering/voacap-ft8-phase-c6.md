@@ -38,7 +38,7 @@ Malformed, redirected, non-HTTPS, ambiguous, oversized, stale, future-captured,
 schema-drifted and missing/mismatched-month inputs fail closed.
 
 `rolling-thunder-forge-voacap-plan` builds an initial fixed `EM79xm` plan from an
-operator-reviewed target manifest (one to eight explicit grid4/grid6 targets) and a
+operator-reviewed target manifest (one to sixteen explicit grid4/grid6 targets) and a
 validated SSN snapshot. The manifest states the exact forecast target month and
 capture age remains capped at 24 hours. It never invents target geography. Dry-run is the default
 and performs no database or artifact write. `--apply` is explicit, refuses to
