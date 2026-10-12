@@ -40,9 +40,13 @@ def test_baseline_adapter_posts_only_provider_supported_fields(monkeypatch: pyte
 
 def test_baseline_adapter_rejects_provider_version_drift(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = LocalVoacapProvider("http://127.0.0.1:8787", service_version="0.3.0", model_version="model-1")
-    monkeypatch.setattr(adapter.client, "_json_request", lambda *args: (
-        {"version": "0.9.0"} if args[0] == "GET" else {}
-    ))
+    requests: list[str] = []
+
+    def fake_http(method: str, *args: object) -> dict[str, str]:
+        requests.append(method)
+        return {"version": "0.9.0"}
+
+    monkeypatch.setattr(adapter.client, "_json_request", fake_http)
     request = {
         "tx_grid": "EM79xm", "rx_grid": "EL98", "year": 2026, "month": 10,
         "bands_m": [20], "power_watts": 20, "mode": "FT8",
@@ -50,3 +54,29 @@ def test_baseline_adapter_rejects_provider_version_drift(monkeypatch: pytest.Mon
     }
     with pytest.raises(ProviderFailure, match="provider_version_mismatch"):
         adapter.predict(request, timeout_s=10.0)
+    assert requests == ["GET"]
+
+
+def test_pilot_adapter_hard_stops_before_second_post(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = LocalVoacapProvider(
+        "http://127.0.0.1:8787", service_version="0.3.0", model_version="model-1",
+        max_posts=1,
+    )
+    requests: list[str] = []
+
+    def fake_http(method: str, route: str, payload: Any) -> dict[str, Any]:
+        requests.append(f"{method} {route}")
+        if method == "GET":
+            return {"version": "0.3.0"}
+        return {"analysis": {"best_band_by_hour": []}}
+
+    monkeypatch.setattr(adapter.client, "_json_request", fake_http)
+    request = {
+        "tx_grid": "EM79xm", "rx_grid": "EL98", "year": 2026, "month": 10,
+        "bands_m": [20], "power_watts": 20, "mode": "FT8", "timezone": "UTC",
+        "ssn": 87.9,
+    }
+    adapter.predict(request, timeout_s=10.0)
+    with pytest.raises(ProviderFailure, match="pilot_post_limit_exhausted"):
+        adapter.predict(request, timeout_s=10.0)
+    assert requests.count("POST /api/v1/summary") == 1

@@ -238,6 +238,16 @@ release.
 
 ## Reusable service design rules
 
+### C6.2 SSN normalization candidate
+
+The uncomposed provider-neutral boundary in `forge_solar_ssn.py` accepts only the
+versioned normalized `monthly_smoothed_observed_sunspot_number` semantic. It retains
+source, release, observation, capture and raw-payload-hash provenance and stores
+exact source-record replay append-only. The existing HamQSL `sunspots` field is
+available only through a query-only audit view explicitly marked ineligible; it
+cannot be promoted to VOACAP SSN. No NOAA/SILSO public wire format is claimed until
+its published contract is separately verified.
+
 All Forge additions and modifications must follow these rules:
 
 1. **Presentation-neutral contracts.** Responses contain domain/service data, not Tkinter labels, colors, widget coordinates, or screen-specific layout.

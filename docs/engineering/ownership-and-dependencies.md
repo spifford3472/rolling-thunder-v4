@@ -186,6 +186,13 @@ readiness-only policy state. It consumes no live provider and has no Pi, UI, CQ
 sorting, retry, power, CAT/PTT, contact, Wavelog or RF authority. The operational
 baseline remains 20 W. `armed_when_ready` is a readiness label only.
 
+C6.2 adds a separate Forge SSN normalization/snapshot boundary consumed only by
+audited C4 plan preparation. It owns monthly-smoothed value semantics and immutable
+source provenance. It may inspect the existing HamQSL store query-only to report raw
+count ineligibility, but does not modify propagation history or reinterpret those
+records. It owns no provider-specific public schema until that schema is reviewed,
+and has no Pi, UI, contact, Wavelog, radio or transmit authority.
+
 The receive service also owns configured-local-callsign addressed-grid/report
 capture; the FT8 panel owns answer/ignore presentation state. Button 2 preserves
 the accepted inbound record and enters the QSO controller's explicit responder

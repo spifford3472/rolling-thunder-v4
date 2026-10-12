@@ -452,3 +452,7 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/forge_ft8_readiness_preflight.py` — C5.3 no-egress read-only source integrity/required-table checker, fail closed.
 
 - `src/rolling_thunder/forge_voacap_baseline_main.py` — C6 one-shot bounded Forge C4 sampler, loopback provider adapter and independent configuration.
+
+- `src/rolling_thunder/forge_solar_ssn.py` — C6.2 provider-neutral bounded monthly-smoothed-SSN normalization, immutable snapshot storage and query-only HamQSL raw-count exclusion audit.
+
+- `src/rolling_thunder/forge_voacap_plan_main.py` — C6.2 dry-run-first audited fixed-origin C4 plan/environment artifact builder with explicit optional plan registration.

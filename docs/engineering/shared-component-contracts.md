@@ -268,6 +268,16 @@ regional I-71 dataset does not satisfy that contract.
 Provider quirks, credentials, reconnect etiquette, and polling belong behind
 Forge service/provider boundaries.
 
+## VOACAP solar input provenance
+
+VOACAP SSN is a scientific input, not a synonym for any field containing the word
+`sunspots`. C4 accepts only an explicitly versioned monthly smoothed observed
+sunspot-number snapshot with separate observation, source-release and UTC capture
+times plus immutable raw-payload identity. HamQSL propagation-history `sunspots` is
+a raw observed count and is never eligible for this contract. A feed adapter must
+fail closed on unknown semantics, source/version drift, future knowledge, stale
+capture, malformed or oversized input. Forecast presence remains training-ineligible.
+
 ## DX Summit connection
 
 Forge owns one long-lived DX Summit IRC connection. It is not a polling socket.

@@ -501,3 +501,9 @@ still required.
 - `tests/test_forge_voacap_baseline_deploy.py` — C6.1 installer shell integrity and fail-closed three-gate checks.
 
 - `tests/test_forge_voacap_baseline_provider_contract.py` — fake-HTTP real VOACAP summary request body and version drift rejection.
+
+- `tests/test_forge_solar_ssn.py` — normalized monthly-smoothed semantics, provenance, freshness, immutable replay and query-only HamQSL raw-count exclusion.
+
+- `tests/test_forge_voacap_plan_main.py` — fixed-origin bounded plan construction, dry-run no-write default and explicit artifact/plan registration.
+
+- `tests/test_forge_voacap_baseline_local_http.py` — real urllib HTTP framing over an in-memory fake socket; no network egress.

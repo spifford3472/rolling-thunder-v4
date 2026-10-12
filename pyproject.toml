@@ -30,6 +30,7 @@ rolling-thunder-forge-ft8-historical-replay = "rolling_thunder.forge_ft8_histori
 rolling-thunder-forge-ft8-readiness = "rolling_thunder.forge_ft8_readiness_main:main"
 rolling-thunder-forge-ft8-readiness-preflight = "rolling_thunder.forge_ft8_readiness_preflight:main"
 rolling-thunder-forge-voacap-baseline = "rolling_thunder.forge_voacap_baseline_main:main"
+rolling-thunder-forge-voacap-plan = "rolling_thunder.forge_voacap_plan_main:main"
 rolling-thunder-pota-catalog = "rolling_thunder.pota_catalog_main:main"
 
 [project.optional-dependencies]
