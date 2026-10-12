@@ -43,26 +43,20 @@ separate explicit one-request authorization and the prerequisites below**.
    require world-readable/traversable immutable venv files and a successful CLI
    preflight before the current link or systemd units can change.
 
-Commit SHAs and PR: no new commit or PR. The completed checkpoint could not be
-committed because this managed session exposes the linked worktree Git index at
-`/home/geoff/projects/rolling-thunder-v4/.git/worktrees/rolling-thunder-v4-voacap-overnight`
-read-only; Git failed creating `index.lock`. Source files remain safely modified in
-this isolated worktree. No permission change or sandbox bypass was attempted.
+Implementation committed as `79d2c3bda527083c08eee39be94b12b037bffc98` and
+pushed to PR #318 (`feature/voacap-c62-c64-overnight`). Deployment, provider
+POST, production C4 writes, C6 gate changes, and Pi/radio changes did not occur.
+Read-only Forge production validation confirmed the C3 worker, C5 timer, C6 timer,
+and VOACAP service active, version endpoint `0.3.0`, and all three sampler gates
+false. This documentation records the software checkpoint, not C4 pilot approval.
 
 ## Validation at this checkpoint
 
-Focused tests: 43 passing after the implementation above (command uses
-`PYTHONPATH=src /home/geoff/projects/rolling-thunder-codex/.venv/bin/pytest`). Full
-full Ruff and strict MyPy (330 source files) pass, and `git diff --check` passes.
-Full pytest completed with 3,289 passed, 7 skipped and 3 failures. All three failures
-are unrelated existing live-loopback HTTP tests whose socket creation is prohibited
-by this managed sandbox (`PermissionError: Operation not permitted`):
-`test_real_http_framing_completes_without_waiting_for_connection_close`,
-`test_live_http_handler_reads_bounded_post_body`, and
-`test_live_http_contract_on_disposable_local_db`. Pre-commit Ruff and MyPy passed;
-its pytest hook reproduced only those same three sandbox socket failures. The
-temporary ignored `.venv` symlink used to satisfy the repository hook paths was
-removed by the command trap.
+Normal Forge host, outside Codex socket-restricted sandbox:
+`PYTHONPATH=src /home/geoff/projects/rolling-thunder-codex/.venv/bin/pytest -q`
+completed **3299 passed, 7 skipped, 0 failed** (repeated after documentation and
+contract changes). Ruff, strict MyPy (330 source files), `git diff --check`,
+and commit-time Ruff/MyPy/Pytest hooks passed.
 
 ## NOAA verification evidence and remaining limitation
 
