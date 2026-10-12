@@ -79,6 +79,19 @@ def _fetch(transport: FakeTransport, month: str = "2026-10"):
     )
 
 
+def test_live_capture_clock_defaults_to_response_capture_and_explicit_as_of_still_checks() -> None:
+    capture = NOW + timedelta(seconds=5)
+    transport = FakeTransport(_body(), captured=capture)
+    snapshot = NoaaSwpcPredictedSsnAdapter(transport=transport).fetch(
+        target_month="2026-10"
+    )
+    assert snapshot.captured_at_utc == capture
+    with pytest.raises(ValueError, match="future knowledge"):
+        NoaaSwpcPredictedSsnAdapter(transport=transport).fetch(
+            target_month="2026-10", as_of_utc=NOW
+        )
+
+
 def test_noaa_wire_fixture_selects_predicted_month_and_retains_provenance() -> None:
     transport = FakeTransport(_body())
     snapshot = _fetch(transport)

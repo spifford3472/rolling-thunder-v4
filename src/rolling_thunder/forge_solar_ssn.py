@@ -178,7 +178,7 @@ class NoaaSwpcPredictedSsnAdapter:
         self._max_bytes = max_bytes
 
     def fetch(
-        self, *, target_month: str, as_of_utc: datetime,
+        self, *, target_month: str, as_of_utc: datetime | None = None,
         max_capture_age: timedelta = timedelta(hours=24),
     ) -> SmoothedSsnSnapshot:
         response = self._transport.fetch(
@@ -225,7 +225,8 @@ class NoaaSwpcPredictedSsnAdapter:
             source_http_headers=response.headers,
         )
         snapshot.require_for_target(
-            target_month=target_month, as_of_utc=as_of_utc,
+            target_month=target_month,
+            as_of_utc=response.captured_at_utc if as_of_utc is None else as_of_utc,
             max_capture_age=max_capture_age,
         )
         return snapshot
@@ -340,7 +341,7 @@ def main() -> None:
     if args.target_month is None:
         parser.error("capture requires --target-month")
     adapter = NoaaSwpcPredictedSsnAdapter(transport=UrllibSsnFeedTransport())
-    snapshot = adapter.fetch(target_month=args.target_month, as_of_utc=datetime.now(UTC))
+    snapshot = adapter.fetch(target_month=args.target_month)
     added = SsnSnapshotRepository(args.database).add(snapshot)
     print(dumps({
         "state": "captured" if added else "exact_replay",

@@ -68,10 +68,24 @@ GET was attempted, but this managed sandbox could not resolve
 claimed in this handoff. Tests use a strict published-schema fixture. A future live
 capture must go through the bounded HTTPS adapter and append its actual bytes/headers.
 
+## Live NOAA source capture on normal Forge host
+
+Verified 2026-10-12 23:33Z via **read-only HTTPS** outside Codex restricted
+DNS sandbox: current source was a 57-record JSON array with the published
+`time-tag` / `predicted_ssn` fields, forecast target `2026-10` value `87.9`,
+HTTP `application/json`, `ETag` and `Last-Modified` headers. The live adapter
+successfully captured an append-only snapshot into a **disposable development
+SQLite file in `/tmp`**, and status reported one immutable revision. No production
+C4 database or sampler setting was touched. Publication/issuance timestamp remains
+unknown, and the HTTP `Last-Modified` time is **not** asserted as issuance time.
+A new regression test covers the CLI capture clock versus explicit historical
+as-of timestamp semantics.
+
 ## Next safe actions
 
-1. Perform one read-only NOAA capture in an environment with working DNS, inspect the
-   retained headers/schema/hash, and do not infer an issue time absent explicit proof.
+1. NOAA live feed and adapter capture have been verified read-only in a disposable
+   development store; retain the actual snapshot under controlled production policy
+   only when installed and approved. Never infer an unproven issuance time.
 2. Supply/review the small regional target manifest, uncertainty text, plan UUID,
    version and parent ID. Run the plan command without `--apply` first.
 3. Review the controlled-pilot database backup directory and disposable/production
