@@ -104,3 +104,28 @@ outside this branch.
 
 C5.4 readiness timer and Pi 20-W radio operation are unaffected. No TX,
 CAT/PTT, Pi deployment, service restart or real provider HTTP call performed.
+
+## C6 safe upgrade candidate (not approved for production)
+
+The root-only `deploy/scripts/upgrade-forge-voacap-baseline.sh` is separate from
+the first-install helper. It insists on an existing release, an exact, root-owned
+staged SHA, verified offline wheel hashes, three disabled gates, and an explicit
+NOAA snapshot path in the owner-controlled configuration. It records a private
+backup of the current units, configuration and previous release symlink before
+installing the new wheel into a new immutable SHA directory. It checks the new
+launcher and config before changing the symlink. The timer is temporarily
+stopped during the atomic switch, then re-enabled while all provider gates
+remain OFF. On an upgrade error after the switch it restores the previous
+release symlink, units and configuration. The previous release is retained.
+
+**NO-GO / manual review still required:** current production configuration
+does not yet have the required `ssn_snapshot_path`, so this upgrade MUST fail
+until an administrator separately reviews/backs up and supplies it. The
+running VOACAP service reports service version 0.3.0 via GET /version but no
+model/engine fingerprint; the C4 adapter currently labels the model using its
+plan's `model_version` without provider proof. Therefore the pilot must not
+run until an independently verifiable provider model-identity contract is
+implemented and tested. The engine binary may be SHA-256 fingerprinted
+out-of-band for audit, but that is not equivalent to the service attesting the
+running engine. The script is a candidate only, not blanket installation,
+model verification, live provider use, or C6.4 activation authorization.
