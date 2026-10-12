@@ -447,8 +447,19 @@ Consumers and ownership remain unchanged.
 
 - `src/rolling_thunder/forge_ft8_prospective_inventory.py` — read-only source/provenance/as-of audit of C3 v2 FT8 events; no modeled success estimates or wattage control.
 
-- `src/rolling_thunder/forge_ft8_c4_asof.py` — read-only C4 regional forecast to v2 FT8 operator-choice as-of comparison; validates plan and request/response identities.
+- `src/rolling_thunder/forge_ft8_c4_asof.py` — read-only C4 regional forecast to v2
+  FT8 operator-choice as-of comparison; validates plan/request/response identities
+  and exact predicted-SSN month/source/capture provenance while remaining
+  training-ineligible.
 
 - `src/rolling_thunder/forge_ft8_readiness_preflight.py` — C5.3 no-egress read-only source integrity/required-table checker, fail closed.
 
 - `src/rolling_thunder/forge_voacap_baseline_main.py` — C6 one-shot bounded Forge C4 sampler, loopback provider adapter and independent configuration.
+
+- `src/rolling_thunder/forge_solar_ssn.py` — C6.2 bounded injected-transport NOAA
+  predicted-month SSN adapter, HTTPS capture/status CLI, append-only raw-byte/header
+  revision store and query-only HamQSL raw-count exclusion audit.
+
+- `src/rolling_thunder/forge_voacap_plan_main.py` — C6.2 dry-run-first audited
+  fixed-origin C4 plan/environment builder requiring exact NOAA forecast-month
+  semantics/provenance, with explicit optional plan registration.

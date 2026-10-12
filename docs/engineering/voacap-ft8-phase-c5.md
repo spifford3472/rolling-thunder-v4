@@ -29,8 +29,9 @@ choice and environmental observation/capture times in UTC. Naive timestamps fail
 validation. Only audited `field_observed`, `pre_choice`, prospectively available
 evidence with `available_at_utc <= choice_at_utc` can be training-eligible. Late,
 backfill, post-attempt, retrospective, synthetic and unknown-provenance evidence is
-reason-coded and excluded. SSN observation and capture must not be later than model
-generation.
+reason-coded and excluded. For C4 NOAA forecast input, capture must not be later than
+model generation and the `predicted_ssn` target month must match the modeled month;
+an unknown NOAA issue time stays unknown rather than being inferred from capture.
 
 Grid4 and grid6 precision must match the actual locator and carry explicit
 uncertainty. The contract separately stores the model's band-center frequency

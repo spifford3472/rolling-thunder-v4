@@ -10,6 +10,7 @@ import re
 import sqlite3
 from collections import Counter
 from datetime import datetime, timedelta
+from json import loads
 from pathlib import Path
 
 from rolling_thunder.forge_ft8_prospective_inventory import _connect
@@ -62,8 +63,12 @@ def audit_c4_choice_pairs(
             slots = c4.execute(
                 """SELECT s.plan_id,s.target_grid,s.band_m,s.forecast_for_utc,
                    s.generated_at_utc,s.canonical_request_sha256,
-                   s.canonical_request_json,s.response_sha256,s.ssn_observed_at_utc,
-                   s.ssn_captured_at_utc,p.response_json,p.service_version,
+                   s.canonical_request_json,s.response_sha256,s.ssn_value_semantics,
+                   s.ssn_target_month,s.ssn_source,s.ssn_source_version,
+                   s.ssn_source_schema,s.ssn_revision_policy,s.ssn_source_record_id,
+                   s.ssn_source_released_at_utc,s.ssn_captured_at_utc,s.ssn_raw_sha256,
+                   s.ssn_snapshot_sha256,
+                   p.response_json,p.service_version,
                    p.model_version,p.response_sha256
                    FROM baseline_slot_v1 s JOIN baseline_provider_response_v1 p
                    ON s.canonical_request_sha256=p.request_sha256
@@ -71,21 +76,44 @@ def audit_c4_choice_pairs(
             ).fetchall()
             verified_slots: list[tuple[str, str, int, datetime, datetime, str]] = []
             for (plan_id, target_grid, band, forecast_utc, generated_utc,
-                 request_sha, request_json, response_sha, ssn_observed, ssn_captured,
+                 request_sha, request_json, response_sha, ssn_semantics, ssn_month,
+                 ssn_source, ssn_source_version, ssn_source_schema, ssn_revision_policy,
+                 ssn_record_id, ssn_released, ssn_captured, ssn_raw_sha, ssn_snapshot_sha,
                  response_json, service_version, model_version, stored_response_sha) in slots:
                 try:
                     plan = plans[plan_id]
                     forecast = datetime.fromisoformat(forecast_utc)
                     generated = datetime.fromisoformat(generated_utc)
+                    request = loads(request_json)
                     if (not forecast.tzinfo or not generated.tzinfo
                         or generated > forecast
-                        or datetime.fromisoformat(ssn_observed) > generated
                         or datetime.fromisoformat(ssn_captured) > generated
+                        or (ssn_released is not None
+                            and datetime.fromisoformat(ssn_released) > generated)
+                        or ssn_semantics != "monthly_smoothed_predicted_sunspot_number"
+                        or ssn_month != forecast.strftime("%Y-%m")
+                        or ssn_source != plan.ssn_source
+                        or ssn_source_version != plan.ssn_source_version
+                        or ssn_source_schema != plan.ssn_source_schema
+                        or ssn_revision_policy != plan.ssn_revision_policy
+                        or not isinstance(ssn_record_id, str) or not ssn_record_id
+                        or not isinstance(ssn_raw_sha, str) or len(ssn_raw_sha) != 64
+                        or not isinstance(ssn_snapshot_sha, str) or len(ssn_snapshot_sha) != 64
                         or plan.model_version != model_version
                         or plan.service_version != service_version
                         or response_sha != stored_response_sha
                         or hashlib.sha256(request_json.encode()).hexdigest() != request_sha
-                        or hashlib.sha256(response_json.encode()).hexdigest() != response_sha):
+                        or hashlib.sha256(response_json.encode()).hexdigest() != response_sha
+                        or not isinstance(request, dict)
+                        or request.get("ssn_value_semantics") != ssn_semantics
+                        or request.get("ssn_target_month") != ssn_month
+                        or request.get("ssn_source") != ssn_source
+                        or request.get("ssn_source_version") != ssn_source_version
+                        or request.get("ssn_source_schema") != ssn_source_schema
+                        or request.get("ssn_revision_policy") != ssn_revision_policy
+                        or request.get("ssn_source_record_id") != ssn_record_id
+                        or request.get("ssn_raw_sha256") != ssn_raw_sha
+                        or request.get("ssn_snapshot_sha256") != ssn_snapshot_sha):
                         rejected["invalid_forecast_source"] += 1
                         continue
                     # Do not silently broaden 4-character target-grid uncertainty.
@@ -159,6 +187,7 @@ def _report(
         "distinct_provider_request_inputs": len(families),
         "operating_segments": dict(sorted(segments.items())),
         "reason_counts": dict(sorted(excluded.items())),
+        "training_eligible": False,
         "calibrated_for_power": False,
         "noninferiority_vs_20w_established": False,
     }

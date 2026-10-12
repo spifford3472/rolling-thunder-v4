@@ -268,6 +268,19 @@ regional I-71 dataset does not satisfy that contract.
 Provider quirks, credentials, reconnect etiquette, and polling belong behind
 Forge service/provider boundaries.
 
+## VOACAP solar input provenance
+
+VOACAP SSN is a scientific input, not a synonym for any field containing the word
+`sunspots`. C4 accepts NOAA/SWPC `predicted_ssn` only for the exact `time-tag`
+`YYYY-MM` being modeled: it is the product's forecast-month smoothed predicted SSN,
+not `observed-solar-cycle-indices.json` `smoothed_ssn` and not HamQSL's raw observed
+count. The current NOAA feed supplies no provable per-record issue timestamp, so the
+source release is explicitly unknown and capture time is the earliest availability
+claim. Exact raw bytes/hash, obtainable HTTP headers, source schema and mutable-feed
+revision policy are retained append-only. An adapter fails closed on semantic/month
+mismatch, schema/version drift, future or stale capture, malformed/oversized input,
+or absent as-of evidence. C4 rows remain training-ineligible by presence alone.
+
 ## DX Summit connection
 
 Forge owns one long-lived DX Summit IRC connection. It is not a polling socket.

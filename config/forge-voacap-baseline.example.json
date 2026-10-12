@@ -4,7 +4,8 @@
   "provider_enabled": false,
   "database_path": "/var/lib/rolling-thunder-forge-propagation/c4-baseline.sqlite3",
   "plan_path": "/etc/rolling-thunder-forge-voacap-baseline/plan.json",
-  "environment_path": "/etc/rolling-thunder-forge-voacap-baseline/ssn.json",
+  "environment_path": "/etc/rolling-thunder-forge-voacap-baseline/environment.json",
+  "ssn_snapshot_path": "/etc/rolling-thunder-forge-voacap-baseline/noaa-snapshot.json",
   "provider_base_url": "http://127.0.0.1:8787",
   "future_days_to_schedule": 1
 }
