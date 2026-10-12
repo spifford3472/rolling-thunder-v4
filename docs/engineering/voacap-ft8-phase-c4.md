@@ -30,8 +30,13 @@ uncertainty, exactly bands 40/30/20/17/15/12/10 m, UTC hours 00/06/12/18, and on
 
 Every slot retains `forecast_for_utc`, `scheduled_at_utc`, `generated_at_utc`, and a
 truthful timing class: `pre_choice`, `late`, `backfill`, or `missed`. The environment
-snapshot includes SSN value, source/version, observation time and capture time.
-Missing SSN or source identity fails validation; no NOAA lookup is available here.
+snapshot includes exact forecast-month predicted SSN, semantic, source URL/version/
+schema/revision policy, record identity, nullable source release, UTC capture and
+raw-payload hash. The target month must equal every scheduled UTC day's month.
+Missing, observed/historical, stale, mismatched or future-knowledge SSN fails before
+scheduling. The C6 composition additionally requires the environment to match the
+canonical retained raw snapshot artifact. NOAA retrieval remains outside this
+provider-neutral module.
 
 The canonical monthly request includes the frozen circuit, calendar month, one band,
 20-W reference, FT8 mode, SSN identity and plan model/service versions. It excludes
@@ -107,7 +112,8 @@ the implemented contract, evaluation and readiness-only policy.
 
 ## Offline acceptance
 
-The fake-only suite covers immutable identity and forks, grid4/grid6 precision,
+The fake-only suite covers immutable identity and forks, exact predicted-SSN month/
+semantic/source matching, grid4/grid6 precision,
 00/06/12/18 rollover cells, monthly response dedup, disabled and unsupported skips,
 HTTP-500/429-equivalent failures, timeout, malformed/missing-cell, missing SSN,
 version mismatch, oversized response, call/storage bounds, concurrency, lease expiry,

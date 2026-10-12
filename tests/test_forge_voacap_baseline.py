@@ -91,6 +91,9 @@ def _plan(**changes: Any) -> BaselinePlan:
         "service_version": "svc-1",
         "ssn_source": "offline-fixture",
         "ssn_source_version": "ssn-1",
+        "ssn_value_semantics": "monthly_smoothed_predicted_sunspot_number",
+        "ssn_source_schema": "fixture-schema-v1",
+        "ssn_revision_policy": "append-only fixture captures",
         "max_provider_calls_per_cycle": 8,
         "max_provider_calls_per_day": 16,
         "max_slots_per_cycle": 64,
@@ -102,10 +105,17 @@ def _plan(**changes: Any) -> BaselinePlan:
 def _environment() -> EnvironmentSnapshot:
     return EnvironmentSnapshot(
         ssn=132.5,
+        value_semantics="monthly_smoothed_predicted_sunspot_number",
+        target_month="2026-10",
         source="offline-fixture",
+        source_url="https://example.invalid/predicted.json",
         source_version="ssn-1",
-        observed_at_utc=datetime(2026, 10, 1, tzinfo=UTC),
+        source_schema="fixture-schema-v1",
+        source_revision_policy="append-only fixture captures",
+        source_record_id="2026-10:predicted_ssn",
         captured_at_utc=NOW,
+        raw_sha256="a" * 64,
+        snapshot_canonical_sha256="b" * 64,
     )
 
 
@@ -186,6 +196,13 @@ def test_disabled_gates_and_unsupported_band_skip_without_provider(tmp_path: Pat
             model_version="model-1",
             response_json={"analysis": {"best_band_by_hour": []}},
         ), "requested_hour_band_missing"),
+        (ProviderResult(
+            service_version="svc-1",
+            model_version="model-1",
+            response_json={
+                "analysis": {"best_band_by_hour": [{"hour_utc": 0, "band_m": 10}]}
+            },
+        ), "malformed_requested_hour_band"),
     ],
 )
 def test_provider_failures_are_bounded_and_explicit(
@@ -203,6 +220,7 @@ def test_provider_failures_are_bounded_and_explicit(
         calls = db.execute(
             "SELECT COUNT(*) FROM baseline_activity_v1 WHERE action='provider_call'"
         ).fetchone()[0]
+        cached = db.execute("SELECT COUNT(*) FROM baseline_provider_response_v1").fetchone()[0]
     if expected_reason == "requested_hour_band_missing":
         assert row[0] == "unavailable"
     else:
@@ -210,6 +228,7 @@ def test_provider_failures_are_bounded_and_explicit(
     assert row[1] == expected_reason
     assert row[2] == 1
     assert calls == 1
+    assert cached == 0
 
 
 def test_missing_ssn_and_oversized_response_fail_closed(tmp_path: Path) -> None:
@@ -358,6 +377,18 @@ def test_plan_and_model_fork_append_and_legacy_copy_is_preserved(tmp_path: Path)
         assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert db.execute("SELECT COUNT(*) FROM baseline_plan_v1").fetchone()[0] == 2
+
+
+def test_old_c4_slot_schema_fails_closed_without_migration(tmp_path: Path) -> None:
+    path = tmp_path / "old-c4.sqlite"
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "CREATE TABLE baseline_slot_v1(slot_key TEXT,ssn_observed_at_utc TEXT NOT NULL)"
+        )
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="predates predicted-SSN provenance"):
+        BaselineRepository(path)
+    assert path.read_bytes() == before
 
 
 def test_diagnostics_are_read_only_deterministic_and_training_ineligible(tmp_path: Path) -> None:

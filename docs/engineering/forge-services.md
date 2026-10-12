@@ -238,15 +238,17 @@ release.
 
 ## Reusable service design rules
 
-### C6.2 SSN normalization candidate
+### C6.2 NOAA predicted-SSN adapter
 
-The uncomposed provider-neutral boundary in `forge_solar_ssn.py` accepts only the
-versioned normalized `monthly_smoothed_observed_sunspot_number` semantic. It retains
-source, release, observation, capture and raw-payload-hash provenance and stores
-exact source-record replay append-only. The existing HamQSL `sunspots` field is
-available only through a query-only audit view explicitly marked ineligible; it
-cannot be promoted to VOACAP SSN. No NOAA/SILSO public wire format is claimed until
-its published contract is separately verified.
+The uncomposed boundary in `forge_solar_ssn.py` maps NOAA/SWPC's documented
+`predicted-solar-cycle.json` records into exact-target-month
+`monthly_smoothed_predicted_sunspot_number` evidence. It uses bounded injected HTTPS
+transport and retains raw bytes/hash, obtainable HTTP headers, capture time, source
+schema and the mutable-current-feed/append-only revision policy. NOAA publishes no
+per-record issue timestamp in this wire contract, so release time remains null and
+capture is never backdated into an as-issued claim. The CLI can capture one month or
+inspect the local revision store; it is not runtime-composed. HamQSL raw `sunspots`
+and NOAA observed `smoothed_ssn` remain explicitly ineligible substitutes.
 
 All Forge additions and modifications must follow these rules:
 

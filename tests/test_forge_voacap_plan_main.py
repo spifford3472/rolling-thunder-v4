@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import subprocess
@@ -12,17 +13,22 @@ from rolling_thunder.forge_voacap_plan_main import InitialPlanManifest, build_ar
 
 
 def _snapshot() -> SmoothedSsnSnapshot:
+    raw = b'[{"time-tag":"2026-10","predicted_ssn":121.4}]'
     return SmoothedSsnSnapshot(
         value=121.4,
-        value_semantics="monthly_smoothed_observed_sunspot_number",
-        source_id="reviewed-source",
-        source_url="https://source.invalid/data",
-        source_version="release-1",
-        source_record_id="2026-03-final",
-        observed_at_utc=datetime(2026, 3, 1, tzinfo=UTC),
-        released_at_utc=datetime(2026, 10, 12, 10, tzinfo=UTC),
+        value_semantics="monthly_smoothed_predicted_sunspot_number",
+        target_month="2026-10",
+        source_id="noaa-swpc-predicted-solar-cycle",
+        source_url="https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json",
+        source_version="published-schema-v1",
+        source_schema="published-schema-v1",
+        source_revision_policy="mutable current feed; append-only captures",
+        source_record_id="2026-10:predicted_ssn",
+        source_released_at_utc=None,
         captured_at_utc=datetime(2026, 10, 12, 11, tzinfo=UTC),
-        raw_sha256="a" * 64,
+        raw_sha256=hashlib.sha256(raw).hexdigest(),
+        raw_payload=raw,
+        source_http_headers={"etag": '"fixture"'},
     )
 
 
@@ -39,7 +45,7 @@ def _manifest() -> InitialPlanManifest:
         ],
         "model_version": "model-1",
         "service_version": "0.3.0",
-        "ssn_max_observation_age_days": 400,
+        "forecast_target_month": "2026-10",
     })
 
 
@@ -49,9 +55,10 @@ def test_plan_builder_fixes_origin_inventory_and_single_post_limits() -> None:
     assert plan.max_provider_calls_per_cycle == plan.max_provider_calls_per_day == 1
     assert plan.max_slots_per_cycle == plan.max_attempts == 1
     assert plan.provider_timeout_s == 10.0
-    assert environment.source == "reviewed-source"
-    assert audit["ssn_value_semantics"] == "monthly_smoothed_observed_sunspot_number"
-    assert audit["ssn_max_observation_age_days"] == 400
+    assert environment.source == "noaa-swpc-predicted-solar-cycle"
+    assert environment.target_month == "2026-10"
+    assert audit["ssn_value_semantics"] == "monthly_smoothed_predicted_sunspot_number"
+    assert audit["ssn_release_time_known"] is False
 
 
 def test_cli_defaults_dry_run_and_never_writes(tmp_path: Path) -> None:

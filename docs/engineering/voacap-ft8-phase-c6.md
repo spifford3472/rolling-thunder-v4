@@ -26,22 +26,21 @@ No baseline data are training eligible by virtue of being present.
 
 ## C6.2 staged continuation (2026-10-12)
 
-The source tree now contains an uncomposed normalized SSN adapter contract and
-append-only snapshot store. It accepts only explicitly identified monthly smoothed
-observed SSN and retains source ID/URL/version/record ID, observation/release/capture
-times and raw SHA-256. Malformed, ambiguous, oversized, stale and future-knowledge
-inputs fail closed. The existing propagation-history HamQSL reader is query-only and
-labels its raw `sunspots` value ineligible; no conversion is implemented.
-
-The exact authoritative public upstream and wire schema remain deliberately
-unresolved. The normalized adapter is not evidence that NOAA or SILSO implements
-that wire contract. A provider-specific adapter must wait for review of the
-published upstream schema, version/revision behavior, release timestamps and terms.
+The source tree now contains an uncomposed NOAA/SWPC adapter for the authoritative
+`predicted-solar-cycle.json` product. It selects exactly one requested `time-tag`
+`YYYY-MM` and maps `predicted_ssn` to the distinct
+`monthly_smoothed_predicted_sunspot_number` semantic. It retains exact raw bytes and
+SHA-256, obtainable HTTP headers, capture time, published schema identity, record ID
+and the mutable-current-feed/append-only revision policy. The feed has no provable
+per-record issue timestamp; release therefore remains unknown and capture is not
+backdated. NOAA observed `smoothed_ssn` and HamQSL raw `sunspots` are ineligible.
+Malformed, redirected, non-HTTPS, ambiguous, oversized, stale, future-captured,
+schema-drifted and missing/mismatched-month inputs fail closed.
 
 `rolling-thunder-forge-voacap-plan` builds an initial fixed `EM79xm` plan from an
 operator-reviewed target manifest (one to eight explicit grid4/grid6 targets) and a
-validated SSN snapshot. The manifest must state the reviewed maximum observation
-age; capture age remains capped at 24 hours. It never invents target geography. Dry-run is the default
+validated SSN snapshot. The manifest states the exact forecast target month and
+capture age remains capped at 24 hours. It never invents target geography. Dry-run is the default
 and performs no database or artifact write. `--apply` is explicit, refuses to
 overwrite artifacts, and database registration occurs only when `--database` is
 also supplied. Generated pilot limits are one provider POST per cycle/day, one slot,
@@ -52,9 +51,14 @@ The sampler now normalizes any supplied clock to UTC before selecting tomorrow,
 fixing local-offset/DST midnight cases that could otherwise schedule the current UTC
 day. The controlled pilot CLI is separately operator gated with the exact phrase
 `AUTHORIZE_C4_ONE_POST_PILOT`; it requires all three existing gates, the strict pilot
-plan limits, an existing database and a successful consistent backup/integrity
-check. Its adapter verifies exact service version before POST and refuses a second
-POST even if called again. This is staged code,
+plan limits, an existing database and a successful consistent backup/integrity/
+foreign-key check. The backup hash and table counts are recorded, and success or
+failure produces a durable audit sidecar. The sampler validates SSN semantic, month
+and complete source identity plus the canonical raw NOAA snapshot artifact and exact
+provider identity/version before it persists candidate slots. The adapter refuses a
+second POST even after an ambiguous timeout;
+provider responses become ready/cacheable only after version, size and requested
+hour/band reliability/SNR validation. This is staged code,
 not authorization to invoke the command or enable any gate.
 
 C6.4 unattended activation remains **NO-GO** pending authoritative source-adapter

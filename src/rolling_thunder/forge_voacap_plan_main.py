@@ -36,7 +36,7 @@ class InitialPlanManifest(DomainModel):
     targets: tuple[TargetGrid, ...] = Field(min_length=1, max_length=8)
     model_version: str = Field(min_length=1, max_length=120)
     service_version: str = Field(min_length=1, max_length=120)
-    ssn_max_observation_age_days: int = Field(ge=1, le=730)
+    forecast_target_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
 
     @model_validator(mode="after")
     def regional_inventory_is_explicit(self) -> InitialPlanManifest:
@@ -48,10 +48,10 @@ class InitialPlanManifest(DomainModel):
 def build_artifacts(
     manifest: InitialPlanManifest, snapshot: SmoothedSsnSnapshot
 ) -> tuple[BaselinePlan, EnvironmentSnapshot, dict[str, object]]:
-    snapshot.require_fresh(
+    snapshot.require_for_target(
+        target_month=manifest.forecast_target_month,
         as_of_utc=manifest.created_at_utc,
         max_capture_age=timedelta(hours=24),
-        max_observation_age=timedelta(days=manifest.ssn_max_observation_age_days),
     )
     plan = BaselinePlan(
         plan_id=manifest.plan_id,
@@ -66,6 +66,9 @@ def build_artifacts(
         service_version=manifest.service_version,
         ssn_source=snapshot.source_id,
         ssn_source_version=snapshot.source_version,
+        ssn_value_semantics="monthly_smoothed_predicted_sunspot_number",
+        ssn_source_schema=snapshot.source_schema,
+        ssn_revision_policy=snapshot.source_revision_policy,
         max_provider_calls_per_cycle=1,
         max_provider_calls_per_day=1,
         max_slots_per_cycle=1,
@@ -74,10 +77,18 @@ def build_artifacts(
     )
     environment = EnvironmentSnapshot(
         ssn=snapshot.value,
+        value_semantics="monthly_smoothed_predicted_sunspot_number",
+        target_month=snapshot.target_month,
         source=snapshot.source_id,
+        source_url=snapshot.source_url,
         source_version=snapshot.source_version,
-        observed_at_utc=snapshot.observed_at_utc,
+        source_schema=snapshot.source_schema,
+        source_revision_policy=snapshot.source_revision_policy,
+        source_record_id=snapshot.source_record_id,
+        source_released_at_utc=snapshot.source_released_at_utc,
         captured_at_utc=snapshot.captured_at_utc,
+        raw_sha256=snapshot.raw_sha256,
+        snapshot_canonical_sha256=snapshot.canonical_sha256,
     )
     audit: dict[str, object] = {
         "contract": "c4-plan-creation-audit-v1",
@@ -89,7 +100,9 @@ def build_artifacts(
         "plan_sha256": plan.canonical_sha256,
         "ssn_snapshot_sha256": snapshot.canonical_sha256,
         "ssn_value_semantics": snapshot.value_semantics.value,
-        "ssn_max_observation_age_days": manifest.ssn_max_observation_age_days,
+        "ssn_target_month": snapshot.target_month,
+        "ssn_release_time_known": snapshot.source_released_at_utc is not None,
+        "ssn_revision_policy": snapshot.source_revision_policy,
         "provider_limits": {
             "posts_per_cycle": plan.max_provider_calls_per_cycle,
             "posts_per_day": plan.max_provider_calls_per_day,

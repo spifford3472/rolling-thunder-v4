@@ -1,8 +1,8 @@
-# C6.2-C6.4 overnight handoff
+# C6 NOAA forecast-SSN implementation and safety-review handoff
 
-Updated: 2026-10-12 UTC. Branch:
-`feature/voacap-c62-c64-overnight`, based on
-`ddf6741bb33fc544a90ab3871e15839739ed2ce7`.
+Updated: 2026-10-12 UTC. Review branch:
+`feature/c6-noaa-forecast-ssn-review`, starting from PR #318 head
+`0c21a86c6f70f5fc4742fc216ef2bbac267e9f67`.
 
 ## Production state and go/no-go
 
@@ -16,11 +16,11 @@ separate explicit one-request authorization and the prerequisites below**.
 
 ## Implemented checkpoints
 
-1. C6.2 SSN boundary: `forge_solar_ssn.py` accepts only a strict normalized
-   monthly-smoothed-observed SSN contract, validates bounded/fresh/non-future source
-   provenance, stores immutable snapshots and rejects changed source-record replay.
-   Its query-only HamQSL audit labels raw `sunspots` ineligible and cannot create a
-   smoothed snapshot.
+1. C6.2 SSN boundary: `forge_solar_ssn.py` now implements the published NOAA/SWPC
+   `predicted-solar-cycle.json` array contract. It selects exact-month
+   `predicted_ssn`, retains raw bytes/hash and obtainable HTTP headers, records
+   capture while leaving unprovable release unknown, and appends mutable-feed
+   revisions. NOAA observed `smoothed_ssn` and HamQSL raw counts are ineligible.
 2. Audited plan tooling: `rolling-thunder-forge-voacap-plan` fixes origin to
    `EM79xm`, requires an explicit one-to-eight-target reviewed inventory, retains
    uncertainty and lineage, and produces a one-POST/10-second/one-attempt pilot plan.
@@ -29,9 +29,15 @@ separate explicit one-request authorization and the prerequisites below**.
    complete future days, including local-offset/DST midnight boundaries.
 4. Controlled pilot staging: exact approval phrase, all-three-gate validation,
    strict plan-bound checks, pre-run consistent SQLite backup plus integrity/foreign
-   key verification, backup SHA-256/rollback output, pre-POST exact version guard and
-   a hard adapter one-POST cap.
-5. Offline integration/sandbox tests: real urllib request framing uses an in-memory
+   key verification, backup SHA-256/table counts/rollback output, durable success or
+   failure audit, pre-persistence provider identity/version guard and a hard adapter
+   one-POST cap that survives timeout/ambiguous outcomes.
+5. Candidate/response safety: no slot is created until SSN semantic, target month,
+   complete source identity/freshness, canonical raw snapshot match and provider
+   preflight pass. A ready row and
+   cached response require exact model/service versions, bounded response and one
+   unique requested hour/band cell with finite reliability and SNR.
+6. Offline integration/sandbox tests: real urllib request framing uses an in-memory
    fake socket (zero egress); systemd assertions preserve the dedicated identity,
    strict filesystem boundary and loopback-only IP policy. Installer ordering tests
    require world-readable/traversable immutable venv files and a successful CLI
@@ -58,21 +64,20 @@ its pytest hook reproduced only those same three sandbox socket failures. The
 temporary ignored `.venv` symlink used to satisfy the repository hook paths was
 removed by the command trap.
 
-## Deliberately unresolved source contract
+## NOAA verification evidence and remaining limitation
 
-No authoritative NOAA/SILSO public wire schema was asserted from memory. The new
-JSON contract is an internal provider-neutral normalization boundary, not a claim
-that an upstream publishes that shape. Tomorrow's exact safe action is to review an
-authoritative upstream specification/sample and revision policy, then implement a
-provider-specific adapter mapping it into `SmoothedSsnSnapshot` with captured fixture
-tests. Confirm that monthly smoothed *observed* SSN is the intended VOACAP input for
-the forecast month; if a predicted monthly series is required, introduce a separate
-semantic instead of relabeling observations.
+NOAA's product page documents a multi-year forecast of smoothed monthly sunspot
+number and identifies `time-tag` as `YYYY-MM` and `predicted_ssn` as predicted sunspot
+number. The data index reported the current JSON at about 17 KB. A bounded direct
+GET was attempted, but this managed sandbox could not resolve
+`services.swpc.noaa.gov`; therefore no live value, response bytes or issuance time is
+claimed in this handoff. Tests use a strict published-schema fixture. A future live
+capture must go through the bounded HTTPS adapter and append its actual bytes/headers.
 
 ## Next safe actions
 
-1. Review the SSN upstream contract and scientific choice above; do not fabricate a
-   current value or use HamQSL raw counts.
+1. Perform one read-only NOAA capture in an environment with working DNS, inspect the
+   retained headers/schema/hash, and do not infer an issue time absent explicit proof.
 2. Supply/review the small regional target manifest, uncertainty text, plan UUID,
    version and parent ID. Run the plan command without `--apply` first.
 3. Review the controlled-pilot database backup directory and disposable/production

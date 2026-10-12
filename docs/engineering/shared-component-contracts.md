@@ -271,12 +271,15 @@ Forge service/provider boundaries.
 ## VOACAP solar input provenance
 
 VOACAP SSN is a scientific input, not a synonym for any field containing the word
-`sunspots`. C4 accepts only an explicitly versioned monthly smoothed observed
-sunspot-number snapshot with separate observation, source-release and UTC capture
-times plus immutable raw-payload identity. HamQSL propagation-history `sunspots` is
-a raw observed count and is never eligible for this contract. A feed adapter must
-fail closed on unknown semantics, source/version drift, future knowledge, stale
-capture, malformed or oversized input. Forecast presence remains training-ineligible.
+`sunspots`. C4 accepts NOAA/SWPC `predicted_ssn` only for the exact `time-tag`
+`YYYY-MM` being modeled: it is the product's forecast-month smoothed predicted SSN,
+not `observed-solar-cycle-indices.json` `smoothed_ssn` and not HamQSL's raw observed
+count. The current NOAA feed supplies no provable per-record issue timestamp, so the
+source release is explicitly unknown and capture time is the earliest availability
+claim. Exact raw bytes/hash, obtainable HTTP headers, source schema and mutable-feed
+revision policy are retained append-only. An adapter fails closed on semantic/month
+mismatch, schema/version drift, future or stale capture, malformed/oversized input,
+or absent as-of evidence. C4 rows remain training-ineligible by presence alone.
 
 ## DX Summit connection
 

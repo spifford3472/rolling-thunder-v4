@@ -490,20 +490,30 @@ still required.
 
 - `tests/test_forge_ft8_prospective_inventory.py` — isolated v2 event, missing provenance, retrospective link, read-only rejection tests.
 
-- `tests/test_forge_ft8_c4_asof.py` — valid synthetic as-of regional join, after-choice rejection and absent-source fail-closed acceptance.
+- `tests/test_forge_ft8_c4_asof.py` — valid synthetic regional as-of join,
+  after-choice and observed-SSN semantic rejection, explicit training ineligibility
+  and absent-source fail-closed acceptance.
 
 - `tests/test_forge_ft8_readiness_preflight.py` — read-only source byte preservation, missing source and malformed schema rejection.
 
 - `tests/test_forge_ft8_readiness_installer.py` — candidate root-helper safety scoping and shell syntax; offline wheel staging and CLI installation additionally smoke-tested on Forge.
 
-- `tests/test_forge_voacap_baseline_main.py` — C6 disabled/no-I/O gate, idempotent day scheduling and loopback restriction.
+- `tests/test_forge_voacap_baseline_main.py` — C6 disabled/no-I/O gate, UTC day/month
+  scheduling, fail-before-persistence provider preflight, trusted backup metadata and
+  durable controlled-pilot failure audit.
 
 - `tests/test_forge_voacap_baseline_deploy.py` — C6.1 installer shell integrity and fail-closed three-gate checks.
 
-- `tests/test_forge_voacap_baseline_provider_contract.py` — fake-HTTP real VOACAP summary request body and version drift rejection.
+- `tests/test_forge_voacap_baseline_provider_contract.py` — fake-HTTP real VOACAP
+  summary request body, exact identity/version rejection and one-POST cap preserved
+  after an ambiguous timeout.
 
-- `tests/test_forge_solar_ssn.py` — normalized monthly-smoothed semantics, provenance, freshness, immutable replay and query-only HamQSL raw-count exclusion.
+- `tests/test_forge_solar_ssn.py` — NOAA published wire fixture, exact target-month
+  `predicted_ssn`, predicted/observed separation, unknown release, freshness/HTTPS/
+  schema failure, raw bytes/headers and append-only revision capture plus query-only
+  HamQSL raw-count exclusion.
 
-- `tests/test_forge_voacap_plan_main.py` — fixed-origin bounded plan construction, dry-run no-write default and explicit artifact/plan registration.
+- `tests/test_forge_voacap_plan_main.py` — fixed-origin exact forecast-month predicted
+  SSN plan construction, dry-run no-write default and explicit artifact/plan registration.
 
 - `tests/test_forge_voacap_baseline_local_http.py` — real urllib HTTP framing over an in-memory fake socket; no network egress.

@@ -7,6 +7,7 @@ clock and SQLite repository; no network adapter or process composition lives her
 from __future__ import annotations
 
 import hashlib
+import math
 import sqlite3
 import threading
 from collections.abc import Mapping, Sequence
@@ -91,6 +92,9 @@ class BaselinePlan(DomainModel):
     service_version: str = Field(min_length=1, max_length=120)
     ssn_source: str = Field(min_length=1, max_length=200)
     ssn_source_version: str = Field(min_length=1, max_length=120)
+    ssn_value_semantics: Literal["monthly_smoothed_predicted_sunspot_number"]
+    ssn_source_schema: str = Field(min_length=1, max_length=160)
+    ssn_revision_policy: str = Field(min_length=1, max_length=300)
     max_provider_calls_per_cycle: int = Field(default=8, ge=1, le=64)
     max_provider_calls_per_day: int = Field(default=128, ge=1, le=1024)
     max_slots_per_cycle: int = Field(default=64, ge=1, le=512)
@@ -136,16 +140,34 @@ class BaselinePlan(DomainModel):
 
 
 class EnvironmentSnapshot(DomainModel):
+    schema_version: Literal[2] = 2
     ssn: float = Field(ge=0)
+    value_semantics: Literal["monthly_smoothed_predicted_sunspot_number"]
+    target_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     source: str = Field(min_length=1, max_length=200)
+    source_url: str = Field(min_length=1, max_length=500)
     source_version: str = Field(min_length=1, max_length=120)
-    observed_at_utc: datetime
+    source_schema: str = Field(min_length=1, max_length=160)
+    source_revision_policy: str = Field(min_length=1, max_length=300)
+    source_record_id: str = Field(min_length=1, max_length=200)
+    source_released_at_utc: datetime | None = None
     captured_at_utc: datetime
+    raw_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    snapshot_canonical_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
-    @field_validator("observed_at_utc", "captured_at_utc")
+    @field_validator("source_released_at_utc", "captured_at_utc")
     @classmethod
-    def utc_times(cls, value: datetime) -> datetime:
-        return _utc(value)
+    def utc_times(cls, value: datetime | None) -> datetime | None:
+        return None if value is None else _utc(value)
+
+    @model_validator(mode="after")
+    def temporal_provenance(self) -> Self:
+        if (
+            self.source_released_at_utc is not None
+            and self.source_released_at_utc > self.captured_at_utc
+        ):
+            raise ValueError("SSN source release cannot postdate capture")
+        return self
 
 
 class ProviderResult(DomainModel):
@@ -235,8 +257,17 @@ class BaselineRepository:
         scheduled_at_utc: datetime,
     ) -> int:
         self.add_plan(plan)
-        if environment.source != plan.ssn_source or environment.source_version != plan.ssn_source_version:
+        if (
+            environment.source != plan.ssn_source
+            or environment.source_version != plan.ssn_source_version
+            or environment.value_semantics != plan.ssn_value_semantics
+            or environment.source_schema != plan.ssn_source_schema
+            or environment.source_revision_policy != plan.ssn_revision_policy
+        ):
             raise ValueError("environment SSN identity does not match immutable plan")
+        target_month = f"{day.year:04d}-{day.month:02d}"
+        if environment.target_month != target_month:
+            raise ValueError("environment SSN target month does not match scheduled day")
         scheduled = _utc(scheduled_at_utc)
         rows: list[tuple[Any, ...]] = []
         for target in plan.targets:
@@ -266,8 +297,18 @@ class BaselineRepository:
                             environment.ssn,
                             environment.source,
                             environment.source_version,
-                            _time(environment.observed_at_utc),
+                            environment.value_semantics,
+                            environment.target_month,
+                            environment.source_url,
+                            environment.source_schema,
+                            environment.source_revision_policy,
+                            environment.source_record_id,
+                            None if environment.source_released_at_utc is None else _time(
+                                environment.source_released_at_utc
+                            ),
                             _time(environment.captured_at_utc),
+                            environment.raw_sha256,
+                            environment.snapshot_canonical_sha256,
                             _time(scheduled),
                         )
                     )
@@ -279,9 +320,12 @@ class BaselineRepository:
                     """INSERT OR IGNORE INTO baseline_slot_v1
                     (slot_key,plan_id,forecast_for_utc,scheduled_at_utc,region_id,
                      target_grid,target_grid_precision,target_uncertainty,band_m,ssn,
-                     ssn_source,ssn_source_version,ssn_observed_at_utc,
-                     ssn_captured_at_utc,next_attempt_at_utc,status,attempt_count)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',0)""",
+                     ssn_source,ssn_source_version,ssn_value_semantics,ssn_target_month,
+                     ssn_source_url,ssn_source_schema,ssn_revision_policy,ssn_source_record_id,
+                     ssn_source_released_at_utc,ssn_captured_at_utc,ssn_raw_sha256,
+                     ssn_snapshot_sha256,
+                     next_attempt_at_utc,status,attempt_count)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',0)""",
                     row,
                 )
                 inserted += cursor.rowcount
@@ -316,7 +360,10 @@ class BaselineRepository:
             row = db.execute(
                 """SELECT slot_key,forecast_for_utc,scheduled_at_utc,region_id,target_grid,
                 target_grid_precision,target_uncertainty,band_m,ssn,ssn_source,
-                ssn_source_version,ssn_observed_at_utc,ssn_captured_at_utc,attempt_count
+                ssn_source_version,ssn_value_semantics,ssn_target_month,ssn_source_url,
+                ssn_source_schema,ssn_revision_policy,ssn_source_record_id,
+                ssn_source_released_at_utc,ssn_captured_at_utc,ssn_raw_sha256,
+                ssn_snapshot_sha256,attempt_count
                 FROM baseline_slot_v1 WHERE plan_id=? AND status IN ('pending','retry')
                 AND next_attempt_at_utc<=? ORDER BY forecast_for_utc,region_id,band_m LIMIT 1""",
                 (str(plan.plan_id), _time(now)),
@@ -332,7 +379,10 @@ class BaselineRepository:
         keys = (
             "slot_key", "forecast_for_utc", "scheduled_at_utc", "region_id", "target_grid",
             "target_grid_precision", "target_uncertainty", "band_m", "ssn", "ssn_source",
-            "ssn_source_version", "ssn_observed_at_utc", "ssn_captured_at_utc", "attempt_count",
+            "ssn_source_version", "ssn_value_semantics", "ssn_target_month", "ssn_source_url",
+            "ssn_source_schema", "ssn_revision_policy", "ssn_source_record_id",
+            "ssn_source_released_at_utc", "ssn_captured_at_utc", "ssn_raw_sha256",
+            "ssn_snapshot_sha256", "attempt_count",
         )
         result = dict(zip(keys, row, strict=True))
         result["attempt_count"] = int(result["attempt_count"]) + 1
@@ -511,6 +561,30 @@ class BaselineRepository:
     def _initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
+            existing_slot = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='baseline_slot_v1'"
+            ).fetchone()
+            if existing_slot is not None:
+                columns = {
+                    str(row[1]) for row in db.execute("PRAGMA table_info(baseline_slot_v1)")
+                }
+                required_ssn_columns = {
+                    "ssn_value_semantics",
+                    "ssn_target_month",
+                    "ssn_source_url",
+                    "ssn_source_schema",
+                    "ssn_revision_policy",
+                    "ssn_source_record_id",
+                    "ssn_source_released_at_utc",
+                    "ssn_captured_at_utc",
+                    "ssn_raw_sha256",
+                    "ssn_snapshot_sha256",
+                }
+                if not required_ssn_columns <= columns:
+                    raise ValueError(
+                        "baseline database predates predicted-SSN provenance; "
+                        "use a new reviewed C4 database"
+                    )
             db.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS baseline_schema_v1(version INTEGER PRIMARY KEY);
@@ -528,8 +602,13 @@ class BaselineRepository:
                   forecast_for_utc TEXT NOT NULL,scheduled_at_utc TEXT NOT NULL,region_id TEXT NOT NULL,
                   target_grid TEXT NOT NULL,target_grid_precision INTEGER NOT NULL,target_uncertainty TEXT NOT NULL,
                   band_m INTEGER NOT NULL,ssn REAL NOT NULL,ssn_source TEXT NOT NULL,
-                  ssn_source_version TEXT NOT NULL,ssn_observed_at_utc TEXT NOT NULL,
-                  ssn_captured_at_utc TEXT NOT NULL,status TEXT NOT NULL,reason TEXT,timing_class TEXT,
+                  ssn_source_version TEXT NOT NULL,ssn_value_semantics TEXT NOT NULL,
+                  ssn_target_month TEXT NOT NULL,ssn_source_url TEXT NOT NULL,
+                  ssn_source_schema TEXT NOT NULL,ssn_revision_policy TEXT NOT NULL,
+                  ssn_source_record_id TEXT NOT NULL,ssn_source_released_at_utc TEXT,
+                  ssn_captured_at_utc TEXT NOT NULL,ssn_raw_sha256 TEXT NOT NULL,
+                  ssn_snapshot_sha256 TEXT NOT NULL,
+                  status TEXT NOT NULL,reason TEXT,timing_class TEXT,
                   attempt_count INTEGER NOT NULL,next_attempt_at_utc TEXT NOT NULL,lease_token TEXT,
                   leased_until_utc TEXT,generated_at_utc TEXT,canonical_request_sha256 TEXT,
                   canonical_request_json TEXT,response_sha256 TEXT,provider_called INTEGER NOT NULL DEFAULT 0,
@@ -668,6 +747,16 @@ def _request(plan: BaselinePlan, claim: Mapping[str, Any]) -> dict[str, Any]:
         "ssn": claim["ssn"],
         "ssn_source": claim["ssn_source"],
         "ssn_source_version": claim["ssn_source_version"],
+        "ssn_value_semantics": claim["ssn_value_semantics"],
+        "ssn_target_month": claim["ssn_target_month"],
+        "ssn_source_url": claim["ssn_source_url"],
+        "ssn_source_schema": claim["ssn_source_schema"],
+        "ssn_revision_policy": claim["ssn_revision_policy"],
+        "ssn_source_record_id": claim["ssn_source_record_id"],
+        "ssn_source_released_at_utc": claim["ssn_source_released_at_utc"],
+        "ssn_captured_at_utc": claim["ssn_captured_at_utc"],
+        "ssn_raw_sha256": claim["ssn_raw_sha256"],
+        "ssn_snapshot_sha256": claim["ssn_snapshot_sha256"],
         "model_version": plan.model_version,
         "service_version": plan.service_version,
     }
@@ -677,9 +766,27 @@ def _validate_response(response: Mapping[str, Any], band: int, hour: int) -> Non
     cells = response.get("analysis", {}).get("best_band_by_hour") if isinstance(response.get("analysis"), dict) else None
     if not isinstance(cells, Sequence) or isinstance(cells, (str, bytes)):
         raise ProviderFailure("malformed_response", retryable=False)
-    matches = [cell for cell in cells if isinstance(cell, dict) and cell.get("hour_utc") == hour and cell.get("band_m") == band]
+    matches = [
+        cell for cell in cells
+        if isinstance(cell, dict) and cell.get("hour_utc") == hour and cell.get("band_m") == band
+    ]
     if not matches:
         raise ProviderFailure("requested_hour_band_missing", retryable=False)
+    if len(matches) != 1:
+        raise ProviderFailure("duplicate_requested_hour_band", retryable=False)
+    cell = matches[0]
+    reliability = cell.get("reliability")
+    snr = cell.get("snr_db")
+    if (
+        isinstance(reliability, bool)
+        or not isinstance(reliability, (int, float))
+        or not math.isfinite(float(reliability))
+        or not 0 <= float(reliability) <= 1
+        or isinstance(snr, bool)
+        or not isinstance(snr, (int, float))
+        or not math.isfinite(float(snr))
+    ):
+        raise ProviderFailure("malformed_requested_hour_band", retryable=False)
 
 
 def _timing(claim: Mapping[str, Any], generated: datetime) -> TimingClass:

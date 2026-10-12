@@ -50,9 +50,20 @@ def _fixture(tmp_path: Path, *, forecast_after_choice: bool = False) -> tuple[Pa
                             uncertainty="grid4 only"),),
         model_version="model-1", service_version="svc-1",
         ssn_source="synthetic", ssn_source_version="1",
+        ssn_value_semantics="monthly_smoothed_predicted_sunspot_number",
+        ssn_source_schema="fixture-schema-v1",
+        ssn_revision_policy="append-only fixture captures",
     )
-    request = '{"bands_m":[20],"hour_utc":12}'
-    response = '{"analysis":{"best_band_by_hour":[{"band_m":20,"hour_utc":12}]}}'
+    request = (
+        '{"bands_m":[20],"ssn_raw_sha256":"' + "a" * 64
+        + '","ssn_revision_policy":"append-only fixture captures",'
+        '"ssn_source":"synthetic","ssn_source_record_id":"2026-10:predicted_ssn",'
+        '"ssn_source_schema":"fixture-schema-v1","ssn_source_version":"1",'
+        '"ssn_snapshot_sha256":"' + "b" * 64 + '",'
+        '"ssn_target_month":"2026-10",'
+        '"ssn_value_semantics":"monthly_smoothed_predicted_sunspot_number"}'
+    )
+    response = '{"analysis":{"best_band_by_hour":[{"band_m":20,"hour_utc":12,"reliability":0.5,"snr_db":10.0}]}}'
     reqsha = hashlib.sha256(request.encode()).hexdigest()
     respsha = hashlib.sha256(response.encode()).hexdigest()
     generated = START - timedelta(minutes=5)
@@ -68,12 +79,19 @@ def _fixture(tmp_path: Path, *, forecast_after_choice: bool = False) -> tuple[Pa
         db.execute("""CREATE TABLE baseline_slot_v1
         (plan_id TEXT,target_grid TEXT,band_m INTEGER,forecast_for_utc TEXT,
          generated_at_utc TEXT,canonical_request_sha256 TEXT,
-         canonical_request_json TEXT,response_sha256 TEXT,ssn_observed_at_utc TEXT,
-         ssn_captured_at_utc TEXT,status TEXT,timing_class TEXT)""")
-        db.execute("INSERT INTO baseline_slot_v1 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+         canonical_request_json TEXT,response_sha256 TEXT,ssn_value_semantics TEXT,
+         ssn_target_month TEXT,ssn_source TEXT,ssn_source_version TEXT,
+         ssn_source_schema TEXT,ssn_revision_policy TEXT,ssn_source_record_id TEXT,
+         ssn_source_released_at_utc TEXT,ssn_captured_at_utc TEXT,ssn_raw_sha256 TEXT,
+         ssn_snapshot_sha256 TEXT,
+         status TEXT,timing_class TEXT)""")
+        db.execute("INSERT INTO baseline_slot_v1 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                    (str(plan.plan_id),"FN31",20,START.isoformat(),generated.isoformat(),
-                    reqsha,request,respsha,(START-timedelta(hours=2)).isoformat(),
-                    (START-timedelta(hours=1)).isoformat(),"ready","pre_choice"))
+                    reqsha,request,respsha,"monthly_smoothed_predicted_sunspot_number",
+                    "2026-10","synthetic","1","fixture-schema-v1",
+                    "append-only fixture captures","2026-10:predicted_ssn",None,
+                    (START-timedelta(hours=1)).isoformat(),"a"*64,"b"*64,
+                    "ready","pre_choice"))
     return inbox, history, c4
 
 
@@ -85,12 +103,26 @@ def test_valid_regional_prechoice_joins_but_does_not_qualify_power(tmp_path: Pat
     assert result["distinct_provider_request_inputs"] == 1
     assert result["calibrated_for_power"] is False
     assert result["noninferiority_vs_20w_established"] is False
+    assert result["training_eligible"] is False
 
 
 def test_forecast_generated_after_choice_is_not_prospective(tmp_path: Path) -> None:
     paths = _fixture(tmp_path, forecast_after_choice=True)
     result = audit_c4_choice_pairs(*paths)
     assert result["regional_asof_comparisons"] == 0
+
+
+def test_observed_ssn_semantic_is_not_prospective_c4_evidence(tmp_path: Path) -> None:
+    paths = _fixture(tmp_path)
+    with sqlite3.connect(paths[2]) as db:
+        db.execute(
+            "UPDATE baseline_slot_v1 SET ssn_value_semantics=?",
+            ("monthly_smoothed_observed_sunspot_number",),
+        )
+    result = audit_c4_choice_pairs(*paths)
+    assert result["regional_asof_comparisons"] == 0
+    assert result["training_eligible"] is False
+    assert result["reason_counts"]["invalid_forecast_source"] == 1
 
 
 def test_missing_sources_fail_closed(tmp_path: Path) -> None:
