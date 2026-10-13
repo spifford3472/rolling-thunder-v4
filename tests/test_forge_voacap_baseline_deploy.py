@@ -43,3 +43,18 @@ def test_installer_preflights_venv_access_before_link_or_systemd_mutation() -> N
     assert install.index(launcher_preflight) < install.index(unit_install)
     assert install.index(launcher_preflight) < install.index(current_link)
     assert install.index("trap rollback ERR") < install.index(unit_install)
+
+def test_upgrade_script_preserves_existing_release_and_fails_closed() -> None:
+    path = ROOT / "deploy/scripts/upgrade-forge-voacap-baseline.sh"
+    assert subprocess.run(["bash", "-n", str(path)], check=False).returncode == 0
+    script = path.read_text()
+    assert "ssn_snapshot_path" in script
+    assert "trap rollback ERR" in script
+    assert "mv -Tf" in script
+    assert 'previous-release' in script
+    assert 'cp -p "$CONFIG" "$BACKUP/config.json"' in script
+    assert 'all(v.get(g) is False' in script
+    assert 'systemctl stop "$TIMER"' in script
+    assert 'systemctl start "$SERVICE"' in script
+    assert 'systemctl enable --now "$TIMER"' in script
+    assert "systemctl disable --now" not in script
