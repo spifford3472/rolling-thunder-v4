@@ -160,3 +160,27 @@ silently drain or rewrite that historical backlog. Database ready-state,
 plan lineage, per-region coverage, rollback and fresh snapshot publication
 require acceptance before any automatic gates can be enabled. Keep all
 three production gates false until these conditions are verified.
+
+### NOAA refresh implementation and queue isolation
+
+A separate `forge_voacap_noaa_refresh_main` utility retrieves exactly one
+target month from the pinned NOAA HTTPS feed, validates source provenance
+against an immutable plan, and produces snapshot/environment JSON artifacts.
+Its `--apply` mode atomically replaces each artifact in the same directory;
+the sampler checks their canonical hashes and fails closed on any in-flight
+mismatch. The HTTPS publisher is **not** part of the localhost-only sampling
+service and must be run under a separately reviewed least-privilege systemd
+unit/timer before live activation. No live NOAA fetch or protected publication
+is required for its unit tests.
+
+The C4 claim query includes `WHERE plan_id=?`, which isolates the 420
+historical pilot slots from a new operational plan. A 15-call-per-cycle,
+60-call-per-UTC-day budget does **not** calculate all 15 regions x 7 bands x
+4 six-hour slots (420 per day); it is a sampled subset. A future coverage
+algorithm must deliberately rotate target regions and bands, rather than
+assume the oldest queued 15 slots give balanced international coverage.
+
+**GO/NO-GO:** Keep all three gates OFF pending a dedicated NOAA refresh
+unit, a new reviewed operational plan, region/band coverage scheduling, root
+owner database acceptance, and reversible deployment. Standing authorization
+for recurring software calculations does not bypass these engineering gates.
