@@ -1,0 +1,21 @@
+[Unit]
+Description=Forge C6 NOAA predicted SSN snapshot publisher (no VOACAP calls)
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/rolling-thunder-forge-voacap-baseline/plan.json
+
+[Service]
+Type=oneshot
+User=rolling-thunder-noaa
+Group=rolling-thunder-noaa
+ExecStart=/opt/rolling-thunder-forge-voacap-baseline/current/.venv/bin/python -m rolling_thunder.forge_voacap_noaa_refresh_main --plan /etc/rolling-thunder-forge-voacap-baseline/plan.json --snapshot-output /etc/rolling-thunder-forge-voacap-baseline/noaa-snapshot.json --environment-output /etc/rolling-thunder-forge-voacap-baseline/environment.json --apply
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/rolling-thunder-forge-voacap-baseline
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0022
+TimeoutStartSec=35s

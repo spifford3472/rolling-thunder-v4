@@ -463,3 +463,9 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/forge_voacap_plan_main.py` — C6.2 dry-run-first audited
   fixed-origin C4 plan/environment builder requiring exact NOAA forecast-month
   semantics/provenance, with explicit optional plan registration.
+
+- `src/rolling_thunder/forge_voacap_noaa_refresh_main.py` — isolated,
+  no-VOACAP-POST NOAA predicted SSN artifact publisher used by the C6
+  publisher service/timer; never part of Pi control path.
+- `deploy/systemd/rolling-thunder-forge-noaa-refresh.{service,timer}` —
+  opt-in Forge refresh service examples, not installed/activated by git.
