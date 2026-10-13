@@ -17,6 +17,20 @@ Changes must consider POTA, DX, Browse/pending-callsign flows, map-overlay
 placement, Settings enable/disable behavior, and Forge callsign-intelligence
 responses.
 
+## Antenna reference and RF exposure advisory
+
+The antenna-reference subsystem shares only the local SQLite migration mechanism;
+its tables and repository do not alter contact, radio, GPS, map, or preference
+semantics. Catalog antennas remain separate from physical installations. Unknown
+gain or loss is never zero, gain is never interpolated beyond an explicit frequency
+segment, and HF support never implies 6 m support.
+
+RF exposure output is a versioned plane-wave approximation. It must always retain
+both controlled and uncontrolled FCC limits, its reflection assumption, citations,
+and uncertainty warnings. It must never publish a compliant/safe verdict, create an
+interlock, derive live transmit authority, change output power, or issue CAT/PTT.
+The default 6 ft distance is unverified scenario data, not vehicle geometry.
+
 ## Local-first contact durability
 
 A successful operator Commit must be durable locally before remote

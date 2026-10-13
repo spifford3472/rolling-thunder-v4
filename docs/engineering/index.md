@@ -8,6 +8,9 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `antenna-reference-rf-exposure.md` — offline immutable antenna catalog,
+  installation/loss records, versioned FCC MPE plane-wave advisory calculator,
+  schema-21 persistence, limits, and deferred acceptance tasks.
 - `voacap-ft8-phase-a.md` — VOACAP/FT8 Phase A as-built audit, schema decisions, and review gates (design only).
 - `voacap-ft8-phase-b.md` — additive attempt ledger, Forge inbox, immutable
   VOACAP correlation, migration/rollback, and offline acceptance.

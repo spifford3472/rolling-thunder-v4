@@ -32,6 +32,14 @@ def test_schema_migration_creates_operator_preferences_table(tmp_path: Path) -> 
     initialize_database(database_path)
 
     with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP TABLE rf_exposure_scenarios")
+        connection.execute("DROP TABLE antenna_mode_profiles")
+        connection.execute("DROP TABLE antenna_installation_band_assignments")
+        connection.execute("DROP TABLE antenna_loss_segments")
+        connection.execute("DROP TABLE antenna_installations")
+        connection.execute("DROP TABLE antenna_gain_segments")
+        connection.execute("DROP TABLE antenna_band_associations")
+        connection.execute("DROP TABLE antenna_catalog")
         connection.execute("DROP TABLE dx_worked_markers")
         connection.execute("DROP TABLE ft8_performance_outbox")
         connection.execute("DROP TABLE pota_worked_markers")

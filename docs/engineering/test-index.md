@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 337.**
+**Cataloged Python test modules: 355.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -80,6 +80,15 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_radio_band.py`
 - `tests/test_radio_polling.py`
 - `tests/test_receive_tuning.py`
+
+## Antenna reference and RF exposure
+
+- `tests/test_rf_exposure_calculator.py` — immutable validation, gain conversion,
+  incomplete inputs, duty/fraction separation, reflection assumptions, equations,
+  and the FCC boundary matrix.
+- `tests/test_antenna_reference_repository.py` — schema-21 preservation and
+  rollback, no seeded values, UUID aggregate round trips, assignment ownership,
+  and typed service evaluation.
 
 ## GPS and time
 

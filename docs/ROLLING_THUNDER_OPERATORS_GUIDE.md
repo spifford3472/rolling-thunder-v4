@@ -694,6 +694,18 @@ preferences without editing configuration files.
 The page displays the effective zoom and availability of the map/radar/callsign
 controls.
 
+## Antenna reference / RF exposure status
+
+Version 1 of the offline antenna-reference and RF-exposure calculation core is not
+connected to the dashboard or Settings screen. There is currently no operator
+control, advisory display, RF interlock, or automatic power action. Do not treat the
+repository's 6 ft scenario default as a measured driver, passenger, or bystander
+distance, and do not use a plane-wave estimate as a safety or compliance finding.
+Actual antenna gain, frequency coverage, installation loss, occupant geometry, and
+transmit-duty data must be entered and checked against the current ARRL reference
+before operational use. Six-metre support must be recorded explicitly; an HF
+antenna entry does not imply 6 m capability.
+
 A manual DAY/NIGHT selection can temporarily override automatic solar style
 selection until the next real solar transition. The callsign-information
 mini-map follows the same accepted DAY/NIGHT selection; map zoom remains a

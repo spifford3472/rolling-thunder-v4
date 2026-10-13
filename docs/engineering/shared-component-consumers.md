@@ -17,6 +17,7 @@ This document prevents feature-scoped work from accidentally breaking shared beh
 | Operator preferences | `operator_preferences.py`, settings controllers | map zoom/style, radar image, callsign info and future preferences | Medium: persisted keys are cross-session contracts |
 | Physical controls | `physical_controls.py`, dispatcher/source modules | all active contexts | Critical: action remapping can change behavior across every screen |
 | Context navigation | `context_navigation.py` | all screens, physical NEXT/BACK/home behavior, keyboard test shortcuts | High |
+| Local SQLite schema | `storage.py` | contacts/retry, retained caches, worked markers, preferences, antenna reference | High: migrations are additive and transactional; preserve every existing table/row and reject newer schemas |
 | Forge spot API | `forge_spot_api.py`, Pi Forge spot clients | POTA, DX, health/status | High: reusable external contract |
 | Forge map API layer | `forge_map.py`, `forge_map_api.py`, `forge_spot_main.py` | callsign mini-map and future authorized private clients; shares the spot/weather/radar listener | High: route or listener changes must preserve every existing Forge API |
 | Forge weather API | `forge_weather*.py`, Pi weather clients | WEATHER, map local temperature, alerts/status | High: shared retained-state contract |

@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 320.**
+**Cataloged Python modules: 335.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -53,6 +53,17 @@ originates from one screen.
 - `src/rolling_thunder/radio_band.py` — Module providing radio band behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/radio_polling.py` — Module providing radio polling behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/receive_tuning.py` — Shared typed receive-tuning authority used instead of feature-specific raw CAT.
+
+## Antenna reference and RF exposure
+
+- `src/rolling_thunder/antenna_reference_domain.py` — Immutable sourced antenna,
+  installation, band, gain/loss, mode-profile, and scenario value models.
+- `src/rolling_thunder/antenna_reference_repository.py` — Local schema-21 SQLite
+  aggregate persistence with stable UUIDs and no seeded installation assumptions.
+- `src/rolling_thunder/antenna_reference_service.py` — Typed hardware-free
+  application boundary for persistence and advisory evaluation.
+- `src/rolling_thunder/rf_exposure_calculator.py` — Pure versioned peak ERP/EIRP,
+  time-average power, FCC MPE, and plane-wave distance estimator.
 
 ## GPS and time
 
@@ -361,7 +372,8 @@ originates from one screen.
 
 ## Infrastructure
 
-- `src/rolling_thunder/storage.py` — SQLite schema initialization and shared storage infrastructure.
+- `src/rolling_thunder/storage.py` — SQLite schema initialization and shared storage
+  infrastructure, including additive antenna-reference schema 21.
 - `src/rolling_thunder/threaded_poll_scheduler.py` — Module providing threaded poll scheduler behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/threading_scheduler.py` — Module providing threading scheduler behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 
