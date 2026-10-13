@@ -126,3 +126,18 @@ def test_plan_rejects_more_than_16_regions() -> None:
     ]
     with pytest.raises(ValidationError):
         InitialPlanManifest.model_validate(base)
+
+
+def test_opt_in_operational_plan_is_bounded_and_pilot_stays_unchanged() -> None:
+    manifest = _manifest()
+    snapshot = _snapshot()
+    pilot, _, pilot_audit = build_artifacts(manifest, snapshot)
+    production, _, audit = build_artifacts(manifest, snapshot, operational=True)
+    assert (pilot.max_provider_calls_per_cycle, pilot.max_provider_calls_per_day) == (1, 1)
+    assert pilot_audit["operational"] is False
+    assert (production.max_provider_calls_per_cycle, production.max_provider_calls_per_day) == (15, 60)
+    assert production.max_slots_per_cycle == 15
+    assert production.provider_timeout_s == 10.0
+    assert production.reference_power_watts == 20
+    assert production.max_attempts == 1
+    assert audit["operational"] is True

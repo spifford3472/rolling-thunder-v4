@@ -46,7 +46,8 @@ class InitialPlanManifest(DomainModel):
 
 
 def build_artifacts(
-    manifest: InitialPlanManifest, snapshot: SmoothedSsnSnapshot
+    manifest: InitialPlanManifest, snapshot: SmoothedSsnSnapshot, *,
+    operational: bool = False,
 ) -> tuple[BaselinePlan, EnvironmentSnapshot, dict[str, object]]:
     snapshot.require_for_target(
         target_month=manifest.forecast_target_month,
@@ -69,9 +70,9 @@ def build_artifacts(
         ssn_value_semantics="monthly_smoothed_predicted_sunspot_number",
         ssn_source_schema=snapshot.source_schema,
         ssn_revision_policy=snapshot.source_revision_policy,
-        max_provider_calls_per_cycle=1,
-        max_provider_calls_per_day=1,
-        max_slots_per_cycle=1,
+        max_provider_calls_per_cycle=15 if operational else 1,
+        max_provider_calls_per_day=60 if operational else 1,
+        max_slots_per_cycle=15 if operational else 1,
         provider_timeout_s=10.0,
         max_attempts=1,
     )
@@ -93,6 +94,7 @@ def build_artifacts(
     audit: dict[str, object] = {
         "contract": "c4-plan-creation-audit-v1",
         "dry_run_default": True,
+        "operational": operational,
         "origin_grid6": FIXED_ORIGIN_GRID6,
         "target_count": len(plan.targets),
         "plan_id": str(plan.plan_id),
@@ -121,10 +123,12 @@ def main() -> None:
     parser.add_argument("--environment-output", type=Path)
     parser.add_argument("--database", type=Path)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--operational", action="store_true",
+                        help="Opt-in 15-post/cycle, 60-post/day plan; pilot remains one POST")
     args = parser.parse_args()
     manifest = InitialPlanManifest.model_validate_json(args.manifest.read_text())
     snapshot = SmoothedSsnSnapshot.model_validate_json(args.ssn_snapshot.read_text())
-    plan, environment, audit = build_artifacts(manifest, snapshot)
+    plan, environment, audit = build_artifacts(manifest, snapshot, operational=args.operational)
     if not args.apply:
         print(json.dumps({**audit, "state": "dry_run", "database_changed": False}, sort_keys=True))
         return
