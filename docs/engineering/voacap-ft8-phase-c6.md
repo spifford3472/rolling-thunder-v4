@@ -129,3 +129,13 @@ implemented and tested. The engine binary may be SHA-256 fingerprinted
 out-of-band for audit, but that is not equivalent to the service attesting the
 running engine. The script is a candidate only, not blanket installation,
 model verification, live provider use, or C6.4 activation authorization.
+
+## C6 model attestation handshake (pending upstream provider rollout)
+
+Before scheduling or POST, C4 GET /version now requires `model_version`
+equal to the immutable plan identity; absent or unequal identity fails closed.
+Each successful summary POST must independently return the same model identity
+before it may become a ready result. The existing VOACAP service 0.3.0 does
+not yet serve this contract and MUST be upgraded/verified separately before a
+pilot. A local file hash or administrator assertion alone does not satisfy this
+network-level handshake. This change never relaxes provider budgets or gates.

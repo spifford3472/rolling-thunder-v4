@@ -86,6 +86,8 @@ class LocalVoacapProvider:
             raise ProviderFailure("provider_identity_mismatch", retryable=False)
         if str(version.get("version", "")) != self.service_version:
             raise ProviderFailure("provider_version_mismatch", retryable=False)
+        if str(version.get("model_version", "")) != self.model_version:
+            raise ProviderFailure("provider_model_identity_mismatch", retryable=False)
         self._version_verified = True
 
     def predict(self, request: dict[str, Any] | Any, *, timeout_s: float) -> ProviderResult:
@@ -106,6 +108,8 @@ class LocalVoacapProvider:
             raise
         except Exception as exc:
             raise ProviderFailure("loopback_voacap_unavailable", retryable=True) from exc
+        if str(response.get("model_version", "")) != self.model_version:
+            raise ProviderFailure("provider_response_model_mismatch", retryable=False)
         return ProviderResult(
             response_json=response, service_version=self.service_version,
             model_version=self.model_version,
