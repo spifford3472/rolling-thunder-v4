@@ -416,3 +416,15 @@ def test_audit_identities_and_no_network_implementation_are_unchanged() -> None:
     assert "urllib" not in source
     assert "httpx" not in source
     assert "socket" not in source
+
+
+def test_forecast_queue_prefers_future_slots_over_expired_backlog(tmp_path: Path) -> None:
+    """An old pending slot cannot crowd out a prospective future prediction."""
+    repo = BaselineRepository(tmp_path / "future-priority.sqlite3")
+    plan = _plan()
+    repo.schedule_day(plan, date(2026, 10, 9), _environment(),
+                      scheduled_at_utc=NOW - timedelta(days=2))
+    repo.schedule_day(plan, DAY, _environment(), scheduled_at_utc=NOW)
+    claim = repo.claim_one(plan, NOW)
+    assert claim is not None
+    assert str(claim["forecast_for_utc"]).startswith("2026-10-11")

@@ -365,8 +365,9 @@ class BaselineRepository:
                 ssn_source_released_at_utc,ssn_captured_at_utc,ssn_raw_sha256,
                 ssn_snapshot_sha256,attempt_count
                 FROM baseline_slot_v1 WHERE plan_id=? AND status IN ('pending','retry')
-                AND next_attempt_at_utc<=? ORDER BY forecast_for_utc,band_m,region_id LIMIT 1""",
-                (str(plan.plan_id), _time(now)),
+                AND next_attempt_at_utc<=?
+                ORDER BY CASE WHEN forecast_for_utc>=? THEN 0 ELSE 1 END, forecast_for_utc,band_m,region_id LIMIT 1""",
+                (str(plan.plan_id), _time(now), _time(now)),
             ).fetchone()
             if row is None:
                 return None
