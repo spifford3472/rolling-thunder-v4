@@ -1,9 +1,9 @@
-# Rolling Thunder v4.3.0
+# Rolling Thunder v4.4.1
 
 Rolling Thunder is a Raspberry Pi-based mobile amateur-radio operating and
 logging console.
 
-**v4.3.0 is the current official Rolling Thunder release.** Native FT8 is now
+**v4.4.1 is the current official Rolling Thunder release.** Native FT8 is now
 a supported part of the integrated mobile operating system after deterministic,
 repository, and installed-hardware acceptance.
 
@@ -24,6 +24,15 @@ The authoritative design is:
 `docs/RollingThunder_v4.1.0_Architecture_Specification.md`
 
 ## Current Release
+
+**v4.4.1 — Forge C6 NOAA-assisted six-hour VOACAP forecasting checkpoint.**
+
+Forge-only operational commissioning adds NOAA predicted SSN evidence, immutable
+15-region plans, bounded 15-per-cycle/60-per-UTC-day forecasting, live acceptance,
+and an explicit six-hour UTC timer. This does not authorize autonomous RF
+transmission, FT8 transmit-power changes, or changes to mobile controls.
+Mobile deployment requires separate validation and approval.
+
 
 **v4.3.0 — native FT8 plus the v4.2 mapping and operating-intelligence platform**
 
