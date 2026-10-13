@@ -184,3 +184,19 @@ assume the oldest queued 15 slots give balanced international coverage.
 unit, a new reviewed operational plan, region/band coverage scheduling, root
 owner database acceptance, and reversible deployment. Standing authorization
 for recurring software calculations does not bypass these engineering gates.
+
+### Commissioning-stage timer and deterministic coverage order
+
+The `rolling-thunder-forge-noaa-refresh` example systemd units run the
+refresh publisher under a dedicated `rolling-thunder-noaa` account every six
+hours. A separately reviewed deployment must create that user, grant only
+write permission to the artifact directory, and use the sampler unit dependency to require successful refresh before
+each run (calendar ordering alone does not guarantee this).
+**The unit files are not installed or enabled by the repository change.**
+
+The queue now orders by forecast UTC, **band**, then region, instead of
+region then band. With 15 reviewed targets and 15 calls per cycle, this
+prioritizes region-diverse samples before requesting another band's set.
+This is deterministic per time/band, rather than a comprehensive all-band
+coverage guarantee. The 420 previously scheduled pilot slots remain tied
+to their historical plan ID and are not drained by a new plan.

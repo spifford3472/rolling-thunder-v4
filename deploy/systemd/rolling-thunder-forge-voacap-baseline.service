@@ -1,6 +1,7 @@
 [Unit]
 Description=Forge C4 bounded VOACAP baseline sampler (disabled by default)
-After=local-fs.target
+After=local-fs.target rolling-thunder-forge-noaa-refresh.service
+Requires=rolling-thunder-forge-noaa-refresh.service
 ConditionPathExists=/etc/rolling-thunder-forge-voacap-baseline/config.json
 
 [Service]
