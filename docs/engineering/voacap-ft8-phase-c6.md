@@ -139,3 +139,24 @@ before it may become a ready result. The existing VOACAP service 0.3.0 does
 not yet serve this contract and MUST be upgraded/verified separately before a
 pilot. A local file hash or administrator assertion alone does not satisfy this
 network-level handshake. This change never relaxes provider budgets or gates.
+
+## C6 unattended operation (standing owner authorization, staged)
+
+Owner authorizes recurring software-only VOACAP requests under a six-hour
+cadence without per-forecast human approvals. This is **not** authorization
+for RF transmission, CAT/PTT control, or changes to FT8 transmit power.
+
+`forge_voacap_plan_main --operational` is explicit opt-in and creates an
+immutable plan allowing at most 15 provider POSTs per scheduler run and 60
+per UTC day, with 10 seconds per POST, one attempt and a 20 W reference input.
+The original default/pilot plan remains limited to one POST per day and cycle.
+
+**Activation blockers:** The sampler will reject NOAA evidence older than
+24 hours and the systemd service allows only localhost networking; a
+separate reviewed NOAA refresh publisher is needed before enabling the timer.
+The previous one-post pilot scheduled 420 slots for its immutable plan;
+these are not 420 completed forecasts. A fresh operational plan must not
+silently drain or rewrite that historical backlog. Database ready-state,
+plan lineage, per-region coverage, rollback and fresh snapshot publication
+require acceptance before any automatic gates can be enabled. Keep all
+three production gates false until these conditions are verified.
