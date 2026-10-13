@@ -20,7 +20,10 @@ def build_environment(plan: BaselinePlan, *, now: datetime) -> tuple[str, str]:
     month = f"{tomorrow.year:04d}-{tomorrow.month:02d}"
     snapshot = NoaaSwpcPredictedSsnAdapter(
         transport=UrllibSsnFeedTransport(), timeout_s=10.0
-    ).fetch(target_month=month, as_of_utc=now)
+    ).fetch(target_month=month)
+    # A real HTTPS capture occurs after the caller chooses its target month.
+    # Validate the returned evidence against its actual capture timestamp;
+    # the sampler separately rejects stale or future-dated artifacts.
     if (
         snapshot.source_id != plan.ssn_source
         or snapshot.source_version != plan.ssn_source_version

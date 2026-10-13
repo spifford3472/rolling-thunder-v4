@@ -56,6 +56,7 @@ def test_noaa_refresh_identity_and_paired_artifacts(monkeypatch: pytest.MonkeyPa
             pass
         def fetch(self, **kwargs: object):
             assert kwargs["target_month"] == "2026-10"
+            assert "as_of_utc" not in kwargs
             return _snapshot()
     monkeypatch.setattr(module, "NoaaSwpcPredictedSsnAdapter", FakeAdapter)
     snapshot, env = build_environment(plan, now=datetime(2026, 10, 12, 12, tzinfo=UTC))
