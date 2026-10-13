@@ -12,6 +12,8 @@ ROOT=/opt/rolling-thunder-forge-voacap-baseline
 CONFIG=/etc/rolling-thunder-forge-voacap-baseline/config.json
 SERVICE=rolling-thunder-forge-voacap-baseline.service
 TIMER=rolling-thunder-forge-voacap-baseline.timer
+NOAA_SERVICE=rolling-thunder-forge-noaa-refresh.service
+NOAA_TIMER=rolling-thunder-forge-noaa-refresh.timer
 [[ $EUID == 0 && $SHA =~ ^[0-9a-f]{40}$ ]] || exit 3
 [[ $STAGE == /var/lib/rolling-thunder-forge-deploy/staging/voacap-baseline/* && -d $STAGE && ! -L $STAGE ]] || exit 3
 [[ $(stat -c %u "$STAGE") == 0 && $(stat -c %a "$STAGE") == 700 ]] || exit 3
@@ -24,10 +26,11 @@ python3 - "$CONFIG" <<'PY'
 import json,sys
 v=json.load(open(sys.argv[1]))
 assert all(v.get(g) is False for g in ('process_enabled','scheduler_enabled','provider_enabled'))
-assert v.get('database_path') == '/var/lib/rolling-thunder-forge-propagation/c4-baseline.sqlite3'
+assert v.get('database_path') in ('/var/lib/rolling-thunder-forge-propagation/c4-baseline.sqlite3', '/var/lib/rolling-thunder-forge-propagation/c6-predicted-ssn-baseline-20261013.sqlite3')
 assert v.get('ssn_snapshot_path'), 'new release requires explicit NOAA snapshot path'
 print('PASS: three activation gates OFF and source configuration present')
 PY
+for unit in "$NOAA_SERVICE" "$NOAA_TIMER"; do [[ -f "$STAGE/$unit" ]] || exit 4; done
 (cd "$STAGE/wheelhouse" && sha256sum -c SHA256SUMS >/dev/null)
 VERSION=$(cat "$STAGE/PROJECT_VERSION")
 [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 4
@@ -41,6 +44,9 @@ for u in "$SERVICE" "$TIMER"; do
  cp -p "/etc/systemd/system/$u" "$BACKUP/$u"
 done
 printf '%s\n' "$OLD" > "$BACKUP/previous-release"
+for unit in "$NOAA_SERVICE" "$NOAA_TIMER"; do
+ if [[ -f /etc/systemd/system/$unit ]]; then cp -p "/etc/systemd/system/$unit" "$BACKUP/$unit"; fi
+done
 RELEASE="$ROOT/releases/$SHA"
 install -d -o root -g root -m 0755 "$RELEASE"
 SWITCHED=false
@@ -52,9 +58,13 @@ rollback() {
    mv -Tf "$ROOT/.current-rollback-$$" "$ROOT/current"
    cp -p "$BACKUP/config.json" "$CONFIG"
    for u in "$SERVICE" "$TIMER"; do cp -p "$BACKUP/$u" "/etc/systemd/system/$u"; done
+   for unit in "$NOAA_SERVICE" "$NOAA_TIMER"; do
+     if [[ -f "$BACKUP/$unit" ]]; then cp -p "$BACKUP/$unit" "/etc/systemd/system/$unit"
+     else rm -f "/etc/systemd/system/$unit"; fi
+   done
    systemctl daemon-reload
  fi
- systemctl enable --now "$TIMER" >/dev/null 2>&1 || true
+ systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
  echo "UPGRADE_ROLLBACK_BACKUP=$BACKUP" >&2
  exit "$result"
 }
@@ -70,14 +80,17 @@ find "$RELEASE" -type f -exec chmod a+r,go-w {} +
 systemctl stop "$TIMER"
 install -o root -g root -m 0644 "$STAGE/$SERVICE" "/etc/systemd/system/$SERVICE"
 install -o root -g root -m 0644 "$STAGE/$TIMER" "/etc/systemd/system/$TIMER"
+for unit in "$NOAA_SERVICE" "$NOAA_TIMER"; do install -o root -g root -m 0644 "$STAGE/$unit" "/etc/systemd/system/$unit"; done
 ln -s "releases/$SHA" "$ROOT/.current-upgrade-$$"
 mv -Tf "$ROOT/.current-upgrade-$$" "$ROOT/current"
 SWITCHED=true
 systemctl daemon-reload
-systemctl start "$SERVICE"
-systemctl enable --now "$TIMER"
-[[ $(systemctl show -P Result "$SERVICE") == success ]]
-systemctl is-active --quiet "$TIMER"
+systemctl disable "$NOAA_TIMER" >/dev/null 2>&1 || true
+# Do not trigger a NOAA fetch or provider process during disabled cutover.
+# Explicitly keep the sampling timer stopped until NOAA account, refreshed
+# artifacts and the reviewed immutable operational plan are commissioned.
+systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
+"$RELEASE/.venv/bin/rolling-thunder-forge-voacap-baseline" --config "$CONFIG" --check-config
 python3 - "$CONFIG" <<'PY'
 import json,sys
 v=json.load(open(sys.argv[1]))

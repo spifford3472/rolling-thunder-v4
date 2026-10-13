@@ -36,6 +36,9 @@ find "$DEPENDENCY_WHEELHOUSE" -maxdepth 1 -type f -name '*.whl' ! -name 'rolling
 [[ -f "$DEST/wheelhouse/rolling_thunder-${VERSION}-py3-none-any.whl" ]] || { echo 'ERROR: app wheel missing' >&2; exit 5; }
 cp "$TEMP/src/deploy/systemd/rolling-thunder-forge-voacap-baseline.service" "$DEST/"
 cp "$TEMP/src/deploy/systemd/rolling-thunder-forge-voacap-baseline.timer" "$DEST/"
+for unit in rolling-thunder-forge-noaa-refresh.service rolling-thunder-forge-noaa-refresh.timer; do
+ cp "$TEMP/src/deploy/systemd/$unit" "$DEST/"
+done
 printf '%s\n' "$SHA" > "$DEST/COMMIT_SHA"
 printf 'forge-voacap-baseline\n' > "$DEST/COMPONENT"
 printf '%s\n' "$VERSION" > "$DEST/PROJECT_VERSION"
