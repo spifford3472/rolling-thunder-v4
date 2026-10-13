@@ -27,7 +27,6 @@ class AntennaPanelCommands(Protocol):
 
     def select_previous(self) -> bool: ...
     def select_next(self) -> bool: ...
-    def clear_evaluation(self) -> bool: ...
 
 
 class AntennaAwareActivePanelCommands:
@@ -73,9 +72,7 @@ class AntennaAwareActivePanelCommands:
         return False if self._active() else self._delegate.activate_selection()
 
     def back(self) -> bool:
-        if self._active():
-            return self._antenna_panel.clear_evaluation()
-        return self._delegate.back()
+        return False if self._active() else self._delegate.back()
 
     def synchronize_radio_state(self) -> bool:
         return self._delegate.synchronize_radio_state()

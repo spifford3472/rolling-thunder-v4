@@ -187,11 +187,11 @@ physical_controls:
     encoder-switch-short: activate_selection
     encoder-switch-long: back
 
-# Offline advisory only. It never reads or commands the radio. Keep setup_enabled
-# false while mobile; setup/evaluation entry is intended only for a parked bench.
+# Read-only offline advisory. Manual off-car YAML is the sole data authority.
+# Copy antenna-reference.example.yaml, add only sourced values, and restart.
 antenna_reference:
   enabled: false
-  setup_enabled: false
+  data_file: antenna-reference.yaml
 
 ft8:
   # FT8-P1 recommendation-only power policy; NEVER authorizes CAT power changes.

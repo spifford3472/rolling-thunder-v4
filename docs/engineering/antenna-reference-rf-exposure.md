@@ -1,92 +1,120 @@
 # Antenna Reference and RF Exposure v1
 
-## Implemented scope
+## Implemented scope and authority
 
-This feature is an offline, non-actuating reference subsystem. It does not read a
-radio, issue CAT commands, key PTT, set output power, create an interlock, or contact
-Forge. An optional dashboard context now presents already-published immutable data
-and submits transient advisory calculations through a bounded background controller.
+This feature is an offline, non-actuating, strictly read-only reference subsystem.
+Its sole runtime data authority is the manually maintained YAML named by
+`antenna_reference.data_file`. Operators edit that file off-car and restart Rolling
+Thunder; the application does not periodically reload it and no dashboard,
+keyboard, mouse, touchscreen, encoder, button, radio, or future voice path may
+mutate antenna, installation, mode, scenario, or calculation inputs.
+
+`antenna_reference.enabled` defaults false. When false, the ANTENNAS context,
+configuration source, background controller, widgets, and shortcut are not
+constructed and the established navigation order is unchanged. When true,
+`data_file` is required, ANTENNAS follows SETTINGS, and bench shortcut `a` selects
+the context. Encoder movement changes only the currently viewed immutable card.
+Encoder activation, Back, and all context buttons do nothing. There is no setup or
+edit gate.
+
+The feature does not read a radio, issue CAT, key PTT, set output power, create an
+interlock, use GPS, contact Forge, or grant voice mutation authority. Any future
+voice-edit design requires a separate approval and contract change.
 
 Implemented modules:
 
 - `antenna_reference_domain.py` — immutable validated catalog, installation,
-  band, gain, loss, mode-profile, band-assignment, provenance, and scenario models;
+  band, gain, loss, mode-profile, distance-kind, provenance, and scenario models;
+- `antenna_reference_config.py` — strict schema-1 YAML document, reference
+  validation, actionable file/parse/validation errors, and atomic snapshots;
 - `rf_exposure_calculator.py` — pure calculation version
   `rf-exposure-plane-wave-v1`;
-- `antenna_reference_repository.py` — local SQLite aggregate persistence;
-- `antenna_reference_service.py` — typed application boundary for future voice,
-  button, CLI, or presentation consumers; it exposes no radio authority;
-- `antenna_reference_panel.py` — immutable panel state, HF/VHF/UHF cards, sourced
-  reference-mode selection, and one-worker snapshot/evaluation lifecycle;
-- `antenna_reference_commands.py` — view-only encoder navigation and Back handling;
-- `antenna_reference_ui.py` — Tk presentation and parked mouse/keyboard scenario
-  editor;
-- `storage.py` schema 21 — additive tables for the preceding records.
+- `antenna_reference_service.py` — read-only source/calculation boundary;
+- `antenna_reference_panel.py` — one-worker load/calculation and immutable card
+  publication;
+- `antenna_reference_commands.py` — view-only encoder navigation;
+- `antenna_reference_ui.py` — read-only Tk presentation;
+- `antenna_reference_repository.py` and schema 21 — dormant legacy storage from
+  the earlier PR revision, not composed into the dashboard and not authoritative.
 
-`antenna_reference.enabled` defaults false. When false, the ANTENNAS context,
-repository, background controller, widgets, and shortcut are not constructed and
-the established navigation order is unchanged. When true, ANTENNAS follows SETTINGS
-in next-context navigation and uses the bench shortcut `a`. Encoder previous/next
-selects only already-published cards; encoder activation and context buttons do
-nothing. This adapter has no radio dependency or command path.
+## Configuration lifecycle
 
-`antenna_reference.setup_enabled` separately defaults false and requires the screen
-gate. It exposes a deliberate mouse/keyboard **PARKED SETUP: EVALUATE** dialog for
-transient inputs only. The form never reads current radio power. Frequency, forward
-power, controlled 6-minute TX fraction, uncontrolled 30-minute TX fraction, distance,
-distance verification, reflection assumption, mode, and operator provenance must be
-entered explicitly. The 6 ft field is visibly an unverified advisory scenario until
-the operator checks that a real occupant/public measurement was used.
+The application YAML enables the optional screen and names the separate authority:
 
-SQLite snapshot loading and advisory work run on one bounded background executor.
-Tk callbacks only submit immutable input or read immutable panel state. The screen
-starts truthfully empty because the repository still seeds no installation data.
+```yaml
+antenna_reference:
+  enabled: false
+  data_file: antenna-reference.yaml
+```
 
-## Domain and persistence contract
+Relative paths resolve beside the active application YAML. The checked-in
+`config/antenna-reference.example.yaml` is valid and intentionally empty. It
+contains a commented field-shape reference but no active unverified antenna,
+gain, loss, duty, power, transmit fraction, reflection, or distance value.
 
-Catalog antennas and physical installations are different records with independent
+When enabled, one bounded background worker reads and validates the whole data file
+once at dashboard startup, calculates every configured scenario with the pure
+calculator, and atomically replaces the published snapshot only after all work
+finishes. Tk reads only the published snapshot. A missing, unreadable, malformed,
+or invalid file publishes an explicit read-only error; it never becomes an empty
+or apparently safe calculation. There is no periodic or in-app reload. After a
+manual off-car update, restart Rolling Thunder through the normal approved
+operational procedure.
+
+Schema 1 rejects extra fields and validates unique aggregate UUIDs, catalog /
+installation / mode / scenario references, and installation band ownership.
+Band-assignment `active` and every scenario's distance, verification, distance kind,
+and reflection model must be written explicitly rather than inherited from domain
+defaults.
+Domain validation preserves frequency bounds, numeric limits, 6 m classification,
+and source text. Calculator-level incompleteness remains visible for valid documents
+whose sourced data is insufficient for a numerical estimate.
+
+## Domain contract
+
+Catalog antennas and physical installations are separate records with independent
 stable UUIDs. A catalog antenna can have multiple explicit band associations and
-multiple frequency-bounded gain records. An installation references one catalog
-antenna and separately records:
+frequency-bounded gain records. An installation references one catalog antenna and
+separately records frequency-bounded loss contributions, loss-inventory
+completeness, active band assignments, location, and provenance.
 
-- frequency-bounded loss contributions, including an explicit `unknown` (`NULL`)
-  value;
-- whether the loss inventory has been verified complete;
-- explicit active/inactive assignments to that antenna's band associations;
-- physical-location notes and provenance.
+Gain retains its original `dBi` or `dBd` unit and source. Calculator v1 converts
+`dBd + 2.15` to dBi. It selects gain only when exactly one segment contains the
+requested frequency; it never interpolates or extends a segment. HF never implies
+6 m. A six-metre association must be an independently sourced VHF association.
 
-Gain is stored with its original `dBi` or `dBd` unit and source. Calculator v1 uses
-`dBi = dBd + 2.15`. It selects a gain only when exactly one gain segment contains
-the requested frequency. It never interpolates a gain, extends a nearby segment, or
-assumes that an HF association includes 6 m. A `6 m` association must be VHF.
+Mode RF-envelope duty and controlled/uncontrolled scenario TX fractions are
+separate YAML inputs with separate provenance. Controlled and uncontrolled
+fractions apply to different 6- and 30-minute averaging windows. No live frequency,
+power, mode, or duty value is inferred.
 
-Mode RF-envelope duty and scenario transmit fractions are separate persisted inputs.
-Controlled and uncontrolled transmit fractions are recorded independently because
-they apply over different 6- and 30-minute averaging windows.
-Reference profiles returned by `standard_mode_profiles()` are not inserted into the
-database automatically:
+Distance semantics are typed:
 
-| Reference profile | RF-envelope duty |
-| --- | ---: |
-| FT8 | 1.00 |
-| SSB, unprocessed | 0.20 |
-| SSB, heavily processed | 0.50 |
-| 6 m FM | 1.00 |
+- `hypothetical_six_foot` is exactly 1.8288 m and must remain unverified;
+- `front_seat_measured` must be explicitly measured/verified;
+- `public_measured` must be explicitly measured/verified.
 
-Each transmit fraction is scenario- and averaging-window-specific. FT8 does not
-imply a 0.50 transmit fraction in either window.
+Each scenario also owns an explicit reflection model and source. The screen shows
+the configured inputs and result; it offers no what-if controls.
 
-Schema 21 is additive and transactional. Existing tables are not rebuilt. An older
-binary correctly refuses a schema-21 database rather than attempting a downgrade;
-operational rollback therefore requires restoring the pre-migration database backup
-with the matching older code. The migration test proves a failed schema-21
-transaction leaves schema 20 and existing data intact. The repository seeds no
-antenna, installation, gain, loss, mode, or scenario rows.
+## Dormant SQLite schema 21
+
+Schema 21 remains additive and transactional to preserve databases already opened
+by the earlier branch revision. Its antenna tables and repository tests remain for
+rollback/preservation compatibility, but the dashboard does not construct the
+repository, read those rows, copy YAML into SQLite, treat SQLite as a cache, or
+write them. YAML is the sole authority.
+
+The dormant schema predates `distance_kind`; it must not be reactivated as an
+authority without a separately reviewed migration and conflict policy. An older
+binary still correctly refuses a schema-21 database. Operational rollback therefore
+requires the matching pre-migration database backup. No tables or user rows are
+removed by this correction.
 
 ## Calculator equations
 
-With forward transmitter output `Ptx`, summed applicable installation loss `L` in
-dB, and applicable gain `G` in dBi:
+With forward output `Ptx`, applicable installation loss `L` in dB, and gain `G` in
+dBi:
 
 ```text
 Pantenna_peak = Ptx * 10^(-L/10)
@@ -96,27 +124,25 @@ EIRP_average_controlled   = EIRP_peak * mode_RF_envelope_duty * controlled_6min_
 EIRP_average_uncontrolled = EIRP_peak * mode_RF_envelope_duty * uncontrolled_30min_TX_fraction
 ```
 
-Unknown gain, no applicable gain segment, ambiguous gain segments, an incomplete
-loss inventory, no applicable explicit loss record, or any applicable unknown loss
-makes power/exposure output incomplete. Zero loss is accepted only as an explicit
-sourced `0.0 dB` record; absence is not silently treated as zero.
+Unknown gain, no or ambiguous gain segment, incomplete losses, no applicable loss,
+or an applicable unknown loss makes output incomplete. Zero loss is accepted only
+as an explicit sourced `0.0 dB` value.
 
-For distance `r`, calculator v1 uses the plane-wave/far-field estimate:
+For distance `r`, calculator v1 uses:
 
 ```text
 S(W/m²) = EIRP_average * reflection_factor / (4*pi*r²)
 r_required = sqrt(EIRP_average * reflection_factor / (4*pi*MPE(W/m²)))
 ```
 
-The free-space reflection factor is 1.0. The selectable ARRL typical-ground
-approximation is 2.56. The chosen assumption is part of each scenario. It is not a
-vehicle-specific electromagnetic model.
+Free space uses factor 1.0; the selectable ARRL typical-ground approximation uses
+2.56. Neither is a vehicle-specific electromagnetic model.
 
-## FCC MPE table implemented
+## FCC MPE table
 
 Calculator v1 implements the power-density column and averaging windows in
-47 CFR 1.1310(e)(1), Table 1, verified in eCFR on 2026-10-12. `f` is MHz and power
-density is mW/cm².
+47 CFR 1.1310(e)(1), Table 1, checked 2026-10-12. `f` is MHz and density is
+mW/cm².
 
 | Frequency | Controlled (6 min) | Uncontrolled (30 min) |
 | --- | ---: | ---: |
@@ -127,94 +153,26 @@ density is mW/cm².
 | >300–1500 MHz | f/300 | f/1500 |
 | >1500–100000 MHz | 5.0 | 1.0 |
 
-Tests cover the requested 1.34, 3, 30, 50, 54, 146, and 440 MHz boundaries and
-points. The result always presents both environments and never labels a numerical
-estimate compliant, noncompliant, safe, or unsafe.
+The result always presents both environments and never labels an estimate
+compliant, noncompliant, safe, or unsafe.
 
-References:
+References: [47 CFR 1.1310](https://www.ecfr.gov/current/title-47/chapter-I/subchapter-A/part-1/subpart-I/section-1.1310),
+[ARRL RF Exposure Calculator](https://www.arrl.org/rf-exposure-calculator), and
+[ARRL instructions](https://www.arrl.org/rf-exposure-calc-instructions).
 
-- [47 CFR 1.1310](https://www.ecfr.gov/current/title-47/chapter-I/subchapter-A/part-1/subpart-I/section-1.1310)
-- [ARRL RF Exposure Calculator](https://www.arrl.org/rf-exposure-calculator)
-- [ARRL RF Exposure Calculator Instructions](https://www.arrl.org/rf-exposure-calc-instructions)
+## Mandatory limits and remaining acceptance
 
-## Mandatory interpretation limits
+This plane-wave result is not a compliance finding, safety finding, engineering
+certification, or substitute for a station evaluation. Near-field coupling,
+vehicle roof/body/glass, feedline, occupants, nearby metal, antenna pattern,
+ground/mounting geometry, simultaneous sources, and directionality can materially
+change exposure. ARRL identifies special near-field limitations, including antennas
+less than 20 cm from a person.
 
-The numerical result is a reference/advisory estimate only. It is not a compliance
-finding, safety finding, engineering certification, or substitute for a station
-evaluation. In particular:
-
-- near-field coupling can invalidate the plane-wave estimate;
-- the vehicle roof/body, glass, feedline, occupants, nearby metal, antenna pattern,
-  ground, and mounting geometry can materially change fields;
-- simultaneous sources require an aggregate-exposure evaluation;
-- directional antennas may require evaluation in multiple directions;
-- unknown occupant/bystander geometry requires further evaluation;
-- ARRL warns that its calculator is not for an antenna less than 20 cm from a
-  person and identifies special near-field concerns for some antenna types.
-
-The scenario distance defaults to exactly 6 ft (1.8288 m), with
-`occupant_distance_verified=false`. It is not a measured driver, front-passenger,
-rear-passenger, pedestrian, or bystander clearance.
-
-## Tomorrow data-entry and acceptance tasks
-
-Before any operational use:
-
-1. record actual antenna manufacturer, model, serial/asset identity, and source
-   documents;
-2. enter each supported band explicitly, including a separate 6 m VHF association
-   only where the manufacturer or measurement supports it;
-3. enter sourced gain and original unit for every evaluated frequency segment;
-4. measure or document every connector, feedline, switch, duplexer, tuner, and
-   other path loss by frequency, and mark `losses_complete` only after review;
-5. measure straight-line distance from every radiating antenna part to driver,
-   front passenger, rear passengers, and plausible bystanders—do not reuse the
-   6 ft placeholder;
-6. record antenna orientation, vehicle-metal/ground assumptions, maximum forward
-   PEP, mode envelope duty, and actual transmit fraction over both applicable
-   averaging windows;
-7. compare controlled and uncontrolled results with the current ARRL calculator
-   using the same antenna watts, gain, frequency, duty, transmit fraction, and
-   reflection assumption;
-8. investigate every discrepancy and retain the calculation inputs/version and
-   reference output;
-9. obtain measurement/modeling assistance where near-field or vehicle geometry
-   makes the simple model unsuitable; and
-10. separately evaluate aggregate exposure from all RF sources that can operate at
-    the same time.
-
-Full-screen/operator acceptance on the installed 1280x720 display remains deferred.
-No live RF transmission is required or authorized by this subsystem's automated
-tests.
-
-## Remaining work
-
-- owner-supplied antenna and installation records;
-- bench validation against the ARRL reference calculation;
-- vehicle-specific geometry/near-field assessment;
-- multi-source aggregation model;
-- parked catalog/installation add, edit, and archive workflow with audit history;
-- persisted named scenarios (the current form is transient and does not write);
-- installed full-screen acceptance if that UI is later approved.
-
-The missing add/edit/archive workflow is deliberate in this increment: without a
-reviewed audit/archive schema, destructive or synchronous record editing would be a
-worse safety contract than a truthful read/evaluate-only screen. Owner data must be
-entered through a separately reviewed path before this screen can show it.
-
-## Validation for this implementation
-
-Run from the isolated feature worktree with the existing development virtual
-environment and `PYTHONPATH=src`:
-
-- `ruff check .` — passed;
-- `mypy src/rolling_thunder` — passed, 338 source files checked;
-- `pytest -q` — passed, 3353 passed and 7 skipped; the suite's three loopback-HTTP
-  acceptance tests were rerun with ephemeral localhost socket permission;
-- `git diff --check` — passed.
-
-There were no test failures in the finished state. No live hardware, production
-database, production service, deployment, Forge scheduler, SSH, or RF transmission
-was used. Bench comparison, real vehicle measurements, full-screen acceptance, and
-live RF acceptance remain intentionally not performed. Final gate results and exact
-commit are recorded in the PR/hand-off rather than hard-coded into this design guide.
+Before operational reliance, the owner must supply and review real catalog,
+installation, loss, gain, mode, scenario, front-seat, and public-distance records;
+compare results with the current ARRL reference using identical inputs; investigate
+differences; evaluate near-field/vehicle geometry and aggregate sources; and perform
+installed 1280x720 readability acceptance. No live RF test is required or
+authorized by this subsystem. No Forge, hardware, deployment, service restart, or
+production change is part of this work.

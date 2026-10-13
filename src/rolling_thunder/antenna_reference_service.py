@@ -1,10 +1,9 @@
-"""Typed application boundary for future antenna-reference presentation/control."""
+"""Read-only application boundary for antenna-reference publication."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
-from uuid import UUID
 
 from rolling_thunder.antenna_reference_domain import (
     AntennaCatalogEntry,
@@ -15,65 +14,73 @@ from rolling_thunder.antenna_reference_domain import (
 from rolling_thunder.rf_exposure_calculator import RfExposureResult, calculate_rf_exposure
 
 
-class AntennaReferenceStore(Protocol):
-    """Persistence operations required by the application boundary."""
-
-    def save_catalog(self, catalog: AntennaCatalogEntry) -> None: ...
-
-    def get_catalog(self, antenna_id: UUID) -> AntennaCatalogEntry | None: ...
-
-    def list_catalog(self) -> tuple[AntennaCatalogEntry, ...]: ...
-
-    def save_installation(self, installation: AntennaInstallation) -> None: ...
-
-    def get_installation(self, installation_id: UUID) -> AntennaInstallation | None: ...
-
-    def list_installations(self) -> tuple[AntennaInstallation, ...]: ...
-
-    def save_mode_profile(self, profile: ModeProfile) -> None: ...
-
-    def get_mode_profile(self, profile_id: UUID) -> ModeProfile | None: ...
-
-    def save_scenario(self, scenario: ExposureScenario) -> None: ...
-
-    def get_scenario(self, scenario_id: UUID) -> ExposureScenario | None: ...
-
-
-class AntennaReferenceNotFoundError(LookupError):
-    """Raised when an evaluation aggregate is missing from offline storage."""
-
-
 @dataclass(frozen=True)
 class AntennaReferenceSnapshot:
-    """Immutable aggregate list published to presentation/controller consumers."""
+    """One immutable source-of-truth snapshot loaded from manual configuration."""
 
     catalog: tuple[AntennaCatalogEntry, ...] = ()
     installations: tuple[AntennaInstallation, ...] = ()
+    mode_profiles: tuple[ModeProfile, ...] = ()
+    scenarios: tuple[ExposureScenario, ...] = ()
+
+
+class AntennaReferenceSource(Protocol):
+    """Read-only authority required by the application service."""
+
+    def load_snapshot(self) -> AntennaReferenceSnapshot: ...
+
+
+@dataclass(frozen=True)
+class AntennaScenarioEvaluation:
+    """A configured scenario and its immutable advisory result."""
+
+    scenario: ExposureScenario
+    mode: ModeProfile
+    result: RfExposureResult
+
+
+@dataclass(frozen=True)
+class AntennaReferencePublication:
+    """Atomic snapshot plus all calculations derived from that exact snapshot."""
+
+    snapshot: AntennaReferenceSnapshot
+    evaluations: tuple[AntennaScenarioEvaluation, ...] = ()
 
 
 class AntennaReferenceService:
-    """Hardware-free controller/service boundary with no radio actuation methods."""
+    """Load manual configuration and calculate it without mutation or radio authority."""
 
-    def __init__(self, store: AntennaReferenceStore) -> None:
-        self._store = store
+    def __init__(self, source: AntennaReferenceSource) -> None:
+        self._source = source
 
-    def save_catalog(self, catalog: AntennaCatalogEntry) -> None:
-        self._store.save_catalog(catalog)
-
-    def save_installation(self, installation: AntennaInstallation) -> None:
-        self._store.save_installation(installation)
-
-    def save_mode_profile(self, profile: ModeProfile) -> None:
-        self._store.save_mode_profile(profile)
-
-    def save_scenario(self, scenario: ExposureScenario) -> None:
-        self._store.save_scenario(scenario)
-
-    def load_snapshot(self) -> AntennaReferenceSnapshot:
-        """Load one immutable offline snapshot for publication outside SQLite."""
-        return AntennaReferenceSnapshot(
-            catalog=self._store.list_catalog(),
-            installations=self._store.list_installations(),
+    def load_publication(self) -> AntennaReferencePublication:
+        """Load and evaluate one whole source snapshot for atomic publication."""
+        snapshot = self._source.load_snapshot()
+        catalog_by_id = {item.antenna_id: item for item in snapshot.catalog}
+        installation_by_id = {
+            item.installation_id: item for item in snapshot.installations
+        }
+        mode_by_id = {item.mode_profile_id: item for item in snapshot.mode_profiles}
+        evaluations: list[AntennaScenarioEvaluation] = []
+        for scenario in snapshot.scenarios:
+            installation = installation_by_id[scenario.installation_id]
+            catalog = catalog_by_id[installation.antenna_id]
+            mode = mode_by_id[scenario.mode_profile_id]
+            evaluations.append(
+                AntennaScenarioEvaluation(
+                    scenario=scenario,
+                    mode=mode,
+                    result=self.evaluate_inputs(
+                        catalog=catalog,
+                        installation=installation,
+                        mode=mode,
+                        scenario=scenario,
+                    ),
+                )
+            )
+        return AntennaReferencePublication(
+            snapshot=snapshot,
+            evaluations=tuple(evaluations),
         )
 
     @staticmethod
@@ -85,33 +92,6 @@ class AntennaReferenceService:
         scenario: ExposureScenario,
     ) -> RfExposureResult:
         """Evaluate already-loaded immutable inputs without persistence or hardware."""
-        return calculate_rf_exposure(
-            catalog=catalog,
-            installation=installation,
-            mode=mode,
-            scenario=scenario,
-        )
-
-    def evaluate_scenario(self, scenario_id: UUID) -> RfExposureResult:
-        """Load immutable inputs and run the pure versioned calculator."""
-        scenario = self._store.get_scenario(scenario_id)
-        if scenario is None:
-            raise AntennaReferenceNotFoundError(f"RF exposure scenario not found: {scenario_id}")
-        installation = self._store.get_installation(scenario.installation_id)
-        if installation is None:
-            raise AntennaReferenceNotFoundError(
-                f"Antenna installation not found: {scenario.installation_id}"
-            )
-        catalog = self._store.get_catalog(installation.antenna_id)
-        if catalog is None:
-            raise AntennaReferenceNotFoundError(
-                f"Antenna catalog entry not found: {installation.antenna_id}"
-            )
-        mode = self._store.get_mode_profile(scenario.mode_profile_id)
-        if mode is None:
-            raise AntennaReferenceNotFoundError(
-                f"Antenna mode profile not found: {scenario.mode_profile_id}"
-            )
         return calculate_rf_exposure(
             catalog=catalog,
             installation=installation,

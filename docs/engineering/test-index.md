@@ -88,12 +88,15 @@ Live acceptance should use an exact commit SHA and record rollback information.
   and the FCC boundary matrix.
 - `tests/test_antenna_reference_repository.py` — schema-21 preservation and
   rollback, no seeded values, UUID aggregate round trips, assignment ownership,
-  and typed service evaluation.
+  and pure service evaluation for dormant-storage compatibility.
+- `tests/test_antenna_reference_config.py` — empty authoritative example, strict
+  YAML parsing, provenance and explicit-6-m preservation, aggregate references,
+  measured-distance rules, and missing-file failure.
 - `tests/test_antenna_reference_panel.py` — empty startup, multi-installation listing,
-  HF/VHF/explicit-6-m cards, gain/loss units, deferred worker execution, transient
-  six-metre FM evaluation, advisory wording, and view-only physical commands.
+  HF/VHF/explicit-6-m cards, gain/loss units, deferred YAML worker execution,
+  configured six-metre FM results, advisory wording, and view-only controls.
 - `tests/test_context_navigation.py` and `tests/test_config.py` — default-off context
-  sequence/shortcut and independent parked-setup gate regression coverage.
+  sequence/shortcut plus required, path-resolved authority-file configuration.
 
 ## GPS and time
 

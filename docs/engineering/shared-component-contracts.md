@@ -19,23 +19,26 @@ responses.
 
 ## Antenna reference and RF exposure advisory
 
-The antenna-reference subsystem shares only the local SQLite migration mechanism;
-its tables and repository do not alter contact, radio, GPS, map, or preference
-semantics. Catalog antennas remain separate from physical installations. Unknown
-gain or loss is never zero, gain is never interpolated beyond an explicit frequency
-segment, and HF support never implies 6 m support.
+The antenna-reference subsystem shares typed application configuration, context /
+physical navigation, and the local SQLite migration mechanism. Its sole data
+authority is manual YAML; schema-21 antenna tables are dormant compatibility storage
+and the dashboard neither reads nor writes them. Catalog antennas remain separate
+from physical installations. Unknown gain or loss is never zero, gain is never
+interpolated beyond an explicit frequency segment, and HF support never implies 6 m.
 
 RF exposure output is a versioned plane-wave approximation. It must always retain
 both controlled and uncontrolled FCC limits, its reflection assumption, citations,
 and uncertainty warnings. It must never publish a compliant/safe verdict, create an
 interlock, derive live transmit authority, change output power, or issue CAT/PTT.
-The default 6 ft distance is unverified scenario data, not vehicle geometry.
+The typed six-foot scenario is exactly 1.8288 m and unverified; front-seat and public
+distance kinds require measured/verified values.
 
 The dashboard context and shortcut exist only when the typed feature gate is enabled;
 the default navigation sequence is unchanged. Physical controls are view-only for
-this context. Parked scenario entry is a second gate, uses explicit operator inputs,
-and never reads live frequency or configured power. Tkinter never performs antenna
-SQLite work.
+this context. There is no in-app setup/edit/reload or voice mutation path. One bounded
+worker loads and validates YAML once at startup and atomically publishes results;
+Tkinter performs no file, SQLite, calculator, radio, or persistence work. Missing or
+invalid YAML must remain an explicit error and never appear as a safe estimate.
 
 ## Local-first contact durability
 

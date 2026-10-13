@@ -8,25 +8,17 @@ from enum import StrEnum
 from threading import Lock
 from uuid import UUID
 
-from pydantic import Field
-
 from rolling_thunder.antenna_reference_domain import (
-    AntennaCatalogEntry,
     AntennaInstallation,
-    ExposureScenario,
     FrequencyRegion,
-    GroundReflectionModel,
-    ModeProfile,
-    TextProvenance,
-    standard_mode_profiles,
 )
 from rolling_thunder.antenna_reference_service import (
+    AntennaReferencePublication,
     AntennaReferenceService,
     AntennaReferenceSnapshot,
+    AntennaScenarioEvaluation,
 )
-from rolling_thunder.domain import DomainModel, Frequency
-from rolling_thunder.rf_exposure_calculator import RfExposureResult
-from rolling_thunder.storage import StorageError
+from rolling_thunder.config import ConfigurationError
 
 
 class AntennaPanelStatus(StrEnum):
@@ -35,37 +27,7 @@ class AntennaPanelStatus(StrEnum):
     IDLE = "idle"
     LOADING = "loading"
     READY = "ready"
-    EVALUATING = "evaluating"
     ERROR = "error"
-
-
-class ReferenceMode(StrEnum):
-    """Sourced reference mode choices exposed by the advisory form."""
-
-    FT8 = "FT8"
-    SSB_UNPROCESSED = "SSB unprocessed"
-    SSB_PROCESSED = "SSB heavily processed"
-    SIX_M_FM = "6 m FM"
-
-    @property
-    def profile(self) -> ModeProfile:
-        """Return the immutable sourced mode profile without storing it."""
-        return next(profile for profile in standard_mode_profiles() if profile.name == self.value)
-
-
-class AntennaEvaluationRequest(DomainModel):
-    """Explicit operator-entered inputs for one transient what-if evaluation."""
-
-    installation_id: UUID
-    mode: ReferenceMode
-    frequency_mhz: float = Field(ge=0.3, le=100_000, allow_inf_nan=False)
-    forward_tx_watts: float = Field(gt=0, allow_inf_nan=False)
-    controlled_tx_fraction: float = Field(gt=0, le=1, allow_inf_nan=False)
-    uncontrolled_tx_fraction: float = Field(gt=0, le=1, allow_inf_nan=False)
-    distance_feet: float = Field(gt=0, allow_inf_nan=False)
-    distance_verified: bool = False
-    ground_reflection_model: GroundReflectionModel = GroundReflectionModel.ARRL_TYPICAL_GROUND
-    provenance: TextProvenance
 
 
 @dataclass(frozen=True)
@@ -82,6 +44,7 @@ class AntennaReferenceCard:
     loss_lines: tuple[str, ...]
     provenance: str
     losses_complete: bool
+    evaluations: tuple[AntennaScenarioEvaluation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,8 +55,6 @@ class AntennaPanelState:
     snapshot: AntennaReferenceSnapshot = field(default_factory=AntennaReferenceSnapshot)
     cards: tuple[AntennaReferenceCard, ...] = ()
     selected_index: int | None = None
-    evaluation: RfExposureResult | None = None
-    evaluation_request: AntennaEvaluationRequest | None = None
     error: str | None = None
 
     @property
@@ -107,7 +68,10 @@ def _mhz_range(lower_hz: int, upper_hz: int) -> str:
     return f"{lower_hz / 1_000_000:g}-{upper_hz / 1_000_000:g} MHz"
 
 
-def build_reference_cards(snapshot: AntennaReferenceSnapshot) -> tuple[AntennaReferenceCard, ...]:
+def build_reference_cards(
+    snapshot: AntennaReferenceSnapshot,
+    evaluations: tuple[AntennaScenarioEvaluation, ...] = (),
+) -> tuple[AntennaReferenceCard, ...]:
     """Build HF/VHF/UHF cards without inferring bands, gain, or loss."""
     installations_by_antenna: dict[UUID, list[AntennaInstallation]] = {}
     for stored_installation in snapshot.installations:
@@ -127,10 +91,23 @@ def build_reference_cards(snapshot: AntennaReferenceSnapshot) -> tuple[AntennaRe
         installations: tuple[AntennaInstallation | None, ...] = (
             tuple(known_installations) if known_installations else (None,)
         )
-        regions = tuple(dict.fromkeys(band.region for band in catalog.bands)) or (
+        catalog_regions = tuple(dict.fromkeys(band.region for band in catalog.bands)) or (
             FrequencyRegion.OTHER,
         )
         for installation in installations:
+            unmatched_scenario = installation is not None and any(
+                evaluation.scenario.installation_id == installation.installation_id
+                and not any(
+                    band.frequencies.contains(evaluation.scenario.frequency)
+                    for band in catalog.bands
+                )
+                for evaluation in evaluations
+            )
+            regions = (
+                (*catalog_regions, FrequencyRegion.OTHER)
+                if unmatched_scenario and FrequencyRegion.OTHER not in catalog_regions
+                else catalog_regions
+            )
             for region in regions:
                 bands = tuple(
                     f"{band.label} {_mhz_range(band.frequencies.lower.hz, band.frequencies.upper.hz)}"
@@ -139,7 +116,8 @@ def build_reference_cards(snapshot: AntennaReferenceSnapshot) -> tuple[AntennaRe
                 )
                 gains = tuple(
                     f"{_mhz_range(gain.frequencies.lower.hz, gain.frequencies.upper.hz)} "
-                    f"{gain.gain_db:g} {gain.unit.value}"
+                    f"{gain.gain_db:g} {gain.unit.value} "
+                    f"(source: {gain.provenance.source})"
                     for gain in catalog.gains
                     if any(
                         band.region is region
@@ -150,8 +128,28 @@ def build_reference_cards(snapshot: AntennaReferenceSnapshot) -> tuple[AntennaRe
                 )
                 losses = () if installation is None else tuple(
                     f"{loss.name} {_mhz_range(loss.frequencies.lower.hz, loss.frequencies.upper.hz)} "
-                    f"{'UNKNOWN' if loss.loss_db is None else f'{loss.loss_db:g} dB'}"
+                    f"{'UNKNOWN' if loss.loss_db is None else f'{loss.loss_db:g} dB'} "
+                    f"(source: {loss.provenance.source})"
                     for loss in installation.loss_segments
+                )
+                card_evaluations = () if installation is None else tuple(
+                    evaluation
+                    for evaluation in evaluations
+                    if evaluation.scenario.installation_id == installation.installation_id
+                    and (
+                        any(
+                            band.region is region
+                            and band.frequencies.contains(evaluation.scenario.frequency)
+                            for band in catalog.bands
+                        )
+                        or (
+                            region is FrequencyRegion.OTHER
+                            and not any(
+                                band.frequencies.contains(evaluation.scenario.frequency)
+                                for band in catalog.bands
+                            )
+                        )
+                    )
                 )
                 cards.append(
                     AntennaReferenceCard(
@@ -176,6 +174,7 @@ def build_reference_cards(snapshot: AntennaReferenceSnapshot) -> tuple[AntennaRe
                         losses_complete=(
                             False if installation is None else installation.losses_complete
                         ),
+                        evaluations=card_evaluations,
                     )
                 )
     return tuple(
@@ -191,7 +190,7 @@ def build_reference_cards(snapshot: AntennaReferenceSnapshot) -> tuple[AntennaRe
 
 
 class AntennaReferencePanelController:
-    """Publish repository state and evaluations from one bounded worker."""
+    """Publish one config-backed reference snapshot from a bounded worker."""
 
     def __init__(
         self,
@@ -215,24 +214,27 @@ class AntennaReferencePanelController:
             return self._state
 
     def start(self) -> bool:
-        """Queue the initial database snapshot without blocking the caller."""
+        """Queue one startup configuration load without blocking the caller."""
         with self._lock:
-            if self._closed or self._state.status is AntennaPanelStatus.LOADING:
+            if self._closed or self._state.status is not AntennaPanelStatus.IDLE:
                 return False
             self._state = replace(
                 self._state,
                 status=AntennaPanelStatus.LOADING,
                 error=None,
             )
-        future = self._executor.submit(self._service.load_snapshot)
+        future = self._executor.submit(self._service.load_publication)
         future.add_done_callback(self._snapshot_finished)
         return True
 
-    def _snapshot_finished(self, future: Future[AntennaReferenceSnapshot]) -> None:
+    def _snapshot_finished(self, future: Future[AntennaReferencePublication]) -> None:
         try:
-            snapshot = future.result()
-            cards = build_reference_cards(snapshot)
-        except (CancelledError, StorageError, ValueError) as error:
+            publication = future.result()
+            cards = build_reference_cards(
+                publication.snapshot,
+                publication.evaluations,
+            )
+        except (CancelledError, ConfigurationError, ValueError) as error:
             self._publish_error(f"Antenna reference load failed: {error}")
             return
         with self._lock:
@@ -240,7 +242,7 @@ class AntennaReferencePanelController:
                 return
             self._state = AntennaPanelState(
                 status=AntennaPanelStatus.READY,
-                snapshot=snapshot,
+                snapshot=publication.snapshot,
                 cards=cards,
                 selected_index=0 if cards else None,
             )
@@ -261,108 +263,9 @@ class AntennaReferencePanelController:
             self._state = replace(
                 self._state,
                 selected_index=selected,
-                evaluation=None,
-                evaluation_request=None,
                 error=None,
             )
             return True
-
-    def clear_evaluation(self) -> bool:
-        with self._lock:
-            if self._state.evaluation is None and self._state.error is None:
-                return False
-            self._state = replace(
-                self._state,
-                evaluation=None,
-                evaluation_request=None,
-                error=None,
-                status=AntennaPanelStatus.READY,
-            )
-            return True
-
-    def start_evaluation(self, request: AntennaEvaluationRequest) -> bool:
-        """Queue a transient advisory calculation using the published snapshot."""
-        with self._lock:
-            if self._closed or self._state.status is AntennaPanelStatus.EVALUATING:
-                return False
-            snapshot = self._state.snapshot
-            installation = next(
-                (
-                    item
-                    for item in snapshot.installations
-                    if item.installation_id == request.installation_id
-                ),
-                None,
-            )
-            if installation is None:
-                self._state = replace(self._state, error="Selected installation is unavailable.")
-                return False
-            catalog = next(
-                (item for item in snapshot.catalog if item.antenna_id == installation.antenna_id),
-                None,
-            )
-            if catalog is None:
-                self._state = replace(self._state, error="Selected antenna is unavailable.")
-                return False
-            self._state = replace(
-                self._state,
-                status=AntennaPanelStatus.EVALUATING,
-                evaluation=None,
-                evaluation_request=request,
-                error=None,
-            )
-
-        future = self._executor.submit(
-            self._evaluate,
-            catalog,
-            installation,
-            request,
-        )
-        future.add_done_callback(self._evaluation_finished)
-        return True
-
-    def _evaluate(
-        self,
-        catalog: AntennaCatalogEntry,
-        installation: AntennaInstallation,
-        request: AntennaEvaluationRequest,
-    ) -> RfExposureResult:
-        profile = request.mode.profile
-        scenario = ExposureScenario(
-            installation_id=installation.installation_id,
-            mode_profile_id=profile.mode_profile_id,
-            name=f"Transient {request.mode.value} advisory",
-            frequency=Frequency(hz=round(request.frequency_mhz * 1_000_000)),
-            forward_tx_watts=request.forward_tx_watts,
-            controlled_tx_fraction=request.controlled_tx_fraction,
-            uncontrolled_tx_fraction=request.uncontrolled_tx_fraction,
-            occupant_distance_m=request.distance_feet * 0.3048,
-            occupant_distance_verified=request.distance_verified,
-            ground_reflection_model=request.ground_reflection_model,
-            provenance=request.provenance,
-        )
-        return self._service.evaluate_inputs(
-            catalog=catalog,
-            installation=installation,
-            mode=profile,
-            scenario=scenario,
-        )
-
-    def _evaluation_finished(self, future: Future[RfExposureResult]) -> None:
-        try:
-            result = future.result()
-        except (CancelledError, StorageError, ValueError) as error:
-            self._publish_error(f"RF advisory calculation failed: {error}")
-            return
-        with self._lock:
-            if self._closed:
-                return
-            self._state = replace(
-                self._state,
-                status=AntennaPanelStatus.READY,
-                evaluation=result,
-                error=None,
-            )
 
     def _publish_error(self, message: str) -> None:
         with self._lock:

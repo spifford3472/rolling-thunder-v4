@@ -205,7 +205,12 @@ def test_repository_round_trip_and_service_evaluation(tmp_path: Path) -> None:
     assert repository.get_mode_profile(MODE_ID) == mode
     assert repository.get_scenario(SCENARIO_ID) == scenario
 
-    result = AntennaReferenceService(repository).evaluate_scenario(SCENARIO_ID)
+    result = AntennaReferenceService.evaluate_inputs(
+        catalog=catalog,
+        installation=installation,
+        mode=mode,
+        scenario=scenario,
+    )
     assert result.inputs_complete is True
     assert result.controlled is not None
     assert result.uncontrolled is not None

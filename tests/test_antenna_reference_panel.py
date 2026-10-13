@@ -10,19 +10,19 @@ from rolling_thunder.antenna_reference_domain import (
     AntennaCatalogEntry,
     AntennaInstallation,
     BandAssociation,
+    ExposureScenario,
     FrequencyRegion,
     FrequencySegment,
     GainSegment,
     GainUnit,
     InstallationBandAssignment,
     LossSegment,
+    ModeProfile,
     TextProvenance,
 )
 from rolling_thunder.antenna_reference_panel import (
-    AntennaEvaluationRequest,
     AntennaPanelStatus,
     AntennaReferencePanelController,
-    ReferenceMode,
     build_reference_cards,
 )
 from rolling_thunder.antenna_reference_repository import AntennaReferenceRepository
@@ -30,7 +30,12 @@ from rolling_thunder.antenna_reference_service import (
     AntennaReferenceService,
     AntennaReferenceSnapshot,
 )
-from rolling_thunder.antenna_reference_ui import card_summary_lines, evaluation_lines
+from rolling_thunder.antenna_reference_ui import (
+    card_summary_lines,
+    evaluation_lines,
+    scenario_evaluation_lines,
+)
+from rolling_thunder.config import ConfigurationError, ConfigurationFileError
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
 from rolling_thunder.domain import Frequency
 
@@ -39,6 +44,7 @@ INSTALLATION_ID = UUID("20000000-0000-0000-0000-000000000001")
 HF_BAND_ID = UUID("30000000-0000-0000-0000-000000000001")
 SIX_M_BAND_ID = UUID("30000000-0000-0000-0000-000000000002")
 SOURCE = TextProvenance(source="operator manual page 12")
+MODE_ID = UUID("40000000-0000-0000-0000-000000000001")
 
 
 def sample_records() -> tuple[AntennaCatalogEntry, AntennaInstallation]:
@@ -117,49 +123,14 @@ def sample_records() -> tuple[AntennaCatalogEntry, AntennaInstallation]:
     return catalog, installation
 
 
-class FakeStore:
+class FakeSource:
     def __init__(self, snapshot: AntennaReferenceSnapshot) -> None:
         self.snapshot = snapshot
-        self.list_calls = 0
+        self.load_calls = 0
 
-    def list_catalog(self) -> tuple[AntennaCatalogEntry, ...]:
-        self.list_calls += 1
-        return self.snapshot.catalog
-
-    def list_installations(self) -> tuple[AntennaInstallation, ...]:
-        self.list_calls += 1
-        return self.snapshot.installations
-
-    def get_catalog(self, antenna_id: UUID) -> AntennaCatalogEntry | None:
-        return next((item for item in self.snapshot.catalog if item.antenna_id == antenna_id), None)
-
-    def get_installation(self, installation_id: UUID) -> AntennaInstallation | None:
-        return next(
-            (
-                item
-                for item in self.snapshot.installations
-                if item.installation_id == installation_id
-            ),
-            None,
-        )
-
-    def save_catalog(self, catalog: AntennaCatalogEntry) -> None:
-        raise AssertionError("not used")
-
-    def save_installation(self, installation: AntennaInstallation) -> None:
-        raise AssertionError("not used")
-
-    def save_mode_profile(self, profile: Any) -> None:
-        raise AssertionError("not used")
-
-    def get_mode_profile(self, profile_id: UUID) -> None:
-        return None
-
-    def save_scenario(self, scenario: Any) -> None:
-        raise AssertionError("not used")
-
-    def get_scenario(self, scenario_id: UUID) -> None:
-        return None
+    def load_snapshot(self) -> AntennaReferenceSnapshot:
+        self.load_calls += 1
+        return self.snapshot
 
 
 class ControlledExecutor(Executor):
@@ -175,7 +146,10 @@ class ControlledExecutor(Executor):
 
     def run_next(self) -> None:
         future, fn, args, kwargs = self.pending.pop(0)
-        future.set_result(fn(*args, **kwargs))
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except (ConfigurationError, ValueError) as error:
+            future.set_exception(error)
 
 
 def test_empty_snapshot_starts_without_fabricated_records() -> None:
@@ -192,62 +166,93 @@ def test_cards_separate_hf_and_explicit_six_m_vhf_with_units_and_losses() -> Non
     )
 
     assert [card.region for card in cards] == [FrequencyRegion.HF, FrequencyRegion.VHF]
-    assert cards[0].gain_lines == ("14-14.35 MHz 2 dBd",)
-    assert "feedline and switch 1.8-54 MHz 1.2 dB" in cards[1].loss_lines
+    assert cards[0].gain_lines == (
+        "14-14.35 MHz 2 dBd (source: operator manual page 12)",
+    )
+    assert cards[1].loss_lines == (
+        "feedline and switch 1.8-54 MHz 1.2 dB (source: operator VNA measurement)",
+    )
     assert "6 M  EXPLICITLY ASSOCIATED" in "\n".join(card_summary_lines(cards[1]))
 
 
-def test_controller_defers_sqlite_boundary_to_injected_executor() -> None:
-    store = FakeStore(AntennaReferenceSnapshot())
+def test_controller_defers_yaml_load_to_injected_executor() -> None:
+    source = FakeSource(AntennaReferenceSnapshot())
     executor = ControlledExecutor()
     controller = AntennaReferencePanelController(
-        AntennaReferenceService(store),  # type: ignore[arg-type]
+        AntennaReferenceService(source),
         executor=executor,
     )
 
     assert controller.start() is True
     assert controller.state.status is AntennaPanelStatus.LOADING
-    assert store.list_calls == 0
+    assert source.load_calls == 0
 
     executor.run_next()
 
-    assert store.list_calls == 2
+    assert source.load_calls == 1
     assert controller.state.status is AntennaPanelStatus.READY
     assert controller.state.cards == ()
+    assert controller.start() is False
 
 
-def test_transient_six_m_fm_evaluation_publishes_both_limits_without_verdict() -> None:
+def test_controller_surfaces_missing_config_without_publishing_safe_state() -> None:
+    class MissingSource:
+        def load_snapshot(self) -> AntennaReferenceSnapshot:
+            raise ConfigurationFileError("manual antenna YAML is missing")
+
+    executor = ControlledExecutor()
+    controller = AntennaReferencePanelController(
+        AntennaReferenceService(MissingSource()),
+        executor=executor,
+    )
+
+    controller.start()
+    executor.run_next()
+
+    assert controller.state.status is AntennaPanelStatus.ERROR
+    assert controller.state.cards == ()
+    assert controller.state.snapshot == AntennaReferenceSnapshot()
+    assert "manual antenna YAML is missing" in (controller.state.error or "")
+
+
+def test_configured_six_m_fm_evaluation_publishes_both_limits_without_verdict() -> None:
     catalog, installation = sample_records()
-    store = FakeStore(
-        AntennaReferenceSnapshot(catalog=(catalog,), installations=(installation,))
+    mode = ModeProfile(
+        mode_profile_id=MODE_ID,
+        name="6 m FM",
+        rf_envelope_duty=1.0,
+        provenance=SOURCE,
+    )
+    scenario = ExposureScenario(
+        installation_id=INSTALLATION_ID,
+        mode_profile_id=MODE_ID,
+        name="File-backed six-foot hypothetical",
+        frequency=Frequency(hz=52_000_000),
+        forward_tx_watts=40.0,
+        controlled_tx_fraction=0.25,
+        uncontrolled_tx_fraction=0.05,
+        provenance=TextProvenance(source="reviewed manual configuration"),
+    )
+    source = FakeSource(
+        AntennaReferenceSnapshot(
+            catalog=(catalog,),
+            installations=(installation,),
+            mode_profiles=(mode,),
+            scenarios=(scenario,),
+        )
     )
     executor = ControlledExecutor()
     controller = AntennaReferencePanelController(
-        AntennaReferenceService(store),  # type: ignore[arg-type]
+        AntennaReferenceService(source),
         executor=executor,
     )
     controller.start()
     executor.run_next()
 
-    accepted = controller.start_evaluation(
-        AntennaEvaluationRequest(
-            installation_id=INSTALLATION_ID,
-            mode=ReferenceMode.SIX_M_FM,
-            frequency_mhz=52.0,
-            forward_tx_watts=40.0,
-            controlled_tx_fraction=0.25,
-            uncontrolled_tx_fraction=0.05,
-            distance_feet=6.0,
-            provenance=TextProvenance(source="operator parked what-if"),
-        )
-    )
-    assert accepted is True
-    assert controller.state.status is AntennaPanelStatus.EVALUATING
+    evaluations = controller.state.cards[1].evaluations
+    assert len(evaluations) == 1
+    result = evaluations[0].result
 
-    executor.run_next()
-    result = controller.state.evaluation
-
-    assert result is not None
     assert result.inputs_complete is True
     assert result.controlled is not None
     assert result.controlled.limit.averaging_minutes == 6
@@ -259,6 +264,10 @@ def test_transient_six_m_fm_evaluation_publishes_both_limits_without_verdict() -
     assert "not a safety or compliance finding" in rendered
     assert "compliant" not in rendered
     assert "unsafe" not in rendered
+    scenario_rendered = "\n".join(scenario_evaluation_lines(evaluations[0]))
+    assert "40 W FORWARD" in scenario_rendered
+    assert "hypothetical_six_foot" in scenario_rendered
+    assert "reviewed manual configuration" in scenario_rendered
 
     incomplete = result.model_copy(
         update={
@@ -320,11 +329,6 @@ class FakePanel:
         self.calls.append("next")
         return True
 
-    def clear_evaluation(self) -> bool:
-        self.calls.append("back")
-        return True
-
-
 def test_physical_commands_are_view_only_in_antenna_context() -> None:
     navigation = ContextNavigationController(include_antennas=True)
     navigation.select(ContextId.ANTENNAS)
@@ -338,10 +342,10 @@ def test_physical_commands_are_view_only_in_antenna_context() -> None:
 
     assert commands.move_previous() is True
     assert commands.move_next() is True
-    assert commands.back() is True
+    assert commands.back() is False
     assert commands.activate_selection() is False
     assert commands.primary() is False
     assert commands.secondary() is False
     assert commands.tertiary() is False
-    assert panel.calls == ["previous", "next", "back"]
+    assert panel.calls == ["previous", "next"]
     assert delegate.calls == []

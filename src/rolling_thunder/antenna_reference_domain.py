@@ -40,6 +40,14 @@ class GroundReflectionModel(StrEnum):
         return 1.0
 
 
+class ExposureDistanceKind(StrEnum):
+    """Human geometry represented by a configured scenario distance."""
+
+    HYPOTHETICAL_SIX_FOOT = "hypothetical_six_foot"
+    FRONT_SEAT_MEASURED = "front_seat_measured"
+    PUBLIC_MEASURED = "public_measured"
+
+
 class TextProvenance(DomainModel):
     """Human-reviewable source for a catalog value or assumption."""
 
@@ -232,7 +240,7 @@ class ModeProfile(DomainModel):
 
 
 class ExposureScenario(DomainModel):
-    """One offline what-if scenario; it has no radio-control authority."""
+    """One manually configured scenario; it has no radio-control authority."""
 
     scenario_id: UUID = Field(default_factory=uuid4)
     installation_id: UUID
@@ -244,6 +252,7 @@ class ExposureScenario(DomainModel):
     uncontrolled_tx_fraction: float = Field(gt=0, le=1, allow_inf_nan=False)
     occupant_distance_m: float = Field(default=1.8288, gt=0, allow_inf_nan=False)
     occupant_distance_verified: bool = False
+    distance_kind: ExposureDistanceKind = ExposureDistanceKind.HYPOTHETICAL_SIX_FOOT
     ground_reflection_model: GroundReflectionModel = GroundReflectionModel.ARRL_TYPICAL_GROUND
     provenance: TextProvenance
     notes: str | None = Field(default=None, max_length=2000)
@@ -262,37 +271,11 @@ class ExposureScenario(DomainModel):
     def validate_mpe_frequency_range(self) -> ExposureScenario:
         if not 300_000 <= self.frequency.hz <= 100_000_000_000:
             raise ValueError("scenario frequency must be within the FCC MPE table range")
+        if self.distance_kind is ExposureDistanceKind.HYPOTHETICAL_SIX_FOOT:
+            if self.occupant_distance_verified:
+                raise ValueError("the hypothetical six-foot distance cannot be verified")
+            if self.occupant_distance_m != 1.8288:
+                raise ValueError("the hypothetical six-foot distance must be exactly 1.8288 m")
+        elif not self.occupant_distance_verified:
+            raise ValueError("front-seat and public distances must be measured/verified")
         return self
-
-
-def standard_mode_profiles() -> tuple[ModeProfile, ...]:
-    """Return sourced v1 reference profiles without writing user storage."""
-    source = TextProvenance(
-        source="ARRL RF Exposure Calculator instructions, retrieved 2026-10-12"
-    )
-    return (
-        ModeProfile(
-            mode_profile_id=UUID("231e36a4-5e67-5dd4-bd42-6e8052aab8f8"),
-            name="FT8",
-            rf_envelope_duty=1.0,
-            provenance=source,
-        ),
-        ModeProfile(
-            mode_profile_id=UUID("8f251203-8bdd-54ef-bca3-3b835f16ec6c"),
-            name="SSB unprocessed",
-            rf_envelope_duty=0.20,
-            provenance=source,
-        ),
-        ModeProfile(
-            mode_profile_id=UUID("215201f4-06ee-5275-a78f-9c94bf59052d"),
-            name="SSB heavily processed",
-            rf_envelope_duty=0.50,
-            provenance=source,
-        ),
-        ModeProfile(
-            mode_profile_id=UUID("07a258a9-4058-50f1-a6e0-250b25a94033"),
-            name="6 m FM",
-            rf_envelope_duty=1.0,
-            provenance=source,
-        ),
-    )

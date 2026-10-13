@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
-from rolling_thunder.antenna_reference_domain import (
-    GroundReflectionModel,
-    TextProvenance,
-)
 from rolling_thunder.antenna_reference_panel import (
-    AntennaEvaluationRequest,
     AntennaPanelState,
     AntennaPanelStatus,
     AntennaReferenceCard,
-    ReferenceMode,
 )
+from rolling_thunder.antenna_reference_service import AntennaScenarioEvaluation
 from rolling_thunder.rf_exposure_calculator import (
     ExposureEnvironment,
     RfExposureResult,
@@ -104,20 +98,11 @@ def evaluation_lines(
 
 
 class AntennaReferenceWidgets:
-    """Render published state and an explicitly setup-gated scenario editor."""
+    """Render immutable file-backed antenna and scenario state."""
 
-    def __init__(
-        self,
-        parent: Any,
-        *,
-        setup_enabled: bool,
-        submit_evaluation: Callable[[AntennaEvaluationRequest], bool],
-    ) -> None:
+    def __init__(self, parent: Any) -> None:
         import tkinter as tk
 
-        self._tk = tk
-        self._setup_enabled = setup_enabled
-        self._submit_evaluation = submit_evaluation
         self._state = AntennaPanelState()
         self.frame = tk.Frame(parent, bg=_BACKGROUND)
         self.frame.grid(row=1, column=0, sticky="nsew", padx=4, pady=2)
@@ -161,7 +146,7 @@ class AntennaReferenceWidgets:
         footer.grid(row=2, column=0, sticky="ew", padx=4, pady=(5, 0))
         footer.grid_columnconfigure(0, weight=1)
         self._notice = tk.StringVar(
-            value="VIEW ONLY • ENCODER MOVES • NO RADIO OR POWER CONTROL"
+            value="READ ONLY • MANUAL YAML + RESTART • NO RADIO OR POWER CONTROL"
         )
         tk.Label(
             footer,
@@ -171,22 +156,8 @@ class AntennaReferenceWidgets:
             font=("DejaVu Sans", 12, "bold"),
             justify="left",
             anchor="w",
-            wraplength=430,
+            wraplength=570,
         ).grid(row=0, column=0, sticky="ew")
-        self._evaluate_button = tk.Button(
-            footer,
-            text="PARKED SETUP: EVALUATE",
-            command=self.open_evaluation_editor,
-            font=("DejaVu Sans", 12, "bold"),
-            bg="#274754",
-            fg=_BRIGHT,
-            activebackground="#315f73",
-            activeforeground=_BRIGHT,
-            padx=8,
-            pady=5,
-        )
-        if setup_enabled:
-            self._evaluate_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
 
     def show(self) -> None:
         self.frame.grid()
@@ -213,10 +184,9 @@ class AntennaReferenceWidgets:
             self._body.set(
                 "NO ANTENNA OR INSTALLATION RECORDS\n\n"
                 "No manufacturer, model, gain, loss, band, six-metre capability, or "
-                "vehicle geometry is assumed. Add sourced records during a parked bench "
-                "setup session before evaluating an installation."
+                "vehicle geometry is assumed. Add sourced records to the manual antenna "
+                "YAML off-car, validate it, and restart Rolling Thunder."
             )
-            self._evaluate_button.configure(state="disabled")
             return
         assert state.selected_index is not None
         self._position.set(
@@ -224,191 +194,34 @@ class AntennaReferenceWidgets:
             "ENCODER PREVIOUS / NEXT"
         )
         lines = list(card_summary_lines(card))
-        request = state.evaluation_request
-        if request is not None:
-            lines.extend(
-                (
-                    "",
-                    f"MODE  {request.mode.value}    FREQUENCY  {request.frequency_mhz:g} MHz",
-                    f"FORWARD POWER  {request.forward_tx_watts:g} W (MANUAL INPUT)",
-                    (
-                        f"TX FRACTION  6 MIN {request.controlled_tx_fraction:g}  •  "
-                        f"30 MIN {request.uncontrolled_tx_fraction:g}"
-                    ),
-                )
-            )
-        if state.evaluation is not None:
-            lines.extend(
-                (
-                    "",
-                    *evaluation_lines(
-                        state.evaluation,
-                        frequency_mhz=(
-                            None if request is None else request.frequency_mhz
-                        ),
-                    ),
-                )
-            )
-            lines.extend(("", "CAUTION  NEAR-FIELD / VEHICLE GEOMETRY / MULTISOURCE NOT MODELED"))
-        elif state.status is AntennaPanelStatus.EVALUATING:
-            lines.extend(("", "CALCULATING TRANSIENT ADVISORY…"))
+        if not card.evaluations:
+            lines.extend(("", "NO CONFIGURED OPERATING SCENARIO FOR THIS CARD"))
+        for evaluation in card.evaluations:
+            lines.extend(("", *scenario_evaluation_lines(evaluation)))
+        lines.extend(("", "CAUTION  NEAR-FIELD / VEHICLE GEOMETRY / MULTISOURCE NOT MODELED"))
         self._body.set("\n".join(lines))
-        self._evaluate_button.configure(
-            state=(
-                "normal"
-                if self._setup_enabled and card.installation_id is not None
-                else "disabled"
-            )
-        )
 
-    def open_evaluation_editor(self) -> None:
-        """Open a deliberate mouse/keyboard-only parked setup form."""
-        if not self._setup_enabled:
-            return
-        card = self._state.selected_card
-        installation_id = None if card is None else card.installation_id
-        if card is None or installation_id is None:
-            return
 
-        tk = self._tk
-        window = tk.Toplevel(self.frame)
-        window.title("Parked RF Exposure Advisory Setup")
-        window.configure(bg=_BACKGROUND)
-        window.geometry("900x680")
-        window.transient(self.frame.winfo_toplevel())
-
-        tk.Label(
-            window,
-            text="PARKED BENCH ENTRY — REFERENCE ONLY",
-            bg=_BACKGROUND,
-            fg=_WARNING,
-            font=("DejaVu Sans", 20, "bold"),
-        ).grid(row=0, column=0, columnspan=2, sticky="ew", padx=18, pady=(16, 4))
-        tk.Label(
-            window,
-            text=(
-                "This does not read or set radio power and cannot establish compliance or safety. "
-                "Use measured occupant/public geometry; 6 ft is only an unverified scenario."
-            ),
-            bg=_BACKGROUND,
-            fg=_BRIGHT,
-            font=("DejaVu Sans", 13),
-            wraplength=820,
-            justify="left",
-        ).grid(row=1, column=0, columnspan=2, sticky="ew", padx=18, pady=(0, 12))
-
-        values: dict[str, Any] = {
-            "mode": tk.StringVar(value=ReferenceMode.FT8.value),
-            "frequency": tk.StringVar(value=""),
-            "power": tk.StringVar(value=""),
-            "controlled": tk.StringVar(value=""),
-            "uncontrolled": tk.StringVar(value=""),
-            "distance": tk.StringVar(value="6"),
-            "verified": tk.BooleanVar(value=False),
-            "reflection": tk.StringVar(value=GroundReflectionModel.ARRL_TYPICAL_GROUND.value),
-            "source": tk.StringVar(value=""),
-        }
-        fields = (
-            ("Mode / RF envelope", "mode"),
-            ("Frequency (MHz)", "frequency"),
-            ("Forward power (W, manually entered)", "power"),
-            ("Controlled TX fraction / 6 min (0-1)", "controlled"),
-            ("Uncontrolled TX fraction / 30 min (0-1)", "uncontrolled"),
-            ("Distance (ft)", "distance"),
-            ("Reflection assumption", "reflection"),
-            ("Operator provenance / source", "source"),
-        )
-        for row, (label, key) in enumerate(fields, start=2):
-            tk.Label(
-                window,
-                text=label,
-                bg=_BACKGROUND,
-                fg=_BRIGHT,
-                font=("DejaVu Sans", 13, "bold"),
-                anchor="e",
-            ).grid(row=row, column=0, sticky="e", padx=(18, 10), pady=5)
-            if key == "mode":
-                widget = tk.OptionMenu(window, values[key], *(item.value for item in ReferenceMode))
-            elif key == "reflection":
-                widget = tk.OptionMenu(
-                    window,
-                    values[key],
-                    *(item.value for item in GroundReflectionModel),
-                )
-            else:
-                widget = tk.Entry(
-                    window,
-                    textvariable=values[key],
-                    font=("DejaVu Sans", 13),
-                    width=46,
-                )
-            widget.grid(row=row, column=1, sticky="ew", padx=(0, 18), pady=5)
-
-        verified_row = len(fields) + 2
-        tk.Checkbutton(
-            window,
-            text="Distance is measured/verified for this occupant or public location",
-            variable=values["verified"],
-            bg=_BACKGROUND,
-            fg=_BRIGHT,
-            selectcolor=_PANEL,
-            activebackground=_BACKGROUND,
-            activeforeground=_BRIGHT,
-            font=("DejaVu Sans", 13),
-        ).grid(row=verified_row, column=1, sticky="w", padx=(0, 18), pady=8)
-        message = tk.StringVar(value="")
-        tk.Label(
-            window,
-            textvariable=message,
-            bg=_BACKGROUND,
-            fg=_ERROR,
-            font=("DejaVu Sans", 12, "bold"),
-            wraplength=820,
-            justify="left",
-        ).grid(row=verified_row + 1, column=0, columnspan=2, sticky="ew", padx=18)
-
-        def submit() -> None:
-            try:
-                request = AntennaEvaluationRequest(
-                    installation_id=installation_id,
-                    mode=ReferenceMode(values["mode"].get()),
-                    frequency_mhz=float(values["frequency"].get()),
-                    forward_tx_watts=float(values["power"].get()),
-                    controlled_tx_fraction=float(values["controlled"].get()),
-                    uncontrolled_tx_fraction=float(values["uncontrolled"].get()),
-                    distance_feet=float(values["distance"].get()),
-                    distance_verified=bool(values["verified"].get()),
-                    ground_reflection_model=GroundReflectionModel(
-                        values["reflection"].get()
-                    ),
-                    provenance=TextProvenance(source=values["source"].get()),
-                )
-            except (TypeError, ValueError) as error:
-                message.set(f"Check every explicit input: {error}")
-                return
-            if not self._submit_evaluation(request):
-                message.set("An advisory is already running or the installation changed.")
-                return
-            window.destroy()
-
-        buttons = tk.Frame(window, bg=_BACKGROUND)
-        buttons.grid(
-            row=verified_row + 2,
-            column=0,
-            columnspan=2,
-            sticky="e",
-            padx=18,
-            pady=16,
-        )
-        tk.Button(buttons, text="CANCEL", command=window.destroy, padx=16, pady=7).pack(
-            side="left", padx=6
-        )
-        tk.Button(
-            buttons,
-            text="CALCULATE ADVISORY",
-            command=submit,
-            bg="#274754",
-            fg=_BRIGHT,
-            padx=16,
-            pady=7,
-        ).pack(side="left", padx=6)
+def scenario_evaluation_lines(
+    evaluation: AntennaScenarioEvaluation,
+) -> tuple[str, ...]:
+    """Format every file-authoritative scenario input before its result."""
+    scenario = evaluation.scenario
+    return (
+        f"SCENARIO  {scenario.name}  •  MODE {evaluation.mode.name}",
+        (
+            f"{scenario.frequency.mhz:g} MHz  •  {scenario.forward_tx_watts:g} W FORWARD  •  "
+            f"RF DUTY {evaluation.mode.rf_envelope_duty:g}"
+        ),
+        (
+            f"TX FRACTION  6 MIN {scenario.controlled_tx_fraction:g}  •  "
+            f"30 MIN {scenario.uncontrolled_tx_fraction:g}"
+        ),
+        f"DISTANCE BASIS  {scenario.distance_kind.value}",
+        f"MODE SOURCE  {evaluation.mode.provenance.source}",
+        f"SCENARIO SOURCE  {scenario.provenance.source}",
+        *evaluation_lines(
+            evaluation.result,
+            frequency_mhz=scenario.frequency.mhz,
+        ),
+    )

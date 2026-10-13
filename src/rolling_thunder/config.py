@@ -610,15 +610,17 @@ class ContactLoggingConfig(ConfigurationModel):
 
 
 class AntennaReferenceConfig(ConfigurationModel):
-    """Optional offline antenna-reference dashboard and parked setup controls."""
+    """Optional read-only antenna-reference dashboard configuration."""
 
     enabled: bool = False
-    setup_enabled: bool = False
+    data_file: Path | None = None
 
     @model_validator(mode="after")
-    def validate_setup_gate(self) -> Self:
-        if self.setup_enabled and not self.enabled:
-            raise ValueError("antenna_reference.setup_enabled requires enabled")
+    def validate_data_file(self) -> Self:
+        if self.enabled and self.data_file is None:
+            raise ValueError("antenna_reference.data_file is required when enabled")
+        if self.data_file is not None and str(self.data_file) == ".":
+            raise ValueError("antenna_reference.data_file must name a YAML file")
         return self
 
 
@@ -901,6 +903,17 @@ def resolve_database_path(
     return (config_path.parent / database_path).resolve()
 
 
+def resolve_antenna_reference_data_file(
+    config: ApplicationConfig,
+    config_path: Path,
+) -> Path | None:
+    """Resolve manually maintained antenna data beside the active application YAML."""
+    data_file = config.antenna_reference.data_file
+    if data_file is None or data_file.is_absolute():
+        return data_file
+    return (config_path.parent / data_file).resolve()
+
+
 def resolve_completed_qso_outbox_path(
     config: ApplicationConfig,
     config_path: Path,
@@ -1078,6 +1091,9 @@ def load_config(path: Path) -> ApplicationConfig:
     resolved_ft8 = config.ft8.model_copy(
         update={"completed_qso_delivery": resolved_completed_qso_delivery}
     )
+    resolved_antenna_reference = config.antenna_reference.model_copy(
+        update={"data_file": resolve_antenna_reference_data_file(config, path)}
+    )
     return config.model_copy(
         update={
             "storage": resolved_storage,
@@ -1087,5 +1103,6 @@ def load_config(path: Path) -> ApplicationConfig:
             "repeaters": resolved_repeaters,
             "map": resolved_map,
             "ft8": resolved_ft8,
+            "antenna_reference": resolved_antenna_reference,
         }
     )

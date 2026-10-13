@@ -701,32 +701,35 @@ This optional screen is disabled by default. When enabled, it appears after SETT
 in next-context navigation and can be opened with `a` on a bench keyboard. Encoder
 movement reviews already-loaded HF, VHF, and UHF antenna/installation cards. Encoder
 press and Context Buttons do nothing on this screen; it cannot tune, key, transmit,
-or change power.
+change power, or edit any displayed value. Back also has no Antennas-screen action.
 
-The screen starts empty until real sourced antenna and installation records exist.
-It never fabricates a gain, treats missing loss as zero, assumes HF includes 6 m, or
-uses current radio settings. A six-metre-capable antenna must have its own explicit
-VHF band association. Cards retain the entered operator/manufacturer/measurement
-provenance and original dBi/dBd gain units.
+The screen's sole authority is a manually maintained antenna-reference YAML file.
+Update it only off-car, using retained manufacturer, installation, or measurement
+sources, then restart Rolling Thunder through the normal approved procedure. There
+is no in-app editor or reload. Keyboard, mouse, touchscreen, encoder, context button,
+physical button, and voice input cannot alter antenna, installation, operating mode,
+power, distance, reflection, RF duty, or either transmit fraction. Future voice
+changes are not implemented and have no mutation authority.
 
-With the separate parked setup gate enabled, **PARKED SETUP: EVALUATE** opens a
-mouse/keyboard form for FT8, unprocessed SSB, heavily processed SSB, or 6 m FM. Enter
-frequency, forward power, separate controlled 6-minute and uncontrolled 30-minute TX
-fractions, reflection assumption, source/provenance, and distance. The initial 6 ft
-value is an unverified what-if scenario. Check the measurement box only for actual
-straight-line occupant or public geometry.
+The checked-in example starts empty. The screen never fabricates gain, treats missing
+loss as zero, assumes HF includes 6 m, or uses current radio settings. A six-metre
+antenna needs its own explicit VHF association. Cards retain gain/loss provenance and
+the original dBi/dBd unit. Configured scenarios separately show mode RF-envelope duty,
+forward power, controlled 6-minute and uncontrolled 30-minute TX fractions,
+reflection assumption, and source.
+
+Distance is explicit: `hypothetical_six_foot` is exactly 6 ft / 1.8288 m and is
+always unverified; `front_seat_measured` and `public_measured` require real measured
+geometry. Missing, unreadable, malformed, or invalid YAML produces a visible error,
+not an empty or safe-looking estimate.
 
 Results show peak ERP/EIRP, both FCC limits, and calculated plane-wave distances, or
-name every input that prevents a calculation. They never declare the installation
-safe, unsafe, compliant, or noncompliant. Near-field coupling, the vehicle body and
-metal, real antenna pattern, occupants, and aggregate exposure from simultaneous
-sources remain outside this estimate.
-
-Catalog/installation add, edit, and archive is not implemented in this increment;
-the scenario form is transient and writes no records. Do not use the screen
-operationally until actual installation data is entered through a reviewed workflow,
-the calculation is compared with the current ARRL reference, and vehicle-specific
-geometry/near-field questions are addressed.
+name every input that prevents calculation. They never declare an installation safe,
+unsafe, compliant, or noncompliant. Near-field coupling, vehicle body/metal/glass,
+real antenna pattern, occupants, and aggregate simultaneous-source exposure remain
+outside the estimate. Do not rely operationally on the screen until real sourced data
+has been reviewed, results have been compared with the current ARRL reference, and
+vehicle-specific geometry and near-field questions have been addressed.
 
 A manual DAY/NIGHT selection can temporarily override automatic solar style
 selection until the next real solar transition. The callsign-information
@@ -1117,6 +1120,7 @@ Rolling Thunder reduces workload but does not replace operator judgment.
 | Settings | Runtime display/preferences | Encoder zoom; Buttons 1 radar, 2 style, 3 callsign info |
 | Log | Recent contacts/sync status | Button 1 forced sync |
 | DMR | Monitor/log hotspot contacts | Button 1 current caller; Button 2 commit; encoder history |
+| Antennas / RF exposure | Read configured reference/advisories | Encoder view navigation only; all data edited manually off-car in YAML |
 | AI | Reserved | No production advisor behavior yet |
 
 ---

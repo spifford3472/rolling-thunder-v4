@@ -57,18 +57,20 @@ originates from one screen.
 ## Antenna reference and RF exposure
 
 - `src/rolling_thunder/antenna_reference_domain.py` — Immutable sourced antenna,
-  installation, band, gain/loss, mode-profile, and scenario value models.
+  installation, band, gain/loss, mode-profile, distance-kind, and scenario models.
+- `src/rolling_thunder/antenna_reference_config.py` — Strict schema-1 manual YAML
+  authority loader, aggregate-reference validation, and atomic snapshot adapter.
 - `src/rolling_thunder/antenna_reference_repository.py` — Local schema-21 SQLite
-  aggregate persistence/listing with stable UUIDs and no seeded installation
-  assumptions.
-- `src/rolling_thunder/antenna_reference_service.py` — Typed hardware-free
-  application boundary for immutable snapshots, persistence, and advisory evaluation.
-- `src/rolling_thunder/antenna_reference_panel.py` — One-worker snapshot/evaluation
-  controller and immutable HF/VHF/UHF presentation state.
+  aggregate persistence retained dormant for compatibility; it is not the dashboard
+  authority and has no composed UI write path.
+- `src/rolling_thunder/antenna_reference_service.py` — Read-only hardware-free
+  YAML snapshot and configured-advisory calculation boundary.
+- `src/rolling_thunder/antenna_reference_panel.py` — One-worker startup load /
+  calculation controller and atomic immutable HF/VHF/UHF presentation state.
 - `src/rolling_thunder/antenna_reference_commands.py` — ANTENNAS-only view navigation
   adapter that blocks activation/context commands.
-- `src/rolling_thunder/antenna_reference_ui.py` — Optional Tk viewport and separately
-  setup-gated parked transient-scenario editor.
+- `src/rolling_thunder/antenna_reference_ui.py` — Strictly read-only optional Tk
+  viewport for configured catalog, installation, scenario inputs, and results.
 - `src/rolling_thunder/rf_exposure_calculator.py` — Pure versioned peak ERP/EIRP,
   time-average power, FCC MPE, and plane-wave distance estimator.
 

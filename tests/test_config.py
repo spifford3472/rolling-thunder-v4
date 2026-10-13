@@ -82,10 +82,10 @@ def test_models_can_be_constructed_directly() -> None:
     assert config.forge.max_response_bytes == 1_048_576
     assert config.storage.database_path == Path("data/rolling-thunder.db")
     assert config.antenna_reference.enabled is False
-    assert config.antenna_reference.setup_enabled is False
+    assert config.antenna_reference.data_file is None
 
 
-def test_antenna_reference_screen_and_setup_are_explicitly_gated(tmp_path: Path) -> None:
+def test_antenna_reference_screen_requires_and_resolves_data_file(tmp_path: Path) -> None:
     path = write_config(
         tmp_path,
         """
@@ -94,17 +94,17 @@ operator:
   home_grid: EM79xm
 antenna_reference:
   enabled: true
-  setup_enabled: true
+  data_file: antenna-reference.yaml
 """,
     )
 
     config = load_config(path)
 
     assert config.antenna_reference.enabled is True
-    assert config.antenna_reference.setup_enabled is True
+    assert config.antenna_reference.data_file == tmp_path / "antenna-reference.yaml"
 
 
-def test_antenna_reference_setup_requires_visible_feature_gate(tmp_path: Path) -> None:
+def test_antenna_reference_enabled_requires_data_file(tmp_path: Path) -> None:
     path = write_config(
         tmp_path,
         """
@@ -112,7 +112,7 @@ operator:
   callsign: KI5VNB
   home_grid: EM79xm
 antenna_reference:
-  setup_enabled: true
+  enabled: true
 """,
     )
 

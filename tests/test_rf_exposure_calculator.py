@@ -22,7 +22,6 @@ from rolling_thunder.antenna_reference_domain import (
     LossSegment,
     ModeProfile,
     TextProvenance,
-    standard_mode_profiles,
 )
 from rolling_thunder.domain import DomainModel, Frequency
 from rolling_thunder.rf_exposure_calculator import (
@@ -263,15 +262,9 @@ def test_ground_reflection_assumption_is_explicit_and_changes_density() -> None:
     )
 
 
-def test_standard_profiles_and_default_distance_are_explicit() -> None:
-    profiles = {profile.name: profile.rf_envelope_duty for profile in standard_mode_profiles()}
-    assert profiles == {
-        "FT8": 1.0,
-        "SSB unprocessed": 0.20,
-        "SSB heavily processed": 0.50,
-        "6 m FM": 1.0,
-    }
-    scenario = complete_inputs()[3]
+def test_mode_duty_and_default_distance_are_explicit_inputs() -> None:
+    _, _, mode, scenario = complete_inputs()
+    assert mode.rf_envelope_duty == 1.0
     assert scenario.occupant_distance_m == 1.8288
     assert scenario.occupant_distance_verified is False
     assert scenario.controlled_tx_fraction == 0.5

@@ -10,8 +10,8 @@ from rolling_thunder.active_panel_commands import (
     SharedSpotActivePanelCommandController,
 )
 from rolling_thunder.antenna_reference_commands import AntennaAwareActivePanelCommands
+from rolling_thunder.antenna_reference_config import AntennaReferenceYamlSource
 from rolling_thunder.antenna_reference_panel import AntennaReferencePanelController
-from rolling_thunder.antenna_reference_repository import AntennaReferenceRepository
 from rolling_thunder.antenna_reference_service import AntennaReferenceService
 from rolling_thunder.antenna_reference_ui import AntennaReferenceWidgets
 from rolling_thunder.application_runtime import ApplicationRuntime
@@ -314,10 +314,11 @@ def run_dashboard(
     antenna_panel = (
         AntennaReferencePanelController(
             AntennaReferenceService(
-                AntennaReferenceRepository(config.storage.database_path)
+                AntennaReferenceYamlSource(config.antenna_reference.data_file)
             )
         )
         if config.antenna_reference.enabled
+        and config.antenna_reference.data_file is not None
         else None
     )
     if antenna_panel is not None:
@@ -742,11 +743,7 @@ def run_dashboard(
 
     settings_widgets = SettingsWidgets(context_content)
     antenna_widgets = (
-        AntennaReferenceWidgets(
-            context_content,
-            setup_enabled=config.antenna_reference.setup_enabled,
-            submit_evaluation=antenna_panel.start_evaluation,
-        )
+        AntennaReferenceWidgets(context_content)
         if antenna_panel is not None
         else None
     )
