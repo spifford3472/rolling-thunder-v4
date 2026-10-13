@@ -200,3 +200,5 @@ prioritizes region-diverse samples before requesting another band's set.
 This is deterministic per time/band, rather than a comprehensive all-band
 coverage guarantee. The 420 previously scheduled pilot slots remain tied
 to their historical plan ID and are not drained by a new plan.
+
+The NOAA publisher writes only under a dedicated /var/lib/rolling-thunder-noaa directory owned by its account; it cannot modify /etc plan or activation configuration. The sampler reads these published artifacts via explicit config paths.
