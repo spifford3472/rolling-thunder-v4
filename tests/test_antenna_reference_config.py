@@ -3,9 +3,14 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
-from rolling_thunder.antenna_reference_config import load_antenna_reference_document
+from rolling_thunder.antenna_reference_config import (
+    AntennaReferenceYamlSource,
+    load_antenna_reference_document,
+)
 from rolling_thunder.antenna_reference_domain import ExposureDistanceKind, FrequencyRegion
+from rolling_thunder.antenna_reference_service import AntennaReferenceService
 from rolling_thunder.config import (
     ConfigurationFileError,
     ConfigurationValidationError,
@@ -85,6 +90,108 @@ def test_empty_checked_in_example_contains_no_unverified_values() -> None:
     assert document.installations == ()
     assert document.mode_profiles == ()
     assert document.scenarios == ()
+
+
+def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomplete(
+    tmp_path: Path,
+) -> None:
+    path = Path("config/antenna-reference.mobile-example.yaml")
+
+    document = load_antenna_reference_document(path)
+
+    assert [item.name for item in document.catalog] == [
+        "Yaesu ATAS-120A",
+        "Comet 224",
+        "144/430MHz VHF UHF Mobil Car Radio Antenna 2.15/3.5dBi VSWR <1.5",
+    ]
+    atas, comet, generic = document.catalog
+    assert [(band.label, band.region, band.frequencies.lower.hz, band.frequencies.upper.hz) for band in atas.bands] == [
+        ("40 m", FrequencyRegion.HF, 7_000_000, 7_300_000),
+        ("20 m", FrequencyRegion.HF, 14_000_000, 14_350_000),
+        ("15 m", FrequencyRegion.HF, 21_000_000, 21_450_000),
+        ("10 m", FrequencyRegion.HF, 28_000_000, 29_700_000),
+        ("6 m", FrequencyRegion.VHF, 50_000_000, 54_000_000),
+    ]
+    assert [gain.gain_db for gain in atas.gains] == [-10.0, -5.0, -5.0, -5.0, 0.0]
+    assert "30 m, 17 m, and 12 m are intentionally omitted" in (atas.notes or "")
+    assert comet.model == "224"
+    assert comet.gains == ()
+    assert generic.bands[0].frequencies.lower.hz == 420_000_000
+    assert generic.bands[0].frequencies.upper.hz == 450_000_000
+    assert generic.gains[0].gain_db == 3.5
+    assert "pending datasheet" in (generic.gains[0].provenance.notes or "")
+
+    assert all(item.losses_complete is False for item in document.installations)
+    assert [[loss.name for loss in item.loss_segments] for item in document.installations] == [
+        ["6.5 ft RG316 feedline", "2 ft RG8X feedline"],
+        ["6.5 ft RG316 feedline", "Comet CF-4160J duplexer", "2 ft RG8X feedline"],
+        ["6 ft RG58 feedline", "Comet CF-4160J duplexer", "2 ft RG8X feedline"],
+    ]
+    assert all(
+        loss.loss_db is None
+        for installation in document.installations
+        for loss in installation.loss_segments
+    )
+    assert all(
+        item.location_description == "vehicle; mounting position not yet measured"
+        for item in document.installations
+    )
+    assert [item.provenance.notes for item in document.installations] == [
+        "Driver distance was estimated as 7 ft and is not independently measured or verified.",
+        "Driver distance was estimated as 6 ft and is not independently measured or verified.",
+        "Driver distance was estimated as 8 ft and is not independently measured or verified.",
+    ]
+    assert [item.rf_envelope_duty for item in document.mode_profiles] == [1.0, 1.0, 1.0]
+    assert document.mode_profiles[0].provenance.source == "engineering assumption 2026-10-13"
+
+    assert len(document.scenarios) == 12
+    assert [(item.name, item.frequency.hz) for item in document.scenarios] == [
+        ("ATAS-120A 40 m SSB maximum", 7_150_000),
+        ("ATAS-120A 40 m FT8 maximum", 7_150_000),
+        ("ATAS-120A 20 m SSB maximum", 14_175_000),
+        ("ATAS-120A 20 m FT8 maximum", 14_175_000),
+        ("ATAS-120A 15 m SSB maximum", 21_225_000),
+        ("ATAS-120A 15 m FT8 maximum", 21_225_000),
+        ("ATAS-120A 10 m SSB maximum", 28_850_000),
+        ("ATAS-120A 10 m FT8 maximum", 28_850_000),
+        ("ATAS-120A 6 m SSB maximum", 52_000_000),
+        ("ATAS-120A 6 m FT8 maximum", 52_000_000),
+        ("Comet 224 2 m FM maximum", 146_000_000),
+        ("Generic antenna 70 cm FM maximum", 435_000_000),
+    ]
+    assert [item.forward_tx_watts for item in document.scenarios[:10]] == [
+        100.0,
+        70.0,
+    ] * 5
+    assert [item.forward_tx_watts for item in document.scenarios[10:]] == [50.0, 50.0]
+    assert all(item.controlled_tx_fraction == 0.5 for item in document.scenarios)
+    assert all(item.uncontrolled_tx_fraction == 0.5 for item in document.scenarios)
+    assert all(
+        item.distance_kind is ExposureDistanceKind.HYPOTHETICAL_SIX_FOOT
+        and item.occupant_distance_m == 1.8288
+        and item.occupant_distance_verified is False
+        for item in document.scenarios
+    )
+
+    round_trip_path = tmp_path / "mobile-round-trip.yaml"
+    round_trip_path.write_text(
+        yaml.safe_dump(yaml.safe_load(path.read_text(encoding="utf-8")), sort_keys=False),
+        encoding="utf-8",
+    )
+    assert load_antenna_reference_document(round_trip_path) == document
+
+    publication = AntennaReferenceService(AntennaReferenceYamlSource(path)).load_publication()
+    assert len(publication.evaluations) == 12
+    assert all(result.result.inputs_complete is False for result in publication.evaluations)
+    assert all(result.result.needs_further_evaluation is True for result in publication.evaluations)
+    assert all(result.result.controlled is None for result in publication.evaluations)
+    assert all(result.result.uncontrolled is None for result in publication.evaluations)
+    assert all(
+        "installation loss inventory is not marked complete" in result.result.missing_inputs
+        and "one or more applicable installation losses are unknown"
+        in result.result.missing_inputs
+        for result in publication.evaluations
+    )
 
 
 def test_full_yaml_preserves_provenance_six_metres_and_measured_distance(

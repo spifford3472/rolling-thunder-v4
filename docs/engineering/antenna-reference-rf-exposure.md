@@ -52,6 +52,34 @@ Relative paths resolve beside the active application YAML. The checked-in
 contains a commented field-shape reference but no active unverified antenna,
 gain, loss, duty, power, transmit fraction, reflection, or distance value.
 
+`config/antenna-reference.mobile-example.yaml` is a separate, valid, manually
+editable example that records operator-provided claims dated 2026-10-13. It is not
+production configuration and is not selected automatically. Its cable types,
+lengths, and CF-4160J devices have no invented attenuation or insertion-loss
+values: each contribution is explicitly unknown and every installation keeps
+`losses_complete: false`. Consequently all of its configured scenarios publish
+incomplete results rather than gain-to-power estimates.
+
+That mobile example preserves the supplied ATAS-120A bands as discrete 40, 20, 15,
+10, and 6 m associations. It does not infer 30, 17, or 12 m from the phrase
+"20-10m". Six metres remains VHF. The supplied `Comet 224` model string is not
+silently changed to SBB224, and that record has no invented gain. The generic
+antenna is assigned only to a clearly labeled 420-450 MHz 70 cm range, with its
+operator-supplied nominal 3.5 dBi mapping marked pending datasheet verification;
+the Region 2 range was checked against
+[47 CFR 97.301](https://www.ecfr.gov/current/title-47/chapter-I/subchapter-D/part-97/subpart-D/section-97.301)
+on 2026-10-13 and is not transmit authorization.
+
+The supplied 7 ft, 6 ft, and 8 ft driver distances are retained as unverified
+operator estimates in provenance, not represented as `front_seat_measured`.
+Because schema 1 correctly forbids an unverified measured-distance flag pairing,
+the example scenarios evaluate the explicit unverified 1.8288 m six-foot
+hypothetical instead. Passenger and public distances remain unknown. Reference
+frequencies and the ARRL typical-ground selection are identified as engineering
+scenario assumptions rather than operator claims. SSB uses a separately sourced
+conservative 1.0 RF-envelope assumption; SSB, FT8, and FM transmit fractions remain
+the operator-provided 0.5 for both averaging windows.
+
 When enabled, one bounded background worker reads and validates the whole data file
 once at dashboard startup, calculates every configured scenario with the pure
 calculator, and atomically replaces the published snapshot only after all work
@@ -175,4 +203,8 @@ compare results with the current ARRL reference using identical inputs; investig
 differences; evaluate near-field/vehicle geometry and aggregate sources; and perform
 installed 1280x720 readability acceptance. No live RF test is required or
 authorized by this subsystem. No Forge, hardware, deployment, service restart, or
-production change is part of this work.
+production change is part of this work. For the mobile example specifically, the
+owner must still confirm whether 30, 17, or 12 m should be supported; retain a
+datasheet that maps the generic antenna's stated gain to 70 cm; establish applicable
+feedline, connector, and duplexer losses; measure/verify driver, passenger, and
+public geometry; and review the actual mounting position.

@@ -91,7 +91,9 @@ Live acceptance should use an exact commit SHA and record rollback information.
   and pure service evaluation for dormant-storage compatibility.
 - `tests/test_antenna_reference_config.py` — empty authoritative example, strict
   YAML parsing, provenance and explicit-6-m preservation, aggregate references,
-  measured-distance rules, and missing-file failure.
+  measured-distance rules, missing-file failure, and the separate mobile example's
+  exact operator claims, YAML round trip, unknown losses, and deliberately
+  incomplete/no-verdict evaluations.
 - `tests/test_antenna_reference_panel.py` — empty startup, multi-installation listing,
   HF/VHF/explicit-6-m cards, gain/loss units, deferred YAML worker execution,
   configured six-metre FM results, advisory wording, and view-only controls.

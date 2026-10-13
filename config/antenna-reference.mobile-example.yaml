@@ -1,0 +1,424 @@
+# Rolling Thunder mobile antenna reference, schema 1.
+#
+# These records preserve operator claims supplied 2026-10-13. They are not
+# manufacturer-verified specifications or a completed RF exposure evaluation.
+# Feedline and duplexer attenuation are deliberately unknown, so every
+# installation has losses_complete: false and every calculation remains
+# incomplete. Driver distances are operator estimates, not independently
+# measured/verified distances; the configured calculations therefore retain the
+# schema's unverified six-foot hypothetical. Passenger and public distances are
+# unknown. The dashboard loads this file read-only and never edits it.
+#
+# The ATAS-120A has only the five discrete bands actually supplied. In
+# particular, 30 m, 17 m, and 12 m are omitted pending explicit operator or
+# retained-source confirmation. Scenario frequencies are documented engineering
+# reference points inside each supplied band, not operator claims. The ARRL
+# typical-ground model is a conservative calculator assumption, not a
+# vehicle-specific model or an operator-supplied measurement.
+schema_version: 1
+catalog:
+  - antenna_id: 11111111-0000-0000-0000-000000000001
+    name: Yaesu ATAS-120A
+    manufacturer: Yaesu
+    model: ATAS-120A
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Model, supported bands, and nominal gains are operator claims pending retained-source verification.
+    bands:
+      - association_id: 11111111-1000-0000-0000-000000000001
+        label: 40 m
+        region: HF
+        frequencies: {lower: {hz: 7000000}, upper: {hz: 7300000}}
+        provenance: {source: operator-provided 2026-10-13}
+      - association_id: 11111111-1000-0000-0000-000000000002
+        label: 20 m
+        region: HF
+        frequencies: {lower: {hz: 14000000}, upper: {hz: 14350000}}
+        provenance: {source: operator-provided 2026-10-13}
+      - association_id: 11111111-1000-0000-0000-000000000003
+        label: 15 m
+        region: HF
+        frequencies: {lower: {hz: 21000000}, upper: {hz: 21450000}}
+        provenance: {source: operator-provided 2026-10-13}
+      - association_id: 11111111-1000-0000-0000-000000000004
+        label: 10 m
+        region: HF
+        frequencies: {lower: {hz: 28000000}, upper: {hz: 29700000}}
+        provenance: {source: operator-provided 2026-10-13}
+      - association_id: 11111111-1000-0000-0000-000000000005
+        label: 6 m
+        region: VHF
+        frequencies: {lower: {hz: 50000000}, upper: {hz: 54000000}}
+        provenance: {source: operator-provided 2026-10-13}
+    gains:
+      - gain_id: 11111111-2000-0000-0000-000000000001
+        frequencies: {lower: {hz: 7000000}, upper: {hz: 7300000}}
+        gain_db: -10
+        unit: dBi
+        provenance: {source: operator-provided 2026-10-13}
+      - gain_id: 11111111-2000-0000-0000-000000000002
+        frequencies: {lower: {hz: 14000000}, upper: {hz: 14350000}}
+        gain_db: -5
+        unit: dBi
+        provenance: {source: operator-provided 2026-10-13}
+      - gain_id: 11111111-2000-0000-0000-000000000003
+        frequencies: {lower: {hz: 21000000}, upper: {hz: 21450000}}
+        gain_db: -5
+        unit: dBi
+        provenance: {source: operator-provided 2026-10-13}
+      - gain_id: 11111111-2000-0000-0000-000000000004
+        frequencies: {lower: {hz: 28000000}, upper: {hz: 29700000}}
+        gain_db: -5
+        unit: dBi
+        provenance: {source: operator-provided 2026-10-13}
+      - gain_id: 11111111-2000-0000-0000-000000000005
+        frequencies: {lower: {hz: 50000000}, upper: {hz: 54000000}}
+        gain_db: 0
+        unit: dBi
+        provenance: {source: operator-provided 2026-10-13}
+    notes: 30 m, 17 m, and 12 m are intentionally omitted. The phrase 20-10 m was not treated as evidence for intermediate bands.
+
+  - antenna_id: 22222222-0000-0000-0000-000000000001
+    name: Comet 224
+    manufacturer: Comet
+    model: "224"
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Model string is preserved exactly as supplied and is not assumed to mean SBB224.
+    bands:
+      - association_id: 22222222-1000-0000-0000-000000000001
+        label: 2 m
+        region: VHF
+        frequencies: {lower: {hz: 144000000}, upper: {hz: 148000000}}
+        provenance: {source: operator-provided 2026-10-13}
+    gains: []
+    notes: No gain was supplied; no gain is inferred from a similarly named product.
+
+  - antenna_id: 33333333-0000-0000-0000-000000000001
+    name: "144/430MHz VHF UHF Mobil Car Radio Antenna 2.15/3.5dBi VSWR <1.5"
+    model: "144/430MHz VHF UHF Mobil Car Radio Antenna 2.15/3.5dBi VSWR <1.5"
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Generic product string is preserved as supplied; manufacturer and datasheet are unknown.
+    bands:
+      - association_id: 33333333-1000-0000-0000-000000000001
+        label: 70 cm (420-450 MHz range only)
+        region: UHF
+        frequencies: {lower: {hz: 420000000}, upper: {hz: 450000000}}
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Assigned to 70 cm only; the Region 2 range label was checked against 47 CFR 97.301 on 2026-10-13 and is not a transmit authorization.
+    gains:
+      - gain_id: 33333333-2000-0000-0000-000000000001
+        frequencies: {lower: {hz: 420000000}, upper: {hz: 450000000}}
+        gain_db: 3.5
+        unit: dBi
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Nominal 70 cm mapping is pending datasheet verification.
+    notes: The nominal 3.5 dBi value is retained as an operator claim pending datasheet band-mapping verification.
+
+installations:
+  - installation_id: 11111111-3000-0000-0000-000000000001
+    antenna_id: 11111111-0000-0000-0000-000000000001
+    name: Yaesu ATAS-120A mobile installation
+    location_description: vehicle; mounting position not yet measured
+    losses_complete: false
+    loss_segments:
+      - loss_id: 11111111-4000-0000-0000-000000000001
+        name: 6.5 ft RG316 feedline
+        frequencies: {lower: {hz: 7000000}, upper: {hz: 54000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Cable type and length only; attenuation was not supplied and is not inferred.
+      - loss_id: 11111111-4000-0000-0000-000000000002
+        name: 2 ft RG8X feedline
+        frequencies: {lower: {hz: 7000000}, upper: {hz: 54000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Cable type and length only; attenuation was not supplied and is not inferred.
+    band_assignments:
+      - assignment_id: 11111111-5000-0000-0000-000000000001
+        association_id: 11111111-1000-0000-0000-000000000001
+        active: true
+        provenance: {source: operator-provided 2026-10-13}
+      - assignment_id: 11111111-5000-0000-0000-000000000002
+        association_id: 11111111-1000-0000-0000-000000000002
+        active: true
+        provenance: {source: operator-provided 2026-10-13}
+      - assignment_id: 11111111-5000-0000-0000-000000000003
+        association_id: 11111111-1000-0000-0000-000000000003
+        active: true
+        provenance: {source: operator-provided 2026-10-13}
+      - assignment_id: 11111111-5000-0000-0000-000000000004
+        association_id: 11111111-1000-0000-0000-000000000004
+        active: true
+        provenance: {source: operator-provided 2026-10-13}
+      - assignment_id: 11111111-5000-0000-0000-000000000005
+        association_id: 11111111-1000-0000-0000-000000000005
+        active: true
+        provenance: {source: operator-provided 2026-10-13}
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Driver distance was estimated as 7 ft and is not independently measured or verified.
+    notes: Passenger and public distances are unknown. Feedline losses and any other path losses remain incomplete.
+
+  - installation_id: 22222222-3000-0000-0000-000000000001
+    antenna_id: 22222222-0000-0000-0000-000000000001
+    name: Comet 224 mobile installation
+    location_description: vehicle; mounting position not yet measured
+    losses_complete: false
+    loss_segments:
+      - loss_id: 22222222-4000-0000-0000-000000000001
+        name: 6.5 ft RG316 feedline
+        frequencies: {lower: {hz: 144000000}, upper: {hz: 148000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Cable type and length only; attenuation was not supplied and is not inferred.
+      - loss_id: 22222222-4000-0000-0000-000000000002
+        name: Comet CF-4160J duplexer
+        frequencies: {lower: {hz: 144000000}, upper: {hz: 148000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Named device only; insertion loss was not supplied and is not inferred.
+      - loss_id: 22222222-4000-0000-0000-000000000003
+        name: 2 ft RG8X feedline
+        frequencies: {lower: {hz: 144000000}, upper: {hz: 148000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Cable type and length only; attenuation was not supplied and is not inferred.
+    band_assignments:
+      - assignment_id: 22222222-5000-0000-0000-000000000001
+        association_id: 22222222-1000-0000-0000-000000000001
+        active: true
+        provenance: {source: operator-provided 2026-10-13}
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Driver distance was estimated as 6 ft and is not independently measured or verified.
+    notes: Passenger and public distances are unknown. Feedline and duplexer insertion losses remain incomplete.
+
+  - installation_id: 33333333-3000-0000-0000-000000000001
+    antenna_id: 33333333-0000-0000-0000-000000000001
+    name: Generic 144/430 MHz mobile installation
+    location_description: vehicle; mounting position not yet measured
+    losses_complete: false
+    loss_segments:
+      - loss_id: 33333333-4000-0000-0000-000000000001
+        name: 6 ft RG58 feedline
+        frequencies: {lower: {hz: 420000000}, upper: {hz: 450000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Cable type and length only; attenuation was not supplied and is not inferred.
+      - loss_id: 33333333-4000-0000-0000-000000000002
+        name: Comet CF-4160J duplexer
+        frequencies: {lower: {hz: 420000000}, upper: {hz: 450000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Named device only; insertion loss was not supplied and is not inferred.
+      - loss_id: 33333333-4000-0000-0000-000000000003
+        name: 2 ft RG8X feedline
+        frequencies: {lower: {hz: 420000000}, upper: {hz: 450000000}}
+        loss_db: null
+        provenance:
+          source: operator-provided 2026-10-13
+          notes: Cable type and length only; attenuation was not supplied and is not inferred.
+    band_assignments:
+      - assignment_id: 33333333-5000-0000-0000-000000000001
+        association_id: 33333333-1000-0000-0000-000000000001
+        active: true
+        provenance: {source: operator-provided 2026-10-13}
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Driver distance was estimated as 8 ft and is not independently measured or verified.
+    notes: Passenger and public distances are unknown. Feedline and duplexer insertion losses remain incomplete.
+
+mode_profiles:
+  - mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: SSB conservative RF envelope
+    rf_envelope_duty: 1.0
+    provenance:
+      source: engineering assumption 2026-10-13
+      notes: Conservative full-envelope value; it is separate from the operator-provided 1 minute on / 1 minute off transmit fraction and is not claimed as operator-provided.
+  - mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: FT8 full RF envelope
+    rf_envelope_duty: 1.0
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Full RF envelope while keyed; alternating 15 second transmit/receive periods are represented separately by scenario transmit fractions.
+  - mode_profile_id: 88888888-0000-0000-0000-000000000003
+    name: FM full RF envelope
+    rf_envelope_duty: 1.0
+    provenance:
+      source: operator-provided 2026-10-13
+      notes: Full RF envelope while keyed; 1 minute on / 1 minute off is represented separately by scenario transmit fractions.
+
+scenarios:
+  - scenario_id: 99999999-0000-0000-0000-000000000001
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 40 m SSB maximum
+    frequency: {hz: 7150000}
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: &atas_scenario_provenance
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented in notes
+      notes: Power and timing are operator claims. Frequency is an engineering reference point. Reflection model and six-foot hypothetical are conservative scenario assumptions. Claimed 7 ft driver distance is unverified; passenger and public distances are unknown.
+  - scenario_id: 99999999-0000-0000-0000-000000000002
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 40 m FT8 maximum
+    frequency: {hz: 7150000}
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000003
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 20 m SSB maximum
+    frequency: {hz: 14175000}
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000004
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 20 m FT8 maximum
+    frequency: {hz: 14175000}
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000005
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 15 m SSB maximum
+    frequency: {hz: 21225000}
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000006
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 15 m FT8 maximum
+    frequency: {hz: 21225000}
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000007
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 10 m SSB maximum
+    frequency: {hz: 28850000}
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000008
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 10 m FT8 maximum
+    frequency: {hz: 28850000}
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000009
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 6 m SSB maximum
+    frequency: {hz: 52000000}
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000010
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 6 m FT8 maximum
+    frequency: {hz: 52000000}
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance: *atas_scenario_provenance
+  - scenario_id: 99999999-0000-0000-0000-000000000011
+    installation_id: 22222222-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000003
+    name: Comet 224 2 m FM maximum
+    frequency: {hz: 146000000}
+    forward_tx_watts: 50
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented in notes
+      notes: Power and timing are operator claims. Frequency is an engineering reference point. Reflection model and six-foot hypothetical are conservative scenario assumptions. Claimed 6 ft driver distance is unverified; passenger and public distances are unknown.
+  - scenario_id: 99999999-0000-0000-0000-000000000012
+    installation_id: 33333333-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000003
+    name: Generic antenna 70 cm FM maximum
+    frequency: {hz: 435000000}
+    forward_tx_watts: 50
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented in notes
+      notes: Power and timing are operator claims. Frequency is an engineering reference point. Reflection model and six-foot hypothetical are conservative scenario assumptions. Claimed 8 ft driver distance is unverified; passenger and public distances are unknown.

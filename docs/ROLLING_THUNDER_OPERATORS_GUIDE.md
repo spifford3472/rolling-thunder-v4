@@ -718,6 +718,15 @@ the original dBi/dBd unit. Configured scenarios separately show mode RF-envelope
 forward power, controlled 6-minute and uncontrolled 30-minute TX fractions,
 reflection assumption, and source.
 
+The separate checked-in `config/antenna-reference.mobile-example.yaml` records a
+specific set of operator claims dated 2026-10-13 and is not enabled or copied into
+production automatically. It deliberately leaves all cable and duplexer loss values
+unknown, keeps driver-distance claims marked unverified, and leaves passenger/public
+distances unknown, so it cannot produce a complete exposure estimate. Its ATAS-120A
+record omits 30, 17, and 12 m pending confirmation; its `Comet 224` name is preserved
+as supplied; and the generic antenna's nominal 70 cm gain remains pending datasheet
+mapping verification.
+
 Distance is explicit: `hypothetical_six_foot` is exactly 6 ft / 1.8288 m and is
 always unverified; `front_seat_measured` and `public_measured` require real measured
 geometry. Missing, unreadable, malformed, or invalid YAML produces a visible error,
