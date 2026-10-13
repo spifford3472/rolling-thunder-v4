@@ -14,8 +14,8 @@ def test_baseline_adapter_posts_only_provider_supported_fields(monkeypatch: pyte
     def fake_http(method: str, route: str, payload: Any) -> dict[str, Any]:
         requests.append((method, route, payload))
         if method == "GET":
-            return {"service": "voacap-service", "version": "0.3.0"}
-        return {"analysis": {"best_band_by_hour": [{"hour_utc": 0, "band_m": 20}]}}
+            return {"service": "voacap-service", "version": "0.3.0", "model_version": "model-1"}
+        return {"model_version": "model-1", "analysis": {"best_band_by_hour": [{"hour_utc": 0, "band_m": 20}]}}
 
     monkeypatch.setattr(adapter.client, "_json_request", fake_http)
     input_request = {
@@ -67,8 +67,8 @@ def test_pilot_adapter_hard_stops_before_second_post(monkeypatch: pytest.MonkeyP
     def fake_http(method: str, route: str, payload: Any) -> dict[str, Any]:
         requests.append(f"{method} {route}")
         if method == "GET":
-            return {"service": "voacap-service", "version": "0.3.0"}
-        return {"analysis": {"best_band_by_hour": []}}
+            return {"service": "voacap-service", "version": "0.3.0", "model_version": "model-1"}
+        return {"model_version": "model-1", "analysis": {"best_band_by_hour": []}}
 
     monkeypatch.setattr(adapter.client, "_json_request", fake_http)
     request = {
@@ -92,7 +92,7 @@ def test_pilot_post_timeout_cannot_be_retried(monkeypatch: pytest.MonkeyPatch) -
     def fake_http(method: str, route: str, payload: Any) -> dict[str, Any]:
         requests.append(f"{method} {route}")
         if method == "GET":
-            return {"service": "voacap-service", "version": "0.3.0"}
+            return {"service": "voacap-service", "version": "0.3.0", "model_version": "model-1"}
         raise TimeoutError("ambiguous POST outcome")
 
     monkeypatch.setattr(adapter.client, "_json_request", fake_http)
@@ -107,3 +107,41 @@ def test_pilot_post_timeout_cannot_be_retried(monkeypatch: pytest.MonkeyPatch) -
         adapter.predict(request, timeout_s=10.0)
     assert requests.count("POST /api/v1/summary") == 1
     assert requests.count("GET /version") == 1
+
+def test_missing_provider_model_identity_stops_before_post(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = LocalVoacapProvider(
+        "http://127.0.0.1:8787", service_version="0.3.0", model_version="model-1",
+    )
+    seen: list[str] = []
+
+    def fake_http(method: str, route: str, payload: Any) -> dict[str, Any]:
+        seen.append(method)
+        return {"service": "voacap-service", "version": "0.3.0"}
+
+    monkeypatch.setattr(adapter.client, "_json_request", fake_http)
+    with pytest.raises(ProviderFailure, match="provider_model_identity_mismatch"):
+        adapter.verify_version(timeout_s=3.0)
+    assert seen == ["GET"]
+    assert adapter.post_count == 0
+
+
+def test_post_response_model_drift_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = LocalVoacapProvider(
+        "http://127.0.0.1:8787", service_version="0.3.0", model_version="model-1",
+        max_posts=1,
+    )
+
+    def fake_http(method: str, route: str, payload: Any) -> dict[str, Any]:
+        if method == "GET":
+            return {"service": "voacap-service", "version": "0.3.0", "model_version": "model-1"}
+        return {"model_version": "different-engine", "analysis": {}}
+
+    monkeypatch.setattr(adapter.client, "_json_request", fake_http)
+    request = {
+        "tx_grid": "EM79xm", "rx_grid": "EL98", "year": 2026, "month": 10,
+        "bands_m": [20], "power_watts": 20, "mode": "FT8", "timezone": "UTC",
+        "ssn": 87.9,
+    }
+    with pytest.raises(ProviderFailure, match="provider_response_model_mismatch"):
+        adapter.predict(request, timeout_s=10.0)
+    assert adapter.post_count == 1

@@ -44,8 +44,8 @@ def test_real_urllib_adapter_request_response_framing(
 ) -> None:
     writes: list[bytes] = []
     responses = iter([
-        {"service": "voacap-service", "version": "0.3.0"},
-        {"analysis": {"best_band_by_hour": [
+        {"service": "voacap-service", "version": "0.3.0", "model_version": "model-1"},
+        {"model_version": "model-1", "analysis": {"best_band_by_hour": [
             {"hour_utc": 0, "band_m": 20, "reliability": 0.5, "snr_db": 10.0}
         ]}},
     ])
