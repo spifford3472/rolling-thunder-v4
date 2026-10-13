@@ -391,6 +391,19 @@ class AntennaReferenceRepository:
             notes=row[6],
         )
 
+    def list_installations(self) -> tuple[AntennaInstallation, ...]:
+        """Return all physical installations in deterministic display order."""
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    """SELECT installation_id FROM antenna_installations
+                       ORDER BY name COLLATE NOCASE, installation_id"""
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise StorageError(f"Antenna installations could not be listed: {error}") from error
+        installations = tuple(self.get_installation(UUID(row[0])) for row in rows)
+        return tuple(item for item in installations if item is not None)
+
     def save_mode_profile(self, profile: ModeProfile) -> None:
         """Store one explicit RF-envelope mode profile without seeding defaults."""
         try:

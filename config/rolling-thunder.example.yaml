@@ -178,6 +178,7 @@ physical_controls:
     context-button-1-long: select_ai
     context-button-2-short: panel_secondary
     context-button-2-long: select_settings
+
     context-button-3-short: panel_tertiary
     context-button-3-long: panel_tertiary_long
 
@@ -185,6 +186,12 @@ physical_controls:
     encoder-clockwise: move_next
     encoder-switch-short: activate_selection
     encoder-switch-long: back
+
+# Offline advisory only. It never reads or commands the radio. Keep setup_enabled
+# false while mobile; setup/evaluation entry is intended only for a parked bench.
+antenna_reference:
+  enabled: false
+  setup_enabled: false
 
 ft8:
   # FT8-P1 recommendation-only power policy; NEVER authorizes CAT power changes.

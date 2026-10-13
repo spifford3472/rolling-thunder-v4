@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
@@ -21,9 +22,13 @@ class AntennaReferenceStore(Protocol):
 
     def get_catalog(self, antenna_id: UUID) -> AntennaCatalogEntry | None: ...
 
+    def list_catalog(self) -> tuple[AntennaCatalogEntry, ...]: ...
+
     def save_installation(self, installation: AntennaInstallation) -> None: ...
 
     def get_installation(self, installation_id: UUID) -> AntennaInstallation | None: ...
+
+    def list_installations(self) -> tuple[AntennaInstallation, ...]: ...
 
     def save_mode_profile(self, profile: ModeProfile) -> None: ...
 
@@ -36,6 +41,14 @@ class AntennaReferenceStore(Protocol):
 
 class AntennaReferenceNotFoundError(LookupError):
     """Raised when an evaluation aggregate is missing from offline storage."""
+
+
+@dataclass(frozen=True)
+class AntennaReferenceSnapshot:
+    """Immutable aggregate list published to presentation/controller consumers."""
+
+    catalog: tuple[AntennaCatalogEntry, ...] = ()
+    installations: tuple[AntennaInstallation, ...] = ()
 
 
 class AntennaReferenceService:
@@ -55,6 +68,29 @@ class AntennaReferenceService:
 
     def save_scenario(self, scenario: ExposureScenario) -> None:
         self._store.save_scenario(scenario)
+
+    def load_snapshot(self) -> AntennaReferenceSnapshot:
+        """Load one immutable offline snapshot for publication outside SQLite."""
+        return AntennaReferenceSnapshot(
+            catalog=self._store.list_catalog(),
+            installations=self._store.list_installations(),
+        )
+
+    @staticmethod
+    def evaluate_inputs(
+        *,
+        catalog: AntennaCatalogEntry,
+        installation: AntennaInstallation,
+        mode: ModeProfile,
+        scenario: ExposureScenario,
+    ) -> RfExposureResult:
+        """Evaluate already-loaded immutable inputs without persistence or hardware."""
+        return calculate_rf_exposure(
+            catalog=catalog,
+            installation=installation,
+            mode=mode,
+            scenario=scenario,
+        )
 
     def evaluate_scenario(self, scenario_id: UUID) -> RfExposureResult:
         """Load immutable inputs and run the pure versioned calculator."""

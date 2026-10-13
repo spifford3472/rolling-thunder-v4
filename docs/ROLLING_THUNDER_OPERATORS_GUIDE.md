@@ -195,6 +195,7 @@ The current dashboard contexts are:
 - SETTINGS
 - LOG
 - DMR
+- ANTENNAS / RF EXPOSURE (only when explicitly enabled in configuration)
 
 The persistent map/situational region is separate from the normal context page.
 
@@ -694,17 +695,38 @@ preferences without editing configuration files.
 The page displays the effective zoom and availability of the map/radar/callsign
 controls.
 
-## Antenna reference / RF exposure status
+## Antenna reference / RF exposure screen
 
-Version 1 of the offline antenna-reference and RF-exposure calculation core is not
-connected to the dashboard or Settings screen. There is currently no operator
-control, advisory display, RF interlock, or automatic power action. Do not treat the
-repository's 6 ft scenario default as a measured driver, passenger, or bystander
-distance, and do not use a plane-wave estimate as a safety or compliance finding.
-Actual antenna gain, frequency coverage, installation loss, occupant geometry, and
-transmit-duty data must be entered and checked against the current ARRL reference
-before operational use. Six-metre support must be recorded explicitly; an HF
-antenna entry does not imply 6 m capability.
+This optional screen is disabled by default. When enabled, it appears after SETTINGS
+in next-context navigation and can be opened with `a` on a bench keyboard. Encoder
+movement reviews already-loaded HF, VHF, and UHF antenna/installation cards. Encoder
+press and Context Buttons do nothing on this screen; it cannot tune, key, transmit,
+or change power.
+
+The screen starts empty until real sourced antenna and installation records exist.
+It never fabricates a gain, treats missing loss as zero, assumes HF includes 6 m, or
+uses current radio settings. A six-metre-capable antenna must have its own explicit
+VHF band association. Cards retain the entered operator/manufacturer/measurement
+provenance and original dBi/dBd gain units.
+
+With the separate parked setup gate enabled, **PARKED SETUP: EVALUATE** opens a
+mouse/keyboard form for FT8, unprocessed SSB, heavily processed SSB, or 6 m FM. Enter
+frequency, forward power, separate controlled 6-minute and uncontrolled 30-minute TX
+fractions, reflection assumption, source/provenance, and distance. The initial 6 ft
+value is an unverified what-if scenario. Check the measurement box only for actual
+straight-line occupant or public geometry.
+
+Results show peak ERP/EIRP, both FCC limits, and calculated plane-wave distances, or
+name every input that prevents a calculation. They never declare the installation
+safe, unsafe, compliant, or noncompliant. Near-field coupling, the vehicle body and
+metal, real antenna pattern, occupants, and aggregate exposure from simultaneous
+sources remain outside this estimate.
+
+Catalog/installation add, edit, and archive is not implemented in this increment;
+the scenario form is transient and writes no records. Do not use the screen
+operationally until actual installation data is entered through a reviewed workflow,
+the calculation is compared with the current ARRL reference, and vehicle-specific
+geometry/near-field questions are addressed.
 
 A manual DAY/NIGHT selection can temporarily override automatic solar style
 selection until the next real solar transition. The callsign-information

@@ -609,6 +609,19 @@ class ContactLoggingConfig(ConfigurationModel):
     append_weather_notes: bool = True
 
 
+class AntennaReferenceConfig(ConfigurationModel):
+    """Optional offline antenna-reference dashboard and parked setup controls."""
+
+    enabled: bool = False
+    setup_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_setup_gate(self) -> Self:
+        if self.setup_enabled and not self.enabled:
+            raise ValueError("antenna_reference.setup_enabled requires enabled")
+        return self
+
+
 class FT8QsoConfig(ConfigurationModel):
     """Hardware-independent FT8 QSO policy settings."""
 
@@ -848,6 +861,7 @@ class ApplicationConfig(ConfigurationModel):
     radar: RadarConfig = RadarConfig()
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     ft8: FT8Config = FT8Config()
+    antenna_reference: AntennaReferenceConfig = AntennaReferenceConfig()
     contact_logging: ContactLoggingConfig = ContactLoggingConfig()
     storage: StorageConfig = StorageConfig()
 

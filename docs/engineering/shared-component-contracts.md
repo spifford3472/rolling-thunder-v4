@@ -31,6 +31,12 @@ and uncertainty warnings. It must never publish a compliant/safe verdict, create
 interlock, derive live transmit authority, change output power, or issue CAT/PTT.
 The default 6 ft distance is unverified scenario data, not vehicle geometry.
 
+The dashboard context and shortcut exist only when the typed feature gate is enabled;
+the default navigation sequence is unchanged. Physical controls are view-only for
+this context. Parked scenario entry is a second gate, uses explicit operator inputs,
+and never reads live frequency or configured power. Tkinter never performs antenna
+SQLite work.
+
 ## Local-first contact durability
 
 A successful operator Commit must be durable locally before remote

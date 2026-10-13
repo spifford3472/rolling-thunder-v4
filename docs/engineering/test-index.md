@@ -89,6 +89,11 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_antenna_reference_repository.py` — schema-21 preservation and
   rollback, no seeded values, UUID aggregate round trips, assignment ownership,
   and typed service evaluation.
+- `tests/test_antenna_reference_panel.py` — empty startup, multi-installation listing,
+  HF/VHF/explicit-6-m cards, gain/loss units, deferred worker execution, transient
+  six-metre FM evaluation, advisory wording, and view-only physical commands.
+- `tests/test_context_navigation.py` and `tests/test_config.py` — default-off context
+  sequence/shortcut and independent parked-setup gate regression coverage.
 
 ## GPS and time
 

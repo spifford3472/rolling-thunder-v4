@@ -10,7 +10,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `antenna-reference-rf-exposure.md` — offline immutable antenna catalog,
   installation/loss records, versioned FCC MPE plane-wave advisory calculator,
-  schema-21 persistence, limits, and deferred acceptance tasks.
+  disabled-by-default dashboard presentation, schema-21 persistence, limits, and
+  deferred record-editing/acceptance tasks.
 - `voacap-ft8-phase-a.md` — VOACAP/FT8 Phase A as-built audit, schema decisions, and review gates (design only).
 - `voacap-ft8-phase-b.md` — additive attempt ledger, Forge inbox, immutable
   VOACAP correlation, migration/rollback, and offline acceptance.
@@ -336,6 +337,7 @@ The current stable context IDs are:
 8. SETTINGS
 9. LOG
 10. DMR
+11. ANTENNAS / RF EXPOSURE (only when `antenna_reference.enabled` is true)
 
 The Operator's Guide describes user-facing behavior for each context. Context order and keyboard development shortcuts are defined in `context_navigation.py`.
 

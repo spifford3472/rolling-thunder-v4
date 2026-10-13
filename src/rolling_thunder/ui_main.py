@@ -9,6 +9,11 @@ from time import monotonic
 from rolling_thunder.active_panel_commands import (
     SharedSpotActivePanelCommandController,
 )
+from rolling_thunder.antenna_reference_commands import AntennaAwareActivePanelCommands
+from rolling_thunder.antenna_reference_panel import AntennaReferencePanelController
+from rolling_thunder.antenna_reference_repository import AntennaReferenceRepository
+from rolling_thunder.antenna_reference_service import AntennaReferenceService
+from rolling_thunder.antenna_reference_ui import AntennaReferenceWidgets
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.application_secrets import (
     SecretConfigurationError,
@@ -26,7 +31,6 @@ from rolling_thunder.callsign_info_ui import (
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
 from rolling_thunder.context_navigation import (
-    CONTEXT_DEFINITIONS,
     ContextId,
     ContextNavigationController,
 )
@@ -304,7 +308,20 @@ def run_dashboard(
         live_capture = LiveCallsignCaptureController(recognizer)
 
     capture = live_capture if live_capture is not None else mock_transcripts
-    context_navigation = ContextNavigationController()
+    context_navigation = ContextNavigationController(
+        include_antennas=config.antenna_reference.enabled
+    )
+    antenna_panel = (
+        AntennaReferencePanelController(
+            AntennaReferenceService(
+                AntennaReferenceRepository(config.storage.database_path)
+            )
+        )
+        if config.antenna_reference.enabled
+        else None
+    )
+    if antenna_panel is not None:
+        antenna_panel.start()
     pota_worked = PotaWorkedTracker(
         PotaWorkedRepository(config.storage.database_path)
     )
@@ -365,6 +382,8 @@ def run_dashboard(
             dmr_panel_runtime.start()
     except (RuntimeError, ValueError) as error:
         print(f"Rolling Thunder DMR startup error: {error}")
+        if antenna_panel is not None:
+            antenna_panel.close()
         log_panel.stop()
         runtime.stop()
         return 3
@@ -372,6 +391,7 @@ def run_dashboard(
         LogAwareActivePanelCommands
         | DmrAwareActivePanelCommands
         | FT8AwareActivePanelCommands
+        | AntennaAwareActivePanelCommands
     )
     if dmr_panel_runtime is None:
         active_panel_commands = log_aware_active_panel_commands
@@ -395,6 +415,12 @@ def run_dashboard(
             exit_ft8=runtime.exit_ft8_context,
             clear_start_status=runtime.clear_ft8_qso_start_status,
             pending_callsign=capture,
+        )
+    if antenna_panel is not None:
+        active_panel_commands = AntennaAwareActivePanelCommands(
+            context_navigation,
+            active_panel_commands,
+            antenna_panel,
         )
 
     status_monitor = build_status_monitor(config)
@@ -715,6 +741,15 @@ def run_dashboard(
     context_body_label.grid(row=1, column=0, sticky="nsew")
 
     settings_widgets = SettingsWidgets(context_content)
+    antenna_widgets = (
+        AntennaReferenceWidgets(
+            context_content,
+            setup_enabled=config.antenna_reference.setup_enabled,
+            submit_evaluation=antenna_panel.start_evaluation,
+        )
+        if antenna_panel is not None
+        else None
+    )
     weather_widgets = WeatherWidgets(context_content)
     repeater_widgets = RepeaterWidgets(context_content)
     log_widgets = LogWidgets(context_content)
@@ -1131,6 +1166,8 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
@@ -1143,6 +1180,8 @@ def run_dashboard(
         context_body_label.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
@@ -1155,6 +1194,8 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
@@ -1167,6 +1208,8 @@ def run_dashboard(
         context_body_label.grid_remove()
         pota_panel_frame.grid_remove()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
@@ -1184,6 +1227,8 @@ def run_dashboard(
         dmr_widgets.hide()
         ft8_widgets.hide()
         settings_widgets.show()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
 
     def show_weather_context_body() -> None:
         """Show retained weather and hide other context bodies."""
@@ -1192,6 +1237,8 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
         ft8_widgets.hide()
@@ -1204,6 +1251,8 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         weather_widgets.hide()
         dmr_widgets.hide()
         ft8_widgets.hide()
@@ -1215,6 +1264,8 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
         ft8_widgets.hide()
@@ -1227,10 +1278,26 @@ def run_dashboard(
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
         settings_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.hide()
         weather_widgets.hide()
         log_widgets.hide()
         dmr_widgets.hide()
         ft8_widgets.show()
+
+    def show_antenna_context_body() -> None:
+        """Show the offline antenna advisory and hide unrelated context bodies."""
+        browse_frame.grid_remove()
+        context_body_label.grid_remove()
+        pota_panel_frame.grid_remove()
+        repeater_widgets.hide()
+        settings_widgets.hide()
+        weather_widgets.hide()
+        log_widgets.hide()
+        dmr_widgets.hide()
+        ft8_widgets.hide()
+        if antenna_widgets is not None:
+            antenna_widgets.show()
 
     def refresh() -> None:
         # SSH trigger is consumed only in receive-only mode while FT8 is visible.
@@ -1505,8 +1572,11 @@ def run_dashboard(
                 selected_context.selected is ContextId.DMR
             )
         set_dmr_expanded_layout(
-            selected_context.selected is ContextId.DMR
-            and dmr_panel_runtime is not None
+            (
+                selected_context.selected is ContextId.DMR
+                and dmr_panel_runtime is not None
+            )
+            or selected_context.selected is ContextId.ANTENNAS
         )
 
         context_decode_text.set("")
@@ -1851,6 +1921,13 @@ def run_dashboard(
                 )
 
             health_frame.grid()
+        elif selected_context.selected is ContextId.ANTENNAS:
+            health_frame.grid_remove()
+            show_antenna_context_body()
+            context_title_text.set(selected_context.definition.title)
+            context_title_label.configure(font=("DejaVu Sans", 31, "bold"))
+            if antenna_widgets is not None and antenna_panel is not None:
+                antenna_widgets.update(antenna_panel.state)
         else:
             show_standard_context_body()
             health_frame.grid_remove()
@@ -1867,6 +1944,8 @@ def run_dashboard(
             print(f"Rolling Thunder physical controls shutdown error: {control_close_error}")
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.stop()
+        if antenna_panel is not None:
+            antenna_panel.close()
         log_panel.stop()
         status_monitor.stop()
         runtime.stop()
@@ -1953,7 +2032,7 @@ def run_dashboard(
             context_navigation.state.selected
         )
 
-    for definition in CONTEXT_DEFINITIONS:
+    for definition in context_navigation.definitions:
         root.bind(definition.shortcut, select_context_shortcut)
     root.protocol("WM_DELETE_WINDOW", close)
     refresh()

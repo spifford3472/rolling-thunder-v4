@@ -3,8 +3,9 @@
 ## Implemented scope
 
 This feature is an offline, non-actuating reference subsystem. It does not read a
-radio, issue CAT commands, key PTT, set output power, create an interlock, contact
-Forge, or participate in dashboard/runtime composition.
+radio, issue CAT commands, key PTT, set output power, create an interlock, or contact
+Forge. An optional dashboard context now presents already-published immutable data
+and submits transient advisory calculations through a bounded background controller.
 
 Implemented modules:
 
@@ -15,13 +16,31 @@ Implemented modules:
 - `antenna_reference_repository.py` — local SQLite aggregate persistence;
 - `antenna_reference_service.py` — typed application boundary for future voice,
   button, CLI, or presentation consumers; it exposes no radio authority;
+- `antenna_reference_panel.py` — immutable panel state, HF/VHF/UHF cards, sourced
+  reference-mode selection, and one-worker snapshot/evaluation lifecycle;
+- `antenna_reference_commands.py` — view-only encoder navigation and Back handling;
+- `antenna_reference_ui.py` — Tk presentation and parked mouse/keyboard scenario
+  editor;
 - `storage.py` schema 21 — additive tables for the preceding records.
 
-No dashboard screen or standalone UI is composed in v1. This is deliberate: the
-high-coupling runtime/UI roots do not yet have measured installation data or an
-approved low-distraction editing workflow. A future screen must remain gated off by
-default and must render immutable service output without SQLite work on the UI
-thread.
+`antenna_reference.enabled` defaults false. When false, the ANTENNAS context,
+repository, background controller, widgets, and shortcut are not constructed and
+the established navigation order is unchanged. When true, ANTENNAS follows SETTINGS
+in next-context navigation and uses the bench shortcut `a`. Encoder previous/next
+selects only already-published cards; encoder activation and context buttons do
+nothing. This adapter has no radio dependency or command path.
+
+`antenna_reference.setup_enabled` separately defaults false and requires the screen
+gate. It exposes a deliberate mouse/keyboard **PARKED SETUP: EVALUATE** dialog for
+transient inputs only. The form never reads current radio power. Frequency, forward
+power, controlled 6-minute TX fraction, uncontrolled 30-minute TX fraction, distance,
+distance verification, reflection assumption, mode, and operator provenance must be
+entered explicitly. The 6 ft field is visibly an unverified advisory scenario until
+the operator checks that a real occupant/public measurement was used.
+
+SQLite snapshot loading and advisory work run on one bounded background executor.
+Tk callbacks only submit immutable input or read immutable panel state. The screen
+starts truthfully empty because the repository still seeds no installation data.
 
 ## Domain and persistence contract
 
@@ -164,8 +183,9 @@ Before any operational use:
 10. separately evaluate aggregate exposure from all RF sources that can operate at
     the same time.
 
-Full-screen/operator acceptance is deferred because no UI is implemented. No live
-RF transmission is required or authorized by this subsystem's automated tests.
+Full-screen/operator acceptance on the installed 1280x720 display remains deferred.
+No live RF transmission is required or authorized by this subsystem's automated
+tests.
 
 ## Remaining work
 
@@ -173,9 +193,14 @@ RF transmission is required or authorized by this subsystem's automated tests.
 - bench validation against the ARRL reference calculation;
 - vehicle-specific geometry/near-field assessment;
 - multi-source aggregation model;
-- reviewed import/edit workflow with audit history;
-- disabled-by-default, low-distraction presentation and physical-control design;
+- parked catalog/installation add, edit, and archive workflow with audit history;
+- persisted named scenarios (the current form is transient and does not write);
 - installed full-screen acceptance if that UI is later approved.
+
+The missing add/edit/archive workflow is deliberate in this increment: without a
+reviewed audit/archive schema, destructive or synchronous record editing would be a
+worse safety contract than a truthful read/evaluate-only screen. Owner data must be
+entered through a separately reviewed path before this screen can show it.
 
 ## Validation for this implementation
 
@@ -183,12 +208,13 @@ Run from the isolated feature worktree with the existing development virtual
 environment and `PYTHONPATH=src`:
 
 - `ruff check .` — passed;
-- `mypy src/rolling_thunder` — passed, 335 source files checked;
-- `pytest -q` — passed, 3343 passed and 7 skipped; the suite's three loopback-HTTP
-  acceptance tests were run with ephemeral localhost socket permission;
+- `mypy src/rolling_thunder` — passed, 338 source files checked;
+- `pytest -q` — passed, 3353 passed and 7 skipped; the suite's three loopback-HTTP
+  acceptance tests were rerun with ephemeral localhost socket permission;
 - `git diff --check` — passed.
 
 There were no test failures in the finished state. No live hardware, production
 database, production service, deployment, Forge scheduler, SSH, or RF transmission
 was used. Bench comparison, real vehicle measurements, full-screen acceptance, and
-live RF acceptance remain intentionally not performed.
+live RF acceptance remain intentionally not performed. Final gate results and exact
+commit are recorded in the PR/hand-off rather than hard-coded into this design guide.

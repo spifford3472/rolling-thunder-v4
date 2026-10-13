@@ -105,3 +105,25 @@ def test_select_home_returns_to_pota() -> None:
     state = controller.select_home()
 
     assert state.selected is ContextId.POTA
+
+
+def test_antenna_context_is_absent_by_default() -> None:
+    controller = ContextNavigationController()
+
+    assert ContextId.ANTENNAS not in {
+        definition.context_id for definition in controller.definitions
+    }
+    assert controller.select_shortcut("a") is False
+    with pytest.raises(ValueError, match="not enabled"):
+        controller.select(ContextId.ANTENNAS)
+
+
+def test_enabled_antenna_context_follows_settings_and_supports_bench_shortcut() -> None:
+    controller = ContextNavigationController(
+        ContextId.SETTINGS,
+        include_antennas=True,
+    )
+
+    assert controller.select_next().selected is ContextId.ANTENNAS
+    assert controller.select_shortcut("a") is True
+    assert controller.state.definition.title == "ANTENNAS / RF EXPOSURE"

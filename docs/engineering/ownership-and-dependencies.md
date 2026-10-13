@@ -98,16 +98,19 @@ Owns immutable sourced antenna catalog records, separate physical installation
 records, explicit active-band assignments, frequency-bounded gain/loss data,
 operator-authored scenarios, and the pure versioned advisory calculator.
 
-Depends only on core immutable `Frequency` values and shared local SQLite migration
-infrastructure. It does not consume current radio state, configured power, GPS,
-contact logging, Forge, CAT/PTT, or FT8 authority. Scenario power, duty, transmit
-fraction, loss, gain, distance, and reflection assumptions are explicit offline
-inputs and are never inferred from live runtime state.
+Its domain/storage service depends only on core immutable `Frequency` values and
+shared local SQLite migration infrastructure. Its optional presentation additionally
+consumes typed configuration and shared context/physical-control navigation. It does
+not consume current radio state, configured power, GPS, contact logging, Forge,
+CAT/PTT, or FT8 authority. Scenario power, duty, transmit fraction, loss, gain,
+distance, and reflection assumptions are explicit offline inputs and are never
+inferred from live runtime state.
 
-The service boundary is the sole future controller/presentation entry point. Any
-future UI must be separately approved, off by default, non-actuating, and must not
-perform SQLite work on the Tk thread. See
-`antenna-reference-rf-exposure.md`.
+The service boundary is the sole controller/presentation entry point. The optional
+screen and parked transient scenario editor are off by default and non-actuating;
+one bounded worker loads SQLite and calculates while Tk reads immutable state. The
+physical adapter supports only viewing navigation and Back. Persistent catalog and
+installation add/edit/archive remains deferred. See `antenna-reference-rf-exposure.md`.
 
 ### FT8
 
