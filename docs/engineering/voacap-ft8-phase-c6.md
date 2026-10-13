@@ -202,3 +202,10 @@ coverage guarantee. The 420 previously scheduled pilot slots remain tied
 to their historical plan ID and are not drained by a new plan.
 
 The NOAA publisher writes only under a dedicated /var/lib/rolling-thunder-noaa directory owned by its account; it cannot modify /etc plan or activation configuration. The sampler reads these published artifacts via explicit config paths.
+
+The C6 disabled upgrade helper stages the NOAA refresh units **without**
+enabling either timer. It leaves the baseline timer stopped because the
+sampler now has a required NOAA refresh dependency. Administrator
+commissioning must provision the dedicated NOAA account/directory and validate
+a new immutable operational plan before activation. Upgrade rollback restores
+earlier units and configuration and leaves the baseline timer disabled.

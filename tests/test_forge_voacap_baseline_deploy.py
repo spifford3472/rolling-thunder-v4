@@ -55,6 +55,9 @@ def test_upgrade_script_preserves_existing_release_and_fails_closed() -> None:
     assert 'cp -p "$CONFIG" "$BACKUP/config.json"' in script
     assert 'all(v.get(g) is False' in script
     assert 'systemctl stop "$TIMER"' in script
-    assert 'systemctl start "$SERVICE"' in script
-    assert 'systemctl enable --now "$TIMER"' in script
-    assert "systemctl disable --now" not in script
+    assert 'systemctl disable --now "$TIMER"' in script
+    assert 'systemctl disable "$NOAA_TIMER"' in script
+    assert 'systemctl start "$SERVICE"' not in script
+    assert 'rolling-thunder-forge-propagation/c6-predicted-ssn-baseline-20261013.sqlite3' in script
+    assert 'systemctl enable --now "$TIMER"' not in script
+    assert 'systemctl disable --now "$TIMER"' in script
