@@ -1,11 +1,10 @@
 [Unit]
-Description=Periodic Forge C4 prospective baseline scheduling
+Description=Forge C6 prospective VOACAP forecast every six UTC hours
 
 [Timer]
-OnBootSec=5min
-OnUnitInactiveSec=6h
+OnCalendar=*-*-* 00,06,12,18:10:00 UTC
 AccuracySec=5min
-Persistent=true
+Persistent=false
 Unit=rolling-thunder-forge-voacap-baseline.service
 
 [Install]

@@ -296,3 +296,18 @@ It is not deployed; the existing approved generic Forge deploy helper has no
 readiness component. No listener, provider egress, Pi dependency or radio control.
 The C4 inventory count is not a qualified prospective C5 calibration cohort.
 See `voacap-ft8-phase-c51.md`.
+
+## Forge C6 six-hour VOACAP forecasting (v4.4.1)
+
+The Forge-owned NOAA service `rolling-thunder-forge-noaa-refresh.timer`
+refreshes predicted SSN evidence at 00/06/12/18 UTC under the isolated
+`rolling-thunder-noaa` account. The forecast timer
+`rolling-thunder-forge-voacap-baseline.timer` executes at 00:10/06:10/12:10/18:10
+UTC, allowing time for the upstream capture. The sampler remains strictly
+Forge-only; no Pi CAT/PTT, RF transmission, or autonomous transmit-power change
+is permitted. The immutable operational C6 plan limits provider requests to
+15 per cycle and 60 per UTC day; actual quotas depend on the installed plan.
+The C6 acceptance checkpoint had 15 successful real provider calls and
+15 ready forecasts, with the original pilot evidence kept separately.
+The deployment's configuration, NOAA artifacts, plan, and database must be
+backed up and validated independently of a source release.
