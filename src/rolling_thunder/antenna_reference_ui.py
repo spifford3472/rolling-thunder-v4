@@ -217,11 +217,11 @@ def scenario_evaluation_lines(
             * 100
         )
         screen_lines = (
-            "ZERO-LOSS SCREENING ONLY — NOT FCC COMPLIANCE OR VERIFIED SAFETY",
+            "BASED ON ARRL RF EXPOSURE CALCULATOR",
             f"EST. PUBLIC/DRIVER REQUIRED DISTANCE  {feet:.2f} ft",
             f"EST. EXPOSURE AT SCENARIO DISTANCE  {ratio:.1f}% OF UNCONTROLLED MPE",
-            "ASSUMED 0 dB CABLE/DUPLEXER LOSS — NOT MEASURED",
-            "NEAR-FIELD / VEHICLE / COMBINED TRANSMITTER EXPOSURE UNVERIFIED",
+            "ASSUMPTION: 0 dB CABLE/DUPLEXER LOSS",
+            "ESTIMATE ONLY — NOT AN FCC COMPLIANCE DETERMINATION",
         )
     return (
         f"SCENARIO  {scenario.name}  •  MODE {evaluation.mode.name}",
@@ -237,8 +237,12 @@ def scenario_evaluation_lines(
         f"MODE SOURCE  {evaluation.mode.provenance.source}",
         f"SCENARIO SOURCE  {scenario.provenance.source}",
         *screen_lines,
-        *evaluation_lines(
-            evaluation.result,
-            frequency_mhz=scenario.frequency.mhz,
+        *(
+            ()
+            if screening is not None
+            else evaluation_lines(
+                evaluation.result,
+                frequency_mhz=scenario.frequency.mhz,
+            )
         ),
     )

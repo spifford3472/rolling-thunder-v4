@@ -1218,3 +1218,11 @@ are unknown. It uses a zero-dB-loss numerical assumption and keeps the actual
 evaluation labeled INCOMPLETE. This is an advisory *far-field estimate*, not a
 confirmed safe distance or an FCC compliance determination. No radio controls
 or power changes result from this screen.
+
+
+A scenario with a valid conservative zero-loss screening result displays
+**BASED ON ARRL RF EXPOSURE CALCULATOR** instead of a duplicate
+"ADVISORY INCOMPLETE" block. The separate authoritative evaluation remains
+incomplete in the application model until actual feedline/duplexer losses are
+specified. The screen retains a 0 dB-loss assumption and does not assert FCC
+compliance. Scenarios without a valid estimate continue to show missing inputs.
