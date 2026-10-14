@@ -248,3 +248,6 @@ percentage with an explicit 0 dB cable/duplexer-loss assumption and
 non-certification caveat. The underlying actual result remains
 `inputs_complete=False`, and scenarios without valid screening estimates still
 show incomplete/missing-input diagnostics.
+
+### Readable public-distance table
+The 1280×720 mobile presentation intentionally restricts the main table to the selected antenna’s public hypothetical scenarios, one row per band and mode. Driver geometry is retained in source records and calculations but intentionally absent from the driving display. Use large monospaced rows and short caveats. Missing public scenarios are explicit rather than silently inferred.

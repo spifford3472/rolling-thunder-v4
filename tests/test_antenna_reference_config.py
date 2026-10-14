@@ -204,6 +204,19 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert "ASSUMPTION: 0 dB CABLE/DUPLEXER LOSS" in rendered
     assert "INCOMPLETE" not in rendered
     assert "NOT AN FCC COMPLIANCE DETERMINATION" in rendered
+    from rolling_thunder.antenna_reference_panel import build_reference_cards
+    from rolling_thunder.antenna_reference_ui import compact_public_table_lines
+    card = next(
+        card for card in build_reference_cards(publication.snapshot, publication.evaluations)
+        if "SBB-224" in card.antenna_name
+    )
+    table = "\n".join(compact_public_table_lines(card))
+    assert "PUBLIC MIN" in table
+    assert "15 W" in table
+    assert "3.7 ft" in table
+    assert "DRIVER" not in table
+    assert "INCOMPLETE" not in table
+
 
 
     assert all(result.result.controlled is None for result in publication.evaluations)
