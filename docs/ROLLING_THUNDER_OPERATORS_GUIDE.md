@@ -1206,3 +1206,7 @@ Changes normally appear on the next 30-second poll. When Forge is unavailable
 or the classification becomes stale, callsigns render without stars and normal
 operating/logging controls continue. See `KNOWN_CALLSIGNS.md` for setup and
 owner deployment/acceptance instructions.
+
+
+### Mobile antenna public-distance operating reference
+The separate mobile antenna YAML records the driver-only normal occupancy policy (front passenger seat taken by display, rear seat by POTA equipment), with the **three measured driver distances unchanged**. Its **six-foot public separation** is a *hypothetical, operator-enforced minimum from the antenna*, not a guarantee based on road lanes or an FCC compliance certification. When parked and transmitting, visually monitor public access; if a person enters the established exclusion distance, cease transmitting until separation is restored. Do not operate on the assumption that any fixed separation is lawful until controlled/uncontrolled RF exposure evaluation is completed. The current antenna screen is informational and read-only; unknown coax and duplexer losses mean all reference evaluations are incomplete.

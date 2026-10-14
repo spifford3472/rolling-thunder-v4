@@ -7,7 +7,9 @@
 # incomplete. ONLY DRIVER antenna distances were physically measured by the
 # operator. All 12 scenarios therefore use front_seat_measured with
 # occupant_distance_verified: true. Passenger and public distances remain
-# unknown; occupant/public and multiantenna risk or safety cannot be concluded.
+# not established; a separate six-foot public scenario is hypothetical, not a guaranteed road clearance. Occupant/public and multiantenna risk or safety cannot be concluded.
+# Vehicle operating policy: single driver only. Front passenger position holds a monitor; rear seat holds POTA equipment; no passenger has ridden in the vehicle for three years. This describes normal use, not a physical impossibility or public exposure guarantee.
+# Public road proximity of six feet is hypothetical, NOT established from 12-foot lane width (which does not guarantee antenna-to-bystander spacing).
 # The dashboard loads this file read-only and never edits it.
 #
 # The ATAS-120A has only the five discrete bands actually supplied. In
@@ -156,8 +158,8 @@ installations:
         provenance: {source: operator-provided 2026-10-13}
     provenance:
       source: operator-provided 2026-10-13
-      notes: ONLY DRIVER antenna distance was physically measured as 90 in (2.286 m). Passenger and public distances are unknown.
-    notes: Feedline is ONLY 6.5 ft RG316; the previously recorded additional 2 ft RG8X was erroneous. Cable loss and any other path losses remain null/incomplete. Driver distance verification does not establish passenger/public or multiantenna risk or safety.
+      notes: ONLY DRIVER antenna distance was physically measured as 90 in (2.286 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.
+    notes: Feedline is ONLY 6.5 ft RG316; the previously recorded additional 2 ft RG8X was erroneous. Cable loss and any other path losses remain null/incomplete. Driver distance verification does not establish public or multiantenna risk or safety.
 
   - installation_id: 22222222-3000-0000-0000-000000000001
     antenna_id: 22222222-0000-0000-0000-000000000001
@@ -178,7 +180,7 @@ installations:
         loss_db: null
         provenance:
           source: operator-provided 2026-10-13
-          notes: Named device only; insertion loss was not supplied and is not inferred.
+          notes: Operator-reported CF-4160J low-pass 1.3-170 MHz MAX insertion loss 0.1 dB; also reported typical ~0.07 dB at 52 MHz and ~0.14 dB at 148 MHz (the 148 MHz typical exceeds the stated maximum; conflicting claims require verification). Maximum loss is not a guaranteed minimum attenuation for exposure calculations. No measured insertion loss; loss_db remains null.
       - loss_id: 22222222-4000-0000-0000-000000000003
         name: 2 ft RG8X feedline
         frequencies: {lower: {hz: 144000000}, upper: {hz: 148000000}}
@@ -193,8 +195,8 @@ installations:
         provenance: {source: operator-provided 2026-10-13}
     provenance:
       source: operator-provided 2026-10-13
-      notes: ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m). Passenger and public distances are unknown.
-    notes: This is the 2 m Comet SSB224, not the separate dual-band generic antenna assigned to 70 cm. Feedline and duplexer losses remain null/incomplete. Driver distance verification does not establish passenger/public or multiantenna risk or safety.
+      notes: ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.
+    notes: This is the 2 m Comet SSB224, not the separate dual-band generic antenna assigned to 70 cm. Feedline and duplexer losses remain null/incomplete. Driver distance verification does not establish public or multiantenna risk or safety.
 
   - installation_id: 33333333-3000-0000-0000-000000000001
     antenna_id: 33333333-0000-0000-0000-000000000001
@@ -215,7 +217,7 @@ installations:
         loss_db: null
         provenance:
           source: operator-provided 2026-10-13
-          notes: Named device only; insertion loss was not supplied and is not inferred.
+          notes: Operator-reported CF-4160J high-pass 350-540 MHz MAX insertion loss 0.2 dB and typical ~0.14 dB at 420/450 MHz. A maximum loss is not a guaranteed minimum attenuation for exposure calculations. No measured insertion loss; loss_db remains null.
       - loss_id: 33333333-4000-0000-0000-000000000003
         name: 2 ft RG8X feedline
         frequencies: {lower: {hz: 420000000}, upper: {hz: 450000000}}
@@ -230,8 +232,8 @@ installations:
         provenance: {source: operator-provided 2026-10-13}
     provenance:
       source: operator-provided 2026-10-13
-      notes: ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m). Passenger and public distances are unknown.
-    notes: This dual-band generic antenna is assigned only to 70 cm here; it is distinct from the 2 m Comet SSB224. Feedline and duplexer losses remain null/incomplete. Driver distance verification does not establish passenger/public or multiantenna risk or safety.
+      notes: ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.
+    notes: This dual-band generic antenna is assigned only to 70 cm here; it is distinct from the 2 m Comet SSB224. Feedline and duplexer losses remain null/incomplete. Driver distance verification does not establish public or multiantenna risk or safety.
 
 mode_profiles:
   - mode_profile_id: 88888888-0000-0000-0000-000000000001
@@ -416,3 +418,246 @@ scenarios:
     provenance:
       source: operator-provided 2026-10-13; engineering scenario assumptions documented in notes
       notes: Power and timing are operator claims. Frequency and reflection model are engineering scenario assumptions. This dual-band generic antenna is assigned only to 70 cm and is distinct from the 2 m Comet SSB224. ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m); passenger and public distances remain unknown, so occupant/public and multiantenna risk or safety cannot be concluded.
+
+# Separate hypothetical public six-foot cases, not asserted road clearance.
+  - scenario_id: 95b2bba3-babf-5bd3-a3a0-4489777cb41c
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 40 m SSB maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 7150000
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 5fcc9011-116f-5f9b-aa2a-96388085cbfb
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 40 m FT8 maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 7150000
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 65470d76-f60b-598c-bb9b-015925e045f1
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 20 m SSB maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 14175000
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 8e56ca44-7f42-562a-9066-b33ce397f351
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 20 m FT8 maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 14175000
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 8896c121-acaa-563a-a3e9-06e5fc4ce27a
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 15 m SSB maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 21225000
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 1bb76a20-d42c-5e6b-9319-5b065e094975
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 15 m FT8 maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 21225000
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 86a3f38d-ff04-507c-bdff-30f955be43f1
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 10 m SSB maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 28850000
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: b1149546-3ff7-5c42-853f-5df45b8c1c1d
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 10 m FT8 maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 28850000
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 3ea7cc6d-1f2a-5d35-b91e-613d16ee68e6
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000001
+    name: ATAS-120A 6 m SSB maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 52000000
+    forward_tx_watts: 100
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: be2fc034-37cb-5095-86c8-4072c9ca5c96
+    installation_id: 11111111-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000002
+    name: ATAS-120A 6 m FT8 maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 52000000
+    forward_tx_watts: 70
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: df78da40-e667-5598-89ca-8da2b85b86e1
+    installation_id: 22222222-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000003
+    name: Comet SSB224 2 m FM maximum (hypothetical public 6 ft)
+    frequency:
+      hz: 146000000
+    forward_tx_watts: 50
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.
+  - scenario_id: 67a2438e-d02f-5368-b5b1-658802a8fdc0
+    installation_id: 33333333-3000-0000-0000-000000000001
+    mode_profile_id: 88888888-0000-0000-0000-000000000003
+    name: Generic dual-band antenna operating 70 cm FM maximum (hypothetical public
+      6 ft)
+    frequency:
+      hz: 435000000
+    forward_tx_watts: 50
+    controlled_tx_fraction: 0.5
+    uncontrolled_tx_fraction: 0.5
+    occupant_distance_m: 1.8288
+    occupant_distance_verified: false
+    distance_kind: hypothetical_six_foot
+    ground_reflection_model: arrl_typical_ground
+    provenance:
+      source: operator-provided 2026-10-13; engineering scenario assumptions documented
+        in notes
+      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
+        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
+        Other distances, feedline attenuation, and combined exposures remain unverified.
+        No compliance verdict.

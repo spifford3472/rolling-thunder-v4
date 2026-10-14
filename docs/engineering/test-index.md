@@ -536,3 +536,5 @@ still required.
   SSN plan construction, dry-run no-write default and explicit artifact/plan registration.
 
 - `tests/test_forge_voacap_baseline_local_http.py` — real urllib HTTP framing over an in-memory fake socket; no network egress.
+
+- Antenna mobile YAML tests also verify separate measured-driver versus unverified hypothetical six-foot public scenarios, incomplete assessments with unknown duplexer/coax losses, and both supplied duplexer path specifications.

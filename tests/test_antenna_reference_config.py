@@ -137,15 +137,15 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         for item in document.installations
     )
     assert [item.provenance.notes for item in document.installations] == [
-        "ONLY DRIVER antenna distance was physically measured as 90 in (2.286 m). Passenger and public distances are unknown.",
-        "ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m). Passenger and public distances are unknown.",
-        "ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m). Passenger and public distances are unknown.",
+        "ONLY DRIVER antenna distance was physically measured as 90 in (2.286 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.",
+        "ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.",
+        "ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.",
     ]
     assert [item.rf_envelope_duty for item in document.mode_profiles] == [1.0, 1.0, 1.0]
     assert document.mode_profiles[0].provenance.source == "engineering assumption 2026-10-13"
 
-    assert len(document.scenarios) == 12
-    assert [(item.name, item.frequency.hz) for item in document.scenarios] == [
+    assert len(document.scenarios) == 24
+    assert [(item.name, item.frequency.hz) for item in document.scenarios[:12]] == [
         ("ATAS-120A 40 m SSB maximum", 7_150_000),
         ("ATAS-120A 40 m FT8 maximum", 7_150_000),
         ("ATAS-120A 20 m SSB maximum", 14_175_000),
@@ -163,15 +163,15 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         100.0,
         70.0,
     ] * 5
-    assert [item.forward_tx_watts for item in document.scenarios[10:]] == [50.0, 50.0]
+    assert [item.forward_tx_watts for item in document.scenarios[10:12]] == [50.0, 50.0]
     assert all(item.controlled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(item.uncontrolled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(
         item.distance_kind is ExposureDistanceKind.FRONT_SEAT_MEASURED
         and item.occupant_distance_verified is True
-        for item in document.scenarios
+        for item in document.scenarios[:12]
     )
-    assert [item.occupant_distance_m for item in document.scenarios] == [
+    assert [item.occupant_distance_m for item in document.scenarios[:12]] == [
         *([2.286] * 10),
         1.6256,
         2.1336,
@@ -185,17 +185,21 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert load_antenna_reference_document(round_trip_path) == document
 
     publication = AntennaReferenceService(AntennaReferenceYamlSource(path)).load_publication()
-    assert len(publication.evaluations) == 12
+    assert len(publication.evaluations) == 24
     assert all(result.result.inputs_complete is False for result in publication.evaluations)
     assert all(result.result.needs_further_evaluation is True for result in publication.evaluations)
     assert all(result.result.controlled is None for result in publication.evaluations)
     assert all(result.result.uncontrolled is None for result in publication.evaluations)
-    assert [result.result.evaluated_distance_m for result in publication.evaluations] == [
+    assert [result.result.evaluated_distance_m for result in publication.evaluations[:12]] == [
         *([2.286] * 10),
         1.6256,
         2.1336,
     ]
-    assert all(result.result.distance_verified is True for result in publication.evaluations)
+    assert all(result.result.distance_verified is True for result in publication.evaluations[:12])
+    assert all(item.distance_kind is ExposureDistanceKind.HYPOTHETICAL_SIX_FOOT and item.occupant_distance_verified is False and item.occupant_distance_m == 1.8288 for item in document.scenarios[12:])
+    assert all(result.result.distance_verified is False for result in publication.evaluations[12:])
+    assert "0.1 dB" in (document.installations[1].loss_segments[1].provenance.notes or "")
+    assert "0.2 dB" in (document.installations[2].loss_segments[1].provenance.notes or "")
     assert all(
         "installation loss inventory is not marked complete" in result.result.missing_inputs
         and "one or more applicable installation losses are unknown"
