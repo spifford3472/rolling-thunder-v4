@@ -12,7 +12,7 @@
 # Public road proximity of six feet is hypothetical, NOT established from 12-foot lane width (which does not guarantee antenna-to-bystander spacing).
 # The dashboard loads this file read-only and never edits it.
 #
-# Evaluation policy: 70 cm FM is 15W MED maximum (operator-approved RF reference target only, not radio CAT/control).
+# Evaluation policy: IC-2730A 2m AND 70cm FM are both 15W MED maximum (operator-approved RF reference targets only, not radio CAT/control).
 # Operating-mode policy: Rolling Thunder does not support FT8 on 6 m; 6 m SSB only.
 # The ATAS-120A has only the five discrete bands actually supplied. In
 # particular, 30 m, 17 m, and 12 m are omitted pending explicit operator or
@@ -389,7 +389,7 @@ scenarios:
     mode_profile_id: 88888888-0000-0000-0000-000000000003
     name: Comet SBB-224 2 m FM maximum
     frequency: {hz: 146000000}
-    forward_tx_watts: 50
+    forward_tx_watts: 15
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
     occupant_distance_m: 1.6256
@@ -602,7 +602,7 @@ scenarios:
     name: Comet SBB-224 2 m FM maximum (hypothetical public 6 ft)
     frequency:
       hz: 146000000
-    forward_tx_watts: 50
+    forward_tx_watts: 15
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
     occupant_distance_m: 1.8288

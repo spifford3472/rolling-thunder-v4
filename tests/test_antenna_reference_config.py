@@ -159,7 +159,7 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         ("Generic dual-band antenna operating 70 cm FM maximum", 435_000_000),
     ]
     assert [item.forward_tx_watts for item in document.scenarios[:11]] == [
-        *([100.0, 70.0] * 4), 100.0, 50.0, 15.0,
+        *([100.0, 70.0] * 4), 100.0, 15.0, 15.0,
     ]
     assert all(item.controlled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(item.uncontrolled_tx_fraction == 0.5 for item in document.scenarios)

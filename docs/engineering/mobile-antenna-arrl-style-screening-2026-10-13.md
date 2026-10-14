@@ -38,3 +38,16 @@ Input: `config/antenna-reference.mobile-example.yaml` at commit `320247a`; compu
 - Do not treat a modeled ratio below 1 as legal certification; FCC exposure compliance may require an installation-specific near-field assessment or measurement.
 
 Reference links: https://www.ecfr.gov/current/title-47/section-1.1310 ; https://www.arrl.org/rf-exposure-calculator
+
+
+## Operator-selected uniform 15W IC-2730A profile (2026-10-13)
+
+Both 2m FM and 70cm FM evaluation scenarios now use **15W MED**, selected to minimize the risk of operator power-setting error. This is an RF reference configuration change, not a power control or interlock. The tables ABOVE are historical 50W 2m results and are **superseded for 2m** by the figures below.
+
+Using the same 50%-transmit-time, 100%-FM-envelope, ground-reflection-factor 2.56, Comet SBB-224 2.15 dBi gain and **zero feedline/duplexer loss** screening assumptions:
+
+- 2m FM 15W, six-foot hypothetical public boundary: uncontrolled MPE ratio **0.3747** (37.5%); modeled required distance **3.67 ft**.
+- 2m FM 15W, measured 64-inch driver distance: uncontrolled MPE ratio **0.4743** (47.4%); modeled required distance **3.67 ft**.
+- 70cm FM 15W unchanged: public six-foot ratio **0.3527** (35.3%), and driver 84-inch ratio **0.2591** (25.9%).
+
+These are ARRL-style far-field estimates, NOT compliance or safety findings; close mobile antennas require review of near-field, vehicle coupling and total RF source exposure. Six feet must be maintained from the antenna to members of the public.
