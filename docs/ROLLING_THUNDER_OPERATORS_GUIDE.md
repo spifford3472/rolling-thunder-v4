@@ -1233,11 +1233,13 @@ compliance. Scenarios without a valid estimate continue to show missing inputs.
 The ANTENNAS main view uses the full existing left pane for a high-contrast native
 table on the selected card. BAND, MODE, and POWER use large separate cells; PUBLIC
 MIN is the widest, highlighted column and shows modeled separation in feet to one
-decimal place. At the normal 1280×720 in-car size, rows are approximately 20-point
-type and the two-line “Based on ARRL RF Exposure Calculator” heading is 24-point.
-The layout sizes itself to the available height so a nine-row ATAS-sized table,
-heading, column labels, and footer fit without clipping. It does not display driver
-separation or long diagnostic blocks on the main view; the manually maintained YAML
-preserves detailed input provenance. The six-foot public boundary, 0 dB cable-loss
-assumption, and non-certification caveat remain visible. Encoder changes the selected
-card; no radio power control.
+decimal place. At the physical 1280×720 in-car size, the table retains approximately
+20-point rows and 21-point yellow public-minimum values. A compact one-line “ARRL RF
+EXPOSURE CALCULATOR” attribution and reduced vertical margins leave all nine ATAS
+rows—including 6 m SSB—fully visible above the two-line footer without scrolling.
+The sizing accounts for the dashboard status strip, context title, selector/read-only
+lines, borders, padding, and Tk font scaling rather than treating the whole context as
+table space. It does not display driver separation or long diagnostic blocks on the
+main view; the manually maintained YAML preserves detailed input provenance. The
+six-foot public boundary, 0 dB cable-loss assumption, and non-certification caveat
+remain visible. Encoder changes the selected card; no radio power control.

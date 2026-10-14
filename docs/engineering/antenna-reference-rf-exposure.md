@@ -256,9 +256,15 @@ geometry is retained in source records and calculations but intentionally absent
 from the driving display. The Tk viewport uses a real four-column grid rather than
 a fixed-width multiline label: BAND, MODE, POWER, and the emphasized PUBLIC MIN
 distance in feet to one decimal place. Proportional columns use the existing left
-pane without changing the map width. Heading and row typography respond to the
-available card height; the normal 480–520 px viewport uses a 24-point two-line
-ARRL heading, 20-point rows, and a 21-point highlighted public-distance value. Its
-nine-row sizing budget includes the column heading and concise footer without
-horizontal overflow or clipping. Loading, error, no-record, and no-public-scenario
-states remain explicit and readable. Missing public scenarios are never inferred.
+pane without changing the map width. The dense 1280×720 budget starts with the
+physical display rather than assuming a synthetic 480–520 px table: it deducts the
+76 px dashboard status strip, context margins/borders/padding and title, card
+border, selector line, read-only notice, and table padding. Font points are converted
+through the active Tk pixels-per-inch value and include line spacing and label
+chrome. The normal dense layout retains 20-point rows and a 21-point highlighted
+public-distance value, while the ARRL attribution is a compact legible one-line
+heading. Rows use their requested height rather than expanding to consume spare
+space. The resulting budget includes all nine ATAS rows, the column heading, and
+both legible footer lines without clipping. Loading, error, no-record, and
+no-public-scenario states remain explicit and readable. Missing public scenarios are
+never inferred.

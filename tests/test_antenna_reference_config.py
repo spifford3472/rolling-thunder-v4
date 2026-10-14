@@ -209,7 +209,6 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     from rolling_thunder.antenna_reference_ui import (
         PUBLIC_TABLE_COLUMNS,
         compact_public_table_lines,
-        public_table_layout,
         public_table_rows,
     )
     card = next(
@@ -255,11 +254,7 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         len(row.public_minimum.removesuffix(" ft").partition(".")[2]) == 1
         for row in rows
     )
-    for usable_height in (480, 500, 520):
-        layout = public_table_layout(usable_height, len(rows))
-        assert layout.heading_font_size == 24
-        assert layout.row_font_size == 20
-        assert layout.required_height_px <= usable_height
+    assert (rows[-1].band, rows[-1].mode) == ("6m", "SSB")
 
     assert all(result.result.controlled is None for result in publication.evaluations)
     assert all(result.result.uncontrolled is None for result in publication.evaluations)
@@ -279,6 +274,58 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         in result.result.missing_inputs
         for result in publication.evaluations
     )
+
+
+def test_dense_1280x720_budget_keeps_all_nine_rows_accessible_above_footer() -> None:
+    from rolling_thunder.antenna_reference_ui import (
+        antenna_vertical_budget,
+        public_table_layout,
+        public_table_row_bounds,
+        tk_label_required_height_px,
+    )
+
+    row_labels = (
+        "40m SSB",
+        "40m FT8",
+        "20m SSB",
+        "20m FT8",
+        "15m SSB",
+        "15m FT8",
+        "10m SSB",
+        "10m FT8",
+        "6m SSB",
+    )
+    dense_budget = antenna_vertical_budget(720, pixels_per_inch=96.0)
+    assert dense_budget.display_height_px == 720
+    assert dense_budget.table_usable_height_px == 475
+
+    dense_layout = public_table_layout(
+        dense_budget.table_usable_height_px,
+        len(row_labels),
+        pixels_per_inch=96.0,
+    )
+    assert dense_layout.heading_font_size == 17
+    assert dense_layout.row_font_size == 20
+    assert dense_layout.required_height_px <= dense_budget.table_usable_height_px
+
+    row_bounds = public_table_row_bounds(dense_layout, len(row_labels))
+    assert len(row_bounds) == len(row_labels) == 9
+    assert all(
+        bottom - top
+        >= tk_label_required_height_px(
+            dense_layout.row_font_size + 1,
+            pixels_per_inch=96.0,
+        )
+        for top, bottom in row_bounds
+    )
+    footer_top = dense_layout.required_height_px - dense_layout.footer_height_px
+    accessible_rows = tuple(
+        label
+        for label, (top, bottom) in zip(row_labels, row_bounds, strict=True)
+        if 0 <= top < bottom <= footer_top
+    )
+    assert accessible_rows == row_labels
+    assert row_bounds[-1][1] <= footer_top < dense_budget.table_usable_height_px
 
 
 def test_full_yaml_preserves_provenance_six_metres_and_measured_distance(
