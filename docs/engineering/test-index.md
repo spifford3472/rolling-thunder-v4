@@ -93,7 +93,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
   YAML parsing, provenance and explicit-6-m preservation, aggregate references,
   measured-distance rules, missing-file failure, and the separate mobile example's
   corrected feed chains, three verified driver distances, unchanged gains, YAML
-  round trip, unknown losses, and deliberately incomplete/no-verdict evaluations.
+  round trip, unknown losses, deliberately incomplete/no-verdict evaluations, and
+  the physical 1280×720/Tk-scaled nine-row table accessibility budget.
 - `tests/test_antenna_reference_panel.py` — empty startup, multi-installation listing,
   HF/VHF/explicit-6-m cards, gain/loss units, deferred YAML worker execution,
   configured six-metre FM results, advisory wording, and view-only controls.

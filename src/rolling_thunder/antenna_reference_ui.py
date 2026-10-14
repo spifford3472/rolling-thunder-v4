@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil
 from typing import Any
 
 from rolling_thunder.antenna_reference_domain import ExposureDistanceKind
@@ -28,6 +29,23 @@ _ACCENT = "#66ccff"
 _ERROR = "#ff6b6b"
 
 PUBLIC_TABLE_COLUMNS = ("BAND", "MODE", "POWER", "PUBLIC MIN")
+
+_DENSE_DISPLAY_HEIGHT_PX = 720
+_STATUS_BAR_HEIGHT_PX = 76
+_CONTEXT_OUTER_VERTICAL_MARGIN_PX = 20
+_CONTEXT_BORDER_PX = 2
+_CONTEXT_CONTENT_VERTICAL_PADDING_PX = 16
+_CONTEXT_HEADER_FONT_SIZE = 31
+_CONTEXT_HEADER_VERTICAL_PADDING_PX = 10
+_ANTENNA_POSITION_FONT_SIZE = 16
+_ANTENNA_POSITION_VERTICAL_PADDING_PX = 1
+_ANTENNA_NOTICE_FONT_SIZE = 12
+_ANTENNA_NOTICE_VERTICAL_PADDING_PX = 2
+_ANTENNA_CARD_BORDER_PX = 4
+_ANTENNA_TABLE_VERTICAL_PADDING_PX = 4
+_TK_DEFAULT_PIXELS_PER_INCH = 96.0
+_TK_FONT_LINE_HEIGHT_FACTOR = 1.2
+_TK_LABEL_VERTICAL_CHROME_PX = 4
 
 
 @dataclass(frozen=True)
@@ -57,26 +75,120 @@ class PublicTableLayout:
     required_height_px: int
 
 
-def public_table_layout(usable_height_px: int, row_count: int) -> PublicTableLayout:
-    """Choose large typography while keeping nine rows inside the mobile viewport."""
-    if usable_height_px >= 480:
-        heading_font_size, row_font_size = 24, 20
-        heading_height, header_height, footer_height = 72, 32, 46
-    elif usable_height_px >= 420:
-        heading_font_size, row_font_size = 22, 19
-        heading_height, header_height, footer_height = 66, 30, 44
-    else:
-        heading_font_size, row_font_size = 20, 18
-        heading_height, header_height, footer_height = 61, 29, 42
+@dataclass(frozen=True)
+class AntennaVerticalBudget:
+    """Measured vertical budget from the physical display down to the inner table."""
 
-    fixed_height = heading_height + header_height + footer_height
-    natural_row_height = round(row_font_size * 4 / 3) + 6
-    if row_count:
-        distributed_height = (usable_height_px - fixed_height) // row_count
-        row_height = max(natural_row_height, min(44, distributed_height))
-    else:
-        row_height = natural_row_height
-    required_height = fixed_height + (row_height * row_count)
+    display_height_px: int
+    table_usable_height_px: int
+
+
+def tk_label_required_height_px(
+    font_size_points: int,
+    *,
+    line_count: int = 1,
+    pixels_per_inch: float = _TK_DEFAULT_PIXELS_PER_INCH,
+) -> int:
+    """Conservatively model Tk's point conversion, line spacing, and label border."""
+    em_pixels = ceil(font_size_points * pixels_per_inch / 72.0)
+    line_height = ceil(em_pixels * _TK_FONT_LINE_HEIGHT_FACTOR)
+    return (line_height * line_count) + _TK_LABEL_VERTICAL_CHROME_PX
+
+
+def antenna_vertical_budget(
+    display_height_px: int = _DENSE_DISPLAY_HEIGHT_PX,
+    *,
+    pixels_per_inch: float = _TK_DEFAULT_PIXELS_PER_INCH,
+) -> AntennaVerticalBudget:
+    """Return the real table height after the dashboard and antenna-page chrome."""
+    context_header_height = tk_label_required_height_px(
+        _CONTEXT_HEADER_FONT_SIZE,
+        pixels_per_inch=pixels_per_inch,
+    )
+    position_height = tk_label_required_height_px(
+        _ANTENNA_POSITION_FONT_SIZE,
+        pixels_per_inch=pixels_per_inch,
+    )
+    notice_height = tk_label_required_height_px(
+        _ANTENNA_NOTICE_FONT_SIZE,
+        pixels_per_inch=pixels_per_inch,
+    )
+    fixed_chrome = sum(
+        (
+            _STATUS_BAR_HEIGHT_PX,
+            _CONTEXT_OUTER_VERTICAL_MARGIN_PX,
+            _CONTEXT_BORDER_PX,
+            _CONTEXT_CONTENT_VERTICAL_PADDING_PX,
+            context_header_height,
+            _CONTEXT_HEADER_VERTICAL_PADDING_PX,
+            position_height,
+            _ANTENNA_POSITION_VERTICAL_PADDING_PX,
+            notice_height,
+            _ANTENNA_NOTICE_VERTICAL_PADDING_PX,
+            _ANTENNA_CARD_BORDER_PX,
+            _ANTENNA_TABLE_VERTICAL_PADDING_PX,
+        )
+    )
+    return AntennaVerticalBudget(
+        display_height_px=display_height_px,
+        table_usable_height_px=max(0, display_height_px - fixed_chrome),
+    )
+
+
+def public_table_layout(
+    usable_height_px: int,
+    row_count: int,
+    *,
+    pixels_per_inch: float = _TK_DEFAULT_PIXELS_PER_INCH,
+) -> PublicTableLayout:
+    """Choose the largest legible typography whose Tk requests fit the viewport."""
+    candidates = ((17, 20), (16, 19), (15, 18))
+    heading_font_size, row_font_size = candidates[-1]
+    for candidate_heading, candidate_row in candidates:
+        candidate_fixed = (
+            tk_label_required_height_px(
+                candidate_heading,
+                pixels_per_inch=pixels_per_inch,
+            )
+            + tk_label_required_height_px(
+                max(14, candidate_row - 4),
+                pixels_per_inch=pixels_per_inch,
+            )
+            + (
+                2
+                * tk_label_required_height_px(
+                    max(12, candidate_row - 7),
+                    pixels_per_inch=pixels_per_inch,
+                )
+            )
+        )
+        # PUBLIC MIN is intentionally one point larger than the other cells and
+        # therefore determines Tk's requested height for every four-column row.
+        candidate_rows = row_count * tk_label_required_height_px(
+            candidate_row + 1,
+            pixels_per_inch=pixels_per_inch,
+        )
+        if candidate_fixed + candidate_rows <= usable_height_px:
+            heading_font_size, row_font_size = candidate_heading, candidate_row
+            break
+
+    heading_height = tk_label_required_height_px(
+        heading_font_size,
+        pixels_per_inch=pixels_per_inch,
+    )
+    header_height = tk_label_required_height_px(
+        max(14, row_font_size - 4),
+        pixels_per_inch=pixels_per_inch,
+    )
+    row_height = tk_label_required_height_px(
+        row_font_size + 1,
+        pixels_per_inch=pixels_per_inch,
+    )
+    footer_height = 2 * tk_label_required_height_px(
+        max(12, row_font_size - 7),
+        pixels_per_inch=pixels_per_inch,
+    )
+    required_height = heading_height + header_height + footer_height + row_height * row_count
     return PublicTableLayout(
         heading_font_size=heading_font_size,
         row_font_size=row_font_size,
@@ -85,6 +197,21 @@ def public_table_layout(usable_height_px: int, row_count: int) -> PublicTableLay
         row_height_px=row_height,
         footer_height_px=footer_height,
         required_height_px=required_height,
+    )
+
+
+def public_table_row_bounds(
+    layout: PublicTableLayout,
+    row_count: int,
+) -> tuple[tuple[int, int], ...]:
+    """Return each data row's top/bottom coordinates inside the table viewport."""
+    first_row_top = layout.heading_height_px + layout.header_height_px
+    return tuple(
+        (
+            first_row_top + (index * layout.row_height_px),
+            first_row_top + ((index + 1) * layout.row_height_px),
+        )
+        for index in range(row_count)
     )
 
 
@@ -219,7 +346,8 @@ class AntennaReferenceWidgets:
         self._rendered_state: AntennaPanelState | None = None
         self._row_labels: list[tuple[Any, ...]] = []
         self.frame = tk.Frame(parent, bg=_BACKGROUND)
-        self.frame.grid(row=1, column=0, sticky="nsew", padx=4, pady=2)
+        self._pixels_per_inch = float(self.frame.winfo_fpixels("1i"))
+        self.frame.grid(row=1, column=0, sticky="nsew", padx=4, pady=0)
         self.frame.grid_columnconfigure(0, weight=1)
         self.frame.grid_rowconfigure(1, weight=1)
         self.frame.grid_remove()
@@ -232,7 +360,7 @@ class AntennaReferenceWidgets:
             fg=_ACCENT,
             font=("DejaVu Sans", 16, "bold"),
             anchor="w",
-        ).grid(row=0, column=0, sticky="ew", padx=8, pady=(2, 4))
+        ).grid(row=0, column=0, sticky="ew", padx=8, pady=(0, 1))
 
         card = tk.Frame(
             self.frame,
@@ -257,7 +385,7 @@ class AntennaReferenceWidgets:
         self._message_label.grid(row=0, column=0, sticky="nsew", padx=18, pady=14)
 
         self._table = tk.Frame(card, bg=_PANEL)
-        self._table.grid(row=0, column=0, sticky="nsew", padx=8, pady=6)
+        self._table.grid(row=0, column=0, sticky="nsew", padx=8, pady=2)
         column_weights = (17, 17, 23, 43)
         for column, weight in enumerate(column_weights):
             self._table.grid_columnconfigure(
@@ -268,10 +396,10 @@ class AntennaReferenceWidgets:
 
         self._heading_label = tk.Label(
             self._table,
-            text="Based on ARRL\nRF Exposure Calculator",
+            text="ARRL RF EXPOSURE CALCULATOR",
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 24, "bold"),
+            font=("DejaVu Sans", 17, "bold"),
             anchor="center",
             justify="center",
         )
@@ -321,10 +449,10 @@ class AntennaReferenceWidgets:
         self._table.grid_remove()
 
         footer = tk.Frame(self.frame, bg=_BACKGROUND)
-        footer.grid(row=2, column=0, sticky="ew", padx=4, pady=(5, 0))
+        footer.grid(row=2, column=0, sticky="ew", padx=4, pady=(2, 0))
         footer.grid_columnconfigure(0, weight=1)
         self._notice = tk.StringVar(
-            value="READ ONLY • MANUAL YAML + RESTART • NO RADIO OR POWER CONTROL"
+            value="READ ONLY • YAML+RESTART • NO RADIO/POWER"
         )
         tk.Label(
             footer,
@@ -424,7 +552,11 @@ class AntennaReferenceWidgets:
         footer_row = 2 + max(1, len(rows))
         self._footer.grid_configure(row=footer_row)
         self._table.grid()
-        self._apply_table_layout(max(420, self._table.winfo_height()))
+        measured_height = self._table.winfo_height()
+        fallback_height = antenna_vertical_budget(
+            pixels_per_inch=self._pixels_per_inch,
+        ).table_usable_height_px
+        self._apply_table_layout(max(measured_height, fallback_height))
 
     def _resize_table(self, event: Any) -> None:
         if event.height >= 300:
@@ -432,7 +564,11 @@ class AntennaReferenceWidgets:
 
     def _apply_table_layout(self, usable_height_px: int) -> None:
         row_count = max(1, len(self._row_labels))
-        layout = public_table_layout(usable_height_px, row_count)
+        layout = public_table_layout(
+            usable_height_px,
+            row_count,
+            pixels_per_inch=self._pixels_per_inch,
+        )
         self._heading_label.configure(
             font=("DejaVu Sans", layout.heading_font_size, "bold")
         )
@@ -444,7 +580,7 @@ class AntennaReferenceWidgets:
         for offset, labels in enumerate(self._row_labels, start=2):
             self._table.grid_rowconfigure(
                 offset,
-                weight=1,
+                weight=0,
                 minsize=layout.row_height_px,
             )
             for column, label in enumerate(labels):
