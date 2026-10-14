@@ -250,4 +250,15 @@ non-certification caveat. The underlying actual result remains
 show incomplete/missing-input diagnostics.
 
 ### Readable public-distance table
-The 1280×720 mobile presentation intentionally restricts the main table to the selected antenna’s public hypothetical scenarios, one row per band and mode. Driver geometry is retained in source records and calculations but intentionally absent from the driving display. Use large monospaced rows and short caveats. Missing public scenarios are explicit rather than silently inferred.
+The 1280×720 mobile presentation intentionally restricts the main table to the
+selected card's public hypothetical scenarios, one row per band and mode. Driver
+geometry is retained in source records and calculations but intentionally absent
+from the driving display. The Tk viewport uses a real four-column grid rather than
+a fixed-width multiline label: BAND, MODE, POWER, and the emphasized PUBLIC MIN
+distance in feet to one decimal place. Proportional columns use the existing left
+pane without changing the map width. Heading and row typography respond to the
+available card height; the normal 480–520 px viewport uses a 24-point two-line
+ARRL heading, 20-point rows, and a 21-point highlighted public-distance value. Its
+nine-row sizing budget includes the column heading and concise footer without
+horizontal overflow or clipping. Loading, error, no-record, and no-public-scenario
+states remain explicit and readable. Missing public scenarios are never inferred.

@@ -741,13 +741,16 @@ always unverified; `front_seat_measured` and `public_measured` require real meas
 geometry. Missing, unreadable, malformed, or invalid YAML produces a visible error,
 not an empty or safe-looking estimate.
 
-Results show peak ERP/EIRP, both FCC limits, and calculated plane-wave distances, or
-name every input that prevents calculation. They never declare an installation safe,
-unsafe, compliant, or noncompliant. Near-field coupling, vehicle body/metal/glass,
-real antenna pattern, occupants, and aggregate simultaneous-source exposure remain
-outside the estimate. Do not rely operationally on the screen until real sourced data
-has been reviewed, results have been compared with the current ARRL reference, and
-vehicle-specific geometry and near-field questions have been addressed.
+The underlying calculations retain peak ERP/EIRP, both FCC limits, calculated
+plane-wave distances, and missing-input details. The driving view intentionally
+shows only the selected card's public-scenario summary rather than those long
+diagnostics. Neither the view nor the underlying result declares an installation
+safe, unsafe, compliant, or noncompliant. Near-field coupling, vehicle
+body/metal/glass, real antenna pattern, occupants, and aggregate simultaneous-source
+exposure remain outside the estimate. Do not rely operationally on the screen until
+real sourced data has been reviewed, results have been compared with the current
+ARRL reference, and vehicle-specific geometry and near-field questions have been
+addressed.
 
 A manual DAY/NIGHT selection can temporarily override automatic solar style
 selection until the next real solar transition. The callsign-information
@@ -1227,4 +1230,14 @@ incomplete in the application model until actual feedline/duplexer losses are
 specified. The screen retains a 0 dB-loss assumption and does not assert FCC
 compliance. Scenarios without a valid estimate continue to show missing inputs.
 
-The ANTENNAS main view uses a compact large-print table by selected antenna, listing BAND, MODE, POWER and modeled PUBLIC MIN separation (feet). It does not display driver separation or long diagnostic blocks on the main view; the manually maintained YAML preserves detailed input provenance. The six-foot public boundary, 0 dB cable-loss assumption and non-certification caveat remain visible. Encoder changes the selected antenna; no radio power control.
+The ANTENNAS main view uses the full existing left pane for a high-contrast native
+table on the selected card. BAND, MODE, and POWER use large separate cells; PUBLIC
+MIN is the widest, highlighted column and shows modeled separation in feet to one
+decimal place. At the normal 1280×720 in-car size, rows are approximately 20-point
+type and the two-line “Based on ARRL RF Exposure Calculator” heading is 24-point.
+The layout sizes itself to the available height so a nine-row ATAS-sized table,
+heading, column labels, and footer fit without clipping. It does not display driver
+separation or long diagnostic blocks on the main view; the manually maintained YAML
+preserves detailed input provenance. The six-foot public boundary, 0 dB cable-loss
+assumption, and non-certification caveat remain visible. Encoder changes the selected
+card; no radio power control.
