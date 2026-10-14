@@ -1,5 +1,6 @@
 """Validation for the manual YAML antenna-reference authority."""
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -205,7 +206,12 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert "INCOMPLETE" not in rendered
     assert "NOT AN FCC COMPLIANCE DETERMINATION" in rendered
     from rolling_thunder.antenna_reference_panel import build_reference_cards
-    from rolling_thunder.antenna_reference_ui import compact_public_table_lines
+    from rolling_thunder.antenna_reference_ui import (
+        PUBLIC_TABLE_COLUMNS,
+        compact_public_table_lines,
+        public_table_layout,
+        public_table_rows,
+    )
     card = next(
         card for card in build_reference_cards(publication.snapshot, publication.evaluations)
         if "SBB-224" in card.antenna_name
@@ -217,7 +223,43 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert "DRIVER" not in table
     assert "INCOMPLETE" not in table
 
-
+    atas_cards = [
+        item
+        for item in build_reference_cards(publication.snapshot, publication.evaluations)
+        if item.antenna_name == "Yaesu ATAS-120A"
+    ]
+    atas_card = replace(
+        atas_cards[0],
+        evaluations=tuple(
+            evaluation
+            for atas_region_card in atas_cards
+            for evaluation in atas_region_card.evaluations
+        ),
+    )
+    rows = public_table_rows(atas_card)
+    assert PUBLIC_TABLE_COLUMNS == ("BAND", "MODE", "POWER", "PUBLIC MIN")
+    assert len(rows) == 9
+    assert [row.band for row in rows] == [
+        "40m",
+        "40m",
+        "20m",
+        "20m",
+        "15m",
+        "15m",
+        "10m",
+        "10m",
+        "6m",
+    ]
+    assert all(len(row.cells) == len(PUBLIC_TABLE_COLUMNS) for row in rows)
+    assert all(
+        len(row.public_minimum.removesuffix(" ft").partition(".")[2]) == 1
+        for row in rows
+    )
+    for usable_height in (480, 500, 520):
+        layout = public_table_layout(usable_height, len(rows))
+        assert layout.heading_font_size == 24
+        assert layout.row_font_size == 20
+        assert layout.required_height_px <= usable_height
 
     assert all(result.result.controlled is None for result in publication.evaluations)
     assert all(result.result.uncontrolled is None for result in publication.evaluations)
