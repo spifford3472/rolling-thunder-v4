@@ -207,6 +207,22 @@ def scenario_evaluation_lines(
 ) -> tuple[str, ...]:
     """Format every file-authoritative scenario input before its result."""
     scenario = evaluation.scenario
+    screening = evaluation.zero_loss_screening
+    screen_lines: tuple[str, ...] = ()
+    if screening is not None and screening.uncontrolled is not None:
+        feet = screening.uncontrolled.estimated_required_distance_m / 0.3048
+        ratio = (
+            screening.uncontrolled.estimated_power_density_mw_cm2
+            / screening.uncontrolled.limit.power_density_mw_cm2
+            * 100
+        )
+        screen_lines = (
+            "ZERO-LOSS SCREENING ONLY — NOT FCC COMPLIANCE OR VERIFIED SAFETY",
+            f"EST. PUBLIC/DRIVER REQUIRED DISTANCE  {feet:.2f} ft",
+            f"EST. EXPOSURE AT SCENARIO DISTANCE  {ratio:.1f}% OF UNCONTROLLED MPE",
+            "ASSUMED 0 dB CABLE/DUPLEXER LOSS — NOT MEASURED",
+            "NEAR-FIELD / VEHICLE / COMBINED TRANSMITTER EXPOSURE UNVERIFIED",
+        )
     return (
         f"SCENARIO  {scenario.name}  •  MODE {evaluation.mode.name}",
         (
@@ -220,6 +236,7 @@ def scenario_evaluation_lines(
         f"DISTANCE BASIS  {scenario.distance_kind.value}",
         f"MODE SOURCE  {evaluation.mode.provenance.source}",
         f"SCENARIO SOURCE  {scenario.provenance.source}",
+        *screen_lines,
         *evaluation_lines(
             evaluation.result,
             frequency_mhz=scenario.frequency.mhz,

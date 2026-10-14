@@ -37,6 +37,7 @@ class AntennaScenarioEvaluation:
     scenario: ExposureScenario
     mode: ModeProfile
     result: RfExposureResult
+    zero_loss_screening: RfExposureResult | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,12 @@ class AntennaReferenceService:
                         mode=mode,
                         scenario=scenario,
                     ),
+                    zero_loss_screening=self.screen_zero_loss(
+                        catalog=catalog,
+                        installation=installation,
+                        mode=mode,
+                        scenario=scenario,
+                    ),
                 )
             )
         return AntennaReferencePublication(
@@ -98,3 +105,40 @@ class AntennaReferenceService:
             mode=mode,
             scenario=scenario,
         )
+
+    @staticmethod
+    def screen_zero_loss(
+        *,
+        catalog: AntennaCatalogEntry,
+        installation: AntennaInstallation,
+        mode: ModeProfile,
+        scenario: ExposureScenario,
+    ) -> RfExposureResult | None:
+        """Optional zero-loss screening, never a replacement for the actual evaluation.
+
+        Passive feedline/duplexer components are assigned ZERO attenuation solely
+        to estimate an upper bound using this far-field formula. Any other
+        missing/ambiguous input leaves screening unavailable.
+        """
+        if installation.losses_complete and all(
+            part.loss_db is not None for part in installation.loss_segments
+        ):
+            return None  # The normal fully specified result is authoritative.
+        if not installation.loss_segments:
+            return None
+        assumed = installation.model_copy(
+            update={
+                "losses_complete": True,
+                "loss_segments": tuple(
+                    part.model_copy(update={"loss_db": 0.0})
+                    for part in installation.loss_segments
+                ),
+            }
+        )
+        screened = calculate_rf_exposure(
+            catalog=catalog,
+            installation=assumed,
+            mode=mode,
+            scenario=scenario,
+        )
+        return screened if screened.inputs_complete else None

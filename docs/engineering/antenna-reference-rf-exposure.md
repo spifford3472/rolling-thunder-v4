@@ -229,3 +229,14 @@ Rolling Thunder normally operates with only the driver: the front-passenger seat
 The owner proposes an **actively monitored minimum public separation of 6 ft (1.8288 m) from the radiating antenna**, particularly while parked. The 12-ft width of a traffic lane is not proof of a six-foot antenna-to-person clearance, and a public member closer than 6 ft invalidates that operating condition. The mobile example has separate hypothetical/unverified 6-ft public exposure scenarios alongside the verified 90-in/64-in/84-in driver-distance cases. A six-foot operating boundary is NOT a finding of FCC compliance. An RF assessment must still satisfy the general-population/uncontrolled limits, reflect radiating near-field behavior where relevant, and account for other transmitters if operated simultaneously.
 
 Operator-reported Comet CF-4160J nominal specifications: low-pass 1.3–170 MHz, max insertion loss 0.1 dB; claimed typical 0.07 dB at 52 MHz and 0.14 dB at 148 MHz (**apparent conflict** with the stated 0.1 dB maximum). High-pass 350–540 MHz, max insertion loss 0.2 dB; claimed typical ~0.14 dB at 420–450 MHz. A maximum insertion loss cannot be subtracted as guaranteed minimum attenuation in a conservative exposure evaluation. Both duplexer segments remain unknown (loss_db: null), as do all coax losses. Do not mark losses_complete: true without validated data.
+
+
+### Read-only conservative screening display (pre-deployment)
+When the authoritative cable/duplexer loss inventory is missing or incomplete, the
+pure application service may publish an additional explicitly labeled *zero-loss
+screening estimate* using 0 dB on every listed passive segment. It never mutates
+the manual YAML or the actual incomplete regulatory advisory. A screen is produced
+only when all other required gain, band, and source references are valid. This
+simple far-field result is not a safety verdict, near-field assessment or proof
+of FCC compliance. Missing loss data remain visible and the normal result remains
+INCOMPLETE. No radio power/CAT/PTT authority is added.

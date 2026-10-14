@@ -185,6 +185,20 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert len(publication.evaluations) == 22
     assert all(result.result.inputs_complete is False for result in publication.evaluations)
     assert all(result.result.needs_further_evaluation is True for result in publication.evaluations)
+    assert all(result.zero_loss_screening is not None for result in publication.evaluations)
+    assert all(
+        result.zero_loss_screening is not None
+        and result.zero_loss_screening.uncontrolled is not None
+        for result in publication.evaluations
+    )
+    public_vhf = next(
+        result for result in publication.evaluations
+        if result.scenario.name == "Comet SBB-224 2 m FM maximum (hypothetical public 6 ft)"
+    )
+    assert public_vhf.zero_loss_screening is not None
+    assert public_vhf.zero_loss_screening.uncontrolled is not None
+    assert 3.6 < public_vhf.zero_loss_screening.uncontrolled.estimated_required_distance_m / 0.3048 < 3.8
+
     assert all(result.result.controlled is None for result in publication.evaluations)
     assert all(result.result.uncontrolled is None for result in publication.evaluations)
     assert [result.result.evaluated_distance_m for result in publication.evaluations[:11]] == [
