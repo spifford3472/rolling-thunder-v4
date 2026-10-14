@@ -12,6 +12,7 @@
 # Public road proximity of six feet is hypothetical, NOT established from 12-foot lane width (which does not guarantee antenna-to-bystander spacing).
 # The dashboard loads this file read-only and never edits it.
 #
+# Evaluation policy: 70 cm FM is 15W MED maximum (operator-approved RF reference target only, not radio CAT/control).
 # Operating-mode policy: Rolling Thunder does not support FT8 on 6 m; 6 m SSB only.
 # The ATAS-120A has only the five discrete bands actually supplied. In
 # particular, 30 m, 17 m, and 12 m are omitted pending explicit operator or
@@ -83,20 +84,27 @@ catalog:
     notes: 30 m, 17 m, and 12 m are intentionally omitted. The phrase 20-10 m was not treated as evidence for intermediate bands.
 
   - antenna_id: 22222222-0000-0000-0000-000000000001
-    name: Comet SSB224
+    name: Comet SBB-224
     manufacturer: Comet
-    model: SSB224
+    model: SBB-224
     provenance:
       source: operator-provided 2026-10-13
-      notes: Model is the operator-corrected SSB224; gain remains unknown because no gain claim or retained source was supplied.
+      notes: Operator confirmed Comet SBB-224 on 2026-10-13. Manufacturer publishes 2 m 2.15 dBi gain; https://www.cometantenna.com/product/comet-sbb-224/ .
     bands:
       - association_id: 22222222-1000-0000-0000-000000000001
         label: 2 m
         region: VHF
         frequencies: {lower: {hz: 144000000}, upper: {hz: 148000000}}
         provenance: {source: operator-provided 2026-10-13}
-    gains: []
-    notes: No gain was supplied; no gain is inferred from a similarly named product.
+    gains:
+      - gain_id: 22222222-2000-0000-0000-000000000001
+        frequencies: {lower: {hz: 144000000}, upper: {hz: 148000000}}
+        gain_db: 2.15
+        unit: dBi
+        provenance:
+          source: Comet Antenna SBB-224 manufacturer published specifications, checked 2026-10-13
+          notes: https://www.cometantenna.com/product/comet-sbb-224/ ; 2 m quarter-wave requires effective vehicle ground plane.
+    notes: Manufacturer 2m gain applies nominally; installed ground plane and antenna pattern unverified.
 
   - antenna_id: 33333333-0000-0000-0000-000000000001
     name: "144/430MHz VHF UHF Mobil Car Radio Antenna 2.15/3.5dBi VSWR <1.5"
@@ -164,7 +172,7 @@ installations:
 
   - installation_id: 22222222-3000-0000-0000-000000000001
     antenna_id: 22222222-0000-0000-0000-000000000001
-    name: Comet SSB224 2 m mobile installation
+    name: Comet SBB-224 2 m mobile installation
     location_description: vehicle; only driver antenna distance measured
     losses_complete: false
     loss_segments:
@@ -238,11 +246,11 @@ installations:
 
 mode_profiles:
   - mode_profile_id: 88888888-0000-0000-0000-000000000001
-    name: SSB conservative RF envelope
-    rf_envelope_duty: 1.0
+    name: SSB heavily processed ARRL RF envelope
+    rf_envelope_duty: 0.5
     provenance:
-      source: engineering assumption 2026-10-13
-      notes: Conservative full-envelope value; it is separate from the operator-provided 1 minute on / 1 minute off transmit fraction and is not claimed as operator-provided.
+      source: ARRL heavily processed SSB duty-factor guidance; operator confirms processed SSB 2026-10-13
+      notes: Operator confirms speech processing enabled; ARRL-style heavily processed SSB factor 0.5, separate from 1 minute on / 1 minute off transmit fraction 0.5.
   - mode_profile_id: 88888888-0000-0000-0000-000000000002
     name: FT8 full RF envelope
     rf_envelope_duty: 1.0
@@ -379,7 +387,7 @@ scenarios:
   - scenario_id: 99999999-0000-0000-0000-000000000011
     installation_id: 22222222-3000-0000-0000-000000000001
     mode_profile_id: 88888888-0000-0000-0000-000000000003
-    name: Comet SSB224 2 m FM maximum
+    name: Comet SBB-224 2 m FM maximum
     frequency: {hz: 146000000}
     forward_tx_watts: 50
     controlled_tx_fraction: 0.5
@@ -396,7 +404,7 @@ scenarios:
     mode_profile_id: 88888888-0000-0000-0000-000000000003
     name: Generic dual-band antenna operating 70 cm FM maximum
     frequency: {hz: 435000000}
-    forward_tx_watts: 50
+    forward_tx_watts: 15
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
     occupant_distance_m: 2.1336
@@ -591,7 +599,7 @@ scenarios:
   - scenario_id: df78da40-e667-5598-89ca-8da2b85b86e1
     installation_id: 22222222-3000-0000-0000-000000000001
     mode_profile_id: 88888888-0000-0000-0000-000000000003
-    name: Comet SSB224 2 m FM maximum (hypothetical public 6 ft)
+    name: Comet SBB-224 2 m FM maximum (hypothetical public 6 ft)
     frequency:
       hz: 146000000
     forward_tx_watts: 50
@@ -615,7 +623,7 @@ scenarios:
       6 ft)
     frequency:
       hz: 435000000
-    forward_tx_watts: 50
+    forward_tx_watts: 15
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
     occupant_distance_m: 1.8288

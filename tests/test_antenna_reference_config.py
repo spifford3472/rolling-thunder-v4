@@ -101,7 +101,7 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
 
     assert [item.name for item in document.catalog] == [
         "Yaesu ATAS-120A",
-        "Comet SSB224",
+        "Comet SBB-224",
         "144/430MHz VHF UHF Mobil Car Radio Antenna 2.15/3.5dBi VSWR <1.5",
     ]
     atas, comet, generic = document.catalog
@@ -114,8 +114,8 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     ]
     assert [gain.gain_db for gain in atas.gains] == [-10.0, -5.0, -5.0, -5.0, 0.0]
     assert "30 m, 17 m, and 12 m are intentionally omitted" in (atas.notes or "")
-    assert comet.model == "SSB224"
-    assert comet.gains == ()
+    assert comet.model == "SBB-224"
+    assert len(comet.gains) == 1 and comet.gains[0].gain_db == 2.15 and comet.gains[0].unit.value == "dBi"
     assert generic.bands[0].frequencies.lower.hz == 420_000_000
     assert generic.bands[0].frequencies.upper.hz == 450_000_000
     assert generic.gains[0].gain_db == 3.5
@@ -141,8 +141,8 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         "ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.",
         "ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m). No passenger positions available in normal use (front monitor; rear POTA equipment). Public separation is not verified.",
     ]
-    assert [item.rf_envelope_duty for item in document.mode_profiles] == [1.0, 1.0, 1.0]
-    assert document.mode_profiles[0].provenance.source == "engineering assumption 2026-10-13"
+    assert [item.rf_envelope_duty for item in document.mode_profiles] == [0.5, 1.0, 1.0]
+    assert document.mode_profiles[0].provenance.source  .startswith("ARRL heavily processed SSB")
 
     assert len(document.scenarios) == 22
     assert [(item.name, item.frequency.hz) for item in document.scenarios[:11]] == [
@@ -155,11 +155,11 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         ("ATAS-120A 10 m SSB maximum", 28_850_000),
         ("ATAS-120A 10 m FT8 maximum", 28_850_000),
         ("ATAS-120A 6 m SSB maximum", 52_000_000),
-                ("Comet SSB224 2 m FM maximum", 146_000_000),
+                ("Comet SBB-224 2 m FM maximum", 146_000_000),
         ("Generic dual-band antenna operating 70 cm FM maximum", 435_000_000),
     ]
     assert [item.forward_tx_watts for item in document.scenarios[:11]] == [
-        *([100.0, 70.0] * 4), 100.0, 50.0, 50.0,
+        *([100.0, 70.0] * 4), 100.0, 50.0, 15.0,
     ]
     assert all(item.controlled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(item.uncontrolled_tx_fraction == 0.5 for item in document.scenarios)

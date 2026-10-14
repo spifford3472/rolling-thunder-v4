@@ -43,3 +43,7 @@ At 7.5 ft from the ATAS, the most constraining given mode is **6 m SSB** at abou
 Regulatory sources: https://www.ecfr.gov/current/title-47/section-1.1310 and https://www.ecfr.gov/current/title-47/section-97.13
 
 **Correction (2026-10-13):** Rolling Thunder does not support FT8 on 6m. Earlier FT8-on-6m screening values are historical hypothetical calculations only; remove them from operational scenarios. The 6m SSB calculation is unchanged.
+
+
+## Superseding configuration correction (2026-10-13)
+Operator confirmed **Comet SBB-224** (not SSB224); manufacturer's specified 2m gain is 2.15 dBi (https://www.cometantenna.com/product/comet-sbb-224/). Operator also confirms **heavily processed SSB**: ARRL-style 0.5 RF-envelope factor, separately multiplied by the 0.5 transmit fraction; this is not the same as a continuous 100% envelope. Generic antenna 70 cm FM evaluation power is **15W MED** rather than 50W; this changes reference calculations only and does not operate the radio. **The numerical table earlier in this report is superseded for SSB, 2m and 70cm and MUST NOT be used operationally without recalculation**. The safety caveats and incomplete loss inventory still apply.
