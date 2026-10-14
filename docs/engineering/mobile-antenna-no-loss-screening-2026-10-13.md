@@ -22,7 +22,7 @@ The antenna reference YAML remains the sole manually edited authority and is not
 | ATAS 20 m SSB / FT8 | 1.97 / 1.65 ft | 0.11 / 0.08 |
 | ATAS 15 m SSB / FT8 | 2.95 / 2.46 ft | 0.24 / 0.17 |
 | ATAS 10 m SSB / FT8 | 4.00 / 3.35 ft | 0.45 / 0.31 |
-| **ATAS 6 m SSB / FT8** | **7.40 / 6.19 ft** | **1.52 / 1.07** |
+| **ATAS 6 m SSB** | **7.40 ft** | **1.52** |
 | Comet SSB224 2 m FM | **Not determined (gain unknown)** | **Not determined** |
 | **Generic 70 cm FM** | **6.51 ft** | **1.18** |
 
@@ -38,6 +38,8 @@ At 7.5 ft from the ATAS, the most constraining given mode is **6 m SSB** at abou
 2. Obtain verified cable attenuation data for specific RG316/RG58/RG8X manufacturer and construction, lengths, frequencies, connectors, and duplexer; **maximum** insertion loss must not be subtracted as guaranteed attenuation.
 3. Verify that the antenna-to-person distance is measured from the closest part of the radiating structure and that six feet can actually be maintained in accessible locations.
 4. Validate RF exposure with the appropriate near-field/mobile-antenna method or measurement if this simple far-field approximation is inadequate. Consider aggregate simultaneous transmitters separately.
-5. Until a complete evaluation supports the proposed separation, do not rely on six feet at 6m 100W SSB, 6m 70W FT8, or 70cm 50W FM. Lower power or extend separation only under a properly validated evaluation.
+5. Until a complete evaluation supports the proposed separation, do not rely on six feet at 6m 100W SSB, or 70cm 50W FM. Lower power or extend separation only under a properly validated evaluation.
 
 Regulatory sources: https://www.ecfr.gov/current/title-47/section-1.1310 and https://www.ecfr.gov/current/title-47/section-97.13
+
+**Correction (2026-10-13):** Rolling Thunder does not support FT8 on 6m. Earlier FT8-on-6m screening values are historical hypothetical calculations only; remove them from operational scenarios. The 6m SSB calculation is unchanged.

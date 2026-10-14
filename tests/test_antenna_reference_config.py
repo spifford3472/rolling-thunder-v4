@@ -144,8 +144,8 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert [item.rf_envelope_duty for item in document.mode_profiles] == [1.0, 1.0, 1.0]
     assert document.mode_profiles[0].provenance.source == "engineering assumption 2026-10-13"
 
-    assert len(document.scenarios) == 24
-    assert [(item.name, item.frequency.hz) for item in document.scenarios[:12]] == [
+    assert len(document.scenarios) == 22
+    assert [(item.name, item.frequency.hz) for item in document.scenarios[:11]] == [
         ("ATAS-120A 40 m SSB maximum", 7_150_000),
         ("ATAS-120A 40 m FT8 maximum", 7_150_000),
         ("ATAS-120A 20 m SSB maximum", 14_175_000),
@@ -155,24 +155,21 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         ("ATAS-120A 10 m SSB maximum", 28_850_000),
         ("ATAS-120A 10 m FT8 maximum", 28_850_000),
         ("ATAS-120A 6 m SSB maximum", 52_000_000),
-        ("ATAS-120A 6 m FT8 maximum", 52_000_000),
-        ("Comet SSB224 2 m FM maximum", 146_000_000),
+                ("Comet SSB224 2 m FM maximum", 146_000_000),
         ("Generic dual-band antenna operating 70 cm FM maximum", 435_000_000),
     ]
-    assert [item.forward_tx_watts for item in document.scenarios[:10]] == [
-        100.0,
-        70.0,
-    ] * 5
-    assert [item.forward_tx_watts for item in document.scenarios[10:12]] == [50.0, 50.0]
+    assert [item.forward_tx_watts for item in document.scenarios[:11]] == [
+        *([100.0, 70.0] * 4), 100.0, 50.0, 50.0,
+    ]
     assert all(item.controlled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(item.uncontrolled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(
         item.distance_kind is ExposureDistanceKind.FRONT_SEAT_MEASURED
         and item.occupant_distance_verified is True
-        for item in document.scenarios[:12]
+        for item in document.scenarios[:11]
     )
-    assert [item.occupant_distance_m for item in document.scenarios[:12]] == [
-        *([2.286] * 10),
+    assert [item.occupant_distance_m for item in document.scenarios[:11]] == [
+        *([2.286] * 9),
         1.6256,
         2.1336,
     ]
@@ -185,19 +182,19 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert load_antenna_reference_document(round_trip_path) == document
 
     publication = AntennaReferenceService(AntennaReferenceYamlSource(path)).load_publication()
-    assert len(publication.evaluations) == 24
+    assert len(publication.evaluations) == 22
     assert all(result.result.inputs_complete is False for result in publication.evaluations)
     assert all(result.result.needs_further_evaluation is True for result in publication.evaluations)
     assert all(result.result.controlled is None for result in publication.evaluations)
     assert all(result.result.uncontrolled is None for result in publication.evaluations)
-    assert [result.result.evaluated_distance_m for result in publication.evaluations[:12]] == [
-        *([2.286] * 10),
+    assert [result.result.evaluated_distance_m for result in publication.evaluations[:11]] == [
+        *([2.286] * 9),
         1.6256,
         2.1336,
     ]
-    assert all(result.result.distance_verified is True for result in publication.evaluations[:12])
-    assert all(item.distance_kind is ExposureDistanceKind.HYPOTHETICAL_SIX_FOOT and item.occupant_distance_verified is False and item.occupant_distance_m == 1.8288 for item in document.scenarios[12:])
-    assert all(result.result.distance_verified is False for result in publication.evaluations[12:])
+    assert all(result.result.distance_verified is True for result in publication.evaluations[:11])
+    assert all(item.distance_kind is ExposureDistanceKind.HYPOTHETICAL_SIX_FOOT and item.occupant_distance_verified is False and item.occupant_distance_m == 1.8288 for item in document.scenarios[11:])
+    assert all(result.result.distance_verified is False for result in publication.evaluations[11:])
     assert "0.1 dB" in (document.installations[1].loss_segments[1].provenance.notes or "")
     assert "0.2 dB" in (document.installations[2].loss_segments[1].provenance.notes or "")
     assert all(

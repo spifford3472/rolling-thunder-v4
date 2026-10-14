@@ -5,13 +5,14 @@
 # Feedline and duplexer attenuation are deliberately unknown, so every
 # installation has losses_complete: false and every calculation remains
 # incomplete. ONLY DRIVER antenna distances were physically measured by the
-# operator. All 12 scenarios therefore use front_seat_measured with
+# operator. All 11 driver scenarios therefore use front_seat_measured with
 # occupant_distance_verified: true. Passenger and public distances remain
 # not established; a separate six-foot public scenario is hypothetical, not a guaranteed road clearance. Occupant/public and multiantenna risk or safety cannot be concluded.
 # Vehicle operating policy: single driver only. Front passenger position holds a monitor; rear seat holds POTA equipment; no passenger has ridden in the vehicle for three years. This describes normal use, not a physical impossibility or public exposure guarantee.
 # Public road proximity of six feet is hypothetical, NOT established from 12-foot lane width (which does not guarantee antenna-to-bystander spacing).
 # The dashboard loads this file read-only and never edits it.
 #
+# Operating-mode policy: Rolling Thunder does not support FT8 on 6 m; 6 m SSB only.
 # The ATAS-120A has only the five discrete bands actually supplied. In
 # particular, 30 m, 17 m, and 12 m are omitted pending explicit operator or
 # retained-source confirmation. Scenario frequencies are documented engineering
@@ -375,19 +376,6 @@ scenarios:
     distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
-  - scenario_id: 99999999-0000-0000-0000-000000000010
-    installation_id: 11111111-3000-0000-0000-000000000001
-    mode_profile_id: 88888888-0000-0000-0000-000000000002
-    name: ATAS-120A 6 m FT8 maximum
-    frequency: {hz: 52000000}
-    forward_tx_watts: 70
-    controlled_tx_fraction: 0.5
-    uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 2.286
-    occupant_distance_verified: true
-    distance_kind: front_seat_measured
-    ground_reflection_model: arrl_typical_ground
-    provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000011
     installation_id: 22222222-3000-0000-0000-000000000001
     mode_profile_id: 88888888-0000-0000-0000-000000000003
@@ -587,26 +575,6 @@ scenarios:
     frequency:
       hz: 52000000
     forward_tx_watts: 100
-    controlled_tx_fraction: 0.5
-    uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
-    ground_reflection_model: arrl_typical_ground
-    provenance:
-      source: operator-provided 2026-10-13; engineering scenario assumptions documented
-        in notes
-      notes: Hypothetical public antenna separation of six feet, not a measured or guaranteed
-        minimum on roads. A 12-foot lane does not establish antenna-to-person spacing.
-        Other distances, feedline attenuation, and combined exposures remain unverified.
-        No compliance verdict.
-  - scenario_id: be2fc034-37cb-5095-86c8-4072c9ca5c96
-    installation_id: 11111111-3000-0000-0000-000000000001
-    mode_profile_id: 88888888-0000-0000-0000-000000000002
-    name: ATAS-120A 6 m FT8 maximum (hypothetical public 6 ft)
-    frequency:
-      hz: 52000000
-    forward_tx_watts: 70
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
     occupant_distance_m: 1.8288
