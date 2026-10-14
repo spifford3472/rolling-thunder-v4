@@ -135,10 +135,10 @@ class AntennaReferenceWidgets:
             textvariable=self._body,
             bg=_PANEL,
             fg=_BRIGHT,
-            font=("DejaVu Sans", 15, "bold"),
+            font=("DejaVu Sans Mono", 15, "bold"),
             justify="left",
             anchor="nw",
-            wraplength=570,
+            wraplength=0,
         )
         self._body_label.grid(row=0, column=0, sticky="nsew", padx=12, pady=10)
 
@@ -193,13 +193,55 @@ class AntennaReferenceWidgets:
             f"{state.selected_index + 1}/{len(state.cards)}  •  "
             "ENCODER PREVIOUS / NEXT"
         )
-        lines = list(card_summary_lines(card))
-        if not card.evaluations:
-            lines.extend(("", "NO CONFIGURED OPERATING SCENARIO FOR THIS CARD"))
-        for evaluation in card.evaluations:
-            lines.extend(("", *scenario_evaluation_lines(evaluation)))
-        lines.extend(("", "CAUTION  NEAR-FIELD / VEHICLE GEOMETRY / MULTISOURCE NOT MODELED"))
-        self._body.set("\n".join(lines))
+        self._position.set(
+            f"{state.selected_index + 1}/{len(state.cards)} • {card.antenna_name} • ENCODER ◀ ▶"
+        )
+        self._body.set("\n".join(compact_public_table_lines(card)))
+
+
+def compact_public_table_lines(card: AntennaReferenceCard) -> tuple[str, ...]:
+    """Show one large-print row per mode, with public MPE separation only."""
+    public = [
+        e for e in card.evaluations
+        if e.scenario.distance_kind.value == "hypothetical_six_foot"
+    ]
+    lines = [
+        "Based on ARRL RF Exposure Calculator",
+        "",
+        "BAND   MODE   POWER   PUBLIC MIN",
+        "----   ----   -----   ----------",
+    ]
+    for item in public:
+        hz = item.scenario.frequency.hz
+        band = (
+            "40m" if 7_000_000 <= hz < 7_300_000 else
+            "20m" if 14_000_000 <= hz < 14_350_000 else
+            "15m" if 21_000_000 <= hz < 21_450_000 else
+            "10m" if 28_000_000 <= hz < 29_700_000 else
+            "6m" if 50_000_000 <= hz < 54_000_000 else
+            "2m" if 144_000_000 <= hz < 148_000_000 else
+            "70cm" if 420_000_000 <= hz <= 450_000_000 else
+            f"{hz / 1e6:g}M"
+        )
+        mode = "SSB" if "SSB" in item.mode.name.upper() else (
+            "FT8" if "FT8" in item.mode.name.upper() else "FM"
+        )
+        estimate = item.zero_loss_screening or item.result
+        required = (
+            f"{estimate.uncontrolled.estimated_required_distance_m / 0.3048:.1f} ft"
+            if estimate.uncontrolled is not None else "N/A"
+        )
+        lines.append(
+            f"{band:<6} {mode:<5}  {item.scenario.forward_tx_watts:>3g} W   {required:>8}"
+        )
+    if not public:
+        lines.append("NO PUBLIC-SEPARATION SCENARIOS")
+    lines.extend((
+        "",
+        "6 ft public boundary • 0 dB loss assumed",
+        "Estimate only • Not FCC certification",
+    ))
+    return tuple(lines)
 
 
 def scenario_evaluation_lines(

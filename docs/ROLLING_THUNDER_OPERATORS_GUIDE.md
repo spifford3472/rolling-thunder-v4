@@ -1226,3 +1226,5 @@ A scenario with a valid conservative zero-loss screening result displays
 incomplete in the application model until actual feedline/duplexer losses are
 specified. The screen retains a 0 dB-loss assumption and does not assert FCC
 compliance. Scenarios without a valid estimate continue to show missing inputs.
+
+The ANTENNAS main view uses a compact large-print table by selected antenna, listing BAND, MODE, POWER and modeled PUBLIC MIN separation (feet). It does not display driver separation or long diagnostic blocks on the main view; the manually maintained YAML preserves detailed input provenance. The six-foot public boundary, 0 dB cable-loss assumption and non-certification caveat remain visible. Encoder changes the selected antenna; no radio power control.
