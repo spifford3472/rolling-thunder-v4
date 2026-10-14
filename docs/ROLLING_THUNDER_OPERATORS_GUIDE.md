@@ -195,6 +195,7 @@ The current dashboard contexts are:
 - SETTINGS
 - LOG
 - DMR
+- ANTENNAS / RF EXPOSURE (only when explicitly enabled in configuration)
 
 The persistent map/situational region is separate from the normal context page.
 
@@ -694,6 +695,60 @@ preferences without editing configuration files.
 The page displays the effective zoom and availability of the map/radar/callsign
 controls.
 
+## Antenna reference / RF exposure screen
+
+This optional screen is disabled by default. When enabled, it appears after SETTINGS
+in next-context navigation and can be opened with `a` on a bench keyboard. Encoder
+movement reviews already-loaded HF, VHF, and UHF antenna/installation cards. Encoder
+press and Context Buttons do nothing on this screen; it cannot tune, key, transmit,
+change power, or edit any displayed value. Back also has no Antennas-screen action.
+
+The screen's sole authority is a manually maintained antenna-reference YAML file.
+Update it only off-car, using retained manufacturer, installation, or measurement
+sources, then restart Rolling Thunder through the normal approved procedure. There
+is no in-app editor or reload. Keyboard, mouse, touchscreen, encoder, context button,
+physical button, and voice input cannot alter antenna, installation, operating mode,
+power, distance, reflection, RF duty, or either transmit fraction. Future voice
+changes are not implemented and have no mutation authority.
+
+The checked-in example starts empty. The screen never fabricates gain, treats missing
+loss as zero, assumes HF includes 6 m, or uses current radio settings. A six-metre
+antenna needs its own explicit VHF association. Cards retain gain/loss provenance and
+the original dBi/dBd unit. Configured scenarios separately show mode RF-envelope duty,
+forward power, controlled 6-minute and uncontrolled 30-minute TX fractions,
+reflection assumption, and source.
+
+The separate checked-in `config/antenna-reference.mobile-example.yaml` records a
+specific set of operator claims dated 2026-10-13 and is not enabled or copied into
+production automatically. It deliberately leaves all cable and duplexer loss values
+unknown and every loss inventory incomplete, so it cannot produce a complete
+exposure estimate. The ATAS-120A chain is ONLY 6.5 ft RG316. The 2 m Comet SSB224
+chain is 6.5 ft RG316, CF-4160J duplexer, then 2 ft RG8X; it is distinct from the
+generic dual-band antenna assigned to 70 cm, whose chain is 6 ft RG58, CF-4160J,
+then 2 ft RG8X. No cable or duplexer loss or third-party certification is inferred.
+The ATAS-120A record omits 30, 17, and 12 m pending confirmation, and the generic
+antenna's nominal 70 cm gain remains pending datasheet mapping verification.
+
+ONLY DRIVER antenna distance is verified in that mobile example: 90 in / 2.286 m
+for the ATAS-120A, 64 in / 1.6256 m for the 2 m Comet SSB224, and 84 in / 2.1336 m
+for the generic dual-band antenna operating on 70 cm. All 12 scenarios identify
+that value as `front_seat_measured`. Passenger and public distances remain unknown,
+so risk or safety cannot be concluded for passengers, other occupants, the public,
+or aggregate/multiantenna exposure.
+
+Distance is explicit: `hypothetical_six_foot` is exactly 6 ft / 1.8288 m and is
+always unverified; `front_seat_measured` and `public_measured` require real measured
+geometry. Missing, unreadable, malformed, or invalid YAML produces a visible error,
+not an empty or safe-looking estimate.
+
+Results show peak ERP/EIRP, both FCC limits, and calculated plane-wave distances, or
+name every input that prevents calculation. They never declare an installation safe,
+unsafe, compliant, or noncompliant. Near-field coupling, vehicle body/metal/glass,
+real antenna pattern, occupants, and aggregate simultaneous-source exposure remain
+outside the estimate. Do not rely operationally on the screen until real sourced data
+has been reviewed, results have been compared with the current ARRL reference, and
+vehicle-specific geometry and near-field questions have been addressed.
+
 A manual DAY/NIGHT selection can temporarily override automatic solar style
 selection until the next real solar transition. The callsign-information
 mini-map follows the same accepted DAY/NIGHT selection; map zoom remains a
@@ -1083,6 +1138,7 @@ Rolling Thunder reduces workload but does not replace operator judgment.
 | Settings | Runtime display/preferences | Encoder zoom; Buttons 1 radar, 2 style, 3 callsign info |
 | Log | Recent contacts/sync status | Button 1 forced sync |
 | DMR | Monitor/log hotspot contacts | Button 1 current caller; Button 2 commit; encoder history |
+| Antennas / RF exposure | Read configured reference/advisories | Encoder view navigation only; all data edited manually off-car in YAML |
 | AI | Reserved | No production advisor behavior yet |
 
 ---
@@ -1150,3 +1206,15 @@ Changes normally appear on the next 30-second poll. When Forge is unavailable
 or the classification becomes stale, callsigns render without stars and normal
 operating/logging controls continue. See `KNOWN_CALLSIGNS.md` for setup and
 owner deployment/acceptance instructions.
+
+
+### Mobile antenna public-distance operating reference
+The separate mobile antenna YAML records the driver-only normal occupancy policy (front passenger seat taken by display, rear seat by POTA equipment), with the **three measured driver distances unchanged**. Its **six-foot public separation** is a *hypothetical, operator-enforced minimum from the antenna*, not a guarantee based on road lanes or an FCC compliance certification. When parked and transmitting, visually monitor public access; if a person enters the established exclusion distance, cease transmitting until separation is restored. Do not operate on the assumption that any fixed separation is lawful until controlled/uncontrolled RF exposure evaluation is completed. The current antenna screen is informational and read-only; unknown coax and duplexer losses mean all reference evaluations are incomplete.
+
+
+The optional antenna page can show a **ZERO-LOSS SCREENING ONLY** distance
+and percent of uncontrolled MPE for configured scenarios when feedline losses
+are unknown. It uses a zero-dB-loss numerical assumption and keeps the actual
+evaluation labeled INCOMPLETE. This is an advisory *far-field estimate*, not a
+confirmed safe distance or an FCC compliance determination. No radio controls
+or power changes result from this screen.

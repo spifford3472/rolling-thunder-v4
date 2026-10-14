@@ -1,0 +1,71 @@
+# Rolling Thunder Antenna Reference authority, schema 1.
+#
+# This valid example is intentionally empty: no antenna, gain, loss, mode duty,
+# power, transmit fraction, reflection assumption, or vehicle/public distance is
+# known merely because the software is installed. Copy this file to
+# antenna-reference.yaml and add only values supported by retained provenance.
+# Rolling Thunder loads the file once at startup; edit it manually off-car, then
+# restart. The dashboard is strictly read-only and never writes this file.
+schema_version: 1
+catalog: []
+installations: []
+mode_profiles: []
+scenarios: []
+
+# Field shape (comments only; there are no active sample values):
+#
+# catalog:
+#   - antenna_id: <stable UUID>
+#     name: <operator label>
+#     manufacturer: <omit unless verified>
+#     model: <omit unless verified>
+#     provenance: {source: <document/measurement>, notes: <optional>}
+#     bands:
+#       - association_id: <stable UUID>
+#         label: <band label; 6 m must be region VHF>
+#         region: <HF|VHF|UHF|other>
+#         frequencies: {lower: {hz: <integer>}, upper: {hz: <integer>}}
+#         provenance: {source: <document/measurement>}
+#     gains:
+#       - gain_id: <stable UUID>
+#         frequencies: {lower: {hz: <integer>}, upper: {hz: <integer>}}
+#         gain_db: <sourced numeric value>
+#         unit: <dBi|dBd>
+#         provenance: {source: <document/measurement>}
+# installations:
+#   - installation_id: <stable UUID>
+#     antenna_id: <catalog antenna UUID>
+#     name: <operator label>
+#     location_description: <sourced physical location>
+#     losses_complete: <true only after the whole path is reviewed>
+#     loss_segments:
+#       - loss_id: <stable UUID>
+#         name: <feedline/connector/switch/etc.>
+#         frequencies: {lower: {hz: <integer>}, upper: {hz: <integer>}}
+#         loss_db: <sourced value; use null for explicitly unknown>
+#         provenance: {source: <document/measurement>}
+#     band_assignments:
+#       - assignment_id: <stable UUID>
+#         association_id: <band UUID owned by this antenna>
+#         active: true
+#         provenance: {source: <installation record>}
+#     provenance: {source: <installation record>}
+# mode_profiles:
+#   - mode_profile_id: <stable UUID>
+#     name: <operating mode label>
+#     rf_envelope_duty: <sourced fraction greater than 0 and at most 1>
+#     provenance: {source: <reference used>}
+# scenarios:
+#   - scenario_id: <stable UUID>
+#     installation_id: <installation UUID>
+#     mode_profile_id: <mode profile UUID>
+#     name: <scenario label>
+#     frequency: {hz: <integer>}
+#     forward_tx_watts: <manual maximum forward power>
+#     controlled_tx_fraction: <6-minute fraction, greater than 0 and at most 1>
+#     uncontrolled_tx_fraction: <30-minute fraction, greater than 0 and at most 1>
+#     occupant_distance_m: <measured distance, or exactly 1.8288 for hypothetical>
+#     occupant_distance_verified: <false only for the six-foot hypothetical>
+#     distance_kind: <hypothetical_six_foot|front_seat_measured|public_measured>
+#     ground_reflection_model: <free_space|arrl_typical_ground>
+#     provenance: {source: <scenario record/measurement>}

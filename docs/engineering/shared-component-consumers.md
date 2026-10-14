@@ -15,8 +15,9 @@ This document prevents feature-scoped work from accidentally breaking shared beh
 | Global status messages | `status_messages.py`, `status_bar_ui.py`, `status_strip.py` | radio/tuning, connectivity, operator feedback, multiple contexts | Medium-high: priority/expiry changes affect unrelated alerts |
 | Map runtime | `live_map*.py`, `map_*.py` | primary map, callsign mini-map style mirror, GPS state, POTA markers, radar, weather info | High: provider/cache/viewport changes have broad visual impact |
 | Operator preferences | `operator_preferences.py`, settings controllers | map zoom/style, radar image, callsign info and future preferences | Medium: persisted keys are cross-session contracts |
-| Physical controls | `physical_controls.py`, dispatcher/source modules | all active contexts | Critical: action remapping can change behavior across every screen |
-| Context navigation | `context_navigation.py` | all screens, physical NEXT/BACK/home behavior, keyboard test shortcuts | High |
+| Physical controls | `physical_controls.py`, dispatcher/source modules | all active contexts, including view-only ANTENNAS navigation when gated on | Critical: action remapping can change behavior across every screen |
+| Context navigation | `context_navigation.py` | all screens, optional ANTENNAS context, physical NEXT/BACK/home behavior, keyboard test shortcuts | High |
+| Local SQLite schema | `storage.py` | contacts/retry, retained caches, worked markers, preferences; dormant schema-21 antenna tables retained only for compatibility | High: migrations are additive and transactional; preserve every existing table/row and reject newer schemas; antenna YAML is authoritative and the dashboard does not read/write its dormant tables |
 | Forge spot API | `forge_spot_api.py`, Pi Forge spot clients | POTA, DX, health/status | High: reusable external contract |
 | Forge map API layer | `forge_map.py`, `forge_map_api.py`, `forge_spot_main.py` | callsign mini-map and future authorized private clients; shares the spot/weather/radar listener | High: route or listener changes must preserve every existing Forge API |
 | Forge weather API | `forge_weather*.py`, Pi weather clients | WEATHER, map local temperature, alerts/status | High: shared retained-state contract |

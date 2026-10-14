@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 20
+CURRENT_SCHEMA_VERSION: Final = 21
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -663,6 +663,192 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     20: (
         "ALTER TABLE contacts ADD COLUMN contact_latitude REAL",
         "ALTER TABLE contacts ADD COLUMN contact_longitude REAL",
+    ),
+    21: (
+        """
+        CREATE TABLE antenna_catalog (
+            antenna_id TEXT PRIMARY KEY CHECK (length(antenna_id) = 36),
+            name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+            manufacturer TEXT CHECK (manufacturer IS NULL OR length(manufacturer) <= 200),
+            model TEXT CHECK (model IS NULL OR length(model) <= 200),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            notes TEXT CHECK (notes IS NULL OR length(notes) <= 2000),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE antenna_band_associations (
+            association_id TEXT PRIMARY KEY CHECK (length(association_id) = 36),
+            antenna_id TEXT NOT NULL,
+            label TEXT NOT NULL CHECK (length(label) BETWEEN 1 AND 40),
+            region TEXT NOT NULL CHECK (region IN ('HF', 'VHF', 'UHF', 'other')),
+            lower_hz INTEGER NOT NULL CHECK (lower_hz > 0),
+            upper_hz INTEGER NOT NULL CHECK (upper_hz >= lower_hz),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            FOREIGN KEY (antenna_id) REFERENCES antenna_catalog (antenna_id)
+                ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE INDEX antenna_band_associations_antenna_index
+        ON antenna_band_associations (antenna_id, lower_hz, upper_hz)
+        """,
+        """
+        CREATE TABLE antenna_gain_segments (
+            gain_id TEXT PRIMARY KEY CHECK (length(gain_id) = 36),
+            antenna_id TEXT NOT NULL,
+            lower_hz INTEGER NOT NULL CHECK (lower_hz > 0),
+            upper_hz INTEGER NOT NULL CHECK (upper_hz >= lower_hz),
+            gain_db REAL NOT NULL,
+            gain_unit TEXT NOT NULL CHECK (gain_unit IN ('dBi', 'dBd')),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            FOREIGN KEY (antenna_id) REFERENCES antenna_catalog (antenna_id)
+                ON DELETE CASCADE,
+            CHECK (gain_db = gain_db AND abs(gain_db) < 1.0e308)
+        )
+        """,
+        """
+        CREATE INDEX antenna_gain_segments_antenna_index
+        ON antenna_gain_segments (antenna_id, lower_hz, upper_hz)
+        """,
+        """
+        CREATE TABLE antenna_installations (
+            installation_id TEXT PRIMARY KEY CHECK (length(installation_id) = 36),
+            antenna_id TEXT NOT NULL,
+            name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+            location_description TEXT NOT NULL CHECK (
+                length(location_description) BETWEEN 1 AND 500
+            ),
+            losses_complete INTEGER NOT NULL CHECK (losses_complete IN (0, 1)),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            notes TEXT CHECK (notes IS NULL OR length(notes) <= 2000),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (antenna_id) REFERENCES antenna_catalog (antenna_id)
+                ON DELETE RESTRICT
+        )
+        """,
+        """
+        CREATE INDEX antenna_installations_antenna_index
+        ON antenna_installations (antenna_id)
+        """,
+        """
+        CREATE TABLE antenna_loss_segments (
+            loss_id TEXT PRIMARY KEY CHECK (length(loss_id) = 36),
+            installation_id TEXT NOT NULL,
+            name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+            lower_hz INTEGER NOT NULL CHECK (lower_hz > 0),
+            upper_hz INTEGER NOT NULL CHECK (upper_hz >= lower_hz),
+            loss_db REAL CHECK (
+                loss_db IS NULL
+                OR (loss_db >= 0 AND loss_db = loss_db AND loss_db < 1.0e308)
+            ),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            FOREIGN KEY (installation_id) REFERENCES antenna_installations (installation_id)
+                ON DELETE CASCADE
+        )
+        """,
+        """
+        CREATE INDEX antenna_loss_segments_installation_index
+        ON antenna_loss_segments (installation_id, lower_hz, upper_hz)
+        """,
+        """
+        CREATE TABLE antenna_installation_band_assignments (
+            assignment_id TEXT PRIMARY KEY CHECK (length(assignment_id) = 36),
+            installation_id TEXT NOT NULL,
+            association_id TEXT NOT NULL,
+            active INTEGER NOT NULL CHECK (active IN (0, 1)),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            UNIQUE (installation_id, association_id),
+            FOREIGN KEY (installation_id) REFERENCES antenna_installations (installation_id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (association_id) REFERENCES antenna_band_associations (association_id)
+                ON DELETE RESTRICT
+        )
+        """,
+        """
+        CREATE TABLE antenna_mode_profiles (
+            mode_profile_id TEXT PRIMARY KEY CHECK (length(mode_profile_id) = 36),
+            name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
+            rf_envelope_duty REAL NOT NULL CHECK (
+                rf_envelope_duty > 0 AND rf_envelope_duty <= 1
+                AND rf_envelope_duty = rf_envelope_duty
+            ),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE rf_exposure_scenarios (
+            scenario_id TEXT PRIMARY KEY CHECK (length(scenario_id) = 36),
+            installation_id TEXT NOT NULL,
+            mode_profile_id TEXT NOT NULL,
+            name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+            frequency_hz INTEGER NOT NULL CHECK (
+                frequency_hz >= 300000 AND frequency_hz <= 100000000000
+            ),
+            forward_tx_watts REAL NOT NULL CHECK (
+                forward_tx_watts > 0 AND forward_tx_watts = forward_tx_watts
+                AND forward_tx_watts < 1.0e308
+            ),
+            controlled_tx_fraction REAL NOT NULL CHECK (
+                controlled_tx_fraction > 0 AND controlled_tx_fraction <= 1
+                AND controlled_tx_fraction = controlled_tx_fraction
+            ),
+            uncontrolled_tx_fraction REAL NOT NULL CHECK (
+                uncontrolled_tx_fraction > 0 AND uncontrolled_tx_fraction <= 1
+                AND uncontrolled_tx_fraction = uncontrolled_tx_fraction
+            ),
+            occupant_distance_m REAL NOT NULL DEFAULT 1.8288 CHECK (
+                occupant_distance_m > 0 AND occupant_distance_m = occupant_distance_m
+                AND occupant_distance_m < 1.0e308
+            ),
+            occupant_distance_verified INTEGER NOT NULL DEFAULT 0 CHECK (
+                occupant_distance_verified IN (0, 1)
+            ),
+            ground_reflection_model TEXT NOT NULL CHECK (
+                ground_reflection_model IN ('free_space', 'arrl_typical_ground')
+            ),
+            source TEXT NOT NULL CHECK (length(source) BETWEEN 1 AND 500),
+            provenance_notes TEXT CHECK (
+                provenance_notes IS NULL OR length(provenance_notes) <= 2000
+            ),
+            notes TEXT CHECK (notes IS NULL OR length(notes) <= 2000),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (installation_id) REFERENCES antenna_installations (installation_id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (mode_profile_id) REFERENCES antenna_mode_profiles (mode_profile_id)
+                ON DELETE RESTRICT
+        )
+        """,
+        """
+        CREATE INDEX rf_exposure_scenarios_installation_index
+        ON rf_exposure_scenarios (installation_id, frequency_hz)
+        """,
     ),
 }
 

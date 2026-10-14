@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 337.**
+**Cataloged Python test modules: 355.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -80,6 +80,25 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_radio_band.py`
 - `tests/test_radio_polling.py`
 - `tests/test_receive_tuning.py`
+
+## Antenna reference and RF exposure
+
+- `tests/test_rf_exposure_calculator.py` — immutable validation, gain conversion,
+  incomplete inputs, duty/fraction separation, reflection assumptions, equations,
+  and the FCC boundary matrix.
+- `tests/test_antenna_reference_repository.py` — schema-21 preservation and
+  rollback, no seeded values, UUID aggregate round trips, assignment ownership,
+  and pure service evaluation for dormant-storage compatibility.
+- `tests/test_antenna_reference_config.py` — empty authoritative example, strict
+  YAML parsing, provenance and explicit-6-m preservation, aggregate references,
+  measured-distance rules, missing-file failure, and the separate mobile example's
+  corrected feed chains, three verified driver distances, unchanged gains, YAML
+  round trip, unknown losses, and deliberately incomplete/no-verdict evaluations.
+- `tests/test_antenna_reference_panel.py` — empty startup, multi-installation listing,
+  HF/VHF/explicit-6-m cards, gain/loss units, deferred YAML worker execution,
+  configured six-metre FM results, advisory wording, and view-only controls.
+- `tests/test_context_navigation.py` and `tests/test_config.py` — default-off context
+  sequence/shortcut plus required, path-resolved authority-file configuration.
 
 ## GPS and time
 
@@ -517,3 +536,7 @@ still required.
   SSN plan construction, dry-run no-write default and explicit artifact/plan registration.
 
 - `tests/test_forge_voacap_baseline_local_http.py` — real urllib HTTP framing over an in-memory fake socket; no network egress.
+
+- Antenna mobile YAML tests also verify separate measured-driver versus unverified hypothetical six-foot public scenarios, incomplete assessments with unknown duplexer/coax losses, and both supplied duplexer path specifications.
+
+- Antenna zero-loss screening presentation: tests/test_antenna_reference_config.py and tests/test_antenna_reference_panel.py preserve actual incomplete results and screen only when other inputs permit.

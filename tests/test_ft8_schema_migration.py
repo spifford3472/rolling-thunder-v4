@@ -107,7 +107,7 @@ def test_v14_migration_preserves_existing_contact_and_retry_and_allows_ft8(
     _create_v13_database(database_path)
 
     assert initialize_database(database_path) == CURRENT_SCHEMA_VERSION
-    assert CURRENT_SCHEMA_VERSION == 20
+    assert CURRENT_SCHEMA_VERSION == 21
 
     repository = ContactRepository(database_path)
     legacy = repository.get(UUID("00000000-0000-0000-0000-000000000831"))

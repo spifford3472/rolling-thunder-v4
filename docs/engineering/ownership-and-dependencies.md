@@ -92,6 +92,28 @@ Depends on:
 
 Browse must not create alternate implementations of those shared services.
 
+### Antenna reference and RF exposure
+
+Owns immutable sourced antenna catalog records, separate physical installation
+records, explicit active-band assignments, frequency-bounded gain/loss data,
+operator-authored scenarios, and the pure versioned advisory calculator. The sole
+runtime authority is the manual schema-1 YAML named by typed application
+configuration. Schema-21 antenna tables remain dormant compatibility storage and are
+not read, cached, synchronized, or written by the dashboard.
+
+The optional presentation consumes typed configuration and shared context/physical-
+control navigation. It does not consume current radio state, configured power, GPS,
+contact logging, Forge, CAT/PTT, or FT8 authority. Scenario power, mode duty,
+controlled/uncontrolled transmit fractions, loss, gain, distance kind/measurement,
+and reflection are explicit file inputs and are never inferred from runtime state.
+
+The service is read-only. One bounded worker loads, validates, calculates, and
+atomically publishes a startup snapshot while Tk only renders it. The optional
+screen defaults off; it supports view navigation only and exposes no edit, reload,
+voice-mutation, or persistence action. Invalid/missing data publishes an error, not a
+safe estimate. Manual off-car changes require restart. See
+`antenna-reference-rf-exposure.md`.
+
 ### FT8
 
 Owns native FT8 receive/decode activity, CQ eligibility, band control, timing,
