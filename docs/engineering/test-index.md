@@ -538,3 +538,5 @@ still required.
 - `tests/test_forge_voacap_baseline_local_http.py` — real urllib HTTP framing over an in-memory fake socket; no network egress.
 
 - Antenna mobile YAML tests also verify separate measured-driver versus unverified hypothetical six-foot public scenarios, incomplete assessments with unknown duplexer/coax losses, and both supplied duplexer path specifications.
+
+- Antenna zero-loss screening presentation: tests/test_antenna_reference_config.py and tests/test_antenna_reference_panel.py preserve actual incomplete results and screen only when other inputs permit.

@@ -57,31 +57,30 @@ editable example that records operator-provided claims dated 2026-10-13. It is n
 production configuration and is not selected automatically. Its cable types,
 lengths, and CF-4160J devices have no invented attenuation or insertion-loss
 values: each contribution is explicitly unknown and every installation keeps
-`losses_complete: false`. Consequently all of its configured scenarios publish
-incomplete results rather than gain-to-power estimates.
+`losses_complete: false`. Consequently the actual regulatory advisory remains incomplete, but a separate
+zero-loss far-field screening can be presented with prominent non-compliance caveats.
 
-That mobile example preserves the supplied ATAS-120A bands as discrete 40, 20, 15,
-10, and 6 m associations. It does not infer 30, 17, or 12 m from the phrase
-"20-10m". Six metres remains VHF. The operator-corrected 2 m antenna is explicitly
-the Comet SSB224 and remains without an invented gain. It is distinct from the
-generic dual-band antenna that this example assigns only to a clearly labeled
-420-450 MHz 70 cm range, with its operator-supplied nominal 3.5 dBi mapping marked
-pending datasheet verification;
-the Region 2 range was checked against
-[47 CFR 97.301](https://www.ecfr.gov/current/title-47/chapter-I/subchapter-D/part-97/subpart-D/section-97.301)
-on 2026-10-13 and is not transmit authorization.
+The mobile example retains explicit ATAS-120A band associations for 40, 20,
+15, 10 and 6 metres. No 30, 17 or 12 metre association is inferred.
+Six metres is VHF and only its SSB scenario is configured (6m FT8 unsupported).
+The verified Comet antenna is **SBB-224**, with manufacturer-reported 2m
+gain of 2.15 dBi. The separate generic dual-band antenna is assigned to
+70cm at nominal 3.5 dBi pending datasheet verification.
 
-The operator physically measured ONLY DRIVER antenna distance: 90 in (2.286 m) for
-the ATAS-120A, 64 in (1.6256 m) for the 2 m Comet SSB224, and 84 in (2.1336 m) for
-the generic dual-band antenna operating on 70 cm. All 12 scenarios therefore use
-`front_seat_measured` and `occupant_distance_verified: true`; the previous
-hypothetical six-foot scenarios are removed. Passenger and public distances remain
-unknown. Driver-distance verification alone cannot establish risk or safety for
-passengers, the public, other occupants, or aggregate/multiantenna exposure.
-Reference frequencies and the ARRL typical-ground selection are identified as
-engineering scenario assumptions rather than operator claims. SSB uses a separately
-sourced conservative 1.0 RF-envelope assumption; SSB, FT8, and FM transmit fractions
-remain the operator-provided 0.5 for both averaging windows.
+The owner measured driver distances of 90 inches ATAS, 64 inches SBB-224
+and 84 inches 70cm generic. The owner reports the front passenger position is
+occupied by a monitor and the rear seating by POTA equipment. The 6ft
+(1.8288 m) public distance is an actively monitored operating goal, **not a
+measured/guaranteed roadway clearance**. Driver and public scenarios are
+distinct; there are 11 of each. All remain advisory only, not a compliance verdict.
+
+SSB has owner-confirmed heavy speech processing and uses ARRL's 0.5 RF
+envelope duty factor, separately from a 0.5 transmit/receive time fraction.
+FT8 and FM have 1.0 RF envelope duty while transmitting and separate
+0.5 transmit fractions. SSB references 100W, HF FT8 70W, and both IC-2730A
+2m/70cm FM references 15W. These are manually configured **reference**
+values, not live radio readings, setpoints, transmission interlocks, or
+automatic power controls.
 
 The ATAS-120A feedline is ONLY 6.5 ft RG316; the previously recorded additional
 2 ft RG8X segment was erroneous and is removed. The 2 m Comet SSB224 chain is
