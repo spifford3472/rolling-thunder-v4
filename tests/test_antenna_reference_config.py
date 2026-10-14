@@ -101,7 +101,7 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
 
     assert [item.name for item in document.catalog] == [
         "Yaesu ATAS-120A",
-        "Comet 224",
+        "Comet SSB224",
         "144/430MHz VHF UHF Mobil Car Radio Antenna 2.15/3.5dBi VSWR <1.5",
     ]
     atas, comet, generic = document.catalog
@@ -114,7 +114,7 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     ]
     assert [gain.gain_db for gain in atas.gains] == [-10.0, -5.0, -5.0, -5.0, 0.0]
     assert "30 m, 17 m, and 12 m are intentionally omitted" in (atas.notes or "")
-    assert comet.model == "224"
+    assert comet.model == "SSB224"
     assert comet.gains == ()
     assert generic.bands[0].frequencies.lower.hz == 420_000_000
     assert generic.bands[0].frequencies.upper.hz == 450_000_000
@@ -123,7 +123,7 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
 
     assert all(item.losses_complete is False for item in document.installations)
     assert [[loss.name for loss in item.loss_segments] for item in document.installations] == [
-        ["6.5 ft RG316 feedline", "2 ft RG8X feedline"],
+        ["6.5 ft RG316 feedline"],
         ["6.5 ft RG316 feedline", "Comet CF-4160J duplexer", "2 ft RG8X feedline"],
         ["6 ft RG58 feedline", "Comet CF-4160J duplexer", "2 ft RG8X feedline"],
     ]
@@ -133,13 +133,13 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         for loss in installation.loss_segments
     )
     assert all(
-        item.location_description == "vehicle; mounting position not yet measured"
+        item.location_description == "vehicle; only driver antenna distance measured"
         for item in document.installations
     )
     assert [item.provenance.notes for item in document.installations] == [
-        "Driver distance was estimated as 7 ft and is not independently measured or verified.",
-        "Driver distance was estimated as 6 ft and is not independently measured or verified.",
-        "Driver distance was estimated as 8 ft and is not independently measured or verified.",
+        "ONLY DRIVER antenna distance was physically measured as 90 in (2.286 m). Passenger and public distances are unknown.",
+        "ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m). Passenger and public distances are unknown.",
+        "ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m). Passenger and public distances are unknown.",
     ]
     assert [item.rf_envelope_duty for item in document.mode_profiles] == [1.0, 1.0, 1.0]
     assert document.mode_profiles[0].provenance.source == "engineering assumption 2026-10-13"
@@ -156,8 +156,8 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
         ("ATAS-120A 10 m FT8 maximum", 28_850_000),
         ("ATAS-120A 6 m SSB maximum", 52_000_000),
         ("ATAS-120A 6 m FT8 maximum", 52_000_000),
-        ("Comet 224 2 m FM maximum", 146_000_000),
-        ("Generic antenna 70 cm FM maximum", 435_000_000),
+        ("Comet SSB224 2 m FM maximum", 146_000_000),
+        ("Generic dual-band antenna operating 70 cm FM maximum", 435_000_000),
     ]
     assert [item.forward_tx_watts for item in document.scenarios[:10]] == [
         100.0,
@@ -167,11 +167,15 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert all(item.controlled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(item.uncontrolled_tx_fraction == 0.5 for item in document.scenarios)
     assert all(
-        item.distance_kind is ExposureDistanceKind.HYPOTHETICAL_SIX_FOOT
-        and item.occupant_distance_m == 1.8288
-        and item.occupant_distance_verified is False
+        item.distance_kind is ExposureDistanceKind.FRONT_SEAT_MEASURED
+        and item.occupant_distance_verified is True
         for item in document.scenarios
     )
+    assert [item.occupant_distance_m for item in document.scenarios] == [
+        *([2.286] * 10),
+        1.6256,
+        2.1336,
+    ]
 
     round_trip_path = tmp_path / "mobile-round-trip.yaml"
     round_trip_path.write_text(
@@ -186,6 +190,12 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert all(result.result.needs_further_evaluation is True for result in publication.evaluations)
     assert all(result.result.controlled is None for result in publication.evaluations)
     assert all(result.result.uncontrolled is None for result in publication.evaluations)
+    assert [result.result.evaluated_distance_m for result in publication.evaluations] == [
+        *([2.286] * 10),
+        1.6256,
+        2.1336,
+    ]
+    assert all(result.result.distance_verified is True for result in publication.evaluations)
     assert all(
         "installation loss inventory is not marked complete" in result.result.missing_inputs
         and "one or more applicable installation losses are unknown"

@@ -4,10 +4,11 @@
 # manufacturer-verified specifications or a completed RF exposure evaluation.
 # Feedline and duplexer attenuation are deliberately unknown, so every
 # installation has losses_complete: false and every calculation remains
-# incomplete. Driver distances are operator estimates, not independently
-# measured/verified distances; the configured calculations therefore retain the
-# schema's unverified six-foot hypothetical. Passenger and public distances are
-# unknown. The dashboard loads this file read-only and never edits it.
+# incomplete. ONLY DRIVER antenna distances were physically measured by the
+# operator. All 12 scenarios therefore use front_seat_measured with
+# occupant_distance_verified: true. Passenger and public distances remain
+# unknown; occupant/public and multiantenna risk or safety cannot be concluded.
+# The dashboard loads this file read-only and never edits it.
 #
 # The ATAS-120A has only the five discrete bands actually supplied. In
 # particular, 30 m, 17 m, and 12 m are omitted pending explicit operator or
@@ -79,12 +80,12 @@ catalog:
     notes: 30 m, 17 m, and 12 m are intentionally omitted. The phrase 20-10 m was not treated as evidence for intermediate bands.
 
   - antenna_id: 22222222-0000-0000-0000-000000000001
-    name: Comet 224
+    name: Comet SSB224
     manufacturer: Comet
-    model: "224"
+    model: SSB224
     provenance:
       source: operator-provided 2026-10-13
-      notes: Model string is preserved exactly as supplied and is not assumed to mean SBB224.
+      notes: Model is the operator-corrected SSB224; gain remains unknown because no gain claim or retained source was supplied.
     bands:
       - association_id: 22222222-1000-0000-0000-000000000001
         label: 2 m
@@ -122,18 +123,11 @@ installations:
   - installation_id: 11111111-3000-0000-0000-000000000001
     antenna_id: 11111111-0000-0000-0000-000000000001
     name: Yaesu ATAS-120A mobile installation
-    location_description: vehicle; mounting position not yet measured
+    location_description: vehicle; only driver antenna distance measured
     losses_complete: false
     loss_segments:
       - loss_id: 11111111-4000-0000-0000-000000000001
         name: 6.5 ft RG316 feedline
-        frequencies: {lower: {hz: 7000000}, upper: {hz: 54000000}}
-        loss_db: null
-        provenance:
-          source: operator-provided 2026-10-13
-          notes: Cable type and length only; attenuation was not supplied and is not inferred.
-      - loss_id: 11111111-4000-0000-0000-000000000002
-        name: 2 ft RG8X feedline
         frequencies: {lower: {hz: 7000000}, upper: {hz: 54000000}}
         loss_db: null
         provenance:
@@ -162,13 +156,13 @@ installations:
         provenance: {source: operator-provided 2026-10-13}
     provenance:
       source: operator-provided 2026-10-13
-      notes: Driver distance was estimated as 7 ft and is not independently measured or verified.
-    notes: Passenger and public distances are unknown. Feedline losses and any other path losses remain incomplete.
+      notes: ONLY DRIVER antenna distance was physically measured as 90 in (2.286 m). Passenger and public distances are unknown.
+    notes: Feedline is ONLY 6.5 ft RG316; the previously recorded additional 2 ft RG8X was erroneous. Cable loss and any other path losses remain null/incomplete. Driver distance verification does not establish passenger/public or multiantenna risk or safety.
 
   - installation_id: 22222222-3000-0000-0000-000000000001
     antenna_id: 22222222-0000-0000-0000-000000000001
-    name: Comet 224 mobile installation
-    location_description: vehicle; mounting position not yet measured
+    name: Comet SSB224 2 m mobile installation
+    location_description: vehicle; only driver antenna distance measured
     losses_complete: false
     loss_segments:
       - loss_id: 22222222-4000-0000-0000-000000000001
@@ -199,13 +193,13 @@ installations:
         provenance: {source: operator-provided 2026-10-13}
     provenance:
       source: operator-provided 2026-10-13
-      notes: Driver distance was estimated as 6 ft and is not independently measured or verified.
-    notes: Passenger and public distances are unknown. Feedline and duplexer insertion losses remain incomplete.
+      notes: ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m). Passenger and public distances are unknown.
+    notes: This is the 2 m Comet SSB224, not the separate dual-band generic antenna assigned to 70 cm. Feedline and duplexer losses remain null/incomplete. Driver distance verification does not establish passenger/public or multiantenna risk or safety.
 
   - installation_id: 33333333-3000-0000-0000-000000000001
     antenna_id: 33333333-0000-0000-0000-000000000001
     name: Generic 144/430 MHz mobile installation
-    location_description: vehicle; mounting position not yet measured
+    location_description: vehicle; only driver antenna distance measured
     losses_complete: false
     loss_segments:
       - loss_id: 33333333-4000-0000-0000-000000000001
@@ -236,8 +230,8 @@ installations:
         provenance: {source: operator-provided 2026-10-13}
     provenance:
       source: operator-provided 2026-10-13
-      notes: Driver distance was estimated as 8 ft and is not independently measured or verified.
-    notes: Passenger and public distances are unknown. Feedline and duplexer insertion losses remain incomplete.
+      notes: ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m). Passenger and public distances are unknown.
+    notes: This dual-band generic antenna is assigned only to 70 cm here; it is distinct from the 2 m Comet SSB224. Feedline and duplexer losses remain null/incomplete. Driver distance verification does not establish passenger/public or multiantenna risk or safety.
 
 mode_profiles:
   - mode_profile_id: 88888888-0000-0000-0000-000000000001
@@ -268,13 +262,13 @@ scenarios:
     forward_tx_watts: 100
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: &atas_scenario_provenance
       source: operator-provided 2026-10-13; engineering scenario assumptions documented in notes
-      notes: Power and timing are operator claims. Frequency is an engineering reference point. Reflection model and six-foot hypothetical are conservative scenario assumptions. Claimed 7 ft driver distance is unverified; passenger and public distances are unknown.
+      notes: Power and timing are operator claims. Frequency and reflection model are engineering scenario assumptions. ONLY DRIVER antenna distance was physically measured as 90 in (2.286 m); passenger and public distances remain unknown, so occupant/public and multiantenna risk or safety cannot be concluded.
   - scenario_id: 99999999-0000-0000-0000-000000000002
     installation_id: 11111111-3000-0000-0000-000000000001
     mode_profile_id: 88888888-0000-0000-0000-000000000002
@@ -283,9 +277,9 @@ scenarios:
     forward_tx_watts: 70
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000003
@@ -296,9 +290,9 @@ scenarios:
     forward_tx_watts: 100
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000004
@@ -309,9 +303,9 @@ scenarios:
     forward_tx_watts: 70
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000005
@@ -322,9 +316,9 @@ scenarios:
     forward_tx_watts: 100
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000006
@@ -335,9 +329,9 @@ scenarios:
     forward_tx_watts: 70
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000007
@@ -348,9 +342,9 @@ scenarios:
     forward_tx_watts: 100
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000008
@@ -361,9 +355,9 @@ scenarios:
     forward_tx_watts: 70
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000009
@@ -374,9 +368,9 @@ scenarios:
     forward_tx_watts: 100
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000010
@@ -387,38 +381,38 @@ scenarios:
     forward_tx_watts: 70
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.286
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance: *atas_scenario_provenance
   - scenario_id: 99999999-0000-0000-0000-000000000011
     installation_id: 22222222-3000-0000-0000-000000000001
     mode_profile_id: 88888888-0000-0000-0000-000000000003
-    name: Comet 224 2 m FM maximum
+    name: Comet SSB224 2 m FM maximum
     frequency: {hz: 146000000}
     forward_tx_watts: 50
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 1.6256
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance:
       source: operator-provided 2026-10-13; engineering scenario assumptions documented in notes
-      notes: Power and timing are operator claims. Frequency is an engineering reference point. Reflection model and six-foot hypothetical are conservative scenario assumptions. Claimed 6 ft driver distance is unverified; passenger and public distances are unknown.
+      notes: Power and timing are operator claims. Frequency and reflection model are engineering scenario assumptions. ONLY DRIVER antenna distance was physically measured as 64 in (1.6256 m); passenger and public distances remain unknown, so occupant/public and multiantenna risk or safety cannot be concluded.
   - scenario_id: 99999999-0000-0000-0000-000000000012
     installation_id: 33333333-3000-0000-0000-000000000001
     mode_profile_id: 88888888-0000-0000-0000-000000000003
-    name: Generic antenna 70 cm FM maximum
+    name: Generic dual-band antenna operating 70 cm FM maximum
     frequency: {hz: 435000000}
     forward_tx_watts: 50
     controlled_tx_fraction: 0.5
     uncontrolled_tx_fraction: 0.5
-    occupant_distance_m: 1.8288
-    occupant_distance_verified: false
-    distance_kind: hypothetical_six_foot
+    occupant_distance_m: 2.1336
+    occupant_distance_verified: true
+    distance_kind: front_seat_measured
     ground_reflection_model: arrl_typical_ground
     provenance:
       source: operator-provided 2026-10-13; engineering scenario assumptions documented in notes
-      notes: Power and timing are operator claims. Frequency is an engineering reference point. Reflection model and six-foot hypothetical are conservative scenario assumptions. Claimed 8 ft driver distance is unverified; passenger and public distances are unknown.
+      notes: Power and timing are operator claims. Frequency and reflection model are engineering scenario assumptions. This dual-band generic antenna is assigned only to 70 cm and is distinct from the 2 m Comet SSB224. ONLY DRIVER antenna distance was physically measured as 84 in (2.1336 m); passenger and public distances remain unknown, so occupant/public and multiantenna risk or safety cannot be concluded.

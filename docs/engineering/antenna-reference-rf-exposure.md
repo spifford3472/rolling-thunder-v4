@@ -62,23 +62,34 @@ incomplete results rather than gain-to-power estimates.
 
 That mobile example preserves the supplied ATAS-120A bands as discrete 40, 20, 15,
 10, and 6 m associations. It does not infer 30, 17, or 12 m from the phrase
-"20-10m". Six metres remains VHF. The supplied `Comet 224` model string is not
-silently changed to SBB224, and that record has no invented gain. The generic
-antenna is assigned only to a clearly labeled 420-450 MHz 70 cm range, with its
-operator-supplied nominal 3.5 dBi mapping marked pending datasheet verification;
+"20-10m". Six metres remains VHF. The operator-corrected 2 m antenna is explicitly
+the Comet SSB224 and remains without an invented gain. It is distinct from the
+generic dual-band antenna that this example assigns only to a clearly labeled
+420-450 MHz 70 cm range, with its operator-supplied nominal 3.5 dBi mapping marked
+pending datasheet verification;
 the Region 2 range was checked against
 [47 CFR 97.301](https://www.ecfr.gov/current/title-47/chapter-I/subchapter-D/part-97/subpart-D/section-97.301)
 on 2026-10-13 and is not transmit authorization.
 
-The supplied 7 ft, 6 ft, and 8 ft driver distances are retained as unverified
-operator estimates in provenance, not represented as `front_seat_measured`.
-Because schema 1 correctly forbids an unverified measured-distance flag pairing,
-the example scenarios evaluate the explicit unverified 1.8288 m six-foot
-hypothetical instead. Passenger and public distances remain unknown. Reference
-frequencies and the ARRL typical-ground selection are identified as engineering
-scenario assumptions rather than operator claims. SSB uses a separately sourced
-conservative 1.0 RF-envelope assumption; SSB, FT8, and FM transmit fractions remain
-the operator-provided 0.5 for both averaging windows.
+The operator physically measured ONLY DRIVER antenna distance: 90 in (2.286 m) for
+the ATAS-120A, 64 in (1.6256 m) for the 2 m Comet SSB224, and 84 in (2.1336 m) for
+the generic dual-band antenna operating on 70 cm. All 12 scenarios therefore use
+`front_seat_measured` and `occupant_distance_verified: true`; the previous
+hypothetical six-foot scenarios are removed. Passenger and public distances remain
+unknown. Driver-distance verification alone cannot establish risk or safety for
+passengers, the public, other occupants, or aggregate/multiantenna exposure.
+Reference frequencies and the ARRL typical-ground selection are identified as
+engineering scenario assumptions rather than operator claims. SSB uses a separately
+sourced conservative 1.0 RF-envelope assumption; SSB, FT8, and FM transmit fractions
+remain the operator-provided 0.5 for both averaging windows.
+
+The ATAS-120A feedline is ONLY 6.5 ft RG316; the previously recorded additional
+2 ft RG8X segment was erroneous and is removed. The 2 m Comet SSB224 chain is
+6.5 ft RG316, Comet CF-4160J duplexer, then 2 ft RG8X. The generic dual-band
+antenna's 70 cm chain is 6 ft RG58, Comet CF-4160J duplexer, then 2 ft RG8X.
+Cable attenuation, connector loss, and duplexer insertion loss remain `null` /
+unknown, and every installation remains `losses_complete: false`. No third-party
+certification or loss value is implied.
 
 When enabled, one bounded background worker reads and validates the whole data file
 once at dashboard startup, calculates every configured scenario with the pure
@@ -191,11 +202,12 @@ References: [47 CFR 1.1310](https://www.ecfr.gov/current/title-47/chapter-I/subc
 ## Mandatory limits and remaining acceptance
 
 This plane-wave result is not a compliance finding, safety finding, engineering
-certification, or substitute for a station evaluation. Near-field coupling,
-vehicle roof/body/glass, feedline, occupants, nearby metal, antenna pattern,
-ground/mounting geometry, simultaneous sources, and directionality can materially
-change exposure. ARRL identifies special near-field limitations, including antennas
-less than 20 cm from a person.
+certification, or substitute for a station evaluation. A verified driver distance
+is only one input and does not verify any passenger or public distance. Near-field
+coupling, vehicle roof/body/glass, feedline, occupants, nearby metal, antenna
+pattern, ground/mounting geometry, simultaneous sources, and directionality can
+materially change exposure. ARRL identifies special near-field limitations,
+including antennas less than 20 cm from a person.
 
 Before operational reliance, the owner must supply and review real catalog,
 installation, loss, gain, mode, scenario, front-seat, and public-distance records;
@@ -206,5 +218,6 @@ authorized by this subsystem. No Forge, hardware, deployment, service restart, o
 production change is part of this work. For the mobile example specifically, the
 owner must still confirm whether 30, 17, or 12 m should be supported; retain a
 datasheet that maps the generic antenna's stated gain to 70 cm; establish applicable
-feedline, connector, and duplexer losses; measure/verify driver, passenger, and
-public geometry; and review the actual mounting position.
+feedline, connector, and duplexer losses; measure/verify passenger and public
+geometry; evaluate aggregate/multiantenna exposure; and review the actual mounting
+position.

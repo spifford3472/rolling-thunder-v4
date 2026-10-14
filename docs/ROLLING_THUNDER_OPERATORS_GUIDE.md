@@ -721,11 +721,20 @@ reflection assumption, and source.
 The separate checked-in `config/antenna-reference.mobile-example.yaml` records a
 specific set of operator claims dated 2026-10-13 and is not enabled or copied into
 production automatically. It deliberately leaves all cable and duplexer loss values
-unknown, keeps driver-distance claims marked unverified, and leaves passenger/public
-distances unknown, so it cannot produce a complete exposure estimate. Its ATAS-120A
-record omits 30, 17, and 12 m pending confirmation; its `Comet 224` name is preserved
-as supplied; and the generic antenna's nominal 70 cm gain remains pending datasheet
-mapping verification.
+unknown and every loss inventory incomplete, so it cannot produce a complete
+exposure estimate. The ATAS-120A chain is ONLY 6.5 ft RG316. The 2 m Comet SSB224
+chain is 6.5 ft RG316, CF-4160J duplexer, then 2 ft RG8X; it is distinct from the
+generic dual-band antenna assigned to 70 cm, whose chain is 6 ft RG58, CF-4160J,
+then 2 ft RG8X. No cable or duplexer loss or third-party certification is inferred.
+The ATAS-120A record omits 30, 17, and 12 m pending confirmation, and the generic
+antenna's nominal 70 cm gain remains pending datasheet mapping verification.
+
+ONLY DRIVER antenna distance is verified in that mobile example: 90 in / 2.286 m
+for the ATAS-120A, 64 in / 1.6256 m for the 2 m Comet SSB224, and 84 in / 2.1336 m
+for the generic dual-band antenna operating on 70 cm. All 12 scenarios identify
+that value as `front_seat_measured`. Passenger and public distances remain unknown,
+so risk or safety cannot be concluded for passengers, other occupants, the public,
+or aggregate/multiantenna exposure.
 
 Distance is explicit: `hypothetical_six_foot` is exactly 6 ft / 1.8288 m and is
 always unverified; `front_seat_measured` and `public_measured` require real measured
