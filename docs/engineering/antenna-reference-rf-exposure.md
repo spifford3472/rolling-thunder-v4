@@ -239,3 +239,12 @@ only when all other required gain, band, and source references are valid. This
 simple far-field result is not a safety verdict, near-field assessment or proof
 of FCC compliance. Missing loss data remain visible and the normal result remains
 INCOMPLETE. No radio power/CAT/PTT authority is added.
+
+
+### Display wording refinement
+For available zero-loss screening results the read-only screen uses **BASED ON
+ARRL RF EXPOSURE CALCULATOR** and displays the estimated distance and MPE
+percentage with an explicit 0 dB cable/duplexer-loss assumption and
+non-certification caveat. The underlying actual result remains
+`inputs_complete=False`, and scenarios without valid screening estimates still
+show incomplete/missing-input diagnostics.

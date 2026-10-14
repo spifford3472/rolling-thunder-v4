@@ -198,6 +198,13 @@ def test_mobile_example_preserves_operator_claims_round_trips_and_stays_incomple
     assert public_vhf.zero_loss_screening is not None
     assert public_vhf.zero_loss_screening.uncontrolled is not None
     assert 3.6 < public_vhf.zero_loss_screening.uncontrolled.estimated_required_distance_m / 0.3048 < 3.8
+    from rolling_thunder.antenna_reference_ui import scenario_evaluation_lines
+    rendered = "\n".join(scenario_evaluation_lines(public_vhf))
+    assert "BASED ON ARRL RF EXPOSURE CALCULATOR" in rendered
+    assert "ASSUMPTION: 0 dB CABLE/DUPLEXER LOSS" in rendered
+    assert "INCOMPLETE" not in rendered
+    assert "NOT AN FCC COMPLIANCE DETERMINATION" in rendered
+
 
     assert all(result.result.controlled is None for result in publication.evaluations)
     assert all(result.result.uncontrolled is None for result in publication.evaluations)
