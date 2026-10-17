@@ -13,6 +13,7 @@ def test_disabled_collector_never_uses_clock():
 
 
 def test_enabled_collector_is_bounded_and_reports_only_aggregates(caplog):
+    caplog.set_level("INFO")
     now = [0.0]
     timer = UiTiming(enabled=True, clock=lambda: now[0], report_every=2, capacity=2)
     for i in range(3):
