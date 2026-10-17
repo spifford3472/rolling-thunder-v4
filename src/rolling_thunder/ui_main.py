@@ -99,6 +99,7 @@ from rolling_thunder.shared_spot_tuning import SharedSpotTuneController
 from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
+from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.status_bar_ui import StatusBarWidgets
 from rolling_thunder.status_messages import StatusPresentation
 from rolling_thunder.status_monitor import build_status_monitor
@@ -1296,7 +1297,10 @@ def run_dashboard(
         if antenna_widgets is not None:
             antenna_widgets.show()
 
+    ui_timing = UiTiming.from_environment()
+
     def refresh() -> None:
+        refresh_start = ui_timing.begin_refresh()
         # SSH trigger is consumed only in receive-only mode while FT8 is visible.
         # Never trigger the actual PTT alarm state or affect radio authority.
         if visual_test_file.is_file():
@@ -1320,7 +1324,11 @@ def run_dashboard(
         else:
             ptt_alert.place_forget()
         if control_dispatcher is not None:
-            control_dispatcher.dispatch_available()
+            controls_start = ui_timing.start()
+            try:
+                control_dispatcher.dispatch_available()
+            finally:
+                ui_timing.observe("controls", controls_start)
 
         active_panel_commands.synchronize_radio_state()
         shared_spot_tune_status.refresh()
@@ -1408,15 +1416,19 @@ def run_dashboard(
         elif runtime.ft8_receive is not None:
             runtime.ft8_receive.select_activity_target(None)
 
-        live_map_widgets.update(
-            live_map_presentation,
+        map_start = ui_timing.start()
+        try:
+            live_map_widgets.update(
+                live_map_presentation,
             live_map_snapshot,
             runtime.latest_live_radar_state,
             runtime.latest_pota_map_marker_state,
             weather_presentation,
             ft8_status=ft8_map_status,
-            ft8_remote_status=ft8_remote_status,
-        )
+                ft8_remote_status=ft8_remote_status,
+            )
+        finally:
+            ui_timing.observe("map", map_start)
 
         connectivity = build_runtime_connectivity_status(
             runtime,
@@ -1933,6 +1945,7 @@ def run_dashboard(
             context_body_label.configure(font=("DejaVu Sans", 22), wraplength=560)
             context_body_text.set(selected_context.definition.placeholder)
 
+        ui_timing.end_refresh(refresh_start)
         root.after(_REFRESH_MS, refresh)
 
     def close() -> None:
