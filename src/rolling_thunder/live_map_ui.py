@@ -47,6 +47,7 @@ _MARKER_OUTLINE = "#ffffff"
 _STATUS_BACKGROUND = "#10191e"
 _PHOTO_CACHE_LIMIT = 128
 _RADAR_PHOTO_CACHE_LIMIT = 128
+_RADAR_TILE_REDRAW_PER_REFRESH = 2
 _POTA_MARKER_FILL = "#ffd400"
 _POTA_MARKER_OUTLINE = "#000000"
 _POTA_MARKER_TEXT = "#000000"
@@ -338,6 +339,7 @@ class LiveMapWidgets:
             tuple[bytes, Any],
         ] = OrderedDict()
         self._radar_items: dict[MapTileKey, int] = {}
+        self._pending_radar_tiles: list[tuple[str, RadarTileSnapshot]] = []
         self._radar_active_photos: dict[MapTileKey, Any] = {}
         self._radar_photo_cache: OrderedDict[
             tuple[str, MapTileKey],
@@ -390,12 +392,13 @@ class LiveMapWidgets:
 
         if size_changed:
             self._draw_radar(radar_snapshot, snapshot)
-        elif snapshot_changed or radar_changed or pota_changed:
+        elif snapshot_changed or radar_changed:
             self._update_radar(
                 self._last_radar_snapshot,
                 radar_snapshot,
                 snapshot,
             )
+        self._flush_pending_radar_tiles()
 
         self._last_snapshot = snapshot
         self._last_radar_snapshot = radar_snapshot
@@ -743,10 +746,8 @@ class LiveMapWidgets:
             return
 
         frame_token = radar.frame.frame_token
-        for tile in radar.tiles:
-            self._upsert_radar_tile(frame_token, tile)
+        self._pending_radar_tiles = [(frame_token, tile) for tile in radar.tiles]
         self._raise_radar_layer()
-        self._trim_radar_photo_cache(frame_token)
 
     def _update_radar(
         self,
@@ -778,17 +779,36 @@ class LiveMapWidgets:
         current_tiles = _radar_snapshot_tiles_by_key(current)
         frame_token = current.frame.frame_token
 
+        # Preserve tiles that were queued but not yet drawn when a newer
+        # snapshot arrives for the same frame (e.g. a pan or map refresh).
+        pending_keys = {
+            tile.placement.key
+            for pending_token, tile in self._pending_radar_tiles
+            if pending_token == frame_token
+        }
+        redraw_keys = set(plan.redraw) | (pending_keys & current_tiles.keys())
+        self._pending_radar_tiles = [
+            (frame_token, current_tiles[key]) for key in sorted(redraw_keys)
+        ]
         for key in plan.remove:
             self._remove_radar_tile(key)
-        for key in plan.redraw:
-            self._upsert_radar_tile(frame_token, current_tiles[key])
         for key in plan.move:
             self._move_radar_tile(frame_token, current_tiles[key])
 
         self._raise_radar_layer()
-        self._trim_radar_photo_cache(frame_token)
+
+    def _flush_pending_radar_tiles(self) -> None:
+        """Bound synchronous PhotoImage work per Tk refresh."""
+        batch = self._pending_radar_tiles[:_RADAR_TILE_REDRAW_PER_REFRESH]
+        del self._pending_radar_tiles[:len(batch)]
+        for frame_token, tile in batch:
+            self._upsert_radar_tile(frame_token, tile)
+        if batch:
+            self._raise_radar_layer()
+            self._trim_radar_photo_cache(batch[-1][0])
 
     def _clear_radar(self) -> None:
+        self._pending_radar_tiles = []
         self._canvas.delete("map-radar")
         self._radar_items.clear()
         self._radar_active_photos.clear()
