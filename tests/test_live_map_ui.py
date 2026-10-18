@@ -543,6 +543,8 @@ def test_base_tile_rendering_is_bounded_and_clears_on_viewport_rebuild() -> None
             return 1
         def create_text(self, *_args, **_kwargs) -> int:
             return 2
+        def create_line(self, *_args, **_kwargs) -> int:
+            return 3
     widgets._canvas = Canvas()
     widgets._tile_items = {}
     widgets._tile_item_kinds = {}
