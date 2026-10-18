@@ -21,3 +21,7 @@ This bounds the number of radar image conversions per callback rather than guara
 New base-map tile images are queued and rendered at most two per Tk refresh; queued work is reset on full viewport rebuild and retained by key when the same zoom viewport is updated. The map can fill progressively after pan/zoom. This complements R1-B radar batching, without changing background map retrieval or radio control. Pending base tiles continue advancing each regular UI refresh even with no new snapshot.
 
 When `RT_R1A_UI_TIMING=1`, logs also include `base_map` and `radar` duration metrics. These measure their respective synchronous update sections, while `map` continues to measure the whole map widget update. Compare these metrics for the same sample windows; they do not prove which individual tile conversion is expensive. Validate raster appearance and responsiveness with actual Pi display before closing R1-B.
+
+### R1-B2a logging correction
+
+The `base_map` metric is explicitly observed around base-map snapshot work and the pending base-tile flush on every widget update (including unchanged snapshots). This repairs a missing timing hook from R1-B2. No scheduling, rendering, radio, or radar behavior is changed by this correction. Use the separate `base_map`, `radar`, `map` and `refresh` aggregates to select the next focused investigation, rather than attributing unrelated maxima to the same callback.
