@@ -8,6 +8,7 @@ from collections import deque
 from collections.abc import Callable
 from time import monotonic
 
+
 class UiTiming:
     """Observe major UI boundaries without influencing their behavior."""
 
