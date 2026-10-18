@@ -50,6 +50,7 @@ from rolling_thunder.domain import Contact
 from rolling_thunder.dx_worked import DxWorkedRepository, DxWorkedTracker
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
+from rolling_thunder.ft8.band_presentation import present_ft8_band_tune
 from rolling_thunder.ft8.distance import format_maidenhead_distance
 from rolling_thunder.ft8.panel import FT8PanelMode
 from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
@@ -1556,7 +1557,6 @@ def run_dashboard(
             context_navigation.state.selected is ContextId.FT8
             and runtime.ft8_band_control is not None
         ):
-            from rolling_thunder.ft8.band_presentation import present_ft8_band_tune
             displayed_frequency, displayed_band, acknowledged = present_ft8_band_tune(
                 radio_state,
                 runtime.ft8_band_control.status,
