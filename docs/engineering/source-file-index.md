@@ -492,3 +492,5 @@ Consumers and ownership remain unchanged.
   opt-in Forge refresh service examples, not installed/activated by git.
 
 - `src/rolling_thunder/ui_timing.py` — opt-in bounded monotonic UI critical-path timing collector (R1-A1).
+
+- `src/rolling_thunder/ft8/band_presentation.py` — pure FT8 receive-band tuning progress, verified display and stale-outcome acknowledgment (R1-C1).
