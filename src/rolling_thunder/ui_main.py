@@ -1426,6 +1426,7 @@ def run_dashboard(
             weather_presentation,
             ft8_status=ft8_map_status,
                 ft8_remote_status=ft8_remote_status,
+                timing=ui_timing,
             )
         finally:
             ui_timing.observe("map", map_start)
