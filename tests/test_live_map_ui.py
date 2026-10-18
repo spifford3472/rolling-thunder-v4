@@ -552,3 +552,30 @@ def test_base_tile_rendering_is_bounded_and_clears_on_viewport_rebuild() -> None
     widgets._attribution_item = None
     widgets._draw_base(None, 100, 100)
     assert widgets._pending_base_tiles == []
+
+
+def test_live_map_update_records_base_map_timing_when_enabled() -> None:
+    """Capture base-map time even if no new snapshot arrives."""
+    from unittest.mock import Mock
+
+    widgets = LiveMapWidgets.__new__(LiveMapWidgets)
+    widgets._canvas = Mock()
+    widgets._canvas.winfo_width.return_value = 800
+    widgets._canvas.winfo_height.return_value = 480
+    widgets._last_size = (800, 480)
+    widgets._last_snapshot = None
+    widgets._last_radar_snapshot = None
+    widgets._last_pota_snapshot = None
+    widgets._pending_base_tiles = []
+    widgets._pending_radar_tiles = []
+    widgets._flush_pending_base_tiles = Mock()
+    widgets._flush_pending_radar_tiles = Mock()
+    widgets._draw_vehicle_marker = Mock()
+    widgets._draw_status = Mock()
+    from rolling_thunder.ui_timing import UiTiming
+
+    now = [1.0]
+    timing = UiTiming(enabled=True, clock=lambda: now[0])
+    widgets.update(presentation(), None, timing=timing)
+    assert len(timing._samples["base_map"]) == 1
+    assert len(timing._samples["radar"]) == 1
