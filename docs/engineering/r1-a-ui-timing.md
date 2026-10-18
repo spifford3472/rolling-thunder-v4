@@ -15,3 +15,9 @@ This patch does not instrument individual CAT writes, PTT or FT8 timing, which r
 When radar frame or viewport changes, the Tk adapter now queues visible radar tiles rather than constructing every `PhotoImage` synchronously in one refresh. At most **two new radar tiles** are created per UI refresh, with remaining tiles appearing during subsequent 250 ms refresh cycles. Queued stale tiles are cleared on radar disable or viewport redraw; pending same-frame tiles survive unrelated snapshot updates. Network radar fetching remains on the existing background worker, while Tk canvas/image calls stay on the Tk thread.
 
 This bounds the number of radar image conversions per callback rather than guaranteeing a hard millisecond deadline. The visual radar layer can fill progressively for several refresh cycles. Compare R1-A timing `map` and `refresh` p95/max under actual garage conditions, including frame swaps and rapid viewport changes, before declaring the latency issue resolved. Normal FT8, CAT/PTT and controller paths are unchanged.
+
+## R1-B2 base-map budget and rendering timing
+
+New base-map tile images are queued and rendered at most two per Tk refresh; queued work is reset on full viewport rebuild and retained by key when the same zoom viewport is updated. The map can fill progressively after pan/zoom. This complements R1-B radar batching, without changing background map retrieval or radio control. Pending base tiles continue advancing each regular UI refresh even with no new snapshot.
+
+When `RT_R1A_UI_TIMING=1`, logs also include `base_map` and `radar` duration metrics. These measure their respective synchronous update sections, while `map` continues to measure the whole map widget update. Compare these metrics for the same sample windows; they do not prove which individual tile conversion is expensive. Validate raster appearance and responsiveness with actual Pi display before closing R1-B.
