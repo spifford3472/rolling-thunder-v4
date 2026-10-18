@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 import os
+import sys
 from collections import deque
 from collections.abc import Callable
 from time import monotonic
-
-_LOGGER = logging.getLogger(__name__)
-
 
 class UiTiming:
     """Observe major UI boundaries without influencing their behavior."""
@@ -57,5 +54,9 @@ class UiTiming:
                 continue
             ordered = sorted(values)
             index = min(len(ordered) - 1, max(0, (95 * len(ordered) + 99) // 100 - 1))
-            _LOGGER.info("R1A_UI_TIMING metric=%s count=%d p95_ms=%.2f max_ms=%.2f",
-                         name, len(ordered), ordered[index], ordered[-1])
+            print(  # systemd captures stderr without depending on root logger configuration
+                f"R1A_UI_TIMING metric={name} count={len(ordered)} "
+                f"p95_ms={ordered[index]:.2f} max_ms={ordered[-1]:.2f}",
+                file=sys.stderr,
+                flush=True,
+            )
