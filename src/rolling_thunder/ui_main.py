@@ -1326,12 +1326,14 @@ def run_dashboard(
             ptt_alert.lift()
         else:
             ptt_alert.place_forget()
+        ui_timing.checkpoint("pre_controls")
         if control_dispatcher is not None:
             controls_start = ui_timing.start()
             try:
                 control_dispatcher.dispatch_available()
             finally:
                 ui_timing.observe("controls", controls_start)
+        ui_timing.checkpoint("controls")
 
         active_panel_commands.synchronize_radio_state()
         shared_spot_tune_status.refresh()
@@ -1419,6 +1421,7 @@ def run_dashboard(
         elif runtime.ft8_receive is not None:
             runtime.ft8_receive.select_activity_target(None)
 
+        ui_timing.checkpoint("map_prepare")
         map_start = ui_timing.start()
         try:
             live_map_widgets.update(
@@ -1433,6 +1436,7 @@ def run_dashboard(
             )
         finally:
             ui_timing.observe("map", map_start)
+        ui_timing.checkpoint("map_update")
 
         connectivity = build_runtime_connectivity_status(
             runtime,
@@ -1606,6 +1610,7 @@ def run_dashboard(
             or selected_context.selected is ContextId.ANTENNAS
         )
 
+        ui_timing.checkpoint("presentation")
         context_decode_text.set("")
         if selected_context.selected in {ContextId.POTA, ContextId.DX}:
             health_frame.grid_remove()
