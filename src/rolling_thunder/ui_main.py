@@ -1299,6 +1299,8 @@ def run_dashboard(
 
     ui_timing = UiTiming.from_environment()
 
+    acknowledged_ft8_tune: list[object | None] = [None]
+
     def refresh() -> None:
         refresh_start = ui_timing.begin_refresh()
         # SSH trigger is consumed only in receive-only mode while FT8 is visible.
@@ -1548,8 +1550,23 @@ def run_dashboard(
         voice_label.configure(fg=_indicator_color(view.voice_state))
         commit_text.set("COMMIT")
         commit_label.configure(fg=_indicator_color(view.commit_state))
-        frequency_text.set(view.frequency)
-        band_text.set(view.band.replace(" ", ""))
+        displayed_frequency = view.frequency
+        displayed_band = view.band.replace(" ", "")
+        if (
+            context_navigation.state.selected is ContextId.FT8
+            and runtime.ft8_band_control is not None
+        ):
+            from rolling_thunder.ft8.band_presentation import present_ft8_band_tune
+            displayed_frequency, displayed_band, acknowledged = present_ft8_band_tune(
+                radio_state,
+                runtime.ft8_band_control.status,
+                acknowledged_ft8_tune[0],
+                displayed_frequency,
+                displayed_band,
+            )
+            acknowledged_ft8_tune[0] = acknowledged
+        frequency_text.set(displayed_frequency)
+        band_text.set(displayed_band)
         mode_text.set(view.mode)
         last_result = view.last_result if view.last_result != "—" else "—"
         last_result_text.set(f"Last Result: {last_result[:18]}")
