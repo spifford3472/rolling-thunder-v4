@@ -28,6 +28,7 @@ from rolling_thunder.live_radar_service import (
 )
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
+from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.pota_map_markers import (
     PotaMapMarkerSnapshot,
     project_pota_marker,
@@ -375,6 +376,7 @@ class LiveMapWidgets:
         weather: WeatherPanelPresentation | None = None,
         ft8_status: str | None = None,
         ft8_remote_status: str | None = None,
+        timing: UiTiming | None = None,
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
@@ -394,6 +396,7 @@ class LiveMapWidgets:
         if size_changed or snapshot_changed or pota_changed:
             self._draw_pota_markers(pota_snapshot, snapshot)
 
+        radar_started = timing.start() if timing is not None else 0.0
         if size_changed:
             self._draw_radar(radar_snapshot, snapshot)
         elif snapshot_changed or radar_changed:
@@ -403,6 +406,8 @@ class LiveMapWidgets:
                 snapshot,
             )
         self._flush_pending_radar_tiles()
+        if timing is not None:
+            timing.observe("radar", radar_started)
 
         self._last_snapshot = snapshot
         self._last_radar_snapshot = radar_snapshot
