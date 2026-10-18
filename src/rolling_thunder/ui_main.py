@@ -99,7 +99,6 @@ from rolling_thunder.shared_spot_tuning import SharedSpotTuneController
 from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
 from rolling_thunder.speech_recognition import VoskCallsignRecognizer
 from rolling_thunder.station_health import build_station_health
-from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.status_bar_ui import StatusBarWidgets
 from rolling_thunder.status_messages import StatusPresentation
 from rolling_thunder.status_monitor import build_status_monitor
@@ -107,6 +106,7 @@ from rolling_thunder.status_strip import (
     build_status_bar_routine_message,
     build_status_strip_snapshot,
 )
+from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.us_extra_band_advisory import (
     BandAdvisoryLevel,
     us_extra_band_advisory,
