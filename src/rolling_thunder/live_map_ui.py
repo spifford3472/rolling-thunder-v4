@@ -28,11 +28,11 @@ from rolling_thunder.live_radar_service import (
 )
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
-from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.pota_map_markers import (
     PotaMapMarkerSnapshot,
     project_pota_marker,
 )
+from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.weather_panel import WeatherPanelPresentation
 
 _BACKGROUND = "#0d1418"
