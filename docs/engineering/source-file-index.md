@@ -490,3 +490,5 @@ Consumers and ownership remain unchanged.
   publisher service/timer; never part of Pi control path.
 - `deploy/systemd/rolling-thunder-forge-noaa-refresh.{service,timer}` —
   opt-in Forge refresh service examples, not installed/activated by git.
+
+- `src/rolling_thunder/ui_timing.py` — opt-in bounded monotonic UI critical-path timing collector (R1-A1).
