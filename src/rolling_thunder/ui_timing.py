@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 import os
 from collections import deque
+from collections.abc import Callable
 from time import monotonic
-from typing import Callable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class UiTiming:
         self._previous_end: float | None = None
 
     @classmethod
-    def from_environment(cls) -> "UiTiming":
+    def from_environment(cls) -> UiTiming:
         return cls(enabled=os.environ.get("RT_R1A_UI_TIMING", "") == "1")
 
     def start(self) -> float:
