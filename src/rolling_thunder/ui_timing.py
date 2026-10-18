@@ -20,7 +20,7 @@ class UiTiming:
         self._clock = clock
         self._report_every = report_every
         self._samples: dict[str, deque[float]] = {name: deque(maxlen=capacity) for name in
-                         ("refresh", "controls", "map", "refresh_gap")}
+                         ("refresh", "controls", "map", "base_map", "radar", "refresh_gap")}
         self._refreshes = 0
         self._previous_end: float | None = None
 

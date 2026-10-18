@@ -32,6 +32,7 @@ from rolling_thunder.pota_map_markers import (
     PotaMapMarkerSnapshot,
     project_pota_marker,
 )
+from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.weather_panel import WeatherPanelPresentation
 
 _BACKGROUND = "#0d1418"
@@ -48,6 +49,7 @@ _STATUS_BACKGROUND = "#10191e"
 _PHOTO_CACHE_LIMIT = 128
 _RADAR_PHOTO_CACHE_LIMIT = 128
 _RADAR_TILE_REDRAW_PER_REFRESH = 2
+_BASE_TILE_REDRAW_PER_REFRESH = 2
 _POTA_MARKER_FILL = "#ffd400"
 _POTA_MARKER_OUTLINE = "#000000"
 _POTA_MARKER_TEXT = "#000000"
@@ -332,6 +334,7 @@ class LiveMapWidgets:
         self._canvas.pack(fill="both", expand=True)
 
         self._tile_items: dict[MapTileKey, int] = {}
+        self._pending_base_tiles: list[MapTileSnapshot] = []
         self._tile_item_kinds: dict[MapTileKey, str] = {}
         self._active_photos: dict[MapTileKey, Any] = {}
         self._photo_cache: OrderedDict[
@@ -373,6 +376,7 @@ class LiveMapWidgets:
         weather: WeatherPanelPresentation | None = None,
         ft8_status: str | None = None,
         ft8_remote_status: str | None = None,
+        timing: UiTiming | None = None,
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
@@ -387,9 +391,12 @@ class LiveMapWidgets:
         elif snapshot_changed:
             self._update_base(self._last_snapshot, snapshot, width, height)
 
+        self._flush_pending_base_tiles()
+
         if size_changed or snapshot_changed or pota_changed:
             self._draw_pota_markers(pota_snapshot, snapshot)
 
+        radar_started = timing.start() if timing is not None else 0.0
         if size_changed:
             self._draw_radar(radar_snapshot, snapshot)
         elif snapshot_changed or radar_changed:
@@ -399,6 +406,8 @@ class LiveMapWidgets:
                 snapshot,
             )
         self._flush_pending_radar_tiles()
+        if timing is not None:
+            timing.observe("radar", radar_started)
 
         self._last_snapshot = snapshot
         self._last_radar_snapshot = radar_snapshot
@@ -430,6 +439,7 @@ class LiveMapWidgets:
     ) -> None:
         canvas = self._canvas
         canvas.delete("map-base")
+        self._pending_base_tiles.clear()
         self._tile_items.clear()
         self._tile_item_kinds.clear()
         self._active_photos.clear()
@@ -488,8 +498,9 @@ class LiveMapWidgets:
         for key in plan.remove:
             self._remove_tile(key)
 
-        for key in plan.redraw:
-            self._upsert_tile(current_tiles[key])
+        pending_keys = {tile.placement.key for tile in self._pending_base_tiles}
+        redraw_keys = set(plan.redraw) | (pending_keys & current_tiles.keys())
+        self._pending_base_tiles = [current_tiles[key] for key in sorted(redraw_keys)]
 
         for key in plan.move:
             self._move_tile(current_tiles[key])
@@ -501,7 +512,13 @@ class LiveMapWidgets:
             )
 
     def _draw_tiles(self, snapshot: LiveMapSnapshot) -> None:
-        for tile in snapshot.tiles:
+        self._pending_base_tiles = list(snapshot.tiles)
+
+    def _flush_pending_base_tiles(self) -> None:
+        """Keep new base map image conversion bounded per UI refresh."""
+        batch = self._pending_base_tiles[:_BASE_TILE_REDRAW_PER_REFRESH]
+        del self._pending_base_tiles[:len(batch)]
+        for tile in batch:
             self._upsert_tile(tile)
 
     def _upsert_tile(self, tile: MapTileSnapshot) -> None:
