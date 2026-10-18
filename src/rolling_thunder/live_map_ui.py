@@ -386,12 +386,16 @@ class LiveMapWidgets:
         pota_changed = pota_snapshot is not self._last_pota_snapshot
         size_changed = size != self._last_size
 
-        if size_changed:
-            self._draw_base(snapshot, width, height)
-        elif snapshot_changed:
-            self._update_base(self._last_snapshot, snapshot, width, height)
-
-        self._flush_pending_base_tiles()
+        base_started = timing.start() if timing is not None else 0.0
+        try:
+            if size_changed:
+                self._draw_base(snapshot, width, height)
+            elif snapshot_changed:
+                self._update_base(self._last_snapshot, snapshot, width, height)
+            self._flush_pending_base_tiles()
+        finally:
+            if timing is not None:
+                timing.observe("base_map", base_started)
 
         if size_changed or snapshot_changed or pota_changed:
             self._draw_pota_markers(pota_snapshot, snapshot)
