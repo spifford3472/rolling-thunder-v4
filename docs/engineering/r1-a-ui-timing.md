@@ -25,3 +25,7 @@ When `RT_R1A_UI_TIMING=1`, logs also include `base_map` and `radar` duration met
 ### R1-B2a logging correction
 
 The `base_map` metric is explicitly observed around base-map snapshot work and the pending base-tile flush on every widget update (including unchanged snapshots). This repairs a missing timing hook from R1-B2. No scheduling, rendering, radio, or radar behavior is changed by this correction. Use the separate `base_map`, `radar`, `map` and `refresh` aggregates to select the next focused investigation, rather than attributing unrelated maxima to the same callback.
+
+## R1-C1 FT8 band presentation
+
+FT8 receive-band tuning continues on its established background worker and retains existing CAT/PTT authorization. While the tune status is TUNING, the dashboard band field shows `TUNING <target>`. Once the worker publishes a verified `ReceiveTuneOutcome`, the dashboard may show its verified frequency and band before the ordinary one-second radio-state polling snapshot catches up. Once polling confirms that frequency, the outcome is acknowledged and cannot overwrite subsequent independent radio changes. An unsuccessful tune never presents the requested band as confirmed. No polling cadence change or additional CAT query is introduced.
