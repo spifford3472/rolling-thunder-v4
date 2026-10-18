@@ -779,9 +779,16 @@ class LiveMapWidgets:
         current_tiles = _radar_snapshot_tiles_by_key(current)
         frame_token = current.frame.frame_token
 
-        # Replace any unrendered work from a prior snapshot; it is no longer valid.
+        # Preserve tiles that were queued but not yet drawn when a newer
+        # snapshot arrives for the same frame (e.g. a pan or map refresh).
+        pending_keys = {
+            tile.placement.key
+            for pending_token, tile in self._pending_radar_tiles
+            if pending_token == frame_token
+        }
+        redraw_keys = set(plan.redraw) | (pending_keys & current_tiles.keys())
         self._pending_radar_tiles = [
-            (frame_token, current_tiles[key]) for key in plan.redraw
+            (frame_token, current_tiles[key]) for key in sorted(redraw_keys)
         ]
         for key in plan.remove:
             self._remove_radar_tile(key)
