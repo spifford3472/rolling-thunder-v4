@@ -12,8 +12,7 @@ def test_disabled_collector_never_uses_clock():
     sample.end_refresh(0)
 
 
-def test_enabled_collector_is_bounded_and_reports_only_aggregates(caplog):
-    caplog.set_level("INFO")
+def test_enabled_collector_is_bounded_and_reports_only_aggregates(capsys):
     now = [0.0]
     timer = UiTiming(enabled=True, clock=lambda: now[0], report_every=2, capacity=2)
     for i in range(3):
@@ -31,8 +30,10 @@ def test_enabled_collector_is_bounded_and_reports_only_aggregates(caplog):
     assert len(timer._samples["controls"]) == 2
     assert len(timer._samples["map"]) == 2
     assert len(timer._samples["refresh_gap"]) == 2
-    assert "R1A_UI_TIMING" in caplog.text
-    assert "p95_ms" in caplog.text
+    output = capsys.readouterr()
+    assert "R1A_UI_TIMING" in output.err
+    assert "p95_ms" in output.err
+    assert output.out == ""
 
 
 def test_invalid_limits_rejected():
