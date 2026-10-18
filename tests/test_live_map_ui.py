@@ -518,3 +518,35 @@ def test_radar_clear_discards_pending_tiles() -> None:
     assert widgets._pending_radar_tiles == []
     assert widgets._radar_items == {}
     assert widgets._radar_active_photos == {}
+
+
+def test_base_tile_rendering_is_bounded_and_clears_on_viewport_rebuild() -> None:
+    widgets = LiveMapWidgets.__new__(LiveMapWidgets)
+    tiles = [object() for _ in range(7)]
+    widgets._pending_base_tiles = list(tiles)
+    rendered: list[object] = []
+    widgets._upsert_tile = rendered.append
+
+    widgets._flush_pending_base_tiles()
+    assert rendered == tiles[:2]
+    assert widgets._pending_base_tiles == tiles[2:]
+    for _ in range(3):
+        widgets._flush_pending_base_tiles()
+    assert rendered == tiles
+    assert widgets._pending_base_tiles == []
+
+    widgets._pending_base_tiles = list(tiles)
+    class Canvas:
+        def delete(self, _tag: str) -> None:
+            pass
+        def create_rectangle(self, *_args, **_kwargs) -> int:
+            return 1
+        def create_text(self, *_args, **_kwargs) -> int:
+            return 2
+    widgets._canvas = Canvas()
+    widgets._tile_items = {}
+    widgets._tile_item_kinds = {}
+    widgets._active_photos = {}
+    widgets._attribution_item = None
+    widgets._draw_base(None, 100, 100)
+    assert widgets._pending_base_tiles == []
