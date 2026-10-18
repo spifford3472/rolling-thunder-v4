@@ -479,3 +479,42 @@ def test_pota_markers_stay_visible_while_async_viewport_query_catches_up() -> No
     assert canvas.deleted == []
     assert canvas.coords_calls
     assert canvas.coords_calls[0][0] == 101
+
+
+def test_radar_tile_conversion_is_limited_per_refresh() -> None:
+    """A frame burst never constructs all radar images in one UI refresh."""
+    widgets = LiveMapWidgets.__new__(LiveMapWidgets)
+    tiles = [object() for _ in range(7)]
+    widgets._pending_radar_tiles = [("frame-a", tile) for tile in tiles]
+    rendered: list[tuple[str, object]] = []
+    widgets._upsert_radar_tile = lambda token, tile: rendered.append((token, tile))
+    widgets._raise_radar_layer = lambda: None
+    widgets._trim_radar_photo_cache = lambda token: None
+
+    widgets._flush_pending_radar_tiles()
+    assert rendered == [("frame-a", tiles[0]), ("frame-a", tiles[1])]
+    assert len(widgets._pending_radar_tiles) == 5
+
+    for _ in range(3):
+        widgets._flush_pending_radar_tiles()
+    assert rendered == [("frame-a", tile) for tile in tiles]
+    assert widgets._pending_radar_tiles == []
+
+
+def test_radar_clear_discards_pending_tiles() -> None:
+    """A changed or disabled viewport must not display queued stale tiles."""
+    class Canvas:
+        def delete(self, _tag: str) -> None:
+            return None
+
+    widgets = LiveMapWidgets.__new__(LiveMapWidgets)
+    widgets._canvas = Canvas()
+    widgets._pending_radar_tiles = [("old-frame", object())]
+    widgets._radar_items = {object(): 1}
+    widgets._radar_active_photos = {object(): object()}
+
+    widgets._clear_radar()
+
+    assert widgets._pending_radar_tiles == []
+    assert widgets._radar_items == {}
+    assert widgets._radar_active_photos == {}
