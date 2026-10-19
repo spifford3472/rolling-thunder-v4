@@ -9,6 +9,7 @@ def test_disabled_collector_never_uses_clock():
     sample = UiTiming(clock=forbidden)
     sample.begin_refresh()
     sample.observe("map", 0)
+    sample.checkpoint("pre_controls")
     sample.end_refresh(0)
 
 
@@ -42,3 +43,64 @@ def test_invalid_limits_rejected():
         UiTiming(enabled=True, capacity=0)
     with pytest.raises(ValueError):
         UiTiming(enabled=True, report_every=0)
+
+
+def test_slow_refresh_reports_correlated_bounded_phase_durations(capsys):
+    now = [0.0]
+    timer = UiTiming(
+        enabled=True,
+        clock=lambda: now[0],
+        report_every=99,
+        slow_refresh_threshold_ms=100,
+    )
+
+    started = timer.begin_refresh()
+    for name, elapsed in (
+        ("pre_controls", 0.005),
+        ("controls", 0.020),
+        ("map_prepare", 0.015),
+        ("map_update", 0.040),
+        ("presentation", 0.030),
+    ):
+        now[0] += elapsed
+        timer.checkpoint(name)
+    now[0] += 0.040
+    timer.end_refresh(started)
+
+    lines = capsys.readouterr().err.splitlines()
+    event = next(line for line in lines if line.startswith("R1C2_SLOW_REFRESH "))
+    assert "id=1" in event
+    assert "duration_ms=150.00" in event
+    assert "pre_controls_ms=5.00" in event
+    assert "controls_ms=20.00" in event
+    assert "map_prepare_ms=15.00" in event
+    assert "map_update_ms=40.00" in event
+    assert "presentation_ms=30.00" in event
+    assert "context_widgets_ms=40.00" in event
+    assert len(timer._samples["refresh"]) == 1
+
+
+def test_slow_refresh_output_is_rate_limited(capsys):
+    now = [0.0]
+    timer = UiTiming(
+        enabled=True,
+        clock=lambda: now[0],
+        report_every=99,
+        slow_refresh_threshold_ms=100,
+        slow_report_interval_s=1.0,
+    )
+    for _ in range(2):
+        started = timer.begin_refresh()
+        now[0] += 0.150
+        timer.end_refresh(started)
+
+    assert capsys.readouterr().err.count("R1C2_SLOW_REFRESH") == 1
+
+
+def test_invalid_slow_refresh_limits_rejected():
+    import pytest
+
+    with pytest.raises(ValueError):
+        UiTiming(slow_refresh_threshold_ms=0)
+    with pytest.raises(ValueError):
+        UiTiming(slow_report_interval_s=0)

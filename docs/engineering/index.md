@@ -8,7 +8,7 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
-- `r1-a-ui-timing.md` — opt-in bounded UI performance tracing, safe integrated-replay validation and limits.
+- `r1-a-ui-timing.md` — bounded UI timing aggregates, R1-C2 correlated slow-refresh diagnostics, validation and interpretation limits.
 
 - `antenna-reference-rf-exposure.md` — manually maintained typed-YAML antenna,
   installation, mode and scenario authority; versioned FCC MPE plane-wave advisory
