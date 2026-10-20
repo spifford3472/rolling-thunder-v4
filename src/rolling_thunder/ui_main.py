@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from time import monotonic
@@ -27,6 +31,8 @@ from rolling_thunder.callsign_capture import (
 from rolling_thunder.callsign_info_ui import (
     CallsignInfoOverlayWidgets,
     build_callsign_info_presentation,
+    build_local_callsign_info_presentation,
+    callsign_info_failure_status,
 )
 from rolling_thunder.config import ConfigurationError, load_config
 from rolling_thunder.contact_commit_controller import ContactCommitController
@@ -52,8 +58,9 @@ from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.ft8.band_presentation import present_ft8_band_tune
 from rolling_thunder.ft8.distance import format_maidenhead_distance
-from rolling_thunder.ft8.panel import FT8PanelMode
+from rolling_thunder.ft8.panel import FT8PanelMode, FT8PanelSnapshot
 from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+from rolling_thunder.ft8.start_control import FT8QsoStartState, FT8QsoStartStatus
 from rolling_thunder.ft8.status import operator_ft8_status, target_activity_status
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import (
@@ -148,6 +155,65 @@ _POTA_VISIBLE_CARD_COUNT = 3
 _POTA_WORKED_BACKGROUND = "#b9ddf5"
 _POTA_WORKED_FOREGROUND = "#0b1f33"
 _CONTEXT_HEADER_FONT = ("DejaVu Sans", 48, "bold")
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class _CallsignInfoTarget:
+    callsign: str | None
+    grid: str | None = None
+
+
+def _callsign_info_target(
+    context: ContextId,
+    *,
+    pending_callsign: str | None,
+    ft8_snapshot: FT8PanelSnapshot | None = None,
+    selected_ft8_callsign: str | None = None,
+    ft8_start_status: FT8QsoStartStatus | None = None,
+) -> _CallsignInfoTarget:
+    """Resolve only the callsign currently owned by the visible lifecycle."""
+    if context is not ContextId.FT8:
+        return _CallsignInfoTarget(pending_callsign)
+    if ft8_snapshot is None or ft8_snapshot.mode is FT8PanelMode.TERMINAL:
+        return _CallsignInfoTarget(None)
+    if ft8_snapshot.mode is FT8PanelMode.ACTIVE:
+        active = ft8_snapshot.active_context
+        if active is None:
+            return _CallsignInfoTarget(None)
+        return _CallsignInfoTarget(active.remote_callsign, active.remote_grid)
+    if (
+        ft8_start_status is not None
+        and ft8_start_status.state is FT8QsoStartState.PREPARING
+    ):
+        candidate = ft8_start_status.activity or ft8_start_status.incoming_call
+        if candidate is not None:
+            return _CallsignInfoTarget(candidate.callsign, candidate.grid)
+    if selected_ft8_callsign is None:
+        return _CallsignInfoTarget(None)
+    matches = tuple(
+        activity
+        for activity in ft8_snapshot.cq_activity
+        if activity.callsign == selected_ft8_callsign
+    )
+    if len(matches) != 1:
+        return _CallsignInfoTarget(None)
+    return _CallsignInfoTarget(matches[0].callsign, matches[0].grid)
+
+
+@contextmanager
+def _callsign_info_presentation_boundary(
+    hide: Callable[[], None],
+) -> Iterator[None]:
+    """Isolate the optional overlay from dashboard and radio workflows."""
+    try:
+        yield
+    except Exception:
+        _LOGGER.exception("Callsign-info overlay presentation failed")
+        try:
+            hide()
+        except Exception:
+            _LOGGER.exception("Callsign-info overlay cleanup failed")
 
 
 def _indicator_color(value: str) -> str:
@@ -1456,39 +1522,23 @@ def run_dashboard(
 
         pota_latitude: float | None = None
         pota_longitude: float | None = None
-        callsign_info_callsign = pending_callsign or None
-        callsign_info_target_grid: str | None = None
+        callsign_info_target = _callsign_info_target(
+            context_navigation.state.selected,
+            pending_callsign=pending_callsign or None,
+        )
 
         if (
             context_navigation.state.selected is ContextId.FT8
             and runtime.ft8_panel is not None
         ):
             ft8_panel_snapshot = runtime.ft8_panel.snapshot()
-            if ft8_panel_snapshot.active_context is not None:
-                callsign_info_callsign = ft8_panel_snapshot.active_context.remote_callsign
-                callsign_info_target_grid = ft8_panel_snapshot.active_context.remote_grid
-            else:
-                start_status = runtime.latest_ft8_qso_start_status
-                if start_status is not None and start_status.activity is not None:
-                    callsign_info_callsign = start_status.activity.callsign
-                    callsign_info_target_grid = start_status.activity.grid
-                else:
-                    selected_ft8_callsign = runtime.ft8_panel.selected_callsign
-                    if selected_ft8_callsign is not None:
-                        selected_activity = next(
-                            (
-                                activity
-                                for activity in ft8_panel_snapshot.cq_activity
-                                if activity.callsign == selected_ft8_callsign
-                            ),
-                            None,
-                        )
-                        callsign_info_callsign = selected_ft8_callsign
-                        callsign_info_target_grid = (
-                            None if selected_activity is None else selected_activity.grid
-                        )
-                    else:
-                        callsign_info_callsign = None
+            callsign_info_target = _callsign_info_target(
+                ContextId.FT8,
+                pending_callsign=pending_callsign or None,
+                ft8_snapshot=ft8_panel_snapshot,
+                selected_ft8_callsign=runtime.ft8_panel.selected_callsign,
+                ft8_start_status=runtime.latest_ft8_qso_start_status,
+            )
 
         selected_spot = shared_spot_panel.selected_spot
         if (
@@ -1503,37 +1553,60 @@ def run_dashboard(
             pota_longitude = selected_spot.pota.longitude
 
         if runtime.callsign_info is not None:
-            runtime.callsign_info.observe_callsign(
-                callsign_info_callsign,
-                pota_latitude=pota_latitude,
-                pota_longitude=pota_longitude,
-            )
-            callsign_info_state = runtime.callsign_info.state
-            if callsign_info_state.response is not None:
-                callsign_presentation = build_callsign_info_presentation(
-                    callsign_info_state.response,
-                    friends=friends,
-                    pota_latitude=callsign_info_state.target_latitude,
-                    pota_longitude=callsign_info_state.target_longitude,
-                    target_grid=callsign_info_target_grid,
+            with _callsign_info_presentation_boundary(callsign_info_widgets.hide):
+                runtime.callsign_info.observe_callsign(
+                    callsign_info_target.callsign,
+                    pota_latitude=pota_latitude,
+                    pota_longitude=pota_longitude,
                 )
+                callsign_info_state = runtime.callsign_info.state
+                if callsign_info_state.response is not None:
+                    callsign_presentation = build_callsign_info_presentation(
+                        callsign_info_state.response,
+                        friends=friends,
+                        pota_latitude=callsign_info_state.target_latitude,
+                        pota_longitude=callsign_info_state.target_longitude,
+                        target_grid=callsign_info_target.grid,
+                    )
+                elif (
+                    callsign_info_state.presentation_active
+                    and callsign_info_state.callsign is not None
+                ):
+                    failure_status = callsign_info_failure_status(
+                        callsign_info_state.failure,
+                        network_status=connectivity.network,
+                    )
+                    callsign_presentation = build_local_callsign_info_presentation(
+                        callsign_info_state.callsign,
+                        friends=friends,
+                        target_grid=callsign_info_target.grid,
+                        service_status=failure_status or "LOOKING UP LOCATION",
+                        service_status_error=failure_status is not None,
+                    )
+                else:
+                    callsign_presentation = None
+
                 callsign_map_snapshot = None
-                if runtime.callsign_map is not None and callsign_presentation.target is not None:
-                    runtime.callsign_map.set_zoom(callsign_presentation.map_zoom)
-                    info_map_width, info_map_height = callsign_info_widgets.map_size
-                    if info_map_width >= 64 and info_map_height >= 64:
-                        runtime.callsign_map.request_viewport(
-                            callsign_presentation.target,
-                            width_px=info_map_width,
-                            height_px=info_map_height,
-                        )
-                    callsign_map_snapshot = runtime.callsign_map.latest_state
-                callsign_info_widgets.show(
-                    callsign_presentation,
-                    callsign_map_snapshot,
-                )
-            else:
-                callsign_info_widgets.hide()
+                if callsign_presentation is not None:
+                    if (
+                        runtime.callsign_map is not None
+                        and callsign_presentation.target is not None
+                    ):
+                        runtime.callsign_map.set_zoom(callsign_presentation.map_zoom)
+                        info_map_width, info_map_height = callsign_info_widgets.map_size
+                        if info_map_width >= 64 and info_map_height >= 64:
+                            runtime.callsign_map.request_viewport(
+                                callsign_presentation.target,
+                                width_px=info_map_width,
+                                height_px=info_map_height,
+                            )
+                        callsign_map_snapshot = runtime.callsign_map.latest_state
+                    callsign_info_widgets.show(
+                        callsign_presentation,
+                        callsign_map_snapshot,
+                    )
+                else:
+                    callsign_info_widgets.hide()
         else:
             callsign_info_widgets.hide()
 

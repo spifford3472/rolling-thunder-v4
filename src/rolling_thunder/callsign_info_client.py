@@ -8,12 +8,16 @@ from urllib.parse import urlencode, urlparse
 
 from pydantic import ValidationError
 
-from rolling_thunder.callsign_info import CallsignInfoResponse
+from rolling_thunder.callsign_info import CallsignInfoFailure, CallsignInfoResponse
 from rolling_thunder.http_home_platform import HttpTransport, UrllibHttpTransport
 
 
 class CallsignInfoClientError(OSError):
-    """Raised when the remote callsign-info response is unavailable or invalid."""
+    """Raised with a non-sensitive category when callsign info is unavailable."""
+
+    def __init__(self, failure: CallsignInfoFailure) -> None:
+        super().__init__(failure.value)
+        self.failure = failure
 
 
 class HttpCallsignInfoClient:
@@ -68,25 +72,31 @@ class HttpCallsignInfoClient:
                 timeout_s=self._timeout_s,
             )
         except (TimeoutError, URLError, OSError) as error:
-            raise CallsignInfoClientError("Callsign-info service could not be reached.") from error
-
-        if not 200 <= response.status_code < 300:
             raise CallsignInfoClientError(
-                f"Callsign-info service returned HTTP {response.status_code}."
+                CallsignInfoFailure.FORGE_UNREACHABLE
+            ) from error
+
+        if response.status_code >= 500:
+            raise CallsignInfoClientError(
+                CallsignInfoFailure.FORGE_UNREACHABLE
             )
+        if not 200 <= response.status_code < 300:
+            raise CallsignInfoClientError(CallsignInfoFailure.SERVICE_UNAVAILABLE)
         if len(response.body) > self._max_response_bytes:
-            raise CallsignInfoClientError("Callsign-info response exceeded the configured limit.")
+            raise CallsignInfoClientError(CallsignInfoFailure.SERVICE_UNAVAILABLE)
 
         try:
             raw = loads(response.body.decode("utf-8"))
         except (UnicodeDecodeError, JSONDecodeError) as error:
-            raise CallsignInfoClientError("Callsign-info service returned invalid JSON.") from error
+            raise CallsignInfoClientError(
+                CallsignInfoFailure.SERVICE_UNAVAILABLE
+            ) from error
         try:
             result = CallsignInfoResponse.model_validate(raw)
         except ValidationError as error:
             raise CallsignInfoClientError(
-                "Callsign-info response did not match the expected schema."
+                CallsignInfoFailure.SERVICE_UNAVAILABLE
             ) from error
         if result.callsign.strip().upper() != normalized:
-            raise CallsignInfoClientError("Callsign-info response returned a different callsign.")
+            raise CallsignInfoClientError(CallsignInfoFailure.SERVICE_UNAVAILABLE)
         return result

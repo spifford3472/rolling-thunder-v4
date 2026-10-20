@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field
 
 from rolling_thunder.domain import ContactWeatherObservation, DomainModel
+
+
+class CallsignInfoFailure(StrEnum):
+    """Safe Pi lookup-failure categories published to presentation code."""
+
+    FORGE_UNREACHABLE = "forge_unreachable"
+    SERVICE_UNAVAILABLE = "service_unavailable"
 
 
 class CallsignInfoProfile(DomainModel):

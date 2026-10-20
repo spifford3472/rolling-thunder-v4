@@ -111,9 +111,9 @@ originates from one screen.
 - `src/rolling_thunder/callsign_capture.py` — Module providing callsign capture behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/callsign_country.py` — Module providing callsign country behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/callsign_info.py` — Provider-neutral callsign/contact-intelligence models.
-- `src/rolling_thunder/callsign_info_client.py` — Pi HTTP client for Forge callsign-intelligence API.
-- `src/rolling_thunder/callsign_info_service.py` — Background pending-callsign lookup lifecycle and stale-response rejection.
-- `src/rolling_thunder/callsign_info_ui.py` — Shared pure presentation and Tk overlay for contact intelligence.
+- `src/rolling_thunder/callsign_info_client.py` — Pi HTTP client for the Forge callsign-intelligence API with bounded transport and safe failure categories.
+- `src/rolling_thunder/callsign_info_service.py` — Background relevant-callsign lookup lifecycle, bounded presentation, and stale-response rejection.
+- `src/rolling_thunder/callsign_info_ui.py` — Shared local-first/enriched pure presentation and Tk overlay for contact intelligence.
 - `src/rolling_thunder/live_callsign_capture.py` — Module providing live callsign capture behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/phonetic_callsign.py` — Module providing phonetic callsign behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/qrz_profile_image.py` — Module providing qrz profile image behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.

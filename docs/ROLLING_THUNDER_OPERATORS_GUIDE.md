@@ -915,15 +915,26 @@ not presented as an exact station pin.
 
 ## Lifecycle
 
-The overlay follows the shared pending callsign. Callsign replacement, Commit,
-Discard, timeout, or disabling the feature invalidates the current overlay.
+The overlay follows the shared pending callsign or the currently relevant FT8
+station. On FT8 it appears promptly for a selected CQ, live preparation, or active
+QSO using the locally decoded grid when valid; the map marks that point as an
+approximate FT8 grid center. Missing or malformed grids never create a pin. Forge
+identity, history, and weather fill in asynchronously when available.
+
+Callsign replacement, Commit, Discard, FT8 abort/completion/terminal state,
+selection dismissal/expiry, timeout, or disabling the feature invalidates the
+current overlay. A late result for an earlier station is not shown.
 
 `LOCAL` means the contacted target's time, including daylight-saving rules. If Forge
 cannot establish that timezone reliably, the field is left blank rather than showing
 the vehicle/operator timezone.
 
-If Forge/QRZ/Wavelog/weather is unavailable, contact logging and radio operation
-continue; an enrichment failure is not a Commit failure.
+If enrichment fails, the overlay retains local context and shows one large status:
+`NETWORK UNAVAILABLE` only when Rolling Thunder already knows the network is down;
+`FORGE SERVICE NOT RESPONDING` when the network is known available but Forge fails;
+otherwise `LOCATION SERVICE UNAVAILABLE`. Rolling Thunder performs no extra network
+probe for this label and does not display raw error details. Contact logging, FT8
+decoding/timing, radio operation, and Commit continue independently.
 
 ---
 

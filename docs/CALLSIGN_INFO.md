@@ -9,7 +9,17 @@ The callsign-information overlay answers four operator questions without replaci
 3. What is the current weather there?
 4. Have I worked them before?
 
-The overlay is optional, appears over the lower-right portion of the live map only after a complete useful lookup has loaded, uses deliberately oversized in-car typography, and never participates in durable contact Commit. The compact layout uses a map across the top, a protected-width weather column beside contact identity details, and a full-width two-line contact-history strip across the bottom. The weather column keeps a minimum readable width; long callsign/name/address text wraps on the identity side instead of shrinking weather. Only the map row expands vertically, preventing unused black space from opening beneath the contact details.
+The overlay is optional, appears promptly over the lower-right portion of the live
+map from the locally available callsign and valid FT8 grid, uses deliberately
+oversized in-car typography, and never participates in durable contact Commit.
+Forge identity, history, and weather replace the local-only pending presentation
+asynchronously if they arrive while that target is still relevant. The compact
+layout uses a map across the top, a protected-width weather column beside contact
+identity details, and a full-width two-line contact-history strip across the
+bottom. The weather column keeps a minimum readable width; long
+callsign/name/address text wraps on the identity side instead of shrinking
+weather. Only the map row expands vertically, preventing unused black space from
+opening beneath the contact details.
 
 ## Architecture
 
@@ -52,7 +62,7 @@ The POTA coordinate override affects target weather and map presentation. QRZ id
 
 The Pi owns:
 
-- pending-callsign observation
+- pending-callsign and current FT8-target observation
 - one background lookup per pending callsign
 - generation-based stale-response rejection
 - the 120-second maximum overlay lifetime
@@ -100,6 +110,12 @@ For the current contact:
 3. QRZ coordinates whose source is only a state or DXCC center may center a country/region map, but do not receive a station pin or target weather.
 4. Grid-center fallback is explicitly labeled approximate.
 5. Missing coordinates never invent a pin.
+
+For FT8, a valid grid from the current selected CQ, live preparation, or active
+QSO may provide that approximate grid-center presentation before Forge responds.
+Terminal QSO state, abort, selection dismissal/expiry, and non-live preparation
+status immediately invalidate that FT8 target. A malformed or missing local grid
+still permits callsign/status presentation but never creates a location or pin.
 
 The profile may still display textual information when no reliable coordinate exists.
 
@@ -171,7 +187,7 @@ Mutable Wavelog history is intentionally short-lived.
 
 ## Overlay lifecycle and stale responses
 
-Each pending callsign increments a generation.
+Each observed relevant callsign increments a generation.
 
 A response is accepted only if:
 
@@ -180,7 +196,11 @@ A response is accepted only if:
 - the feature is still enabled,
 - the service has not stopped.
 
-Commit, discard, callsign replacement, timeout, and feature disable invalidate presentation state. Cancelling the underlying HTTP future is only an optimization; correctness does not depend on cancellation.
+Commit, discard, callsign replacement, FT8 terminal/abort/dismissal transitions,
+timeout, and feature disable invalidate presentation state. Cancelling the
+underlying HTTP future is only an optimization; correctness does not depend on
+cancellation. Only `PREPARING` FT8 start status is a live pre-QSO target; stale
+`STARTED`, `FAILED`, or restored status cannot resurrect an overlay.
 
 A failed or timed-out lookup is not repeatedly retried while the same callsign remains pending.
 
@@ -206,10 +226,19 @@ Turning the setting OFF immediately invalidates/hides an active overlay and prev
 If Forge, WireGuard, cellular service, QRZ, Wavelog, or the weather provider is unavailable:
 
 - no modal dialog appears,
-- no large error overlay appears,
+- the optional overlay retains locally known callsign/grid context,
+- a large high-contrast status says `NETWORK UNAVAILABLE` only when the already-
+  published network state proves the network is down,
+- it says `FORGE SERVICE NOT RESPONDING` only when that state proves the network
+  is available and the Forge request failed,
+- all other lookup failures say `LOCATION SERVICE UNAVAILABLE`,
 - radio/map controls continue,
 - durable local logging continues,
 - provider failure never enters the Commit path.
+
+Failure classification performs no additional connectivity probe and never shows
+raw exception text. The HTTP request remains bounded and runs only on the existing
+background lookup executor.
 
 ## Privacy and data-source limitations
 
