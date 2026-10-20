@@ -127,6 +127,8 @@ Depends on:
 - shared local contact persistence;
 - shared QRZ enrichment eligibility and background contact synchronization;
 - dashboard context/control infrastructure;
+- shared optional callsign-info overlay for the current selected, preparing, or
+  active remote station;
 - global status presentation where used.
 
 The typed FT-891 adapter owns menu 11-05 encoding/readback. Existing FT8

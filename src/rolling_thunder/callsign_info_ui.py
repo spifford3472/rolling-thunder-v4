@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from rolling_thunder.callsign_info import CallsignInfoResponse
+from rolling_thunder.callsign_info import CallsignInfoFailure, CallsignInfoResponse
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
 from rolling_thunder.live_map import GeoPoint
 from rolling_thunder.live_map_service import LiveMapSnapshot
@@ -42,6 +42,74 @@ class CallsignInfoPresentation:
     location_note: str | None
     map_zoom: int
     friend_marker: str = ""
+    service_status: str | None = None
+    service_status_error: bool = False
+
+
+def callsign_info_failure_status(
+    failure: CallsignInfoFailure | None,
+    *,
+    network_status: str,
+) -> str | None:
+    """Map published evidence to conservative operator-facing failure text."""
+    if failure is None:
+        return None
+    normalized_network = network_status.strip().upper()
+    if normalized_network == "OFFLINE":
+        return "NETWORK UNAVAILABLE"
+    if (
+        normalized_network == "ONLINE"
+        and failure is CallsignInfoFailure.FORGE_UNREACHABLE
+    ):
+        return "FORGE SERVICE NOT RESPONDING"
+    return "LOCATION SERVICE UNAVAILABLE"
+
+
+def build_local_callsign_info_presentation(
+    callsign: str,
+    *,
+    target_grid: str | None = None,
+    service_status: str = "LOOKING UP LOCATION",
+    service_status_error: bool = False,
+    friends: frozenset[str] = frozenset(),
+) -> CallsignInfoPresentation:
+    """Build an immediate local-only overlay without inventing enrichment."""
+    normalized = callsign.strip().upper()
+    if not normalized:
+        raise ValueError("Callsign must not be blank.")
+
+    target: GeoPoint | None = None
+    pin_visible = False
+    location_note: str | None = None
+    if target_grid:
+        try:
+            latitude, longitude = maidenhead_grid_center(target_grid)
+        except ValueError:
+            pass
+        else:
+            target = GeoPoint(latitude, longitude)
+            pin_visible = True
+            location_note = "APPROX FT8 GRID CENTER"
+
+    return CallsignInfoPresentation(
+        callsign=normalized,
+        name=None,
+        license_line=None,
+        identity_lines=(),
+        local_time_text="",
+        weather_temperature=None,
+        weather_condition=None,
+        weather_attribution=None,
+        history_heading="",
+        history_line=None,
+        target=target,
+        pin_visible=pin_visible,
+        location_note=location_note,
+        map_zoom=6 if target is not None else 5,
+        friend_marker=friend_marker(normalized, friends),
+        service_status=service_status,
+        service_status_error=service_status_error,
+    )
 
 
 def build_callsign_info_presentation(
@@ -378,8 +446,18 @@ class CallsignInfoOverlayWidgets:
         self._weather_condition.set(presentation.weather_condition or "")
         self._weather_attribution.set(presentation.weather_attribution or "")
         self._history_heading.set(presentation.history_heading)
+        if presentation.service_status is not None:
+            self._history_heading.set(presentation.service_status)
         self._history_label.configure(
-            fg=_FIRST if presentation.history_heading == "FIRST CONTACT" else _ACCENT
+            fg=(
+                "#ff5a5a"
+                if presentation.service_status_error
+                else _WEATHER
+                if presentation.service_status is not None
+                else _FIRST
+                if presentation.history_heading == "FIRST CONTACT"
+                else _ACCENT
+            )
         )
         self._history.set(presentation.history_line or "")
         self._draw_map(

@@ -14,8 +14,11 @@ but the lookup lifecycle, stale-response invalidation, presentation, timeout,
 and preference are shared.
 
 Changes must consider POTA, DX, Browse/pending-callsign flows, map-overlay
-placement, Settings enable/disable behavior, and Forge callsign-intelligence
-responses.
+placement, Settings enable/disable behavior, FT8 selected/preparing/active/terminal
+lifecycle, and Forge callsign-intelligence responses. Locally known callsign and
+valid FT8 grid state may render before enrichment; only current lifecycle ownership
+may accept the asynchronous result. Network failure wording uses already-published
+connectivity state and must not add a blocking probe or expose exception details.
 
 ## Antenna reference and RF exposure advisory
 

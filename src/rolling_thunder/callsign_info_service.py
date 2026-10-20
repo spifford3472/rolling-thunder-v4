@@ -9,7 +9,7 @@ from threading import Lock
 from time import monotonic
 from typing import Protocol
 
-from rolling_thunder.callsign_info import CallsignInfoResponse
+from rolling_thunder.callsign_info import CallsignInfoFailure, CallsignInfoResponse
 from rolling_thunder.callsign_info_client import CallsignInfoClientError
 
 MonotonicClock = Callable[[], float]
@@ -39,6 +39,8 @@ class CallsignInfoState:
     last_error: str | None = None
     target_latitude: float | None = None
     target_longitude: float | None = None
+    failure: CallsignInfoFailure | None = None
+    presentation_active: bool = False
 
 
 class CallsignInfoLookupService:
@@ -67,7 +69,10 @@ class CallsignInfoLookupService:
         self._loading = False
         self._response: CallsignInfoResponse | None = None
         self._shown_at: float | None = None
+        self._observed_at: float | None = None
+        self._presentation_active = False
         self._last_error: str | None = None
+        self._failure: CallsignInfoFailure | None = None
         self._target_latitude: float | None = None
         self._target_longitude: float | None = None
         self._future: Future[None] | None = None
@@ -77,15 +82,28 @@ class CallsignInfoLookupService:
     def state(self) -> CallsignInfoState:
         now = self._clock()
         with self._lock:
-            if (
+            response_expired = (
                 self._response is not None
                 and self._shown_at is not None
                 and now - self._shown_at >= self._overlay_timeout_s
-            ):
+            )
+            pending_expired = (
+                self._response is None
+                and self._observed_at is not None
+                and now - self._observed_at >= self._overlay_timeout_s
+            )
+            if self._presentation_active and (response_expired or pending_expired):
                 self._generation += 1
+                future = self._future
+                self._future = None
+                if future is not None:
+                    future.cancel()
                 self._response = None
                 self._shown_at = None
                 self._loading = False
+                self._last_error = None
+                self._failure = None
+                self._presentation_active = False
             return CallsignInfoState(
                 generation=self._generation,
                 enabled=self._enabled,
@@ -94,8 +112,10 @@ class CallsignInfoLookupService:
                 response=self._response,
                 shown_at_monotonic=self._shown_at,
                 last_error=self._last_error,
+                failure=self._failure,
                 target_latitude=self._target_latitude,
                 target_longitude=self._target_longitude,
+                presentation_active=self._presentation_active,
             )
 
     def set_enabled(self, enabled: bool) -> bool:
@@ -136,7 +156,10 @@ class CallsignInfoLookupService:
             self._loading = True
             self._response = None
             self._shown_at = None
+            self._observed_at = self._clock()
+            self._presentation_active = True
             self._last_error = None
+            self._failure = None
             self._target_latitude = pota_latitude
             self._target_longitude = pota_longitude
             executor = self._executor
@@ -188,13 +211,19 @@ class CallsignInfoLookupService:
                 pota_longitude=pota_longitude,
             )
         except (CallsignInfoClientError, OSError, ValueError) as error:
+            failure = (
+                error.failure
+                if isinstance(error, CallsignInfoClientError)
+                else CallsignInfoFailure.SERVICE_UNAVAILABLE
+            )
             with self._lock:
                 if generation != self._generation or callsign != self._callsign:
                     return
                 self._loading = False
                 self._response = None
                 self._shown_at = None
-                self._last_error = str(error)
+                self._last_error = failure.value
+                self._failure = failure
             return
 
         with self._lock:
@@ -209,6 +238,7 @@ class CallsignInfoLookupService:
             self._response = response
             self._shown_at = self._clock()
             self._last_error = None
+            self._failure = None
 
     def _invalidate_locked(self, *, clear_callsign: bool) -> None:
         self._generation += 1
@@ -219,7 +249,10 @@ class CallsignInfoLookupService:
         self._loading = False
         self._response = None
         self._shown_at = None
+        self._observed_at = None
+        self._presentation_active = False
         self._last_error = None
+        self._failure = None
         if clear_callsign:
             self._callsign = None
             self._target_latitude = None

@@ -4,7 +4,7 @@ This document prevents feature-scoped work from accidentally breaking shared beh
 
 | Shared component | Primary modules | Known consumers | Change risk |
 | --- | --- | --- | --- |
-| Callsign/contact-info overlay | `callsign_info*.py`, `callsign_info_ui.py` | POTA-selected contacts, DX-selected contacts, Browse/pending callsign workflow, dashboard overlay lifecycle | High: visual or lifecycle changes can affect multiple operating modes |
+| Callsign/contact-info overlay | `callsign_info*.py`, `callsign_info_ui.py` | POTA-selected contacts, DX-selected contacts, Browse/pending callsign workflow, FT8 selected/preparing/active targets, dashboard overlay lifecycle | High: visual or lifecycle changes can affect multiple operating modes |
 | Pending callsign capture | `callsign_capture.py`, `live_callsign_capture.py` | Browse, selected spot workflows, contact commit, callsign info | High: stale/replacement semantics affect logging and overlays |
 | Local contact logging | `contact_logging.py`, `contact_commit_controller.py`, repositories | Browse, POTA/DX contacts, FT8 logging, DMR logging, LOG screen, remote sync | Critical: local-first durability invariant |
 | Current GPS/grid | `gps*.py`, `serial_gps.py`, `maidenhead.py` | Map, logging, FT8 QSO context, repeater distance, Forge location publication, weather applicability | Critical: a QSO must capture the intended current grid at the correct lifecycle point |
@@ -46,7 +46,10 @@ If a change alters a shared component's inputs, outputs, state transitions, pers
 
 ### Callsign information
 
-The overlay is not owned by POTA. POTA may supply a higher-confidence current operating location, but the overlay lifecycle and presentation are shared.
+The overlay is not owned by POTA or FT8. POTA may supply a higher-confidence
+current operating location, and FT8 may supply a current approximate grid center,
+but lookup lifecycle, failure presentation, preference, and stale-result rejection
+remain shared.
 
 ### Logging
 

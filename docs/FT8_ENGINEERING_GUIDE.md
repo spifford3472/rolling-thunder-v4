@@ -34,6 +34,22 @@ The native FT8 subsystem is built around three separate concerns:
 
 Keeping these separate prevents decoded non-CQ traffic or historical attempt data from manufacturing a station that never called CQ.
 
+## Optional callsign-information overlay
+
+The shared callsign-information overlay may observe the exact currently selected
+CQ, `PREPARING` candidate, or active frozen QSO context. A locally decoded valid
+remote grid renders immediately as an explicitly approximate grid center while
+Forge enrichment remains on the existing bounded background executor. The overlay
+is presentation-only: it does not alter CQ activity, authorization, decoding,
+timing, CAT/PTT, contact state, logging, or delivery.
+
+Terminal QSO mode wins over a retained active context, and stale start states such
+as `STARTED`, `FAILED`, or restored are not lookup targets. Clearing/expiring a
+selection, aborting, completing, acknowledging, leaving FT8, or disabling the
+operator preference invalidates the lookup generation so late results cannot
+appear. Popup rendering failure is isolated at the optional dashboard presentation
+boundary.
+
 ## CQ Eligibility State
 
 `FT8CQActivityManager` is authoritative for browser membership.
