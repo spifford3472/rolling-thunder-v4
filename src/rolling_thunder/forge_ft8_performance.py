@@ -17,7 +17,7 @@ from rolling_thunder.ft8.performance import (
 )
 
 Clock = Callable[[], datetime]
-_FORGE_FT8_SCHEMA_VERSION = 3
+_FORGE_FT8_SCHEMA_VERSION = 4
 
 
 def _utc_now() -> datetime:
@@ -104,6 +104,8 @@ class ForgeFT8PerformanceRepository:
                         sent_report_db,
                         received_report_db,
                         local_grid,
+                        local_latitude,
+                        local_longitude,
                         remote_grid,
                         distance_km,
                         audio_frequency_hz,
@@ -140,6 +142,8 @@ class ForgeFT8PerformanceRepository:
                         :sent_report_db,
                         :received_report_db,
                         :local_grid,
+                        :local_latitude,
+                        :local_longitude,
                         :remote_grid,
                         :distance_km,
                         :audio_frequency_hz,
@@ -181,6 +185,8 @@ class ForgeFT8PerformanceRepository:
                         "sent_report_db": attempt.sent_report_db,
                         "received_report_db": attempt.received_report_db,
                         "local_grid": attempt.local_grid,
+                        "local_latitude": attempt.local_latitude,
+                        "local_longitude": attempt.local_longitude,
                         "remote_grid": attempt.remote_grid,
                         "distance_km": attempt.distance_km,
                         "audio_frequency_hz": attempt.audio_frequency_hz,
@@ -374,6 +380,23 @@ class ForgeFT8PerformanceRepository:
                 connection.execute("""
                     UPDATE forge_ft8_performance_schema
                     SET schema_version = 3, updated_at = CURRENT_TIMESTAMP
+                    WHERE singleton_id = 1
+                """)
+
+            if current_version < 4:
+                connection.execute("""
+                    ALTER TABLE ft8_performance_attempts
+                    ADD COLUMN local_latitude REAL
+                    CHECK(local_latitude IS NULL OR local_latitude BETWEEN -90 AND 90)
+                """)
+                connection.execute("""
+                    ALTER TABLE ft8_performance_attempts
+                    ADD COLUMN local_longitude REAL
+                    CHECK(local_longitude IS NULL OR local_longitude BETWEEN -180 AND 180)
+                """)
+                connection.execute("""
+                    UPDATE forge_ft8_performance_schema
+                    SET schema_version = 4, updated_at = CURRENT_TIMESTAMP
                     WHERE singleton_id = 1
                 """)
 

@@ -114,9 +114,14 @@ payload hash.
 The same private process can expose the presentation-neutral FT8 performance
 endpoint. Its additive API accepts old payloads without configured-power
 readbacks and new payloads with nullable `tx_power_start_watts`,
-`tx_power_end_watts`, and `tx_power_max_watts`. Forge's dedicated FT8 SQLite
-schema migrates v1 to v2 without rebuilding or discarding attempts; legacy
-payload hashes remain valid for idempotent replay.
+`tx_power_end_watts`, and `tx_power_max_watts`, plus paired nullable frozen
+`local_latitude` and `local_longitude`. Forge's dedicated FT8 SQLite schema
+migrates transactionally through v1 configured base fields, v2 configured-power
+readbacks, v3 busy-extension counts, and v4 coordinates without rebuilding or
+discarding attempts. Historical coordinate columns remain null; payload hashes are
+not rewritten, and the existing v1/v2/v3 hash shapes remain valid for idempotent
+replay. This endpoint writes only performance telemetry and never calls Wavelog or
+contact synchronization.
 
 Contact sync performs no weather-provider work. It uploads the immutable contact it
 receives; existing structured weather is retained, while requested notes render

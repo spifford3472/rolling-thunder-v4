@@ -173,6 +173,11 @@ its leased worker records append-only full-input-hash VOACAP inputs/runs/links a
 read-only diagnostics. This path has no contact, Wavelog, ranking, UI, radio, or
 transmit authority.
 
+The older Forge performance projection uses its own additive schema: v2 configured
+power, v3 busy-extension count, and v4 paired frozen local coordinates. Its UUID
+hash/replay contract remains independent of the contact-sync ledger, and ingesting
+or retrying performance telemetry has no Wavelog, CAT, PTT, or RF authority.
+
 Phase C1 adds Forge-owned analytics provenance beside, not inside, the immutable
 attempt payload. Documented synthetic/test UUIDs are auditable processing and
 training exclusions. Unknown provenance preserves Phase B processing compatibility
