@@ -145,6 +145,11 @@ retained for API compatibility. Nullable `tx_power_start_watts`,
 power readback; they are distinct from the raw RF power meter. End readback is
 best-effort in terminal/receive handling and can never change the QSO result.
 Old Pi payloads remain valid, and Forge schema v1 migrates additively to v2.
+Forge performance schema v3 retains `busy_extension_attempts`; schema v4 adds the
+paired nullable frozen `local_latitude` and `local_longitude` already present in
+the typed payload. Upgrades proceed v1 -> v2 -> v3 -> v4 transactionally, leave
+historical coordinates null, and preserve legacy payload hashes for exact replay.
+Performance ingestion remains separate from contacts and cannot write Wavelog.
 
 For a completed QSO, the same terminal configured-power read is captured on the
 immutable Contact for Wavelog `TX_PWR`. A failed read leaves it null and never changes

@@ -67,6 +67,8 @@ def _attempt(
         band="20m",
         dial_frequency_hz=14_074_000,
         local_grid="EM79xm",
+        local_latitude=39.25,
+        local_longitude=-84.55,
         remote_grid="FN31pr",
         distance_km=1000.0,
         audio_frequency_hz=1500,

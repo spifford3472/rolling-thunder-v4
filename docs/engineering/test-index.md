@@ -190,8 +190,11 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_ft8_contact_sync.py` — composed dashboard completion notification
   and shared Pi/Forge/Wavelog Mobile path, including optional QRZ and replay.
 
-- `tests/test_forge_ft8_performance.py` — structured configured-power fields, legacy replay, and additive Forge schema migration.
-- `tests/test_forge_ft8_performance_api.py`
+- `tests/test_forge_ft8_performance.py` — structured configured-power/coordinate
+  fields, current and legacy replay/conflict behavior, and additive Forge schema-1
+  and schema-3 migration to schema 4 with row/integrity preservation.
+- `tests/test_forge_ft8_performance_api.py` — authenticated-shape endpoint behavior,
+  UUID conflicts, coordinate ingestion, and zero Wavelog calls.
 - `tests/test_forge_ft8_attempt_api.py` — authentication-before-ingestion,
   idempotent acceptance, disabled ingestion and read-only diagnostics.
 - `tests/test_forge_ft8_attempt_correlation.py` — replay conflicts,

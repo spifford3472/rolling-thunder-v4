@@ -11,6 +11,9 @@ from rolling_thunder.forge_ft8_performance import (
     ForgeFT8PerformanceConflictError,
     ForgeFT8PerformanceRepository,
     ForgeFT8PerformanceService,
+    _legacy_payload_sha256,
+    _pre_phase_b_payload_sha256,
+    _previous_payload_sha256,
 )
 from rolling_thunder.ft8.performance import (
     FT8AttemptOutcome,
@@ -19,6 +22,7 @@ from rolling_thunder.ft8.performance import (
 )
 
 _DEFAULT_ATTEMPT_ID = UUID("00000000-0000-0000-0000-000000000301")
+
 
 def _attempt(
     *,
@@ -50,6 +54,8 @@ def _attempt(
         sent_report_db=-10,
         received_report_db=-8 if success else None,
         local_grid="EM79xm",
+        local_latitude=39.25,
+        local_longitude=-84.55,
         remote_grid="FN31pr",
         distance_km=1000.0,
         audio_frequency_hz=1500,
@@ -78,7 +84,7 @@ def test_forge_schema_creation_preserves_existing_database_data(tmp_path: Path) 
             WHERE singleton_id = 1
             """
         ).fetchone()
-    assert version == (3,)
+    assert version == (4,)
 
 def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None:
     repository = ForgeFT8PerformanceRepository(tmp_path / "forge.db")
@@ -102,6 +108,8 @@ def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None
     assert row["swr_meter_raw"] == 2
     assert row["alc_meter_raw"] == 3
     assert row["local_grid"] == "EM79xm"
+    assert row["local_latitude"] == pytest.approx(39.25)
+    assert row["local_longitude"] == pytest.approx(-84.55)
     assert row["remote_grid"] == "FN31pr"
     assert row["distance_km"] == pytest.approx(1000.0)
     assert row["voacap_probability"] is None
@@ -109,7 +117,7 @@ def test_structured_attempt_persists_all_analysis_fields(tmp_path: Path) -> None
     assert row["voacap_path"] is None
 
 
-def test_v1_schema_migrates_power_columns_without_losing_attempts(tmp_path: Path) -> None:
+def test_v1_schema_migrates_through_v4_without_losing_attempts(tmp_path: Path) -> None:
     database = tmp_path / "forge.db"
     repository = ForgeFT8PerformanceRepository(database)
     attempt = _attempt()
@@ -127,7 +135,19 @@ def test_v1_schema_migrates_power_columns_without_losing_attempts(tmp_path: Path
         connection.execute(
             "ALTER TABLE ft8_performance_attempts DROP COLUMN tx_power_max_watts"
         )
-        connection.execute("ALTER TABLE ft8_performance_attempts DROP COLUMN busy_extension_attempts")
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN busy_extension_attempts"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN local_latitude"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN local_longitude"
+        )
+        connection.execute(
+            "UPDATE ft8_performance_attempts SET payload_sha256=? WHERE attempt_id=?",
+            (_legacy_payload_sha256(attempt), str(attempt.attempt_id)),
+        )
         connection.commit()
 
     migrated = ForgeFT8PerformanceRepository(database)
@@ -138,6 +158,16 @@ def test_v1_schema_migrates_power_columns_without_losing_attempts(tmp_path: Path
     assert row["tx_power_start_watts"] is None
     assert row["tx_power_end_watts"] is None
     assert row["tx_power_max_watts"] is None
+    assert row["busy_extension_attempts"] == 0
+    assert row["local_latitude"] is None
+    assert row["local_longitude"] is None
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT schema_version FROM forge_ft8_performance_schema"
+        ).fetchone() == (4,)
+    assert migrated.persist(attempt) is FT8PerformanceUploadDisposition.ALREADY_EXISTS
+    with pytest.raises(ForgeFT8PerformanceConflictError):
+        migrated.persist(attempt.model_copy(update={"callsign": "W9XYZ"}))
 
 
 def test_preparation_failure_persists_with_unknown_radio_context(
@@ -186,6 +216,10 @@ def test_identical_replay_is_idempotent_and_changed_payload_conflicts(
     with pytest.raises(ForgeFT8PerformanceConflictError):
         repository.persist(_attempt(callsign="K2XYZ"))
 
+    with pytest.raises(ForgeFT8PerformanceConflictError):
+        repository.persist(attempt.model_copy(update={"local_latitude": 39.26}))
+
+
 def test_service_returns_typed_utc_acknowledgement(tmp_path: Path) -> None:
     now = datetime(2026, 10, 2, 20, 5, tzinfo=UTC)
     service = ForgeFT8PerformanceService(
@@ -199,23 +233,97 @@ def test_service_returns_typed_utc_acknowledgement(tmp_path: Path) -> None:
     assert result.received_at_utc == now
 
 
-def test_cp31_busy_extension_persists_and_v2_migration_preserves_history(tmp_path: Path) -> None:
-    from rolling_thunder.forge_ft8_performance import _previous_payload_sha256
-
+def test_cp31_busy_extension_persists_and_v2_migration_preserves_history(
+    tmp_path: Path,
+) -> None:
     database = tmp_path / "forge.db"
     repository = ForgeFT8PerformanceRepository(database)
     old_attempt = _attempt()
     repository.persist(old_attempt)
     with sqlite3.connect(database) as connection:
         connection.execute("UPDATE forge_ft8_performance_schema SET schema_version = 2")
-        connection.execute("ALTER TABLE ft8_performance_attempts DROP COLUMN busy_extension_attempts")
-        connection.execute("UPDATE ft8_performance_attempts SET payload_sha256=? WHERE attempt_id=?",
-                           (_previous_payload_sha256(old_attempt), str(old_attempt.attempt_id)))
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN busy_extension_attempts"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN local_latitude"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN local_longitude"
+        )
+        connection.execute(
+            "UPDATE ft8_performance_attempts SET payload_sha256=? WHERE attempt_id=?",
+            (_previous_payload_sha256(old_attempt), str(old_attempt.attempt_id)),
+        )
         connection.commit()
 
     repository = ForgeFT8PerformanceRepository(database)
-    assert repository.get_row(str(old_attempt.attempt_id))["busy_extension_attempts"] == 0
+    row = repository.get_row(str(old_attempt.attempt_id))
+    assert row is not None
+    assert row["busy_extension_attempts"] == 0
+    assert row["local_latitude"] is None
+    assert row["local_longitude"] is None
     assert repository.persist(old_attempt) is FT8PerformanceUploadDisposition.ALREADY_EXISTS
-    new_attempt = old_attempt.model_copy(update={"attempt_id": UUID("00000000-0000-0000-0000-000000009999"), "busy_extension_attempts": 2})
+    new_attempt = old_attempt.model_copy(
+        update={
+            "attempt_id": UUID("00000000-0000-0000-0000-000000009999"),
+            "busy_extension_attempts": 2,
+        }
+    )
     assert repository.persist(new_attempt) is FT8PerformanceUploadDisposition.ACCEPTED
-    assert repository.get_row(str(new_attempt.attempt_id))["busy_extension_attempts"] == 2
+    new_row = repository.get_row(str(new_attempt.attempt_id))
+    assert new_row is not None
+    assert new_row["busy_extension_attempts"] == 2
+
+
+def test_v3_schema_adds_coordinates_and_preserves_186_legacy_rows_and_hash_replay(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "forge.db"
+    repository = ForgeFT8PerformanceRepository(database)
+    attempts = [
+        _attempt(
+            attempt_id=UUID(f"00000000-0000-0000-0000-{index:012d}"),
+        )
+        for index in range(1, 187)
+    ]
+    for attempt in attempts:
+        repository.persist(attempt)
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE forge_ft8_performance_schema SET schema_version = 3"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN local_latitude"
+        )
+        connection.execute(
+            "ALTER TABLE ft8_performance_attempts DROP COLUMN local_longitude"
+        )
+        for attempt in attempts:
+            connection.execute(
+                "UPDATE ft8_performance_attempts SET payload_sha256=? WHERE attempt_id=?",
+                (_pre_phase_b_payload_sha256(attempt), str(attempt.attempt_id)),
+            )
+        connection.commit()
+
+    migrated = ForgeFT8PerformanceRepository(database)
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT schema_version FROM forge_ft8_performance_schema"
+        ).fetchone() == (4,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM ft8_performance_attempts"
+        ).fetchone() == (186,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM ft8_performance_attempts "
+            "WHERE local_latitude IS NULL AND local_longitude IS NULL"
+        ).fetchone() == (186,)
+        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+
+    assert (
+        migrated.persist(attempts[0])
+        is FT8PerformanceUploadDisposition.ALREADY_EXISTS
+    )
+    with pytest.raises(ForgeFT8PerformanceConflictError):
+        migrated.persist(attempts[0].model_copy(update={"callsign": "W9XYZ"}))

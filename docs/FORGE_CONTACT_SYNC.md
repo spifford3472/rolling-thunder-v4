@@ -319,6 +319,69 @@ Confirm the next FT8 QSO captures fresh current GPS grid. A Pi-only callback
 change does not require replacing Forge code/configuration or restarting the
 spot/weather service.
 
+### Development-only FT8 performance schema-4 recovery
+
+FT8 performance telemetry is not QSO contact synchronization. `POST
+/ft8-performance` writes only `ft8_performance_attempts`; it does not resolve a
+station, claim `forge_contact_sync_ledger`, or call Wavelog. Retrying telemetry must
+not be implemented by replaying contacts, relogging QSOs, changing Pi contact state,
+or posting directly to Wavelog.
+
+The recovery schema advances transactionally through the historical versions:
+
+1. schema 1 creates the original performance table;
+2. schema 2 adds nullable configured-power start/end/max columns;
+3. schema 3 adds `busy_extension_attempts` with historical value zero; and
+4. schema 4 adds checked nullable `local_latitude` and `local_longitude` columns.
+
+Schema 4 does not rebuild the table, backfill coordinates, or recompute stored
+payload hashes. New coordinate-bearing attempts retain both values. Existing rows
+remain null in the new columns, while current and pre-coordinate hash forms continue
+to support the established exact-replay decision. The newer `choice_at_utc` value is
+owned by the Phase-B attempt ledger and is not added to this legacy query projection.
+
+Before any separately approved production installation, record the exact installed
+SHA/package and service timestamps, then take a SQLite-consistent backup of the
+shared Forge contact-sync database using the approved deployment workflow. A raw
+copy of a running WAL database is not an acceptable backup. Restore that backup to a
+non-production path and run the migration there first. Compare pre/post counts and
+stable identity/hash projections for all existing tables, including the expected
+performance-attempt, contact-ledger, and station-binding counts; run `quick_check`,
+`integrity_check`, and `foreign_key_check`; verify schema version 4 and both new
+columns; and confirm all historical coordinate values remain null. Keep the backup,
+installed SHA, candidate SHA, configuration identity, and verification output as the
+rollback record.
+
+Because an older schema-3 binary rejects schema 4 as newer, package-only downgrade is
+not a working rollback. If validation fails before any new durable activity, stop
+only the contact-sync component through the approved wrapper and restore the matched
+pre-migration package plus SQLite-consistent backup. If any contact, binding, or
+telemetry state changed after migration, restoring the whole shared database could
+lose durable state; preserve it and use a reviewed forward fix instead. Never delete
+the performance table or reset the schema marker as rollback.
+
+Production evidence reconciliation is read-only until deployment is separately
+approved. Capture Pi outbox counts by synchronization state and error class, the
+oldest/newest creation times, retry counts/next-attempt times, and the Forge
+performance UUID/count/hash set. After an approved cutover, allow only the ordinary
+background telemetry scheduler to retry; do not post/replay contacts or QSOs. Verify
+that each acknowledged attempt moves to synchronized, Forge gains at most one row
+per previously absent attempt UUID, pre-existing Forge rows and hashes remain
+unchanged, contact-ledger and station-binding counts remain unchanged, database
+checks remain clean, and Wavelog receives zero QSO writes. Reconcile the final Pi
+synchronized UUID set against Forge attempt UUIDs rather than comparing only totals.
+
+An older failed row is always eligible once its capped retry time is due, while a
+pending row is always eligible. `list_ready` orders the union by creation time and
+then applies the configured batch limit. Therefore a set of older, repeatedly due
+HTTP-422 rows larger than one batch can occupy every pass and starve newer pending
+rows. High capped retry counts plus newer untouched pending rows are consistent with
+that mechanism. This is the likely explanation for the observed pending backlog,
+but it is not proven without read-only Pi configuration, row timestamps,
+`next_attempt_at`, scheduler lifecycle, and logs. The recovery does not change retry
+ordering; once the blocking 422 condition is corrected, bounded passes should drain
+the older rows and then reach the pending rows.
+
 ## LOG panel
 
 LOG is a normal dashboard context in the existing context-navigation cycle. It does not redefine Back, encoder movement, Context Button #2, tertiary actions, or unrelated global controls.

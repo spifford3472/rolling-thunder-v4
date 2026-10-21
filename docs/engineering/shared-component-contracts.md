@@ -376,6 +376,13 @@ zero extensions, and exact replay of legacy payloads is still idempotent.
 Additional target-busy attempts must remain distinguishable from reachability
 failures in any future model training or analytic aggregate.
 
+Forge performance schema version 4 additively stores paired nullable frozen local
+latitude/longitude already carried by the typed attempt. Schema-1 and schema-3
+databases must migrate forward without rebuilding rows, backfilling coordinates, or
+rewriting payload hashes. Exact current and legacy replay remains idempotent;
+changed current payloads still conflict. This telemetry path is not a contact
+receipt and must never invoke Wavelog, CAT/PTT, or RF behavior.
+
 ## FT8 attempt analytics provenance
 
 The immutable attempt payload, canonical SHA-256 and UUID replay decision are not
