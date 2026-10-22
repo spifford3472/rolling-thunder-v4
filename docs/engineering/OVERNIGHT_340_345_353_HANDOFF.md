@@ -1,5 +1,32 @@
 # Overnight mission handoff — issues 340, 345 and 353
 
+## 2026-10-22 reviewed resumption checkpoint
+
+- Resumption authority: complete issue #340 comments `6337074884` and
+  `6330482816`, read end-to-end.
+- Active mechanism: owner-launched transient Forge user unit
+  `rt-codex-resume-20261022.service`, working directory
+  `/home/geoff/projects/rolling-thunder-resume-20261022-0510`, automatic approval
+  review, workspace-write, command networking, `Restart=no`, six-hour hard cap.
+- GitHub `main` and clean resumption source remain
+  `d7a3b574dc53d213764eff341ad77ae976df57e1`.
+- Required STARTED comment was posted as issue comment `6337112912`.
+- #340 current service/timer and C6 release metadata were rechecked read-only;
+  Pi source SHA and fresh protected backup integrity remain blocked. See
+  `production-baseline-and-recovery.md` for the exact minimum helper output.
+- #345 Pi timing journal access remains denied to the restricted account. No
+  CAT/PTT/RF action, Pi restart, speculative fix or production change occurred.
+- Existing draft PR #356 was independently reviewed. Snapshot and exact identity
+  gaps were corrected at `2a85f85d8fb08f51960262b53a3d037e2fe6d417`.
+  Local gates: Ruff pass, strict MyPy pass for 341 source files, 66 focused C6
+  tests pass, full pytest 3,394 passed / 7 skipped, diff check pass. New-head CI
+  remains pending at this checkpoint; protected C6 database/backup/deployment
+  acceptance remains blocked.
+- Runner infrastructure documentation was updated and pushed at
+  `77b3e31dc8fabee1c1e09b632e8e87f631d3a990`; draft infrastructure PR #2 is open.
+- No merge, deployment, provider request, database mutation, service restart,
+  privilege change, unsafe Pi operation or RF occurred.
+
 Mission authority: complete GitHub issue #340 comment `6330482816` (34,250
 characters), including the 2026-10-21 launch addendum and original mission.
 This file is a resumable checkpoint; the GitHub comment remains the complete
