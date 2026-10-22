@@ -311,6 +311,9 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_live_map_runtime.py`
 - `tests/test_live_map_service.py`
 - `tests/test_live_map_ui.py`
+- `tests/test_issue_345_ui_blocking_reproduction.py` — deterministic,
+  hardware-free event/barrier proof that synchronous Tk image materialization
+  retains the map-refresh caller until completion; diagnostic only.
 - `tests/test_live_map_zoom.py`
 - `tests/test_live_radar_service.py`
 - `tests/test_forge_map_route.py`
