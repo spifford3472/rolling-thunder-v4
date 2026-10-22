@@ -235,7 +235,10 @@ When a snapshot or filtered view is replaced:
 - no neighboring identity becomes selected automatically
 
 Rotating the encoder or otherwise changing the row selection also clears any
-staged action.
+staged action. In the dashboard station-popup lifecycle, an accepted POTA/DX row
+move also suppresses callsign-info presentation; highlighting subsequent rows does
+not perform lookup work. This presentation effect does not preload a callsign or
+create a receive action.
 
 ## Exact Receive Actions
 
@@ -266,6 +269,11 @@ single activation
 
 If there is no current selection, the tuning boundary is unavailable, or a tune
 is already active, activation is rejected without creating confirmation state.
+
+Only an accepted single activation rearms the shared callsign-info popup, including
+the same station after navigation dismissal. Rejected activation does not rearm and
+does not preload a callsign. Accepted band-filter changes dismiss the popup while
+leaving provider-specific filtering and staged-action invalidation unchanged.
 
 ## Radio-State Gate
 

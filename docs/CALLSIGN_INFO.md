@@ -63,6 +63,7 @@ The POTA coordinate override affects target weather and map presentation. QRZ id
 The Pi owns:
 
 - pending-callsign and current FT8-target observation
+- explicit station-selection presentation rearm and durable navigation dismissal
 - one background lookup per pending callsign
 - generation-based stale-response rejection
 - the 120-second maximum overlay lifetime
@@ -187,7 +188,7 @@ Mutable Wavelog history is intentionally short-lived.
 
 ## Overlay lifecycle and stale responses
 
-Each observed relevant callsign increments a generation.
+Each explicitly armed, observed relevant callsign increments a generation.
 
 A response is accepted only if:
 
@@ -201,6 +202,23 @@ timeout, and feature disable invalidate presentation state. Cancelling the
 underlying HTTP future is only an optimization; correctness does not depend on
 cancellation. Only `PREPARING` FT8 start status is a live pre-QSO target; stale
 `STARTED`, `FAILED`, or restored status cannot resurrect an overlay.
+
+For the POTA, DX, and FT8 station browsers, an encoder/keyboard browse command
+dismisses the overlay even when a one-row/edge/active state cannot move the
+highlight, and suppresses further popup observation. The
+suppression survives timer refresh, a newly highlighted callsign, retained FT8
+active-target state, and late lookup completion. An accepted band change and
+leaving one of those station contexts apply the same dismissal. Periodic refresh
+does not start a lookup or request/render the contact mini-map while suppression
+is active.
+
+An accepted explicit station activation rearms the lifecycle before the next
+refresh, including selection of the same callsign after dismissal, lookup failure,
+or the one-shot timeout. Rearm does not authorize or perform tuning or transmit:
+the existing POTA/DX receive-tuning and FT8 one-QSO command must first accept the
+operator action. Rejected/blocked commands do not rearm or execute a fallback
+selection. Browse voice/manual pending-callsign behavior outside these station
+browsers is unchanged.
 
 A failed or timed-out lookup is not repeatedly retried while the same callsign remains pending.
 

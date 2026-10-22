@@ -11,6 +11,7 @@ from pathlib import Path
 from time import monotonic
 
 from rolling_thunder.active_panel_commands import (
+    CallsignInfoAwareActivePanelCommands,
     SharedSpotActivePanelCommandController,
 )
 from rolling_thunder.antenna_reference_commands import AntennaAwareActivePanelCommands
@@ -457,6 +458,8 @@ def run_dashboard(
         runtime.stop()
         return 3
     active_panel_commands: (
+        CallsignInfoAwareActivePanelCommands
+        |
         LogAwareActivePanelCommands
         | DmrAwareActivePanelCommands
         | FT8AwareActivePanelCommands
@@ -490,6 +493,12 @@ def run_dashboard(
             context_navigation,
             active_panel_commands,
             antenna_panel,
+        )
+    if runtime.callsign_info is not None:
+        active_panel_commands = CallsignInfoAwareActivePanelCommands(
+            context_navigation,
+            active_panel_commands,
+            runtime.callsign_info,
         )
 
     status_monitor = build_status_monitor(config)

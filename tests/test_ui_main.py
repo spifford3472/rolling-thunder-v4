@@ -1,9 +1,14 @@
 """Tests for pure full-screen dashboard presentation helpers."""
 
+from collections.abc import Callable
+from concurrent.futures import Executor, Future
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
+from rolling_thunder.callsign_info import CallsignInfoResponse
+from rolling_thunder.callsign_info_service import CallsignInfoLookupService
 from rolling_thunder.context_navigation import ContextId
 from rolling_thunder.ft8.domain import FT8CQActivity, FT8Period, FT8QsoState
 from rolling_thunder.ft8.panel import FT8PanelMode, FT8PanelSnapshot
@@ -176,3 +181,57 @@ def test_callsign_info_presentation_error_is_isolated_and_hidden() -> None:
         raise RuntimeError("private provider detail")
 
     assert hidden == [True]
+
+
+def test_dismissed_active_ft8_target_cannot_restart_popup_refresh_work() -> None:
+    class InlineExecutor(Executor):
+        def submit(
+            self,
+            fn: Callable[..., Any],
+            *args: object,
+            **kwargs: object,
+        ) -> Future[Any]:
+            future: Future[Any] = Future()
+            future.set_result(fn(*args, **kwargs))
+            return future
+
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def lookup(
+            self,
+            callsign: str,
+            *,
+            pota_latitude: float | None = None,
+            pota_longitude: float | None = None,
+        ) -> CallsignInfoResponse:
+            del pota_latitude, pota_longitude
+            self.calls.append(callsign)
+            return CallsignInfoResponse(callsign=callsign)
+
+    active_context = SimpleNamespace(remote_callsign="K2ABC", remote_grid="EM79xm")
+    active = FT8PanelSnapshot(
+        mode=FT8PanelMode.ACTIVE,
+        cq_activity=(),
+        qso_state=FT8QsoState.WAIT_REPORT,
+        active_context=active_context,
+    )
+    target = _callsign_info_target(
+        ContextId.FT8,
+        pending_callsign=None,
+        ft8_snapshot=active,
+    )
+    client = RecordingClient()
+    service = CallsignInfoLookupService(client, executor=InlineExecutor())
+    assert service.observe_callsign(target.callsign) is True
+
+    service.dismiss_presentation()
+    for _refresh in range(3):
+        assert service.observe_callsign(target.callsign) is False
+
+    state = service.state
+    assert state.presentation_suppressed is True
+    assert state.presentation_active is False
+    assert state.response is None
+    assert client.calls == ["K2ABC"]

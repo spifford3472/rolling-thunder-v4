@@ -135,6 +135,11 @@ The typed FT-891 adapter owns menu 11-05 encoding/readback. Existing FT8
 receive/preparation services own REAR entry and MIC normal-context cleanup;
 UI contexts do not issue CAT writes.
 
+The shared callsign-info service, not FT8 selection state, owns popup suppression
+and generation invalidation. FT8 browse intent and accepted band changes dismiss;
+an accepted explicit CQ activation or incoming-call answer rearms without changing
+the existing one-QSO authorization or preparation boundary.
+
 The optional Forge PSK service boundary accepts only an authenticated confirmed event
 containing the immutable durable FT8 `Contact` and its matching successful terminal
 attempt, keyed by the shared stable UUID. It may use terminal time only to delay PSK
@@ -360,6 +365,11 @@ Pending callsign
   +--> shared callsign-info overlay
   +--> POTA/DX preload
   +--> Browse voice/manual capture
+
+Station-browser operator commands
+  +--> POTA/DX/FT8 browse intent or accepted band change suppresses popup presentation
+  +--> accepted explicit station action rearms popup presentation
+  +--> existing tuning/QSO authority remains independently decisive
 
 Forge spot service
   +--> POTA

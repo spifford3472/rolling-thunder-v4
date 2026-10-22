@@ -197,6 +197,101 @@ class WeatherAlertViewportCommands(Protocol):
         ...
 
 
+class CallsignInfoPresentationCommands(Protocol):
+    """Shared station-popup lifecycle reached only through operator intent."""
+
+    def dismiss_presentation(self) -> bool:
+        """Suppress presentation across background target observation."""
+
+    def rearm_presentation(self) -> bool:
+        """Permit a fresh lifecycle after explicit station selection."""
+
+
+class DelegatedActivePanelCommands(Protocol):
+    """Complete active-panel surface decorated by shared lifecycle wrappers."""
+
+    def activate_context(self, context_id: ContextId) -> None: ...
+    def primary(self) -> bool: ...
+    def secondary(self) -> bool: ...
+    def tertiary(self) -> bool: ...
+    def tertiary_long(self) -> bool: ...
+    def move_previous(self) -> bool: ...
+    def move_next(self) -> bool: ...
+    def activate_selection(self) -> bool: ...
+    def back(self) -> bool: ...
+    def synchronize_radio_state(self) -> bool: ...
+
+
+class CallsignInfoAwareActivePanelCommands:
+    """Apply shared popup lifecycle to accepted station-browser commands."""
+
+    _STATION_CONTEXTS = frozenset({ContextId.POTA, ContextId.DX, ContextId.FT8})
+
+    def __init__(
+        self,
+        context_navigation: ContextNavigationController,
+        delegate: DelegatedActivePanelCommands,
+        callsign_info: CallsignInfoPresentationCommands,
+    ) -> None:
+        self._context_navigation = context_navigation
+        self._delegate = delegate
+        self._callsign_info = callsign_info
+        self._last_context_id = context_navigation.state.selected
+
+    def activate_context(self, context_id: ContextId) -> None:
+        previous = self._last_context_id
+        self._delegate.activate_context(context_id)
+        self._last_context_id = context_id
+        if context_id is not previous and previous in self._STATION_CONTEXTS:
+            self._callsign_info.dismiss_presentation()
+
+    def primary(self) -> bool:
+        accepted = self._delegate.primary()
+        if accepted and self._station_context_is_active():
+            self._callsign_info.dismiss_presentation()
+        return accepted
+
+    def secondary(self) -> bool:
+        accepted = self._delegate.secondary()
+        if accepted and self._context_navigation.state.selected is ContextId.FT8:
+            # FT8 Button 2 is an explicit acceptance of the exact incoming station.
+            self._callsign_info.rearm_presentation()
+        return accepted
+
+    def tertiary(self) -> bool:
+        return self._delegate.tertiary()
+
+    def tertiary_long(self) -> bool:
+        return self._delegate.tertiary_long()
+
+    def move_previous(self) -> bool:
+        accepted = self._delegate.move_previous()
+        if self._station_context_is_active():
+            self._callsign_info.dismiss_presentation()
+        return accepted
+
+    def move_next(self) -> bool:
+        accepted = self._delegate.move_next()
+        if self._station_context_is_active():
+            self._callsign_info.dismiss_presentation()
+        return accepted
+
+    def activate_selection(self) -> bool:
+        accepted = self._delegate.activate_selection()
+        if accepted and self._station_context_is_active():
+            self._callsign_info.rearm_presentation()
+        return accepted
+
+    def back(self) -> bool:
+        return self._delegate.back()
+
+    def synchronize_radio_state(self) -> bool:
+        return self._delegate.synchronize_radio_state()
+
+    def _station_context_is_active(self) -> bool:
+        return self._context_navigation.state.selected in self._STATION_CONTEXTS
+
+
 class ActivePanelCommandController:
     """Route generic selection controls to the legacy active POTA panel."""
 
