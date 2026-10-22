@@ -316,3 +316,12 @@ The C6 acceptance checkpoint had 15 successful real provider calls and
 15 ready forecasts, with the original pilot evidence kept separately.
 The deployment's configuration, NOAA artifacts, plan, and database must be
 backed up and validated independently of a source release.
+
+Cycle JSON includes provider-free operational coverage health. It separately
+counts provider-stored and cache-reused ready slots, unavailable outcomes,
+pending/retry/processing work, skipped work, failed/missed work, missing
+expected slots, stale targets, unexpected identities, and the current UTC-day
+provider-call ledger. Per-day identity digests and bounded missing/unexpected
+samples bind totals to the immutable plan inventory. The same coherent SQLite
+read snapshot is available through the query-only `--health` CLI mode; this mode
+never schedules work or contacts NOAA/VOACAP.

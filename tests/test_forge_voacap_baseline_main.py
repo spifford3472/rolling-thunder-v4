@@ -10,6 +10,7 @@ from rolling_thunder.forge_solar_ssn import SmoothedSsnSnapshot
 from rolling_thunder.forge_voacap_baseline_main import (
     LocalVoacapProvider,
     SamplingRuntime,
+    read_operational_health,
     run_controlled_pilot,
     run_once,
 )
@@ -70,6 +71,71 @@ def test_disabled_provider_does_not_schedule_skipped_slots(tmp_path: Path) -> No
         "state": "disabled", "provider_calls": 0, "scheduled_slots": 0,
     }
     assert not config.database_path.exists()
+
+
+def test_read_operational_health_does_not_require_enabled_gates_or_provider(
+    tmp_path: Path,
+) -> None:
+    from rolling_thunder.forge_voacap_baseline import (
+        BaselinePlan,
+        BaselineRepository,
+        EnvironmentSnapshot,
+        TargetGrid,
+    )
+
+    now = datetime(2026, 10, 11, 23, 30, tzinfo=timezone(-timedelta(hours=4)))
+    tomorrow = (now.astimezone(UTC) + timedelta(days=1)).date()
+    plan = BaselinePlan(
+        plan_id=UUID("20000000-0000-4000-8000-000000000001"),
+        plan_version="health-v1",
+        created_at_utc=now,
+        origin_grid="EM79xm",
+        origin_uncertainty="fixed grid6",
+        target_inventory_version="test-v1",
+        targets=(TargetGrid(region_id="region", grid="EN80", uncertainty="grid4"),),
+        model_version="model-1",
+        service_version="0.3.0",
+        ssn_source="fixture",
+        ssn_source_version="fixture-v1",
+        ssn_value_semantics="monthly_smoothed_predicted_sunspot_number",
+        ssn_source_schema="fixture-schema-v1",
+        ssn_revision_policy="append-only fixture captures",
+    )
+    snapshot = _ssn_snapshot(now)
+    environment = EnvironmentSnapshot(
+        ssn=snapshot.value,
+        value_semantics="monthly_smoothed_predicted_sunspot_number",
+        target_month="2026-10",
+        source="fixture",
+        source_url="https://example.invalid/predicted.json",
+        source_version="fixture-v1",
+        source_schema="fixture-schema-v1",
+        source_revision_policy="append-only fixture captures",
+        source_record_id="2026-10:predicted_ssn",
+        captured_at_utc=now,
+        raw_sha256=snapshot.raw_sha256,
+        snapshot_canonical_sha256=snapshot.canonical_sha256,
+    )
+    database = tmp_path / "c4.sqlite"
+    repository = BaselineRepository(database)
+    repository.schedule_day(plan, tomorrow, environment, scheduled_at_utc=now)
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(plan.model_dump_json())
+    config = SamplingRuntime(
+        database_path=database,
+        plan_path=plan_path,
+        environment_path=tmp_path / "not-read-environment.json",
+        ssn_snapshot_path=tmp_path / "not-read-snapshot.json",
+    )
+    before = database.read_bytes()
+    result = read_operational_health(config, now=now)
+    health = result["operational_health"]
+    assert result["state"] == "health"
+    assert isinstance(health, dict)
+    assert health["coverage_state"] == "incomplete"
+    assert health["pending_slots"] == 28
+    assert health["forecast_days"] == ["2026-10-13"]
+    assert database.read_bytes() == before
 
 
 def test_reject_stale_ssn_without_creating_database(tmp_path: Path) -> None:

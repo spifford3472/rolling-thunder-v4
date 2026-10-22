@@ -192,8 +192,45 @@ def run_once(
         def now(self) -> datetime:
             return moment
     outcome = BaselineService(repo, provider, FixedClock()).run_cycle(plan, gates)
-    return {"state": outcome["state"], "provider_calls": outcome["provider_calls"],
-            "scheduled_slots": slots, "processed_slots": outcome["slots"]}
+    health = BaselineRepository.inspect_operational_health(
+        config.database_path,
+        plan,
+        generated_at_utc=moment,
+        forecast_days=days,
+    )
+    return {
+        "state": outcome["state"],
+        "provider_calls": outcome["provider_calls"],
+        "scheduled_slots": slots,
+        "processed_slots": outcome["slots"],
+        "operational_health": health,
+    }
+
+
+def read_operational_health(
+    config: SamplingRuntime,
+    *,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    """Read the next scheduled coverage window without provider or database writes."""
+    moment = now or datetime.now(UTC)
+    if moment.tzinfo is None:
+        raise ValueError("clock must be timezone aware")
+    moment = moment.astimezone(UTC)
+    plan = BaselinePlan.model_validate_json(config.plan_path.read_text())
+    days = [
+        (moment + timedelta(days=offset + 1)).date()
+        for offset in range(config.future_days_to_schedule)
+    ]
+    return {
+        "state": "health",
+        "operational_health": BaselineRepository.inspect_operational_health(
+            config.database_path,
+            plan,
+            generated_at_utc=moment,
+            forecast_days=days,
+        ),
+    }
 
 
 def run_controlled_pilot(
@@ -279,6 +316,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Forge C4 bounded one-shot sampler")
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--check-config", action="store_true")
+    parser.add_argument("--health", action="store_true")
     parser.add_argument("--controlled-pilot", action="store_true")
     parser.add_argument("--approval-phrase", default="")
     parser.add_argument("--backup-directory", type=Path)
@@ -288,6 +326,9 @@ def main() -> None:
         print(json.dumps({"state": "validated", "process_enabled": config.process_enabled,
                           "scheduler_enabled": config.scheduler_enabled,
                           "provider_enabled": config.provider_enabled}, sort_keys=True))
+        return
+    if args.health:
+        print(json.dumps(read_operational_health(config), sort_keys=True))
         return
     if args.controlled_pilot:
         if args.backup_directory is None:

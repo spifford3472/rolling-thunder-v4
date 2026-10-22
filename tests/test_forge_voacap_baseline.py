@@ -406,6 +406,132 @@ def test_diagnostics_are_read_only_deterministic_and_training_ineligible(tmp_pat
     assert repository.path.read_bytes() == before
 
 
+def test_operational_health_classifies_provider_storage_and_cache_reuse(tmp_path: Path) -> None:
+    repository, plan = _setup(tmp_path)
+    BaselineService(repository, FakeProvider(), FakeClock()).run_cycle(
+        plan, BaselineConfig(enabled=True, scheduler_enabled=True, provider_enabled=True)
+    )
+    before = repository.path.read_bytes()
+    health = BaselineRepository.inspect_operational_health(
+        repository.path,
+        plan,
+        generated_at_utc=NOW,
+        forecast_days=(DAY,),
+    )
+    assert health["coverage_state"] == "complete"
+    assert health["expected_slots"] == health["observed_slots"] == 28
+    assert health["ready_provider_slots"] == 7
+    assert health["ready_reused_slots"] == 21
+    assert health["provider_calls_today"] == 7
+    assert health["pending_slots"] == health["missing_slots"] == 0
+    assert health["unexpected_slots"] == health["ready_unclassified_slots"] == 0
+    assert health["stale_slots"] == 0
+    assert health["plan_sha256"] == plan.canonical_sha256
+    assert health["identity_coverage_by_day"] == [
+        {
+            "day": DAY.isoformat(),
+            "expected_slots": 28,
+            "observed_slots": 28,
+            "missing_slots": 0,
+            "expected_identity_sha256": health["identity_coverage_by_day"][0][
+                "expected_identity_sha256"
+            ],
+            "observed_identity_sha256": health["identity_coverage_by_day"][0][
+                "observed_identity_sha256"
+            ],
+            "missing_identity_sha256": health["identity_coverage_by_day"][0][
+                "missing_identity_sha256"
+            ],
+        }
+    ]
+    assert (
+        health["identity_coverage_by_day"][0]["expected_identity_sha256"]
+        == health["identity_coverage_by_day"][0]["observed_identity_sha256"]
+    )
+    assert repository.path.read_bytes() == before
+
+
+def test_operational_health_detects_incomplete_and_unavailable_coverage(tmp_path: Path) -> None:
+    repository, plan = _setup(tmp_path, max_provider_calls_per_cycle=1)
+    provider = FakeProvider(
+        [ProviderFailure("requested_hour_band_missing", retryable=False)]
+    )
+    BaselineService(repository, provider, FakeClock()).run_cycle(
+        plan, BaselineConfig(enabled=True, scheduler_enabled=True, provider_enabled=True)
+    )
+    health = BaselineRepository.inspect_operational_health(
+        repository.path,
+        plan,
+        generated_at_utc=NOW,
+        forecast_days=(DAY,),
+    )
+    assert health["coverage_state"] == "incomplete"
+    assert health["unavailable_slots"] == 1
+    assert health["pending_slots"] == 27
+    assert health["provider_contacted_slots"] == 1
+
+
+def test_operational_health_requires_existing_store_and_expected_day(tmp_path: Path) -> None:
+    plan = _plan()
+    with pytest.raises(ValueError, match="at least one forecast day"):
+        BaselineRepository.inspect_operational_health(
+            tmp_path / "missing.sqlite",
+            plan,
+            generated_at_utc=NOW,
+            forecast_days=(),
+        )
+    with pytest.raises(ValueError, match="existing baseline database"):
+        BaselineRepository.inspect_operational_health(
+            tmp_path / "missing.sqlite",
+            plan,
+            generated_at_utc=NOW,
+            forecast_days=(DAY,),
+        )
+
+
+def test_operational_health_detects_identity_drift_and_stale_slots(tmp_path: Path) -> None:
+    repository, plan = _setup(tmp_path)
+    with sqlite3.connect(repository.path) as db:
+        db.execute(
+            "UPDATE baseline_slot_v1 SET target_grid='FN31' "
+            "WHERE slot_key=(SELECT slot_key FROM baseline_slot_v1 LIMIT 1)"
+        )
+    health = BaselineRepository.inspect_operational_health(
+        repository.path,
+        plan,
+        generated_at_utc=datetime(2026, 10, 12, tzinfo=UTC),
+        forecast_days=(DAY,),
+    )
+    assert health["coverage_state"] == "failed"
+    assert health["expected_slots"] == 28
+    assert health["observed_slots"] == 27
+    assert health["missing_slots"] == health["unexpected_slots"] == 1
+    assert health["stale_slots"] == 27
+    assert health["missing_slot_sample"][0]["target_grid"] == "EL98"
+    assert health["unexpected_slot_sample"][0]["target_grid"] == "FN31"
+
+
+def test_operational_health_uses_durable_ready_evidence_not_reason_labels(
+    tmp_path: Path,
+) -> None:
+    repository, plan = _setup(tmp_path)
+    BaselineService(repository, FakeProvider(), FakeClock()).run_cycle(
+        plan, BaselineConfig(enabled=True, scheduler_enabled=True, provider_enabled=True)
+    )
+    with sqlite3.connect(repository.path) as db:
+        db.execute("UPDATE baseline_slot_v1 SET reason='legacy_ready_label' WHERE status='ready'")
+    health = BaselineRepository.inspect_operational_health(
+        repository.path,
+        plan,
+        generated_at_utc=NOW,
+        forecast_days=(DAY,),
+    )
+    assert health["coverage_state"] == "complete"
+    assert health["ready_provider_slots"] == 7
+    assert health["ready_reused_slots"] == 21
+    assert health["ready_unclassified_slots"] == 0
+
+
 def test_audit_identities_and_no_network_implementation_are_unchanged() -> None:
     assert str(AA4NP_ATTEMPT_UUID) == "938620bb-b4ff-40b2-9493-081b56bb038c"
     assert {str(item[0]) for item in DOCUMENTED_SYNTHETIC_ATTEMPTS} == {

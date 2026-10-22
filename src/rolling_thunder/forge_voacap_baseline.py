@@ -10,6 +10,7 @@ import hashlib
 import math
 import sqlite3
 import threading
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
@@ -557,6 +558,184 @@ class BaselineRepository:
                 "voacap_snr": "dB-Hz; not FT8 decoder dB",
                 "reference_power": "configured model input; not measured RF output",
             },
+        }
+
+    @staticmethod
+    def inspect_operational_health(
+        path: Path,
+        plan: BaselinePlan,
+        *,
+        generated_at_utc: datetime,
+        forecast_days: Sequence[date],
+    ) -> dict[str, Any]:
+        """Classify expected plan coverage without initializing or writing the store."""
+        generated = _utc(generated_at_utc)
+        days = tuple(dict.fromkeys(day.isoformat() for day in forecast_days))
+        if not days:
+            raise ValueError("operational health requires at least one forecast day")
+        if not path.is_file():
+            raise ValueError("operational health requires an existing baseline database")
+        placeholders = ",".join("?" for _ in days)
+        parameters = (str(plan.plan_id), *days)
+        expected_identities = {
+            (
+                _time(datetime(day.year, day.month, day.day, hour, tzinfo=UTC)),
+                target.region_id,
+                target.grid,
+                band,
+            )
+            for day in forecast_days
+            for target in plan.targets
+            for band in plan.bands_m
+            for hour in plan.hours_utc
+        }
+        uri = f"file:{path.resolve()}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as db:
+            db.execute("PRAGMA query_only=ON")
+            # Pin every identity/status/budget query to one coherent read snapshot.
+            db.execute("BEGIN")
+            registered_plan = db.execute(
+                "SELECT canonical_sha256 FROM baseline_plan_v1 WHERE plan_id=?",
+                (str(plan.plan_id),),
+            ).fetchone()
+            if registered_plan is None:
+                raise ValueError("operational health plan is not registered in the database")
+            if registered_plan[0] != plan.canonical_sha256:
+                raise ValueError("operational health plan artifact conflicts with database identity")
+            rows = db.execute(
+                f"""SELECT forecast_for_utc,region_id,target_grid,band_m,status,
+                COALESCE(reason,'unclassified'),provider_called,response_sha256
+                FROM baseline_slot_v1
+                WHERE plan_id=? AND substr(forecast_for_utc,1,10) IN ({placeholders})
+                ORDER BY forecast_for_utc,region_id,target_grid,band_m""",
+                parameters,
+            ).fetchall()
+            provider_calls_today = int(
+                db.execute(
+                    """SELECT COUNT(*) FROM baseline_activity_v1 WHERE plan_id=?
+                    AND occurred_at_utc LIKE ? AND action='provider_call'""",
+                    (str(plan.plan_id), f"{generated.date().isoformat()}%"),
+                ).fetchone()[0]
+            )
+        actual_identities = {
+            (str(row[0]), str(row[1]), str(row[2]), int(row[3])) for row in rows
+        }
+        observed_identities = actual_identities & expected_identities
+        missing_identities = expected_identities - actual_identities
+        unexpected_identities = actual_identities - expected_identities
+        valid_rows = [
+            row
+            for row in rows
+            if (str(row[0]), str(row[1]), str(row[2]), int(row[3]))
+            in expected_identities
+        ]
+        status_counts = dict(sorted(Counter(str(row[4]) for row in valid_rows).items()))
+        reason_counts = dict(sorted(Counter(str(row[5]) for row in valid_rows).items()))
+        expected_statuses = {status.value for status in BaselineStatus}
+        invalid_status_slots = sum(
+            count for status, count in status_counts.items() if status not in expected_statuses
+        )
+        observed_slots = len(observed_identities)
+        expected_slots = len(expected_identities)
+        missing_slots = len(missing_identities)
+        pending_slots = sum(
+            int(status_counts.get(status.value, 0))
+            for status in (BaselineStatus.PENDING, BaselineStatus.PROCESSING, BaselineStatus.RETRY)
+        )
+        failed_slots = sum(
+            int(status_counts.get(status.value, 0))
+            for status in (BaselineStatus.FAILED, BaselineStatus.MISSED)
+        )
+        skipped_slots = int(status_counts.get(BaselineStatus.SKIPPED.value, 0))
+        unavailable_slots = int(status_counts.get(BaselineStatus.UNAVAILABLE.value, 0))
+        ready_rows = [row for row in valid_rows if row[4] == BaselineStatus.READY.value]
+        ready_provider_slots = sum(bool(row[6]) for row in ready_rows)
+        ready_reused_slots = sum(not bool(row[6]) and row[7] is not None for row in ready_rows)
+        ready_unclassified_slots = len(ready_rows) - ready_provider_slots - ready_reused_slots
+        provider_contacted_slots = sum(bool(row[6]) for row in valid_rows)
+        stale_slots = sum(
+            datetime.fromisoformat(str(row[0])) <= generated for row in valid_rows
+        )
+        if (
+            failed_slots
+            or unexpected_identities
+            or invalid_status_slots
+            or ready_unclassified_slots
+        ):
+            coverage_state = "failed"
+        elif missing_slots or pending_slots or skipped_slots or stale_slots:
+            coverage_state = "incomplete"
+        elif unavailable_slots:
+            coverage_state = "complete_with_unavailable"
+        else:
+            coverage_state = "complete"
+        identity_coverage_by_day = []
+        for day in days:
+            expected_day = {item for item in expected_identities if item[0][:10] == day}
+            observed_day = expected_day & actual_identities
+            missing_day = expected_day - actual_identities
+            identity_coverage_by_day.append(
+                {
+                    "day": day,
+                    "expected_slots": len(expected_day),
+                    "observed_slots": len(observed_day),
+                    "missing_slots": len(missing_day),
+                    "expected_identity_sha256": _sha(sorted(expected_day)),
+                    "observed_identity_sha256": _sha(sorted(observed_day)),
+                    "missing_identity_sha256": _sha(sorted(missing_day)),
+                }
+            )
+
+        def identity_sample(
+            identities: set[tuple[str, str, str, int]],
+        ) -> list[dict[str, object]]:
+            return [
+                {
+                    "forecast_for_utc": item[0],
+                    "region_id": item[1],
+                    "target_grid": item[2],
+                    "band_m": item[3],
+                }
+                for item in sorted(identities)[:25]
+            ]
+
+        return {
+            "schema_version": 1,
+            "generated_at_utc": _time(generated),
+            "plan_id": str(plan.plan_id),
+            "plan_version": plan.plan_version,
+            "plan_sha256": plan.canonical_sha256,
+            "target_inventory_version": plan.target_inventory_version,
+            "model_version": plan.model_version,
+            "service_version": plan.service_version,
+            "forecast_days": list(days),
+            "coverage_state": coverage_state,
+            "expected_slots": expected_slots,
+            "observed_slots": observed_slots,
+            "missing_slots": missing_slots,
+            "unexpected_slots": len(unexpected_identities),
+            "invalid_status_slots": invalid_status_slots,
+            "identity_coverage_by_day": identity_coverage_by_day,
+            "missing_slot_sample": identity_sample(missing_identities),
+            "missing_slot_sample_truncated": len(missing_identities) > 25,
+            "unexpected_slot_sample": identity_sample(unexpected_identities),
+            "unexpected_slot_sample_truncated": len(unexpected_identities) > 25,
+            "pending_slots": pending_slots,
+            "ready_provider_slots": ready_provider_slots,
+            "ready_reused_slots": ready_reused_slots,
+            "ready_unclassified_slots": ready_unclassified_slots,
+            "unavailable_slots": unavailable_slots,
+            "skipped_slots": skipped_slots,
+            "failed_or_missed_slots": failed_slots,
+            "stale_slots": stale_slots,
+            "provider_contacted_slots": provider_contacted_slots,
+            "provider_calls_today": provider_calls_today,
+            "provider_call_limit_per_cycle": plan.max_provider_calls_per_cycle,
+            "provider_call_limit_today": plan.max_provider_calls_per_day,
+            "status_counts": status_counts,
+            "reason_counts": reason_counts,
+            "read_only": True,
+            "training_eligible": False,
         }
 
     def _initialize(self) -> None:
