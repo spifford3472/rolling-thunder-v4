@@ -162,3 +162,104 @@ The exact minimum authorized helper/read output still needed is:
    authorize a restart, permission change or unrelated repair.
 
 No production restart or deployment is needed solely to finish this inventory.
+
+## Additional owner-authorized evidence — 2026-10-22 10:17–10:20 EDT
+
+The owner explicitly authorized read-only use of the existing geoff connection
+on anvilmobile. This removed the Pi source-identity and journal-access limitation
+for this inspection; no identity was silently substituted and no permissions were
+changed.
+
+### Current Pi source and executable identity
+
+- Checkout HEAD: `1f2f7c5c739757bd2e5746aa10597b8b9440bf27`, independently
+  reconciled to GitHub merge PR #354 (FT8 popup offline lifecycle).
+- Detached HEAD, clean worktree (`git status --short --branch` showed only
+  `## HEAD (no branch)`).
+- The active service still has PID 335866 and start time Oct 20 18:30:05 EDT.
+  Its ExecStart is `/usr/bin/bash` with
+  `/home/geoff/projects/rolling-thunder-v4/deploy/rolling-thunder-autostart`.
+  WorkingDirectory and the process cwd both resolve to that checkout; executable
+  resolves to `/usr/bin/python3.13`.
+- This establishes the checkout/entrypoint association observed now; it does not
+  prove all loaded Python bytes equal today's on-disk bytes after any in-place
+  edit since process start. No service restart was performed to resolve that
+  separate deployment acceptance limitation.
+- Pi operator-use state has not been established. That remains a restart/deploy
+  gate, not a prerequisite for the read-only baseline inspection.
+
+### Fresh Pi backup independently rechecked
+
+Actual snapshot root is
+`/mnt/rolling-thunder-data/backups/rolling-thunder`, not
+`/var/backups/rolling-thunder`. The existing geoff-owned snapshot
+`20261022T053001Z` was read in place without writes.
+
+- Manifest method: SQLite online backup.
+- Database and both configuration assets match their recorded sizes and SHA-256.
+  Configuration contents were neither printed nor committed.
+- Independent query-only SQLite check: integrity `ok`; foreign-key violations 0.
+- The prior `20261016T053004Z` Pi snapshot manifest remains present.
+- Oct 22 10:05:51 EDT delivery journal reports this latest snapshot already
+  hash-verified on Forge.
+- Forge inbox archive SHA-256 was independently computed:
+  `3b5eab6f0dc7f9b2b45cf64d8a7df24c5abb444210c212c17cd47dfec32fdfc8`.
+  It matches the forwarding journal's Oct 22 01:40:06 EDT
+  `R02_ANVILVAULT_VERIFIED` record for the same archive.
+- The Oct 16 Pi archive also remains in Forge's inbox. This is not a fresh PBS
+  restore or an independent query of the destination; the destination hash
+  comparison is evidence from the reviewed forwarding job and its journal.
+
+### Fresh Forge backup evidence from reviewed root-owned job
+
+Read `/usr/local/sbin/rolling-thunder-r02-snapshot.py` and
+`rolling-thunder-r02-nightly.sh` without executing them. The snapshot uses
+SQLite online backup and checks backup integrity; the transfer compares local
+and destination archive hashes before promotion. These are stronger records than
+a successful systemd exit alone.
+
+Oct 22 02:00 EDT journal records show integrity PASS for all eleven declared
+SQLite assets (contact sync and contact snapshots; spots; callsigns; C4 and C6
+baselines; propagation history; QSO ingestion/history; PSK orchestration/history).
+It records completed snapshot `20261022T060001Z` and off-host verification with
+archive SHA-256
+`0b5ce569820c5fe6405be7f9f70fc0d909e289d133f4813f48fb56c83e9b841b`.
+
+The current account has not independently opened the protected Forge snapshot
+manifest or rerun its SQLite/foreign-key checks. Preserve that distinction:
+root-owned job evidence is verified in the journal; independent fresh Forge
+artifact validation remains an administrator-only read.
+
+### Current spots source and remaining direct-install provenance
+
+Read-only inspection of the existing spots editable checkout
+`/opt/rolling-thunder-forge` reports clean detached HEAD
+`28f798ada0f81e2638797f3a56ebc7c172bb4ea4`
+("Polish contact weather and FT8 status presentation"). The safe-directory option
+was scoped to that one read-only git invocation; no Git configuration was saved.
+
+Callsign-info and contact-sync installed metadata and deployment-state records
+are still protected. No immutable source mapping for those current direct
+installs has been verified. An inaccessible record is not proof that no record
+exists and must not be labelled an irreducible provenance gap yet.
+
+The next administrator-only read should return, for those two fixed installed
+roots: package name/version, VCS commit ID if direct_url metadata contains one,
+any exact installed release/deployment marker, and whether only a temporary
+build path is recorded (without returning credential-bearing URLs). If no
+immutable mapping exists, record that limitation with a bounded installed-source
+fingerprint and preservation/recovery disposition rather than invent a SHA.
+
+### Updated #340 gate disposition
+
+Pi checkout/entrypoint, fresh Pi snapshot integrity and transfer chain, and the
+current spots checkout have now been independently evidenced. Remaining checks
+are the two protected direct-install source/provenance records and, if required
+for the release decision, independent reads of fresh protected Forge backup
+artifacts. The documented Oct 16 isolated restore remains representative prior
+recovery evidence; no new full restore is claimed.
+
+#340 remains open until those remaining provenance/recovery limitations are
+explicitly dispositioned. This does not authorize a production change, database
+restore, broad privileged access or radio action. No running service, job,
+configuration, database, permission or infrastructure setting was modified.
