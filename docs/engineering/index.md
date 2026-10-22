@@ -9,6 +9,8 @@ This guide describes the implemented repository rather than an aspirational arch
 ## Engineering document set
 
 - `r1-a-ui-timing.md` — bounded UI timing aggregates, R1-C2 correlated slow-refresh diagnostics, validation and interpretation limits.
+- `production-baseline-and-recovery.md` — R0-01 host/service/data identity,
+  representative restore evidence, provenance limits, and fresh deployment gates.
 
 - `antenna-reference-rf-exposure.md` — manually maintained typed-YAML antenna,
   installation, mode and scenario authority; versioned FCC MPE plane-wave advisory
