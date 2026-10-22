@@ -1,7 +1,9 @@
 # Rolling Thunder v4 — Autonomous Execution Report
 
-Date: 2026-10-21 EDT  
-Mission authority: issue #340 comment `6330482816`  
+Date: 2026-10-21 EDT
+
+Mission authority: issue #340 comment `6330482816`
+
 Safety outcome: no RF, CAT/PTT exercise, production restart, provider request,
 database mutation, merge, or deployment.
 
