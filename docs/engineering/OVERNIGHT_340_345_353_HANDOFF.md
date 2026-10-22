@@ -51,18 +51,59 @@ creation was blocked; the remote branch is the durable checkpoint.
 ## Issue #345
 
 - Objective: FT8/CAT/UI/radar critical-path baseline and responsiveness.
-- Status: `PENDING after #340 checkpoint`.
+- Status: `IN_PROGRESS / production observation BLOCKED`.
 - Current source includes merged R1-A/R1-B/R1-C diagnostics and bounded
   map/radar rendering through PRs #347–#352.
-- Production timing evidence and safe replay acceptance remain to be evaluated.
+- Source/path review found no new evidence that justifies another CAT/PTT,
+  scheduler, radar, or UI behavior change. Forge radar fetching remains on its
+  worker; Tk image creation is bounded to two base-map and two radar tiles per
+  refresh; correlated slow-refresh reporting separates controls, map preparation,
+  map update, presentation, and context widgets; FT8 capture/decode/coordinator
+  remain independently bounded with fail-safe transmit release.
+- No-RF focused regression command covered UI timing/composition, map/radar,
+  slow/unavailable Forge client behavior, controls, FT8 timing/audio/receive/QSO
+  coordination/transmit safety/band presentation, and contact durability/sync:
+  **207 passed in 10.16 seconds**.
+- Production timing evidence (radar off/on, correlated slow-refresh lines, FT8
+  boundary lateness/drop counters, and physical-control response on the Pi) is
+  still unavailable through the approved restricted interface. Tests establish
+  functional isolation and safety, not real Pi p50/p95/p99/max performance.
+- Files modified: none for #345; no speculative change was made.
+- CI/PR/merge/deploy: none for #345.
+- Exact next action: collect a bounded current Pi diagnostic window through an
+  approved read-only interface and disposition remaining long-tail stalls from
+  correlated evidence. Do not restart the Pi or run RF.
 - No CAT/PTT authority or Pi deployment is authorized by this checkpoint.
 
 ## Issue #353
 
 - Objective: reliable, classified four-times-daily 15-region VOACAP collection.
-- Status: `PENDING after #345 investigation; production database gate BLOCKED`.
+- Status: `IN_PROGRESS / implementation complete; CI, PR and production gates BLOCKED`.
 - Protected production database and journals were not accessible through the
   approved restricted interface. A successful systemd exit is not persistence
   evidence.
-- Independent source/test investigation may continue; no live provider request,
-  historical rewrite, or production deployment is authorized without all gates.
+- Source review confirmed that normal cycle output could say `state=complete`
+  while exposing only scheduled/processed/provider-call counts. It did not
+  classify expected versus missing/pending/stored/reused/unavailable/failed
+  coverage.
+- Focused branch `fix/353-voacap-operational-health`, commit
+  `3a6f875cbfd731873530fa0c134eddc01f76fe81`, adds a query-only classified
+  `operational_health` summary to cycle JSON and a standalone provider-free
+  `--health` mode. It performs no schema migration, scheduling, provider/NOAA
+  request, or gate change. Engineering and operator documentation were updated.
+- Focused validation: Ruff and strict MyPy passed; 44 C6 tests passed.
+- Repository gates: `ruff check .` passed; `mypy src/rolling_thunder` passed for
+  341 source files; `pytest` reported **3,392 passed, 7 skipped**; `git diff
+  --check` passed.
+- The branch is pushed. GitHub PR creation was attempted but blocked by the
+  connector approval requirement under this runner's noninteractive
+  `approval_policy=never`. CI does not trigger on `fix/**` pushes and no PR could
+  be opened, so CI is explicitly unverified. Do not merge without complete CI.
+- No production deployment or acceptance was attempted: exact installed C6
+  identity, protected database health/coverage, fresh backup, and component
+  deployment helper access remain unavailable. No live provider request,
+  historical rewrite, Pi change, CAT/PTT action, or RF occurred.
+- Exact next action: open a PR for the pushed branch through an approved GitHub
+  write path, obtain green CI/review, then use approved read-only service-account
+  execution of `--health` against the protected production configuration before
+  making any release decision.
