@@ -176,3 +176,79 @@ service-specific rollout instructions before any authorized cutover.
 
 An approved merge is not approval to deploy. A CI pass does not replace
 operator acceptance or authorize live RF.
+
+
+## Bounded diagnostic runner history: issue 345 on 2026-10-22
+
+This entry records the actual transient Forge user unit used for the owner-approved
+source-trace and hardware-free reproduction slice. It is an execution-history record,
+not a reusable authorization grant and not a production service definition.
+
+Observed unit identity and lifecycle:
+
+    unit: rt-codex-345-repro-20261022.service
+    description: Rolling Thunder 345 bounded UI stall reproduction
+    scope: systemd --user transient unit
+    started: 2026-10-22 10:52:27 EDT
+    working directory: /home/geoff/projects/rolling-thunder-345-repro-20261022
+    RuntimeMaxSec: 2h
+    Restart: no
+    TimeoutStopSec: 90s
+    KillMode: control-group
+    KillSignal: SIGTERM
+    FinalKillSignal: SIGKILL
+    SendSIGKILL: yes
+    CollectMode: inactive
+    OOMPolicy: stop
+    CPUQuota: 200%
+    MemoryMax: infinity
+    stdout: journal
+    stderr: inherited
+    final-message path: /home/geoff/projects/rolling-thunder-345-repro-20261022/REPRO_FINAL_REPORT.md
+
+The exact effective command prefix reported by systemd was:
+
+    /home/geoff/.local/npm-global/bin/codex exec       --approve-for-me       -c sandbox_workspace_write.network_access=true       --color never       --output-last-message=/home/geoff/projects/rolling-thunder-345-repro-20261022/REPRO_FINAL_REPORT.md       -C /home/geoff/projects/rolling-thunder-345-repro-20261022       "<owner-approved issue #345 mission text>"
+
+The final argument was the complete owner mission that requires GitHub issue
+comments `6343741761` and `6343565345`, deployed SHA
+`1f2f7c5c739757bd2e5746aa10597b8b9440bf27`, the bounded source/lock trace and
+event/barrier reproduction, no production/RF/CAT/PTT/hardware/clock/FT8-authority
+changes, #359 deferred, no recursive agents, and accurate GitHub checkpointing.
+The unit's `ExecStart` retained that complete text verbatim; this documentation
+uses a semantic placeholder so the deployment workflow does not duplicate an
+ephemeral issue prompt.
+
+Read-only validation commands:
+
+    systemctl --user show rt-codex-345-repro-20261022.service       -p Id -p Description -p LoadState -p ActiveState -p SubState       -p MainPID -p ExecMainStartTimestamp -p ExecMainExitTimestamp       -p RuntimeMaxUSec -p Restart -p WorkingDirectory -p ExecStart       -p Result -p TimeoutStopUSec
+    systemctl --user status rt-codex-345-repro-20261022.service --no-pager
+    journalctl --user -u rt-codex-345-repro-20261022.service --no-pager
+
+Manual stop, if the owner needs to end the bounded run before its hard cap:
+
+    systemctl --user stop rt-codex-345-repro-20261022.service
+
+Stopping applies to the entire control group. There is no automatic restart. At
+the two-hour runtime limit systemd stops the unit; normal stop has a 90-second
+grace before the configured final kill signal. Do not start a replacement unit
+automatically.
+
+Runner rollback is to stop the transient unit and leave the isolated workspace and
+pushed diagnostic refs intact for audit. This run did not alter production source,
+configuration, databases, services, hardware, or RF state, so there is no production
+rollback action. Any later deletion of the workspace or branches is separate,
+explicit cleanup and must preserve needed artifacts first.
+
+During the live validation at approximately 10:59 EDT, the unit was loaded,
+active/running with the expected working directory and command, the two-hour hard
+cap and `Restart=no`. Final exit/result cannot truthfully be recorded from inside
+the still-running unit. After exit, the saved final-message file, unit journal,
+GitHub issue checkpoint, and exact pushed SHAs are the durable completion evidence;
+no monitoring is implied after the unit exits.
+
+The previously reported ref `docs/codex-overnight-runner-20261021` and commit
+prefix `4514aea` were not present in connected GitHub or the authorized Forge
+repository during this run. The earlier dirty overnight workspace was inspected
+read-only and left unchanged. This entry therefore lives on the replacement focused
+documentation branch `docs/codex-345-runner-20261022`.
