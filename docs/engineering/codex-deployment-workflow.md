@@ -208,7 +208,7 @@ Observed unit identity and lifecycle:
 
 The exact effective command prefix reported by systemd was:
 
-    /home/geoff/.local/npm-global/bin/codex exec       --approve-for-me       -c sandbox_workspace_write.network_access=true       --color never       --output-last-message=/home/geoff/projects/rolling-thunder-345-repro-20261022/REPRO_FINAL_REPORT.md       -C /home/geoff/projects/rolling-thunder-345-repro-20261022       "<owner-approved issue #345 mission text>"
+    /home/geoff/.local/npm-global/bin/codex exec --approve-for-me -c sandbox_workspace_write.network_access=true --color never --output-last-message=/home/geoff/projects/rolling-thunder-345-repro-20261022/REPRO_FINAL_REPORT.md -C /home/geoff/projects/rolling-thunder-345-repro-20261022 "<owner-approved issue #345 mission text>"
 
 The final argument was the complete owner mission that requires GitHub issue
 comments `6343741761` and `6343565345`, deployed SHA
@@ -221,7 +221,7 @@ ephemeral issue prompt.
 
 Read-only validation commands:
 
-    systemctl --user show rt-codex-345-repro-20261022.service       -p Id -p Description -p LoadState -p ActiveState -p SubState       -p MainPID -p ExecMainStartTimestamp -p ExecMainExitTimestamp       -p RuntimeMaxUSec -p Restart -p WorkingDirectory -p ExecStart       -p Result -p TimeoutStopUSec
+    systemctl --user show rt-codex-345-repro-20261022.service -p Id -p Description -p LoadState -p ActiveState -p SubState -p MainPID -p ExecMainStartTimestamp -p ExecMainExitTimestamp -p RuntimeMaxUSec -p Restart -p WorkingDirectory -p ExecStart -p Result -p TimeoutStopUSec
     systemctl --user status rt-codex-345-repro-20261022.service --no-pager
     journalctl --user -u rt-codex-345-repro-20261022.service --no-pager
 
