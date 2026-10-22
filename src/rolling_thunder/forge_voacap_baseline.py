@@ -559,6 +559,103 @@ class BaselineRepository:
             },
         }
 
+    @staticmethod
+    def inspect_operational_health(
+        path: Path,
+        plan: BaselinePlan,
+        *,
+        generated_at_utc: datetime,
+        forecast_days: Sequence[date],
+    ) -> dict[str, Any]:
+        """Classify expected plan coverage without initializing or writing the store."""
+        generated = _utc(generated_at_utc)
+        days = tuple(dict.fromkeys(day.isoformat() for day in forecast_days))
+        if not days:
+            raise ValueError("operational health requires at least one forecast day")
+        if not path.is_file():
+            raise ValueError("operational health requires an existing baseline database")
+        placeholders = ",".join("?" for _ in days)
+        parameters = (str(plan.plan_id), *days)
+        uri = f"file:{path.resolve()}?mode=ro"
+        with sqlite3.connect(uri, uri=True) as db:
+            db.execute("PRAGMA query_only=ON")
+            status_counts = dict(
+                db.execute(
+                    f"""SELECT status,COUNT(*) FROM baseline_slot_v1
+                    WHERE plan_id=? AND substr(forecast_for_utc,1,10) IN ({placeholders})
+                    GROUP BY status ORDER BY status""",
+                    parameters,
+                ).fetchall()
+            )
+            reason_counts = dict(
+                db.execute(
+                    f"""SELECT COALESCE(reason,'unclassified'),COUNT(*)
+                    FROM baseline_slot_v1
+                    WHERE plan_id=? AND substr(forecast_for_utc,1,10) IN ({placeholders})
+                    GROUP BY COALESCE(reason,'unclassified') ORDER BY 1""",
+                    parameters,
+                ).fetchall()
+            )
+            provider_contacted_slots = int(
+                db.execute(
+                    f"""SELECT COALESCE(SUM(provider_called),0) FROM baseline_slot_v1
+                    WHERE plan_id=? AND substr(forecast_for_utc,1,10) IN ({placeholders})""",
+                    parameters,
+                ).fetchone()[0]
+            )
+            provider_calls_today = int(
+                db.execute(
+                    """SELECT COUNT(*) FROM baseline_activity_v1 WHERE plan_id=?
+                    AND occurred_at_utc LIKE ? AND action='provider_call'""",
+                    (str(plan.plan_id), f"{generated.date().isoformat()}%"),
+                ).fetchone()[0]
+            )
+        observed_slots = sum(int(value) for value in status_counts.values())
+        expected_slots = len(days) * len(plan.targets) * len(plan.bands_m) * len(plan.hours_utc)
+        missing_slots = max(0, expected_slots - observed_slots)
+        pending_slots = sum(
+            int(status_counts.get(status.value, 0))
+            for status in (BaselineStatus.PENDING, BaselineStatus.PROCESSING, BaselineStatus.RETRY)
+        )
+        failed_slots = sum(
+            int(status_counts.get(status.value, 0))
+            for status in (BaselineStatus.FAILED, BaselineStatus.MISSED)
+        )
+        skipped_slots = int(status_counts.get(BaselineStatus.SKIPPED.value, 0))
+        unavailable_slots = int(status_counts.get(BaselineStatus.UNAVAILABLE.value, 0))
+        if failed_slots:
+            coverage_state = "failed"
+        elif missing_slots or pending_slots or skipped_slots:
+            coverage_state = "incomplete"
+        elif unavailable_slots:
+            coverage_state = "complete_with_unavailable"
+        else:
+            coverage_state = "complete"
+        return {
+            "schema_version": 1,
+            "generated_at_utc": _time(generated),
+            "plan_id": str(plan.plan_id),
+            "plan_version": plan.plan_version,
+            "forecast_days": list(days),
+            "coverage_state": coverage_state,
+            "expected_slots": expected_slots,
+            "observed_slots": observed_slots,
+            "missing_slots": missing_slots,
+            "pending_slots": pending_slots,
+            "ready_provider_slots": int(reason_counts.get("provider_ready", 0)),
+            "ready_reused_slots": int(reason_counts.get("deduplicated_cached_response", 0)),
+            "unavailable_slots": unavailable_slots,
+            "skipped_slots": skipped_slots,
+            "failed_or_missed_slots": failed_slots,
+            "provider_contacted_slots": provider_contacted_slots,
+            "provider_calls_today": provider_calls_today,
+            "provider_call_limit_today": plan.max_provider_calls_per_day,
+            "status_counts": status_counts,
+            "reason_counts": reason_counts,
+            "read_only": True,
+            "training_eligible": False,
+        }
+
     def _initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:

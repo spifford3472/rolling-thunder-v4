@@ -185,6 +185,26 @@ unit, a new reviewed operational plan, region/band coverage scheduling, root
 owner database acceptance, and reversible deployment. Standing authorization
 for recurring software calculations does not bypass these engineering gates.
 
+### Provider-free operational health
+
+Each enabled sampler cycle emits a nested `operational_health` summary for the
+exact immutable plan and future UTC-day window it considered. The summary
+distinguishes expected, observed, missing, pending/retry/processing,
+provider-stored ready, cache-reused ready, unavailable, skipped, and
+failed/missed slots. It also reports provider-contacted slots and today's
+ledger-backed provider-call count beside the immutable daily limit. A top-level
+cycle `state=complete` therefore no longer obscures incomplete forecast
+coverage.
+
+Administrators can run the same query without scheduler/provider work using
+`rolling-thunder-forge-voacap-baseline --config <path> --health`. Health mode
+opens the existing SQLite database query-only and reads only the plan artifact;
+it does not initialize/migrate the database, read NOAA artifacts, contact the
+provider, schedule work, or alter activation gates. `complete_with_unavailable`
+means every expected slot is terminal but at least one provider result lacked a
+usable prediction; it is distinct from both ready coverage and an incomplete
+queue.
+
 ### Commissioning-stage timer and deterministic coverage order
 
 The `rolling-thunder-forge-noaa-refresh` example systemd units run the
