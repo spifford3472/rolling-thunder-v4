@@ -83,8 +83,8 @@ def test_read_operational_health_does_not_require_enabled_gates_or_provider(
         TargetGrid,
     )
 
-    now = datetime(2026, 10, 11, 17, 0, tzinfo=UTC)
-    tomorrow = (now + timedelta(days=1)).date()
+    now = datetime(2026, 10, 11, 23, 30, tzinfo=timezone(-timedelta(hours=4)))
+    tomorrow = (now.astimezone(UTC) + timedelta(days=1)).date()
     plan = BaselinePlan(
         plan_id=UUID("20000000-0000-4000-8000-000000000001"),
         plan_version="health-v1",
@@ -134,6 +134,7 @@ def test_read_operational_health_does_not_require_enabled_gates_or_provider(
     assert isinstance(health, dict)
     assert health["coverage_state"] == "incomplete"
     assert health["pending_slots"] == 28
+    assert health["forecast_days"] == ["2026-10-13"]
     assert database.read_bytes() == before
 
 

@@ -527,7 +527,9 @@ or transmit authority. Any stored 20-W value is a model reference, not a measure
 or instruction, and VOACAP reliability is not QSO success probability. A successful
 timer exit is not by itself proof of forecast coverage: cycle JSON and the
 administrator-only query-only `--health` report distinguish provider-stored ready,
-cache-reused ready, unavailable, pending, missing, skipped, and failed/missed slots.
+cache-reused ready, unavailable, pending, missing, stale, skipped, and failed/missed
+slots. It also binds coverage to the exact plan and per-day slot identities rather
+than treating matching totals as sufficient evidence.
 
 Phase C5 adds offline Forge evaluation and a shadow-only explanatory data contract.
 It still adds no dashboard control or displayed recommendation and cannot reorder a
