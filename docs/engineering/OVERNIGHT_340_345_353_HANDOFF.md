@@ -19,13 +19,18 @@
 - Existing draft PR #356 was independently reviewed. Snapshot and exact identity
   gaps were corrected at `2a85f85d8fb08f51960262b53a3d037e2fe6d417`.
   Local gates: Ruff pass, strict MyPy pass for 341 source files, 66 focused C6
-  tests pass, full pytest 3,394 passed / 7 skipped, diff check pass. New-head CI
-  remains pending at this checkpoint; protected C6 database/backup/deployment
-  acceptance remains blocked.
+  tests pass, full pytest 3,394 passed / 7 skipped, diff check pass. GitHub Actions
+  run `39754405032` passed. PR #356 was marked ready and merged with expected-head
+  protection at `5572872dee7ddd937ad5ff959714fdb603092908`.
+- That merge is not a deployment or operational acceptance. Forge still runs C6
+  release `858e95e59b131193d92ffefadf7134ab043d8f20`; protected C6 database,
+  backup, approved component-deployment and live health acceptance gates remain
+  blocked. Issue #353 therefore remains open.
 - Runner infrastructure documentation was updated and pushed at
   `77b3e31dc8fabee1c1e09b632e8e87f631d3a990`; draft infrastructure PR #2 is open.
-- No merge, deployment, provider request, database mutation, service restart,
-  privilege change, unsafe Pi operation or RF occurred.
+- Apart from the qualifying PR #356 merge, no deployment, provider request,
+  database mutation, service restart, privilege change, unsafe Pi operation or
+  RF occurred.
 
 Mission authority: complete GitHub issue #340 comment `6330482816` (34,250
 characters), including the 2026-10-21 launch addendum and original mission.
