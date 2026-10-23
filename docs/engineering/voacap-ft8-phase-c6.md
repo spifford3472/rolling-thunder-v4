@@ -263,7 +263,7 @@ C4 rows. Each request retains a run ID, scheduled boundary, capture timestamp, t
 identity, band, request SHA, response SHA, service/model versions, status, attempt
 count and reason. A leased request attempt is counted separately from an actual POST;
 `provider_called` is set only after version preflight succeeds, immediately before the
-HTTP POST, and health reports both counts. Four forecast-hour values are persisted as
+HTTP POST, and cycle/health reports separate attempt and POST counts. Four forecast-hour values are persisted as
 separately classified cells. UTC boundaries choose the capture day/month after normalizing timezone-aware
 input. A delayed invocation more than 30 minutes after its boundary does not start a
 catch-up burst. A replay of an already completed boundary makes no provider requests;

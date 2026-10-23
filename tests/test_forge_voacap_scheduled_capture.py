@@ -334,6 +334,8 @@ def test_due_retry_from_earlier_same_day_run_runs_after_fresh_boundary(
     assert second["current_run_provider_calls"] == 105
     assert second["prior_run_retry_attempts"] == 1
     assert second["provider_calls_this_invocation"] == 106
+    assert second["provider_attempts_this_invocation"] == 106
+    assert second["prior_run_retry_provider_calls"] == 1
     assert len(provider.calls) == 211
     assert second["prior_run_retries"][0]["state"] == "complete"
     health = repo.health(tmp_path / "capture.sqlite", plan, NOW.date())
@@ -382,6 +384,8 @@ def test_preflight_failure_counts_attempts_without_claiming_provider_post(
     assert result["state"] == "failed"
     assert result["provider_attempts"] == 105
     assert result["provider_calls"] == 0
+    assert result["provider_attempts_this_invocation"] == 105
+    assert result["provider_calls_this_invocation"] == 0
     health = ScheduledCaptureRepository.health(path, _plan(), NOW.date())
     assert health["actual_provider_attempts"] == 105
     assert health["actual_provider_calls"] == 0

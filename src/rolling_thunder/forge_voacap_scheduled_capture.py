@@ -720,15 +720,23 @@ class ScheduledCaptureService:
                 self._process_run(prior_run_id, plan, moment)
                 for prior_run_id in prior_run_ids
             ]
-            prior_attempts = sum(int(item["provider_calls_this_invocation"]) for item in prior_results)
+            prior_attempts = sum(
+                int(item["provider_attempts_this_invocation"]) for item in prior_results
+            )
+            prior_provider_calls = sum(
+                int(item["provider_calls_this_invocation"]) for item in prior_results
+            )
             current["scheduled_for_utc"] = _time(scheduled)
             current["captured_at_utc"] = _time(captured)
             current["current_run_provider_calls"] = current["provider_calls_this_invocation"]
             current["prior_run_retry_attempts"] = prior_attempts
-            current["provider_calls_this_invocation"] += prior_attempts
+            current["prior_run_retry_provider_calls"] = prior_provider_calls
+            current["provider_attempts_this_invocation"] += prior_attempts
+            current["provider_calls_this_invocation"] += prior_provider_calls
             current["prior_run_retries"] = [
                 {key: value for key, value in item.items()
-                 if key in {"run_id", "state", "provider_attempts", "provider_calls", "provider_calls_this_invocation"}}
+                 if key in {"run_id", "state", "provider_attempts", "provider_calls",
+                            "provider_attempts_this_invocation", "provider_calls_this_invocation"}}
                 for item in prior_results
             ]
             current["expected_provider_calls_this_run"] = CAPTURE_REQUESTS_PER_RUN
@@ -737,7 +745,8 @@ class ScheduledCaptureService:
             self._lock.release()
 
     def _process_run(self, run_id: str, plan: CapturePlan, moment: datetime) -> dict[str, Any]:
-        calls = 0
+        prediction_attempts = 0
+        provider_posts = 0
         while True:
             if self._repository.capture_response_bytes() >= plan.storage_limit_bytes:
                 self._repository.skip_remaining_for_storage(run_id, moment)
@@ -745,10 +754,12 @@ class ScheduledCaptureService:
             claim = self._repository.claim_one(run_id, moment, plan)
             if claim is None:
                 break
-            calls += 1
+            prediction_attempts += 1
 
             def mark_post_started(claimed: dict[str, Any] = claim) -> None:
+                nonlocal provider_posts
                 self._repository.mark_provider_post_started(run_id, claimed, moment)
+                provider_posts += 1
 
             try:
                 result = self._provider.predict(
@@ -767,7 +778,8 @@ class ScheduledCaptureService:
                     moment, plan, retryable=True,
                 )
         run_result = self._repository.finish_run(run_id, moment)
-        run_result["provider_calls_this_invocation"] = calls
+        run_result["provider_attempts_this_invocation"] = prediction_attempts
+        run_result["provider_calls_this_invocation"] = provider_posts
         return run_result
 
 
