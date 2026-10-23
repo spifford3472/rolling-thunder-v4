@@ -6,7 +6,7 @@ import json
 import math
 import sqlite3
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Protocol, Self
@@ -90,7 +90,13 @@ class CapturePlan(DomainModel):
 
 
 class CaptureProvider(Protocol):
-    def predict(self, request: dict[str, Any], *, timeout_s: float) -> ProviderResult: ...
+    def predict(
+        self,
+        request: dict[str, Any],
+        *,
+        timeout_s: float,
+        on_post_started: Callable[[], None],
+    ) -> ProviderResult: ...
 
 
 class ScheduledCaptureRepository:
@@ -255,13 +261,28 @@ class ScheduledCaptureRepository:
                 (token,_time(moment+timedelta(seconds=plan.lease_seconds)),row[0]),
             )
             self._activity(db,run_id,moment,"provider_attempt_started",row[0],{"attempt":int(row[5])+1})
-            db.execute(
-                "UPDATE baseline_capture_request_v1 SET provider_called=1 WHERE request_id=?",
-                (row[0],),
-            )
             return {"request_id":row[0],"request":json.loads(row[1]),"region_id":row[2],
                     "target_grid":row[3],"band_m":int(row[4]),"attempt":int(row[5])+1,
                     "lease_token":token}
+
+    def mark_provider_post_started(
+        self, run_id: str, claim: Mapping[str, Any], now: datetime
+    ) -> None:
+        """Record the actual HTTP POST boundary after version preflight succeeds."""
+        moment = _utc(now)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            cursor = db.execute(
+                """UPDATE baseline_capture_request_v1 SET provider_called=1
+                WHERE request_id=? AND status='processing' AND lease_token=?""",
+                (claim["request_id"], claim["lease_token"]),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("stale capture request lease before provider POST")
+            self._activity(
+                db, run_id, moment, "provider_post_started", str(claim["request_id"]),
+                {"attempt": int(claim["attempt"])},
+            )
 
     def complete(
         self, run_id: str, claim: Mapping[str, Any], result: ProviderResult,
@@ -403,6 +424,11 @@ class ScheduledCaptureRepository:
             "state": state,
             "expected_requests": expected,
             "provider_attempts": attempts,
+            "provider_calls": int(db.execute(
+                """SELECT COUNT(*) FROM baseline_capture_activity_v1
+                WHERE run_id=? AND action='provider_post_started'""",
+                (run_id,),
+            ).fetchone()[0]),
             "request_status_counts": counts,
             "cell_status_counts": cell_counts,
             "cache_reuse": 0,
@@ -434,6 +460,7 @@ class ScheduledCaptureRepository:
                 **base,
                 "observed_runs": 0,
                 "actual_provider_attempts": 0,
+                "actual_provider_calls": 0,
                 "coverage_state": "incomplete",
                 "reason": "capture_database_missing",
                 "runs": [],
@@ -563,6 +590,11 @@ class ScheduledCaptureRepository:
                         "unexpected_target_hour_cells": len(unexpected_cell_ids),
                         "target_hour_identity_sha256": _sha(sorted(observed_cell_ids)),
                         "provider_attempts": attempts,
+                        "provider_calls": int(db.execute(
+                            """SELECT COUNT(*) FROM baseline_capture_activity_v1
+                            WHERE run_id=? AND action='provider_post_started'""",
+                            (run_id,),
+                        ).fetchone()[0]),
                         "request_status_counts": status_counts,
                         "target_cell_status_counts": cell_counts,
                         "provider_versions": versions,
@@ -579,6 +611,7 @@ class ScheduledCaptureRepository:
             "observed_runs": len(run_reports),
             "missing_scheduled_boundaries": sorted(missing_schedules),
             "actual_provider_attempts": sum(run["provider_attempts"] for run in run_reports),
+            "actual_provider_calls": sum(run["provider_calls"] for run in run_reports),
             "coverage_state": "complete" if complete_runs == 4 and len(run_reports) == 4 and not missing_schedules else "incomplete",
             "runs": run_reports,
         }
@@ -693,7 +726,7 @@ class ScheduledCaptureService:
             current["provider_calls_this_invocation"] += prior_attempts
             current["prior_run_retries"] = [
                 {key: value for key, value in item.items()
-                 if key in {"run_id", "state", "provider_attempts", "provider_calls_this_invocation"}}
+                 if key in {"run_id", "state", "provider_attempts", "provider_calls", "provider_calls_this_invocation"}}
                 for item in prior_results
             ]
             current["expected_provider_calls_this_run"] = CAPTURE_REQUESTS_PER_RUN
@@ -711,8 +744,16 @@ class ScheduledCaptureService:
             if claim is None:
                 break
             calls += 1
+
+            def mark_post_started(claimed: dict[str, Any] = claim) -> None:
+                self._repository.mark_provider_post_started(run_id, claimed, moment)
+
             try:
-                result = self._provider.predict(claim["request"], timeout_s=plan.provider_timeout_s)
+                result = self._provider.predict(
+                    claim["request"],
+                    timeout_s=plan.provider_timeout_s,
+                    on_post_started=mark_post_started,
+                )
                 self._repository.complete(run_id, claim, result, moment, plan)
             except ProviderFailure as error:
                 self._repository.fail(

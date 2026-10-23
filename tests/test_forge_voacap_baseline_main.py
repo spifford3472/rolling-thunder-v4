@@ -462,8 +462,16 @@ def test_scheduled_capture_mode_calls_fake_provider_and_reports_post_count(
         def post_count(self) -> int:
             return len(self.calls)
 
-        def predict(self, request: dict[str, Any], *, timeout_s: float) -> ProviderResult:
+        def predict(
+            self,
+            request: dict[str, Any],
+            *,
+            timeout_s: float,
+            on_post_started: Any | None = None,
+        ) -> ProviderResult:
             self.calls.append(dict(request))
+            if on_post_started is not None:
+                on_post_started()
             band = request["bands_m"][0]
             return ProviderResult(
                 service_version="0.3.0",

@@ -36,9 +36,16 @@ class FakeProvider:
         self.calls: list[dict[str, Any]] = []
         self.fail_first = fail_first
 
-    def predict(self, request: dict[str, Any], *, timeout_s: float) -> ProviderResult:
+    def predict(
+        self,
+        request: dict[str, Any],
+        *,
+        timeout_s: float,
+        on_post_started: Any,
+    ) -> ProviderResult:
         assert timeout_s == 10
         self.calls.append(dict(request))
+        on_post_started()
         if self.fail_first:
             self.fail_first = False
             raise ProviderFailure("provider_timeout", retryable=True)
@@ -173,6 +180,7 @@ def test_four_utc_runs_each_call_105_and_keep_independent_capture_evidence(
     assert health["coverage_state"] == "complete"
     assert health["observed_runs"] == 4
     assert health["actual_provider_attempts"] == 420
+    assert health["actual_provider_calls"] == 420
     assert health["expected_target_hour_cells"] == 1680
     assert health["read_only"] is True
 
@@ -220,8 +228,16 @@ def test_retryable_provider_failure_is_visible_and_retries_only_failed_request(
 
 def test_missing_target_hour_is_explicit_and_not_reused_as_success(tmp_path: Path) -> None:
     class MissingHourProvider(FakeProvider):
-        def predict(self, request: dict[str, Any], *, timeout_s: float) -> ProviderResult:
-            result = super().predict(request, timeout_s=timeout_s)
+        def predict(
+            self,
+            request: dict[str, Any],
+            *,
+            timeout_s: float,
+            on_post_started: Any,
+        ) -> ProviderResult:
+            result = super().predict(
+                request, timeout_s=timeout_s, on_post_started=on_post_started
+            )
             if request["bands_m"] == [80]:
                 result.response_json["analysis"]["best_band_by_hour"].pop()
             return result
@@ -271,8 +287,16 @@ def test_legacy_database_without_capture_schema_health_stays_read_only(tmp_path:
 
 def test_response_storage_cap_skips_unsent_requests_with_reason(tmp_path: Path) -> None:
     class LargeProvider(FakeProvider):
-        def predict(self, request: dict[str, Any], *, timeout_s: float) -> ProviderResult:
-            result = super().predict(request, timeout_s=timeout_s)
+        def predict(
+            self,
+            request: dict[str, Any],
+            *,
+            timeout_s: float,
+            on_post_started: Any,
+        ) -> ProviderResult:
+            result = super().predict(
+                request, timeout_s=timeout_s, on_post_started=on_post_started
+            )
             result.response_json["fixture_padding"] = "x" * 300_000
             return result
 
@@ -314,6 +338,7 @@ def test_due_retry_from_earlier_same_day_run_runs_after_fresh_boundary(
     assert second["prior_run_retries"][0]["state"] == "complete"
     health = repo.health(tmp_path / "capture.sqlite", plan, NOW.date())
     assert health["actual_provider_attempts"] == 211
+    assert health["actual_provider_calls"] == 211
     assert health["coverage_state"] == "incomplete"
 
 
@@ -338,3 +363,25 @@ def test_previous_utc_day_work_is_missed_without_provider_catchup(tmp_path: Path
             "SELECT status,reason,attempts FROM baseline_capture_request_v1 WHERE run_id=? LIMIT 1",
             (previous_run_id,),
         ).fetchone() == ("missed", "utc_day_ended", 0)
+
+
+def test_preflight_failure_counts_attempts_without_claiming_provider_post(
+    tmp_path: Path,
+) -> None:
+    class PreflightFailureProvider:
+        def predict(
+            self, request: dict[str, Any], *, timeout_s: float, on_post_started: Any
+        ) -> ProviderResult:
+            del request, timeout_s, on_post_started
+            raise ProviderFailure("provider_version_mismatch", retryable=False)
+
+    path = tmp_path / "capture.sqlite"
+    result = ScheduledCaptureService(
+        ScheduledCaptureRepository(path), PreflightFailureProvider()
+    ).run_cycle(_plan(), _environment(), NOW)
+    assert result["state"] == "failed"
+    assert result["provider_attempts"] == 105
+    assert result["provider_calls"] == 0
+    health = ScheduledCaptureRepository.health(path, _plan(), NOW.date())
+    assert health["actual_provider_attempts"] == 105
+    assert health["actual_provider_calls"] == 0

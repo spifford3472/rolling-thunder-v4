@@ -261,8 +261,10 @@ The capture plan and NOAA snapshot are frozen into run evidence. The SQLite addi
 uses separate `baseline_capture_*_v1` tables; it does not rewrite or migrate legacy
 C4 rows. Each request retains a run ID, scheduled boundary, capture timestamp, target
 identity, band, request SHA, response SHA, service/model versions, status, attempt
-count and reason. Four forecast-hour values are persisted as separately classified
-cells. UTC boundaries choose the capture day/month after normalizing timezone-aware
+count and reason. A leased request attempt is counted separately from an actual POST;
+`provider_called` is set only after version preflight succeeds, immediately before the
+HTTP POST, and health reports both counts. Four forecast-hour values are persisted as
+separately classified cells. UTC boundaries choose the capture day/month after normalizing timezone-aware
 input. A delayed invocation more than 30 minutes after its boundary does not start a
 catch-up burst. A replay of an already completed boundary makes no provider requests;
 a retry only claims explicitly retryable rows from that same run. At later boundaries
@@ -282,6 +284,7 @@ the storage cap is reached, remaining requests are marked skipped and coverage s
 incomplete; no historical data are pruned.
 
 Fake-provider acceptance covers exactly 105 requests at each of four UTC boundaries,
+separate attempt and actual-POST counts (including zero POSTs on preflight failure),
 zero cross-run cache reuse, run replay, persisted service/model/response provenance,
 status and missing-hour classification, bounded retries/storage, month rollover,
 query-only health, and SQLite backup/integrity/foreign-key checks, including next-boundary same-day retry

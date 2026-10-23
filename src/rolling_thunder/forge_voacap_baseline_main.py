@@ -108,7 +108,13 @@ class LocalVoacapProvider:
             raise error
         self._version_verified = True
 
-    def predict(self, request: dict[str, Any] | Any, *, timeout_s: float) -> ProviderResult:
+    def predict(
+        self,
+        request: dict[str, Any] | Any,
+        *,
+        timeout_s: float,
+        on_post_started: Any | None = None,
+    ) -> ProviderResult:
         """Exclude C4 metadata that the existing provider API does not accept."""
         body = {key: request[key] for key in (
             "tx_grid", "rx_grid", "year", "month", "bands_m",
@@ -120,6 +126,8 @@ class LocalVoacapProvider:
                 raise ProviderFailure("pilot_post_limit_exhausted", retryable=False)
             if not self._version_verified:
                 self.verify_version(timeout_s=timeout_s)
+            if on_post_started is not None:
+                on_post_started()
             self._posts += 1
             response = self.client._json_request("POST", "/api/v1/summary", body)
         except ProviderFailure:
