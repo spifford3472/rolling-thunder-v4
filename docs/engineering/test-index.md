@@ -60,7 +60,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
 
 - `tests/test_browse_control.py`
 - `tests/test_context_navigation.py`
-- `tests/test_control_dispatcher.py`
+- `tests/test_control_dispatcher.py` — FIFO mapping/gating plus optional accepted
+  action-token timing that preserves execution order and excludes rejected events.
 - `tests/test_control_protocol.py`
 - `tests/test_control_source_factory.py`
 - `tests/test_control_source_lifecycle.py`
@@ -319,7 +320,8 @@ the durable Forge UUID ledger so lost responses do not duplicate Wavelog writes.
 - `tests/test_live_map_ui.py`
 - `tests/test_issue_345_ui_blocking_reproduction.py` — deterministic,
   hardware-free event/barrier proof that synchronous Tk image materialization
-  retains the map-refresh caller until completion; diagnostic only.
+  retains the map-refresh caller until completion, with separate bounded
+  base64/PhotoImage/canvas timing tokens; diagnostic only.
 - `tests/test_live_map_zoom.py`
 - `tests/test_live_radar_service.py`
 - `tests/test_forge_map_route.py`

@@ -8,7 +8,29 @@ Metrics are **diagnostic**: `refresh_gap` includes the nominal 250ms scheduled d
 
 Validation approach: run `pytest -q tests/test_ui_timing.py` plus existing directly affected UI integration tests on an isolated machine. Three integrated replay scenarios: radar disabled, radar enabled cached frames, radar enabled slow/unavailable Forge with simulated controls and FT8 receive. Compare existing FT8 `boundary_lateness_ms`, `periods_dropped`, clock health, and UI p95/max; do not add micro-tests or operate RF. Observe whether map cost dominates refresh, or whether delays instead originate in controls or scheduling/CPU. **Do not infer causal improvement from counters alone.**
 
-This patch does not instrument individual CAT writes, PTT or FT8 timing, which remain available via existing diagnostic paths; deeper hooks require a separate evidence-based decision. No production deployment, merge or test RF is authorized by this documentation.
+### R1-C3 bounded subphase probe
+
+The same disabled-by-default environment flag now adds correlated detail only to
+the existing rate-limited `R1C2_SLOW_REFRESH` record. Fixed enum-like tokens split
+the broad `map_prepare` interval across radio/status synchronization, weather and
+alert publication, GPS/map snapshot and viewport requests, POTA/radar requests,
+and FT8 snapshot/presentation calls. Map update reports count/total/max duration
+for base/radar planning, base64 preparation, `PhotoImage`, canvas insertion, POTA,
+and overlay/status work. Accepted physical commands report only their typed action
+token and count/total/max duration. The dispatcher still executes actions inline
+and in the same order; rejected/unknown source events are not reported.
+
+Per-refresh detail is bounded by a fixed token inventory and discarded when the
+next refresh begins. Slow records remain limited to one per second. No callsigns,
+coordinates, event IDs, source inputs, QSO/control payloads, image bytes, audio,
+or secrets are retained or printed. Disabled collection does not call the timing
+clock. The probe changes no Tk ownership, queue limit, request order, exception
+propagation, FT8 timing/state, radio command, or transmit authority.
+
+This probe does not instrument individual CAT writes, PTT or FT8 timing, which
+remain available via existing diagnostic paths. Source tests establish attribution
+boundaries, not Raspberry Pi stall improvement or field causality. No production
+deployment or test RF is authorized by this documentation.
 
 ## R1-B bounded radar tile redraw
 

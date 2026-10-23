@@ -9,6 +9,7 @@ from rolling_thunder.live_map_service import MapTileSnapshot
 from rolling_thunder.live_map_ui import LiveMapWidgets
 from rolling_thunder.map_sources import MapTileSource
 from rolling_thunder.map_tiles import MapTileKey, MapTilePlacement
+from rolling_thunder.ui_timing import UiTiming
 
 
 class _BlockingTk:
@@ -56,10 +57,12 @@ def test_pending_base_tile_keeps_caller_blocked_until_photoimage_returns() -> No
     widgets._active_photos = {}
     widgets._photo_cache = OrderedDict()
     widgets._attribution_item = None
+    timing = UiTiming(enabled=True)
+    timing.begin_refresh()
 
     def render_one_refresh_slice() -> None:
         try:
-            widgets._flush_pending_base_tiles()
+            widgets._flush_pending_base_tiles(timing=timing)
         except (AssertionError, RuntimeError, TypeError, ValueError) as error:
             failure.append(error)
         finally:
@@ -80,3 +83,6 @@ def test_pending_base_tile_keeps_caller_blocked_until_photoimage_returns() -> No
     assert failure == []
     assert widgets._pending_base_tiles == []
     assert key in widgets._tile_items
+    assert timing._subphase_durations["base_b64"][0] == 1
+    assert timing._subphase_durations["base_photo"][0] == 1
+    assert timing._subphase_durations["base_canvas"][0] == 2

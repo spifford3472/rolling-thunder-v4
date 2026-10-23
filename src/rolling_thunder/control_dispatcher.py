@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from time import monotonic
 from typing import Protocol
 
 from rolling_thunder.physical_controls import (
@@ -39,11 +41,16 @@ class ControlDispatcher:
         mapper: ControlActionMapper,
         gate: ControlEventGate,
         commands: OperatorCommands,
+        *,
+        action_observer: Callable[[str, float], None] | None = None,
+        clock: Callable[[], float] = monotonic,
     ) -> None:
         self._source = source
         self._mapper = mapper
         self._gate = gate
         self._commands = commands
+        self._action_observer = action_observer
+        self._clock = clock
 
     def dispatch_available(self) -> ControlDispatchResult:
         """Drain available events without blocking and dispatch safe actions."""
@@ -62,8 +69,14 @@ class ControlDispatcher:
                 unknown += 1
                 continue
 
+            started = self._clock() if self._action_observer is not None else 0.0
             if self._commands.execute(action):
                 accepted += 1
+                if self._action_observer is not None:
+                    self._action_observer(
+                        action.value,
+                        max(0.0, (self._clock() - started) * 1000.0),
+                    )
             else:
                 rejected += 1
 

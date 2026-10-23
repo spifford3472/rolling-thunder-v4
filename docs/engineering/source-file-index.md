@@ -34,7 +34,7 @@ originates from one screen.
 - `src/rolling_thunder/active_panel_commands.py` — Context-aware shared POTA/DX active-panel command handling.
 - `src/rolling_thunder/browse_control.py` — Background receive-only controls for free-form Browse operation.
 - `src/rolling_thunder/context_navigation.py` — Stable dashboard context IDs, order, shortcuts, and navigation state.
-- `src/rolling_thunder/control_dispatcher.py` — Routes normalized physical controls into application commands.
+- `src/rolling_thunder/control_dispatcher.py` — Routes normalized physical controls into application commands and optionally publishes accepted typed-action duration tokens.
 - `src/rolling_thunder/control_protocol.py` — Physical/application control infrastructure for protocol.
 - `src/rolling_thunder/control_source_factory.py` — Physical/application control infrastructure for source factory.
 - `src/rolling_thunder/control_source_lifecycle.py` — Physical/application control infrastructure for source lifecycle.
@@ -240,7 +240,7 @@ originates from one screen.
 - `src/rolling_thunder/live_map.py` — Map controller coordinating current/last-known GPS presentation.
 - `src/rolling_thunder/live_map_info.py` — Pure map information/status projection.
 - `src/rolling_thunder/live_map_service.py` — Background base-map viewport/tile service and immutable snapshot publication.
-- `src/rolling_thunder/live_map_ui.py` — Tk rendering for map, overlays, marker, and map status.
+- `src/rolling_thunder/live_map_ui.py` — Tk rendering for map, overlays, marker, and map status, with optional payload-free subphase timing.
 - `src/rolling_thunder/map_refresh.py` — Primary-map subsystem module for refresh.
 - `src/rolling_thunder/map_solar.py` — GPS/solar DAY/NIGHT policy and shared primary-to-mirror style fan-out.
 - `src/rolling_thunder/map_sources.py` — Local-first installed/cache/online map resolution with style switching.
@@ -491,6 +491,6 @@ Consumers and ownership remain unchanged.
 - `deploy/systemd/rolling-thunder-forge-noaa-refresh.{service,timer}` —
   opt-in Forge refresh service examples, not installed/activated by git.
 
-- `src/rolling_thunder/ui_timing.py` — opt-in bounded monotonic UI critical-path timing collector (R1-A1).
+- `src/rolling_thunder/ui_timing.py` — opt-in bounded monotonic UI critical-path, fixed-subphase, and accepted-action timing collector (R1-A1/R1-C3).
 
 - `src/rolling_thunder/ft8/band_presentation.py` — pure FT8 receive-band tuning progress, verified display and stale-outcome acknowledgment (R1-C1).

@@ -5,8 +5,11 @@ from __future__ import annotations
 import os
 import sys
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from time import monotonic
+
+from rolling_thunder.physical_controls import ControlAction
 
 _PHASE_NAMES = (
     "pre_controls",
@@ -16,6 +19,39 @@ _PHASE_NAMES = (
     "presentation",
     "context_widgets",
 )
+
+_SUBPHASE_NAMES = frozenset(
+    {
+        "radio_sync",
+        "spot_tune_status",
+        "repeater_persistence",
+        "dmr_commits",
+        "weather_update",
+        "weather_alert_update",
+        "weather_alert_viewport",
+        "gps_snapshot",
+        "map_controller",
+        "map_viewport_request",
+        "map_snapshot",
+        "pota_viewport_request",
+        "radar_viewport_request",
+        "ft8_panel_snapshot",
+        "ft8_receive_target",
+        "ft8_receive_snapshot",
+        "ft8_presentation",
+        "base_plan",
+        "base_b64",
+        "base_photo",
+        "base_canvas",
+        "pota_canvas",
+        "radar_plan",
+        "radar_b64",
+        "radar_photo",
+        "radar_canvas",
+        "overlay_status_canvas",
+    }
+)
+_ACTION_NAMES = frozenset(action.value for action in ControlAction)
 
 
 class UiTiming:
@@ -55,6 +91,8 @@ class UiTiming:
         self._active_refresh_id: int | None = None
         self._phase_started: float | None = None
         self._phase_durations: dict[str, float] = {}
+        self._subphase_durations: dict[str, tuple[int, float, float]] = {}
+        self._action_durations: dict[str, tuple[int, float, float]] = {}
         self._slow_refresh_threshold_ms = slow_refresh_threshold_ms
         self._slow_report_interval_s = slow_report_interval_s
         self._last_slow_report: float | None = None
@@ -82,7 +120,56 @@ class UiTiming:
             self._active_refresh_id = self._next_refresh_id
             self._phase_started = started
             self._phase_durations.clear()
+            self._subphase_durations.clear()
+            self._action_durations.clear()
         return started
+
+    @contextmanager
+    def subphase(self, name: str) -> Iterator[None]:
+        """Measure one fixed, payload-free subphase without changing exceptions."""
+        if name not in _SUBPHASE_NAMES:
+            raise ValueError(f"unsupported UI timing subphase: {name}")
+        if not self.enabled:
+            yield
+            return
+        started = self._clock()
+        try:
+            yield
+        finally:
+            self.observe_subphase(name, started)
+
+    def observe_subphase(self, name: str, started: float) -> None:
+        """Accumulate count/total/max for one fixed subphase in this refresh."""
+        if not self.enabled:
+            return
+        if name not in _SUBPHASE_NAMES:
+            raise ValueError(f"unsupported UI timing subphase: {name}")
+        self._accumulate(
+            self._subphase_durations,
+            name,
+            max(0.0, (self._clock() - started) * 1000.0),
+        )
+
+    def observe_control_action(self, action_token: str, duration_ms: float) -> None:
+        """Accumulate one typed action token; never record its source event."""
+        if not self.enabled or self._active_refresh_id is None:
+            return
+        if action_token not in _ACTION_NAMES:
+            raise ValueError("invalid UI timing action token")
+        self._accumulate(
+            self._action_durations,
+            action_token,
+            max(0.0, duration_ms),
+        )
+
+    @staticmethod
+    def _accumulate(
+        target: dict[str, tuple[int, float, float]],
+        name: str,
+        duration_ms: float,
+    ) -> None:
+        count, total, maximum = target.get(name, (0, 0.0, 0.0))
+        target[name] = (count + 1, total + duration_ms, max(maximum, duration_ms))
 
     def checkpoint(self, name: str) -> None:
         """Record the elapsed portion of this refresh up to a named boundary."""
@@ -144,10 +231,22 @@ class UiTiming:
             f"{name}_ms={self._phase_durations.get(name, 0.0):.2f}"
             for name in _PHASE_NAMES
         )
+        details = self._format_details(self._subphase_durations)
+        actions = self._format_details(self._action_durations)
         print(
             f"R1C2_SLOW_REFRESH id={refresh_id} "
-            f"duration_ms={duration_ms:.2f} {phases}",
+            f"duration_ms={duration_ms:.2f} {phases} "
+            f"subphases={details} actions={actions}",
             file=sys.stderr,
             flush=True,
         )
         self._last_slow_report = ended
+
+    @staticmethod
+    def _format_details(values: dict[str, tuple[int, float, float]]) -> str:
+        if not values:
+            return "none"
+        return ",".join(
+            f"{name}:{count}:{total:.2f}:{maximum:.2f}"
+            for name, (count, total, maximum) in sorted(values.items())
+        )

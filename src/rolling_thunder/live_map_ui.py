@@ -388,19 +388,32 @@ class LiveMapWidgets:
 
         base_started = timing.start() if timing is not None else 0.0
         try:
+            base_plan_started = timing.start() if timing is not None else 0.0
             if size_changed:
                 self._draw_base(snapshot, width, height)
             elif snapshot_changed:
-                self._update_base(self._last_snapshot, snapshot, width, height)
-            self._flush_pending_base_tiles()
+                self._update_base(
+                    self._last_snapshot,
+                    snapshot,
+                    width,
+                    height,
+                    timing=timing,
+                )
+            if timing is not None:
+                timing.observe_subphase("base_plan", base_plan_started)
+            self._flush_pending_base_tiles(timing=timing)
         finally:
             if timing is not None:
                 timing.observe("base_map", base_started)
 
+        pota_started = timing.start() if timing is not None else 0.0
         if size_changed or snapshot_changed or pota_changed:
             self._draw_pota_markers(pota_snapshot, snapshot)
+        if timing is not None:
+            timing.observe_subphase("pota_canvas", pota_started)
 
         radar_started = timing.start() if timing is not None else 0.0
+        radar_plan_started = timing.start() if timing is not None else 0.0
         if size_changed:
             self._draw_radar(radar_snapshot, snapshot)
         elif snapshot_changed or radar_changed:
@@ -409,7 +422,9 @@ class LiveMapWidgets:
                 radar_snapshot,
                 snapshot,
             )
-        self._flush_pending_radar_tiles()
+        if timing is not None:
+            timing.observe_subphase("radar_plan", radar_plan_started)
+        self._flush_pending_radar_tiles(timing=timing)
         if timing is not None:
             timing.observe("radar", radar_started)
 
@@ -418,22 +433,27 @@ class LiveMapWidgets:
         self._last_pota_snapshot = pota_snapshot
         self._last_size = size
 
-        self._canvas.delete("map-overlay")
-        if presentation.position is not None:
-            self._draw_vehicle_marker(
-                width / 2,
-                height / 2,
-                presentation.is_current,
-                presentation.heading_degrees or 0.0,
+        overlay_started = timing.start() if timing is not None else 0.0
+        try:
+            self._canvas.delete("map-overlay")
+            if presentation.position is not None:
+                self._draw_vehicle_marker(
+                    width / 2,
+                    height / 2,
+                    presentation.is_current,
+                    presentation.heading_degrees or 0.0,
+                )
+            self._draw_status(
+                presentation,
+                snapshot,
+                radar_snapshot,
+                weather,
+                ft8_status=ft8_status,
+                ft8_remote_status=ft8_remote_status,
             )
-        self._draw_status(
-            presentation,
-            snapshot,
-            radar_snapshot,
-            weather,
-            ft8_status=ft8_status,
-            ft8_remote_status=ft8_remote_status,
-        )
+        finally:
+            if timing is not None:
+                timing.observe_subphase("overlay_status_canvas", overlay_started)
 
     def _draw_base(
         self,
@@ -484,6 +504,8 @@ class LiveMapWidgets:
         current: LiveMapSnapshot | None,
         width: int,
         height: int,
+        *,
+        timing: UiTiming | None = None,
     ) -> None:
         previous_viewport = previous.viewport if previous is not None else None
         current_viewport = current.viewport if current is not None else None
@@ -507,7 +529,7 @@ class LiveMapWidgets:
         self._pending_base_tiles = [current_tiles[key] for key in sorted(redraw_keys)]
 
         for key in plan.move:
-            self._move_tile(current_tiles[key])
+            self._move_tile(current_tiles[key], timing=timing)
 
         if self._attribution_item is not None and current is not None:
             self._canvas.itemconfigure(
@@ -518,19 +540,31 @@ class LiveMapWidgets:
     def _draw_tiles(self, snapshot: LiveMapSnapshot) -> None:
         self._pending_base_tiles = list(snapshot.tiles)
 
-    def _flush_pending_base_tiles(self) -> None:
+    def _flush_pending_base_tiles(self, *, timing: UiTiming | None = None) -> None:
         """Keep new base map image conversion bounded per UI refresh."""
         batch = self._pending_base_tiles[:_BASE_TILE_REDRAW_PER_REFRESH]
         del self._pending_base_tiles[:len(batch)]
         for tile in batch:
-            self._upsert_tile(tile)
+            if timing is None:
+                self._upsert_tile(tile)
+            else:
+                self._upsert_tile(tile, timing=timing)
 
-    def _upsert_tile(self, tile: MapTileSnapshot) -> None:
+    def _upsert_tile(
+        self,
+        tile: MapTileSnapshot,
+        *,
+        timing: UiTiming | None = None,
+    ) -> None:
         key = tile.placement.key
         placement = tile.placement
+        canvas_started = timing.start() if timing is not None else 0.0
         self._remove_tile(key)
+        if timing is not None:
+            timing.observe_subphase("base_canvas", canvas_started)
 
         if tile.png is None:
+            canvas_started = timing.start() if timing is not None else 0.0
             item = self._canvas.create_rectangle(
                 placement.x_px,
                 placement.y_px,
@@ -541,9 +575,12 @@ class LiveMapWidgets:
                 tags="map-base",
             )
             self._tile_item_kinds[key] = "rectangle"
+            if timing is not None:
+                timing.observe_subphase("base_canvas", canvas_started)
         else:
-            photo = self._photo_for_tile(key, tile.png)
+            photo = self._photo_for_tile(key, tile.png, timing=timing)
             self._active_photos[key] = photo
+            canvas_started = timing.start() if timing is not None else 0.0
             item = self._canvas.create_image(
                 placement.x_px,
                 placement.y_px,
@@ -552,6 +589,8 @@ class LiveMapWidgets:
                 tags="map-base",
             )
             self._tile_item_kinds[key] = "image"
+            if timing is not None:
+                timing.observe_subphase("base_canvas", canvas_started)
 
         self._tile_items[key] = item
         if self._attribution_item is not None:
@@ -559,13 +598,18 @@ class LiveMapWidgets:
 
         self._trim_photo_cache()
 
-    def _move_tile(self, tile: MapTileSnapshot) -> None:
+    def _move_tile(
+        self,
+        tile: MapTileSnapshot,
+        *,
+        timing: UiTiming | None = None,
+    ) -> None:
         key = tile.placement.key
         item = self._tile_items.get(key)
         kind = self._tile_item_kinds.get(key)
 
         if item is None or kind is None:
-            self._upsert_tile(tile)
+            self._upsert_tile(tile, timing=timing)
             return
 
         placement = tile.placement
@@ -592,15 +636,26 @@ class LiveMapWidgets:
         self._tile_item_kinds.pop(key, None)
         self._active_photos.pop(key, None)
 
-    def _photo_for_tile(self, key: MapTileKey, png: bytes) -> Any:
+    def _photo_for_tile(
+        self,
+        key: MapTileKey,
+        png: bytes,
+        *,
+        timing: UiTiming | None = None,
+    ) -> Any:
         cached = self._photo_cache.get(key)
         if cached is not None and cached[0] == png:
             self._photo_cache.move_to_end(key)
             return cached[1]
 
-        photo = self._tk.PhotoImage(
-            data=b64encode(png).decode("ascii"),
-        )
+        encoded_started = timing.start() if timing is not None else 0.0
+        encoded = b64encode(png).decode("ascii")
+        if timing is not None:
+            timing.observe_subphase("base_b64", encoded_started)
+        photo_started = timing.start() if timing is not None else 0.0
+        photo = self._tk.PhotoImage(data=encoded)
+        if timing is not None:
+            timing.observe_subphase("base_photo", photo_started)
         self._photo_cache[key] = (png, photo)
         self._photo_cache.move_to_end(key)
         return photo
@@ -818,12 +873,15 @@ class LiveMapWidgets:
 
         self._raise_radar_layer()
 
-    def _flush_pending_radar_tiles(self) -> None:
+    def _flush_pending_radar_tiles(self, *, timing: UiTiming | None = None) -> None:
         """Bound synchronous PhotoImage work per Tk refresh."""
         batch = self._pending_radar_tiles[:_RADAR_TILE_REDRAW_PER_REFRESH]
         del self._pending_radar_tiles[:len(batch)]
         for frame_token, tile in batch:
-            self._upsert_radar_tile(frame_token, tile)
+            if timing is None:
+                self._upsert_radar_tile(frame_token, tile)
+            else:
+                self._upsert_radar_tile(frame_token, tile, timing=timing)
         if batch:
             self._raise_radar_layer()
             self._trim_radar_photo_cache(batch[-1][0])
@@ -838,14 +896,20 @@ class LiveMapWidgets:
         self,
         frame_token: str,
         tile: RadarTileSnapshot,
+        *,
+        timing: UiTiming | None = None,
     ) -> None:
         key = tile.placement.key
+        canvas_started = timing.start() if timing is not None else 0.0
         self._remove_radar_tile(key)
+        if timing is not None:
+            timing.observe_subphase("radar_canvas", canvas_started)
         if tile.png is None:
             return
         cache_key = (frame_token, key)
-        photo = self._radar_photo_for_tile(cache_key, tile.png)
+        photo = self._radar_photo_for_tile(cache_key, tile.png, timing=timing)
         self._radar_active_photos[key] = photo
+        canvas_started = timing.start() if timing is not None else 0.0
         self._radar_items[key] = self._canvas.create_image(
             tile.placement.x_px,
             tile.placement.y_px,
@@ -853,6 +917,8 @@ class LiveMapWidgets:
             anchor="nw",
             tags="map-radar",
         )
+        if timing is not None:
+            timing.observe_subphase("radar_canvas", canvas_started)
 
     def _move_radar_tile(
         self,
@@ -900,12 +966,21 @@ class LiveMapWidgets:
         self,
         cache_key: tuple[str, MapTileKey],
         png: bytes,
+        *,
+        timing: UiTiming | None = None,
     ) -> Any:
         cached = self._radar_photo_cache.get(cache_key)
         if cached is not None and cached[0] == png:
             self._radar_photo_cache.move_to_end(cache_key)
             return cached[1]
-        photo = self._tk.PhotoImage(data=b64encode(png).decode("ascii"))
+        encoded_started = timing.start() if timing is not None else 0.0
+        encoded = b64encode(png).decode("ascii")
+        if timing is not None:
+            timing.observe_subphase("radar_b64", encoded_started)
+        photo_started = timing.start() if timing is not None else 0.0
+        photo = self._tk.PhotoImage(data=encoded)
+        if timing is not None:
+            timing.observe_subphase("radar_photo", photo_started)
         self._radar_photo_cache[cache_key] = (png, photo)
         self._radar_photo_cache.move_to_end(cache_key)
         return photo

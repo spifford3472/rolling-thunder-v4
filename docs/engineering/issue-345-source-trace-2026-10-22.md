@@ -145,6 +145,14 @@ It must record bounded durations/counts only—no callsigns, location, image byt
 QSO data, raw control events, audio, or secrets—and must not alter ordering,
 thread ownership, FT8 scheduling, radio authority, or error propagation.
 
+The source probe implementing that diagnostic boundary is now present on the
+focused investigation branch. It reuses the disabled-by-default timing flag and
+existing one-per-second slow-refresh reporter; stores only fixed subphase/action
+tokens with count/total/max duration for the current refresh; and has deterministic
+tests for disabled behavior, payload rejection, accepted-action ordering, and the
+real synchronous base-image path. It is not installed, and therefore supplies no
+new field attribution or performance claim.
+
 If installed evidence confirms image materialization, the smallest correction
 candidate is to move immutable byte preparation (including base64 preparation or
 frame composition) to the existing map/radar workers, retain all Tk object and
@@ -160,4 +168,6 @@ Rollout requires an isolated display replay, then separately approved garage
 acceptance on the exact green SHA with radar off, cached radar, and unavailable
 Forge. Deployment must retain the prior exact SHA and configuration for rollback;
 rollback is the approved deployment wrapper returning both hosts to that SHA.
-No merge or deployment is authorized in this slice.
+The original diagnostic slice did not authorize merge or deployment. The Oct. 22
+evening stability mission separately authorizes review and qualifying merge of
+this bounded probe; Pi deployment and installed acceptance remain separate gates.

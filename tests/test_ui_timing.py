@@ -10,6 +10,9 @@ def test_disabled_collector_never_uses_clock():
     sample.begin_refresh()
     sample.observe("map", 0)
     sample.checkpoint("pre_controls")
+    with sample.subphase("map_snapshot"):
+        pass
+    sample.observe_control_action("voice", 10.0)
     sample.end_refresh(0)
 
 
@@ -104,3 +107,39 @@ def test_invalid_slow_refresh_limits_rejected():
         UiTiming(slow_refresh_threshold_ms=0)
     with pytest.raises(ValueError):
         UiTiming(slow_report_interval_s=0)
+
+
+def test_slow_refresh_reports_bounded_subphases_and_action_tokens(capsys):
+    now = [0.0]
+    timer = UiTiming(
+        enabled=True,
+        clock=lambda: now[0],
+        report_every=99,
+        slow_refresh_threshold_ms=100,
+    )
+    started = timer.begin_refresh()
+    with timer.subphase("map_snapshot"):
+        now[0] += 0.020
+    detail_started = timer.start()
+    now[0] += 0.030
+    timer.observe_subphase("base_photo", detail_started)
+    timer.observe_control_action("move_next", 12.5)
+    timer.observe_control_action("move_next", 7.5)
+    now[0] += 0.060
+    timer.end_refresh(started)
+
+    event = capsys.readouterr().err
+    assert "subphases=base_photo:1:30.00:30.00,map_snapshot:1:20.00:20.00" in event
+    assert "actions=move_next:2:20.00:12.50" in event
+    assert "callsign" not in event
+
+
+def test_subphase_and_action_names_reject_unbounded_payloads():
+    import pytest
+
+    timer = UiTiming(enabled=True, clock=lambda: 0.0)
+    timer.begin_refresh()
+    with pytest.raises(ValueError), timer.subphase("callsign_K1ABC"):
+        pass
+    with pytest.raises(ValueError):
+        timer.observe_control_action("move_next event-123", 1.0)
