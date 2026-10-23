@@ -520,10 +520,16 @@ power policy, transmit authority, contact logging or Wavelog. Optional Forge
 delivery and VOACAP processing are off by default; network/provider loss leaves the
 local attempt queued and never turns missing data into a propagation failure.
 
-Phase C4 forecast sampling exists only as disabled, offline Forge development code.
-There is no operator control, AI recommendation, band ranking, power advice, radio
-command or active scheduler. Any stored 20-W value is a model reference, not a
-measurement or instruction, and VOACAP reliability is not QSO success probability.
+Phase C4/C6 forecast sampling is a separately supervised Forge-only service. Its
+production timer may run four times daily under an immutable, bounded plan; it has
+no dashboard control, AI recommendation, band ranking, power advice, radio command,
+or transmit authority. Any stored 20-W value is a model reference, not a measurement
+or instruction, and VOACAP reliability is not QSO success probability. A successful
+timer exit is not by itself proof of forecast coverage: cycle JSON and the
+administrator-only query-only `--health` report distinguish provider-stored ready,
+cache-reused ready, unavailable, pending, missing, stale, skipped, and failed/missed
+slots. It also binds coverage to the exact plan and per-day slot identities rather
+than treating matching totals as sufficient evidence.
 
 Phase C5 adds offline Forge evaluation and a shadow-only explanatory data contract.
 It still adds no dashboard control or displayed recommendation and cannot reorder a
