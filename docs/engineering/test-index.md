@@ -115,6 +115,12 @@ Live acceptance should use an exact commit SHA and record rollback information.
 
 ## Contact logging and synchronization
 
+`tests/test_offline_contact_durability.py` is the integrated local-first acceptance
+gate. It holds a network upload future while an ordinary dashboard commit completes,
+reconstructs the SQLite repositories after outage, and proves ordinary plus FT8
+contacts retain their UUID/payload and retry state. Reconnect is exercised through
+the durable Forge UUID ledger so lost responses do not duplicate Wavelog writes.
+
 - `tests/test_contact_backup.py`
 - `tests/test_contact_commit_controller.py`
 - `tests/test_contact_export.py`
