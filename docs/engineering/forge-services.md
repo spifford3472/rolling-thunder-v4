@@ -21,6 +21,8 @@ Production API: port 8766 on the private network.
 Responsibilities include:
 
 - durable provider-neutral spot snapshots;
+- backward-compatible transactional widening of the snapshot mode constraint to
+  the complete shared `RadioMode` domain;
 - POTA provider polling;
 - persistent DX Summit IRC ingestion;
 - disabled-by-default persistent DXSpider fallback;

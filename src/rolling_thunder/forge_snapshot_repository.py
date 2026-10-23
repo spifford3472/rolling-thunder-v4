@@ -27,6 +27,7 @@ from rolling_thunder.spot_domain import (
 
 _FORGE_SCHEMA_VERSION: Final = 1
 _MAX_ERROR_LENGTH: Final = 500
+_FORGE_SPOT_MODE_VALUES: Final = tuple(mode.value for mode in RadioMode)
 
 
 class ForgeSnapshotStorageError(Exception):
@@ -333,31 +334,7 @@ class SqliteForgeSnapshotRepository:
                     )
                     """
                 )
-                connection.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS forge_spots (
-                        position INTEGER PRIMARY KEY CHECK (position >= 0),
-                        provider TEXT NOT NULL,
-                        stable_key TEXT NOT NULL UNIQUE,
-                        callsign TEXT NOT NULL,
-                        operator_name TEXT,
-                        grid TEXT,
-                        frequency_hz INTEGER NOT NULL CHECK (frequency_hz > 0),
-                        mode TEXT NOT NULL CHECK (mode IN ('AM', 'CW', 'DATA', 'FM', 'LSB', 'USB')),
-                        display_mode TEXT NOT NULL,
-                        spotted_at TEXT NOT NULL,
-                        source_metadata_json TEXT NOT NULL,
-                        pota_park_reference TEXT,
-                        pota_park_name TEXT,
-                        pota_location_code TEXT,
-                        pota_latitude REAL,
-                        pota_longitude REAL,
-                        FOREIGN KEY (provider)
-                            REFERENCES forge_provider_slices (provider)
-                            ON DELETE CASCADE
-                    )
-                    """
-                )
+                self._ensure_spots_table(connection)
                 connection.commit()
         except ForgeSnapshotStorageError:
             raise
@@ -366,6 +343,95 @@ class SqliteForgeSnapshotRepository:
                 f"Forge snapshot database could not be initialized: "
                 f"{self._database_path}: {self._bounded_error(error)}"
             ) from error
+
+    @classmethod
+    def _ensure_spots_table(cls, connection: sqlite3.Connection) -> None:
+        """Create or compatibly widen the v1 mode constraint without losing rows."""
+        connection.execute(cls._spots_table_sql("forge_spots", if_not_exists=True))
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'forge_spots'"
+        ).fetchone()
+        if row is None or not isinstance(row[0], str):
+            raise ForgeSnapshotStorageError("Forge snapshot spot table definition is missing.")
+        table_sql = row[0]
+        if all(f"'{mode}'" in table_sql for mode in _FORGE_SPOT_MODE_VALUES):
+            return
+
+        migration_table = "forge_spots_mode_migration"
+        connection.execute(cls._spots_table_sql(migration_table, if_not_exists=False))
+        connection.execute(
+            f"""
+            INSERT INTO {migration_table} (
+                position,
+                provider,
+                stable_key,
+                callsign,
+                operator_name,
+                grid,
+                frequency_hz,
+                mode,
+                display_mode,
+                spotted_at,
+                source_metadata_json,
+                pota_park_reference,
+                pota_park_name,
+                pota_location_code,
+                pota_latitude,
+                pota_longitude
+            )
+            SELECT
+                position,
+                provider,
+                stable_key,
+                callsign,
+                operator_name,
+                grid,
+                frequency_hz,
+                mode,
+                display_mode,
+                spotted_at,
+                source_metadata_json,
+                pota_park_reference,
+                pota_park_name,
+                pota_location_code,
+                pota_latitude,
+                pota_longitude
+            FROM forge_spots
+            """
+        )
+        connection.execute("DROP TABLE forge_spots")
+        connection.execute(f"ALTER TABLE {migration_table} RENAME TO forge_spots")
+
+    @staticmethod
+    def _spots_table_sql(table_name: str, *, if_not_exists: bool) -> str:
+        """Return the canonical spot-table DDL for one internal migration name."""
+        if table_name not in {"forge_spots", "forge_spots_mode_migration"}:
+            raise ValueError("unexpected Forge spot table name")
+        guard = "IF NOT EXISTS " if if_not_exists else ""
+        mode_values = ", ".join(f"'{mode}'" for mode in _FORGE_SPOT_MODE_VALUES)
+        return f"""
+            CREATE TABLE {guard}{table_name} (
+                position INTEGER PRIMARY KEY CHECK (position >= 0),
+                provider TEXT NOT NULL,
+                stable_key TEXT NOT NULL UNIQUE,
+                callsign TEXT NOT NULL,
+                operator_name TEXT,
+                grid TEXT,
+                frequency_hz INTEGER NOT NULL CHECK (frequency_hz > 0),
+                mode TEXT NOT NULL CHECK (mode IN ({mode_values})),
+                display_mode TEXT NOT NULL,
+                spotted_at TEXT NOT NULL,
+                source_metadata_json TEXT NOT NULL,
+                pota_park_reference TEXT,
+                pota_park_name TEXT,
+                pota_location_code TEXT,
+                pota_latitude REAL,
+                pota_longitude REAL,
+                FOREIGN KEY (provider)
+                    REFERENCES forge_provider_slices (provider)
+                    ON DELETE CASCADE
+            )
+        """
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._database_path)

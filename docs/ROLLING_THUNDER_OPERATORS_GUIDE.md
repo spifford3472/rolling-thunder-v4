@@ -304,6 +304,11 @@ show it again without adding a confirmation press or changing receive tuning.
 
 ## If POTA data is unavailable
 
+Forge retains the last complete durable POTA/DX snapshot when a new combined
+snapshot cannot be stored. A supported digital-mode row is valid snapshot data even
+though the mobile POTA filter intentionally presents only SSB/phone and CW; it must
+not invalidate the retained snapshot refresh.
+
 A provider or Forge outage may leave retained state available. Rolling Thunder
 should identify retained/degraded state truthfully rather than treating old data
 as live.
