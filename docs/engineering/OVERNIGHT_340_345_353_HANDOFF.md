@@ -1,5 +1,10 @@
 # Overnight mission handoff — issues 340, 345 and 353
 
+> Historical execution checkpoint. For the completed Oct 22 #340 inventory and
+> explicitly dispositioned gaps, see [production baseline and recovery](production-baseline-and-recovery.md).
+> Earlier blocked/current-status statements below describe their original observation times.
+
+
 ## 2026-10-22 reviewed resumption checkpoint
 
 - Resumption authority: complete issue #340 comments `6337074884` and

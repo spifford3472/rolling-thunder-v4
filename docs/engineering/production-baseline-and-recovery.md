@@ -1,265 +1,183 @@
 # Production baseline and recovery inventory
 
-## Purpose and evidence rule
+## Final R0-01 disposition — evidence collected 2026-10-22
 
-This document is the R0-01 inventory for issue #340. It separates verified
-production observations from repository state and from unverified assumptions.
-An installed identity is never inferred from a development checkout, package
-version, backup archive, or GitHub `main`.
+Issue #340's read-only inventory is complete with the provenance limitations below
+explicitly recorded. This is a dated observation, not a claim that production
+still matches it indefinitely or that another issue is deployed or accepted.
+Historical overnight handoffs are superseded by this inventory for #340.
 
-The last complete host inventory below was collected on 2026-10-16 through
-authorized metadata-only inspection. Restricted checks on 2026-10-21 and a
-reviewed read-only resumption on 2026-10-22 confirmed current service/timer
-state and the installed C6 release, but could not read the Pi checkout identity,
-direct-install Forge provenance, or protected backup/database contents. Therefore
-this inventory is suitable recovery context but does **not** clear a new
-deployment identity/recovery gate without the remaining minimum helper output.
+No production restart, deployment, restore, database/configuration modification,
+permission change, provider request or radio action was required. The owner
+performed one fixed-scope administrator read; no permanent privileged access was
+installed. Missing Git provenance remains an affected-component deployment gate.
 
-## Repository baseline
+## Source baseline and evidence boundaries
 
-On 2026-10-22 the live GitHub `main` ref and the fresh isolated resumption
-workspace both resolved to:
+The isolated mission source began at GitHub main
+`d7a3b574dc53d213764eff341ad77ae976df57e1`; main was independently checked
+after PR #356 at `5572872dee7ddd937ad5ff959714fdb603092908`. Neither development
+source nor GitHub main establishes production identity. Installed metadata,
+service entrypoints, checkout identity and backup evidence are recorded separately.
 
-```text
-d7a3b574dc53d213764eff341ad77ae976df57e1
-```
+The final owner-run report was read from
+`/home/geoff/r0340-protected-evidence.json`, timestamp Oct 22 20:04:45 EDT,
+owned by geoff, mode 0600. Its SHA-256 is
+`187dfbc08a767f3b58bfc8005a2169291c760b5630e31f17701e6b5145522f0a`.
+Report source is private infrastructure PR #4, pinned commit
+`928501ee4f9e9d3f7e874f9951d6b85fc07451de`;
+script SHA-256 is
+`96d9593478094932b765eaf4ea28fb74836a9e9d4120da225abd93171cacd2c8`.
+No credentials, configuration contents or QSO rows are included in this inventory.
 
-The resumption branch was `engineering/resume-340-345-353-20261022` and clean at
-that source before mission changes. Repository identity does not establish either
-host's running version.
+## anvilmobile production identity
 
-## anvilmobile inventory
+Owner-authorized read-only inspection on Oct 22 10:17–10:20 EDT established:
 
-| Asset | Last verified production evidence |
+| Asset | Observed identity |
 |---|---|
-| Main unit | `rolling-thunder.service`, installed under `/etc/systemd/system/` |
+| Main unit | `rolling-thunder.service`, active/running/enabled |
+| Process | PID 335866, started Oct 20 18:30:05 EDT |
 | Entrypoint | `/usr/bin/bash /home/geoff/projects/rolling-thunder-v4/deploy/rolling-thunder-autostart` |
-| Working/source path | `/home/geoff/projects/rolling-thunder-v4` |
-| Source identity (2026-10-16) | clean detached HEAD `0c79f2a7eebea23bf586ac218be3bb4e3ab8dd9f` |
+| Checkout | `/home/geoff/projects/rolling-thunder-v4`, clean detached HEAD |
+| Checkout commit | `1f2f7c5c739757bd2e5746aa10597b8b9440bf27`, GitHub merge #354 |
+| Process association | Unit WorkingDirectory and process cwd match checkout; executable `/usr/bin/python3.13` |
 | Runtime config | `config/rolling-thunder.yaml`; `config/antenna-reference.yaml` |
-| Primary durable database | `config/data/rolling-thunder.db` |
-| Secret environment metadata | FT8 evidence/period files mode `0600` root-owned; completed-QSO delivery file mode `0640` root:`geoff`; contents not inventoried |
-| Backup timers | `r02-pi-snapshot.timer`; `r02-pi-deliver.timer` |
+| Durable database | `config/data/rolling-thunder.db` |
+| Backup timers | `r02-pi-snapshot.timer`; `r02-pi-deliver.timer`, active/waiting |
 
-The 2026-10-21 restricted health preflight reported the main service active and
-enabled and both backup timers scheduled. It did not expose the current checkout
-SHA or a fresh backup manifest. A Pi restart or deployment remains prohibited
-until installed identity, backup readiness, and operating state are positively
-verified through approved interfaces.
+This is checkout/entrypoint association, not proof every loaded Python byte equals
+the current disk after any in-place changes since process start. No restart was
+performed to resolve that deployment-acceptance distinction. Operator-use state
+remains unknown: establish it before any Pi restart or deployment.
 
-The 2026-10-22 restricted check reconfirmed `rolling-thunder.service`
-active/running/enabled with PID 335866, start time 2026-10-20 18:30:05 EDT,
-working directory `/home/geoff/projects/rolling-thunder-v4`, and the expected unit
-path. The snapshot timer last triggered 2026-10-22 01:30 EDT and the delivery
-timer last triggered 05:05:01 EDT; both remain active/waiting. The restricted
-account was denied traversal of the production checkout, so current HEAD,
-detached/branch state and cleanliness remain unverified. It also lacks journal
-access, so #345 timing/error evidence remains unavailable without a helper.
+FT8 evidence/period secret-environment files were root-owned mode 0600; completed
+QSO delivery metadata was root:geoff mode 0640 in the Oct 16 inventory. Contents
+were not read. Current configuration must be preserved privately before changes.
 
-## Forge inventory
+## Forge production identities
 
-| Component | Runtime/state identity last verified 2026-10-16 |
+| Component | Evidence and identity |
 |---|---|
-| Callsign information | direct install `rolling-thunder==4.4.0`; temporary build-source URL did not identify an immutable commit; state `/var/lib/rolling-thunder-forge-callsign-info` |
-| Contact sync | direct install `rolling-thunder==4.4.0`; temporary build-source URL did not identify an immutable commit; durable state under `/var/lib/rolling-thunder` |
-| Spots/weather/radar | direct editable source `file:///opt/rolling-thunder-forge`; database `/var/lib/rolling-thunder/forge-spots.db` |
-| Propagation collector | immutable release `fb9efe09314a07d4fe1dc08cb25bdeffd6213038`; state `/var/lib/rolling-thunder-forge-propagation` |
-| Propagation QSO worker | immutable release `24762a12580e5827db8b616539be37981cbcdb54`; state `/var/lib/rolling-thunder-forge-propagation-qso` |
-| PSK Reporter | immutable release `e09903b5fe06bd5ca350f80648acf45d5d7011c6`; state `/var/lib/rolling-thunder-forge-pskreporter` |
-| PSK evidence listener | immutable release `47c7421b8fde560258643328b6c7ed7de1cc1b18` |
-| VOACAP C6 baseline | dedicated timer/service; protected database `/var/lib/rolling-thunder-forge-propagation/c6-predicted-ssn-baseline-20261013.sqlite3` |
+| Callsign information | Oct 22 administrator report: `rolling-thunder==4.4.0`, local/archive origin; root `/opt/rolling-thunder-forge-callsign-info` |
+| Contact sync | Oct 22 administrator report: `rolling-thunder==4.4.1`, local/archive origin; root `/opt/rolling-thunder-forge-contact-sync` |
+| Spots/weather/radar | Oct 22 clean detached editable checkout `/opt/rolling-thunder-forge` at `28f798ada0f81e2638797f3a56ebc7c172bb4ea4` |
+| Propagation collector | Last directly verified Oct 16 immutable release `fb9efe09314a07d4fe1dc08cb25bdeffd6213038` |
+| Propagation QSO worker | Last directly verified Oct 16 immutable release `24762a12580e5827db8b616539be37981cbcdb54` |
+| PSK Reporter | Oct 22 release `e09903b5fe06bd5ca350f80648acf45d5d7011c6` |
+| PSK evidence listener | Oct 22 unit executes release `47c7421b8fde560258643328b6c7ed7de1cc1b18` |
+| VOACAP C6 baseline | Oct 22 current release `858e95e59b131193d92ffefadf7134ab043d8f20` (merge #328) |
 
-The immutable release identifiers above were reconciled to valid repository
-commits. The three direct installs retain an explicit provenance limitation:
-package metadata alone is insufficient to recover their exact source commit.
-Do not infer one from version `4.4.0` or a nearby deployment.
+Callsign, contact-sync, spots, propagation, propagation-QSO, PSK Reporter and PSK
+evidence services were active in the Oct 22 inspection. Contact sync had been
+running since Oct 21 20:04:04 EDT. The C6 timer was active; the Oct 22 02:10:05
+EDT service exited 0. NOAA refresh was scheduled. These are service observations,
+not proof of C6 forecast freshness, slot coverage or #353 operational acceptance.
+Propagation collector/QSO release identities above retain their Oct 16 evidence
+date; their current link targets were not independently reverified on Oct 22.
 
-Active Forge YAML files observed in 2026 were root-owned, service-group-readable
-mode `0640`; contents and credentials are deliberately excluded here. Durable
-state roots were service-separated mode `0750`. Current configuration contents
-must be backed up without being printed or committed.
+State roots include `/var/lib/rolling-thunder-forge-callsign-info`,
+`/var/lib/rolling-thunder`, `/var/lib/rolling-thunder-forge-propagation`,
+`/var/lib/rolling-thunder-forge-propagation-qso`, and
+`/var/lib/rolling-thunder-forge-pskreporter`. The C6 database is
+`/var/lib/rolling-thunder-forge-propagation/c6-predicted-ssn-baseline-20261013.sqlite3`.
+Observed Forge YAML metadata was root/service-group mode 0640; service-separated
+state roots were mode 0750. Configuration contents are excluded.
 
-The 2026-10-21 restricted preflight confirmed contact sync active, the R0-02
-forward result successful, and the VOACAP timer active with its last service
-exit successful. It could not inspect the protected C6 database, journal, or
-backup contents. A successful oneshot exit does not prove forecast persistence.
+### Direct-install provenance limitation and recovery disposition
 
-The 2026-10-22 reviewed Forge check adds current evidence:
+The fixed metadata/marker checks returned no VCS commit for callsign-info or
+contact-sync. This is a bounded inspection, not proof no deployment record exists
+elsewhere. Version numbers and fingerprints must never be relabelled Git SHAs.
 
-- contact sync remains active/running from 2026-10-21 20:04:04 EDT;
-- C6 `current` resolves to immutable repository commit
-  `858e95e59b131193d92ffefadf7134ab043d8f20` (merge PR #328);
-- the C6 service ran at 2026-10-22 02:10:05 EDT and exited 0, while its timer
-  remains active/waiting for 08:10 EDT;
-- NOAA refresh last triggered 02:00:01 EDT and remains scheduled for 08:00 EDT;
-- the C6 service identity is `rolling-thunder-propagation`, with the known config
-  and protected database paths; the database remains unreadable to `geoff`;
-- PSK Reporter still resolves to `e09903b5fe06bd5ca350f80648acf45d5d7011c6`,
-  and the PSK evidence unit still executes immutable release `47c7421b...`; and
-- callsign-info, contact-sync, spots, propagation, propagation-QSO, PSK evidence,
-  and PSK Reporter services were active. Direct installs and the propagation
-  release links remain unverified where current permissions do not expose their
-  immutable source identity.
+| Installed distribution | Python files | Deterministic source-tree SHA-256 |
+|---|---:|---|
+| Callsign-info 4.4.0 | 275 | `3c1a57e385abc5c7dca09d42eb13ec72aeded0dc4c6f872f0bde38d1c4cf2827` |
+| Contact-sync 4.4.1 | 341 | `d668fb4b3681e353302e9380a4f382e1ff61cc2dfe93f2694efd4720b0713b75` |
 
-These facts establish service and C6 release identity only. They do not establish
-C6 database integrity/coverage, current direct-install source provenance, or a
-safe deployment baseline.
+These fingerprints identify the inspected Python sources only; they are not
+complete recoverable package artifacts. Before replacing either install, preserve
+the existing installation/environment, unit/configuration and consistent data,
+verify the preserved rollback artifact against this identity, and record the new
+immutable release commit. If that cannot be done through an approved deployment
+path, stop that deployment. Do not rebuild an assumed old commit from the version.
+No source-history certainty is manufactured merely to close an inventory.
 
 ## Backup and representative restore evidence
 
-The 2026-10-16 R0-02 AnvilVault/PBS snapshot was independently restored to
-temporary paths. The Pi database and all 11 Forge SQLite databases passed
-SQLite integrity checks. Both archives and all 14 manifest-covered files
-matched their recorded hashes and sizes. This is representative restore
-evidence and establishes the recovery method without overwriting production.
+### Pi snapshot and delivery
 
-On 2026-10-22 the Pi snapshot/delivery timers remained current. Forge
-`rolling-thunder-r02-forge-backup.service` ran from 02:00:01 to 02:00:05 EDT and
-exited successfully; `r02-forge-forward.service` ran from 05:10:04 to 05:10:06
-EDT and exited successfully. The protected R0-02 directory still prevents this
-account from validating the fresh manifest, hashes, SQLite checks or coverage.
+The actual root is `/mnt/rolling-thunder-data/backups/rolling-thunder`.
+Snapshot `20261022T053001Z` uses SQLite online backup. Independent reads verified
+database and both configuration-file sizes/SHA-256 without printing configuration;
+query-only integrity was OK and foreign-key violations were zero. The
+`20261016T053004Z` snapshot manifest remained present.
 
-The separate user `forge-radio-config-backup.service` failed on 2026-10-19 while
-copying a permission-restricted `hamtools/dmrfill/dmrfill` path. Its earlier
-ham-application archive phase reported completion, but the later radio/Node-RED
-backup did not complete. This is a real gap for that separate recovery asset; it
-does not prove R0-02 failure and was neither repaired nor restarted under #340.
+The Oct 22 10:05:51 EDT delivery journal confirmed the latest copy hash-verified
+on Forge. Its inbox archive
+`/srv/backups/rolling-thunder-mobile-inbox/20261022T053001Z.tar.gz`
+was independently hashed:
+`3b5eab6f0dc7f9b2b45cf64d8a7df24c5abb444210c212c17cd47dfec32fdfc8`.
+This matches the forwarding job's Oct 22 01:40:06 EDT
+`R02_ANVILVAULT_VERIFIED` record. The Oct 16 Pi inbox archive was retained.
 
-Recovery rules:
+### Forge protected snapshot
 
-1. Use SQLite backup semantics or a consistent snapshot, never an uncoordinated
-   live database copy.
-2. Restore into isolated temporary paths and run integrity/foreign-key checks
-   before considering production recovery.
-3. Never restore an old database over newer contacts, telemetry, forecasts, or
-   synchronization ledgers.
-4. Preserve new records and reconcile forward when rollback code is compatible
-   with the current schema.
-5. Keep secrets/configuration, code releases, unit files, and durable data as
-   separate recovery assets.
+The administrator report independently read existing snapshot
+`/var/backups/rolling-thunder/r02/20261022T060001Z`.
+Manifest status was complete, method `sqlite3.Connection.backup`.
+All eleven declared assets matched their manifest sizes and SHA-256, passed
+SQLite integrity, and had zero foreign-key violations:
 
-## Open gates and exact next action
+- `contact-sync/forge-contact-sync.db`
+- `contact-sync/forge-contact-sync-contact-snapshots.db`
+- `spots/forge-spots.db`
+- `callsign/known-callsigns.sqlite3`
+- `propagation/c4-baseline.sqlite3`
+- `propagation/c6-predicted-ssn-baseline-20261013.sqlite3`
+- `propagation/propagation-history.sqlite3`
+- `propagation-qso/ingestion.sqlite3`
+- `propagation-qso/history.sqlite3`
+- `pskreporter/orchestration.sqlite3`
+- `pskreporter/history.sqlite3`
 
-R0-01 remains `IN_PROGRESS`, not `DONE`, because the current Pi checkout SHA,
-the current Forge direct-install source identities, and a fresh protected backup
-manifest were not available through this runner's approved read-only interface.
-Production deployment is blocked by that uncertainty.
+The Oct 16 Forge snapshot directory was retained. Backup copies were opened with
+read-only immutable SQLite and query-only checks; no live databases were opened
+by the report and no sidecars or new backups were created.
 
-The exact minimum authorized helper/read output still needed is:
-
-1. Pi helper output containing only current checkout SHA, branch/detached state,
-   cleanliness, effective service entrypoint, and a reliable operator-use state;
-   no journal payload or configuration contents are required for #340.
-2. Forge deployment-state/helper output mapping callsign-info, contact-sync,
-   spots and unreadable release links to exact pushed commits where recorded;
-   an absent mapping should be reported as an irreducible provenance gap.
-3. Latest Pi and Forge R0-02 manifest timestamp, covered asset count/identities,
-   archive hash result, SQLite integrity/foreign-key summary, forward result, and
-   confirmation that the independently restored 2026-10-16 recovery point is
-   retained. Raw archives, databases and secrets are not required.
-4. Separate radio-config backup follow-up only if the owner wants that recovery
-   asset repaired; #340 needs only the failure disposition above and does not
-   authorize a restart, permission change or unrelated repair.
-
-No production restart or deployment is needed solely to finish this inventory.
-
-## Additional owner-authorized evidence — 2026-10-22 10:17–10:20 EDT
-
-The owner explicitly authorized read-only use of the existing geoff connection
-on anvilmobile. This removed the Pi source-identity and journal-access limitation
-for this inspection; no identity was silently substituted and no permissions were
-changed.
-
-### Current Pi source and executable identity
-
-- Checkout HEAD: `1f2f7c5c739757bd2e5746aa10597b8b9440bf27`, independently
-  reconciled to GitHub merge PR #354 (FT8 popup offline lifecycle).
-- Detached HEAD, clean worktree (`git status --short --branch` showed only
-  `## HEAD (no branch)`).
-- The active service still has PID 335866 and start time Oct 20 18:30:05 EDT.
-  Its ExecStart is `/usr/bin/bash` with
-  `/home/geoff/projects/rolling-thunder-v4/deploy/rolling-thunder-autostart`.
-  WorkingDirectory and the process cwd both resolve to that checkout; executable
-  resolves to `/usr/bin/python3.13`.
-- This establishes the checkout/entrypoint association observed now; it does not
-  prove all loaded Python bytes equal today's on-disk bytes after any in-place
-  edit since process start. No service restart was performed to resolve that
-  separate deployment acceptance limitation.
-- Pi operator-use state has not been established. That remains a restart/deploy
-  gate, not a prerequisite for the read-only baseline inspection.
-
-### Fresh Pi backup independently rechecked
-
-Actual snapshot root is
-`/mnt/rolling-thunder-data/backups/rolling-thunder`, not
-`/var/backups/rolling-thunder`. The existing geoff-owned snapshot
-`20261022T053001Z` was read in place without writes.
-
-- Manifest method: SQLite online backup.
-- Database and both configuration assets match their recorded sizes and SHA-256.
-  Configuration contents were neither printed nor committed.
-- Independent query-only SQLite check: integrity `ok`; foreign-key violations 0.
-- The prior `20261016T053004Z` Pi snapshot manifest remains present.
-- Oct 22 10:05:51 EDT delivery journal reports this latest snapshot already
-  hash-verified on Forge.
-- Forge inbox archive SHA-256 was independently computed:
-  `3b5eab6f0dc7f9b2b45cf64d8a7df24c5abb444210c212c17cd47dfec32fdfc8`.
-  It matches the forwarding journal's Oct 22 01:40:06 EDT
-  `R02_ANVILVAULT_VERIFIED` record for the same archive.
-- The Oct 16 Pi archive also remains in Forge's inbox. This is not a fresh PBS
-  restore or an independent query of the destination; the destination hash
-  comparison is evidence from the reviewed forwarding job and its journal.
-
-### Fresh Forge backup evidence from reviewed root-owned job
-
-Read `/usr/local/sbin/rolling-thunder-r02-snapshot.py` and
-`rolling-thunder-r02-nightly.sh` without executing them. The snapshot uses
-SQLite online backup and checks backup integrity; the transfer compares local
-and destination archive hashes before promotion. These are stronger records than
-a successful systemd exit alone.
-
-Oct 22 02:00 EDT journal records show integrity PASS for all eleven declared
-SQLite assets (contact sync and contact snapshots; spots; callsigns; C4 and C6
-baselines; propagation history; QSO ingestion/history; PSK orchestration/history).
-It records completed snapshot `20261022T060001Z` and off-host verification with
-archive SHA-256
+Reviewed root-owned snapshot/forward scripts use SQLite backup and compare local
+and destination hashes. The Oct 22 job journal records all eleven integrity PASS
+results, snapshot completion and off-host archive verification:
 `0b5ce569820c5fe6405be7f9f70fc0d909e289d133f4813f48fb56c83e9b841b`.
+Off-host verification is evidence from that job/journal, not a new independent
+destination read. The administrator report checked local snapshot files only.
 
-The current account has not independently opened the protected Forge snapshot
-manifest or rerun its SQLite/foreign-key checks. Preserve that distinction:
-root-owned job evidence is verified in the journal; independent fresh Forge
-artifact validation remains an administrator-only read.
+### Restore scope and separate failed asset
 
-### Current spots source and remaining direct-install provenance
+The Oct 16 R0-02 AnvilVault/PBS snapshot was previously restored into isolated
+temporary paths: Pi plus all eleven Forge SQLite integrity checks passed, both
+archives and all fourteen manifest-covered assets matched hashes/sizes. This
+remains representative restore evidence. No new full restore of Oct 22 is claimed,
+and local retention checks do not independently establish current PBS retention.
 
-Read-only inspection of the existing spots editable checkout
-`/opt/rolling-thunder-forge` reports clean detached HEAD
-`28f798ada0f81e2638797f3a56ebc7c172bb4ea4`
-("Polish contact weather and FT8 status presentation"). The safe-directory option
-was scoped to that one read-only git invocation; no Git configuration was saved.
+The separate user `forge-radio-config-backup.service` failed Oct 19 while
+copying permission-restricted `hamtools/dmrfill/dmrfill`. Its radio/Node-RED
+backup phase did not complete. That separate asset requires a focused repair;
+it does not invalidate the independently checked R0-02 snapshot. It was not
+repaired or restarted under this read-only inventory.
 
-Callsign-info and contact-sync installed metadata and deployment-state records
-are still protected. No immutable source mapping for those current direct
-installs has been verified. An inaccessible record is not proof that no record
-exists and must not be labelled an irreducible provenance gap yet.
+## Recovery rules and remaining deployment gates
 
-The next administrator-only read should return, for those two fixed installed
-roots: package name/version, VCS commit ID if direct_url metadata contains one,
-any exact installed release/deployment marker, and whether only a temporary
-build path is recorded (without returning credential-bearing URLs). If no
-immutable mapping exists, record that limitation with a bounded installed-source
-fingerprint and preservation/recovery disposition rather than invent a SHA.
+1. Use SQLite backup or consistent snapshots; never copy active databases casually.
+2. Restore to isolated paths and check integrity/foreign keys before recovery.
+3. Never overwrite newer contacts, telemetry, forecasts or synchronization ledgers
+   with old databases. Preserve new records and reconcile forward.
+4. Preserve code, environment, unit/configuration and durable data as distinct assets.
+5. Recheck dated production identity and fresh recovery readiness for the component
+   being deployed; resolve its source-provenance/rollback limitation first.
+6. Establish safe operator-use state before Pi changes. Use only approved deployment
+   paths and separately verify feature-specific acceptance such as C6 coverage.
 
-### Updated #340 gate disposition
-
-Pi checkout/entrypoint, fresh Pi snapshot integrity and transfer chain, and the
-current spots checkout have now been independently evidenced. Remaining checks
-are the two protected direct-install source/provenance records and, if required
-for the release decision, independent reads of fresh protected Forge backup
-artifacts. The documented Oct 16 isolated restore remains representative prior
-recovery evidence; no new full restore is claimed.
-
-#340 remains open until those remaining provenance/recovery limitations are
-explicitly dispositioned. This does not authorize a production change, database
-restore, broad privileged access or radio action. No running service, job,
-configuration, database, permission or infrastructure setting was modified.
+The read-only inventory and its gaps are evidenced, satisfying #340's inventory
+criterion. #345, #353, #357 and #359 retain their own implementation, deployment
+and acceptance status; this inventory does not clear those gates automatically.

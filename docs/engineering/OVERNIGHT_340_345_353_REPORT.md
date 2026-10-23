@@ -1,5 +1,10 @@
 # Rolling Thunder v4 — Autonomous Execution Report
 
+> Historical execution checkpoint. For the completed Oct 22 #340 inventory and
+> explicitly dispositioned gaps, see [production baseline and recovery](production-baseline-and-recovery.md).
+> Earlier blocked/current-status statements below describe their original observation times.
+
+
 Date: 2026-10-21 EDT
 
 Mission authority: issue #340 comment `6330482816`
