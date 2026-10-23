@@ -142,3 +142,40 @@ def test_different_inputs_are_dispatched_independently() -> None:
     assert result.accepted == 2
     assert result.rejected == 0
     assert commands.actions == [ControlAction.VOICE, ControlAction.COMMIT]
+
+
+def test_action_observer_records_only_accepted_typed_action_after_execution() -> None:
+    import pytest
+
+    commands = RecordingCommands()
+    observations: list[tuple[str, float]] = []
+    clock_values = iter((10.0, 10.0125))
+    observed = ControlDispatcher(
+        MockControlSource((event("voice-button", "event-1", 1.0),)),
+        ControlActionMapper({"voice-button": ControlAction.VOICE}),
+        ControlEventGate(repeat_suppression_s=0.25),
+        commands,
+        action_observer=lambda token, duration: observations.append((token, duration)),
+        clock=lambda: next(clock_values),
+    )
+
+    assert observed.dispatch_available().accepted == 1
+    assert commands.actions == [ControlAction.VOICE]
+    assert observations[0][0] == "voice"
+    assert observations[0][1] == pytest.approx(12.5)
+
+
+def test_rejected_command_is_not_reported_as_accepted_action() -> None:
+    commands = RecordingCommands(accepted=False)
+    observations: list[tuple[str, float]] = []
+    observed = ControlDispatcher(
+        MockControlSource((event("commit-button", "event-1", 1.0),)),
+        ControlActionMapper({"commit-button": ControlAction.COMMIT}),
+        ControlEventGate(repeat_suppression_s=0.25),
+        commands,
+        action_observer=lambda token, duration: observations.append((token, duration)),
+        clock=lambda: 10.0,
+    )
+
+    assert observed.dispatch_available().rejected == 1
+    assert observations == []

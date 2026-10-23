@@ -594,6 +594,7 @@ def run_dashboard(
         cancel_ptt_alarm=acknowledge_ptt_alarm,
         ptt_unlock_step=handle_ptt_unlock_action,
     )
+    ui_timing = UiTiming.from_environment()
 
     control_source: ControlSource | None = None
     control_dispatcher: ControlDispatcher | None = None
@@ -608,6 +609,9 @@ def run_dashboard(
             ControlActionMapper(config.physical_controls.mappings),
             ControlEventGate(config.physical_controls.repeat_suppression_s),
             operator_commands,
+            action_observer=(
+                ui_timing.observe_control_action if ui_timing.enabled else None
+            ),
         )
 
     root = tk.Tk()
@@ -1373,8 +1377,6 @@ def run_dashboard(
         if antenna_widgets is not None:
             antenna_widgets.show()
 
-    ui_timing = UiTiming.from_environment()
-
     acknowledged_ft8_tune: list[object | None] = [None]
 
     def refresh() -> None:
@@ -1410,91 +1412,115 @@ def run_dashboard(
                 ui_timing.observe("controls", controls_start)
         ui_timing.checkpoint("controls")
 
-        active_panel_commands.synchronize_radio_state()
-        shared_spot_tune_status.refresh()
-        repeater_persistence_status = (
-            repeater_panel_runtime.synchronize_completed_persistence()
-        )
-        if dmr_panel_runtime is not None:
-            for dmr_event in dmr_panel_runtime.synchronize_commit_events():
-                if dmr_event.kind is DmrCommitEventKind.SUCCEEDED:
-                    log_panel.request_sync()
+        with ui_timing.subphase("radio_sync"):
+            active_panel_commands.synchronize_radio_state()
+        with ui_timing.subphase("spot_tune_status"):
+            shared_spot_tune_status.refresh()
+        with ui_timing.subphase("repeater_persistence"):
+            repeater_persistence_status = (
+                repeater_panel_runtime.synchronize_completed_persistence()
+            )
+        with ui_timing.subphase("dmr_commits"):
+            if dmr_panel_runtime is not None:
+                for dmr_event in dmr_panel_runtime.synchronize_commit_events():
+                    if dmr_event.kind is DmrCommitEventKind.SUCCEEDED:
+                        log_panel.request_sync()
 
-        weather_presentation = weather_panel.update(
-            runtime.latest_forge_weather_state
-        )
-        weather_alert_presentation = weather_alert_panel.update(
-            runtime.latest_forge_weather_alert_state
-        )
-        weather_alert_viewport_presentation = weather_alert_viewport.synchronize(
-            weather_alert_presentation
-        )
+        with ui_timing.subphase("weather_update"):
+            weather_presentation = weather_panel.update(
+                runtime.latest_forge_weather_state
+            )
+        with ui_timing.subphase("weather_alert_update"):
+            weather_alert_presentation = weather_alert_panel.update(
+                runtime.latest_forge_weather_alert_state
+            )
+        with ui_timing.subphase("weather_alert_viewport"):
+            weather_alert_viewport_presentation = weather_alert_viewport.synchronize(
+                weather_alert_presentation
+            )
 
-        gps_state = runtime.latest_gps_state
-        live_map_presentation = live_map_controller.update(gps_state)
+        with ui_timing.subphase("gps_snapshot"):
+            gps_state = runtime.latest_gps_state
+        with ui_timing.subphase("map_controller"):
+            live_map_presentation = live_map_controller.update(gps_state)
         if runtime.live_map is not None and live_map_presentation.position is not None:
             map_width, map_height = live_map_widgets.viewport_size
             if map_width >= 64 and map_height >= 64:
-                runtime.live_map.request_viewport(
-                    live_map_presentation.position,
-                    width_px=map_width,
-                    height_px=map_height,
-                )
-        live_map_snapshot = runtime.latest_live_map_state
-        if runtime.pota_map_markers is not None:
+                with ui_timing.subphase("map_viewport_request"):
+                    runtime.live_map.request_viewport(
+                        live_map_presentation.position,
+                        width_px=map_width,
+                        height_px=map_height,
+                    )
+        with ui_timing.subphase("map_snapshot"):
+            live_map_snapshot = runtime.latest_live_map_state
+        with ui_timing.subphase("pota_viewport_request"):
+            if runtime.pota_map_markers is not None:
+                if (
+                    live_map_controller.pota_position_is_recent(
+                        live_map_presentation,
+                        grace_after=timedelta(
+                            seconds=config.pota_map.gps_grace_period_s
+                        ),
+                    )
+                    and live_map_snapshot is not None
+                    and live_map_snapshot.viewport is not None
+                ):
+                    runtime.pota_map_markers.request_viewport(
+                        live_map_snapshot.viewport
+                    )
+                else:
+                    runtime.pota_map_markers.clear()
+        with ui_timing.subphase("radar_viewport_request"):
             if (
-                live_map_controller.pota_position_is_recent(
-                    live_map_presentation,
-                    grace_after=timedelta(seconds=config.pota_map.gps_grace_period_s),
-                )
+                runtime.live_radar is not None
                 and live_map_snapshot is not None
                 and live_map_snapshot.viewport is not None
             ):
-                runtime.pota_map_markers.request_viewport(live_map_snapshot.viewport)
-            else:
-                runtime.pota_map_markers.clear()
-        if (
-            runtime.live_radar is not None
-            and live_map_snapshot is not None
-            and live_map_snapshot.viewport is not None
-        ):
-            runtime.live_radar.request_viewport(live_map_snapshot.viewport)
+                runtime.live_radar.request_viewport(live_map_snapshot.viewport)
         ft8_map_status: str | None = None
         ft8_remote_status: str | None = None
         if (
             context_navigation.state.selected is ContextId.FT8
             and runtime.ft8_panel is not None
         ):
-            map_ft8_snapshot = runtime.ft8_panel.snapshot()
-            start_status = runtime.latest_ft8_qso_start_status
-            selected_target = (
-                map_ft8_snapshot.active_context.remote_callsign
-                if map_ft8_snapshot.active_context is not None
-                else runtime.ft8_panel.selected_callsign
-            )
-            if runtime.ft8_receive is not None:
-                runtime.ft8_receive.select_activity_target(selected_target)
-                receive_snapshot = runtime.latest_ft8_receive_state
-                ft8_remote_status = target_activity_status(
-                    None if receive_snapshot is None else receive_snapshot.target_activity
+            with ui_timing.subphase("ft8_panel_snapshot"):
+                map_ft8_snapshot = runtime.ft8_panel.snapshot()
+                start_status = runtime.latest_ft8_qso_start_status
+                selected_target = (
+                    map_ft8_snapshot.active_context.remote_callsign
+                    if map_ft8_snapshot.active_context is not None
+                    else runtime.ft8_panel.selected_callsign
                 )
-            if map_ft8_snapshot.active_context is not None:
-                tries = map_ft8_snapshot.attempt_count
-                allowed = map_ft8_snapshot.attempts_per_state
-            else:
-                tries = allowed = 0
-            ft8_map_status = operator_ft8_status(
-                panel_mode=map_ft8_snapshot.mode,
-                qso_state=map_ft8_snapshot.qso_state,
-                selected_callsign=runtime.ft8_panel.selected_callsign,
-                start_state=None if start_status is None else start_status.state,
-            ).value
-            if selected_target is not None:
-                ft8_map_status += f"  {selected_target}"
-            if tries and allowed:
-                ft8_map_status += f"  TRY {tries}/{allowed}"
+            if runtime.ft8_receive is not None:
+                with ui_timing.subphase("ft8_receive_target"):
+                    runtime.ft8_receive.select_activity_target(selected_target)
+                with ui_timing.subphase("ft8_receive_snapshot"):
+                    receive_snapshot = runtime.latest_ft8_receive_state
+                    ft8_remote_status = target_activity_status(
+                        None
+                        if receive_snapshot is None
+                        else receive_snapshot.target_activity
+                    )
+            with ui_timing.subphase("ft8_presentation"):
+                if map_ft8_snapshot.active_context is not None:
+                    tries = map_ft8_snapshot.attempt_count
+                    allowed = map_ft8_snapshot.attempts_per_state
+                else:
+                    tries = allowed = 0
+                ft8_map_status = operator_ft8_status(
+                    panel_mode=map_ft8_snapshot.mode,
+                    qso_state=map_ft8_snapshot.qso_state,
+                    selected_callsign=runtime.ft8_panel.selected_callsign,
+                    start_state=None if start_status is None else start_status.state,
+                ).value
+                if selected_target is not None:
+                    ft8_map_status += f"  {selected_target}"
+                if tries and allowed:
+                    ft8_map_status += f"  TRY {tries}/{allowed}"
         elif runtime.ft8_receive is not None:
-            runtime.ft8_receive.select_activity_target(None)
+            with ui_timing.subphase("ft8_receive_target"):
+                runtime.ft8_receive.select_activity_target(None)
 
         ui_timing.checkpoint("map_prepare")
         map_start = ui_timing.start()

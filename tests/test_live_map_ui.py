@@ -579,3 +579,9 @@ def test_live_map_update_records_base_map_timing_when_enabled() -> None:
     widgets.update(presentation(), None, timing=timing)
     assert len(timing._samples["base_map"]) == 1
     assert len(timing._samples["radar"]) == 1
+    assert set(timing._subphase_durations) == {
+        "base_plan",
+        "overlay_status_canvas",
+        "pota_canvas",
+        "radar_plan",
+    }
