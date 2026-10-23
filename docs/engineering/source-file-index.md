@@ -475,7 +475,9 @@ Consumers and ownership remain unchanged.
 
 - `src/rolling_thunder/forge_ft8_readiness_preflight.py` — C5.3 no-egress read-only source integrity/required-table checker, fail closed.
 
-- `src/rolling_thunder/forge_voacap_baseline_main.py` — C6 one-shot bounded Forge C4 sampler, loopback provider adapter and independent configuration.
+- `src/rolling_thunder/forge_voacap_baseline_main.py` — C6 one-shot bounded Forge sampler, loopback provider adapter, legacy monthly-slot mode, and explicitly gated scheduled-capture mode.
+- `src/rolling_thunder/forge_voacap_scheduled_capture.py` — source-only C6 successor run plan, additive append-only run/request/hour evidence, bounded retry/storage, and query-only health for 105-request captures.
+- `src/rolling_thunder/forge_voacap_scheduled_plan_main.py` — dry-run-first builder for owner-reviewed 15-site C6 successor plans and matching NOAA environment artifacts.
 
 - `src/rolling_thunder/forge_solar_ssn.py` — C6.2 bounded injected-transport NOAA
   predicted-month SSN adapter, HTTPS capture/status CLI, append-only raw-byte/header

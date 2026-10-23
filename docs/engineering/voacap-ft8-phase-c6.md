@@ -234,3 +234,61 @@ sampler now has a required NOAA refresh dependency. Administrator
 commissioning must provision the dedicated NOAA account/directory and validate
 a new immutable operational plan before activation. Upgrade rollback restores
 earlier units and configuration and leaves the baseline timer disabled.
+
+## C6 scheduled capture v1 — successor plan, source-only candidate
+
+**Status: implemented in source for review; not merged, installed, configured, or run
+against the production provider/database.** The original monthly-slot C4/C6 path
+remains unchanged and retains its old plan hashes, monthly response reuse, 40/30/20/
+17/15/12/10 m inventory, and historical rows. It does not satisfy the owner's
+clarified repeated-capture requirement.
+
+The separate `scheduled_capture_v1` mode uses an immutable successor `CapturePlan`
+and a dry-run-first `c6-scheduled-capture-manifest-v1`. The owner-reviewed manifest
+must contain exactly the same 15 defined site identities and representative grids,
+with a new inventory version, new plan UUID, and the prior operational plan UUID as
+parent. The mode fixes the bands to 80/40/20/17/15/12/10 m and target hours to
+00/06/12/18 UTC. Its four timer boundaries remain 00:10, 06:10, 12:10, and 18:10
+UTC. Each boundary creates an independent run identity and issues one API POST for
+each site/band: 105 requests/run and 420 expected requests per UTC day. Each
+provider response is checked for that band at all four UTC hours, yielding 420
+site/band/hour cells per run and 1,680 per day. The monthly C4 response cache is not
+consulted and cannot suppress a run. Reusing identical response bytes for storage is
+not considered request reuse; every run keeps separate request and provider-attempt
+provenance.
+
+The capture plan and NOAA snapshot are frozen into run evidence. The SQLite addition
+uses separate `baseline_capture_*_v1` tables; it does not rewrite or migrate legacy
+C4 rows. Each request retains a run ID, scheduled boundary, capture timestamp, target
+identity, band, request SHA, response SHA, service/model versions, status, attempt
+count and reason. Four forecast-hour values are persisted as separately classified
+cells. UTC boundaries choose the capture day/month after normalizing timezone-aware
+input. A delayed invocation more than 30 minutes after its boundary does not start a
+catch-up burst. A replay of an already completed boundary makes no provider requests;
+a retry only claims explicitly retryable rows from that same run. At later boundaries
+on the same UTC day, due retries from prior runs are handled after the fresh current
+run. Unattempted past boundaries and incomplete prior-day rows are marked missed; the
+scheduler does not launch previous-day catch-up bursts. Missing model cells,
+provider/version errors, expired leases and exhausted storage remain visible.
+
+The plan builder `rolling-thunder-forge-voacap-capture-plan` is dry-run by default.
+`--apply` writes only new plan/environment artifacts and never registers a plan or
+opens a database. Runtime opt-in requires `capture_mode="scheduled_capture_v1"`, an
+explicit `capture_plan_path`, and the existing three independent process/scheduler/
+provider gates. `--health` opens the database query-only and distinguishes expected
+runs/requests/cells from observed evidence; a missing capture schema is reported as
+incomplete. The response-size and capture-response storage caps remain bounded. If
+the storage cap is reached, remaining requests are marked skipped and coverage stays
+incomplete; no historical data are pruned.
+
+Fake-provider acceptance covers exactly 105 requests at each of four UTC boundaries,
+zero cross-run cache reuse, run replay, persisted service/model/response provenance,
+status and missing-hour classification, bounded retries/storage, month rollover,
+query-only health, and SQLite backup/integrity/foreign-key checks, including next-boundary same-day retry
+and prior-day missed classification. These tests are not production provider calls.
+Live backup/restore, exact installed site inventory,
+provider POST count and provenance, protected-database coverage, and cutover/rollback
+remain unverified. The current production upgrade helper disables the active timer
+and requires gates off; do not switch the production config or enable this mode until
+a separate maintenance-window cutover and rollback are reviewed. No Pi, CAT/PTT, RF,
+production database, service, or timer action is part of this source candidate.

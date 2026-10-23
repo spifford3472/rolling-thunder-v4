@@ -2,6 +2,7 @@ import hashlib
 import sqlite3
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -395,3 +396,106 @@ def test_controlled_pilot_preserves_failure_audit_without_retry(
     assert result["provider_calls"] == 0
     assert result["failure_type"] == "TimeoutError"
     assert Path(str(result["audit_path"])).is_file()
+
+
+def test_scheduled_capture_mode_calls_fake_provider_and_reports_post_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from rolling_thunder.forge_voacap_baseline import BaselinePlan, ProviderResult
+    from rolling_thunder.forge_voacap_scheduled_capture import CapturePlan
+    from rolling_thunder.forge_voacap_scheduled_plan_main import (
+        ScheduledCaptureManifest,
+        build_artifacts,
+    )
+
+    now = datetime(2026, 10, 22, 6, 10, tzinfo=UTC)
+    snapshot = _ssn_snapshot(now - timedelta(minutes=5), source="noaa", version="noaa-v1")
+    manifest = ScheduledCaptureManifest.model_validate(
+        {
+            "contract": "c6-scheduled-capture-manifest-v1",
+            "plan_id": "80000000-0000-4000-8000-000000000001",
+            "parent_plan_id": "70000000-0000-4000-8000-000000000001",
+            "plan_version": "capture-v1",
+            "created_at_utc": now - timedelta(minutes=4),
+            "origin_uncertainty": "fixed home grid6",
+            "target_inventory_version": "reviewed-sites-v2",
+            "targets": [
+                {"region_id": f"site-{index:02d}", "grid": f"EN{index:02d}",
+                 "uncertainty": "reviewed representative grid4 cell"}
+                for index in range(15)
+            ],
+            "model_version": "model-1",
+            "service_version": "0.3.0",
+            "forecast_target_month": "2026-10",
+        }
+    )
+    parent_plan = BaselinePlan(
+        plan_id=manifest.parent_plan_id,
+        plan_version="legacy-parent-v1",
+        created_at_utc=now - timedelta(days=1),
+        origin_grid="EM79xm",
+        origin_uncertainty="fixed home grid6",
+        target_inventory_version="legacy-sites-v1",
+        targets=manifest.targets,
+        model_version="old-model",
+        service_version="0.3.0",
+        ssn_source="noaa",
+        ssn_source_version="noaa-v1",
+        ssn_value_semantics="monthly_smoothed_predicted_sunspot_number",
+        ssn_source_schema="fixture-schema-v1",
+        ssn_revision_policy="append-only fixture captures",
+    )
+    plan, environment, _ = build_artifacts(manifest, snapshot, parent_plan)
+    assert isinstance(plan, CapturePlan)
+    plan_path = tmp_path / "capture-plan.json"
+    env_path = tmp_path / "environment.json"
+    snapshot_path = tmp_path / "snapshot.json"
+    plan_path.write_text(plan.model_dump_json())
+    env_path.write_text(environment.model_dump_json())
+    snapshot_path.write_text(snapshot.model_dump_json())
+
+    class FakeLocalProvider:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self.calls: list[dict[str, Any]] = []
+
+        @property
+        def post_count(self) -> int:
+            return len(self.calls)
+
+        def predict(self, request: dict[str, Any], *, timeout_s: float) -> ProviderResult:
+            self.calls.append(dict(request))
+            band = request["bands_m"][0]
+            return ProviderResult(
+                service_version="0.3.0",
+                model_version="model-1",
+                response_json={
+                    "analysis": {
+                        "best_band_by_hour": [
+                            {"hour_utc": hour, "band_m": band,
+                             "reliability": 0.5, "snr_db": 9.0}
+                            for hour in (0, 6, 12, 18)
+                        ]
+                    }
+                },
+            )
+
+    monkeypatch.setattr(
+        "rolling_thunder.forge_voacap_baseline_main.LocalVoacapProvider",
+        FakeLocalProvider,
+    )
+    config = SamplingRuntime(
+        process_enabled=True,
+        scheduler_enabled=True,
+        provider_enabled=True,
+        database_path=tmp_path / "capture.sqlite",
+        plan_path=tmp_path / "legacy-plan-not-used.json",
+        capture_plan_path=plan_path,
+        capture_mode="scheduled_capture_v1",
+        environment_path=env_path,
+        ssn_snapshot_path=snapshot_path,
+    )
+    result = run_once(config, now=now)
+    assert result["state"] == "complete"
+    assert result["provider_calls_this_invocation"] == 105
+    assert result["provider_post_count"] == 105
+    assert result["cache_reuse"] == 0

@@ -10,7 +10,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,6 +26,11 @@ from rolling_thunder.forge_voacap_baseline import (
     ProviderFailure,
     ProviderResult,
 )
+from rolling_thunder.forge_voacap_scheduled_capture import (
+    CapturePlan,
+    ScheduledCaptureRepository,
+    ScheduledCaptureService,
+)
 
 
 class SamplingRuntime(BaseModel):
@@ -39,6 +44,8 @@ class SamplingRuntime(BaseModel):
     ssn_snapshot_path: Path
     provider_base_url: str = "http://127.0.0.1:8787"
     future_days_to_schedule: int = Field(default=1, ge=1, le=3)
+    capture_mode: Literal["monthly_slot_cache", "scheduled_capture_v1"] = "monthly_slot_cache"
+    capture_plan_path: Path | None = None
 
     def gates(self) -> BaselineConfig:
         return BaselineConfig(
@@ -68,6 +75,7 @@ class LocalVoacapProvider:
         self._max_posts = max_posts
         self._posts = 0
         self._version_verified = False
+        self._version_error: ProviderFailure | None = None
 
     @property
     def post_count(self) -> int:
@@ -77,17 +85,27 @@ class LocalVoacapProvider:
         """Validate the provider before any candidate slot is persisted."""
         if self._max_posts is not None and self._posts >= self._max_posts:
             raise ProviderFailure("pilot_post_limit_exhausted", retryable=False)
+        if self._version_error is not None:
+            raise self._version_error
         self.client._timeout_s = timeout_s
         try:
             version = self.client._json_request("GET", "/version", None)
         except Exception as exc:
-            raise ProviderFailure("loopback_voacap_version_unavailable", retryable=False) from exc
+            error = ProviderFailure("loopback_voacap_version_unavailable", retryable=False)
+            self._version_error = error
+            raise error from exc
         if str(version.get("service", "")) != "voacap-service":
-            raise ProviderFailure("provider_identity_mismatch", retryable=False)
+            error = ProviderFailure("provider_identity_mismatch", retryable=False)
+            self._version_error = error
+            raise error
         if str(version.get("version", "")) != self.service_version:
-            raise ProviderFailure("provider_version_mismatch", retryable=False)
+            error = ProviderFailure("provider_version_mismatch", retryable=False)
+            self._version_error = error
+            raise error
         if str(version.get("model_version", "")) != self.model_version:
-            raise ProviderFailure("provider_model_identity_mismatch", retryable=False)
+            error = ProviderFailure("provider_model_identity_mismatch", retryable=False)
+            self._version_error = error
+            raise error
         self._version_verified = True
 
     def predict(self, request: dict[str, Any] | Any, *, timeout_s: float) -> ProviderResult:
@@ -131,6 +149,8 @@ def run_once(
     # All plan days are UTC days.  A local-offset test/operator clock near
     # midnight must not accidentally schedule the current UTC day.
     moment = moment.astimezone(UTC)
+    if config.capture_mode == "scheduled_capture_v1":
+        return _run_scheduled_capture(config, moment, max_provider_posts=max_provider_posts)
     plan = BaselinePlan.model_validate_json(config.plan_path.read_text())
     environment = EnvironmentSnapshot.model_validate_json(config.environment_path.read_text())
     ssn_snapshot = SmoothedSsnSnapshot.model_validate_json(config.ssn_snapshot_path.read_text())
@@ -207,6 +227,58 @@ def run_once(
     }
 
 
+
+def _run_scheduled_capture(
+    config: SamplingRuntime, moment: datetime, *, max_provider_posts: int | None
+) -> dict[str, Any]:
+    if config.capture_plan_path is None:
+        raise ValueError("scheduled capture mode requires capture_plan_path")
+    plan = CapturePlan.model_validate_json(config.capture_plan_path.read_text())
+    environment = EnvironmentSnapshot.model_validate_json(config.environment_path.read_text())
+    snapshot = SmoothedSsnSnapshot.model_validate_json(config.ssn_snapshot_path.read_text())
+    if environment.captured_at_utc > moment:
+        raise ValueError("environment is future-dated")
+    if moment - environment.captured_at_utc > timedelta(hours=24):
+        raise ValueError("SSN snapshot older than 24 hours: cannot capture")
+    if (
+        environment.snapshot_canonical_sha256 != snapshot.canonical_sha256
+        or environment.ssn != snapshot.value
+        or environment.value_semantics != snapshot.value_semantics.value
+        or environment.target_month != snapshot.target_month
+        or environment.source != snapshot.source_id
+        or environment.source_url != snapshot.source_url
+        or environment.source_version != snapshot.source_version
+        or environment.source_schema != snapshot.source_schema
+        or environment.source_revision_policy != snapshot.source_revision_policy
+        or environment.source_record_id != snapshot.source_record_id
+        or environment.source_released_at_utc != snapshot.source_released_at_utc
+        or environment.captured_at_utc != snapshot.captured_at_utc
+        or environment.raw_sha256 != snapshot.raw_sha256
+    ):
+        raise ValueError("environment does not match the verified SSN snapshot artifact")
+    snapshot.require_for_target(
+        target_month=environment.target_month,
+        as_of_utc=moment,
+        max_capture_age=timedelta(hours=24),
+    )
+    if (
+        environment.source != plan.ssn_source
+        or environment.source_version != plan.ssn_source_version
+        or environment.value_semantics != plan.ssn_value_semantics
+        or environment.source_schema != plan.ssn_source_schema
+        or environment.source_revision_policy != plan.ssn_revision_policy
+    ):
+        raise ValueError("environment SSN identity does not match immutable capture plan")
+    provider = LocalVoacapProvider(
+        config.provider_base_url, service_version=plan.service_version,
+        model_version=plan.model_version, max_posts=max_provider_posts,
+    )
+    repository = ScheduledCaptureRepository(config.database_path)
+    result = ScheduledCaptureService(repository, provider).run_cycle(plan, environment, moment)
+    result["provider_post_count"] = provider.post_count
+    return result
+
+
 def read_operational_health(
     config: SamplingRuntime,
     *,
@@ -217,6 +289,16 @@ def read_operational_health(
     if moment.tzinfo is None:
         raise ValueError("clock must be timezone aware")
     moment = moment.astimezone(UTC)
+    if config.capture_mode == "scheduled_capture_v1":
+        if config.capture_plan_path is None:
+            raise ValueError("scheduled capture mode requires capture_plan_path")
+        capture_plan = CapturePlan.model_validate_json(config.capture_plan_path.read_text())
+        return {
+            "state": "health",
+            "operational_health": ScheduledCaptureRepository.health(
+                config.database_path, capture_plan, moment.date()
+            ),
+        }
     plan = BaselinePlan.model_validate_json(config.plan_path.read_text())
     days = [
         (moment + timedelta(days=offset + 1)).date()
@@ -246,6 +328,8 @@ def run_controlled_pilot(
     gates = config.gates()
     if not (gates.enabled and gates.scheduler_enabled and gates.provider_enabled):
         raise ValueError("controlled pilot requires all three runtime gates")
+    if config.capture_mode != "monthly_slot_cache":
+        raise ValueError("controlled pilot is available only for a legacy C4 plan")
     plan = BaselinePlan.model_validate_json(config.plan_path.read_text())
     if (
         plan.max_provider_calls_per_cycle != 1
@@ -325,7 +409,8 @@ def main() -> None:
     if args.check_config:
         print(json.dumps({"state": "validated", "process_enabled": config.process_enabled,
                           "scheduler_enabled": config.scheduler_enabled,
-                          "provider_enabled": config.provider_enabled}, sort_keys=True))
+                          "provider_enabled": config.provider_enabled,
+                          "capture_mode": config.capture_mode}, sort_keys=True))
         return
     if args.health:
         print(json.dumps(read_operational_health(config), sort_keys=True))
