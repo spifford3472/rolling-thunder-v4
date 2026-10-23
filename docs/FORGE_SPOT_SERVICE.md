@@ -227,6 +227,22 @@ The repository refuses to initialize Forge snapshot tables in a database that ap
 
 One transaction replaces aggregate metadata, revision, provider fetch metadata, and all canonical spot rows.
 
+The spot-mode constraint accepts every value in the shared typed `RadioMode`
+domain. Startup transactionally rebuilds the original six-mode table when needed,
+copying every existing row before the old table is removed. The column layout and
+schema-version marker remain compatible with the prior binary, so an immediate code
+rollback can continue reading the same database; no database reset or downgrade is
+required. A failed migration or snapshot replacement rolls back and retains the
+complete last-good snapshot.
+
+This closes the source-level mismatch behind issue #357: the typed domain permits
+`DMR` and `FT8`, while the original table admitted only six modes. POTA and DX
+normalizers continue to preserve their existing canonical/display semantics (for
+example, provider FT8 is normally canonical `DATA` with display `FT8`); persistence
+does not reinterpret a provider row. The Oct. 22 field error did not identify its
+rejected row, so the exact production value remains unknown rather than being
+retroactively attributed to DMR or FT8.
+
 Loading reconstructs provider slices and the complete `SpotSnapshot`, then revalidates identities, ordering, duplicate collapse, timestamps, and provider composition before publishing retained state.
 
 Production database:
