@@ -299,10 +299,13 @@ def test_disable_hides_and_reenable_allows_current_callsign_to_lookup_again() ->
     service.observe_callsign("W1AW")
     assert service.state.response is not None
 
+    service.dismiss_presentation()
+    assert service.state.presentation_suppressed is True
     assert service.set_enabled(False) is True
     assert service.state.response is None
     assert service.state.enabled is False
     assert service.set_enabled(True) is True
+    assert service.state.presentation_suppressed is False
     assert service.observe_callsign("W1AW") is True
     assert client.calls == ["W1AW", "W1AW"]
 
@@ -480,6 +483,75 @@ def test_late_response_after_clear_cannot_resurrect_overlay() -> None:
     assert state.callsign is None
     assert state.response is None
     assert state.loading is False
+
+
+def test_navigation_dismissal_stays_quiet_for_same_and_new_targets() -> None:
+    client = FakeClient()
+    service = CallsignInfoLookupService(client, executor=InlineExecutor())
+
+    assert service.observe_callsign("W1AW") is True
+    assert service.state.presentation_active is True
+    assert service.dismiss_presentation() is True
+
+    dismissed = service.state
+    assert dismissed.presentation_suppressed is True
+    assert dismissed.presentation_active is False
+    assert dismissed.callsign is None
+    assert dismissed.response is None
+    assert service.observe_callsign("W1AW") is False
+    assert service.observe_callsign("K1ABC") is False
+    assert client.calls == ["W1AW"]
+
+
+def test_explicit_selection_rearms_same_or_new_station() -> None:
+    client = FakeClient()
+    service = CallsignInfoLookupService(client, executor=InlineExecutor())
+
+    service.observe_callsign("W1AW")
+    service.dismiss_presentation()
+    assert service.rearm_presentation() is True
+    assert service.observe_callsign("W1AW") is True
+    assert service.state.response is not None
+
+    service.dismiss_presentation()
+    service.rearm_presentation()
+    assert service.observe_callsign("K1ABC") is True
+    assert client.calls == ["W1AW", "W1AW", "K1ABC"]
+
+
+def test_late_response_after_navigation_dismissal_cannot_resurrect_overlay() -> None:
+    executor = DeferredExecutor()
+    service = CallsignInfoLookupService(FakeClient(), executor=executor)
+    assert service.observe_callsign("W1AW") is True
+    assert executor.jobs[0][3].set_running_or_notify_cancel() is True
+
+    service.dismiss_presentation()
+    executor.run(0)
+
+    state = service.state
+    assert state.presentation_suppressed is True
+    assert state.callsign is None
+    assert state.response is None
+    assert state.loading is False
+
+
+def test_explicit_selection_rearms_after_one_shot_timeout() -> None:
+    client = FakeClient()
+    now = [100.0]
+    service = CallsignInfoLookupService(
+        client,
+        overlay_timeout_s=10.0,
+        executor=InlineExecutor(),
+        clock=lambda: now[0],
+    )
+    service.observe_callsign("W1AW")
+    now[0] = 111.0
+    assert service.state.presentation_active is False
+    assert service.observe_callsign("W1AW") is False
+
+    assert service.rearm_presentation() is True
+    assert service.observe_callsign("W1AW") is True
+    assert client.calls == ["W1AW", "W1AW"]
 
 
 def test_dxcc_center_can_frame_map_without_inventing_station_pin() -> None:

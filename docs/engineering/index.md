@@ -167,7 +167,10 @@ Read: `docs/SHARED_SPOT_DOMAIN.md`, `docs/FORGE_SPOT_SERVICE.md`.
 The contact-information overlay is shared operator infrastructure, not a POTA- or
 FT8-owned popup. It consumes pending callsign state, optional POTA location context,
 current FT8 selected/preparing/active callsign/grid state, and asynchronous Forge
-intelligence. A feature agent must not redesign it without reviewing all consumers.
+intelligence. Explicit station activation arms presentation; station-browser
+movement intent, accepted band change, or context departure durably suppresses it until another
+accepted activation. A feature agent must not redesign it without reviewing all
+consumers.
 
 Primary modules:
 

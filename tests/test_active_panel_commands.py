@@ -2,7 +2,12 @@
 
 from datetime import UTC, datetime
 
-from rolling_thunder.active_panel_commands import ActivePanelCommandController
+import pytest
+
+from rolling_thunder.active_panel_commands import (
+    ActivePanelCommandController,
+    CallsignInfoAwareActivePanelCommands,
+)
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
 from rolling_thunder.domain import Frequency, RadioMode
 from rolling_thunder.pota_dashboard_controller import PotaDashboardController
@@ -292,3 +297,147 @@ def test_context_change_prevents_encoder_from_mutating_pota_state() -> None:
     assert commands.back() is False
     assert dashboard.selected_index == 0
     assert dashboard.tune_intent is pending
+
+
+class RecordingPanelDelegate:
+    def __init__(self, *, accepted: bool = True) -> None:
+        self.accepted = accepted
+        self.calls: list[str] = []
+
+    def activate_context(self, context_id: ContextId) -> None:
+        self.calls.append(f"context:{context_id.value}")
+
+    def primary(self) -> bool:
+        self.calls.append("primary")
+        return self.accepted
+
+    def secondary(self) -> bool:
+        self.calls.append("secondary")
+        return self.accepted
+
+    def tertiary(self) -> bool:
+        self.calls.append("tertiary")
+        return self.accepted
+
+    def tertiary_long(self) -> bool:
+        self.calls.append("tertiary_long")
+        return self.accepted
+
+    def move_previous(self) -> bool:
+        self.calls.append("previous")
+        return self.accepted
+
+    def move_next(self) -> bool:
+        self.calls.append("next")
+        return self.accepted
+
+    def activate_selection(self) -> bool:
+        self.calls.append("activate")
+        return self.accepted
+
+    def back(self) -> bool:
+        self.calls.append("back")
+        return self.accepted
+
+    def synchronize_radio_state(self) -> bool:
+        self.calls.append("synchronize")
+        return self.accepted
+
+
+class RecordingCallsignInfoLifecycle:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def dismiss_presentation(self) -> bool:
+        self.calls.append("dismiss")
+        return True
+
+    def rearm_presentation(self) -> bool:
+        self.calls.append("rearm")
+        return True
+
+
+@pytest.mark.parametrize("context", [ContextId.POTA, ContextId.DX, ContextId.FT8])
+def test_station_browser_rotation_dismisses_even_when_highlight_cannot_move(
+    context: ContextId,
+) -> None:
+    navigation = ContextNavigationController(context)
+    delegate = RecordingPanelDelegate()
+    lifecycle = RecordingCallsignInfoLifecycle()
+    commands = CallsignInfoAwareActivePanelCommands(navigation, delegate, lifecycle)
+
+    assert commands.move_next() is True
+    assert commands.move_previous() is True
+    assert delegate.calls == ["next", "previous"]
+    assert lifecycle.calls == ["dismiss", "dismiss"]
+
+    delegate.accepted = False
+    assert commands.move_next() is False
+    assert delegate.calls[-1] == "next"
+    assert lifecycle.calls == ["dismiss", "dismiss", "dismiss"]
+
+
+@pytest.mark.parametrize("context", [ContextId.POTA, ContextId.DX, ContextId.FT8])
+def test_station_selection_rearms_without_changing_command_result(
+    context: ContextId,
+) -> None:
+    navigation = ContextNavigationController(context)
+    delegate = RecordingPanelDelegate()
+    lifecycle = RecordingCallsignInfoLifecycle()
+    commands = CallsignInfoAwareActivePanelCommands(navigation, delegate, lifecycle)
+
+    assert commands.activate_selection() is True
+    assert delegate.calls == ["activate"]
+    assert lifecycle.calls == ["rearm"]
+
+    delegate.accepted = False
+    assert commands.activate_selection() is False
+    assert delegate.calls == ["activate", "activate"]
+    assert lifecycle.calls == ["rearm"]
+
+
+@pytest.mark.parametrize("context", [ContextId.POTA, ContextId.DX, ContextId.FT8])
+def test_accepted_station_band_command_dismisses_without_extra_action(
+    context: ContextId,
+) -> None:
+    navigation = ContextNavigationController(context)
+    delegate = RecordingPanelDelegate()
+    lifecycle = RecordingCallsignInfoLifecycle()
+    commands = CallsignInfoAwareActivePanelCommands(navigation, delegate, lifecycle)
+
+    assert commands.primary() is True
+    assert delegate.calls == ["primary"]
+    assert lifecycle.calls == ["dismiss"]
+
+    delegate.accepted = False
+    assert commands.primary() is False
+    assert delegate.calls == ["primary", "primary"]
+    assert lifecycle.calls == ["dismiss"]
+
+
+def test_leaving_station_context_dismisses_once_through_shared_context_path() -> None:
+    navigation = ContextNavigationController(ContextId.POTA)
+    delegate = RecordingPanelDelegate()
+    lifecycle = RecordingCallsignInfoLifecycle()
+    commands = CallsignInfoAwareActivePanelCommands(navigation, delegate, lifecycle)
+
+    navigation.select(ContextId.WEATHER)
+    commands.activate_context(ContextId.WEATHER)
+    commands.activate_context(ContextId.WEATHER)
+
+    assert delegate.calls == ["context:weather", "context:weather"]
+    assert lifecycle.calls == ["dismiss"]
+
+
+def test_non_station_pending_callsign_navigation_is_unchanged() -> None:
+    navigation = ContextNavigationController(ContextId.BROWSE)
+    delegate = RecordingPanelDelegate()
+    lifecycle = RecordingCallsignInfoLifecycle()
+    commands = CallsignInfoAwareActivePanelCommands(navigation, delegate, lifecycle)
+
+    assert commands.move_next() is True
+    assert commands.primary() is True
+    assert commands.activate_selection() is True
+
+    assert delegate.calls == ["next", "primary", "activate"]
+    assert lifecycle.calls == []

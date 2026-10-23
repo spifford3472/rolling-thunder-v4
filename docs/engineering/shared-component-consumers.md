@@ -49,7 +49,9 @@ If a change alters a shared component's inputs, outputs, state transitions, pers
 The overlay is not owned by POTA or FT8. POTA may supply a higher-confidence
 current operating location, and FT8 may supply a current approximate grid center,
 but lookup lifecycle, failure presentation, preference, and stale-result rejection
-remain shared.
+remain shared. POTA/DX/FT8 browsing, accepted band changes, context departure, and
+explicit station actions reach the same shared suppression/rearm boundary; they do
+not bypass the existing receive-tuning or one-QSO authorization result.
 
 ### Logging
 

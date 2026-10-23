@@ -41,6 +41,7 @@ class CallsignInfoState:
     target_longitude: float | None = None
     failure: CallsignInfoFailure | None = None
     presentation_active: bool = False
+    presentation_suppressed: bool = False
 
 
 class CallsignInfoLookupService:
@@ -71,6 +72,7 @@ class CallsignInfoLookupService:
         self._shown_at: float | None = None
         self._observed_at: float | None = None
         self._presentation_active = False
+        self._presentation_suppressed = False
         self._last_error: str | None = None
         self._failure: CallsignInfoFailure | None = None
         self._target_latitude: float | None = None
@@ -116,6 +118,7 @@ class CallsignInfoLookupService:
                 target_latitude=self._target_latitude,
                 target_longitude=self._target_longitude,
                 presentation_active=self._presentation_active,
+                presentation_suppressed=self._presentation_suppressed,
             )
 
     def set_enabled(self, enabled: bool) -> bool:
@@ -123,7 +126,39 @@ class CallsignInfoLookupService:
             if self._enabled == enabled:
                 return False
             self._enabled = enabled
+            if enabled:
+                self._presentation_suppressed = False
             self._invalidate_locked(clear_callsign=not enabled)
+            return True
+
+    def dismiss_presentation(self) -> bool:
+        """Hide the popup until a later explicit station-selection rearm."""
+        with self._lock:
+            if self._stopped:
+                return False
+            changed = not self._presentation_suppressed or any(
+                (
+                    self._callsign is not None,
+                    self._loading,
+                    self._response is not None,
+                    self._presentation_active,
+                )
+            )
+            if not changed:
+                return False
+            self._presentation_suppressed = True
+            self._invalidate_locked(clear_callsign=True)
+            return True
+
+    def rearm_presentation(self) -> bool:
+        """Allow one fresh popup lifecycle after explicit station selection."""
+        with self._lock:
+            if self._stopped:
+                return False
+            self._presentation_suppressed = False
+            # Explicit selection is also the intentional retry boundary for the
+            # same station after navigation dismissal, timeout, or lookup failure.
+            self._invalidate_locked(clear_callsign=True)
             return True
 
     def observe_callsign(
@@ -140,6 +175,8 @@ class CallsignInfoLookupService:
             if not self._enabled:
                 if self._callsign is not None or self._response is not None or self._loading:
                     self._invalidate_locked(clear_callsign=True)
+                return False
+            if self._presentation_suppressed:
                 return False
             if not normalized:
                 if self._callsign is not None or self._response is not None or self._loading:

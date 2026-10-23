@@ -50,6 +50,15 @@ operator preference invalidates the lookup generation so late results cannot
 appear. Popup rendering failure is isolated at the optional dashboard presentation
 boundary.
 
+CQ-browser movement intent or an accepted FT8 band change now suppresses the shared
+popup lifecycle after preserving the existing panel/band command result. Suppression
+invalidates any pending generation and prevents selected, preparing, or active FT8
+state from reopening the popup or requesting its mini-map during refresh. An
+accepted explicit CQ activation (or accepted exact incoming-call answer) rearms one
+fresh lifecycle, including the same station; a rejected/blocked action does not.
+This decorator has no CQ, timing, retry, CAT/PTT, transmit-session, or QSO-state
+authority.
+
 ## CQ Eligibility State
 
 `FT8CQActivityManager` is authoritative for browser membership.

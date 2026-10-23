@@ -20,6 +20,16 @@ valid FT8 grid state may render before enrichment; only current lifecycle owners
 may accept the asynchronous result. Network failure wording uses already-published
 connectivity state and must not add a blocking probe or expose exception details.
 
+In POTA, DX, and FT8, popup presentation is armed by an accepted explicit station
+action. Browse movement intent, accepted band change, or departure from one of those
+contexts suppresses presentation and invalidates its generation. Suppression is
+durable across refresh, highlighted/pending callsign changes, active FT8 target
+publication, and stale success/failure completion; while suppressed, no popup lookup
+or contact mini-map request/render is started by refresh. A later accepted explicit
+station action, including the same callsign, rearms one fresh lifecycle. Rejected
+radio/tuning/QSO commands neither rearm nor gain authority. Voice/manual pending
+callsign flows outside the affected station browsers retain their existing behavior.
+
 ## Antenna reference and RF exposure advisory
 
 The antenna-reference subsystem shares typed application configuration, context /

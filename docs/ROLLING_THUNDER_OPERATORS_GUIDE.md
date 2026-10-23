@@ -230,6 +230,11 @@ contact.
 A pending callsign may also trigger the shared callsign-information overlay when
 that feature is enabled.
 
+On the POTA, DX, and FT8 station browsers, the overlay is selection-driven rather
+than highlight-driven. An explicit accepted station action can show it. Moving the
+highlight, changing band, or leaving the context dismisses it until another
+explicit accepted station action.
+
 ---
 
 # 5. POTA Screen
@@ -287,11 +292,15 @@ unsupported physical/radio step.
 ## Callsign information
 
 When callsign information is enabled, the selected/pending POTA callsign can
-trigger the shared contact-information overlay. POTA park coordinates have
+trigger the shared contact-information overlay after an accepted encoder press.
+POTA park coordinates have
 priority for target weather/map placement when the contact is known to be at a
 current park activation.
 
 The overlay itself is shared infrastructure and is not a POTA-only popup.
+Encoder browsing and an accepted band-filter change dismiss it; merely highlighting
+the next row does not open another popup. Pressing the selected station again may
+show it again without adding a confirmation press or changing receive tuning.
 
 ## If POTA data is unavailable
 
@@ -347,6 +356,11 @@ means the retained/publication path is functioning; retained/degraded states
 should be read as such.
 
 A silent radio band is not by itself proof that the IRC connection failed.
+
+The shared callsign-information overlay follows the same DX behavior as POTA:
+an accepted encoder press may show the selected station, while browsing rows,
+changing the band filter, or leaving DX dismisses it. Re-selecting the same or a
+different station can show it again and still uses the existing single-press tune.
 
 ## DX Summit reconnect behavior
 
@@ -456,6 +470,12 @@ the FT8 header. It is hidden when no count is available and on every other scree
 - **Back** — abort active work, acknowledge terminal state, or clear selection
   depending on current FT8 state.
 - Leaving the FT8 context aborts active FT8 work before restoration.
+
+An accepted explicit CQ activation may show the shared station-information popup.
+Encoder browsing, an accepted FT8 band change, or leaving FT8 dismisses it and it
+stays hidden across refresh, even if a highlighted or active target remains. A later
+accepted activation of the same or another station can show it again. Popup behavior
+does not add a press, authorize transmission, or change the bounded QSO workflow.
 
 While the CQ browser is idle, a valid decode addressed to the configured local
 callsign opens a prominent incoming-call alert showing the caller, received SNR,
@@ -921,8 +941,9 @@ not presented as an exact station pin.
 
 ## Lifecycle
 
-The overlay follows the shared pending callsign or the currently relevant FT8
-station. On FT8 it appears promptly for a selected CQ, live preparation, or active
+The overlay follows an explicitly selected shared pending callsign or the currently
+relevant FT8 station while its presentation lifecycle is armed. On FT8 it appears
+promptly after accepted selection for a CQ, live preparation, or active
 QSO using the locally decoded grid when valid; the map marks that point as an
 approximate FT8 grid center. Missing or malformed grids never create a pin. Forge
 identity, history, and weather fill in asynchronously when available.
@@ -930,6 +951,12 @@ identity, history, and weather fill in asynchronously when available.
 Callsign replacement, Commit, Discard, FT8 abort/completion/terminal state,
 selection dismissal/expiry, timeout, or disabling the feature invalidates the
 current overlay. A late result for an earlier station is not shown.
+
+In POTA, DX, and FT8, moving through station rows, changing band, or leaving the
+context dismisses the popup and prevents timer refresh from requesting lookup or
+mini-map work. Highlight movement alone does not reopen it. A later accepted
+explicit selection—including the same station—can start one fresh popup lifecycle.
+Rejected tune/QSO commands do not select, tune, transmit, or rearm the popup.
 
 `LOCAL` means the contacted target's time, including daylight-saving rules. If Forge
 cannot establish that timezone reliably, the field is left blank rather than showing
