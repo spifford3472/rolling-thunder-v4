@@ -334,3 +334,9 @@ provider-call ledger. Per-day identity digests and bounded missing/unexpected
 samples bind totals to the immutable plan inventory. The same coherent SQLite
 read snapshot is available through the query-only `--health` CLI mode; this mode
 never schedules work or contacts NOAA/VOACAP.
+
+Scheduled capture commissioning uses the NOAA publisher option `--forecast-day current`;
+legacy refresh defaults to the next UTC day. Keep the legacy immutable parent plan
+as its source-identity input. The sampler requires a reviewed 90-minute systemd
+timeout for the default 10-second request/three-attempt plan; see
+[the C6 commissioning budget](voacap-ft8-phase-c6.md#scheduled-capture-commissioning-integration).

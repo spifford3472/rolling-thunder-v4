@@ -295,3 +295,26 @@ remain unverified. The current production upgrade helper disables the active tim
 and requires gates off; do not switch the production config or enable this mode until
 a separate maintenance-window cutover and rollback are reviewed. No Pi, CAT/PTT, RF,
 production database, service, or timer action is part of this source candidate.
+
+### Scheduled-capture commissioning integration
+
+The NOAA publisher accepts `--forecast-day current` for scheduled captures;
+the default remains `next` for legacy future-day slots. It normalizes the clock
+to UTC before selecting the forecast month. The scheduled deployment must use
+a service override with the current-day option and retain its immutable legacy
+parent as the NOAA source-identity contract. Do not pass CapturePlan to the
+legacy-plan parser.
+
+For the default immutable capture plan (10-second requests, three attempts,
+60-second retry delay), install a sampler `TimeoutStartSec=90min` override.
+A boundary processes 105 fresh requests followed by due retries from up to
+three earlier same-day runs. A fixed invocation clock and positive retry delay
+allow at most one attempt per request per invocation: at most 420 requests,
+4,200 seconds of configured provider timeout plus version preflight and local
+storage overhead. 90 minutes gives approximately 20 minutes of overhead margin
+and remains below the six-hour cadence. This is a configured budget, not a
+hard proof of wall-clock completion: socket operations and SQLite contention
+may still exhaust it; systemd timeout and incomplete health remain visible.
+Do not increase plan timeout/attempt/retry settings without reviewing this budget.
+The 30-minute window controls invocation admission, not completion duration.
+No immediate replay is required at cutover; enable timers for real future boundaries.
