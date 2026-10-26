@@ -32,6 +32,27 @@ remain available via existing diagnostic paths. Source tests establish attributi
 boundaries, not Raspberry Pi stall improvement or field causality. No production
 deployment or test RF is authorized by this documentation.
 
+### Offline export reporting
+
+`tools/issue345_timing_report.py` reads one exported timing-text file only. Its CLI
+requires `--input PATH` and `--source-sha SHA`; `--scenario` accepts only the
+operator-declared labels `radar_off`, `radar_on`, `forge_slow`, or `unlabeled` and
+defaults to `unlabeled`. It performs no subprocess, journal, network, database, or
+hardware access. Input is limited to an 8 MiB regular file, 100,000 lines, 64 KiB
+per line, and 4,096 recognized records. Output JSON contains only fixed timing
+metric/phase/subphase/action names, counts and durations, the declared scenario and
+source SHA, and explicit incomplete-evidence booleans. Unknown or malformed lines
+are counted but never copied or converted to zero.
+
+The report summarizes only the minimum and maximum values *reported by* overlapping
+rolling-window aggregate records; it never averages those p95 values or calls them a
+global percentile. Correlated slow records remain separate by refresh ID, including
+legacy broad-phase records that have no fine detail. They are a rate-limited selected
+sample rather than all refreshes or operator end-to-end latency. Reports therefore
+always leave global percentiles, complete slow-sample coverage, operator latency,
+and issue acceptance unavailable. Synthetic and fixture inputs must remain labeled
+as such outside this utility and must never be presented as installed field evidence.
+
 ## R1-B bounded radar tile redraw
 
 When radar frame or viewport changes, the Tk adapter now queues visible radar tiles rather than constructing every `PhotoImage` synchronously in one refresh. At most **two new radar tiles** are created per UI refresh, with remaining tiles appearing during subsequent 250 ms refresh cycles. Queued stale tiles are cleared on radar disable or viewport redraw; pending same-frame tiles survive unrelated snapshot updates. Network radar fetching remains on the existing background worker, while Tk canvas/image calls stay on the Tk thread.
