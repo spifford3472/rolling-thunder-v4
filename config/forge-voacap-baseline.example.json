@@ -2,6 +2,8 @@
   "process_enabled": false,
   "scheduler_enabled": false,
   "provider_enabled": false,
+  "capture_mode": "monthly_slot_cache",
+  "capture_plan_path": null,
   "database_path": "/var/lib/rolling-thunder-forge-propagation/c4-baseline.sqlite3",
   "plan_path": "/etc/rolling-thunder-forge-voacap-baseline/plan.json",
   "environment_path": "/etc/rolling-thunder-forge-voacap-baseline/environment.json",

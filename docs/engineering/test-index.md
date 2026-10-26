@@ -532,9 +532,17 @@ still required.
 
 - `tests/test_forge_ft8_readiness_installer.py` — candidate root-helper safety scoping and shell syntax; offline wheel staging and CLI installation additionally smoke-tested on Forge.
 
-- `tests/test_forge_voacap_baseline_main.py` — C6 disabled/no-I/O gate, UTC day/month
+- `tests/test_forge_voacap_baseline_main.py` — legacy C6 disabled/no-I/O gate, UTC day/month
   scheduling, fail-before-persistence provider preflight, trusted backup metadata and
-  durable controlled-pilot failure audit.
+  durable controlled-pilot failure audit; scheduled-capture runtime selection and
+  exactly 105 fake provider calls.
+
+- `tests/test_forge_voacap_scheduled_capture.py` — C6 successor 105-call runs at each
+  UTC boundary, immutable request/cell provenance, same-day retries, missed prior-day
+  work, storage/status classifications, query-only health and SQLite backup integrity.
+
+- `tests/test_forge_voacap_scheduled_plan_main.py` — dry-run-first capture-plan creation,
+  exact 15-site parent identity checks and refusal of duplicate inventory.
 
 - `tests/test_forge_voacap_baseline_deploy.py` — C6.1 installer shell integrity and fail-closed three-gate checks.
 

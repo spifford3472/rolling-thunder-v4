@@ -312,10 +312,17 @@ refreshes predicted SSN evidence at 00/06/12/18 UTC under the isolated
 `rolling-thunder-forge-voacap-baseline.timer` executes at 00:10/06:10/12:10/18:10
 UTC, allowing time for the upstream capture. The sampler remains strictly
 Forge-only; no Pi CAT/PTT, RF transmission, or autonomous transmit-power change
-is permitted. The immutable operational C6 plan limits provider requests to
-15 per cycle and 60 per UTC day; actual quotas depend on the installed plan.
-The C6 acceptance checkpoint had 15 successful real provider calls and
-15 ready forecasts, with the original pilot evidence kept separately.
+is permitted. The original monthly-slot operational plan limits provider requests
+to 15 per cycle and 60 per UTC day; its monthly response cache intentionally reuses
+responses across forecast hours. It does not meet the owner's newer requirement for
+105 fresh provider requests at each scheduled boundary. A separate source-only
+`scheduled_capture_v1` successor contract is under review: 15 sites × 7 bands per
+run, four runs per UTC day (105 per run, 420 expected requests/day), with distinct
+run identities and per-response provenance. It uses additive capture tables and does
+not reinterpret legacy C4 records. It has not been merged, installed, configured or
+run against production. The C6 acceptance checkpoint had 15 successful real
+provider calls and 15 ready forecasts, with the original pilot evidence kept
+separately.
 The deployment's configuration, NOAA artifacts, plan, and database must be
 backed up and validated independently of a source release.
 
@@ -327,3 +334,9 @@ provider-call ledger. Per-day identity digests and bounded missing/unexpected
 samples bind totals to the immutable plan inventory. The same coherent SQLite
 read snapshot is available through the query-only `--health` CLI mode; this mode
 never schedules work or contacts NOAA/VOACAP.
+
+Scheduled capture commissioning uses the NOAA publisher option `--forecast-day current`;
+legacy refresh defaults to the next UTC day. Keep the legacy immutable parent plan
+as its source-identity input. The sampler requires a reviewed 90-minute systemd
+timeout for the default 10-second request/three-attempt plan; see
+[the C6 commissioning budget](voacap-ft8-phase-c6.md#scheduled-capture-commissioning-integration).

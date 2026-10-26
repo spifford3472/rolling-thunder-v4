@@ -69,3 +69,37 @@ def test_atomic_publish_replaces_content(tmp_path) -> None:
     p.write_text("old")
     _atomic_publish(p, "new")
     assert p.read_text() == "new"
+
+
+@pytest.mark.parametrize(("forecast_day", "expected_month"), [("current", "2026-10"), ("next", "2026-11")])
+def test_noaa_month_end_target_matches_capture_mode(
+    monkeypatch: pytest.MonkeyPatch, forecast_day, expected_month
+) -> None:
+    import rolling_thunder.forge_voacap_noaa_refresh_main as module
+    plan, _, _ = build_artifacts(_manifest(), _snapshot(), operational=True)
+    class FakeAdapter:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+        def fetch(self, *, target_month: str):
+            assert target_month == expected_month
+            return _snapshot()
+    monkeypatch.setattr(module, "NoaaSwpcPredictedSsnAdapter", FakeAdapter)
+    build_environment(plan, now=datetime(2026, 10, 31, 18, tzinfo=UTC), forecast_day=forecast_day)
+
+
+def test_noaa_current_day_normalizes_to_utc(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import timedelta, timezone
+
+    import rolling_thunder.forge_voacap_noaa_refresh_main as module
+    plan, _, _ = build_artifacts(_manifest(), _snapshot(), operational=True)
+    class FakeAdapter:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+        def fetch(self, *, target_month: str):
+            assert target_month == "2026-11"
+            return _snapshot()
+    monkeypatch.setattr(module, "NoaaSwpcPredictedSsnAdapter", FakeAdapter)
+    build_environment(
+        plan, now=datetime(2026, 10, 31, 22, tzinfo=timezone(timedelta(hours=-4))),
+        forecast_day="current",
+    )

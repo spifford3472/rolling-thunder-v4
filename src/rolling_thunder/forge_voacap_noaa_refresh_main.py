@@ -5,19 +5,24 @@ import argparse
 import json
 import os
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from rolling_thunder.forge_solar_ssn import NoaaSwpcPredictedSsnAdapter, UrllibSsnFeedTransport
 from rolling_thunder.forge_voacap_baseline import BaselinePlan, EnvironmentSnapshot
 
 
-def build_environment(plan: BaselinePlan, *, now: datetime) -> tuple[str, str]:
+def build_environment(
+    plan: BaselinePlan, *, now: datetime, forecast_day: Literal["current", "next"] = "next"
+) -> tuple[str, str]:
     """Return verified paired JSON artifacts; caller controls publishing."""
-    target_day = now.date().toordinal() + 1
-    from datetime import date
-    tomorrow = date.fromordinal(target_day)
-    month = f"{tomorrow.year:04d}-{tomorrow.month:02d}"
+    if now.tzinfo is None:
+        raise ValueError("clock must be timezone aware")
+    if forecast_day not in ("current", "next"):
+        raise ValueError("forecast_day must be current or next")
+    target_day = now.astimezone(UTC).date() + timedelta(days=forecast_day == "next")
+    month = f"{target_day.year:04d}-{target_day.month:02d}"
     snapshot = NoaaSwpcPredictedSsnAdapter(
         transport=UrllibSsnFeedTransport(), timeout_s=10.0
     ).fetch(target_month=month)
@@ -71,10 +76,12 @@ def main() -> None:
     parser.add_argument("--plan", required=True, type=Path)
     parser.add_argument("--snapshot-output", required=True, type=Path)
     parser.add_argument("--environment-output", required=True, type=Path)
+    parser.add_argument("--forecast-day", choices=("current", "next"), default="next",
+                        help="current UTC day for scheduled capture; next day for legacy slots")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     plan = BaselinePlan.model_validate_json(args.plan.read_text())
-    snapshot, environment = build_environment(plan, now=datetime.now(UTC))
+    snapshot, environment = build_environment(plan, now=datetime.now(UTC), forecast_day=args.forecast_day)
     if args.apply:
         if args.snapshot_output.parent != args.environment_output.parent:
             parser.error("NOAA snapshot/environment must share a reviewed destination directory")
