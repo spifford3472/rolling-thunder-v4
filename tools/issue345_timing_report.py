@@ -101,6 +101,10 @@ _SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
 
 
 def _bounded_count(value: str) -> int | None:
+    # Reject decimal strings longer than 7 digits before int conversion
+    # to prevent Python int digit-limit errors with very large inputs
+    if len(value) > 7:
+        return None
     parsed = int(value)
     return parsed if 0 <= parsed <= MAX_COUNT else None
 

@@ -106,3 +106,9 @@ approved deployment wrapper documented in `codex-deployment-workflow.md`; do not
 bypass it.
 If the labeled packet cannot be collected safely, stop here with #345 open. Do not
 make a speculative production rendering, CAT/PTT, FT8 timing, or shared-policy fix.
+
+
+## Superseding final worker checkpoint
+
+
+11:45EDT final snapshot1552validrecords,239refreshwindows,refresh reportedp95range26.02–45.27ms,max241.20ms,radarmax0.55ms,mapmax121.16ms; initial238record findings above are historical snapshot, not final maxima. Source already committed/pushed eba96ac awaiting review. Final model pass returned only Now and review failed context-limit, so independent review still required. Issue stays open and no runtime fix or physical acceptance claimed.

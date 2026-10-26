@@ -133,3 +133,36 @@ def test_cli_defaults_to_unlabeled_and_prints_bounded_json(tmp_path: Path) -> No
     assert report["scenario"] == "unlabeled"
     assert report["source_sha"] == SHA
     assert set(report["aggregate_windows"]) == {"radar"}
+
+
+def test_bounded_count_rejects_long_inputs(tmp_path: Path) -> None:
+    # Test that _bounded_count rejects decimal strings longer than 7 digits
+    timing_input = tmp_path / "timing.txt"
+    # Create a string with 5000 digits to reproduce Python digit-limit failure
+    long_count = "1" * 5000
+    timing_input.write_text(
+        f"R1A_UI_TIMING metric=refresh count={long_count} p95_ms=1.00 max_ms=2.00\n",
+        encoding="ascii",
+    )
+
+    # This should not raise an exception, but the record should be ignored
+    report = timing_report.build_report(timing_input, "unlabeled", SHA)
+
+    # Since count={long_count} is longer than 7 digits, it should be rejected
+    # and no records should be recognized
+    assert report["recognized_record_count"] == 0
+    assert report["ignored_line_count"] == 1
+
+
+def test_bounded_count_accepts_normal_inputs(tmp_path: Path) -> None:
+    # Test that _bounded_count accepts normal inputs within the limit
+    timing_input = tmp_path / "timing.txt"
+    timing_input.write_text(
+        "R1A_UI_TIMING metric=refresh count=1000000 p95_ms=1.00 max_ms=2.00\n",
+        encoding="ascii",
+    )
+
+    # This should be accepted since count=1000000 is 7 digits or less
+    report = timing_report.build_report(timing_input, "unlabeled", SHA)
+
+    assert report["recognized_record_count"] == 1
