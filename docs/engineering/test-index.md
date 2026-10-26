@@ -322,6 +322,10 @@ the durable Forge UUID ledger so lost responses do not duplicate Wavelog writes.
   hardware-free event/barrier proof that synchronous Tk image materialization
   retains the map-refresh caller until completion, with separate bounded
   base64/PhotoImage/canvas timing tokens; diagnostic only.
+- `tests/test_issue345_timing_report.py` — repository-root import and CLI coverage
+  for bounded exported-text parsing, fixed provenance labels, same-refresh
+  correlation, legacy missing-detail preservation, and rejection without copying
+  unknown, malformed, or oversized input.
 - `tests/test_live_map_zoom.py`
 - `tests/test_live_radar_service.py`
 - `tests/test_forge_map_route.py`

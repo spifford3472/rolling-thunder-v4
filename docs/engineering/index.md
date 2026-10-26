@@ -14,6 +14,9 @@ This guide describes the implemented repository rather than an aspirational arch
 - `issue-345-source-trace-2026-10-22.md` — deployed/current source equivalence,
   broad refresh-path and lock analysis, deterministic synchronous-Tk blocking
   reproduction, evidence limits, and gated correction proposal.
+- `issue-345-20261026-handoff.md` — current probe deployment identity, bounded
+  unlabeled field measurements, gate disposition, and the remaining parked,
+  receive-only acceptance packet.
 
 - `antenna-reference-rf-exposure.md` — manually maintained typed-YAML antenna,
   installation, mode and scenario authority; versioned FCC MPE plane-wave advisory
