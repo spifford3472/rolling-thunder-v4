@@ -124,7 +124,9 @@ The profile may still display textual information when no reliable coordinate ex
 
 The QRZ photograph is deliberately not used by this feature. The contacted
 station/target's current local time is rendered in the upper-right of the mini-map
-rather than consuming identity-panel space. It is derived with the IANA timezone
+rather than consuming identity-panel space. Black text has a compact white backing
+fitted to the rendered label with padding, above the map tiles. No clock or backing
+is drawn when the time is unavailable. It is derived with the IANA timezone
 returned by the same target-weather response, so daylight-saving transitions remain
 correct. When that timezone is unavailable or invalid, the field is blank; the Pi's
 operator timezone is never presented as the target's time.

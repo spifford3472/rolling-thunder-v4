@@ -549,14 +549,27 @@ class CallsignInfoOverlayWidgets:
                 anchor="nw",
             )
 
-        canvas.create_text(
-            width - 12,
-            10,
-            text=local_time_text,
-            fill="#000000",
-            font=("DejaVu Sans", 24, "bold"),
-            anchor="ne",
-        )
+        if local_time_text:
+            clock = canvas.create_text(
+                width - 12,
+                10,
+                text=local_time_text,
+                fill="#000000",
+                font=("DejaVu Sans", 24, "bold"),
+                anchor="ne",
+            )
+            bounds = canvas.bbox(clock)
+            if bounds is not None:
+                left, top, right, bottom = bounds
+                background = canvas.create_rectangle(
+                    left - 6,
+                    top - 3,
+                    right + 6,
+                    bottom + 3,
+                    fill="#ffffff",
+                    outline="",
+                )
+                canvas.tag_lower(background, clock)
 
         visible_keys = set(self._map_photos)
         if len(self._map_photo_cache) > 64:
