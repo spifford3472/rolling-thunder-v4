@@ -919,7 +919,7 @@ Depending on available data, the overlay may include:
 - callsign/name/address identity;
 - a contact mini-map;
 - current target weather;
-- target local time when a reliable IANA timezone accompanies that weather;
+- target local time in black text on a compact white background at the top-right of the mini-map when a reliable IANA timezone accompanies that weather;
 - prior-QSO summary;
 - FIRST CONTACT when no prior QSO is found.
 
