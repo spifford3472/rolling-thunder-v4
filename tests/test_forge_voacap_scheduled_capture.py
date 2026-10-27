@@ -43,7 +43,7 @@ class FakeProvider:
         timeout_s: float,
         on_post_started: Any,
     ) -> ProviderResult:
-        assert timeout_s == 10
+        assert timeout_s == 60
         self.calls.append(dict(request))
         on_post_started()
         if self.fail_first:
@@ -214,11 +214,12 @@ def test_retryable_provider_failure_is_visible_and_retries_only_failed_request(
     repo = ScheduledCaptureRepository(tmp_path / "capture.sqlite")
     provider = FakeProvider(fail_first=True)
     service = ScheduledCaptureService(repo, provider)
-    plan = _plan()
+    plan = _plan(max_attempts=3)
     first = service.run_cycle(plan, _environment(), NOW)
     assert first["state"] == "incomplete"
     assert first["provider_calls_this_invocation"] == 105
     assert first["request_status_counts"]["retry"] == 1
+    assert first["cell_status_counts"] == {"ready": 416}
     retried = service.run_cycle(plan, _environment(), NOW + timedelta(minutes=1))
     assert retried["state"] == "complete"
     assert retried["provider_calls_this_invocation"] == 1
@@ -324,7 +325,7 @@ def test_due_retry_from_earlier_same_day_run_runs_after_fresh_boundary(
     repo = ScheduledCaptureRepository(tmp_path / "capture.sqlite")
     provider = FakeProvider(fail_first=True)
     service = ScheduledCaptureService(repo, provider)
-    plan = _plan()
+    plan = _plan(max_attempts=3)
     first = service.run_cycle(plan, _environment(), NOW)
     assert first["request_status_counts"]["retry"] == 1
 
@@ -389,3 +390,65 @@ def test_preflight_failure_counts_attempts_without_claiming_provider_post(
     health = ScheduledCaptureRepository.health(path, _plan(), NOW.date())
     assert health["actual_provider_attempts"] == 105
     assert health["actual_provider_calls"] == 0
+
+
+def test_successor_defaults_and_explicit_historical_plan_identity() -> None:
+    assert _plan().provider_timeout_s == 60.0
+    assert _plan().max_attempts == 1
+    legacy = _plan(provider_timeout_s=10.0, max_attempts=3)
+    # Captured with the pre-change implementation, not recomputed from new defaults.
+    digest = "8a0d0b76a9c095df5826a5ffb27613ede7ea02820512da15d795ab4847a45c37"
+    assert legacy.canonical_sha256 == digest
+    restored = CapturePlan.model_validate_json(legacy.model_dump_json())
+    assert restored.provider_timeout_s == 10.0
+    assert restored.max_attempts == 3
+    assert restored.canonical_sha256 == digest
+
+
+def test_timeout_is_terminal_with_null_cells_and_does_not_suppress_other_calls(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "capture.sqlite"
+    plan = _plan()
+    provider = FakeProvider(fail_first=True)
+    repo = ScheduledCaptureRepository(path)
+    service = ScheduledCaptureService(repo, provider)
+    result = service.run_cycle(plan, _environment(), NOW)
+    assert result["provider_calls_this_invocation"] == 105
+    assert result["request_status_counts"] == {"failed": 1, "ready": 104}
+    assert result["cell_status_counts"] == {"failed": 4, "ready": 416}
+    with sqlite3.connect(path) as db:
+        failure = db.execute(
+            "SELECT request_id,reason,attempts,response_sha256 FROM "
+            "baseline_capture_request_v1 WHERE status='failed'"
+        ).fetchone()
+        assert failure is not None
+        assert failure[1:] == ("provider_timeout", 1, None)
+        cells = db.execute(
+            "SELECT hour_utc,status,reliability,snr_db,reason FROM "
+            "baseline_capture_cell_v1 WHERE request_id=? ORDER BY hour_utc",
+            (failure[0],),
+        ).fetchall()
+        assert cells == [
+            (hour, "failed", None, None, "provider_timeout") for hour in CAPTURE_HOURS_UTC
+        ]
+    restarted = ScheduledCaptureService(ScheduledCaptureRepository(path), provider)
+    replay = restarted.run_cycle(plan, _environment(), NOW + timedelta(minutes=1))
+    assert replay["provider_calls_this_invocation"] == 0
+    assert len(provider.calls) == 105
+    next_boundary = NOW + timedelta(hours=6)
+    next_result = restarted.run_cycle(
+        plan, _environment(captured=next_boundary), next_boundary
+    )
+    assert next_result["current_run_provider_calls"] == 105
+    assert next_result["prior_run_retry_attempts"] == 0
+    assert len(provider.calls) == 210
+    with sqlite3.connect(path) as db:
+        assert db.execute(
+            "SELECT hour_utc,status,reliability,snr_db,reason FROM "
+            "baseline_capture_cell_v1 WHERE request_id=? ORDER BY hour_utc",
+            (failure[0],),
+        ).fetchall() == cells
+    health = ScheduledCaptureRepository.health(path, plan, NOW.date())
+    assert health["runs"][0]["missing_target_hour_cells"] == 0
+    assert health["coverage_state"] == "incomplete"

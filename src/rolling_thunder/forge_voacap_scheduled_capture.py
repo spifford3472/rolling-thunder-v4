@@ -53,10 +53,10 @@ class CapturePlan(DomainModel):
     ssn_value_semantics: Literal["monthly_smoothed_predicted_sunspot_number"]
     ssn_source_schema: str = Field(min_length=1, max_length=160)
     ssn_revision_policy: str = Field(min_length=1, max_length=300)
-    provider_timeout_s: float = Field(default=10.0, ge=1.0, le=60.0)
+    provider_timeout_s: float = Field(default=60.0, ge=1.0, le=60.0)
     response_size_limit_bytes: int = Field(default=1_000_000, ge=1024, le=10_000_000)
     storage_limit_bytes: int = Field(default=250_000_000, ge=1_000_000, le=20_000_000_000)
-    max_attempts: int = Field(default=3, ge=1, le=5)
+    max_attempts: int = Field(default=1, ge=1, le=5)
     lease_seconds: int = Field(default=90, ge=30, le=3600)
     retry_delay_seconds: int = Field(default=60, ge=1, le=86400)
 
@@ -365,6 +365,15 @@ class ScheduledCaptureRepository:
             )
             if cursor.rowcount!=1:
                 raise ValueError("stale capture request lease")
+            if not retry:
+                # New terminal evidence only; never synthesize zero-valued predictions
+                # or backfill previously stored plans/results.
+                db.executemany(
+                    """INSERT INTO baseline_capture_cell_v1
+                    (request_id,hour_utc,status,reliability,snr_db,reason)
+                    VALUES (?,?,'failed',NULL,NULL,?)""",
+                    [(str(claim["request_id"]), hour, error[:500]) for hour in plan.hours_utc],
+                )
             self._activity(db,run_id,moment,status,str(claim["request_id"]),{"reason":error[:500]})
 
     def finish_run(self, run_id: str, now: datetime) -> dict[str, Any]:
