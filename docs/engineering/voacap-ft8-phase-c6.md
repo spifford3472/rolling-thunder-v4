@@ -305,7 +305,7 @@ a service override with the current-day option and retain its immutable legacy
 parent as the NOAA source-identity contract. Do not pass CapturePlan to the
 legacy-plan parser.
 
-For the default immutable capture plan (10-second requests, three attempts,
+For the historical immutable capture plan (10-second requests, three attempts,
 60-second retry delay), install a sampler `TimeoutStartSec=90min` override.
 A boundary processes 105 fresh requests followed by due retries from up to
 three earlier same-day runs. A fixed invocation clock and positive retry delay
@@ -318,3 +318,29 @@ may still exhaust it; systemd timeout and incomplete health remain visible.
 Do not increase plan timeout/attempt/retry settings without reviewing this budget.
 The 30-minute window controls invocation admission, not completion duration.
 No immediate replay is required at cutover; enable timers for real future boundaries.
+
+### October 27 successor-plan timeout policy (source change)
+
+New CapturePlan construction and the dry-run builder default to a 60-second
+provider timeout and one attempt per request. Explicit historical 10-second /
+three-attempt plans retain their canonical hashes and policy. Never edit an
+existing plan ID or stored payload to adopt these defaults: create a reviewed
+successor with a new identity, preserving old plans, requests, responses and runs.
+There is no scheduled call quota: each admitted boundary still attempts its 105
+site/band requests without consulting the monthly response cache. Storage safety
+limits remain explicit incomplete/skipped outcomes, not successful collection.
+
+The installed 90-minute budget applies only to the historical plan. At 60 seconds,
+105 sequential calls alone allow 6,300 seconds (105 minutes), plus version preflight
+and persistence overhead. A successor needs a separately reviewed service timeout
+(for example two hours with approximately 14 minutes for preflight/overhead),
+lease/recovery and admission review before activation. Socket timeouts are not a
+proof of a whole-cycle wall-clock bound. Do not activate only the new plan under
+the old 90-minute unit, and do not replay old boundaries to manufacture coverage.
+This source change does not switch production configuration or restart either host.
+
+New terminal scheduled failures persist four explicit `failed` hour cells in the
+same transaction as their lease-validated request outcome. Reliability and SNR are
+SQL NULL with a bounded failure reason. Retryable legacy attempts create no cells
+until success or terminal failure. Earlier rows are not backfilled or reclassified.
+A failed request does not suppress the other site/band requests or the next run.

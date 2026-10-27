@@ -85,6 +85,8 @@ def test_builder_freezes_successor_inventory_and_exact_request_economics() -> No
     assert plan.parent_plan_id == UUID("70000000-0000-4000-8000-000000000001")
     assert len(plan.targets) == 15
     assert plan.bands_m == (80, 40, 20, 17, 15, 12, 10)
+    assert plan.provider_timeout_s == audit["provider_timeout_s"] == 60.0
+    assert plan.max_attempts == audit["max_attempts_per_request"] == 1
     assert audit["posts_per_run"] == 105
     assert audit["posts_per_utc_day"] == 420
     assert audit["monthly_cache_suppresses_runs"] is False

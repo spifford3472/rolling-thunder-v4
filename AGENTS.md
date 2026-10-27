@@ -231,3 +231,36 @@ Live RF transmission is a separate safety boundary. Do not initiate an RF
 transmission for testing unless Geoffrey explicitly authorizes the live-radio
 test. Prefer unit tests, mocks, recorded data, receive-only validation, or a
 dummy load where applicable.
+
+## Qwen-first architecture and acceptance workflow
+
+The coordinating architect owns decomposition, review, acceptance, and release decisions.
+Use local Qwen on Forge first for small fresh-context implementation tasks. Give each
+task a narrow file/behavior scope, explicit inputs, a time bound, and a checkable
+definition of done. Run only one local coding worker at a time. Use the established
+`/home/geoff/.local/bin/rt-code` launcher and isolated workspaces under
+`/home/geoff/projects/ki5vnb-ai-workspaces`; inspect its current behavior before use.
+Launcher logs and status live under `/home/geoff/.local/share/ki5vnb-coding/runs`.
+A launch, agent report, or successful process exit is not evidence of acceptance.
+
+Inspect the actual diff and independently validate each definition of done before
+accepting work. Reject incomplete results and return specific requested fixes. If
+Qwen fails, first decide whether the task can be split into two smaller tasks, each
+with its own definition of done. Use Codex only when needed after that assessment;
+apply the same review and quality gates to its work. Preserve useful partial work
+and record exact blockers rather than repeatedly sending an oversized task.
+
+GitHub source is `spifford3472/rolling-thunder-v4`; use the existing authenticated
+connector or configured Git transport. Never copy credential material into prompts,
+logs, documentation, or commits. Fetch current state and inspect dirty work before
+starting or resuming. Follow `docs/engineering/codex-deployment-workflow.md` for
+release paths, and verify actual installed identities independently of GitHub.
+Owner merge/deployment authorization may be time-bounded: honor the latest cutoff,
+check Eastern time, and do not leave coding/deployment jobs running beyond it.
+Do not interrupt anvilmobile during a commute without an established idle state.
+
+Every infrastructure change affecting 192.168.9.0/24, 192.168.10.0/24, or OPNsense
+must also be documented and committed in private
+`spifford3472/ki5vnb-qth-infrastructure` before the infrastructure work is complete.
+Include configuration paths, integrations, jobs, validation, rollback, and change
+history. Do not bypass privilege boundaries or approved deployment wrappers.

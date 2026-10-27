@@ -338,5 +338,19 @@ never schedules work or contacts NOAA/VOACAP.
 Scheduled capture commissioning uses the NOAA publisher option `--forecast-day current`;
 legacy refresh defaults to the next UTC day. Keep the legacy immutable parent plan
 as its source-identity input. The sampler requires a reviewed 90-minute systemd
-timeout for the default 10-second request/three-attempt plan; see
+timeout for the historical 10-second request/three-attempt plan; see
 [the C6 commissioning budget](voacap-ft8-phase-c6.md#scheduled-capture-commissioning-integration).
+
+
+The October 27 source defaults for newly constructed scheduled CapturePlans are
+60 seconds and one attempt. The installed plan is an immutable independent
+artifact and is not upgraded by a source deploy. Follow the successor-plan policy
+and revised service budget in `voacap-ft8-phase-c6.md`; preserve the old plan/hash
+and history. The QSO lane has separate timeout/retry configuration and is not
+changed by the scheduled-plan defaults.
+
+New terminal scheduled failures persist four explicit `failed` hour cells in the
+same transaction as their lease-validated request outcome. Reliability and SNR are
+SQL NULL with a bounded failure reason. Retryable legacy attempts create no cells
+until success or terminal failure. Earlier rows are not backfilled or reclassified.
+A failed request does not suppress the other site/band requests or the next run.
