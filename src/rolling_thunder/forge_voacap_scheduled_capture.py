@@ -329,7 +329,12 @@ class ScheduledCaptureRepository:
                 "SELECT response_json,service_version,model_version FROM baseline_capture_response_v1 "
                 "WHERE response_sha256=?",(response_sha,),
             ).fetchone()
-            if stored!=(encoded,result.service_version,result.model_version):
+            # This table deduplicates exact response bytes. Its version fields
+            # describe the first observation; each request below retains the
+            # independently verified provider/model identity for its own POST.
+            # Identical bytes from a newer version must not rewrite old evidence
+            # or be rejected as a content-hash conflict.
+            if stored is None or stored[0] != encoded:
                 raise ValueError("capture response hash identity conflict")
             cursor=db.execute(
                 """UPDATE baseline_capture_request_v1 SET status=?,provider_version=?,model_version=?,

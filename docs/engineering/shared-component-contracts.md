@@ -467,3 +467,7 @@ Every C5 advisory is Forge-only and immutable with `shadow_only=true`,
 baseline. It must not alter live CQ order, the existing retry ladder or configured
 power. `armed_when_ready` computes only future readiness. Any future actuation or
 operator-visible use requires a separate contract, approval and regression review.
+
+## Scheduled VOACAP response content and provenance
+
+The capture response table deduplicates canonical JSON bytes, with immutable first-observation version metadata. Per-request provider/model columns carry the verified issuer of each distinct POST; consumers must not attribute every request to the first blob issuer. Different versions may return identical bytes without identity conflict. Missing reliability or SNR yields an unavailable hour/band with both derived values NULL, never substituted zero/sentinel values. See `issue-353-response-identity-and-missing-values.md`.
