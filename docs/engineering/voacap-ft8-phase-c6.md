@@ -344,3 +344,7 @@ same transaction as their lease-validated request outcome. Reliability and SNR a
 SQL NULL with a bounded failure reason. Retryable legacy attempts create no cells
 until success or terminal failure. Earlier rows are not backfilled or reclassified.
 A failed request does not suppress the other site/band requests or the next run.
+
+## Response-body deduplication across provider versions
+
+Canonical response bytes are content-addressed independently of the issuer. Blob version fields retain the first observation; each request retains its own verified provider/model versions. Identical bytes from a newer version are accepted without changing old evidence; different bytes under an existing hash remain a hard error. Missing reliability or SNR leaves both derived prediction columns NULL for that hour/band, with other complete transactions unaffected. See [issue-353-response-identity-and-missing-values.md](issue-353-response-identity-and-missing-values.md).

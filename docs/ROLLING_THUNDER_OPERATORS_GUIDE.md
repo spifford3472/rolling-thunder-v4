@@ -1292,3 +1292,7 @@ table space. It does not display driver separation or long diagnostic blocks on 
 main view; the manually maintained YAML preserves detailed input provenance. The
 six-foot public boundary, 0 dB cable-loss assumption, and non-certification caveat
 remain visible. Encoder changes the selected card; no radio power control.
+
+## VOACAP missing predictions
+
+A missing or invalid required prediction value leaves that hour/band transaction blank; it is not displayed or stored as zero. Other complete predictions continue. A successful HTTP response alone does not establish a usable forecast.
