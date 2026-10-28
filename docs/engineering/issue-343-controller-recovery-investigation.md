@@ -164,3 +164,7 @@ BlueZ, network, audio or OPNsense setting changed.
 Change history: October28 initial current-source and live read-only investigation;
 owner-added microphone incident classified as absent reSpeaker USB/ALSA device;
 source recovery gap confirmed; historical controller cause left unresolved.
+
+## Implementation checkpoint
+
+The [pure health policy](control-transport-health-policy.md) now implements the first lifecycle foundation only. It is uncomposed; serial/firmware/configuration and production behavior remain unchanged. Owner subsequently confirmed the microphone is plugged in and powered. A repeated read-only check still finds no microphone USB node, with its parent hub active and authorized. Power alone does not establish USB data connectivity; cable/hub/device cause remains unresolved. Qwen candidates were rejected; the coordinator fallback and tests are recorded in the policy guide.

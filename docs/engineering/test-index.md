@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 355.**
+**Cataloged Python test modules: 356.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -567,3 +567,5 @@ still required.
 - Antenna mobile YAML tests also verify separate measured-driver versus unverified hypothetical six-foot public scenarios, incomplete assessments with unknown duplexer/coax losses, and both supplied duplexer path specifications.
 
 - Antenna zero-loss screening presentation: tests/test_antenna_reference_config.py and tests/test_antenna_reference_panel.py preserve actual incomplete results and screen only when other inputs permit.
+
+- `tests/test_control_transport_health.py` — Pure controller retry/generation, health expiry, invalid-clock and immutable snapshot regression tests; no hardware.

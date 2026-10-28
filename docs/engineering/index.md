@@ -426,3 +426,5 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - [Issue353 response identity and missing values](issue-353-response-identity-and-missing-values.md) — per-request issuer provenance with shared immutable response bytes; blank prediction transactions and continued collection.
 
 - [Issue343 controller transport investigation](issue-343-controller-recovery-investigation.md) — read-only host evidence, separate missing microphone finding, and proposed USB recovery gates; no runtime change.
+
+- [Controller recovery health policy](control-transport-health-policy.md) — tested but uncomposed monotonic lifecycle/backoff foundation; no installed recovery or firmware change.

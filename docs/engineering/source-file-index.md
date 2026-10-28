@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 335.**
+**Cataloged Python modules: 336.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -496,3 +496,5 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/ui_timing.py` — opt-in bounded monotonic UI critical-path, fixed-subphase, and accepted-action timing collector (R1-A1/R1-C3).
 
 - `src/rolling_thunder/ft8/band_presentation.py` — pure FT8 receive-band tuning progress, verified display and stale-outcome acknowledgment (R1-C1).
+
+- `src/rolling_thunder/control_transport_health.py` — Uncomposed pure controller health/backoff policy with immutable snapshots and generation invalidation.
