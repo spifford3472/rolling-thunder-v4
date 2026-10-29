@@ -163,3 +163,5 @@ firmware and regression tests. Rejected Qwen workspace is retained. No coding
 worker remains. Owner subsequently explicitly authorized merge and deployment after validation; actual installed and firmware acceptance status must be recorded separately.
 
 Validation checkpoint:3577passed7skipped across the full Python suite; Ruff and strict MyPy348sourcefiles pass. Both esp32dev and pinned esp32dev-recovery builds pass. Owner merge/deploy authorization is current. Hardware/firmware acceptance and actual installed identities must be recorded after cutover.
+
+Each v2 ControlInputEvent also carries a finite host expiry. The dispatch gate checks it immediately before each command, so a slow earlier command cannot revive stale remainder of a drained batch. Legacy events default to no expiry and retain their existing gate behavior.

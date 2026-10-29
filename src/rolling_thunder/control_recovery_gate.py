@@ -41,7 +41,7 @@ class RecoveryControlEventGate:
         if sequence > 2**64 - 1:
             return False
         now = self._clock()
-        if not math.isfinite(now):
+        if not math.isfinite(now) or event.expires_at_s is None or now >= event.expires_at_s:
             return False
         with self._lock:
             if nonce != self._current():

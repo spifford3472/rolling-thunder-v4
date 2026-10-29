@@ -14,7 +14,7 @@ N = "a" * 32
 
 
 def event(nonce: str, seq: int, input_id: str = "voice-button") -> ControlInputEvent:
-    return ControlInputEvent(input_id, f"{nonce}:{seq}", 0)
+    return ControlInputEvent(input_id, f"{nonce}:{seq}", 0, expires_at_s=99999)
 
 
 def test_current_session_and_watermark_reject_late_duplicate_and_unknown_input() -> None:
@@ -75,3 +75,20 @@ def test_explicit_v2_factory_is_inert_and_legacy_gate_unchanged() -> None:
     assert isinstance(build_control_gate(config, MockControlSource()), ControlEventGate)
     with pytest.raises(ValueError):
         PhysicalControlsConfig(enabled=True, transport="serial_v2")
+
+
+def test_slow_first_command_cannot_authorize_remaining_stale_batch() -> None:
+    now = [0.0]
+    gate = RecoveryControlEventGate(frozenset({"voice-button"}), lambda: N, 0, clock=lambda: now[0])
+    first = ControlInputEvent("voice-button", f"{N}:1", 0, expires_at_s=0.25)
+    second = ControlInputEvent("voice-button", f"{N}:2", 0, expires_at_s=0.25)
+    assert gate.accept(first)
+    now[0] = 1.0 # First operator command took a second; batch remainder expired.
+    assert not gate.accept(second)
+    assert not gate.accept(ControlInputEvent("voice-button", f"{N}:3", 0))
+
+
+@pytest.mark.parametrize("expiry", [True, -1.0, float("nan"), float("inf")])
+def test_invalid_expiry_metadata_cannot_enter_dispatch(expiry: float) -> None:
+    with pytest.raises(ValueError):
+        ControlInputEvent("voice-button", f"{N}:1", 0, expires_at_s=expiry)

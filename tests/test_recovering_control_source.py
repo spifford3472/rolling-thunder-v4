@@ -382,7 +382,7 @@ def test_factory_gate_dispatches_once_only_while_published_session_is_current() 
     port = Port(clock)
     s = source(clock, lambda *_: port)
     config = PhysicalControlsConfig(mappings={"voice-button": "voice"}, repeat_suppression_s=0)
-    gate = build_control_gate(config, s)
+    gate = build_control_gate(config, s, clock=clock)
     try:
         s.open()
         wait_for(lambda: s.snapshot.health.state is State.HEALTHY)

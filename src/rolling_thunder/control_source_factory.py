@@ -1,6 +1,7 @@
 """Application composition for configured physical-control sources."""
 
 from collections.abc import Callable
+from time import monotonic
 
 from rolling_thunder.config import (
     PhysicalControlsConfig,
@@ -56,12 +57,12 @@ def build_control_source(
     raise ValueError(f"Unsupported physical-control transport {config.transport!r}.")
 
 
-def build_control_gate(config: PhysicalControlsConfig, source: ControlSource) -> ControlEventFilter:
+def build_control_gate(config: PhysicalControlsConfig, source: ControlSource, *, clock: Callable[[], float] = monotonic) -> ControlEventFilter:
     """Keep legacy semantics; v2 uses only bounded current-session gating."""
     if isinstance(source, RecoveringControlSource):
         return RecoveryControlEventGate(
             frozenset(config.mappings),
             lambda: source.snapshot.session_nonce,
-            config.repeat_suppression_s,
+            config.repeat_suppression_s, clock=clock,
         )
-    return ControlEventGate(config.repeat_suppression_s)
+    return ControlEventGate(config.repeat_suppression_s, clock=clock)

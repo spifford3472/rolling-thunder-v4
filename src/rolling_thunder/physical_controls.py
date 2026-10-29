@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -45,6 +46,7 @@ class ControlInputEvent:
     input_id: str
     event_id: str
     occurred_at_s: float
+    expires_at_s: float | None = None
 
     def __post_init__(self) -> None:
         if not self.input_id.strip():
@@ -53,6 +55,10 @@ class ControlInputEvent:
             raise ValueError("Control event_id must not be blank.")
         if self.occurred_at_s < 0:
             raise ValueError("Control occurred_at_s must not be negative.")
+        if self.expires_at_s is not None and (
+            isinstance(self.expires_at_s, bool) or not math.isfinite(self.expires_at_s) or self.expires_at_s < 0
+        ):
+            raise ValueError("Control expiry must be a finite nonnegative host timestamp.")
 
 
 class ControlSource(Protocol):

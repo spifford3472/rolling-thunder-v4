@@ -286,13 +286,8 @@ class RecoveringControlSource:
                                             raise ControlSessionError(
                                                 "Controller input queue overflow"
                                             )
-                                        self._queue.append(
-                                            (
-                                                min(result.expires_at, worker_now() + 0.25),
-                                                token,
-                                                result.event,
-                                            )
-                                        )
+                                        expires = min(result.expires_at, worker_now() + 0.25)
+                                        self._queue.append((expires, token, replace(result.event, expires_at_s=expires)))
                         if (
                             policy.snapshot.state is TransportHealthState.HEALTHY
                             and session.can_ping
