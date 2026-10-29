@@ -496,6 +496,7 @@ class PhysicalControlTransport(StrEnum):
 
     MOCK = "mock"
     SERIAL = "serial"
+    SERIAL_V2 = "serial_v2"
 
 
 class PhysicalControlsConfig(ConfigurationModel):
@@ -509,6 +510,7 @@ class PhysicalControlsConfig(ConfigurationModel):
     maximum_read_bytes: int = Field(default=4_096, ge=1, le=65_536)
     maximum_events_per_drain: int = Field(default=32, ge=1, le=1_024)
     repeat_suppression_s: float = Field(default=0.25, ge=0, le=5)
+    recovery_settle_s: float = Field(default=1.0, ge=0, le=2)
     mappings: dict[str, ControlAction] = Field(default_factory=dict)
 
     @field_validator("device", mode="before")
@@ -550,7 +552,7 @@ class PhysicalControlsConfig(ConfigurationModel):
         """Require a serial device only when the serial transport is enabled."""
         if (
             self.enabled
-            and self.transport is PhysicalControlTransport.SERIAL
+            and self.transport in (PhysicalControlTransport.SERIAL, PhysicalControlTransport.SERIAL_V2)
             and self.device is None
         ):
             raise ValueError(

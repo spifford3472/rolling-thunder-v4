@@ -471,3 +471,11 @@ operator-visible use requires a separate contract, approval and regression revie
 ## Scheduled VOACAP response content and provenance
 
 The capture response table deduplicates canonical JSON bytes, with immutable first-observation version metadata. Per-request provider/model columns carry the verified issuer of each distinct POST; consumers must not attribute every request to the first blob issuer. Different versions may return identical bytes without identity conflict. Missing reliability or SNR yields an unavailable hour/band with both derived values NULL, never substituted zero/sentinel values. See `issue-353-response-identity-and-missing-values.md`.
+
+## Uncomposed controller recovery policy
+
+`control_transport_health.py` publishes pure immutable health/backoff data only. No production consumer or activation gate is wired. `validated_session` is a future adapter trust boundary; neither an open serial descriptor nor current RTCTRL/1 events prove freshness. It grants no action/radio authority and does not replace existing physical-control gating. See `control-transport-health-policy.md`.
+
+Recovery v2 adds strict session/age validation and a bounded serial-owner worker, selected only by explicit serial_v2 configuration; legacy serial is unchanged. Health-only traffic is never an application action; pending input is discarded on loss/expiry. Legacy gating and all current consumers remain unchanged. See `controller-recovery-v2.md` for the firmware, ownership, reset and bounded-gating commissioning prerequisites.
+
+ControlInputEvent has optional host-monotonic expires_at_s metadata (default None for legacy producers). The v2 worker supplies its bounded expiry and the recovery gate requires it at each dispatch; slow earlier commands cannot replay the batch remainder. The legacy gate/three-argument event constructors retain compatibility.

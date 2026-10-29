@@ -10,7 +10,7 @@ from typing import Protocol
 from rolling_thunder.physical_controls import (
     ControlAction,
     ControlActionMapper,
-    ControlEventGate,
+    ControlEventFilter,
     ControlSource,
 )
 
@@ -39,7 +39,7 @@ class ControlDispatcher:
         self,
         source: ControlSource,
         mapper: ControlActionMapper,
-        gate: ControlEventGate,
+        gate: ControlEventFilter,
         commands: OperatorCommands,
         *,
         action_observer: Callable[[str, float], None] | None = None,

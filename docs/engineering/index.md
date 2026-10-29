@@ -424,3 +424,9 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - [C6.1 Forge sampler exact-SHA installer](voacap-ft8-phase-c61.md) — offline stage, disabled installation and rollback preconditions.
 
 - [Issue353 response identity and missing values](issue-353-response-identity-and-missing-values.md) — per-request issuer provenance with shared immutable response bytes; blank prediction transactions and continued collection.
+
+- [Issue343 controller transport investigation](issue-343-controller-recovery-investigation.md) — read-only host evidence, separate missing microphone finding, and proposed USB recovery gates; no runtime change.
+
+- [Controller recovery health policy](control-transport-health-policy.md) — tested pure monotonic lifecycle/backoff foundation for explicit serial_v2; no installed recovery or firmware upload.
+
+- [Controller recovery v2 candidate](controller-recovery-v2.md) — opt-in serial_v2 worker, bounded gate, fresh-session protocol and explicit firmware target; activation requires matching firmware.

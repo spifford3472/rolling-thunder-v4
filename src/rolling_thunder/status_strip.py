@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 
+from rolling_thunder.control_transport_health import TransportHealthSnapshot, TransportHealthState
 from rolling_thunder.dashboard_state import DashboardState
 from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.status_monitor import StatusMonitorSnapshot, StatusState
@@ -69,6 +70,7 @@ def build_status_bar_routine_message(
     state: DashboardState,
     *,
     now: datetime | None = None,
+    control_health: TransportHealthSnapshot | None = None,
 ) -> str:
     """Build hidden auxiliary icon metadata plus the visible local/UTC date text."""
     instant = now or datetime.now().astimezone()
@@ -78,7 +80,17 @@ def build_status_bar_routine_message(
     utc_date = instant.astimezone(UTC).strftime("%Y-%b-%d")
     voice_state = state.voice_state.strip().upper() or "UNKNOWN"
     gps_state = state.gps_state.strip().upper() or "UNKNOWN"
+    controller = ""
+    if control_health is not None:
+        label = {
+            TransportHealthState.STOPPED: "OFFLINE",
+            TransportHealthState.BACKOFF: "RECONNECTING",
+            TransportHealthState.SYNCHRONIZING: "CONNECTING",
+            TransportHealthState.HEALTHY: "READY",
+            TransportHealthState.STALE: "UNAVAILABLE",
+        }[control_health.state]
+        controller = f"Controls: {label} | "
     return (
-        f"[[VOICE={voice_state}]][[GPS={gps_state}]]"
+        f"[[VOICE={voice_state}]][[GPS={gps_state}]]{controller}"
         f"Local Date: {local_date} | UTC Date: {utc_date}"
     )

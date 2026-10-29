@@ -42,7 +42,7 @@ from rolling_thunder.context_navigation import (
     ContextNavigationController,
 )
 from rolling_thunder.control_dispatcher import ControlDispatcher
-from rolling_thunder.control_source_factory import build_control_source
+from rolling_thunder.control_source_factory import build_control_gate, build_control_source
 from rolling_thunder.control_source_lifecycle import (
     close_control_source,
     open_control_source,
@@ -82,7 +82,6 @@ from rolling_thunder.operator_preferences import OperatorPreferenceRepository
 from rolling_thunder.physical_controls import (
     ControlAction,
     ControlActionMapper,
-    ControlEventGate,
     ControlSource,
 )
 from rolling_thunder.pota_tune_execution_controller import (
@@ -91,6 +90,7 @@ from rolling_thunder.pota_tune_execution_controller import (
 from rolling_thunder.pota_worked import PotaWorkedRepository, PotaWorkedTracker
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.receive_tuning import ReceiveTuningService
+from rolling_thunder.recovering_control_source import RecoveringControlSource
 from rolling_thunder.repeater_configuration import (
     RepeaterConfigurationController,
     RepeaterConfigurationService,
@@ -607,7 +607,7 @@ def run_dashboard(
         control_dispatcher = ControlDispatcher(
             control_source,
             ControlActionMapper(config.physical_controls.mappings),
-            ControlEventGate(config.physical_controls.repeat_suppression_s),
+            build_control_gate(config.physical_controls, control_source),
             operator_commands,
             action_observer=(
                 ui_timing.observe_control_action if ui_timing.enabled else None
@@ -1689,7 +1689,9 @@ def run_dashboard(
                 status_monitor.latest_state,
             )
         )
-        ticker_message = build_status_bar_routine_message(view)
+        ticker_message = build_status_bar_routine_message(
+            view, control_health=control_source.snapshot.health if isinstance(control_source, RecoveringControlSource) else None,
+        )
         runtime.status_messages.publish(
             replacement_key="dashboard.routine",
             text=ticker_message,

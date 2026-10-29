@@ -1296,3 +1296,19 @@ remain visible. Encoder changes the selected card; no radio power control.
 ## VOACAP missing predictions
 
 A missing or invalid required prediction value leaves that hour/band transaction blank; it is not displayed or stored as zero. Other complete predictions continue. A successful HTTP response alone does not establish a usable forecast.
+
+
+## USB controller recovery (explicit v2 commissioning)
+
+The existing serial controller setup remains supported. The new serial_v2 option
+requires matching recovery firmware and a controlled parked cutover; selecting it
+with legacy firmware leaves controls unavailable instead of guessing a protocol.
+It reconnects in a background worker and discards old inputs. A held button must
+be released and pressed again after reconnection. The bottom routine ticker shows
+Controls: READY, CONNECTING, RECONNECTING, UNAVAILABLE or OFFLINE. Higher-priority
+alerts still take precedence. Touchscreen operation remains available during a
+controller outage. Voice capture still requires a fresh physical Voice-button press.
+
+Do not switch protocols, flash firmware or test reconnects while driving. Keep the
+known-good firmware/configuration backup until parked acceptance and soak pass.
+See engineering/controller-recovery-v2.md for commissioning and rollback details.
