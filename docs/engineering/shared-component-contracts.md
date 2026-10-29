@@ -475,3 +475,5 @@ The capture response table deduplicates canonical JSON bytes, with immutable fir
 ## Uncomposed controller recovery policy
 
 `control_transport_health.py` publishes pure immutable health/backoff data only. No production consumer or activation gate is wired. `validated_session` is a future adapter trust boundary; neither an open serial descriptor nor current RTCTRL/1 events prove freshness. It grants no action/radio authority and does not replace existing physical-control gating. See `control-transport-health-policy.md`.
+
+Recovery v2 adds strict session/age validation and a bounded serial-owner worker, selected only by explicit serial_v2 configuration; legacy serial is unchanged. Health-only traffic is never an application action; pending input is discarded on loss/expiry. Legacy gating and all current consumers remain unchanged. See `controller-recovery-v2.md` for the firmware, ownership, reset and bounded-gating commissioning prerequisites.

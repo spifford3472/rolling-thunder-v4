@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 356.**
+**Cataloged Python test modules: 360.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -569,3 +569,9 @@ still required.
 - Antenna zero-loss screening presentation: tests/test_antenna_reference_config.py and tests/test_antenna_reference_panel.py preserve actual incomplete results and screen only when other inputs permit.
 
 - `tests/test_control_transport_health.py` — Pure controller retry/generation, health expiry, invalid-clock and immutable snapshot regression tests; no hardware.
+
+- `tests/test_control_session_v2.py` — Strict wire, challenge age, replay and constant-state session tests.
+- `tests/test_recovering_control_source.py` — Fake-device lifecycle, owner-thread, queue expiry/overflow and cancellation tests.
+- `tests/test_control_firmware_recovery.py` — Native real-firmware GPIO/serial stubs and Python wire interoperability; requires g++.
+
+- `tests/test_control_recovery_gate.py` — Current-session dispatch filtering, obsolete nonce rejection, bounded state over many sessions and inert opt-in factory tests.

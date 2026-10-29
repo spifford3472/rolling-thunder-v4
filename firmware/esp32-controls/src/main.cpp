@@ -1,5 +1,11 @@
 #include <Arduino.h>
 #include <esp_system.h>
+#ifdef RTCTRL_RECOVERY_V2
+#include <esp_timer.h>
+#include <esp_task_wdt.h>
+#include <esp_idf_version.h>
+#include "recovery_session.h"
+#endif
 
 #include <array>
 #include <cstdint>
@@ -129,13 +135,33 @@ std::array<ButtonState, 8> buttons{{
     },
 }};
 
+#ifdef RTCTRL_RECOVERY_V2
+std::array<bool, 8> suppress_buttons{};
+RecoverySession* recovery_session = nullptr;
+bool recovery_watchdog_ready = false;
+void initialize_buttons();
+uint8_t read_encoder_state();
+uint64_t recovery_now() { return static_cast<uint64_t>(esp_timer_get_time()) / 1000; }
+void recovery_send(const char* line) {
+    const size_t length = std::strlen(line);
+    if (Serial.availableForWrite() >= static_cast<int>(length)) Serial.write(reinterpret_cast<const uint8_t*>(line), length);
+}
+#endif
+#ifndef RTCTRL_RECOVERY_V2
 uint32_t boot_session_id = 0;
 uint32_t event_sequence = 0;
+#endif
 
 uint8_t previous_encoder_state = 0;
 int8_t encoder_transition_accumulator = 0;
 
 void emit_input_event(const char* input_id) {
+#ifdef RTCTRL_RECOVERY_V2
+    if (!recovery_watchdog_ready || recovery_session == nullptr) return;
+    char message[256];
+    if (recovery_session->event(input_id, recovery_now(), message, sizeof(message))) recovery_send(message);
+    return;
+#else
     ++event_sequence;
 
     char event_id[32];
@@ -156,6 +182,7 @@ void emit_input_event(const char* input_id) {
     Serial.print(event_id);
     Serial.print(' ');
     Serial.println(monotonic_seconds, 3);
+#endif
 }
 
 uint8_t read_encoder_state() {
@@ -213,6 +240,14 @@ void poll_buttons(unsigned long now) {
             now - button.last_change_milliseconds
             >= kButtonDebounceMilliseconds;
 
+#ifdef RTCTRL_RECOVERY_V2
+        const size_t index = static_cast<size_t>(&button - buttons.data());
+        if (suppress_buttons[index]) {
+            button.stable_pressed = raw_pressed;
+            if (debounce_complete && !raw_pressed) suppress_buttons[index] = false;
+            continue;
+        }
+#endif
         if (
             !debounce_complete
             || button.stable_pressed == raw_pressed
@@ -283,18 +318,52 @@ void initialize_buttons() {
         button.last_raw_pressed = pressed;
         button.last_change_milliseconds = now;
         button.pressed_at_milliseconds = now;
+#ifdef RTCTRL_RECOVERY_V2
+        suppress_buttons[static_cast<size_t>(&button - buttons.data())] = pressed;
+#endif
     }
 }
 
+#ifdef RTCTRL_RECOVERY_V2
+void poll_recovery() {
+    static char line[128];
+    static size_t used = 0;
+    static bool discard = false;
+    for (unsigned consumed = 0; consumed < 128 && Serial.available() > 0; ++consumed) {
+        const char byte = static_cast<char>(Serial.read());
+        if (discard) { if (byte == '\n') discard = false; continue; }
+        if (byte == '\n') {
+            if (used && line[used - 1] == '\r') --used;
+            line[used] = 0;
+            char response[256];
+            if (recovery_session->command(line, recovery_now(), response, sizeof(response))) {
+                initialize_buttons();
+                previous_encoder_state = read_encoder_state();
+                encoder_transition_accumulator = 0;
+            }
+            recovery_send(response);
+            used = 0;
+        } else if (byte == 0 || static_cast<unsigned char>(byte) > 127) { used = 0; discard = true; }
+        else if (used < sizeof(line) - 1) line[used++] = byte;
+        else { used = 0; discard = true; }
+    }
+    recovery_session->active(recovery_now());
+}
+#endif
 }  // namespace
 
 void setup() {
+#ifdef RTCTRL_RECOVERY_V2
+    Serial.setTxBufferSize(512);
+#endif
     Serial.begin(kSerialBaudRate);
 
     pinMode(kEncoderClockPin, INPUT_PULLUP);
     pinMode(kEncoderDataPin, INPUT_PULLUP);
 
+#ifndef RTCTRL_RECOVERY_V2
     boot_session_id = esp_random();
+#endif
 
     // Allow the serial connection and input pull-ups to settle before
     // capturing initial states.
@@ -302,11 +371,28 @@ void setup() {
 
     previous_encoder_state = read_encoder_state();
     initialize_buttons();
+#ifdef RTCTRL_RECOVERY_V2
+    char boot[17];
+    std::snprintf(boot, sizeof(boot), "%08lx%08lx", static_cast<unsigned long>(esp_random()), static_cast<unsigned long>(esp_random()));
+    static RecoverySession session(boot);
+    recovery_session = &session;
+#if ESP_IDF_VERSION_MAJOR >= 5
+    const esp_task_wdt_config_t config = {2000, 0, true};
+    const esp_err_t initialized = esp_task_wdt_init(&config);
+#else
+    const esp_err_t initialized = esp_task_wdt_init(2, true);
+#endif
+    recovery_watchdog_ready = initialized == ESP_OK && esp_task_wdt_add(nullptr) == ESP_OK;
+#endif
 }
 
 void loop() {
     const unsigned long now = millis();
-
+#ifdef RTCTRL_RECOVERY_V2
+    if (!recovery_watchdog_ready) { delay(1); return; }
+    esp_task_wdt_reset();
+    poll_recovery();
+#endif
     poll_buttons(now);
     poll_encoder();
 

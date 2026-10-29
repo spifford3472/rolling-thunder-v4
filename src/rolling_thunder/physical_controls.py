@@ -62,6 +62,13 @@ class ControlSource(Protocol):
         """Return all currently available events without blocking."""
 
 
+class ControlEventFilter(Protocol):
+    """Shared dispatch eligibility contract for legacy or session-validated input."""
+
+    def accept(self, event: ControlInputEvent) -> bool:
+        """Return whether a physical input is eligible for one dispatch."""
+
+
 class ControlMappingError(ValueError):
     """Raised when physical-control mappings are malformed or ambiguous."""
 

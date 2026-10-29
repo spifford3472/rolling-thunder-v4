@@ -2,9 +2,7 @@
 
 ## Status and ownership
 
-Issue343 first implementation slice, October28. This pure module is uncomposed:
-no production consumer imports it, no configuration enables it, and no controller
-or microphone behavior changes. It does not repair the installed USB connection.
+Issue343 first implementation slice, October28. This pure module is now consumed only by the explicit serial_v2 recovery worker. Legacy serial remains unchanged. It grants no controller action or microphone authority. It does not repair the installed USB connection.
 See [investigation](issue-343-controller-recovery-investigation.md) for live
 observations and unresolved hardware/protocol gates.
 
@@ -79,3 +77,5 @@ fallback rule. No Qwen draft is accepted as working code. Run identities:
 20261028T214639336389Z-issue343-retry-core. No coding worker remains.
 
 Final coordinator validation:63focused tests; full suite3519passed/7skipped; Ruff, strict MyPy344sourcefiles and staged diff checks pass. No installed/hardware acceptance is claimed.
+
+Next source slice: [recovery v2 candidate](controller-recovery-v2.md) adds the still-uncomposed worker and explicit development firmware target. Firmware source now has an opt-in v2 implementation; installed firmware/production behavior remain unchanged. The documented commissioning gates still apply.

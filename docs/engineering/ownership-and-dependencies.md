@@ -409,3 +409,7 @@ CP3.1 retry extensions consume the published FT8 receive target-activity state
 inside the coordinator; no additional receive observer or UI policy is created.
 The bounded hardware transmit executor suppresses adaptive power increases on
 explicit extension periods, independently of the display banner.
+
+## Controller recovery candidate (uncomposed)
+
+`recovering_control_source.py` owns only a future single-owner USB lifecycle/mailbox; `control_session_v2.py` and `control_protocol_v2.py` own strict nonce/sequence/freshness observations. The explicit serial_v2 factory/UI path consumes this worker and its bounded gate; legacy serial remains unchanged. Existing physical-command, voice capture, CAT/PTT and logging owners are unchanged. See `controller-recovery-v2.md`.

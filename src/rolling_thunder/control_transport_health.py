@@ -32,7 +32,7 @@ class TransportHealthSnapshot:
 class ControlTransportHealthPolicy:
     """Pure single-owner policy driven only by explicit host monotonic times.
 
-    No production code composes this policy. RTCTRL/1 cannot validate a fresh
+    The explicit serial_v2 worker composes this policy. RTCTRL/1 cannot validate a fresh
     session; a future adapter must establish that separately before calling
     validated_session. An open serial fd is insufficient.
     """

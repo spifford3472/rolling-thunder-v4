@@ -140,3 +140,7 @@ The confirmed reliable upload speed for this board is 115200 baud.
 
 If clockwise rotation reports `encoder-counterclockwise`, exchange the encoder
 CLK and DT connections. No application-level mapping change is required.
+
+## Opt-in recovery firmware candidate
+
+The default `esp32dev` target still uses the one-way RTCTRL/1 protocol above. A separate `esp32dev-recovery` target implements health-only host challenges, session-bound input, held-button suppression and task watchdog registration. It requires the new host worker, which is not composed/activated. Build only with `pio run --project-dir firmware/esp32-controls -e esp32dev-recovery`; do not upload until parked board identity, firmware rollback and DTR/RTS behavior are reviewed. See [the recovery engineering guide](../../docs/engineering/controller-recovery-v2.md) for the exact protocol, tests and commissioning gates. Neither target has been flashed by this development work.

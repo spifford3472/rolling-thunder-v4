@@ -427,4 +427,6 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 
 - [Issue343 controller transport investigation](issue-343-controller-recovery-investigation.md) — read-only host evidence, separate missing microphone finding, and proposed USB recovery gates; no runtime change.
 
-- [Controller recovery health policy](control-transport-health-policy.md) — tested but uncomposed monotonic lifecycle/backoff foundation; no installed recovery or firmware change.
+- [Controller recovery health policy](control-transport-health-policy.md) — tested pure monotonic lifecycle/backoff foundation for explicit serial_v2; no installed recovery or firmware upload.
+
+- [Controller recovery v2 candidate](controller-recovery-v2.md) — opt-in serial_v2 worker, bounded gate, fresh-session protocol and explicit firmware target; activation requires matching firmware.

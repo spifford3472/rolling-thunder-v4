@@ -168,3 +168,7 @@ source recovery gap confirmed; historical controller cause left unresolved.
 ## Implementation checkpoint
 
 The [pure health policy](control-transport-health-policy.md) now implements the first lifecycle foundation only. It is uncomposed; serial/firmware/configuration and production behavior remain unchanged. Owner subsequently confirmed the microphone is plugged in and powered. A repeated read-only check still finds no microphone USB node, with its parent hub active and authorized. Power alone does not establish USB data connectivity; cable/hub/device cause remains unresolved. Qwen candidates were rejected; the coordinator fallback and tests are recorded in the policy guide.
+
+## October16 original archive reconciliation and next source slice
+
+The original saved archive was found and its SHA verified. It establishes controller USB disconnect/re-enumeration and changed tty numbering, with no captured app descriptor to the controller by-id target. This supersedes the earlier absence-of-retained-history observation; physical trigger and exact app fault remain unproven. Details and remaining gates are in [recovery v2 candidate](controller-recovery-v2.md), which also documents the now-implemented but uncomposed worker and opt-in firmware code. No installed change occurred.

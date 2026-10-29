@@ -181,9 +181,7 @@ class ForgeCallsignInfoClientConfig(ConfigurationModel):
     @model_validator(mode="after")
     def validate_enabled_client(self) -> Self:
         if self.enabled and self.api_url is None:
-            raise ValueError(
-                "forge.callsign_info.api_url must be configured when enabled"
-            )
+            raise ValueError("forge.callsign_info.api_url must be configured when enabled")
         return self
 
 
@@ -241,9 +239,7 @@ class ForgeWeatherAlertClientConfig(ConfigurationModel):
         normalized = value.strip()
 
         if not normalized:
-            raise ValueError(
-                "forge.weather_alerts.audio_device must not be blank"
-            )
+            raise ValueError("forge.weather_alerts.audio_device must not be blank")
 
         return normalized
 
@@ -283,32 +279,21 @@ class ForgeConfig(ConfigurationModel):
     known_callsigns: ForgeKnownCallsignClientConfig = ForgeKnownCallsignClientConfig()
     callsign_info: ForgeCallsignInfoClientConfig = ForgeCallsignInfoClientConfig()
     weather: ForgeWeatherClientConfig = ForgeWeatherClientConfig()
-    weather_alerts: ForgeWeatherAlertClientConfig = (
-        ForgeWeatherAlertClientConfig()
-    )
+    weather_alerts: ForgeWeatherAlertClientConfig = ForgeWeatherAlertClientConfig()
 
     @model_validator(mode="after")
     def validate_enabled_forge(self) -> Self:
         """Require a Forge API URL and parent enablement for active Pi clients."""
         if self.enabled and self.api_url is None:
-            raise ValueError(
-                "forge.api_url must be configured when forge.enabled is true"
-            )
+            raise ValueError("forge.api_url must be configured when forge.enabled is true")
         if self.known_callsigns.enabled and not self.enabled:
             raise ValueError("forge.enabled is required for known_callsigns")
         if self.callsign_info.enabled and not self.enabled:
-            raise ValueError(
-                "forge.enabled must be true when forge.callsign_info.enabled is true"
-            )
+            raise ValueError("forge.enabled must be true when forge.callsign_info.enabled is true")
         if self.weather.enabled and not self.enabled:
-            raise ValueError(
-                "forge.enabled must be true when forge.weather.enabled is true"
-            )
+            raise ValueError("forge.enabled must be true when forge.weather.enabled is true")
         if self.weather_alerts.enabled and not self.enabled:
-            raise ValueError(
-                "forge.enabled must be true when "
-                "forge.weather_alerts.enabled is true"
-            )
+            raise ValueError("forge.enabled must be true when forge.weather_alerts.enabled is true")
         return self
 
 
@@ -384,9 +369,7 @@ class PotaMapConfig(ConfigurationModel):
 class RepeaterConfig(ConfigurationModel):
     """Worktree-independent local repeater deployment data."""
 
-    source_path: Path = Path(
-        "~/.local/share/rolling-thunder/repeaters/6m_repeaters.csv"
-    )
+    source_path: Path = Path("~/.local/share/rolling-thunder/repeaters/6m_repeaters.csv")
 
     @field_validator("source_path", mode="before")
     @classmethod
@@ -496,6 +479,7 @@ class PhysicalControlTransport(StrEnum):
 
     MOCK = "mock"
     SERIAL = "serial"
+    SERIAL_V2 = "serial_v2"
 
 
 class PhysicalControlsConfig(ConfigurationModel):
@@ -509,6 +493,7 @@ class PhysicalControlsConfig(ConfigurationModel):
     maximum_read_bytes: int = Field(default=4_096, ge=1, le=65_536)
     maximum_events_per_drain: int = Field(default=32, ge=1, le=1_024)
     repeat_suppression_s: float = Field(default=0.25, ge=0, le=5)
+    recovery_settle_s: float = Field(default=1.0, ge=0, le=2)
     mappings: dict[str, ControlAction] = Field(default_factory=dict)
 
     @field_validator("device", mode="before")
@@ -550,7 +535,8 @@ class PhysicalControlsConfig(ConfigurationModel):
         """Require a serial device only when the serial transport is enabled."""
         if (
             self.enabled
-            and self.transport is PhysicalControlTransport.SERIAL
+            and self.transport
+            in (PhysicalControlTransport.SERIAL, PhysicalControlTransport.SERIAL_V2)
             and self.device is None
         ):
             raise ValueError(
@@ -668,9 +654,7 @@ class CompletedQsoDeliveryConfig(ConfigurationModel):
     @model_validator(mode="after")
     def validate_delivery(self) -> Self:
         if self.retry_maximum_delay_s < self.retry_initial_delay_s:
-            raise ValueError(
-                "retry_maximum_delay_s must be at least retry_initial_delay_s"
-            )
+            raise ValueError("retry_maximum_delay_s must be at least retry_initial_delay_s")
         if self.enabled and not (self.voacap.enabled or self.psk_reporter.enabled):
             raise ValueError("at least one receiver must be enabled when delivery is enabled")
         return self
@@ -694,9 +678,7 @@ class FT8AttemptDeliveryConfig(ConfigurationModel):
         if self.enabled and self.base_url is None:
             raise ValueError("base_url is required when attempt delivery is enabled")
         if self.retry_maximum_delay_s < self.retry_initial_delay_s:
-            raise ValueError(
-                "retry_maximum_delay_s must be at least retry_initial_delay_s"
-            )
+            raise ValueError("retry_maximum_delay_s must be at least retry_initial_delay_s")
         return self
 
 
@@ -753,32 +735,18 @@ class FT8ReceiveConfig(ConfigurationModel):
 
     @model_validator(mode="after")
     def validate_diagnostic_and_comparison_settings(self) -> Self:
-        if (self.comparison_backend is None) != (
-            self.comparison_decoder_executable is None
-        ):
+        if (self.comparison_backend is None) != (self.comparison_decoder_executable is None):
             raise ValueError(
                 "comparison_backend and comparison_decoder_executable must be configured together"
             )
-        if (
-            self.comparison_backend is not None
-            and self.comparison_backend is self.decoder_backend
-        ):
+        if self.comparison_backend is not None and self.comparison_backend is self.decoder_backend:
             raise ValueError("comparison_backend must differ from decoder_backend")
-        if (
-            self.comparison_backend is not None
-            and self.diagnostic_session_end_local is None
-        ):
-            raise ValueError(
-                "comparison decoder requires diagnostic_session_end_local"
-            )
+        if self.comparison_backend is not None and self.diagnostic_session_end_local is None:
+            raise ValueError("comparison decoder requires diagnostic_session_end_local")
         if (self.saved_pcm_periods == 0) != (self.saved_pcm_directory is None):
-            raise ValueError(
-                "saved_pcm_directory is required only when saved_pcm_periods is 1..3"
-            )
+            raise ValueError("saved_pcm_directory is required only when saved_pcm_periods is 1..3")
         if self.saved_pcm_periods and self.diagnostic_session_end_local is None:
-            raise ValueError(
-                "saved PCM capture requires diagnostic_session_end_local"
-            )
+            raise ValueError("saved PCM capture requires diagnostic_session_end_local")
         return self
 
 
@@ -871,21 +839,15 @@ class ApplicationConfig(ConfigurationModel):
     def validate_radar_dependencies(self) -> Self:
         """Require cross-component dependencies for location-aware features."""
         if self.radar.enabled and not self.map.enabled:
-            raise ValueError(
-                "map.enabled must be true when radar.enabled is true"
-            )
+            raise ValueError("map.enabled must be true when radar.enabled is true")
         if self.radar.enabled and not self.forge.enabled:
-            raise ValueError(
-                "forge.enabled must be true when radar.enabled is true"
-            )
+            raise ValueError("forge.enabled must be true when radar.enabled is true")
         if (
             self.forge.weather_alerts.enabled
-            and self.hardware.effective_gps_mode
-            is not HardwareAdapterMode.REAL
+            and self.hardware.effective_gps_mode is not HardwareAdapterMode.REAL
         ):
             raise ValueError(
-                "hardware.gps_mode must be real when "
-                "forge.weather_alerts.enabled is true"
+                "hardware.gps_mode must be real when forge.weather_alerts.enabled is true"
             )
         return self
 
