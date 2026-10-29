@@ -183,7 +183,10 @@ def _callsign_info_target(
         if active is None:
             return _CallsignInfoTarget(None)
         return _CallsignInfoTarget(active.remote_callsign, active.remote_grid)
-    if ft8_start_status is not None and ft8_start_status.state is FT8QsoStartState.PREPARING:
+    if (
+        ft8_start_status is not None
+        and ft8_start_status.state is FT8QsoStartState.PREPARING
+    ):
         candidate = ft8_start_status.activity or ft8_start_status.incoming_call
         if candidate is not None:
             return _CallsignInfoTarget(candidate.callsign, candidate.grid)
@@ -319,7 +322,9 @@ def run_dashboard(
         secrets=secrets,
         ft8_completed_contact_handler=ft8_contact_completed,
     )
-    preference_repository = OperatorPreferenceRepository(config.storage.database_path)
+    preference_repository = OperatorPreferenceRepository(
+        config.storage.database_path
+    )
     stored_radar_image = preference_repository.read_radar_image_enabled()
     if runtime.live_radar is not None and stored_radar_image is not None:
         runtime.live_radar.set_display_enabled(stored_radar_image)
@@ -377,14 +382,19 @@ def run_dashboard(
     )
     antenna_panel = (
         AntennaReferencePanelController(
-            AntennaReferenceService(AntennaReferenceYamlSource(config.antenna_reference.data_file))
+            AntennaReferenceService(
+                AntennaReferenceYamlSource(config.antenna_reference.data_file)
+            )
         )
-        if config.antenna_reference.enabled and config.antenna_reference.data_file is not None
+        if config.antenna_reference.enabled
+        and config.antenna_reference.data_file is not None
         else None
     )
     if antenna_panel is not None:
         antenna_panel.start()
-    pota_worked = PotaWorkedTracker(PotaWorkedRepository(config.storage.database_path))
+    pota_worked = PotaWorkedTracker(
+        PotaWorkedRepository(config.storage.database_path)
+    )
     dx_worked = DxWorkedTracker(DxWorkedRepository(config.storage.database_path))
     shared_spot_panel = SharedSpotPanelController(
         runtime,
@@ -449,7 +459,8 @@ def run_dashboard(
         return 3
     active_panel_commands: (
         CallsignInfoAwareActivePanelCommands
-        | LogAwareActivePanelCommands
+        |
+        LogAwareActivePanelCommands
         | DmrAwareActivePanelCommands
         | FT8AwareActivePanelCommands
         | AntennaAwareActivePanelCommands
@@ -468,7 +479,9 @@ def run_dashboard(
             active_panel_commands,
             runtime.ft8_panel,
             cycle_band=(
-                None if runtime.ft8_band_control is None else runtime.ft8_band_control.cycle_band
+                None
+                if runtime.ft8_band_control is None
+                else runtime.ft8_band_control.cycle_band
             ),
             enter_ft8=runtime.enter_ft8_context,
             exit_ft8=runtime.exit_ft8_context,
@@ -512,14 +525,22 @@ def run_dashboard(
         on_succeeded=commit_succeeded,
         on_failed=commit_failed,
         gps_state_provider=lambda: runtime.latest_gps_state,
-        pota_context_provider=lambda: context_navigation.state.selected is ContextId.POTA,
+        pota_context_provider=lambda: (
+            context_navigation.state.selected is ContextId.POTA
+        ),
         dx_context_provider=lambda: context_navigation.state.selected is ContextId.DX,
-        browse_context_provider=lambda: context_navigation.state.selected is ContextId.BROWSE,
-        pota_spots_provider=lambda: shared_pota_spots_for_contact(shared_spot_panel.visible_spots),
+        browse_context_provider=lambda: (
+            context_navigation.state.selected is ContextId.BROWSE
+        ),
+        pota_spots_provider=lambda: shared_pota_spots_for_contact(
+            shared_spot_panel.visible_spots
+        ),
         pota_worked_tracker=pota_worked,
         dx_worked_tracker=dx_worked,
         tx_power_provider=(
-            runtime.read_tx_power_watts if config.contact_logging.capture_tx_power else None
+            runtime.read_tx_power_watts
+            if config.contact_logging.capture_tx_power
+            else None
         ),
         weather_notes_enabled=config.contact_logging.append_weather_notes,
     )
@@ -527,7 +548,7 @@ def run_dashboard(
     # runtime.ft8_ptt_alarm, CAT, PTT, or the production transmit authorization.
     visual_test = FT8PttAlarm()
     visual_test_deadline = [0.0]
-    visual_test_file = Path("/home/geoff/rolling-thunder-h4-visual-test.trigger")
+    visual_test_file = Path('/home/geoff/rolling-thunder-h4-visual-test.trigger')
 
     def visual_test_active() -> bool:
         return visual_test_deadline[0] > monotonic()
@@ -544,15 +565,11 @@ def run_dashboard(
 
     def handle_ptt_unlock_action(action: ControlAction) -> bool:
         if visual_test_active():
-            if (
-                not visual_test.active
-                and visual_test.tx_inhibited
-                and visual_test.unlock_step(
-                    action,
-                    ft8_screen=context_navigation.state.selected is ContextId.FT8,
-                    radio_confirmed_receive=True,
-                )
-            ):
+            if (not visual_test.active and visual_test.tx_inhibited
+                    and visual_test.unlock_step(
+                        action, ft8_screen=context_navigation.state.selected is ContextId.FT8,
+                        radio_confirmed_receive=True,
+                    )):
                 visual_test_deadline[0] = 0.0
             return True
         alarm = runtime.ft8_ptt_alarm
@@ -592,7 +609,9 @@ def run_dashboard(
             ControlActionMapper(config.physical_controls.mappings),
             build_control_gate(config.physical_controls, control_source),
             operator_commands,
-            action_observer=(ui_timing.observe_control_action if ui_timing.enabled else None),
+            action_observer=(
+                ui_timing.observe_control_action if ui_timing.enabled else None
+            ),
         )
 
     root = tk.Tk()
@@ -600,32 +619,22 @@ def run_dashboard(
     root.configure(bg=_BACKGROUND, cursor="none")
     root.attributes("-fullscreen", True)
     # Emergency warning overlays every dashboard context; stays until voice cancel.
-    ptt_alert = tk.Frame(root, bg="#fff000", highlightthickness=8, highlightbackground="#101010")
-    tk.Label(
-        ptt_alert,
-        text="WARNING: RADIO MAY BE STUCK TRANSMITTING",
-        bg="#fff000",
-        fg="#000000",
-        font=("DejaVu Sans", 26, "bold"),
-        wraplength=1200,
-    ).pack(padx=22, pady=(16, 8))
-    tk.Label(
-        ptt_alert,
-        text="STOP SAFELY. POWER DOWN RADIO MANUALLY.\nPRESS VOICE CANCEL TO ACKNOWLEDGE.",
-        bg="#fff000",
-        fg="#000000",
-        font=("DejaVu Sans", 23, "bold"),
-        justify="center",
-    ).pack(padx=22, pady=(0, 16))
-    ptt_unlock = tk.Frame(root, bg="#148137", highlightthickness=5, highlightbackground="#ffffff")
+    ptt_alert = tk.Frame(root, bg="#fff000", highlightthickness=8,
+                         highlightbackground="#101010")
+    tk.Label(ptt_alert, text="WARNING: RADIO MAY BE STUCK TRANSMITTING",
+             bg="#fff000", fg="#000000", font=("DejaVu Sans", 26, "bold"),
+             wraplength=1200).pack(padx=22, pady=(16, 8))
+    tk.Label(ptt_alert, text="STOP SAFELY. POWER DOWN RADIO MANUALLY.\n"
+             "PRESS VOICE CANCEL TO ACKNOWLEDGE.",
+             bg="#fff000", fg="#000000", font=("DejaVu Sans", 23, "bold"),
+             justify="center").pack(padx=22, pady=(0, 16))
+    ptt_unlock = tk.Frame(root, bg="#148137", highlightthickness=5,
+                          highlightbackground="#ffffff")
     tk.Label(
         ptt_unlock,
         text="Press command buttons in this order Command 1, Command 3, Command 1 to unlock",
-        bg="#148137",
-        fg="#ffffff",
-        font=("DejaVu Sans", 26, "bold"),
-        wraplength=1100,
-        justify="center",
+        bg="#148137", fg="#ffffff", font=("DejaVu Sans", 26, "bold"),
+        wraplength=1100, justify="center",
     ).pack(padx=18, pady=22)
     root.grid_columnconfigure(0, weight=2, uniform="dashboard")
     root.grid_columnconfigure(1, weight=3, uniform="dashboard")
@@ -677,13 +686,8 @@ def run_dashboard(
         anchor="center",
     )
     callsign_label.grid(row=0, column=0, sticky="e", pady=0)
-    pending_friend_label = tk.Label(
-        pending_call_cell,
-        text="",
-        bg=_PANEL_BACKGROUND,
-        fg=FRIEND_COLOR,
-        font=("DejaVu Sans", 28, "bold"),
-    )
+    pending_friend_label = tk.Label(pending_call_cell, text="", bg=_PANEL_BACKGROUND,
+                                    fg=FRIEND_COLOR, font=("DejaVu Sans", 28, "bold"))
     pending_friend_label.grid(row=0, column=1, sticky="w")
 
     voice_text = tk.StringVar(value="VOICE")
@@ -820,7 +824,9 @@ def run_dashboard(
 
     settings_widgets = SettingsWidgets(context_content)
     antenna_widgets = (
-        AntennaReferenceWidgets(context_content) if antenna_panel is not None else None
+        AntennaReferenceWidgets(context_content)
+        if antenna_panel is not None
+        else None
     )
     weather_widgets = WeatherWidgets(context_content)
     repeater_widgets = RepeaterWidgets(context_content)
@@ -1002,7 +1008,9 @@ def run_dashboard(
     pota_friend_labels: list[tk.Label] = []
     pota_call_headers: list[tk.Frame] = []
     pota_card_labels: list[tuple[tk.Label, tk.Label, tk.Label, tk.Label]] = []
-    pota_card_texts: list[tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]] = []
+    pota_card_texts: list[
+        tuple[tk.StringVar, tk.StringVar, tk.StringVar, tk.StringVar]
+    ] = []
 
     for card_index in range(_POTA_VISIBLE_CARD_COUNT):
         card_frame = tk.Frame(
@@ -1029,13 +1037,8 @@ def run_dashboard(
         call_header = tk.Frame(card_frame, bg=_PANEL_BACKGROUND)
         call_header.grid(row=0, column=0, sticky="ew")
         call_header.grid_columnconfigure(1, weight=1)
-        friend_label = tk.Label(
-            call_header,
-            text="",
-            bg=_PANEL_BACKGROUND,
-            fg=FRIEND_COLOR,
-            font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"),
-        )
+        friend_label = tk.Label(call_header, text="", bg=_PANEL_BACKGROUND,
+                               fg=FRIEND_COLOR, font=("DejaVu Sans", _POTA_BODY_FONT_SIZE, "bold"))
         friend_label.grid(row=0, column=0, sticky="w")
         pota_friend_labels.append(friend_label)
         pota_call_headers.append(call_header)
@@ -1382,17 +1385,15 @@ def run_dashboard(
         # Never trigger the actual PTT alarm state or affect radio authority.
         if visual_test_file.is_file():
             visual_test_file.unlink(missing_ok=True)
-            if (
-                not config.ft8.transmit.enabled
-                and context_navigation.state.selected is ContextId.FT8
-                and not runtime.ft8_ptt_alarm.tx_inhibited
-            ):
+            if (not config.ft8.transmit.enabled
+                    and context_navigation.state.selected is ContextId.FT8
+                    and not runtime.ft8_ptt_alarm.tx_inhibited):
                 visual_test.trigger()
                 visual_test_deadline[0] = monotonic() + 90.0
-        if (
-            (visual_test_active() and visual_test.tx_inhibited and not visual_test.active)
-            or (runtime.ft8_ptt_alarm.tx_inhibited and not runtime.ft8_ptt_alarm.active)
-        ) and (context_navigation.state.selected is ContextId.FT8):
+        if ((visual_test_active() and visual_test.tx_inhibited and not visual_test.active)
+                or (runtime.ft8_ptt_alarm.tx_inhibited and not runtime.ft8_ptt_alarm.active)) and (
+            context_navigation.state.selected is ContextId.FT8
+        ):
             ptt_unlock.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
             ptt_unlock.lift()
         else:
@@ -1416,7 +1417,9 @@ def run_dashboard(
         with ui_timing.subphase("spot_tune_status"):
             shared_spot_tune_status.refresh()
         with ui_timing.subphase("repeater_persistence"):
-            repeater_persistence_status = repeater_panel_runtime.synchronize_completed_persistence()
+            repeater_persistence_status = (
+                repeater_panel_runtime.synchronize_completed_persistence()
+            )
         with ui_timing.subphase("dmr_commits"):
             if dmr_panel_runtime is not None:
                 for dmr_event in dmr_panel_runtime.synchronize_commit_events():
@@ -1424,7 +1427,9 @@ def run_dashboard(
                         log_panel.request_sync()
 
         with ui_timing.subphase("weather_update"):
-            weather_presentation = weather_panel.update(runtime.latest_forge_weather_state)
+            weather_presentation = weather_panel.update(
+                runtime.latest_forge_weather_state
+            )
         with ui_timing.subphase("weather_alert_update"):
             weather_alert_presentation = weather_alert_panel.update(
                 runtime.latest_forge_weather_alert_state
@@ -1454,12 +1459,16 @@ def run_dashboard(
                 if (
                     live_map_controller.pota_position_is_recent(
                         live_map_presentation,
-                        grace_after=timedelta(seconds=config.pota_map.gps_grace_period_s),
+                        grace_after=timedelta(
+                            seconds=config.pota_map.gps_grace_period_s
+                        ),
                     )
                     and live_map_snapshot is not None
                     and live_map_snapshot.viewport is not None
                 ):
-                    runtime.pota_map_markers.request_viewport(live_map_snapshot.viewport)
+                    runtime.pota_map_markers.request_viewport(
+                        live_map_snapshot.viewport
+                    )
                 else:
                     runtime.pota_map_markers.clear()
         with ui_timing.subphase("radar_viewport_request"):
@@ -1471,7 +1480,10 @@ def run_dashboard(
                 runtime.live_radar.request_viewport(live_map_snapshot.viewport)
         ft8_map_status: str | None = None
         ft8_remote_status: str | None = None
-        if context_navigation.state.selected is ContextId.FT8 and runtime.ft8_panel is not None:
+        if (
+            context_navigation.state.selected is ContextId.FT8
+            and runtime.ft8_panel is not None
+        ):
             with ui_timing.subphase("ft8_panel_snapshot"):
                 map_ft8_snapshot = runtime.ft8_panel.snapshot()
                 start_status = runtime.latest_ft8_qso_start_status
@@ -1486,7 +1498,9 @@ def run_dashboard(
                 with ui_timing.subphase("ft8_receive_snapshot"):
                     receive_snapshot = runtime.latest_ft8_receive_state
                     ft8_remote_status = target_activity_status(
-                        None if receive_snapshot is None else receive_snapshot.target_activity
+                        None
+                        if receive_snapshot is None
+                        else receive_snapshot.target_activity
                     )
             with ui_timing.subphase("ft8_presentation"):
                 if map_ft8_snapshot.active_context is not None:
@@ -1513,11 +1527,11 @@ def run_dashboard(
         try:
             live_map_widgets.update(
                 live_map_presentation,
-                live_map_snapshot,
-                runtime.latest_live_radar_state,
-                runtime.latest_pota_map_marker_state,
-                weather_presentation,
-                ft8_status=ft8_map_status,
+            live_map_snapshot,
+            runtime.latest_live_radar_state,
+            runtime.latest_pota_map_marker_state,
+            weather_presentation,
+            ft8_status=ft8_map_status,
                 ft8_remote_status=ft8_remote_status,
                 timing=ui_timing,
             )
@@ -1537,11 +1551,8 @@ def run_dashboard(
             gps_state,
             connectivity,
         )
-        friends = (
-            runtime.known_callsigns.cache.friends
-            if runtime.known_callsigns is not None
-            else frozenset()
-        )
+        friends = (runtime.known_callsigns.cache.friends
+                   if runtime.known_callsigns is not None else frozenset())
         pending_callsign = "" if view.pending_callsign == "—" else view.pending_callsign
 
         pota_latitude: float | None = None
@@ -1551,7 +1562,10 @@ def run_dashboard(
             pending_callsign=pending_callsign or None,
         )
 
-        if context_navigation.state.selected is ContextId.FT8 and runtime.ft8_panel is not None:
+        if (
+            context_navigation.state.selected is ContextId.FT8
+            and runtime.ft8_panel is not None
+        ):
             ft8_panel_snapshot = runtime.ft8_panel.snapshot()
             callsign_info_target = _callsign_info_target(
                 ContextId.FT8,
@@ -1676,10 +1690,7 @@ def run_dashboard(
             )
         )
         ticker_message = build_status_bar_routine_message(
-            view,
-            control_health=control_source.snapshot.health
-            if isinstance(control_source, RecoveringControlSource)
-            else None,
+            view, control_health=control_source.snapshot.health if isinstance(control_source, RecoveringControlSource) else None,
         )
         runtime.status_messages.publish(
             replacement_key="dashboard.routine",
@@ -1698,9 +1709,14 @@ def run_dashboard(
 
         selected_context = context_navigation.state
         if dmr_panel_runtime is not None:
-            dmr_panel_runtime.set_polling_enabled(selected_context.selected is ContextId.DMR)
+            dmr_panel_runtime.set_polling_enabled(
+                selected_context.selected is ContextId.DMR
+            )
         set_dmr_expanded_layout(
-            (selected_context.selected is ContextId.DMR and dmr_panel_runtime is not None)
+            (
+                selected_context.selected is ContextId.DMR
+                and dmr_panel_runtime is not None
+            )
             or selected_context.selected is ContextId.ANTENNAS
         )
 
@@ -1712,7 +1728,9 @@ def run_dashboard(
             panel_state = shared_spot_panel.state
             panel = build_shared_spot_viewport(panel_state, friends=friends)
             context_title_text.set(panel.title)
-            context_title_label.configure(font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold"))
+            context_title_label.configure(
+                font=("DejaVu Sans", _POTA_HEADER_FONT_SIZE, "bold")
+            )
 
             available_wrap_width = max(480, pota_panel_frame.winfo_width() - 36)
             pota_status_label.configure(wraplength=available_wrap_width)
@@ -1771,9 +1789,7 @@ def run_dashboard(
                         pady=invisible_border_width,
                     )
                     pota_call_headers[card_index].configure(bg=card_background)
-                    pota_friend_labels[card_index].configure(
-                        text=card.friend_marker, bg=card_background
-                    )
+                    pota_friend_labels[card_index].configure(text=card.friend_marker, bg=card_background)
                     for card_label in pota_card_labels[card_index]:
                         card_label.configure(
                             bg=card_background,
@@ -1826,13 +1842,17 @@ def run_dashboard(
                 repeater_configuration.status if repeater_configuration is not None else None,
             )
             context_title_text.set(repeater_viewport.title)
-            context_title_label.configure(font=("DejaVu Sans", 42, "bold"))
+            context_title_label.configure(
+                font=("DejaVu Sans", 42, "bold")
+            )
             repeater_widgets.update(repeater_viewport)
         elif selected_context.selected is ContextId.WEATHER:
             show_weather_context_body()
             health_frame.grid_remove()
             context_title_text.set(selected_context.definition.title)
-            context_title_label.configure(font=("DejaVu Sans", 48, "bold"))
+            context_title_label.configure(
+                font=("DejaVu Sans", 48, "bold")
+            )
             weather_widgets.update(
                 weather_presentation,
                 weather_alert_presentation,
@@ -1850,7 +1870,9 @@ def run_dashboard(
             context_title_label.configure(font=("DejaVu Sans", 40, "bold"))
             if dmr_panel_runtime is None:
                 show_standard_context_body()
-                context_body_text.set("DMR hotspot monitoring is disabled in configuration.")
+                context_body_text.set(
+                    "DMR hotspot monitoring is disabled in configuration."
+                )
             else:
                 show_dmr_context_body()
                 dmr_selection = dmr_panel_runtime.commands.refresh()
@@ -1881,9 +1903,13 @@ def run_dashboard(
                 ft8_snapshot = runtime.ft8_panel.snapshot()
                 receive_state = runtime.latest_ft8_receive_state
                 receive_status = (
-                    "UNKNOWN" if receive_state is None else receive_state.status.value.upper()
+                    "UNKNOWN"
+                    if receive_state is None
+                    else receive_state.status.value.upper()
                 )
-                transmitting = bool(getattr(runtime.ft8_hardware_transmit, "transmitting", False))
+                transmitting = bool(
+                    getattr(runtime.ft8_hardware_transmit, "transmitting", False)
+                )
                 if transmitting:
                     activity_text = "TX RUNNING"
                     activity_color = "#ffae66"
@@ -1903,7 +1929,7 @@ def run_dashboard(
                         selected_context.selected,
                         None
                         if receive_state is None or receive_state.last_decoder is None
-                        else receive_state.last_decoder.parsed_decode_count,
+                        else receive_state.last_decoder.parsed_decode_count
                     )
                 )
 
@@ -1913,7 +1939,11 @@ def run_dashboard(
                     attempt_states = {
                         activity.callsign: state
                         for activity in ft8_snapshot.cq_activity
-                        if (state := runtime.ft8_attempt_visual_state(activity.callsign))
+                        if (
+                            state := runtime.ft8_attempt_visual_state(
+                                activity.callsign
+                            )
+                        )
                         is not None
                     }
                     viewport = build_ft8_browser_viewport(
@@ -1924,25 +1954,23 @@ def run_dashboard(
                         attempt_states=attempt_states,
                         friends=friends,
                         rankings=(
-                            {}
-                            if runtime.ft8_browser_ranking is None
+                            {} if runtime.ft8_browser_ranking is None
                             else runtime.ft8_browser_ranking.latest_rankings
                         ),
                         pending_ranking_callsigns=(
-                            frozenset()
-                            if runtime.ft8_browser_ranking is None
+                            frozenset() if runtime.ft8_browser_ranking is None
                             else runtime.ft8_browser_ranking.pending_callsigns
                         ),
                     )
                     selected_activity = next(
-                        (
-                            row
-                            for row in ft8_snapshot.cq_activity
-                            if row.callsign == selected_callsign
-                        ),
+                        (row for row in ft8_snapshot.cq_activity if row.callsign == selected_callsign),
                         None,
                     )
-                    current_grid = view.grid if view.grid != "—" else str(config.operator.home_grid)
+                    current_grid = (
+                        view.grid
+                        if view.grid != "—"
+                        else str(config.operator.home_grid)
+                    )
                     ft8_widgets.update(
                         viewport,
                         transmit_enabled=ft8_snapshot.authorization_enabled,
@@ -1954,8 +1982,12 @@ def run_dashboard(
                                 selected_activity.grid,
                             )
                         ),
-                        diagnostic_text=format_ft8_receive_diagnostic(receive_state),
-                        incoming_call=present_ft8_incoming_call(ft8_snapshot.incoming_call),
+                        diagnostic_text=format_ft8_receive_diagnostic(
+                            receive_state
+                        ),
+                        incoming_call=present_ft8_incoming_call(
+                            ft8_snapshot.incoming_call
+                        ),
                     )
                 else:
                     show_standard_context_body()
@@ -1972,8 +2004,12 @@ def run_dashboard(
                         lines.append("ACTIVE FT8 QSO")
                         if context is not None:
                             lines.append(f"CALL  {context.remote_callsign}")
-                            lines.append(f"GRID  {context.local_grid or '------'}")
-                            lines.append(f"FREQ  {context.radio_frequency_hz / 1_000_000:.6f} MHz")
+                            lines.append(
+                                f"GRID  {context.local_grid or '------'}"
+                            )
+                            lines.append(
+                                f"FREQ  {context.radio_frequency_hz / 1_000_000:.6f} MHz"
+                            )
                             lines.append(
                                 format_maidenhead_distance(
                                     context.local_grid,
@@ -1990,7 +2026,9 @@ def run_dashboard(
                     else:
                         result = ft8_snapshot.result
                         lines.append("")
-                        lines.append(f"RESULT  {ft8_snapshot.qso_state.value.upper()}")
+                        lines.append(
+                            f"RESULT  {ft8_snapshot.qso_state.value.upper()}"
+                        )
                         if result is not None and result.terminal_reason:
                             lines.append(result.terminal_reason)
                         lines.append("")
@@ -2133,7 +2171,9 @@ def run_dashboard(
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
         if not context_navigation.select_shortcut(event.char):
             return
-        active_panel_commands.activate_context(context_navigation.state.selected)
+        active_panel_commands.activate_context(
+            context_navigation.state.selected
+        )
 
     for definition in context_navigation.definitions:
         root.bind(definition.shortcut, select_context_shortcut)
