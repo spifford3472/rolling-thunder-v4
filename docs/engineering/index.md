@@ -430,3 +430,6 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - [Controller recovery health policy](control-transport-health-policy.md) — tested pure monotonic lifecycle/backoff foundation for explicit serial_v2; no installed recovery or firmware upload.
 
 - [Controller recovery v2 candidate](controller-recovery-v2.md) — opt-in serial_v2 worker, bounded gate, fresh-session protocol and explicit firmware target; activation requires matching firmware.
+
+- [Issue246 notes and contact history](issue-246-notes-and-contact-history.md) —
+  blank ordinary notes, true Wavelog count/last band, legacy retry preservation.

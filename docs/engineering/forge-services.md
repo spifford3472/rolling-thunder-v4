@@ -71,7 +71,7 @@ Entry point: `rolling-thunder-forge-callsign-info` / `forge_callsign_info_main.p
 Responsibilities:
 
 - QRZ identity/profile lookup;
-- latest exact-callsign Wavelog history;
+- latest exact-callsign Wavelog history with full filtered worked count and last band;
 - target current weather;
 - bounded caching;
 - one compact presentation-neutral contact-intelligence response.
@@ -126,8 +126,8 @@ replay. This endpoint writes only performance telemetry and never calls Wavelog 
 contact synchronization.
 
 Contact sync performs no weather-provider work. It uploads the immutable contact it
-receives; existing structured weather is retained, while requested notes render
-missing weather as `N/A`. `contact_weather.py` and `OpenMeteoForgeWeatherProvider`
+receives; structured weather is retained without adding new weather notes. Blank
+notes remain blank; exact legacy claim hashes protect pre-change retries. `contact_weather.py` and `OpenMeteoForgeWeatherProvider`
 remain reusable outside synchronization, including for a separate background
 propagation/history worker.
 

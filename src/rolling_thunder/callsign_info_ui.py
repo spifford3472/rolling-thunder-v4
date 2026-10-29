@@ -217,9 +217,15 @@ def build_callsign_info_presentation(
         history_line = None
     else:
         history_heading = "LAST CONTACT"
+        if previous.worked_count is not None:
+            unit = "TIME" if previous.worked_count == 1 else "TIMES"
+            history_heading = f"WORKED {previous.worked_count} {unit} — LAST CONTACT"
         parts: list[str] = []
+        if previous.worked_count is None:
+            parts.append("Worked count unavailable")
         if previous.occurred_at is not None:
             parts.append(previous.occurred_at.astimezone().strftime("%b %d, %Y %H:%M"))
+        parts.append(f"Band: {previous.band}" if previous.band else "Band unavailable")
         if previous.station_location:
             label = f"From: {previous.station_location}"
             if previous.mobile is True:
@@ -229,10 +235,6 @@ def build_callsign_info_presentation(
             parts.append(f"Their POTA: {previous.pota_reference}")
         if previous.my_pota_reference:
             parts.append(f"My POTA: {previous.my_pota_reference}")
-        if previous.comments:
-            parts.append(f"Comment: {previous.comments}")
-        elif previous.notes:
-            parts.append(f"Comment: {previous.notes}")
         history_line = "    ".join(parts) or None
 
     return CallsignInfoPresentation(

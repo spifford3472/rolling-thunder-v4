@@ -247,13 +247,13 @@ def test_contact_to_adif_preserves_required_qso_fields() -> None:
 
 
 @pytest.mark.parametrize("notes", [None, "", "   "])
-def test_contact_to_adif_uses_mobile_qso_only_for_blank_notes(notes: str | None) -> None:
+def test_contact_to_adif_omits_blank_notes(notes: str | None) -> None:
     qso = contact().model_copy(update={"notes": notes})
 
     adif = contact_to_adif(qso)
 
-    assert "<NOTES:10>Mobile QSO" in adif
-    assert adif.count("Mobile QSO") == 1
+    assert "<NOTES:" not in adif
+    assert "Mobile QSO" not in adif
 
 
 def test_contact_to_adif_preserves_existing_notes_exactly() -> None:
@@ -265,7 +265,7 @@ def test_contact_to_adif_preserves_existing_notes_exactly() -> None:
     assert "Mobile QSO" not in adif
 
 
-def test_contact_to_adif_adds_power_and_structured_weather_notes() -> None:
+def test_contact_to_adif_adds_power_without_automatic_weather_notes() -> None:
     qso = contact().model_copy(
         update={
             "tx_power_watts": 60,
@@ -278,8 +278,9 @@ def test_contact_to_adif_adds_power_and_structured_weather_notes() -> None:
     adif = contact_to_adif(qso)
 
     assert "<TX_PWR:2>60" in adif
-    notes = "POTA US-0732\nContact Wx: Clear, 61 F\nLocal Wx: N/A"
-    assert f"<NOTES:{len(notes)}>{notes}" in adif
+    assert "<NOTES:12>POTA US-0732" in adif
+    assert "Contact Wx:" not in adif
+    assert "Local Wx:" not in adif
 
 
 def test_mobile_station_location_is_resolved_by_name_not_assumed_id() -> None:

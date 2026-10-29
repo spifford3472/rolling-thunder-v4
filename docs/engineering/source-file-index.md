@@ -504,3 +504,10 @@ Consumers and ownership remain unchanged.
 - `src/rolling_thunder/recovering_control_source.py` — Opt-in single-owner serial recovery thread and expiring bounded mailbox.
 
 - `src/rolling_thunder/control_recovery_gate.py` — Current-session watermark and bounded known-input repeat suppression for serial_v2 dispatch.
+
+
+Issue246: wavelog.py owns exact-call pagination totals/last band and blank-note ADIF;
+forge_contact_sync.py owns legacy claimed-payload retry matching. callsign_info.py
+and forge_callsign_info.py publish optional count/band; callsign_info_ui.py renders
+history without comments/notes. contact_commit_controller.py and contact_metadata.py
+retain structured metadata instead of generating ordinary QSO notes.

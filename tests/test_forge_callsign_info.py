@@ -174,6 +174,8 @@ def test_previous_mobile_qso_uses_station_location_name() -> None:
         qso_id=1,
         station_id=42,
         occurred_at=None,
+        worked_count=12,
+        band="40m",
         comments="Worked while driving",
         notes=None,
         qth=None,
@@ -193,6 +195,8 @@ def test_previous_mobile_qso_uses_station_location_name() -> None:
     assert result.last_qso.station_location == "Mobile"
     assert result.last_qso.mobile is True
     assert result.last_qso.comments == "Worked while driving"
+    assert result.last_qso.worked_count == 12
+    assert result.last_qso.band == "40m"
 
 
 def test_negative_qrz_result_uses_short_cache() -> None:

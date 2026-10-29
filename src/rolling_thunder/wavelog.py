@@ -118,6 +118,8 @@ class WavelogQsoSummary:
     grid: str | None
     pota_reference: str | None
     my_pota_reference: str | None
+    worked_count: int | None = None
+    band: str | None = None
 
 
 class WavelogClient:
@@ -762,8 +764,18 @@ class WavelogClient:
             raise WavelogResponseError(
                 "Wavelog QSO history lookup returned an unexpected response schema."
             )
+        meta = payload.get("meta")
+        total = meta.get("total") if isinstance(meta, dict) else None
+        if total is not None and (
+            not isinstance(total, int) or isinstance(total, bool) or total < 0
+        ):
+            raise WavelogResponseError("Wavelog QSO history returned an invalid total.")
         if not payload["data"]:
+            if total not in (None, 0):
+                raise WavelogResponseError("Wavelog QSO history total contradicts empty data.")
             return None
+        if total == 0:
+            raise WavelogResponseError("Wavelog QSO history total contradicts QSO data.")
 
         item = payload["data"][0]
         if not isinstance(item, dict):
@@ -797,6 +809,8 @@ class WavelogClient:
             grid=self._optional_text(item.get("gridsquare")),
             pota_reference=self._optional_text(item.get("pota_ref")),
             my_pota_reference=self._optional_text(item.get("my_pota_ref")),
+            worked_count=total,
+            band=self._optional_text(item.get("band")),
         )
 
     def upload_contact(
@@ -1038,12 +1052,20 @@ def contact_to_adif(contact: Contact) -> str:
         fields.append(("TX_PWR", str(contact.tx_power_watts)))
     if contact.pota_reference is not None:
         fields.append(("POTA_REF", str(contact.pota_reference)))
-    fields.append(("NOTES", _wavelog_notes(contact)))
+    if contact.notes is not None and contact.notes.strip():
+        fields.append(("NOTES", contact.notes))
 
     return "".join(_adif_field(name, value) for name, value in fields) + "<EOR>"
 
 
-def _wavelog_notes(contact: Contact) -> str:
+def legacy_notes_contact(contact: Contact) -> Contact:
+    """Recreate only the original claimed ADIF for pre-issue246 retry matching."""
+    return contact.model_copy(
+        update={"notes": _legacy_wavelog_notes(contact), "weather_notes_enabled": False}
+    )
+
+
+def _legacy_wavelog_notes(contact: Contact) -> str:
     notes = contact.notes
     if notes is None or not notes.strip():
         notes = "Mobile QSO"

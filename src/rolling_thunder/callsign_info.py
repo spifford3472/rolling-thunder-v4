@@ -41,6 +41,8 @@ class CallsignInfoLastQso(DomainModel):
     """Purpose-built previous-QSO summary; absent record means FIRST CONTACT."""
 
     exists: bool
+    worked_count: int | None = Field(default=None, ge=1, strict=True)
+    band: str | None = Field(default=None, min_length=1, max_length=16)
     occurred_at: datetime | None = None
     station_location: str | None = Field(default=None, max_length=160)
     comments: str | None = Field(default=None, max_length=1000)

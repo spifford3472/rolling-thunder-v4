@@ -3,10 +3,11 @@
 from collections.abc import Mapping
 from json import dumps
 
+import pytest
 from pydantic import SecretStr
 
 from rolling_thunder.http_home_platform import UrllibHttpResponse
-from rolling_thunder.wavelog import WavelogClient
+from rolling_thunder.wavelog import WavelogClient, WavelogResponseError
 
 
 class ScriptedTransport:
@@ -128,3 +129,39 @@ def test_station_locations_return_names_for_historical_station_ids() -> None:
         (1, "Home"),
         (42, "Mobile"),
     ]
+
+
+def test_latest_qso_uses_total_across_pages_and_latest_band_without_extra_requests():
+    transport = ScriptedTransport([response({
+        "data": [{"call": "W1AW", "band": "20m", "id": 123}],
+        "meta": {"count": 1, "total": 12, "per_page": 1, "has_more": True},
+    })])
+    qso = client(transport).latest_qso("w1aw")
+    assert qso is not None
+    assert qso.worked_count == 12
+    assert qso.band == "20m"
+    assert len(transport.requests) == 1
+    url = transport.requests[0][1]
+    assert "callsign=W1AW" in url
+    assert "station_id" not in url and "band=" not in url and "mode=" not in url
+
+
+@pytest.mark.parametrize("total", [True, -1, "12", 0])
+def test_invalid_or_contradictory_worked_total_fails_closed(total):
+    transport = ScriptedTransport([response({
+        "data": [{"call": "W1AW"}], "meta": {"total": total},
+    })])
+    with pytest.raises(WavelogResponseError):
+        client(transport).latest_qso("W1AW")
+
+
+def test_positive_total_with_empty_data_is_not_first_contact():
+    transport = ScriptedTransport([response({"data": [], "meta": {"total": 12}})])
+    with pytest.raises(WavelogResponseError):
+        client(transport).latest_qso("W1AW")
+
+
+def test_old_history_response_has_unknown_count_and_band_not_an_invented_one():
+    transport = ScriptedTransport([response({"data": [{"call": "W1AW"}]})])
+    qso = client(transport).latest_qso("W1AW")
+    assert qso is not None and qso.worked_count is None and qso.band is None

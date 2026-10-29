@@ -575,3 +575,10 @@ still required.
 - `tests/test_control_firmware_recovery.py` — Native real-firmware GPIO/serial stubs and Python wire interoperability; requires g++.
 
 - `tests/test_control_recovery_gate.py` — Current-session dispatch filtering, obsolete nonce rejection, bounded state over many sessions and inert opt-in factory tests.
+
+
+Issue246 regressions live in test_wavelog_history.py (full totals, last band,
+contradictory data), test_callsign_info.py/test_forge_callsign_info.py (shared
+history, legacy response defaults), test_forge_contact_sync.py (old pending and
+synchronized claim hashes/changed payload rejection), and existing contact
+metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
