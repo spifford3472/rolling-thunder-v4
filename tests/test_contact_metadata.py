@@ -108,7 +108,7 @@ def test_unique_pota_match_records_park_grid_reference_and_notes() -> None:
     assert metadata.grid == "EN80ma"
     assert metadata.grid_source is ContactGridSource.POTA_PARK
     assert metadata.pota_reference == "US-1234"
-    assert metadata.notes == "POTA US-1234"
+    assert metadata.notes is None
 
 
 def test_pota_match_without_coordinates_still_records_reference() -> None:
@@ -119,7 +119,7 @@ def test_pota_match_without_coordinates_still_records_reference() -> None:
     assert metadata.grid is None
     assert metadata.grid_source is None
     assert metadata.pota_reference == "US-1234"
-    assert metadata.notes == "POTA US-1234"
+    assert metadata.notes is None
 
 
 def test_non_pota_context_does_not_associate_a_park() -> None:

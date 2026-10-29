@@ -142,7 +142,6 @@ def resolve_contact_metadata(
             grid=grid,
             qrz_fallback_available=qrz_fallback_available,
         ),
-        notes=f"POTA {park_reference}",
     )
 
 

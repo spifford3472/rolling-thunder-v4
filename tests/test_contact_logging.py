@@ -176,7 +176,7 @@ def test_commit_persists_gps_and_unique_pota_metadata() -> None:
     assert (contact.my_state, contact.my_cq_zone, contact.my_itu_zone) == ("OH", 4, 8)
     assert contact.grid == "EN80ma"
     assert contact.pota_reference == "US-1234"
-    assert contact.notes == "POTA US-1234"
+    assert contact.notes is None
 
 
 def test_commit_supports_explicit_signal_reports() -> None:

@@ -281,7 +281,7 @@ def test_controller_adds_browse_mobile_contact_note_from_current_gps() -> None:
     assert succeeded.wait(timeout=2)
 
     contact = repository.contacts[0]
-    assert contact.notes == "Mobile Contact from 39.530900, -84.086600 (EM79wm)"
+    assert contact.notes is None
     assert contact.source is ContactSource.BROWSE
     assert contact.my_grid == "EM79wm"
     assert contact.pota_reference is None

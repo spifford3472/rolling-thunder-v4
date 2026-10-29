@@ -8,10 +8,10 @@ Rolling Thunder remains a local-first mobile logger. A QSO succeeds when it has 
 
 Contact payload format 5 adds a typed originating workflow, nullable configured
 TX power, structured nullable weather slots, and an immutable weather-note flag.
-Wavelog ADIF emits `TX_PWR` only when known and appends the exact `Contact Wx:` and
-`Local Wx:` lines when requested. Contact synchronization performs no weather I/O:
-it uploads the immutable structured weather values it receives, and formats an absent
-value as `N/A`. The reusable weather provider remains available to separate background
+Wavelog ADIF emits `TX_PWR` only when known and preserves explicitly supplied notes;
+blank notes are omitted, and weather is no longer appended to new uploads.
+Structured weather remains available on immutable contacts. Contact synchronization
+performs no weather I/O. The reusable weather provider remains available to separate background
 workers, but public HTTP latency cannot delay station resolution, claim, or upload.
 At local commit, the Pi best-effort snapshots only already-published state: fresh
 callsign-info target weather proven to match the same callsign/location or grid, plus
@@ -194,11 +194,16 @@ Forge maps each immutable local `Contact` to one deterministic ADIF record and s
 | `grid` | `GRIDSQUARE` when known |
 | `my_grid` | `MY_GRIDSQUARE` when known |
 | `pota_reference` | `POTA_REF` when present |
-| `notes` | ADIF `NOTES`; exact existing text, otherwise exactly `Mobile QSO` |
+| `notes` | ADIF `NOTES` only for exact nonblank supplied text; otherwise omitted |
 
-The notes default is applied only during Wavelog-bound ADIF conversion; immutable
-local `Contact` rows are not changed. Nonblank `Contact.notes` text is emitted
-exactly, without prepending/appending/replacing text or duplicating the phrase.
+New ordinary contacts have blank notes unless explicitly supplied. No mobile,
+POTA or weather boilerplate is generated. Existing Contact rows are not changed.
+Nonblank Contact.notes is emitted exactly. For an already-claimed UUID, the service
+also calculates the original legacy-notes rendering; it uses it only when its exact
+hash matches that durable claim. Pending uploads then retry the original bytes and
+synchronized uploads remain no-ops. Claim hashes/station IDs are never rewritten;
+changed data remains a conflict. This avoids a schema migration and protects old
+uncertain outcomes. Retained structured weather and coordinates are unaffected.
 
 Missing optional metadata never makes local logging fail. Existing QRZ enrichment marks an optional lookup failure complete without a grid, so QRZ unavailability cannot indefinitely block Wavelog synchronization.
 
@@ -562,9 +567,9 @@ so coordinate-only differences do not change that hash.
 
 Coordinates are not added to ADIF and synchronization never reads current GPS or
 calls a weather provider.
-Checkpoints C/D/E now use the frozen Checkpoint A/B fields to select, safely create,
-verify, and link dynamic mobile station locations. Locationless/historical contacts
-retain legacy `Mobile` routing and grid4-only profile alignment. The blank-only Wavelog
-default is implemented in ADIF `NOTES` (not a separate comments field). See
+Checkpoints C/D/E use frozen Checkpoint A/B fields to select, safely create, verify
+and link dynamic mobile stations. The current routing rules above supersede this
+historical checkpoint. Issue246 removes the blank-note default for new uploads,
+while preserving exact already-claimed legacy ADIF for retries. See
 [owner acceptance and rollback](CHECKPOINT_A_ACCEPTANCE.md) for the earlier schema
 checkpoint; the current routing contract is this document.

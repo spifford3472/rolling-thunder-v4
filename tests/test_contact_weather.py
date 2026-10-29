@@ -311,7 +311,8 @@ def test_contact_sync_never_invokes_weather_enrichment(
     assert len(wavelog.uploaded) == 1
     assert wavelog.uploaded[0] is source
     adif = contact_to_adif(wavelog.uploaded[0])
-    assert "Contact Wx: N/A\nLocal Wx: N/A" in adif
+    assert "Contact Wx:" not in adif
+    assert "Local Wx:" not in adif
 
 
 def test_contact_sync_preserves_weather_already_present_on_immutable_payload(
@@ -328,4 +329,4 @@ def test_contact_sync_preserves_weather_already_present_on_immutable_payload(
     service.synchronize(source)
 
     assert wavelog.uploaded == [source]
-    assert "Contact Wx: Partly Cloudy; 21.5 C; humidity 57%" in contact_to_adif(source)
+    assert "Contact Wx:" not in contact_to_adif(source)

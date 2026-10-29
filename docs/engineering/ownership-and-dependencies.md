@@ -413,3 +413,9 @@ explicit extension periods, independently of the display banner.
 ## Controller recovery candidate (uncomposed)
 
 `recovering_control_source.py` owns only a future single-owner USB lifecycle/mailbox; `control_session_v2.py` and `control_protocol_v2.py` own strict nonce/sequence/freshness observations. The explicit serial_v2 factory/UI path consumes this worker and its bounded gate; legacy serial remains unchanged. Existing physical-command, voice capture, CAT/PTT and logging owners are unchanged. See `controller-recovery-v2.md`.
+
+
+Issue246 keeps ownership unchanged: Wavelog adapter normalizes provider history
+and serializes notes; contact-sync alone owns legacy claim compatibility; shared
+callsign presentation consumes count/band without provider access. See
+`issue-246-notes-and-contact-history.md`.

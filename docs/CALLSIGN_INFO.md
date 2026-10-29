@@ -153,7 +153,20 @@ reject unknown fields, so an older Pi must not receive the expanded Forge respon
 
 ## Previous contact
 
-Forge requests the newest exact-callsign QSO from Wavelog v2.
+Forge requests the newest exact-callsign QSO from Wavelog v2 with `limit=1`.
+The same response's `meta.total` is the full filtered total, not `meta.count` or the
+one-row page length. The deployed Wavelog Qso_resource::index/list_meta contract
+was inspected: JSON is newest-first, the exact callsign filter is applied before
+counting, and absent band/mode/station filters include all token-visible history.
+No second request, unbounded pagination or Tk I/O is added. One 60-second cache
+entry contains both latest record and total; its existing invalidation applies.
+
+The heading reads `WORKED 12 TIMES — LAST CONTACT` (singular `TIME` for one).
+The detail keeps the last date/time, location/POTA context and `Band: 20m`.
+Comments and notes are no longer displayed, but existing log text is untouched.
+Missing count/band from an older provider is explicitly unavailable; never infer
+one from a one-row response. Contradictory/invalid totals fail as unavailable
+lookup rather than falsely reporting FIRST CONTACT.
 
 When no prior QSO exists the overlay displays:
 
@@ -167,12 +180,19 @@ When a prior QSO exists the compact response may include:
 
 - previous date/time, flattened with the station-location name onto one summary line
 - station-location name
-- comment or notes
+- total exact-callsign logged QSOs across all token-visible stations, bands and modes
+- the last QSO band (not the currently selected radio band)
 - mobile indication when reliably inferred from station-location identity
 - contacted POTA reference
 - operator's prior POTA reference when Wavelog returns `my_pota_ref`
 
-No giant raw Wavelog record is returned to the Pi.
+No giant raw Wavelog record is returned to the Pi. Optional strict `worked_count`
+and `band` fields extend the existing last_qso model. Upgrade Pi readers before
+callsign-info, because older strict clients reject the expanded response. New Pi
+readers accept older responses with unknown count/band. Rollback callsign-info
+before rolling back Pi. Contact-sync can be upgraded first independently. No
+schema migration or historical QSO update is needed. See
+`engineering/issue-246-notes-and-contact-history.md`.
 
 ## Cache policy
 

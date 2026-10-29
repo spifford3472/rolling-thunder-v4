@@ -55,9 +55,10 @@ remote synchronization is considered complete. Loss of the home network or
 Wavelog does not make a locally committed contact disappear.
 
 New POTA, DX, Browse, and FT8 contacts retain their originating workflow and a
-best-effort configured transmit-power snapshot. When weather notes are enabled,
-synchronized Wavelog notes use weather already captured on the contact and explicitly
-show `N/A` when it is absent; contact synchronization never waits on public weather.
+best-effort configured transmit-power snapshot. New ordinary QSO notes remain blank
+unless explicitly supplied; automatic POTA/mobile/weather notes are no longer added.
+Existing saved notes and structured weather remain intact; contact synchronization
+never waits on public weather.
 Unavailable weather never prevents saving or synchronizing the QSO.
 The capture uses only fresh weather already published for the car and the exact
 contacted callsign/target. Retained car weather must also match the contact's frozen
@@ -920,7 +921,7 @@ Depending on available data, the overlay may include:
 - a contact mini-map;
 - current target weather;
 - target local time in black text on a compact white background at the top-right of the mini-map when a reliable IANA timezone accompanies that weather;
-- prior-QSO summary;
+- WORKED N TIMES plus the last QSO date/location and band; notes/comments are omitted;
 - FIRST CONTACT when no prior QSO is found.
 
 The contact mini-map follows the primary live map's DAY/NIGHT theme. A configured
@@ -1087,10 +1088,11 @@ station profile grid is derived from it. Rolling Thunder submits the full grid i
 but Wavelog 3.2.3 overwrites its stored QSO value from the grid4 station profile. This
 requires a separate Wavelog provider/API change; no station profile is moved among
 six-character subsquares as a workaround. Contact sync uses weather already present
-on the QSO, and missing contact or local weather is shown as `N/A`.
+on the QSO without adding weather text to new notes.
 
-If the contact has no operator notes, its Wavelog ADIF `NOTES` value is `Mobile QSO`.
-Existing notes are kept exactly and are not prefixed, appended, or replaced. Station
+Blank notes are omitted from Wavelog ADIF. Explicit existing notes remain exact;
+old claimed uploads retain their original payload on retry. New POTA and Browse
+contacts do not generate notes from their park or location. Station
 creation/linking or Wavelog failures do not undo the local contact; the LOG retry
 path remains available.
 

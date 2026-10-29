@@ -163,3 +163,43 @@ def test_contact_kinds_share_one_station_routing_and_upload_boundary(
     assert result.disposition is ContactUploadDisposition.ACCEPTED
     assert wavelog.upload_count == 1
     assert [target.location.station_id for target in wavelog.targets] == [42]
+
+
+@pytest.mark.parametrize("synchronized", [False, True])
+@pytest.mark.parametrize("weather", [False, True])
+def test_existing_legacy_notes_claim_keeps_hash_and_exact_retry_payload(
+    tmp_path, synchronized, weather,
+):
+    import hashlib
+    import sqlite3
+
+    from rolling_thunder.wavelog import contact_to_adif
+
+    qso = contact().model_copy(update={"weather_notes_enabled": weather})
+    legacy_notes = "Mobile QSO" + ("\nContact Wx: N/A\nLocal Wx: N/A" if weather else "")
+    expected_old_adif = contact_to_adif(qso).replace(
+        "<EOR>", f"<NOTES:{len(legacy_notes)}>{legacy_notes}<EOR>"
+    )
+    expected_old_hash = hashlib.sha256(("42\n" + expected_old_adif).encode()).hexdigest()
+    database = tmp_path / "ledger.db"
+    repository = ForgeContactSyncRepository(database)
+    repository.claim(qso.contact_id, payload_sha256=expected_old_hash, station_profile_id=42)
+    if synchronized:
+        repository.mark_synchronized(
+            qso.contact_id, synchronized_at=datetime(2026, 10, 29, tzinfo=UTC),
+            remote_disposition=WavelogUploadDisposition.IMPORTED,
+        )
+    wavelog = FakeWavelog()
+    service = ForgeContactSyncService(repository, wavelog)
+    result = service.synchronize(qso)
+    assert result.disposition is (
+        ContactUploadDisposition.ALREADY_EXISTS if synchronized else ContactUploadDisposition.ACCEPTED
+    )
+    assert wavelog.upload_count == (0 if synchronized else 1)
+    if not synchronized:
+        assert contact_to_adif(wavelog.contacts[0]) == expected_old_adif
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT payload_sha256 FROM forge_contact_sync_ledger").fetchone()[0] == expected_old_hash
+    changed = qso.model_copy(update={"notes": "changed data"})
+    with pytest.raises(ForgeContactPayloadConflictError):
+        service.synchronize(changed)

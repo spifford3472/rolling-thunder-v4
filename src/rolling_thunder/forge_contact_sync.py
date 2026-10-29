@@ -27,6 +27,7 @@ from rolling_thunder.wavelog import (
     WavelogStationTarget,
     WavelogUploadDisposition,
     contact_to_adif,
+    legacy_notes_contact,
 )
 
 Clock = Callable[[], datetime]
@@ -187,6 +188,18 @@ class ForgeContactSyncRepository:
                 f"Forge Wavelog station binding update failed: {binding.name!r}"
             ) from error
 
+    def claimed_payload_hash(self, contact_id: UUID) -> str | None:
+        """Read an existing claim without changing its immutable payload identity."""
+        try:
+            with sqlite3.connect(self._database_path) as connection:
+                row = connection.execute(
+                    "SELECT payload_sha256 FROM forge_contact_sync_ledger WHERE contact_id=?",
+                    (str(contact_id),),
+                ).fetchone()
+            return None if row is None else str(row[0])
+        except sqlite3.Error as error:
+            raise ForgeContactSyncStorageError("Could not read existing contact claim.") from error
+
     def claim(
         self,
         contact_id: UUID,
@@ -326,6 +339,16 @@ class ForgeContactSyncService:
                 contact,
                 station_profile_id=target.location.station_id,
             )
+            upload_contact = contact
+            stored_hash = self._repository.claimed_payload_hash(contact.contact_id)
+            if stored_hash is not None and stored_hash != payload_sha256:
+                legacy = legacy_notes_contact(contact)
+                legacy_hash = _remote_payload_sha256(
+                    legacy, station_profile_id=target.location.station_id
+                )
+                if stored_hash == legacy_hash:
+                    upload_contact = legacy
+                    payload_sha256 = legacy_hash
             claim = self._repository.claim(
                 contact.contact_id,
                 payload_sha256=payload_sha256,
@@ -340,7 +363,7 @@ class ForgeContactSyncService:
                     received_at=received_at,
                 )
 
-            remote_disposition = self._wavelog.upload_contact(contact, target=target)
+            remote_disposition = self._wavelog.upload_contact(upload_contact, target=target)
             self._repository.mark_synchronized(
                 contact.contact_id,
                 synchronized_at=received_at,

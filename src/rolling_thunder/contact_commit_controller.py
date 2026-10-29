@@ -10,9 +10,8 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from rolling_thunder.contact_logging import ContactCommitError, ContactLoggingService
-from rolling_thunder.domain import Contact, ContactSource, GPSFixState, RadioState
+from rolling_thunder.domain import Contact, ContactSource, RadioState
 from rolling_thunder.gps import GPSState
-from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.pota_spots import PotaSpot
 from rolling_thunder.storage import StorageError
 
@@ -136,7 +135,6 @@ class ContactCommitController:
                 gps_state=gps_state,
                 pota_context_active=pota_context_active,
                 pota_spots=pota_spots,
-                notes=self._browse_notes(gps_state) if browse_context_active else None,
                 source=self._source_for_context(
                     pota=pota_context_active,
                     dx=dx_context_active,
@@ -175,21 +173,3 @@ class ContactCommitController:
         if browse:
             return ContactSource.BROWSE
         return ContactSource.UNKNOWN
-
-    @staticmethod
-    def _browse_notes(gps_state: GPSState | None) -> str:
-        """Build the Browse mobile-contact note without inventing location data."""
-        if gps_state is None or gps_state.position is None:
-            return "Mobile Contact (GPS unavailable)"
-        position = gps_state.position
-        if (
-            position.fix_state is GPSFixState.NO_FIX
-            or position.latitude is None
-            or position.longitude is None
-        ):
-            return "Mobile Contact (GPS unavailable)"
-        grid = maidenhead_grid(position.latitude, position.longitude)
-        return (
-            f"Mobile Contact from {position.latitude:.6f}, "
-            f"{position.longitude:.6f} ({grid})"
-        )

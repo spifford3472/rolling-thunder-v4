@@ -628,3 +628,32 @@ def test_friend_overlay_marker_does_not_change_contact_identity() -> None:
     decorated = build_callsign_info_presentation(response, local_time=clock, friends=frozenset({"W1ABC"}))
     assert decorated.friend_marker == "★"
     assert replace(decorated, friend_marker="") == ordinary
+
+
+def test_worked_total_and_last_band_replace_comments_and_notes():
+    response = CallsignInfoResponse(
+        callsign="W1AW", last_qso=CallsignInfoLastQso(
+            exists=True, worked_count=12, band="20m",
+            occurred_at=datetime(2026, 10, 28, 12, 0, tzinfo=UTC),
+            station_location="Mobile", comments="PRIVATE COMMENT", notes="OLD NOTES",
+        ),
+    )
+    view = build_callsign_info_presentation(response)
+    assert view.history_heading == "WORKED 12 TIMES — LAST CONTACT"
+    assert view.history_line is not None
+    assert "Band: 20m" in view.history_line
+    assert "From: Mobile" in view.history_line
+    assert "Oct 28, 2026" in view.history_line
+    assert "PRIVATE COMMENT" not in view.history_line and "OLD NOTES" not in view.history_line
+    one = response.model_copy(update={"last_qso": response.last_qso.model_copy(
+        update={"worked_count": 1}
+    )})
+    assert build_callsign_info_presentation(one).history_heading == "WORKED 1 TIME — LAST CONTACT"
+
+
+def test_previous_qso_without_new_history_fields_stays_truthfully_unknown():
+    view = build_callsign_info_presentation(CallsignInfoResponse(
+        callsign="W1AW", last_qso=CallsignInfoLastQso(exists=True),
+    ))
+    assert view.history_heading == "LAST CONTACT"
+    assert view.history_line == "Worked count unavailable    Band unavailable"

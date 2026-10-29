@@ -129,21 +129,26 @@ Verified dynamic stations use `Mobile - XXXX - YY`, retain a four-character
 profile grid, and belong to the exact configured logbook. Any legacy `Mobile`
 profile alignment also uses only derived grid4; no station profile follows a
 moving six-character subsquare. Wavelog-bound ADIF
-always carries full frozen `MY_GRIDSQUARE` when present and carries ADIF `NOTES`
-equal to exact nonblank `Contact.notes` or exactly `Mobile QSO` when blank.
+always carries full frozen `MY_GRIDSQUARE` when present. New Wavelog-bound ADIF
+omits blank `NOTES` and preserves nonblank supplied text exactly. Ordinary new
+POTA/Browse/FT8 contacts do not generate POTA/mobile/location boilerplate.
+Existing saved text and structured location/POTA/weather evidence remain intact.
 
 New contacts also retain typed workflow source and optional configured TX power.
-When weather-note capture is enabled on the immutable contact, Wavelog notes append
-`Contact Wx:` and `Local Wx:` lines; unavailable data is `N/A`. Contact sync performs
+Weather capture remains an immutable structured snapshot, but new uploads do not
+append weather to notes, even when the historical weather-note flag is enabled.
+Existing claimed uploads retain exact legacy ADIF only when its computed hash
+matches the durable claim; both pending retries and synchronized replays retain
+that hash and station identity. Changed payloads still fail closed. No ledger or
+contact row is rewritten. Contact sync performs
 no weather lookup: it immediately routes, hashes, and uploads the immutable payload
 it received. Local commit may snapshot only fresh already-published Pi retained
 weather proven to match the contact's frozen local coordinates (within Forge's default
 10 km mobile-weather refresh boundary), falling back to a frozen local-grid match only
 when coordinates are unavailable, and callsign-info weather proven to match that
 contact's callsign/target;
-manual and FT8 logging share this boundary. Weather already present is preserved,
-and absent, stale, or mismatched weather formats as
-`N/A`. ADIF `TX_PWR` is emitted only
+manual and FT8 logging share this boundary. Weather already present is preserved;
+absent, stale or mismatched observations remain null. ADIF `TX_PWR` is emitted only
 when the snapshot contains a verified configured-power value. Dynamic station
 profiles remain four-character routing identities while QSO `MY_GRIDSQUARE` remains
 the full frozen grid in Rolling Thunder's submitted ADIF. Wavelog 3.2.3 currently
@@ -479,3 +484,9 @@ The capture response table deduplicates canonical JSON bytes, with immutable fir
 Recovery v2 adds strict session/age validation and a bounded serial-owner worker, selected only by explicit serial_v2 configuration; legacy serial is unchanged. Health-only traffic is never an application action; pending input is discarded on loss/expiry. Legacy gating and all current consumers remain unchanged. See `controller-recovery-v2.md` for the firmware, ownership, reset and bounded-gating commissioning prerequisites.
 
 ControlInputEvent has optional host-monotonic expires_at_s metadata (default None for legacy producers). The v2 worker supplies its bounded expiry and the recovery gate requires it at each dispatch; slow earlier commands cannot replay the batch remainder. The legacy gate/three-argument event constructors retain compatibility.
+
+
+Issue246 extends shared last-QSO history with optional strict full worked_count and
+last band. Missing metadata is unknown, never a fabricated count or first contact.
+Pi renders the published values without I/O and omits notes/comments. See
+`../CALLSIGN_INFO.md` for exact-call/token scope, cache and Pi-first rollout.

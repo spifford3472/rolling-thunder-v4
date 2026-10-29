@@ -184,6 +184,8 @@ class ForgeCallsignInfoService:
 
         return CallsignInfoLastQso(
             exists=True,
+            worked_count=qso.worked_count,
+            band=qso.band,
             occurred_at=qso.occurred_at,
             station_location=station_location,
             comments=qso.comments,
