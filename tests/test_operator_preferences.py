@@ -11,7 +11,7 @@ from rolling_thunder.operator_preferences import (
     OperatorPreferenceRepository,
     OperatorPreferenceService,
 )
-from rolling_thunder.storage import CURRENT_SCHEMA_VERSION, initialize_database
+from rolling_thunder.storage import CURRENT_SCHEMA_VERSION, StorageError, initialize_database
 
 
 class ImmediateExecutor(Executor):
@@ -196,3 +196,53 @@ def test_preference_service_submits_callsign_info_write_nonblocking(
     assert service.persist_callsign_info_enabled(False) is True
     assert repository.read_callsign_info_enabled() is False
     assert service.last_error is None
+
+
+class RecoveringFakeRepository:
+    def __init__(self) -> None:
+        self.fail_map = True
+
+    def write_map_zoom(self, _zoom: int) -> None:
+        if self.fail_map:
+            raise StorageError("map write failed")
+
+    def write_radar_image_enabled(self, _enabled: bool) -> None:
+        return None
+
+    def write_callsign_info_enabled(self, _enabled: bool) -> None:
+        return None
+
+
+def test_unrelated_success_cannot_mask_failed_preference_but_same_key_retry_can() -> None:
+    repository = RecoveringFakeRepository()
+    service = OperatorPreferenceService(repository, executor=ImmediateExecutor())  # type: ignore[arg-type]
+
+    assert service.persist_map_zoom(11)
+    assert service.persist_radar_image_enabled(True)
+    assert not service.flush(0.1)
+
+    repository.fail_map = False
+    assert service.persist_map_zoom(11)
+    assert service.flush(0.1)
+
+
+class TimeoutBarrierExecutor(Executor):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def submit(self, fn, /, *args, **kwargs):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        future: Future[object] = Future()
+        if self.calls != 2:
+            future.set_result(fn(*args, **kwargs))
+        return future
+
+
+def test_timed_out_barrier_does_not_stop_preference_service() -> None:
+    repository = RecoveringFakeRepository()
+    repository.fail_map = False
+    service = OperatorPreferenceService(repository, executor=TimeoutBarrierExecutor())  # type: ignore[arg-type]
+
+    assert service.persist_map_zoom(12)
+    assert not service.flush(0.001)
+    assert service.persist_radar_image_enabled(False)

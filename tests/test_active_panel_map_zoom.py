@@ -56,24 +56,24 @@ class FakeSharedPanel:
 
 class FakeSettings:
     def __init__(self) -> None:
-        self.out_count = 0
-        self.in_count = 0
-        self.radar_toggle_count = 0
+        self.movements: list[int] = []
+        self.lower_count = 0
+        self.higher_count = 0
 
-    def toggle_radar(self) -> bool:
-        self.radar_toggle_count += 1
+    def lower_selected(self) -> bool:
+        self.lower_count += 1
         return True
 
-    def zoom_out(self) -> bool:
-        self.out_count += 1
+    def higher_selected(self) -> bool:
+        self.higher_count += 1
         return True
 
-    def zoom_in(self) -> bool:
-        self.in_count += 1
+    def move_selection(self, delta: int) -> bool:
+        self.movements.append(delta)
         return True
 
 
-def test_settings_context_routes_previous_next_to_map_zoom() -> None:
+def test_settings_context_routes_encoder_to_selection_only() -> None:
     navigation = ContextNavigationController(ContextId.SETTINGS)
     settings = FakeSettings()
     controller = SharedSpotActivePanelCommandController(
@@ -85,11 +85,10 @@ def test_settings_context_routes_previous_next_to_map_zoom() -> None:
 
     assert controller.move_previous() is True
     assert controller.move_next() is True
-    assert settings.out_count == 1
-    assert settings.in_count == 1
+    assert settings.movements == [-1, 1]
 
 
-def test_settings_context_routes_primary_to_radar_image_toggle() -> None:
+def test_settings_context_routes_buttons_without_b1_or_encoder_press() -> None:
     navigation = ContextNavigationController(ContextId.SETTINGS)
     settings = FakeSettings()
     controller = SharedSpotActivePanelCommandController(
@@ -99,8 +98,12 @@ def test_settings_context_routes_primary_to_radar_image_toggle() -> None:
         settings_panel=settings,
     )
 
-    assert controller.primary() is True
-    assert settings.radar_toggle_count == 1
+    assert controller.primary() is False
+    assert controller.secondary() is True
+    assert controller.tertiary() is True
+    assert controller.activate_selection() is False
+    assert settings.lower_count == 1
+    assert settings.higher_count == 1
 
 
 def test_non_settings_context_does_not_change_settings() -> None:
@@ -116,6 +119,6 @@ def test_non_settings_context_does_not_change_settings() -> None:
     assert controller.primary() is False
     assert controller.move_previous() is False
     assert controller.move_next() is False
-    assert settings.radar_toggle_count == 0
-    assert settings.out_count == 0
-    assert settings.in_count == 0
+    assert settings.lower_count == 0
+    assert settings.higher_count == 0
+    assert settings.movements == []

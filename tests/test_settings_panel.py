@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from rolling_thunder.settings_panel import DashboardSettingsController
+from rolling_thunder.settings_selection import SettingId
 
 
 @dataclass
@@ -150,3 +151,25 @@ def test_callsign_info_toggle_updates_runtime_and_persists() -> None:
     assert controller.toggle_callsign_info() is True
     assert controller.state.callsign_info_enabled is False
     assert persistence.callsign_values == [False]
+
+
+def test_selection_movement_does_not_change_values() -> None:
+    radar = FakeRadar(enabled=True)
+    persistence = FakePersistence()
+    controller = DashboardSettingsController(None, radar, persistence)
+
+    assert controller.move_selection(1) is True
+    assert controller.state.selection.selected is SettingId.RADAR
+    assert radar.display_enabled is True
+    assert persistence.values == []
+
+
+def test_explicit_boolean_requests_are_idempotent_and_validate_type() -> None:
+    radar = FakeRadar(enabled=True)
+    persistence = FakePersistence()
+    controller = DashboardSettingsController(None, radar, persistence)
+
+    assert controller.set_radar(True) is False
+    assert controller.set_radar(False) is True
+    assert controller.set_radar(False) is False
+    assert persistence.values == [False]

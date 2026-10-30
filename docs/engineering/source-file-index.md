@@ -232,6 +232,8 @@ originates from one screen.
 
 - `src/rolling_thunder/settings_panel.py` — Settings state/controller and operator preference actions.
 - `src/rolling_thunder/settings_ui.py` — Tk presentation for Settings context.
+- `src/rolling_thunder/settings_selection.py` — frozen fixed-order clamped row selection.
+- `src/rolling_thunder/power_control.py` — power proof, guard, confirmation, bounded worker and fixed Linux adapter.
 
 ## Map and radar
 
@@ -511,8 +513,3 @@ forge_contact_sync.py owns legacy claimed-payload retry matching. callsign_info.
 and forge_callsign_info.py publish optional count/band; callsign_info_ui.py renders
 history without comments/notes. contact_commit_controller.py and contact_metadata.py
 retain structured metadata instead of generating ordinary QSO notes.
-
-## Uncomposed Settings selection foundation
-
-`settings_selection.py` defines the ordered `SettingsOption` values for issue371.
-The module is not composed into production; Settings controls are unchanged.

@@ -718,14 +718,30 @@ preferences without editing configuration files.
 
 ## Current controls
 
-- **Encoder** — zoom map out/in.
-- **Context Button #1** — enable/disable radar image display when available.
-- **Context Button #2** — switch DAY/NIGHT map style when both styles are
-  available.
-- **Context Button #3** — enable/disable the callsign-information overlay.
+- **Encoder** — move the highlight through MAP ZOOM, RADAR, CALLSIGN INFO,
+  MAP STYLE, REBOOT, and SHUTDOWN; rotation never changes a value.
+- **Context Button #1 / encoder press** — no Settings action.
+- **Context Button #2** — selected-row OUT, OFF, NIGHT, or CANCEL.
+- **Context Button #3** — selected-row IN, ON, DAY, or power SELECT/CONFIRM.
 
-The page displays the effective zoom and availability of the map/radar/callsign
-controls.
+Six logical rows retain the installed readable type sizes. Four rows are visible
+at once; the window follows the highlight and says which rows are shown and
+whether more are above or below. Text shows actual zoom/style, ON/OFF or
+UNAVAILABLE, the selected marker, and the highlight. Power is UNAVAILABLE unless
+a healthy trusted serial-v2 controller is current. The first Button #3 says
+SELECT; only an active named confirmation says CONFIRM. Reboot or shutdown needs
+two fresh deliberate Button #3 releases on the same row. Button #2, row/page
+change, timeout, unhealthy controller, or session loss cancels.
+
+Radio/FT8/PTT or local-commit activity blocks the request. After a power request
+is accepted, all new commands—including tuning, selection, context, capture, QSO,
+and commit actions—are blocked while Rolling Thunder waits for the service
+manager's actual SIGTERM. The successful request itself does not preemptively
+close the dashboard. A permission, guard, preference-drain, adapter, or timeout
+failure leaves the dashboard usable and shows the action plus a bounded reason.
+Linux shutdown does not disconnect external battery, fan, hub, or radio power; a
+blank screen is not safe-unplug proof. Parked installed power-cycle acceptance and
+Pi full-screen visual acceptance remain separate supervised work.
 
 ## Antenna reference / RF exposure screen
 
@@ -1189,7 +1205,7 @@ Rolling Thunder reduces workload but does not replace operator judgment.
 | FT8 | Native CQ browser and bounded QSO | Encoder select; press start; Button 1 band; incoming Button 2 answer / Button 3 ignore; active Button 3 abort/ack |
 | Repeaters | Nearby 6 m repeater selection | Encoder select; press configure; Button 1 filter; Button 2 active toggle |
 | Weather | Conditions/forecast/alerts | Encoder scrolls long alert text |
-| Settings | Runtime display/preferences | Encoder zoom; Buttons 1 radar, 2 style, 3 callsign info |
+| Settings | Runtime preferences/power request | Encoder selects; B2 lower/off/cancel; B3 higher/on/confirm; B1/press inert |
 | Log | Recent contacts/sync status | Button 1 forced sync |
 | DMR | Monitor/log hotspot contacts | Button 1 current caller; Button 2 commit; encoder history |
 | Antennas / RF exposure | Read configured reference/advisories | Encoder view navigation only; all data edited manually off-car in YAML |

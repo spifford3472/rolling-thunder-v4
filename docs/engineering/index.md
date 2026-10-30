@@ -45,6 +45,7 @@ This guide describes the implemented repository rather than an aspirational arch
 - `test-index.md` — test ownership and validation/live-acceptance guidance.
 - `AGENTS.md` — maintenance rules for this documentation.
 - `codex-deployment-workflow.md` — Codex branch discipline, explicit merge/deploy authorization and guarded release paths.
+- `settings.md` — Settings selection/routing, power confirmation, guard, OS adapter, and lifecycle contract.
 
 ## How to use this guide
 

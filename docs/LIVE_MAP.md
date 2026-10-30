@@ -63,7 +63,7 @@ packages that cover the operating area. If the requested style is not available
 from the installed package set, the existing map-style boundary rejects the
 switch rather than weakening installed-package authority.
 
-Settings Context Button #2 remains an immediate manual DAY/NIGHT override. Both
+On the selected MAP STYLE row, Button #2 requests NIGHT and Button #3 requests DAY. Both
 automatic and manual changes use one shared style target: the primary live map
 is authoritative, and the callsign mini-map mirrors every accepted style. Zoom
 commands still affect only the primary map. A manual choice is retained through

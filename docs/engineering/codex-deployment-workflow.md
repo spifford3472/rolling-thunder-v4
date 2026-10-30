@@ -21,6 +21,16 @@ Repository:
 Codex must not perform normal development inside production runtime
 directories.
 
+## Parked Settings power acceptance
+
+Actual parked reboot/poweroff and physical power-cycle acceptance is owner-only
+and is not established by source tests. Record installed source and configuration
+identities first. Roll back through the approved wrapper to that exact source
+identity while preserving any newer durable database; never replace a database
+with a checkout. Verify SIGTERM cleanup and permission failures truthfully. Linux
+poweroff does not disconnect battery/fan/hub power, and a blank display is not
+safe-unplug evidence.
+
 Before beginning new work:
 
 1. fetch current GitHub state;

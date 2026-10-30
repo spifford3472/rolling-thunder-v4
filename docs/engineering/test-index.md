@@ -54,6 +54,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_operator_preferences.py`
 - `tests/test_settings_panel.py`
 - `tests/test_settings_ui.py`
+- `tests/test_settings_selection.py`
+- `tests/test_power_control.py`
 - `tests/test_speech_config.py`
 
 ## Controls and navigation
@@ -582,8 +584,3 @@ contradictory data), test_callsign_info.py/test_forge_callsign_info.py (shared
 history, legacy response defaults), test_forge_contact_sync.py (old pending and
 synchronized claim hashes/changed payload rejection), and existing contact
 metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
-
-## Uncomposed Settings selection foundation
-
-`tests/test_settings_selection.py` verifies the issue371 SettingsOption order.
-This foundation has no production input or OS-action path.

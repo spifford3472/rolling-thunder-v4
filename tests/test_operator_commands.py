@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from rolling_thunder.callsign_capture import CallsignCaptureState
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
+from rolling_thunder.control_dispatcher import ControlDispatcher
 from rolling_thunder.domain import (
     Frequency,
     RadioConnectionState,
@@ -11,7 +12,12 @@ from rolling_thunder.domain import (
     RadioState,
 )
 from rolling_thunder.operator_commands import OperatorCommandController
-from rolling_thunder.physical_controls import ControlAction
+from rolling_thunder.physical_controls import (
+    ControlAction,
+    ControlActionMapper,
+    ControlInputEvent,
+    MockControlSource,
+)
 
 
 class FakeCapture:
@@ -259,6 +265,61 @@ def test_active_panel_actions_delegate_to_active_panel_commands() -> None:
 
         assert commands.execute(action) is True
         assert active_panel.actions == [recorded_action]
+
+
+def test_pending_power_submission_blocks_new_mutating_commands() -> None:
+    capture = FakeCapture(CallsignCaptureState(pending_callsign="W1AW", commit_state="READY"))
+    commit = FakeCommit()
+    active_panel = FakeActivePanel()
+    commands = OperatorCommandController(
+        capture,
+        commit,
+        ContextNavigationController(),
+        connected_radio,
+        active_panel,
+        mutation_blocked=lambda: True,
+    )
+
+    for action in ControlAction:
+        assert commands.execute(action) is False
+    assert capture.start_calls == 0
+    assert commit.calls == []
+    assert active_panel.actions == []
+
+
+def test_pending_guard_rejects_actual_physical_dispatch_path() -> None:
+    active_panel = FakeActivePanel()
+    commands = OperatorCommandController(
+        FakeCapture(),
+        FakeCommit(),
+        ContextNavigationController(ContextId.BROWSE),
+        connected_radio,
+        active_panel,
+        mutation_blocked=lambda: True,
+    )
+    source = MockControlSource(
+        (
+            ControlInputEvent("encoder", "event-1", 1.0),
+            ControlInputEvent("context", "event-2", 1.1),
+        )
+    )
+    gate = type("Gate", (), {"accept": lambda self, event: True})()
+    dispatcher = ControlDispatcher(
+        source,
+        ControlActionMapper(
+            {
+                "encoder": ControlAction.MOVE_NEXT,
+                "context": ControlAction.NEXT_CONTEXT,
+            }
+        ),
+        gate,  # type: ignore[arg-type]
+        commands,
+    )
+
+    result = dispatcher.dispatch_available()
+
+    assert result.rejected == 2
+    assert active_panel.actions == []
 
 
 def test_active_panel_rejection_is_preserved() -> None:

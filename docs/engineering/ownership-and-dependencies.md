@@ -320,6 +320,11 @@ logging services.
 Owns operator-facing preference controls/presentation. Individual preference
 meaning remains owned by the feature consuming the preference.
 
+It also owns typed reboot/shutdown confirmation and the narrow Linux adapter,
+while consuming published FT8/radio/PTT/commit state, serial-v2 proof, preference
+barrier, and existing cleanup. It owns no radio, schema, privilege, systemd-unit,
+or physical-power authority. See `settings.md`.
+
 ### AI
 
 A navigation context exists, but the current implementation is reserved/

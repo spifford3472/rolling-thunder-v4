@@ -149,6 +149,11 @@ class FT8HardwareTransmitExecutor(Protocol):
 class FT8QsoHardwareTransmitExecutor(Protocol):
     """Physical capability available only to one CP7 QSO transmit session."""
 
+    @property
+    def transmitting(self) -> bool:
+        """Return the executor's already-published PTT assertion state."""
+        ...
+
     def execute_qso(self, request: FT8QsoHardwareTransmitRequest) -> None:
         """Execute one already-authorized QSO waveform."""
         ...

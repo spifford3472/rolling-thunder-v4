@@ -29,8 +29,36 @@ from rolling_thunder.ui_main import (
     _callsign_info_target,
     _context_decode_header_text,
     _pota_card_colors,
+    _run_cleanup_steps,
+    _sigterm_close_handler,
     _status_foreground,
 )
+
+
+def test_sigterm_handler_schedules_existing_orderly_close() -> None:
+    from threading import Event
+
+    requested = Event()
+    handler = _sigterm_close_handler(requested)
+    handler(15, None)
+    assert requested.is_set()
+
+
+def test_cleanup_runner_attempts_every_step_after_failures() -> None:
+    calls: list[str] = []
+    errors: list[str] = []
+
+    def fail() -> None:
+        calls.append("control")
+        raise RuntimeError("broken")
+
+    _run_cleanup_steps(
+        (("control", fail), ("runtime", lambda: calls.append("runtime"))),
+        errors,
+    )
+
+    assert calls == ["control", "runtime"]
+    assert errors == ["control: broken"]
 
 
 def _activity(callsign: str = "W1AW", grid: str | None = "FN31") -> FT8CQActivity:

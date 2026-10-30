@@ -249,6 +249,11 @@ shared command boundaries.
 A feature may interpret an active-panel action but must not create a hidden
 second serial/control protocol or bypass shared gating.
 
+Settings power confirmation is the sole event-aware consumer: the dispatcher
+retains already-validated identity only for it. Destructive physical input needs
+current healthy serial-v2 nonce/generation, host expiry, distinct increasing
+RELEASE IDs, and deliberate spacing. Default consumers remain unchanged.
+
 ## Global status messages
 
 The status service is shared. Priority, replacement keys, expiration, and

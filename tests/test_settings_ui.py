@@ -1,8 +1,11 @@
 """Tests for pure Settings presentation helpers."""
 
+from rolling_thunder.control_transport_health import TransportHealthState
 from rolling_thunder.map_sources import MapPackageStyle
 from rolling_thunder.map_zoom import MapZoomBounds, MapZoomSettingsState
+from rolling_thunder.power_control import PowerAction, PowerConfirmationState
 from rolling_thunder.settings_panel import DashboardSettingsState
+from rolling_thunder.settings_selection import SettingsOption
 from rolling_thunder.settings_ui import (
     _HEALTHY,
     _SETTINGS_CARD_FONT_SIZE,
@@ -10,6 +13,8 @@ from rolling_thunder.settings_ui import (
     _SETTINGS_VALUE_FONT_SIZE,
     _map_style_presentation,
     _map_zoom_presentation,
+    _power_presentation,
+    _settings_window,
 )
 
 
@@ -36,7 +41,7 @@ def test_zoom_presentation_places_current_value_apart_from_instruction() -> None
     title, instruction, value = _map_zoom_presentation(state)
 
     assert title == "MAP ZOOM"
-    assert instruction == "Turn encoder: OUT / IN    Range 6-15"
+    assert instruction == "B2 OUT   B3 IN    Range 6-15"
     assert value == "13"
 
 
@@ -53,7 +58,7 @@ def test_style_presentation_exposes_current_selection_and_button_instruction() -
     title, instruction, value, emphasized = _map_style_presentation(state)
 
     assert title == "MAP STYLE"
-    assert instruction == "Context Button #2: DAY / NIGHT"
+    assert instruction == "B2 NIGHT   B3 DAY"
     assert value == "NIGHT"
     assert emphasized is True
 
@@ -80,21 +85,60 @@ def test_disabled_map_controls_have_truthful_values() -> None:
 
     assert _map_zoom_presentation(state) == (
         "MAP ZOOM",
-        "Turn encoder: OUT / IN",
-        "DISABLED",
+        "B2 OUT   B3 IN",
+        "UNAVAILABLE",
     )
     assert _map_style_presentation(state) == (
         "MAP STYLE",
-        "Context Button #2",
+        "B2 NIGHT   B3 DAY",
         "UNAVAILABLE",
         False,
     )
 
 
-def test_settings_cards_share_compact_typography() -> None:
+def test_settings_cards_preserve_installed_readable_typography() -> None:
     assert _SETTINGS_CARD_FONT_SIZE == 30
     assert _SETTINGS_SECONDARY_FONT_SIZE == 18
     assert _SETTINGS_VALUE_FONT_SIZE == 36
     assert _SETTINGS_SECONDARY_FONT_SIZE < _SETTINGS_CARD_FONT_SIZE
     assert _SETTINGS_CARD_FONT_SIZE < _SETTINGS_VALUE_FONT_SIZE
     assert _HEALTHY == "#66ccff"
+
+
+def test_four_row_window_always_contains_selected_row() -> None:
+    assert _settings_window(SettingsOption.MAP_ZOOM) == tuple(SettingsOption)[:4]
+    assert _settings_window(SettingsOption.MAP_STYLE) == tuple(SettingsOption)[:4]
+    assert _settings_window(SettingsOption.REBOOT) == tuple(SettingsOption)[1:5]
+    assert _settings_window(SettingsOption.SHUTDOWN) == tuple(SettingsOption)[2:]
+
+
+def test_power_copy_is_truthful_available_staged_pending_and_failed() -> None:
+    available = PowerConfirmationState(
+        available=True,
+        health=TransportHealthState.HEALTHY,
+    )
+    assert _power_presentation(SettingsOption.REBOOT, available) == (
+        "SELECT",
+        "B2 CANCEL   B3 SELECT",
+    )
+    staged = PowerConfirmationState(
+        action=PowerAction.REBOOT,
+        available=True,
+        health=TransportHealthState.HEALTHY,
+    )
+    assert _power_presentation(SettingsOption.REBOOT, staged) == (
+        "CONFIRM",
+        "B2 CANCEL   B3 CONFIRM",
+    )
+    pending = PowerConfirmationState(action=PowerAction.REBOOT, pending=True)
+    assert _power_presentation(SettingsOption.REBOOT, pending)[0] == "REBOOT PENDING"
+    failed = PowerConfirmationState(last_error="permission denied by policy")
+    assert _power_presentation(SettingsOption.SHUTDOWN, failed) == (
+        "SHUTDOWN FAILED",
+        "permission denied by policy",
+    )
+    unavailable = PowerConfirmationState(health=TransportHealthState.STALE)
+    assert _power_presentation(SettingsOption.REBOOT, unavailable) == (
+        "UNAVAILABLE",
+        "STALE",
+    )
