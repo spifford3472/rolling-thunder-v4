@@ -582,3 +582,8 @@ contradictory data), test_callsign_info.py/test_forge_callsign_info.py (shared
 history, legacy response defaults), test_forge_contact_sync.py (old pending and
 synchronized claim hashes/changed payload rejection), and existing contact
 metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
+
+## Uncomposed Settings selection foundation
+
+`tests/test_settings_selection.py` verifies the issue371 SettingsOption order.
+This foundation has no production input or OS-action path.
