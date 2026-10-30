@@ -232,6 +232,8 @@ originates from one screen.
 
 - `src/rolling_thunder/settings_panel.py` — Settings state/controller and operator preference actions.
 - `src/rolling_thunder/settings_ui.py` — Tk presentation for Settings context.
+- `src/rolling_thunder/settings_selection.py` — frozen fixed-order clamped row selection.
+- `src/rolling_thunder/power_control.py` — power proof, guard, confirmation, bounded worker and fixed Linux adapter.
 
 ## Map and radar
 

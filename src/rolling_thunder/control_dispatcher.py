@@ -11,6 +11,7 @@ from rolling_thunder.physical_controls import (
     ControlAction,
     ControlActionMapper,
     ControlEventFilter,
+    ControlInputEvent,
     ControlSource,
 )
 
@@ -20,6 +21,13 @@ class OperatorCommands(Protocol):
 
     def execute(self, action: ControlAction) -> bool:
         """Execute one approved action and report whether it was accepted."""
+
+
+class EventAwareInterceptor(Protocol):
+    """Narrow consumer for commands that require validated event identity."""
+
+    def intercept(self, event: ControlInputEvent, action: ControlAction) -> bool | None:
+        """Return None for default dispatch, otherwise consume with this result."""
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,7 @@ class ControlDispatcher:
         *,
         action_observer: Callable[[str, float], None] | None = None,
         clock: Callable[[], float] = monotonic,
+        event_interceptor: EventAwareInterceptor | None = None,
     ) -> None:
         self._source = source
         self._mapper = mapper
@@ -51,6 +60,7 @@ class ControlDispatcher:
         self._commands = commands
         self._action_observer = action_observer
         self._clock = clock
+        self._event_interceptor = event_interceptor
 
     def dispatch_available(self) -> ControlDispatchResult:
         """Drain available events without blocking and dispatch safe actions."""
@@ -70,7 +80,15 @@ class ControlDispatcher:
                 continue
 
             started = self._clock() if self._action_observer is not None else 0.0
-            if self._commands.execute(action):
+            intercepted = (
+                None
+                if self._event_interceptor is None
+                else self._event_interceptor.intercept(event, action)
+            )
+            command_accepted = (
+                self._commands.execute(action) if intercepted is None else intercepted
+            )
+            if command_accepted:
                 accepted += 1
                 if self._action_observer is not None:
                     self._action_observer(

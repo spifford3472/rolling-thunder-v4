@@ -54,6 +54,8 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_operator_preferences.py`
 - `tests/test_settings_panel.py`
 - `tests/test_settings_ui.py`
+- `tests/test_settings_selection.py`
+- `tests/test_power_control.py`
 - `tests/test_speech_config.py`
 
 ## Controls and navigation

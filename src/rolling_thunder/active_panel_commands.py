@@ -171,6 +171,15 @@ class BrowsePanelCommands(Protocol):
 
 
 class SettingsPanelCommands(Protocol):
+    def move_selection(self, delta: int) -> bool:
+        ...
+
+    def lower_selected(self) -> bool:
+        ...
+
+    def higher_selected(self) -> bool:
+        ...
+
     def toggle_radar(self) -> bool:
         ...
 
@@ -398,6 +407,10 @@ class SharedSpotActivePanelCommandController:
 
     def activate_context(self, context_id: ContextId) -> None:
         """Synchronize the application controller with the active panel."""
+        if context_id is not ContextId.SETTINGS and self._settings_panel is not None:
+            cancel_power = getattr(self._settings_panel, "cancel_power_confirmation", None)
+            if callable(cancel_power):
+                cancel_power()
         repeater = self._repeater_panel
         if context_id is ContextId.POTA:
             if repeater is not None:
@@ -437,7 +450,7 @@ class SharedSpotActivePanelCommandController:
             self._repeater_panel.toggle_filter()
             return True
         if self._settings_is_active():
-            return self._settings_panel is not None and self._settings_panel.toggle_radar()
+            return False
         return False
 
     def secondary(self) -> bool:
@@ -452,17 +465,14 @@ class SharedSpotActivePanelCommandController:
         if self._repeater_is_active():
             return self._toggle_repeater_active()
         if self._settings_is_active():
-            return self._settings_panel is not None and self._settings_panel.toggle_map_style()
+            return self._settings_panel is not None and self._settings_panel.lower_selected()
         return False
 
     def tertiary(self) -> bool:
         if self._browse_is_active():
             return self._browse_panel is not None and self._browse_panel.cycle_mode()
         if self._settings_is_active():
-            return (
-                self._settings_panel is not None
-                and self._settings_panel.toggle_callsign_info()
-            )
+            return self._settings_panel is not None and self._settings_panel.higher_selected()
         return False
 
     def tertiary_long(self) -> bool:
@@ -475,7 +485,7 @@ class SharedSpotActivePanelCommandController:
             viewport = self._weather_alert_viewport
             return viewport is not None and viewport.scroll_previous()
         if self._settings_is_active():
-            return self._settings_panel is not None and self._settings_panel.zoom_out()
+            return self._settings_panel is not None and self._settings_panel.move_selection(-1)
         if self._repeater_is_active():
             repeater = self._repeater_panel
             if repeater is None:
@@ -496,7 +506,7 @@ class SharedSpotActivePanelCommandController:
             viewport = self._weather_alert_viewport
             return viewport is not None and viewport.scroll_next()
         if self._settings_is_active():
-            return self._settings_panel is not None and self._settings_panel.zoom_in()
+            return self._settings_panel is not None and self._settings_panel.move_selection(1)
         if self._repeater_is_active():
             repeater = self._repeater_panel
             if repeater is None:

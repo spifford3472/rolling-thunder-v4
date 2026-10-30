@@ -273,7 +273,8 @@ The map health box labels the subsystem `RADAR`. Color carries compact state:
 
 ## Operator Settings control
 
-When radar is configured, Settings exposes a `RADAR Image` on/off switch using Context Button #1.
+When radar is configured, Settings exposes a selected `RADAR Image` row. Button #2
+requests OFF and Button #3 requests ON.
 
 Turning radar image off immediately clears the visible overlay and suppresses new Pi radar image work, without disabling Forge radar or changing base map, GPS, logging, controls, or radio authority. Turning it back on returns the Pi worker to idle; the next normal map refresh requests coverage around the current viewport.
 

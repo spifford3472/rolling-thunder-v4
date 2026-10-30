@@ -84,6 +84,7 @@ class OperatorCommandController:
         active_panel: ActivePanelCommands | None = None,
         cancel_ptt_alarm: Callable[[], bool] | None = None,
         ptt_unlock_step: Callable[[ControlAction], bool] | None = None,
+        mutation_blocked: Callable[[], bool] | None = None,
     ) -> None:
         self._capture = capture
         self._contact_commit = contact_commit
@@ -92,9 +93,12 @@ class OperatorCommandController:
         self._active_panel = active_panel
         self._cancel_ptt_alarm = cancel_ptt_alarm
         self._ptt_unlock_step = ptt_unlock_step
+        self._mutation_blocked = mutation_blocked or (lambda: False)
 
     def execute(self, action: ControlAction) -> bool:
         """Execute one approved action, returning whether it was accepted."""
+        if self._mutation_blocked():
+            return False
         if self._ptt_unlock_step is not None and action in (
             ControlAction.PANEL_PRIMARY, ControlAction.PANEL_TERTIARY,
         ) and self._ptt_unlock_step(action):

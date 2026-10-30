@@ -53,8 +53,12 @@ class ControlInputEvent:
             raise ValueError("Control input_id must not be blank.")
         if not self.event_id.strip():
             raise ValueError("Control event_id must not be blank.")
-        if self.occurred_at_s < 0:
-            raise ValueError("Control occurred_at_s must not be negative.")
+        if (
+            isinstance(self.occurred_at_s, bool)
+            or not math.isfinite(self.occurred_at_s)
+            or self.occurred_at_s < 0
+        ):
+            raise ValueError("Control occurred_at_s must be a finite nonnegative timestamp.")
         if self.expires_at_s is not None and (
             isinstance(self.expires_at_s, bool) or not math.isfinite(self.expires_at_s) or self.expires_at_s < 0
         ):

@@ -3,8 +3,8 @@
 ## Purpose
 
 Checkpoint #157 adds one mutable operator preference to the existing Settings
-context: **Map Zoom**. The operator can change the live-map zoom with the physical
-encoder while Settings is active, and the selected value survives an application
+context: **Map Zoom**. The operator highlights MAP ZOOM with the encoder, then
+uses Button #2 for OUT or Button #3 for IN; the selected value survives an application
 restart.
 
 This checkpoint does not change radio control, GPS parsing, Forge, weather,
@@ -56,11 +56,11 @@ shows:
 MAP ZOOM
 15
 RANGE 6-15
-TURN ENCODER: OUT / IN
+B2 OUT   B3 IN
 ```
 
-The existing `MOVE_PREVIOUS` encoder command zooms out by one level and
-`MOVE_NEXT` zooms in by one level. The value does not wrap at either bound.
+Encoder movement changes only the highlighted Settings row. Explicit OUT/IN
+requests change zoom by one level and do not wrap at either bound.
 POTA/DX selection behavior is unchanged outside Settings.
 
 A zoom change updates `LiveMapService` in memory. The next normal map refresh
@@ -77,9 +77,8 @@ synchronized. Encoder zoom changes never alter the callsign mini-map zoom.
 1. Update `anvilmobile` to the exact PR head and start the dashboard normally.
 2. Select **SETTINGS** and confirm Map Zoom displays the current value and range
    `6-15` with the installed I-71 night package.
-3. Rotate the encoder one step toward zoom out and confirm the displayed value
-   decreases by one and the live map reframes without UI stalls.
-4. Rotate the encoder toward zoom in and confirm the value increases by one.
+3. Press Button #2 and confirm the value decreases by one and the live map reframes.
+4. Press Button #3 and confirm the value increases by one.
 5. Confirm the setting stops at `6` and `15` rather than wrapping.
 6. Change the zoom to an easy-to-remember value such as `13`.
 7. Stop Rolling Thunder through the normal SSH process, start it again, return to

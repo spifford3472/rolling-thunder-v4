@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import signal
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
+from threading import Event, Thread
 from time import monotonic
 
 from rolling_thunder.active_panel_commands import (
@@ -88,6 +90,13 @@ from rolling_thunder.pota_tune_execution_controller import (
     PotaTuneIntentExecutor,
 )
 from rolling_thunder.pota_worked import PotaWorkedRepository, PotaWorkedTracker
+from rolling_thunder.power_control import (
+    LinuxSystemctlPowerAdapter,
+    PowerConfirmationController,
+    PowerGuardState,
+    SettingsPowerEventInterceptor,
+    radio_power_guard,
+)
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.receive_tuning import ReceiveTuningService
 from rolling_thunder.recovering_control_source import RecoveringControlSource
@@ -128,6 +137,26 @@ from rolling_thunder.weather_panel import WeatherPanelController
 from rolling_thunder.weather_ui import WeatherWidgets
 
 _REFRESH_MS = 250
+
+
+def _sigterm_close_handler(requested: Event) -> Callable[[int, object], None]:
+    """Return a minimal handler that performs no Tk work."""
+    def handle(_signum: int, _frame: object) -> None:
+        requested.set()
+
+    return handle
+
+
+def _run_cleanup_steps(
+    steps: tuple[tuple[str, Callable[[], object]], ...],
+    errors: list[str],
+) -> None:
+    """Attempt every bounded cleanup step, preserving each truthful failure."""
+    for label, callback in steps:
+        try:
+            callback()
+        except Exception as error:  # noqa: BLE001 - cleanup must continue after any step
+            errors.append(f"{label}: {error}")
 _BACKGROUND = "#080808"
 _PANEL_BACKGROUND = "#101010"
 _SECONDARY_BACKGROUND = "#151515"
@@ -585,6 +614,35 @@ def run_dashboard(
         )
         return True
 
+    ui_timing = UiTiming.from_environment()
+
+    def power_guard() -> PowerGuardState:
+        radio = runtime.latest_radio_state
+        start_status = runtime.latest_ft8_qso_start_status
+        return PowerGuardState(
+            ft8_context_attached=runtime.latest_ft8_qso_context is not None,
+            ft8_busy=start_status is not None and start_status.busy,
+            hardware_transmitting=(
+                runtime.ft8_hardware_transmit is not None
+                and runtime.ft8_hardware_transmit.transmitting
+            ),
+            ptt_alarm_or_inhibited=(
+                runtime.ft8_ptt_alarm.active or runtime.ft8_ptt_alarm.tx_inhibited
+            ),
+            radio_transmitting=radio_power_guard(radio),
+            contact_commit_active=contact_commit.status.committing,
+            dmr_commit_active=(
+                dmr_panel_runtime is not None
+                and dmr_panel_runtime.commit.status.committing
+            ),
+        )
+
+    power_confirmation = PowerConfirmationController(
+        LinuxSystemctlPowerAdapter(),
+        preference_service,
+        power_guard,
+    )
+    settings_panel.attach_power_confirmation(power_confirmation)
     operator_commands = OperatorCommandController(
         capture,
         contact_commit,
@@ -593,8 +651,10 @@ def run_dashboard(
         active_panel=active_panel_commands,
         cancel_ptt_alarm=acknowledge_ptt_alarm,
         ptt_unlock_step=handle_ptt_unlock_action,
+        mutation_blocked=lambda: (
+            power_confirmation.state.pending or close_started.is_set()
+        ),
     )
-    ui_timing = UiTiming.from_environment()
 
     control_source: ControlSource | None = None
     control_dispatcher: ControlDispatcher | None = None
@@ -611,6 +671,16 @@ def run_dashboard(
             operator_commands,
             action_observer=(
                 ui_timing.observe_control_action if ui_timing.enabled else None
+            ),
+            event_interceptor=(
+                SettingsPowerEventInterceptor(
+                    power_confirmation,
+                    context=lambda: context_navigation.state.selected,
+                    selection=lambda: settings_panel.state.selection.selected,
+                    recovery_snapshot=lambda: control_source.snapshot,
+                )
+                if isinstance(control_source, RecoveringControlSource)
+                else None
             ),
         )
 
@@ -1380,6 +1450,11 @@ def run_dashboard(
     acknowledged_ft8_tune: list[object | None] = [None]
 
     def refresh() -> None:
+        if close_started.is_set():
+            return
+        if sigterm_requested.is_set():
+            close()
+            return
         refresh_start = ui_timing.begin_refresh()
         # SSH trigger is consumed only in receive-only mode while FT8 is visible.
         # Never trigger the actual PTT alarm state or affect radio authority.
@@ -1404,6 +1479,15 @@ def run_dashboard(
         else:
             ptt_alert.place_forget()
         ui_timing.checkpoint("pre_controls")
+        if isinstance(control_source, RecoveringControlSource):
+            recovery = control_source.snapshot
+            power_confirmation.retain_session(
+                recovery.session_nonce,
+                recovery.health.generation,
+                recovery.health.state,
+            )
+        else:
+            power_confirmation.retain_session(None, None, None)
         if control_dispatcher is not None:
             controls_start = ui_timing.start()
             try:
@@ -2081,18 +2165,65 @@ def run_dashboard(
         ui_timing.end_refresh(refresh_start)
         root.after(_REFRESH_MS, refresh)
 
-    def close() -> None:
-        control_close_error = close_control_source(control_source)
-        if control_close_error is not None:
-            print(f"Rolling Thunder physical controls shutdown error: {control_close_error}")
-        if dmr_panel_runtime is not None:
-            dmr_panel_runtime.stop()
-        if antenna_panel is not None:
-            antenna_panel.close()
-        log_panel.stop()
-        status_monitor.stop()
-        runtime.stop()
+    close_started = Event()
+    close_finished = Event()
+    sigterm_requested = Event()
+    close_errors: list[str] = []
+
+    def finish_close() -> None:
+        if not close_finished.is_set():
+            root.after(50, finish_close)
+            return
+        for message in close_errors:
+            print(f"Rolling Thunder shutdown error: {message}")
         root.destroy()
+
+    def close_worker() -> None:
+        def close_controls() -> None:
+            control_close_error = close_control_source(control_source)
+            if control_close_error is not None:
+                raise RuntimeError(control_close_error)
+
+        def stop_dmr() -> None:
+            if dmr_panel_runtime is not None:
+                dmr_panel_runtime.stop()
+
+        def close_antenna() -> None:
+            if antenna_panel is not None:
+                antenna_panel.close()
+
+        def drain_preferences() -> None:
+            if not preference_service.flush(3.0):
+                raise RuntimeError("queued operator preferences did not drain")
+
+        try:
+            _run_cleanup_steps(
+                (
+                    ("physical controls", close_controls),
+                    ("DMR", stop_dmr),
+                    ("antenna reference", close_antenna),
+                    ("log panel", log_panel.stop),
+                    ("status monitor", status_monitor.stop),
+                    ("operator preferences", drain_preferences),
+                    ("power worker", power_confirmation.stop),
+                    ("application runtime", runtime.stop),
+                ),
+                close_errors,
+            )
+        finally:
+            close_finished.set()
+
+    def close() -> None:
+        if close_started.is_set():
+            return
+        close_started.set()
+        Thread(target=close_worker, daemon=True, name="rt-orderly-close").start()
+        finish_close()
+
+    previous_sigterm_handler = signal.signal(
+        signal.SIGTERM,
+        _sigterm_close_handler(sigterm_requested),
+    )
 
     root.bind("<Escape>", lambda _event: close())
     root.bind(
@@ -2169,6 +2300,8 @@ def run_dashboard(
     )
 
     def select_context_shortcut(event: tk.Event[tk.Misc]) -> None:
+        if power_confirmation.state.pending or close_started.is_set():
+            return
         if not context_navigation.select_shortcut(event.char):
             return
         active_panel_commands.activate_context(
@@ -2179,7 +2312,10 @@ def run_dashboard(
         root.bind(definition.shortcut, select_context_shortcut)
     root.protocol("WM_DELETE_WINDOW", close)
     refresh()
-    root.mainloop()
+    try:
+        root.mainloop()
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm_handler)
     return 0
 
 

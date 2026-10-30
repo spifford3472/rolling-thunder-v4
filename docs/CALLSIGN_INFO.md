@@ -250,7 +250,7 @@ Settings includes:
 
 ```text
 CALLSIGN INFO
-Context Button #3
+Button #2 OFF / Button #3 ON when selected
 ```
 
 The operator preference is stored in the application SQLite database as:

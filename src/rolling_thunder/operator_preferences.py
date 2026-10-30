@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from concurrent.futures import Executor, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from enum import StrEnum
 from pathlib import Path
 from threading import Lock
@@ -142,14 +143,14 @@ class OperatorPreferenceService:
         self._executor = executor
         self._owns_executor = executor is None
         self._lock = Lock()
-        self._last_error: str | None = None
+        self._errors: dict[OperatorPreferenceKey, str] = {}
         self._stopped = False
 
     @property
     def last_error(self) -> str | None:
         """Return the most recent asynchronous persistence error, if any."""
         with self._lock:
-            return self._last_error
+            return next(iter(self._errors.values()), None)
 
     def persist_map_zoom(self, zoom: int) -> bool:
         """Queue one map-zoom write without blocking the caller."""
@@ -161,7 +162,10 @@ class OperatorPreferenceService:
         executor = self._write_executor()
         if executor is None:
             return False
-        executor.submit(self._write_map_zoom_safely, zoom)
+        try:
+            executor.submit(self._write_map_zoom_safely, zoom)
+        except RuntimeError:
+            return False
         return True
 
     def persist_radar_image_enabled(self, enabled: bool) -> bool:
@@ -169,7 +173,10 @@ class OperatorPreferenceService:
         executor = self._write_executor()
         if executor is None:
             return False
-        executor.submit(self._write_radar_image_safely, enabled)
+        try:
+            executor.submit(self._write_radar_image_safely, enabled)
+        except RuntimeError:
+            return False
         return True
 
     def persist_callsign_info_enabled(self, enabled: bool) -> bool:
@@ -177,7 +184,10 @@ class OperatorPreferenceService:
         executor = self._write_executor()
         if executor is None:
             return False
-        executor.submit(self._write_callsign_info_safely, enabled)
+        try:
+            executor.submit(self._write_callsign_info_safely, enabled)
+        except RuntimeError:
+            return False
         return True
 
     def stop(self) -> None:
@@ -191,6 +201,20 @@ class OperatorPreferenceService:
 
         if executor is not None and self._owns_executor:
             executor.shutdown(wait=False, cancel_futures=False)
+
+    def flush(self, timeout_s: float) -> bool:
+        """Boundedly wait for queued writes without stopping preference service."""
+        if isinstance(timeout_s, bool) or not 0 < timeout_s <= 3:
+            raise ValueError("Preference flush timeout must be within (0, 3] seconds.")
+        executor = self._write_executor()
+        if executor is None:
+            return False
+        try:
+            executor.submit(lambda: None).result(timeout=timeout_s)
+        except (FutureTimeoutError, RuntimeError):
+            return False
+        with self._lock:
+            return not self._errors
 
     def _write_executor(self) -> Executor | None:
         with self._lock:
@@ -208,30 +232,30 @@ class OperatorPreferenceService:
             self._repository.write_map_zoom(zoom)
         except (StorageError, ValueError) as error:
             with self._lock:
-                self._last_error = str(error)
+                self._errors[OperatorPreferenceKey.MAP_ZOOM] = str(error)
             return
 
         with self._lock:
-            self._last_error = None
+            self._errors.pop(OperatorPreferenceKey.MAP_ZOOM, None)
 
     def _write_callsign_info_safely(self, enabled: bool) -> None:
         try:
             self._repository.write_callsign_info_enabled(enabled)
         except (StorageError, ValueError) as error:
             with self._lock:
-                self._last_error = str(error)
+                self._errors[OperatorPreferenceKey.CALLSIGN_INFO_ENABLED] = str(error)
             return
 
         with self._lock:
-            self._last_error = None
+            self._errors.pop(OperatorPreferenceKey.CALLSIGN_INFO_ENABLED, None)
 
     def _write_radar_image_safely(self, enabled: bool) -> None:
         try:
             self._repository.write_radar_image_enabled(enabled)
         except (StorageError, ValueError) as error:
             with self._lock:
-                self._last_error = str(error)
+                self._errors[OperatorPreferenceKey.RADAR_IMAGE_ENABLED] = str(error)
             return
 
         with self._lock:
-            self._last_error = None
+            self._errors.pop(OperatorPreferenceKey.RADAR_IMAGE_ENABLED, None)

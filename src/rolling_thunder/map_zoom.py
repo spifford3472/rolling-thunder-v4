@@ -175,22 +175,35 @@ class MapZoomSettingsController:
         """Increase zoom one step without wrapping."""
         return self._set_zoom(self._live_map.zoom + 1)
 
+    def set_zoom(self, zoom: int) -> bool:
+        """Set an explicit in-range zoom; repeated requests are harmless."""
+        if isinstance(zoom, bool) or not isinstance(zoom, int):
+            raise TypeError("Map zoom must be an integer.")
+        if not self._bounds.contains(zoom) or zoom == self._live_map.zoom:
+            return False
+        return self._set_zoom(zoom)
+
+    def set_style(self, style: MapPackageStyle) -> bool:
+        """Set one explicit available style through the shared style target."""
+        if not isinstance(style, MapPackageStyle):
+            raise TypeError("Map style must be a MapPackageStyle.")
+        if not isinstance(self._live_map, LiveMapStyleTarget):
+            return False
+        if style == self._live_map.style or style not in self._live_map.available_styles:
+            return False
+        style_target = self._style_target
+        return style_target is not None and style_target.set_style(style)
+
     def toggle_style(self) -> bool:
         """Toggle day/night only when both styles are installed."""
         if not isinstance(self._live_map, LiveMapStyleTarget):
-            return False
-        available = self._live_map.available_styles
-        if len(available) < 2:
             return False
         target = (
             MapPackageStyle.NIGHT
             if self._live_map.style is MapPackageStyle.DAY
             else MapPackageStyle.DAY
         )
-        if target not in available:
-            return False
-        style_target = self._style_target
-        return style_target is not None and style_target.set_style(target)
+        return self.set_style(target)
 
     def _set_zoom(self, requested: int) -> bool:
         target = self._bounds.clamp(requested)
