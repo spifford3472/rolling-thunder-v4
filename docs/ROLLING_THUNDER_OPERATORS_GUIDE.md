@@ -1330,3 +1330,10 @@ controller outage. Voice capture still requires a fresh physical Voice-button pr
 Do not switch protocols, flash firmware or test reconnects while driving. Keep the
 known-good firmware/configuration backup until parked acceptance and soak pass.
 See engineering/controller-recovery-v2.md for commissioning and rollback details.
+
+
+Settings power requests permit an explicitly disconnected radio whose published
+TX flag is false, provided every independent local FT8/hardware/PTT/commit guard
+is idle. This supports shutting down with the radio already switched off. A retained
+TX flag is never cleared by disconnection; connecting/error states remain unknown
+and block the action. No live CAT query or radio command is issued by this guard.

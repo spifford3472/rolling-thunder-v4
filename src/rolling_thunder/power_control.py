@@ -14,6 +14,7 @@ from typing import Protocol
 
 from rolling_thunder.context_navigation import ContextId
 from rolling_thunder.control_transport_health import TransportHealthState
+from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.physical_controls import ControlAction, ControlInputEvent
 from rolling_thunder.settings_selection import SettingId
 
@@ -71,6 +72,21 @@ class PowerGuardState:
                 self.dmr_commit_active,
             )
         )
+
+
+def radio_power_guard(state: RadioState) -> bool | None:
+    """Keep TX evidence; allow an explicitly disconnected, non-transmitting radio.
+
+    This does not bypass the independent FT8/hardware/PTT/commit guards. Connecting
+    and error states remain unknown; disconnect never clears a retained TX flag.
+    """
+    if state.transmitting:
+        return True
+    if state.connection_state in (
+        RadioConnectionState.CONNECTED, RadioConnectionState.DISCONNECTED,
+    ):
+        return False
+    return None
 
 
 class PowerOperatingSystem(Protocol):

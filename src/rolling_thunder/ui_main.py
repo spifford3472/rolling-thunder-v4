@@ -55,7 +55,7 @@ from rolling_thunder.dmr_dashboard_runtime import build_dmr_panel_runtime
 from rolling_thunder.dmr_panel_runtime import DmrCommitEventKind
 from rolling_thunder.dmr_ui import build_dmr_viewport
 from rolling_thunder.dmr_widgets import DmrWidgets
-from rolling_thunder.domain import Contact, RadioConnectionState
+from rolling_thunder.domain import Contact
 from rolling_thunder.dx_worked import DxWorkedRepository, DxWorkedTracker
 from rolling_thunder.fm_repeater import FmRepeaterConfigurableRadio
 from rolling_thunder.friend_presentation import FRIEND_COLOR, friend_marker
@@ -95,6 +95,7 @@ from rolling_thunder.power_control import (
     PowerConfirmationController,
     PowerGuardState,
     SettingsPowerEventInterceptor,
+    radio_power_guard,
 )
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.receive_tuning import ReceiveTuningService
@@ -628,11 +629,7 @@ def run_dashboard(
             ptt_alarm_or_inhibited=(
                 runtime.ft8_ptt_alarm.active or runtime.ft8_ptt_alarm.tx_inhibited
             ),
-            radio_transmitting=(
-                radio.transmitting
-                if radio.connection_state is RadioConnectionState.CONNECTED
-                else None
-            ),
+            radio_transmitting=radio_power_guard(radio),
             contact_commit_active=contact_commit.status.committing,
             dmr_commit_active=(
                 dmr_panel_runtime is not None

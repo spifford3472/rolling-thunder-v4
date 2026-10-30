@@ -495,3 +495,10 @@ Issue246 extends shared last-QSO history with optional strict full worked_count 
 last band. Missing metadata is unknown, never a fabricated count or first contact.
 Pi renders the published values without I/O and omits notes/comments. See
 `../CALLSIGN_INFO.md` for exact-call/token scope, cache and Pi-first rollout.
+
+
+Settings power requests permit an explicitly disconnected radio whose published
+TX flag is false, provided every independent local FT8/hardware/PTT/commit guard
+is idle. This supports shutting down with the radio already switched off. A retained
+TX flag is never cleared by disconnection; connecting/error states remain unknown
+and block the action. No live CAT query or radio command is issued by this guard.

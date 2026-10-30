@@ -416,3 +416,35 @@ def test_busy_guard_rejection_publishes_a_visible_reason() -> None:
     )
     assert not value.request_or_confirm(PowerAction.REBOOT, proof(1, 1.0))
     assert "blocked" in (value.state.last_error or "")
+
+
+@pytest.mark.parametrize("connection,expected", [
+    ("disconnected", False), ("connected", False),
+    ("connecting", None), ("error", None),
+])
+def test_radio_off_allows_shutdown_only_with_other_local_owners_idle(connection, expected):
+    from rolling_thunder.domain import RadioState
+    from rolling_thunder.power_control import radio_power_guard
+
+    state = RadioState(connection_state=connection)
+    assert radio_power_guard(state) is expected
+    guard = PowerGuardState(radio_transmitting=radio_power_guard(state))
+    assert guard.safe is (expected is False)
+    assert not PowerGuardState(
+        radio_transmitting=radio_power_guard(state), hardware_transmitting=True,
+    ).safe
+    assert not PowerGuardState(
+        radio_transmitting=radio_power_guard(state), ft8_busy=True,
+    ).safe
+    assert not PowerGuardState(
+        radio_transmitting=radio_power_guard(state), contact_commit_active=True,
+    ).safe
+
+
+def test_disconnection_never_clears_retained_transmit_evidence():
+    from rolling_thunder.domain import RadioState
+    from rolling_thunder.power_control import radio_power_guard
+
+    state = RadioState(connection_state="disconnected", transmitting=True)
+    assert radio_power_guard(state) is True
+    assert not PowerGuardState(radio_transmitting=radio_power_guard(state)).safe
