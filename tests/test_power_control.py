@@ -3,6 +3,7 @@
 import subprocess
 from concurrent.futures import Executor, Future
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import pytest
 
@@ -423,10 +424,10 @@ def test_busy_guard_rejection_publishes_a_visible_reason() -> None:
     ("connecting", None), ("error", None),
 ])
 def test_radio_off_allows_shutdown_only_with_other_local_owners_idle(connection, expected):
-    from rolling_thunder.domain import RadioState
+    from rolling_thunder.domain import Frequency, RadioState
     from rolling_thunder.power_control import radio_power_guard
 
-    state = RadioState(connection_state=connection)
+    state = RadioState(connection_state=connection, frequency=Frequency(hz=14074000), mode="USB", last_error="unavailable" if connection == "error" else None, updated_at=datetime(2026,10,30,tzinfo=UTC))
     assert radio_power_guard(state) is expected
     guard = PowerGuardState(radio_transmitting=radio_power_guard(state))
     assert guard.safe is (expected is False)
@@ -442,9 +443,9 @@ def test_radio_off_allows_shutdown_only_with_other_local_owners_idle(connection,
 
 
 def test_disconnection_never_clears_retained_transmit_evidence():
-    from rolling_thunder.domain import RadioState
+    from rolling_thunder.domain import Frequency, RadioConnectionState, RadioState
     from rolling_thunder.power_control import radio_power_guard
 
-    state = RadioState(connection_state="disconnected", transmitting=True)
+    state = RadioState(connection_state="connected", transmitting=True, frequency=Frequency(hz=14074000), mode="USB", updated_at=datetime(2026,10,30,tzinfo=UTC)).model_copy(update={"connection_state": RadioConnectionState.DISCONNECTED})
     assert radio_power_guard(state) is True
     assert not PowerGuardState(radio_transmitting=radio_power_guard(state)).safe
