@@ -724,9 +724,9 @@ preferences without editing configuration files.
 - **Context Button #2** — selected-row OUT, OFF, NIGHT, or CANCEL.
 - **Context Button #3** — selected-row IN, ON, DAY, or power SELECT/CONFIRM.
 
-Six logical rows retain the installed readable type sizes. Four rows are visible
-at once; the window follows the highlight and says which rows are shown and
-whether more are above or below. Text shows actual zoom/style, ON/OFF or
+All six rows are visible at once at the supported display size and retain the
+installed readable type sizes. A fixed footer shows the highlighted row's button
+instruction. Text shows actual zoom/style, ON/OFF or
 UNAVAILABLE, the selected marker, and the highlight. Power is UNAVAILABLE unless
 a healthy trusted serial-v2 controller is current. The first Button #3 says
 SELECT; only an active named confirmation says CONFIRM. Reboot or shutdown needs
