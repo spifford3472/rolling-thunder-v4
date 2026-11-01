@@ -13,6 +13,14 @@ must resolve them through the existing approved application controller, not
 direct widget mutation. Unknown, ambiguous, unprefixed, and transmitting/logging
 phrases are rejected.
 
+## Second implementation slice
+
+`tron_recognition.py` now consumes externally supplied bounded 16 kHz mono
+S16_LE PCM, passes a constrained grammar to an injected Vosk-compatible
+recognizer, and returns a parsed intent or no command. It never opens a
+microphone, dispatches navigation, or grants RF authority. Fake-recognizer
+tests cover chunking, limits, malformed results, and failure isolation.
+
 ## Next integration gates
 
 1. Inspect callsign physical-button ownership, `LiveCallsignCaptureController`,
