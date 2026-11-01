@@ -21,6 +21,14 @@ recognizer, and returns a parsed intent or no command. It never opens a
 microphone, dispatches navigation, or grants RF authority. Fake-recognizer
 tests cover chunking, limits, malformed results, and failure isolation.
 
+## Third implementation slice
+
+`tron_audio_gate.py` provides an exclusive microphone ownership contract with
+callsign-request priority. A callsign request blocks new Tron acquisition, but
+an active Tron capture must still be cancelled and joined by its future worker
+before callsign capture can acquire audio. No actual cancellation or live audio
+ownership is wired yet. Tests verify exclusive claims and wrong-owner release.
+
 ## Next integration gates
 
 1. Inspect callsign physical-button ownership, `LiveCallsignCaptureController`,
