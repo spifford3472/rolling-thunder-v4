@@ -408,6 +408,7 @@ originates from one screen.
 - `src/rolling_thunder/live_radar_service.py` — Module providing live radar service behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/logging_setup.py` — Module providing logging setup behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/pi_weather_alert_location_guard.py` — Module providing pi weather alert location guard behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/tron_commands.py` — Pure, non-actuating offline Tron grammar and intent parser; no runtime integration yet.
 - `src/rolling_thunder/speech_recognition.py` — Module providing speech recognition behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/station_state.py` — Module providing station state behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/us_extra_band_advisory.py` — Module providing us extra band advisory behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
