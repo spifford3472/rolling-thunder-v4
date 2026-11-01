@@ -51,7 +51,7 @@ def test_invalid_recognition_fails_closed() -> None:
     ):
         assert recognize_tron_pcm(
             bytes(2),
-            recognizer_factory=lambda _grammar: FakeRecognizer(result),
+            recognizer_factory=lambda _grammar, text=result: FakeRecognizer(text),
         ) is None
 
 
