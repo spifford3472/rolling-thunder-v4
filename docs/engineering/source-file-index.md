@@ -409,6 +409,7 @@ originates from one screen.
 - `src/rolling_thunder/logging_setup.py` — Module providing logging setup behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/pi_weather_alert_location_guard.py` — Module providing pi weather alert location guard behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/tron_recognition.py` — Bounded PCM-to-intent recognition boundary, injectable Vosk-compatible recognizer, no microphone ownership or dispatch.
+- `src/rolling_thunder/tron_audio_gate.py` — Thread-safe exclusive microphone ownership and callsign-request priority gate; integration not yet wired.
 - `src/rolling_thunder/tron_commands.py` — Pure, non-actuating offline Tron grammar and intent parser; no runtime integration yet.
 - `src/rolling_thunder/speech_recognition.py` — Module providing speech recognition behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/station_state.py` — Module providing station state behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
