@@ -6,6 +6,7 @@ This directory is the current-code engineering map for Rolling Thunder v4. It ex
 
 This guide describes the implemented repository rather than an aspirational architecture. Existing subsystem documents remain authoritative for detailed protocols and acceptance history where linked below.
 
+- `tron-voice-control.md` — Issue #374 safe command foundation and pending audio/controller integration gates.
 ## Engineering document set
 
 - `r1-a-ui-timing.md` — bounded UI timing aggregates, R1-C2 correlated slow-refresh diagnostics, validation and interpretation limits.
