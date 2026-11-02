@@ -241,6 +241,17 @@ continually reset configured power because operator manual override is
 authoritative. Configured-power CAT readback is not the raw RF meter and failure
 to read it must not alter or fail a QSO.
 
+## Voice microphone ownership
+
+The microphone is exclusive shared hardware. If Tron owns it, a physical
+callsign request must immediately reserve callsign priority, stop new Tron
+commands, signal and reap the active recorder, and only then start callsign
+capture. The callsign controller releases priority only after its recognition
+worker exits. No UI thread may join or wait for audio work. Callsign capture
+remains available with Tron disabled. Tron intents require the exact wake word,
+use only existing read-only navigation, and cannot acquire radio, logging, or
+configuration authority.
+
 ## Physical controls
 
 Physical controls are normalized into typed actions and dispatched through

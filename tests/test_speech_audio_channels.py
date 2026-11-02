@@ -56,6 +56,11 @@ def test_incomplete_multichannel_frame_is_rejected() -> None:
         _downmix_s16le_to_mono(b"\x00\x01\x02", 2)
 
 
+def test_incomplete_mono_sample_is_rejected() -> None:
+    with pytest.raises(SpeechRecognitionError, match="incomplete multichannel audio frame"):
+        _downmix_s16le_to_mono(bytes([0]), 1)
+
+
 def test_invalid_channel_count_is_rejected() -> None:
     with pytest.raises(
         ValueError,

@@ -92,6 +92,18 @@ Depends on:
 
 Browse must not create alternate implementations of those shared services.
 
+### Tron voice commands and microphone arbitration
+
+Tron owns its exact wake-word grammar, offline bounded recognition worker, and
+read-only intent model. `ui_main.py` owns opt-in countdown presentation and
+Tk-thread dispatch through the existing navigation/active-panel controllers.
+The shared callsign capture controller remains the owner of callsign recognition
+state and pending-call semantics. `tron_audio_gate.py` and
+`tron_capture_coordinator.py` enforce microphone exclusivity; a physical
+callsign request reserves priority, cancels/reaps Tron capture, then starts the
+existing callsign workflow. Voice recognition is disabled by default and never
+grants RF, logging, or configuration authority. See `tron-voice-control.md`.
+
 ### Antenna reference and RF exposure
 
 Owns immutable sourced antenna catalog records, separate physical installation

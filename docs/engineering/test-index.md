@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 360.**
+**Cataloged Python test modules: 383.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -155,6 +155,16 @@ the durable Forge UUID ledger so lost responses do not duplicate Wavelog writes.
 - `tests/test_callsign_info.py`
 - `tests/test_live_callsign_capture.py`
 - `tests/test_phonetic_callsign.py`
+- `tests/test_audio_capture.py`
+- `tests/test_speech_config.py`
+- `tests/test_speech_recognition.py`
+- `tests/test_tron_acceptance.py`
+- `tests/test_tron_audio_gate.py`
+- `tests/test_tron_capture_coordinator.py`
+- `tests/test_tron_commands.py`
+- `tests/test_tron_dispatch.py`
+- `tests/test_tron_microphone.py`
+- `tests/test_tron_recognition.py`
 - `tests/test_qrz_profile_image.py`
 - `tests/test_qrz_xml.py`
 
@@ -259,7 +269,8 @@ the durable Forge UUID ledger so lost responses do not duplicate Wavelog writes.
 - `tests/test_ft8_hardware_transmit.py`
 - `tests/test_ft8_logging.py`
 - `tests/test_ft8_operator_qso.py`
-- `tests/test_ft8_panel.py` — CQ selection plus explicit incoming-call answer/ignore/staleness behavior.
+- `tests/test_ft8_panel.py`
+- `tests/test_ft8_terminal_return.py` — CQ selection plus explicit incoming-call answer/ignore/staleness behavior.
 - `tests/test_ft8_performance.py`
 - `tests/test_ft8_performance_http.py`
 - `tests/test_ft8_performance_outbox.py`

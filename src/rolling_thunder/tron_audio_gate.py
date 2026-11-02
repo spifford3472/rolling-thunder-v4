@@ -1,4 +1,4 @@
-"""Thread-safe, non-hardware audio ownership gate for future Tron integration."""
+"""Thread-safe, non-hardware audio ownership gate for speech features."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ AudioOwner = Literal["callsign", "tron"]
 class TronAudioGate:
     """Prevent concurrent recognizers from accessing the microphone.
 
-    The callsign button must request ownership before capture begins. If Tron
-    owns the microphone, callsign can request preemption; the caller must stop
-    and join the Tron capture worker before callsign capture starts. This gate
-    intentionally does not perform cancellation or access audio hardware.
+    The callsign button must reserve ownership before capture begins. If Tron
+    owns the microphone, the coordinator cancels it and promotes callsign only
+    after the Tron capture callback exits. This gate does not perform
+    cancellation or access audio hardware.
     """
 
     def __init__(self) -> None:

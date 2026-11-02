@@ -14,14 +14,18 @@ class FakeRecognizer:
         self.started = Event()
         self.release = Event()
 
-    def capture_tokens(self) -> tuple[str, ...]:
+    def capture_tokens(self, stop_event: Event | None = None) -> tuple[str, ...]:
         self.started.set()
-        self.release.wait(timeout=2)
+        if stop_event is None:
+            self.release.wait(timeout=2)
+        else:
+            while not self.release.is_set() and not stop_event.is_set():
+                Event().wait(0.005)
         return self.tokens
 
 
 class FailingRecognizer:
-    def capture_tokens(self) -> tuple[str, ...]:
+    def capture_tokens(self, _stop_event: Event | None = None) -> tuple[str, ...]:
         raise SpeechRecognitionError("device unavailable")
 
 
@@ -127,3 +131,18 @@ def test_completed_voice_capture_overwrites_selected_spot_callsign() -> None:
 
     assert controller.state.pending_callsign == "KI5VNB"
     assert controller.state.last_result == "HEARD KI5VNB"
+
+
+def test_cancel_signals_worker_and_completion_fires_afterward() -> None:
+    recognizer = FakeRecognizer(("KILO",))
+    completed = Event()
+    controller = LiveCallsignCaptureController(
+        recognizer, on_finished=completed.set
+    )
+
+    assert controller.start_capture()
+    assert recognizer.started.wait(1)
+    assert controller.cancel_capture()
+    assert completed.wait(1)
+    assert controller.state.last_result == "CANCELLED"
+    assert not controller.status.capturing

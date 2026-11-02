@@ -1,5 +1,7 @@
 """Tests for offline PCM-to-intent boundary without Vosk or audio hardware."""
 
+from threading import Event
+
 from rolling_thunder.tron_commands import TronIntent
 from rolling_thunder.tron_recognition import recognize_tron_pcm
 
@@ -18,7 +20,7 @@ class FakeRecognizer:
 
 
 def test_recognizes_safe_command_with_bounded_chunks() -> None:
-    fake = FakeRecognizer('{"text": "tron open map"}')
+    fake = FakeRecognizer('{"text": "tron show ft8"}')
     grammars: list[tuple[str, ...]] = []
 
     def factory(grammar: tuple[str, ...]) -> FakeRecognizer:
@@ -27,11 +29,11 @@ def test_recognizes_safe_command_with_bounded_chunks() -> None:
 
     pcm = bytes(2) * 5_000
     assert recognize_tron_pcm(pcm, recognizer_factory=factory) == TronIntent(
-        "navigate", "map"
+        "navigate", "ft8"
     )
     assert len(fake.chunks) == 2
     assert sum(map(len, fake.chunks)) == len(pcm)
-    assert "tron open map" in grammars[0]
+    assert "tron show ft8" in grammars[0]
 
 
 def test_rejects_empty_oversized_and_partial_audio_without_initializing() -> None:
@@ -44,7 +46,7 @@ def test_rejects_empty_oversized_and_partial_audio_without_initializing() -> Non
         ) is None
 
 
-def test_invalid_recognition_fails_closed() -> None:
+def test_invalid_recognition_fails_closed_and_reports_errors() -> None:
     for result in (
         "invalid json", "[]", '{"text": 123}', '{"text": "tron transmit"}',
         '{"text": "open map"}', '{"text": ""}',
@@ -59,4 +61,20 @@ def test_recognizer_failure_fails_closed() -> None:
     def broken(_grammar: tuple[str, ...]) -> FakeRecognizer:
         raise RuntimeError("model unavailable")
 
-    assert recognize_tron_pcm(bytes(2), recognizer_factory=broken) is None
+    messages: list[str] = []
+    assert recognize_tron_pcm(
+        bytes(2), recognizer_factory=broken, on_error=messages.append
+    ) is None
+    assert messages == ["model unavailable"]
+
+
+def test_preempted_recognition_never_publishes_intent() -> None:
+    stop = Event()
+    stop.set()
+    assert recognize_tron_pcm(
+        bytes(2),
+        recognizer_factory=lambda _grammar: (_ for _ in ()).throw(
+            AssertionError("must not create recognizer")
+        ),
+        stop_event=stop,
+    ) is None

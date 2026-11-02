@@ -65,6 +65,7 @@ from rolling_thunder.ft8.panel import FT8PanelMode, FT8PanelSnapshot
 from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
 from rolling_thunder.ft8.start_control import FT8QsoStartState, FT8QsoStartStatus
 from rolling_thunder.ft8.status import operator_ft8_status, target_activity_status
+from rolling_thunder.ft8.terminal_return import FT8TerminalReturnTimer
 from rolling_thunder.ft8_active_panel_commands import FT8AwareActivePanelCommands
 from rolling_thunder.ft8_ui import (
     build_ft8_browser_viewport,
@@ -115,7 +116,7 @@ from rolling_thunder.shared_spot_panel import SharedSpotPanelController
 from rolling_thunder.shared_spot_tune_status import SharedSpotTuneStatusController
 from rolling_thunder.shared_spot_tuning import SharedSpotTuneController
 from rolling_thunder.shared_spot_ui import build_shared_spot_viewport
-from rolling_thunder.speech_recognition import VoskCallsignRecognizer
+from rolling_thunder.speech_recognition import VoskCallsignRecognizer, VoskModelProvider
 from rolling_thunder.station_health import build_station_health
 from rolling_thunder.status_bar_ui import StatusBarWidgets
 from rolling_thunder.status_messages import StatusPresentation
@@ -123,6 +124,13 @@ from rolling_thunder.status_monitor import build_status_monitor
 from rolling_thunder.status_strip import (
     build_status_bar_routine_message,
     build_status_strip_snapshot,
+)
+from rolling_thunder.tron_acceptance import TronAcceptanceCountdown
+from rolling_thunder.tron_dispatch import dispatch_tron_intent
+from rolling_thunder.tron_microphone import (
+    PriorityCallsignCapture,
+    TronMicrophoneService,
+    TronWorkerEvent,
 )
 from rolling_thunder.ui_timing import UiTiming
 from rolling_thunder.us_extra_band_advisory import (
@@ -389,6 +397,12 @@ def run_dashboard(
 
     mock_transcripts = MockTranscriptController()
     live_capture: LiveCallsignCaptureController | None = None
+    tron_microphone: TronMicrophoneService | None = None
+    capture: (
+        LiveCallsignCaptureController
+        | MockTranscriptController
+        | PriorityCallsignCapture
+    )
     if config.speech.enabled:
         model_path = config.speech.model_path
         if model_path is None:
@@ -396,16 +410,33 @@ def run_dashboard(
             log_panel.stop()
             runtime.stop()
             return 3
+        model_provider = VoskModelProvider(model_path)
+        if config.tron.enabled:
+            tron_microphone = TronMicrophoneService(
+                audio_device=config.speech.audio_device,
+                model_provider=model_provider,
+                sample_rate=config.speech.sample_rate,
+                channels=config.speech.channels,
+                duration_s=config.tron.capture_duration_seconds,
+            )
         recognizer = VoskCallsignRecognizer(
             model_path=model_path,
             audio_device=config.speech.audio_device,
             duration_s=config.speech.capture_duration_seconds,
             sample_rate=config.speech.sample_rate,
             channels=config.speech.channels,
+            model_provider=model_provider,
         )
-        live_capture = LiveCallsignCaptureController(recognizer)
+        live_capture = LiveCallsignCaptureController(
+            recognizer,
+            on_finished=(
+                None if tron_microphone is None else tron_microphone.callsign_finished
+            ),
+        )
 
     capture = live_capture if live_capture is not None else mock_transcripts
+    if tron_microphone is not None and live_capture is not None:
+        capture = PriorityCallsignCapture(live_capture, tron_microphone)
     context_navigation = ContextNavigationController(
         include_antennas=config.antenna_reference.enabled
     )
@@ -1448,8 +1479,43 @@ def run_dashboard(
             antenna_widgets.show()
 
     acknowledged_ft8_tune: list[object | None] = [None]
-    ft8_terminal_since: list[float | None] = [None]
-    ft8_terminal_hold_seconds = 3.0
+    ft8_terminal_return = FT8TerminalReturnTimer(hold_seconds=3.0)
+    tron_acceptance = TronAcceptanceCountdown(duration_seconds=30)
+    tron_countdown_displayed: list[int | None] = [None]
+
+    def publish_tron_status(message: str, *, error: bool = False) -> None:
+        runtime.status_messages.publish(
+            replacement_key="tron.voice",
+            text=message,
+            presentation=(
+                StatusPresentation.ERROR if error else StatusPresentation.NORMAL
+            ),
+            priority=30,
+        )
+
+    def toggle_tron_acceptance() -> None:
+        if tron_microphone is None:
+            publish_tron_status(
+                "Tron voice is disabled. Enable tron.enabled for an explicit acceptance session.",
+                error=True,
+            )
+            return
+        if tron_acceptance.cancel():
+            tron_countdown_displayed[0] = None
+            publish_tron_status("Tron voice preparation cancelled.")
+            return
+        if tron_microphone.listening_requested:
+            tron_microphone.pause_listening()
+            publish_tron_status("Tron voice listening stopped.")
+            return
+        if not tron_microphone.prepare():
+            publish_tron_status("Tron model preparation could not start.", error=True)
+            return
+        tron_acceptance.start(tron_microphone.generation)
+        tron_countdown_displayed[0] = None
+        publish_tron_status(
+            "Tron voice check: get to the microphone. In 30 seconds say “Tron status”."
+        )
 
     def refresh() -> None:
         if close_started.is_set():
@@ -1458,6 +1524,15 @@ def run_dashboard(
             close()
             return
         refresh_start = ui_timing.begin_refresh()
+        if runtime.ft8_panel is not None and ft8_terminal_return.poll(
+            runtime.ft8_panel.qso_state,
+            monotonic(),
+        ):
+            try:
+                runtime.ft8_panel.return_to_browser()
+            except RuntimeError:
+                _LOGGER.info("FT8 terminal return was superseded by a lifecycle change")
+
         # SSH trigger is consumed only in receive-only mode while FT8 is visible.
         # Never trigger the actual PTT alarm state or affect radio authority.
         if visual_test_file.is_file():
@@ -1497,6 +1572,63 @@ def run_dashboard(
             finally:
                 ui_timing.observe("controls", controls_start)
         ui_timing.checkpoint("controls")
+
+        # Callsign controls run first so a queued physical press invalidates any
+        # command waiting in the bounded Tron event queue before dispatch.
+        if tron_microphone is not None:
+            def handle_tron_event(tron_event: TronWorkerEvent) -> None:
+                if tron_event.kind == "intent" and tron_event.intent is not None:
+                    response = dispatch_tron_intent(
+                        tron_event.intent,
+                        context_navigation,
+                        on_context_changed=active_panel_commands.activate_context,
+                    )
+                    if response is not None:
+                        publish_tron_status(response)
+                elif tron_event.kind == "audio_error":
+                    publish_tron_status(
+                        "Tron microphone unavailable; callsign capture remains available.",
+                        error=True,
+                    )
+                elif tron_event.kind == "recognition_error":
+                    publish_tron_status("Tron could not recognize that phrase.")
+
+            tron_microphone.dispatch_pending_events(handle_tron_event, limit=8)
+            if tron_microphone.callsign_preemption_stalled():
+                publish_tron_status(
+                    "Callsign capture is waiting; Tron has not released the microphone.",
+                    error=True,
+                )
+
+            remaining = tron_acceptance.remaining(
+                monotonic(),
+                tron_microphone.generation,
+            )
+            if remaining == -1:
+                tron_countdown_displayed[0] = None
+                publish_tron_status(
+                    "Tron voice preparation cancelled for callsign capture."
+                )
+            elif remaining == 0:
+                tron_countdown_displayed[0] = None
+                if tron_microphone.start_listening():
+                    if tron_microphone.model_ready:
+                        publish_tron_status("Tron listening. Say “Tron status”.")
+                    else:
+                        publish_tron_status(
+                            "Tron model is preparing; microphone starts when ready."
+                        )
+                else:
+                    publish_tron_status(
+                        "Tron could not acquire the microphone.",
+                        error=True,
+                    )
+            elif remaining is not None and tron_countdown_displayed[0] != remaining:
+                tron_countdown_displayed[0] = remaining
+                publish_tron_status(
+                    f"Tron voice check starts in {remaining}s; "
+                    "expected command: “Tron status”."
+                )
 
         with ui_timing.subphase("radio_sync"):
             active_panel_commands.synchronize_radio_state()
@@ -1987,19 +2119,6 @@ def run_dashboard(
                 )
             else:
                 ft8_snapshot = runtime.ft8_panel.snapshot()
-                # Keep the outcome readable briefly, then restore the CQ list.
-                # This is presentation-only; return_to_browser uses the
-                # existing FT8 coordinator and never authorizes transmission.
-                if ft8_snapshot.mode is FT8PanelMode.TERMINAL:
-                    now = monotonic()
-                    if ft8_terminal_since[0] is None:
-                        ft8_terminal_since[0] = now
-                    elif now - ft8_terminal_since[0] >= ft8_terminal_hold_seconds:
-                        runtime.ft8_panel.return_to_browser()
-                        ft8_snapshot = runtime.ft8_panel.snapshot()
-                        ft8_terminal_since[0] = None
-                else:
-                    ft8_terminal_since[0] = None
                 receive_state = runtime.latest_ft8_receive_state
                 receive_status = (
                     "UNKNOWN"
@@ -2199,6 +2318,14 @@ def run_dashboard(
             if control_close_error is not None:
                 raise RuntimeError(control_close_error)
 
+        def stop_callsign_capture() -> None:
+            if live_capture is not None and not live_capture.shutdown(timeout_s=3.0):
+                raise RuntimeError("callsign audio capture did not stop cleanly")
+
+        def stop_tron_microphone() -> None:
+            if tron_microphone is not None and not tron_microphone.shutdown(timeout_s=3.0):
+                raise RuntimeError("Tron audio worker did not stop cleanly")
+
         def stop_dmr() -> None:
             if dmr_panel_runtime is not None:
                 dmr_panel_runtime.stop()
@@ -2215,6 +2342,8 @@ def run_dashboard(
             _run_cleanup_steps(
                 (
                     ("physical controls", close_controls),
+                    ("callsign audio", stop_callsign_capture),
+                    ("Tron audio", stop_tron_microphone),
                     ("DMR", stop_dmr),
                     ("antenna reference", close_antenna),
                     ("log panel", log_panel.stop),
@@ -2241,6 +2370,7 @@ def run_dashboard(
     )
 
     root.bind("<Escape>", lambda _event: close())
+    root.bind("<F12>", lambda _event: toggle_tron_acceptance())
     root.bind(
         "<v>",
         lambda _event: operator_commands.execute(ControlAction.VOICE),

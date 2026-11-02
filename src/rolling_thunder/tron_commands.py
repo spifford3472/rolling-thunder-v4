@@ -1,7 +1,4 @@
-"""Offline, non-actuating Tron command vocabulary and deterministic intent parsing.
-
-This module performs no microphone access, UI dispatch, logging, or radio control.
-"""
+"""Offline, non-actuating Tron command vocabulary and exact intent parsing."""
 
 from __future__ import annotations
 
@@ -11,28 +8,12 @@ from typing import Final, Literal
 
 TronAction = Literal["help", "status", "current_screen", "navigate"]
 
-# Names here are intent labels, not UI route identifiers. Integration must map
-# each one to an existing approved navigation controller.
-_SCREEN_PHRASES: Final[dict[str, str]] = {
-    "dashboard": "dashboard",
-    "home": "dashboard",
-    "ft eight": "ft8",
-    "ft8": "ft8",
-    "pota": "pota",
-    "dx": "dx",
-    "map": "map",
-    "log": "log",
-    "settings": "settings",
-}
-_NAVIGATION_PREFIXES: Final[tuple[str, ...]] = (
-    "open ", "show ", "go to ", "navigate to ",
+_NAVIGATION_TARGETS: Final[tuple[str, ...]] = (
+    "pota", "dx", "ft8", "log", "settings",
 )
 _SIMPLE: Final[dict[str, TronAction]] = {
     "help": "help",
-    "what can i say": "help",
     "status": "status",
-    "system status": "status",
-    "where am i": "current_screen",
     "current screen": "current_screen",
 }
 
@@ -46,18 +27,15 @@ class TronIntent:
 
 
 def command_grammar() -> tuple[str, ...]:
-    """Return bounded Vosk phrases including the explicit wake prefix."""
-    commands = list(_SIMPLE)
-    commands.extend(
-        f"{prefix}{screen}"
-        for prefix in _NAVIGATION_PREFIXES
-        for screen in _SCREEN_PHRASES
-    )
-    return tuple(f"tron {command}" for command in commands) + ("[unk]",)
+    """Return only the explicitly supported, wake-prefixed Vosk phrases."""
+    commands = [f"tron {command}" for command in _SIMPLE]
+    commands.extend(f"tron show {target}" for target in _NAVIGATION_TARGETS)
+    commands.append("tron show ft eight")
+    return tuple(commands) + ("[unk]",)
 
 
 def parse_tron_command(transcript: str) -> TronIntent | None:
-    """Accept only exact, prefixed, allowlisted commands; fail closed."""
+    """Accept only exact wake-prefixed commands and approved read-only targets."""
     normalized = re.sub(r"\s+", " ", transcript.strip().lower())
     if not normalized.startswith("tron "):
         return None
@@ -65,9 +43,11 @@ def parse_tron_command(transcript: str) -> TronIntent | None:
     action = _SIMPLE.get(command)
     if action is not None:
         return TronIntent(action)
-    for prefix in _NAVIGATION_PREFIXES:
-        if command.startswith(prefix):
-            target = _SCREEN_PHRASES.get(command[len(prefix):])
-            if target is not None:
-                return TronIntent("navigate", target)
+    prefix = "show "
+    if command.startswith(prefix):
+        target = command[len(prefix):]
+        if target == "ft eight":
+            target = "ft8"
+        if target in _NAVIGATION_TARGETS:
+            return TronIntent("navigate", target)
     return None
