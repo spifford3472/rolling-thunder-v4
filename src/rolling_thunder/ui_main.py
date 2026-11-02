@@ -1448,6 +1448,8 @@ def run_dashboard(
             antenna_widgets.show()
 
     acknowledged_ft8_tune: list[object | None] = [None]
+    ft8_terminal_since: list[float | None] = [None]
+    ft8_terminal_hold_seconds = 3.0
 
     def refresh() -> None:
         if close_started.is_set():
@@ -1985,6 +1987,19 @@ def run_dashboard(
                 )
             else:
                 ft8_snapshot = runtime.ft8_panel.snapshot()
+                # Keep the outcome readable briefly, then restore the CQ list.
+                # This is presentation-only; return_to_browser uses the
+                # existing FT8 coordinator and never authorizes transmission.
+                if ft8_snapshot.mode is FT8PanelMode.TERMINAL:
+                    now = monotonic()
+                    if ft8_terminal_since[0] is None:
+                        ft8_terminal_since[0] = now
+                    elif now - ft8_terminal_since[0] >= ft8_terminal_hold_seconds:
+                        runtime.ft8_panel.return_to_browser()
+                        ft8_snapshot = runtime.ft8_panel.snapshot()
+                        ft8_terminal_since[0] = None
+                else:
+                    ft8_terminal_since[0] = None
                 receive_state = runtime.latest_ft8_receive_state
                 receive_status = (
                     "UNKNOWN"
