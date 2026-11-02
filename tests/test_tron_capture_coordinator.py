@@ -1,5 +1,7 @@
 """Cooperative cancellation and callsign priority without real audio."""
+
 from threading import Event
+
 from rolling_thunder.tron_capture_coordinator import TronCaptureCoordinator
 
 
