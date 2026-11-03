@@ -1582,6 +1582,7 @@ def run_dashboard(
                         tron_event.intent,
                         context_navigation,
                         on_context_changed=active_panel_commands.activate_context,
+                        panel_commands=active_panel_commands,
                     )
                     if response is not None:
                         publish_tron_status(response)

@@ -139,6 +139,16 @@ class PendingCallsign:
         return object()
 
 
+def test_voice_station_selection_only_highlights_and_never_activates_qso() -> None:
+    navigation = ContextNavigationController(ContextId.FT8)
+    panel = Panel()
+    commands = FT8AwareActivePanelCommands(navigation, Delegate(), panel)
+
+    assert commands.select_station() is True
+    assert panel.selected_callsign == "W1XYZ"
+    assert panel.calls == ["next"]
+
+
 def test_ft8_selection_preloads_dashboard_callsign() -> None:
     navigation = ContextNavigationController(ContextId.FT8)
     delegate = Delegate()

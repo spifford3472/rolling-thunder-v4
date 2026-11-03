@@ -77,20 +77,24 @@ not initiate a transmission.
 
 ## Supported commands
 
-Every command requires the exact wake word `Tron`:
+Every command requires the exact wake word `Tron`. The bounded Vosk grammar
+accepts these navigation and read-only phrases:
 
-- Tron help
-- Tron status
-- Tron current screen
-- Tron show POTA
-- Tron show DX
-- Tron show FT8
-- Tron show log
-- Tron show settings
+- Tron help, status, or current screen
+- Tron show POTA, DX, Browse, FT8, Weather, Repeaters, DMR, log, or settings
+- Tron next / next station and previous / previous station
+- Tron first station and last station
+- Tron select station / choose station
 
-The parser rejects unprefixed, unsupported, and expanded phrases. Navigation
-uses `ContextNavigationController` and calls the active-panel context hook.
-No voice-based authorization or mutation command is defined.
+Movement is routed through the existing active-panel controller. Station-edge
+movement is bounded to 64 UI selection steps; if the list exceeds that bound,
+feedback reports that movement stopped before the edge. In weather, next/previous scrolls
+the existing alert viewport. Commands do not tune Browse, change settings,
+configure a repeater, or activate a selected spot. Selecting a station only
+highlights it; on FT8 it never calls `activate_selection()` or the QSO
+authorization callback. The existing physical controls remain responsible for
+approving or rejecting a QSO. Unsupported, unprefixed, or expanded phrases fail
+closed.
 
 ## Callsign priority and shutdown
 

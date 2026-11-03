@@ -403,10 +403,14 @@ session. The status bar shows a full 30-second preparation countdown and the
 expected first command, **“Tron status”**. Listening begins only after the
 countdown. Press F12 again to cancel preparation or stop listening.
 
-Every command must begin with “Tron”. Supported commands are help, status,
-current screen, and show POTA, DX, FT8, log, or settings. Voice only reads status
-or navigates existing screens; it cannot transmit, start an FT8 QSO, change RF
-power, commit a contact, or edit settings.
+Every command must begin with “Tron”. Supported commands include help, status,
+current screen; show POTA, DX, Browse, FT8, Weather, Repeaters, DMR, log, or
+settings; next/previous station; first/last station; and select/choose station.
+These movement commands use the current screen’s existing selection controls.
+“Select station” only highlights the current station; use the physical controls
+to approve or reject a QSO. Voice cannot authorize a QSO, transmit, change RF
+power, commit a contact, tune Browse, configure a repeater, or edit settings.
+Unsupported phrases are ignored.
 
 The physical callsign button always takes microphone priority. It cancels an
 active Tron recording, waits for its audio process to exit, and then runs the
