@@ -395,7 +395,24 @@ capture outside a spot/repeater-specific workflow.
 The supported Browse controls execute through background radio-control services;
 the Tkinter screen itself does not open CAT.
 
-## Band/mode advisory
+## Optional Tron voice commands
+
+Tron voice commands are disabled by default. After `tron.enabled: true` is
+configured alongside offline speech, press **F12** to start a voice acceptance
+session. The status bar shows a full 30-second preparation countdown and the
+expected first command, **“Tron status”**. Listening begins only after the
+countdown. Press F12 again to cancel preparation or stop listening.
+
+Every command must begin with “Tron”. Supported commands are help, status,
+current screen, and show POTA, DX, FT8, log, or settings. Voice only reads status
+or navigates existing screens; it cannot transmit, start an FT8 QSO, change RF
+power, commit a contact, or edit settings.
+
+The physical callsign button always takes microphone priority. It cancels an
+active Tron recording, waits for its audio process to exit, and then runs the
+existing callsign capture. Listening resumes afterward if it was active. If the
+microphone is unavailable, the status bar reports the condition and callsign
+capture retains priority.
 
 Rolling Thunder can present U.S. Amateur Extra band/mode advisories. These are
 operator warnings, not a substitute for operator responsibility or regulatory
@@ -475,6 +492,9 @@ the FT8 header. It is hidden when no count is available and on every other scree
   returns to the browser.
 - **Back** — abort active work, acknowledge terminal state, or clear selection
   depending on current FT8 state.
+- A terminal QSO result stays visible for about three seconds, then Rolling
+  Thunder returns the FT8 lifecycle to its CQ browser. The cleanup also occurs
+  if another context is selected; it does not move you back to FT8.
 - Leaving the FT8 context aborts active FT8 work before restoration.
 
 An accepted explicit CQ activation may show the shared station-information popup.

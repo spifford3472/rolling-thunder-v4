@@ -114,7 +114,8 @@ originates from one screen.
 - `src/rolling_thunder/callsign_info_client.py` — Pi HTTP client for the Forge callsign-intelligence API with bounded transport and safe failure categories.
 - `src/rolling_thunder/callsign_info_service.py` — Background relevant-callsign lookup lifecycle, bounded presentation, and stale-response rejection.
 - `src/rolling_thunder/callsign_info_ui.py` — Shared local-first/enriched pure presentation and Tk overlay for contact intelligence.
-- `src/rolling_thunder/live_callsign_capture.py` — Module providing live callsign capture behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/audio_capture.py` — Bounded cancellable ALSA S16_LE recording subprocess with guaranteed process-group reaping.
+- `src/rolling_thunder/live_callsign_capture.py` — Existing callsign capture controller with cooperative cancellation, result state, and completion callback.
 - `src/rolling_thunder/phonetic_callsign.py` — Module providing phonetic callsign behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/qrz_profile_image.py` — Module providing qrz profile image behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/qrz_xml.py` — Module providing qrz xml behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
@@ -180,7 +181,8 @@ originates from one screen.
 - `src/rolling_thunder/ft8/hardware_transmit.py` — FT8 subsystem module for hardware transmit; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/logging.py` — FT8 subsystem module for logging; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/operator_qso.py` — FT8 subsystem module for operator qso; see FT8 engineering documents before modifying its contract.
-- `src/rolling_thunder/ft8/panel.py` — Presentation-safe CQ selection plus incoming-call answer/ignore state.
+- `src/rolling_thunder/ft8/panel.py` — Presentation-safe CQ selection, terminal result state, and lifecycle return.
+- `src/rolling_thunder/ft8/terminal_return.py` — One-shot three-second hold policy for all terminal FT8 outcomes, independent of selected context.
 - `src/rolling_thunder/ft8/performance.py` — Backward-compatible FT8 attempt telemetry including requested and configured-power readbacks.
 - `src/rolling_thunder/ft8/performance_outbox.py` — FT8 subsystem module for performance outbox; see FT8 engineering documents before modifying its contract.
 - `src/rolling_thunder/ft8/performance_recording.py` — FT8 subsystem module for performance recording; see FT8 engineering documents before modifying its contract.
@@ -408,7 +410,14 @@ originates from one screen.
 - `src/rolling_thunder/live_radar_service.py` — Module providing live radar service behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/logging_setup.py` — Module providing logging setup behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/pi_weather_alert_location_guard.py` — Module providing pi weather alert location guard behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
-- `src/rolling_thunder/speech_recognition.py` — Module providing speech recognition behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/speech_recognition.py` — Cancellable callsign speech adapter and shared lazy Vosk model provider.
+- `src/rolling_thunder/tron_acceptance.py` — Generation-bound 30-second manual live-audio preparation countdown.
+- `src/rolling_thunder/tron_audio_gate.py` — Thread-safe exclusive microphone ownership and callsign-request priority gate.
+- `src/rolling_thunder/tron_capture_coordinator.py` — Nonblocking Tron cancellation and asynchronous callsign promotion lifecycle.
+- `src/rolling_thunder/tron_commands.py` — Exact, non-actuating offline Tron grammar and intent parser.
+- `src/rolling_thunder/tron_dispatch.py` — UI-thread-only mapping from approved intents to existing navigation.
+- `src/rolling_thunder/tron_microphone.py` — Offline bounded capture loop, lazy Vosk recognizer, bounded event queue, and priority callsign adapter.
+- `src/rolling_thunder/tron_recognition.py` — Bounded PCM-to-intent recognition boundary with injectable Vosk-compatible recognizer.
 - `src/rolling_thunder/station_state.py` — Module providing station state behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/us_extra_band_advisory.py` — Module providing us extra band advisory behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/value_types.py` — Validated shared value types used by domain/application code.

@@ -30,6 +30,42 @@ def test_speech_defaults_are_disabled_and_typed() -> None:
     assert config.speech.capture_duration_seconds == 8
     assert config.speech.sample_rate == 16_000
     assert config.speech.channels == 1
+    assert config.tron.enabled is False
+    assert config.tron.capture_duration_seconds == 5
+
+
+def test_tron_requires_enabled_speech_and_16khz(tmp_path: Path) -> None:
+    path = write_config(
+        tmp_path,
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+tron:
+  enabled: true
+speech:
+  enabled: true
+  model_path: /models/vosk
+  sample_rate: 48000
+""",
+    )
+    with pytest.raises(ConfigurationValidationError, match="speech.sample_rate"):
+        load_config(path)
+
+    path.write_text(
+        """
+operator:
+  callsign: KI5VNB
+  home_grid: EM79xm
+tron:
+  enabled: true
+speech:
+  enabled: false
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigurationValidationError, match="speech.enabled"):
+        load_config(path)
 
 
 def test_enabled_speech_loads_and_resolves_relative_model_path(tmp_path: Path) -> None:

@@ -79,6 +79,11 @@ class FT8PanelController:
         self._completed_remote_callsign: str | None = None
         self._completed_continuation_cutoff: FT8Period | None = None
 
+    @property
+    def qso_state(self) -> FT8QsoState:
+        """Expose lifecycle state without building the CQ browser snapshot."""
+        return self._qso_state()
+
     def snapshot(self) -> FT8PanelSnapshot:
         """Return current CQ browser/QSO presentation state without I/O."""
         receive = self._receive_state()

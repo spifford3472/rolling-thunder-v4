@@ -169,6 +169,13 @@ class SpeechConfig(ConfigurationModel):
         return self
 
 
+class TronConfig(ConfigurationModel):
+    """Explicitly gated offline voice-command service configuration."""
+
+    enabled: bool = False
+    capture_duration_seconds: int = Field(default=5, ge=1, le=10)
+
+
 class ForgeCallsignInfoClientConfig(ConfigurationModel):
     """On-demand callsign-information lookup settings."""
 
@@ -854,6 +861,7 @@ class ApplicationConfig(ConfigurationModel):
     operator: OperatorConfig
     hardware: HardwareConfig = HardwareConfig()
     speech: SpeechConfig = SpeechConfig()
+    tron: TronConfig = TronConfig()
     forge: ForgeConfig = ForgeConfig()
     home_platform: HomePlatformConfig = HomePlatformConfig()
     network_keepalive: NetworkKeepaliveConfig = NetworkKeepaliveConfig()
@@ -872,6 +880,12 @@ class ApplicationConfig(ConfigurationModel):
     @model_validator(mode="after")
     def validate_radar_dependencies(self) -> Self:
         """Require cross-component dependencies for location-aware features."""
+        if self.tron.enabled and not self.speech.enabled:
+            raise ValueError("speech.enabled must be true when tron.enabled is true")
+        if self.tron.enabled and self.speech.sample_rate != 16_000:
+            raise ValueError("speech.sample_rate must be 16000 when tron.enabled is true")
+        if self.tron.enabled and self.speech.channels not in {1, 2}:
+            raise ValueError("speech.channels must be 1 or 2 when tron.enabled is true")
         if self.radar.enabled and not self.map.enabled:
             raise ValueError(
                 "map.enabled must be true when radar.enabled is true"
