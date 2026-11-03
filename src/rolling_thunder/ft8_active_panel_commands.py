@@ -17,6 +17,8 @@ class DelegatePanelCommands(Protocol):
     def tertiary_long(self) -> bool: ...
     def move_previous(self) -> bool: ...
     def move_next(self) -> bool: ...
+    def has_station_selection(self) -> bool: ...
+    def select_station(self) -> bool: ...
     def activate_selection(self) -> bool: ...
     def back(self) -> bool: ...
     def synchronize_radio_state(self) -> bool: ...
@@ -149,6 +151,19 @@ class FT8AwareActivePanelCommands:
         if changed and selected is not None and self._pending_callsign is not None:
             self._pending_callsign.preload_callsign(selected)
         return changed
+
+    def has_station_selection(self) -> bool:
+        if self._ft8_is_active():
+            return self._ft8_panel.selected_callsign is not None
+        return self._delegate.has_station_selection()
+
+    def select_station(self) -> bool:
+        """Highlight one CQ only; never call the FT8 authorization callback."""
+        if not self._ft8_is_active():
+            return self._delegate.select_station()
+        if self._ft8_panel.selected_callsign is not None:
+            return True
+        return self.move_next()
 
     def activate_selection(self) -> bool:
         if not self._ft8_is_active():

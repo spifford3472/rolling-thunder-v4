@@ -226,6 +226,8 @@ class DelegatedActivePanelCommands(Protocol):
     def tertiary_long(self) -> bool: ...
     def move_previous(self) -> bool: ...
     def move_next(self) -> bool: ...
+    def has_station_selection(self) -> bool: ...
+    def select_station(self) -> bool: ...
     def activate_selection(self) -> bool: ...
     def back(self) -> bool: ...
     def synchronize_radio_state(self) -> bool: ...
@@ -284,6 +286,12 @@ class CallsignInfoAwareActivePanelCommands:
         if self._station_context_is_active():
             self._callsign_info.dismiss_presentation()
         return accepted
+
+    def has_station_selection(self) -> bool:
+        return self._delegate.has_station_selection()
+
+    def select_station(self) -> bool:
+        return self._delegate.select_station()
 
     def activate_selection(self) -> bool:
         accepted = self._delegate.activate_selection()
@@ -350,6 +358,14 @@ class ActivePanelCommandController:
         previous_index = self._pota_panel.selected_index
         self._pota_panel.select_next()
         return self._pota_panel.selected_index != previous_index
+
+    def has_station_selection(self) -> bool:
+        return self._pota_is_active() and self._pota_panel.selected_index is not None
+
+    def select_station(self) -> bool:
+        if not self._pota_is_active():
+            return False
+        return self.has_station_selection() or self.move_next()
 
     def activate_selection(self) -> bool:
         if not self._pota_is_active():
@@ -519,6 +535,20 @@ class SharedSpotActivePanelCommandController:
         previous_identity = self._shared_panel.selected_identity
         self._shared_panel.select_next()
         return self._shared_panel.selected_identity != previous_identity
+
+    def has_station_selection(self) -> bool:
+        if self._repeater_is_active():
+            return (
+                self._repeater_panel is not None
+                and self._repeater_panel.selected_stable_key is not None
+            )
+        return self._shared_spot_is_active() and self._shared_panel.selected_identity is not None
+
+    def select_station(self) -> bool:
+        """Highlight a station without tuning, configuring, or authorizing a QSO."""
+        if not (self._repeater_is_active() or self._shared_spot_is_active()):
+            return False
+        return self.has_station_selection() or self.move_next()
 
     def activate_selection(self) -> bool:
         """Submit the currently selected receive target with one operator activation."""
