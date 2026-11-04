@@ -248,8 +248,11 @@ callsign request must immediately reserve callsign priority, stop new Tron
 commands, signal and reap the active recorder, and only then start callsign
 capture. The callsign controller releases priority only after its recognition
 worker exits. No UI thread may join or wait for audio work. Callsign capture
-remains available with Tron disabled. Tron intents require the exact wake word,
-use only existing read-only navigation, and cannot acquire radio, logging, or
+remains available with Tron disabled. Three physical callsign Discard/Cancel
+presses within two seconds toggle Tron listening, while every press retains its
+ordinary discard behavior. The gesture is suppressed during a PTT alarm/inhibit
+or pending power confirmation. Tron intents require the exact wake word, use
+only existing read-only navigation, and cannot acquire radio, logging, or
 configuration authority.
 
 ## Physical controls

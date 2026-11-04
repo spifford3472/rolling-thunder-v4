@@ -26,10 +26,11 @@ source change.
   cancellation, and starts callsign capture only after the Tron callback exits
   and its recorder has been reaped. The callsign controller releases ownership
   from its completion callback after its own capture returns.
-- `ui_main.py` owns only composition, countdown presentation, bounded event
-  draining, and Tk-thread dispatch. It processes physical controls before Tron
-  events and drops stale generations after preemption. Recognized commands use
-  the existing context navigation and active-panel controller.
+- `ui_main.py` owns composition, the physical cancel-button start/stop gesture,
+  transient Tron popups, bounded event draining, and Tk-thread dispatch. It
+  processes physical controls before Tron events and drops stale generations
+  after preemption. Recognized commands use the existing context navigation and
+  active-panel controller.
 
 No voice intent can transmit, press PTT, change RF power, start an FT8 QSO,
 commit a contact, or edit configuration.
@@ -65,15 +66,17 @@ tron:
 ```
 
 `tron.enabled` defaults to false and requires enabled speech configuration at
-16 kHz. Even when enabled, the worker does not start automatically. Press F12
-in the dashboard to begin a manual acceptance session or stop listening. A
-visible 30-second preparation countdown begins first; the shared Vosk model
-warms on a background worker during this interval without opening the
-microphone. After countdown and model preparation, say the displayed expected
-command, `Tron status`. Pressing F12 during countdown cancels it. A callsign
-button press also cancels the countdown; callsign audio may start while the
-model worker finishes because Tron has released microphone ownership. F12 does
-not initiate a transmission.
+16 kHz. Even when enabled, the worker does not start automatically. Three
+physical callsign Discard/Cancel presses within two seconds toggle the requested
+listener state; each press still follows the normal discard path. The Tk thread
+only signals start/stop, while model loading and capture remain in background
+workers. F12 is retained as a keyboard shortcut when a keyboard is available.
+The same audio gate preserves callsign priority and defers resumed listening
+until callsign capture releases the microphone. No countdown is shown.
+A 20-point popup appears for three seconds for start/stop feedback and the
+answer to `Tron status`. Successful navigation/selection commands do not show
+status boxes. Audio and recognition failures continue to use the shared error
+status path. Starting Tron does not initiate a transmission.
 
 ## Supported commands
 
@@ -133,9 +136,11 @@ suite and CI results must be recorded against the final candidate SHA.
 
 ## Hardware acceptance and resource measurements
 
-A controlled session on anvilmobile is still required. Before each live audio
-test, the operator must see the full 30-second countdown and expected command.
-Do not start a live session remotely over SSH. Test, without transmitting:
+A controlled session on anvilmobile is still required. The operator starts
+and stops listening with three physical callsign Discard/Cancel presses within
+two seconds; remain at the display during startup and allow the background model
+load to finish. Do not start a live session remotely over SSH. Test without
+transmitting:
 
 1. Tron status and Tron help.
 2. Tron show FT8, Tron show POTA, and Tron show DX.
@@ -171,9 +176,10 @@ before deployment and report the actual resulting SHA/status.
 - Pi 4 CPU/memory impact and full-screen acceptance are unmeasured.
 - The feature currently requires a configured 16 kHz speech input and Vosk
   model; it does not probe or select among audio devices automatically.
-- F12 manual acceptance requires the Tron feature flag to be enabled by
-  configuration. Continuous listening never starts at application startup.
-- Status feedback uses the shared status bar and can be replaced by higher
-  priority station alerts.
+- The physical triple-press gesture and F12 shortcut require the Tron feature
+  flag to be enabled by configuration. Listening never starts at application
+  startup.
+- Command confirmations use a transient 20-point popup; hardware and
+  recognition failures use the shared status bar.
 - Speech recognition accuracy, microphone placement, and recovery on the
   installed reSpeaker remain to be validated on anvilmobile.

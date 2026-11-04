@@ -411,9 +411,9 @@ originates from one screen.
 - `src/rolling_thunder/logging_setup.py` — Module providing logging setup behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/pi_weather_alert_location_guard.py` — Module providing pi weather alert location guard behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
 - `src/rolling_thunder/speech_recognition.py` — Cancellable callsign speech adapter and shared lazy Vosk model provider.
-- `src/rolling_thunder/tron_acceptance.py` — Generation-bound 30-second manual live-audio preparation countdown.
 - `src/rolling_thunder/tron_audio_gate.py` — Thread-safe exclusive microphone ownership and callsign-request priority gate.
 - `src/rolling_thunder/tron_capture_coordinator.py` — Nonblocking Tron cancellation and asynchronous callsign promotion lifecycle.
+- `src/rolling_thunder/tron_control_gesture.py` — Guarded physical callsign Discard/Cancel triple-press listener toggle.
 - `src/rolling_thunder/tron_commands.py` — Exact, non-actuating offline Tron grammar and intent parser.
 - `src/rolling_thunder/tron_dispatch.py` — UI-thread-only mapping from approved intents to existing navigation.
 - `src/rolling_thunder/tron_microphone.py` — Offline bounded capture loop, lazy Vosk recognizer, bounded event queue, and priority callsign adapter.

@@ -158,9 +158,9 @@ the durable Forge UUID ledger so lost responses do not duplicate Wavelog writes.
 - `tests/test_audio_capture.py`
 - `tests/test_speech_config.py`
 - `tests/test_speech_recognition.py`
-- `tests/test_tron_acceptance.py`
 - `tests/test_tron_audio_gate.py`
 - `tests/test_tron_capture_coordinator.py`
+- `tests/test_tron_control_gesture.py`
 - `tests/test_tron_commands.py`
 - `tests/test_tron_dispatch.py`
 - `tests/test_tron_microphone.py`

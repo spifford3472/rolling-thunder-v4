@@ -43,7 +43,10 @@ from rolling_thunder.context_navigation import (
     ContextId,
     ContextNavigationController,
 )
-from rolling_thunder.control_dispatcher import ControlDispatcher
+from rolling_thunder.control_dispatcher import (
+    CompositeEventInterceptor,
+    ControlDispatcher,
+)
 from rolling_thunder.control_source_factory import build_control_gate, build_control_source
 from rolling_thunder.control_source_lifecycle import (
     close_control_source,
@@ -125,7 +128,7 @@ from rolling_thunder.status_strip import (
     build_status_bar_routine_message,
     build_status_strip_snapshot,
 )
-from rolling_thunder.tron_acceptance import TronAcceptanceCountdown
+from rolling_thunder.tron_control_gesture import TronCancelTriplePress
 from rolling_thunder.tron_dispatch import dispatch_tron_intent
 from rolling_thunder.tron_microphone import (
     PriorityCallsignCapture,
@@ -695,6 +698,27 @@ def run_dashboard(
         if control_start_error is not None:
             print(f"Rolling Thunder physical controls unavailable: {control_start_error}")
 
+        tron_toggle_interceptor = TronCancelTriplePress(
+            on_toggle=lambda: toggle_tron_listening(),
+            allowed=lambda: (
+                not power_confirmation.state.pending
+                and not runtime.ft8_ptt_alarm.active
+                and not runtime.ft8_ptt_alarm.tx_inhibited
+                and not visual_test_active()
+                and not visual_test.tx_inhibited
+                and not close_started.is_set()
+            ),
+        )
+        settings_interceptor = (
+            SettingsPowerEventInterceptor(
+                power_confirmation,
+                context=lambda: context_navigation.state.selected,
+                selection=lambda: settings_panel.state.selection.selected,
+                recovery_snapshot=lambda: control_source.snapshot,
+            )
+            if isinstance(control_source, RecoveringControlSource)
+            else None
+        )
         control_dispatcher = ControlDispatcher(
             control_source,
             ControlActionMapper(config.physical_controls.mappings),
@@ -703,15 +727,9 @@ def run_dashboard(
             action_observer=(
                 ui_timing.observe_control_action if ui_timing.enabled else None
             ),
-            event_interceptor=(
-                SettingsPowerEventInterceptor(
-                    power_confirmation,
-                    context=lambda: context_navigation.state.selected,
-                    selection=lambda: settings_panel.state.selection.selected,
-                    recovery_snapshot=lambda: control_source.snapshot,
-                )
-                if isinstance(control_source, RecoveringControlSource)
-                else None
+            event_interceptor=CompositeEventInterceptor(
+                tron_toggle_interceptor,
+                settings_interceptor,
             ),
         )
 
@@ -1480,8 +1498,52 @@ def run_dashboard(
 
     acknowledged_ft8_tune: list[object | None] = [None]
     ft8_terminal_return = FT8TerminalReturnTimer(hold_seconds=3.0)
-    tron_acceptance = TronAcceptanceCountdown(duration_seconds=30)
-    tron_countdown_displayed: list[int | None] = [None]
+    tron_popup_window: list[tk.Toplevel | None] = [None]
+    tron_popup_after_id: list[str | None] = [None]
+
+    def dismiss_tron_popup() -> None:
+        after_id = tron_popup_after_id[0]
+        tron_popup_after_id[0] = None
+        if after_id is not None:
+            try:
+                root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        window = tron_popup_window[0]
+        tron_popup_window[0] = None
+        if window is not None:
+            try:
+                if window.winfo_exists():
+                    window.destroy()
+            except tk.TclError:
+                pass
+
+    def show_tron_popup(message: str) -> None:
+        dismiss_tron_popup()
+        window = tk.Toplevel(root)
+        tron_popup_window[0] = window
+        window.withdraw()
+        window.overrideredirect(True)
+        window.configure(bg="#FFF4DF", highlightthickness=3, highlightbackground="#E58B2A")
+        label = tk.Label(
+            window,
+            text=message,
+            font=("DejaVu Sans", 20, "bold"),
+            fg="#17212B",
+            bg="#FFF4DF",
+            justify="center",
+            wraplength=max(420, int(root.winfo_width() * 0.75)),
+            padx=24,
+            pady=16,
+        )
+        label.pack()
+        window.update_idletasks()
+        x = root.winfo_rootx() + max(0, (root.winfo_width() - window.winfo_width()) // 2)
+        y = root.winfo_rooty() + max(0, (root.winfo_height() - window.winfo_height()) // 2)
+        window.geometry(f"+{x}+{y}")
+        window.deiconify()
+        window.lift()
+        tron_popup_after_id[0] = root.after(3000, dismiss_tron_popup)
 
     def publish_tron_status(message: str, *, error: bool = False) -> None:
         runtime.status_messages.publish(
@@ -1493,29 +1555,19 @@ def run_dashboard(
             priority=30,
         )
 
-    def toggle_tron_acceptance() -> None:
+    def toggle_tron_listening() -> None:
         if tron_microphone is None:
-            publish_tron_status(
-                "Tron voice is disabled. Enable tron.enabled for an explicit acceptance session.",
-                error=True,
-            )
-            return
-        if tron_acceptance.cancel():
-            tron_countdown_displayed[0] = None
-            publish_tron_status("Tron voice preparation cancelled.")
+            show_tron_popup("TRON VOICE DISABLED")
             return
         if tron_microphone.listening_requested:
             tron_microphone.pause_listening()
-            publish_tron_status("Tron voice listening stopped.")
+            show_tron_popup("TRON STOPPED")
             return
-        if not tron_microphone.prepare():
-            publish_tron_status("Tron model preparation could not start.", error=True)
-            return
-        tron_acceptance.start(tron_microphone.generation)
-        tron_countdown_displayed[0] = None
-        publish_tron_status(
-            "Tron voice check: get to the microphone. In 30 seconds say “Tron status”."
-        )
+        started = tron_microphone.start_listening()
+        if started or tron_microphone.listening_requested:
+            show_tron_popup("TRON STARTING")
+        else:
+            show_tron_popup("TRON START FAILED")
 
     def refresh() -> None:
         if close_started.is_set():
@@ -1584,8 +1636,8 @@ def run_dashboard(
                         on_context_changed=active_panel_commands.activate_context,
                         panel_commands=active_panel_commands,
                     )
-                    if response is not None:
-                        publish_tron_status(response)
+                    if response is not None and tron_event.intent.action == "status":
+                        show_tron_popup(response)
                 elif tron_event.kind == "audio_error":
                     publish_tron_status(
                         "Tron microphone unavailable; callsign capture remains available.",
@@ -1599,36 +1651,6 @@ def run_dashboard(
                 publish_tron_status(
                     "Callsign capture is waiting; Tron has not released the microphone.",
                     error=True,
-                )
-
-            remaining = tron_acceptance.remaining(
-                monotonic(),
-                tron_microphone.generation,
-            )
-            if remaining == -1:
-                tron_countdown_displayed[0] = None
-                publish_tron_status(
-                    "Tron voice preparation cancelled for callsign capture."
-                )
-            elif remaining == 0:
-                tron_countdown_displayed[0] = None
-                if tron_microphone.start_listening():
-                    if tron_microphone.model_ready:
-                        publish_tron_status("Tron listening. Say “Tron status”.")
-                    else:
-                        publish_tron_status(
-                            "Tron model is preparing; microphone starts when ready."
-                        )
-                else:
-                    publish_tron_status(
-                        "Tron could not acquire the microphone.",
-                        error=True,
-                    )
-            elif remaining is not None and tron_countdown_displayed[0] != remaining:
-                tron_countdown_displayed[0] = remaining
-                publish_tron_status(
-                    f"Tron voice check starts in {remaining}s; "
-                    "expected command: “Tron status”."
                 )
 
         with ui_timing.subphase("radio_sync"):
@@ -2371,7 +2393,7 @@ def run_dashboard(
     )
 
     root.bind("<Escape>", lambda _event: close())
-    root.bind("<F12>", lambda _event: toggle_tron_acceptance())
+    root.bind("<F12>", lambda _event: toggle_tron_listening())
     root.bind(
         "<v>",
         lambda _event: operator_commands.execute(ControlAction.VOICE),
