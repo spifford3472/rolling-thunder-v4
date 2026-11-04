@@ -30,6 +30,22 @@ class EventAwareInterceptor(Protocol):
         """Return None for default dispatch, otherwise consume with this result."""
 
 
+class CompositeEventInterceptor:
+    """Run ordered interceptors until one consumes a physical input."""
+
+    def __init__(self, *interceptors: EventAwareInterceptor | None) -> None:
+        self._interceptors = tuple(
+            interceptor for interceptor in interceptors if interceptor is not None
+        )
+
+    def intercept(self, event: ControlInputEvent, action: ControlAction) -> bool | None:
+        for interceptor in self._interceptors:
+            result = interceptor.intercept(event, action)
+            if result is not None:
+                return result
+        return None
+
+
 @dataclass(frozen=True)
 class ControlDispatchResult:
     """Summary of one nonblocking physical-control drain cycle."""

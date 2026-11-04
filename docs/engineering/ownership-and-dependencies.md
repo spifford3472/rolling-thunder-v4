@@ -95,8 +95,9 @@ Browse must not create alternate implementations of those shared services.
 ### Tron voice commands and microphone arbitration
 
 Tron owns its exact wake-word grammar, offline bounded recognition worker, and
-read-only intent model. `ui_main.py` owns opt-in countdown presentation and
-Tk-thread dispatch through the existing navigation/active-panel controllers.
+read-only intent model. `ui_main.py` owns the physical cancel-button
+start/stop gesture, transient popup presentation, and Tk-thread dispatch through
+the existing navigation/active-panel controllers.
 The shared callsign capture controller remains the owner of callsign recognition
 state and pending-call semantics. `tron_audio_gate.py` and
 `tron_capture_coordinator.py` enforce microphone exclusivity; a physical

@@ -398,10 +398,14 @@ the Tkinter screen itself does not open CAT.
 ## Optional Tron voice commands
 
 Tron voice commands are disabled by default. After `tron.enabled: true` is
-configured alongside offline speech, press **F12** to start a voice acceptance
-session. The status bar shows a full 30-second preparation countdown and the
-expected first command, **“Tron status”**. Listening begins only after the
-countdown. Press F12 again to cancel preparation or stop listening.
+configured alongside offline speech, tap the physical callsign **Discard/Cancel**
+button three times within two seconds to start or stop listening. Each press
+keeps its normal discard behavior. The listener starts as soon as the offline
+model is ready; there is no countdown. F12 remains available as a keyboard
+shortcut when a keyboard is attached.
+A large 20-point popup shows start/stop results and the answer to **“Tron
+status”** for three seconds. Other successful Tron commands do not create
+status boxes; navigation itself shows the result.
 
 Every command must begin with “Tron”. Supported commands include help, status,
 current screen; show POTA, DX, Browse, FT8, Weather, Repeaters, DMR, log, or
