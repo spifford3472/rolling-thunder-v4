@@ -162,3 +162,18 @@ yet carry a trusted fix timestamp/accuracy. Consequently no production
 QSO automatically receives a county yet. Do not merge or deploy until
 the repository, frozen GPS metadata, manual and FT8 paths, Forge sync,
 and migration rollback tests are complete.
+
+## Repository persistence checkpoint
+
+All repository SQL paths now include `my_county`: insertion, retrieval,
+updates, list projections, JSON recovery, and idempotent payload comparison.
+The field remains optional and existing rows remain null. The new
+`tests/test_county_persistence.py` proves a real SQLite round trip and
+ADIF `MY_CNTY` emission without remote-party `CNTY` contamination.
+Targeted persistence/FT8 tests passed (83).
+
+**Still not production-ready**: the QSO authorization context currently
+freezes coordinates and jurisdiction but not a trustworthy horizontal
+accuracy/timestamp. It would be unsafe to infer county from coordinates
+alone. Extend that capture path first, validate Forge sync contract
+compatibility, and benchmark the Pi before activating the lookup.

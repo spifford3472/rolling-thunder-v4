@@ -60,6 +60,7 @@ class ContactRepository:
             "my_latitude": contact.my_latitude,
             "my_longitude": contact.my_longitude,
             "my_state": contact.my_state,
+            "my_county": contact.my_county,
             "my_cq_zone": contact.my_cq_zone,
             "my_itu_zone": contact.my_itu_zone,
             "source": contact.source.value,
@@ -93,6 +94,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -121,6 +123,7 @@ class ContactRepository:
                         :my_latitude,
                         :my_longitude,
                         :my_state,
+                        :my_county,
                         :my_cq_zone,
                         :my_itu_zone,
                         :source,
@@ -189,6 +192,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -236,6 +240,7 @@ class ContactRepository:
             "my_latitude": contact.my_latitude,
             "my_longitude": contact.my_longitude,
             "my_state": contact.my_state,
+            "my_county": contact.my_county,
             "my_cq_zone": contact.my_cq_zone,
             "my_itu_zone": contact.my_itu_zone,
             "source": contact.source.value,
@@ -268,6 +273,7 @@ class ContactRepository:
                         my_latitude = :my_latitude,
                         my_longitude = :my_longitude,
                         my_state = :my_state,
+                        my_county = :my_county,
                         my_cq_zone = :my_cq_zone,
                         my_itu_zone = :my_itu_zone,
                         source = :source,
@@ -332,6 +338,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -451,6 +458,7 @@ class ContactRepository:
                             my_latitude,
                             my_longitude,
                             my_state,
+                            my_county,
                             my_cq_zone,
                             my_itu_zone,
                             source,
@@ -500,6 +508,7 @@ class ContactRepository:
                             my_latitude,
                             my_longitude,
                             my_state,
+                            my_county,
                             my_cq_zone,
                             my_itu_zone,
                             source,
@@ -513,7 +522,7 @@ class ContactRepository:
                             notes,
                             synchronization_state
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             str(contact.contact_id),
@@ -533,6 +542,7 @@ class ContactRepository:
                             contact.my_latitude,
                             contact.my_longitude,
                             contact.my_state,
+                            contact.my_county,
                             contact.my_cq_zone,
                             contact.my_itu_zone,
                             contact.source.value,
@@ -585,6 +595,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -634,6 +645,7 @@ class ContactRepository:
                 my_latitude,
                 my_longitude,
                 my_state,
+                my_county,
                 my_cq_zone,
                 my_itu_zone,
                 source,
@@ -691,6 +703,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -745,6 +758,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -802,6 +816,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -863,6 +878,7 @@ class ContactRepository:
                         my_latitude,
                         my_longitude,
                         my_state,
+                        my_county,
                         my_cq_zone,
                         my_itu_zone,
                         source,
@@ -975,6 +991,7 @@ class ContactRepository:
             or existing.my_latitude != candidate.my_latitude
             or existing.my_longitude != candidate.my_longitude
             or existing.my_state != candidate.my_state
+            or existing.my_county != candidate.my_county
             or existing.my_cq_zone != candidate.my_cq_zone
             or existing.my_itu_zone != candidate.my_itu_zone
             or existing.source is not candidate.source
@@ -1026,6 +1043,7 @@ class ContactRepository:
             "my_latitude": row["my_latitude"],
             "my_longitude": row["my_longitude"],
             "my_state": row["my_state"],
+            "my_county": row["my_county"],
             "my_cq_zone": row["my_cq_zone"],
             "my_itu_zone": row["my_itu_zone"],
             "source": row["source"],
