@@ -10,7 +10,7 @@ from pathlib import Path
 from osgeo import ogr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-from rolling_thunder.offline_county import CountyPolygon, OfflineCountyResolver  # noqa: E402
+from rolling_thunder.offline_county import CountyPolygon, OfflineCountyResolver
 
 
 def resolve(db, lat, lon):
