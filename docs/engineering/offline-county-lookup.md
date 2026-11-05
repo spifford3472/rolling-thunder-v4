@@ -120,3 +120,32 @@ establish accuracy for near-border locations, antimeridian coordinates,
 or the live GPS uncertainty model; those remain deployment blockers.
 The comparison script uses development-only `osgeo`, not a Pi runtime
 dependency.
+
+## Indexed runtime reader checkpoint (2026-11-04)
+
+`src/rolling_thunder/offline_county_store.py` provides a read-only
+`IndexedCountyStore` that queries the SQLite R-tree for nearby candidates,
+loads only those compressed county geometries, and applies the conservative
+polygon resolver. It does not write to the county artifact, use the network,
+or acquire mutable GPS state. A candidate cap of 16 fails closed for
+unexpectedly crowded/corrupt spatial queries; missing/corrupt artifacts
+return unknown. The caller supplies a frozen `GPSPosition`, an explicit
+timestamp, and an age threshold; missing accuracy, invalid fix, stale or
+future-dated fixes return unknown.
+
+The default margin includes reported horizontal uncertainty and 20 meters
+for datum/cartographic differences. This is a preliminary conservative
+policy, **not an assurance** that the 1:500,000 cartographic boundaries are
+accurate within 20 meters. Additional real road/county-line checks and
+a measured boundary uncertainty policy are mandatory before enabling
+automatic QSO county logging.
+
+Synthetic SQLite tests: 2 passed, including boundary, stale GPS, missing
+accuracy, missing file, and candidate overflow. On Forge, example indexed
+lookup times: Waynesville 0.64 ms, Columbus 0.47 ms, Anchorage 10.42 ms,
+San Juan 0.47 ms; these are illustrative single-run Forge measurements,
+**not** Pi worst-case latency or performance acceptance. Strict MyPy
+and Ruff pass. The store is **not connected to the contact logging service,
+not installed on anvilmobile, and not production enabled**.
+
+Rollback: remove the source-only reader; no migrations or service changes.
