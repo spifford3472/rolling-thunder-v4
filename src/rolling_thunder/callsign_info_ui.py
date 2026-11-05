@@ -557,7 +557,7 @@ class CallsignInfoOverlayWidgets:
                 10,
                 text=local_time_text,
                 fill="#000000",
-                font=("DejaVu Sans", 24, "bold"),
+                font=("DejaVu Sans", 48, "bold"),
                 anchor="ne",
             )
             bounds = canvas.bbox(clock)
