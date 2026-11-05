@@ -252,3 +252,5 @@ hardware-local/
 # Installed and partially transferred offline map packages
 *.mbtiles
 *.mbtiles.partial
+# Versioned public-domain offline county boundary artifact.
+!src/rolling_thunder/data/us-counties-2025-500k.sqlite

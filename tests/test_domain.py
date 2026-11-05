@@ -173,6 +173,7 @@ def test_contact_serialization_is_stable_and_json_compatible() -> None:
         "my_latitude": None,
         "my_longitude": None,
         "my_state": None,
+        "my_county": None,
         "my_cq_zone": None,
         "my_itu_zone": None,
         "source": "unknown",

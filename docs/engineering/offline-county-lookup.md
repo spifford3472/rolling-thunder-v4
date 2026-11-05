@@ -177,3 +177,73 @@ freezes coordinates and jurisdiction but not a trustworthy horizontal
 accuracy/timestamp. It would be unsafe to infer county from coordinates
 alone. Extend that capture path first, validate Forge sync contract
 compatibility, and benchmark the Pi before activating the lookup.
+
+## Merge-review candidate: source, runtime and safety
+
+The complete 2025 Census county-equivalent SQLite artifact is checked into
+`src/rolling_thunder/data/us-counties-2025-500k.sqlite` (9.6 MiB).
+SHA256: `4c1a2c1b094e660077e922944ddf961efec54997e5cdfb47aa18b0db7250a1b6`.
+The runtime discovers it relative to the installed Python source, rather
+than assuming a mutable home directory or Forge-only build path.
+
+FT8 authorization now freezes GPS fix timestamp and uncertainty alongside
+the existing coordinates. The completed-contact logger uses only this
+snapshot, never a new position. A fix must be <=10 seconds old at QSO
+authorization, non-future-dated, have an uncertainty estimate, and agree
+with the independently frozen jurisdiction state; otherwise `my_county`
+remains null. No historical contacts are backfilled. The source serial
+NMEA GGA adapter derives a **conservative estimate**, not a measured
+accuracy, from HDOP: max(100 m, HDOP × 30 m). Missing or malformed HDOP
+is unknown and prevents county assignment. The geometric lookup adds a
+further 20 m allowance; cartographic source boundaries can be displaced
+by more than this. County-edge field acceptance is required.
+
+The lookup currently occurs in the completed-QSO logging call, and may
+take milliseconds on Forge (including >10 ms for complex Alaska shapes).
+Before production merge, confirm this does not violate the terminal FT8
+timing budget on the Pi; if it does, move county enrichment to a bounded
+background worker with a durable handoff, preserving the frozen snapshot.
+
+Forge receiver parses the same additive `Contact` JSON field and its
+ADIF encoder now exports `MY_CNTY`. **Receiver-first rollout** is
+required because an older Forge process could silently discard the new
+optional field and lose county metadata. The local schema 21→22
+migration is additive and transactional; restore the pre-upgrade
+SQLite backup on rollback, and do not run older code against schema 22.
+No new network ports, firewall rules, or OPNsense changes are needed.
+
+### Merge and deployment gates
+
+1. Verify clean full-suite tests, Ruff, MyPy, database integrity and checksum.
+2. Review live GPS GGA HDOP availability and county-border behavior on a
+   parked anvilmobile. Do not test while driving.
+3. Verify source package asset is installed at the expected path on both
+   Forge and Pi; read-only benchmark the Pi, including complex geometry.
+4. Back up Pi QSO SQLite with SQLite online backup and record current
+   production SHA; verify restore and rollback steps.
+5. Upgrade compatible Forge contact-sync receiver before Pi sender.
+6. Merge only after review/CI, deploy with the guarded deployment process,
+   verify schema 22, and test one real completed FT8 QSO and Wavelog ADIF.
+7. If a gate fails, leave production unchanged; do not synthesize county.
+
+The prior notes referring to the reader as 'not connected' describe
+earlier checkpoints; the later integration above supersedes them.
+
+## Manual contact path
+
+The dashboard/manual `ContactLoggingService.commit` now shares the same
+offline county store. It resolves only a valid GPS snapshot matching the
+already frozen contact metadata and independently resolved local state;
+the same 10-second freshness, known uncertainty and boundary rejection
+rules apply. The manual path is separately covered by a real Census
+fixture test for a fresh Warren County contact and stale-fix rejection.
+This path does not query GPS a second time.
+
+### Review note on GPS uncertainty
+
+`GPSPosition.accuracy_m` is populated from NMEA GGA HDOP only as a
+conservative **engineering estimate**, not a receiver-certified
+accuracy radius. It is not a statistical guarantee. The 2025 Census
+1:500,000 source is cartographically generalized. A near-county-line
+position can still be wrong even with a 100-meter margin. Do not
+represent the resulting county as authoritative without field checks.

@@ -18,6 +18,7 @@ from rolling_thunder.domain import (
 )
 from rolling_thunder.gps import GPSState
 from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
+from rolling_thunder.offline_county_store import IndexedCountyStore
 from rolling_thunder.pota_spots import PotaSpot
 
 
@@ -61,12 +62,14 @@ class ContactLoggingService:
         qrz_fallback_available: bool = False,
         jurisdiction_resolver: LocalJurisdictionResolver | None = None,
         weather_snapshot_provider: ContactWeatherSnapshotProvider | None = None,
+        county_store: IndexedCountyStore | None = None,
     ) -> None:
         self._repository = repository
         self._clock = clock or SystemClock()
         self._qrz_fallback_available = qrz_fallback_available
         self._jurisdiction_resolver = jurisdiction_resolver
         self._weather_snapshot_provider = weather_snapshot_provider
+        self._county_store = county_store
 
     def commit(
         self,
@@ -108,6 +111,21 @@ class ContactLoggingService:
             qrz_fallback_available=self._qrz_fallback_available,
             jurisdiction_resolver=self._jurisdiction_resolver,
         )
+        county = None
+        if (
+            self._county_store is not None
+            and gps_state is not None
+            and metadata.my_state is not None
+            and gps_state.position is not None
+            and gps_state.position.latitude == metadata.my_latitude
+            and gps_state.position.longitude == metadata.my_longitude
+        ):
+            candidate = self._county_store.resolve_gps(
+                gps_state.position, at=started_at
+            )
+            if candidate is not None and candidate[0] == metadata.my_state:
+                county = candidate[1]
+
         contact = Contact(
             callsign=callsign,
             frequency_hz=radio_state.frequency.hz,
@@ -122,6 +140,7 @@ class ContactLoggingService:
             my_latitude=metadata.my_latitude,
             my_longitude=metadata.my_longitude,
             my_state=metadata.my_state,
+            my_county=county,
             my_cq_zone=metadata.my_cq_zone,
             my_itu_zone=metadata.my_itu_zone,
             source=source,
@@ -150,6 +169,7 @@ class ContactLoggingService:
         my_latitude: float | None = None,
         my_longitude: float | None = None,
         my_state: str | None = None,
+        my_county: str | None = None,
         my_cq_zone: int | None = None,
         my_itu_zone: int | None = None,
         grid: str | None = None,
@@ -182,6 +202,7 @@ class ContactLoggingService:
             my_latitude=my_latitude,
             my_longitude=my_longitude,
             my_state=my_state,
+            my_county=my_county,
             my_cq_zone=my_cq_zone,
             my_itu_zone=my_itu_zone,
             source=source,

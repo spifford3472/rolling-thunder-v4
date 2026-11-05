@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC
 from threading import RLock
 
 from rolling_thunder.contact_logging import ContactLoggingService
@@ -10,6 +11,7 @@ from rolling_thunder.contact_metadata import unique_matching_pota_spot
 from rolling_thunder.domain import Contact, ContactSource, RadioMode
 from rolling_thunder.ft8.coordinator import FT8QsoResult
 from rolling_thunder.ft8.domain import FT8QsoState
+from rolling_thunder.offline_county_store import IndexedCountyStore
 from rolling_thunder.pota_spots import PotaSpot
 from rolling_thunder.storage import StorageError
 
@@ -23,10 +25,12 @@ class FT8QsoLoggingService:
         *,
         completed_contact_handler: Callable[[Contact], None] | None = None,
         pota_spots_provider: Callable[[], tuple[PotaSpot, ...]] | None = None,
+        county_store: IndexedCountyStore | None = None,
     ) -> None:
         self._contact_logging = contact_logging
         self._completed_contact_handler = completed_contact_handler
         self._pota_spots_provider = pota_spots_provider or (lambda: ())
+        self._county_store = county_store
         self._lock = RLock()
         self._latest_contact: Contact | None = None
         self._latest_error: str | None = None
@@ -71,6 +75,30 @@ class FT8QsoLoggingService:
                 contact_latitude = spot.park.latitude
                 contact_longitude = spot.park.longitude
 
+        county = None
+        if (
+            self._county_store is not None
+            and result.context.gps_fix_updated_at is not None
+            and result.context.gps_accuracy_m is not None
+            and result.context.latitude is not None
+            and result.context.longitude is not None
+            and result.context.local_state is not None
+        ):
+            age = -1.0
+            if result.context.gps_fix_updated_at.tzinfo is not None:
+                age = (
+                    result.context.authorized_utc.astimezone(UTC)
+                    - result.context.gps_fix_updated_at.astimezone(UTC)
+                ).total_seconds()
+            if 0 <= age <= 10:
+                candidate = self._county_store.resolve(
+                    result.context.latitude,
+                    result.context.longitude,
+                    uncertainty_m=result.context.gps_accuracy_m,
+                )
+                if candidate is not None and candidate[0] == result.context.local_state:
+                    county = candidate[1]
+
         try:
             contact = self._contact_logging.commit_completed(
                 contact_id=result.context.qso_id,
@@ -84,6 +112,7 @@ class FT8QsoLoggingService:
                 my_latitude=result.context.latitude,
                 my_longitude=result.context.longitude,
                 my_state=result.context.local_state,
+                my_county=county,
                 my_cq_zone=result.context.local_cq_zone,
                 my_itu_zone=result.context.local_itu_zone,
                 grid=result.context.remote_grid,

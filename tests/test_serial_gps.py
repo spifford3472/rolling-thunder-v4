@@ -309,3 +309,21 @@ def test_receiver_validates_serial_settings() -> None:
         SerialGPSReceiver(Path("/dev/ttyUSB1"), timeout_s=0)
     with pytest.raises(ValueError, match="sentences per refresh"):
         SerialGPSReceiver(Path("/dev/ttyUSB1"), maximum_sentences_per_refresh=0)
+
+
+def test_gga_hdop_supplies_conservative_county_uncertainty() -> None:
+    sentence = _sentence("GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,")
+    position = parse_gga_sentence(sentence, updated_at=_FIXED_TIME)
+    assert position.accuracy_m == 100.0
+
+
+def test_gga_missing_hdop_keeps_county_uncertainty_unknown() -> None:
+    sentence = _sentence("GPGGA,123519,4807.038,N,01131.000,E,1,08,,545.4,M,46.9,M,,")
+    position = parse_gga_sentence(sentence, updated_at=_FIXED_TIME)
+    assert position.accuracy_m is None
+
+
+def test_gga_invalid_hdop_rejected() -> None:
+    sentence = _sentence("GPGGA,123519,4807.038,N,01131.000,E,1,08,nan,545.4,M,46.9,M,,")
+    with pytest.raises(GPSParseError):
+        parse_gga_sentence(sentence, updated_at=_FIXED_TIME)

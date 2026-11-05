@@ -207,6 +207,8 @@ class FT8QsoContext:
     local_grid_trusted: bool | None = None
     latitude: float | None = None
     longitude: float | None = None
+    gps_fix_updated_at: datetime | None = None
+    gps_accuracy_m: float | None = None
     local_state: str | None = None
     local_cq_zone: int | None = None
     local_itu_zone: int | None = None
