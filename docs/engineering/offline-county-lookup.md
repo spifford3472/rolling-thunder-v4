@@ -247,3 +247,14 @@ accuracy radius. It is not a statistical guarantee. The 2025 Census
 1:500,000 source is cartographically generalized. A near-county-line
 position can still be wrong even with a 100-meter margin. Do not
 represent the resulting county as authoritative without field checks.
+
+## Final Forge merge-review evidence
+
+At candidate commit `7cd0af9`, the full Forge pytest suite completed:
+**3,721 passed, 7 skipped, 0 failed** (39.87 s). Ruff and strict MyPy
+passed on changed modules. A Hatchling wheel build succeeded; inspection
+confirmed that `rolling_thunder/data/us-counties-2025-500k.sqlite` is
+packaged and its SHA256 matches the documented source artifact.
+GitHub Actions status was not yet confirmed by the connector. The
+remaining Pi hardware/FT8 latency, county-edge field validation, and
+receiver-first deployment gates remain mandatory.
