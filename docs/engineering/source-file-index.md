@@ -522,3 +522,4 @@ forge_contact_sync.py owns legacy claimed-payload retry matching. callsign_info.
 and forge_callsign_info.py publish optional count/band; callsign_info_ui.py renders
 history without comments/notes. contact_commit_controller.py and contact_metadata.py
 retain structured metadata instead of generating ordinary QSO notes.
+- `src/rolling_thunder/offline_county.py` — pure, not-yet-integrated offline county polygon lookup primitive; returns unknown on invalid or ambiguous geometry; see `offline-county-lookup.md`.
