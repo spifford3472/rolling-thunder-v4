@@ -1365,3 +1365,7 @@ TX flag is false, provided every independent local FT8/hardware/PTT/commit guard
 is idle. This supports shutting down with the radio already switched off. A retained
 TX flag is never cleared by disconnection; connecting/error states remain unknown
 and block the action. No live CAT query or radio command is issued by this guard.
+
+### QSO popup and vehicle status readability (2026-11-04)
+
+The QSO map popup shows the remote station local-time label at twice its previous font size (48-point bold); the white background is sized from the rendered text bounds. The bottom vehicle status-bar ticker text is also doubled (36-point bold). The status icons and QSO workflow are unchanged. Longer messages may not fit the available ticker width; the UI does not automatically scroll or abbreviate them.

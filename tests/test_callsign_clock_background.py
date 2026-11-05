@@ -32,7 +32,7 @@ def test_clock_has_fitted_white_backing_above_map_and_below_text() -> None:
         10,
         text="LOCAL 23:50",
         fill="#000000",
-        font=("DejaVu Sans", 24, "bold"),
+        font=("DejaVu Sans", 48, "bold"),
         anchor="ne",
     )
     canvas.bbox.assert_called_once_with(10)

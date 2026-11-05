@@ -96,7 +96,7 @@ class StatusBarWidgets:
             textvariable=self._ticker_text,
             bg=_BACKGROUND,
             fg="#ffffff",
-            font=("DejaVu Sans", 18, "bold"),
+            font=("DejaVu Sans", 36, "bold"),
             anchor="e",
             padx=16,
         )
