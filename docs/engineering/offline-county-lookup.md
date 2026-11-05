@@ -149,3 +149,16 @@ and Ruff pass. The store is **not connected to the contact logging service,
 not installed on anvilmobile, and not production enabled**.
 
 Rollback: remove the source-only reader; no migrations or service changes.
+
+## Schema 22 staging (not activation)
+
+Schema 22 adds a nullable `contacts.my_county` column. The Contact model
+now accepts a normalized county name only alongside frozen local state and
+coordinates; Wavelog's ADIF encoder emits `MY_CNTY` when the Contact has
+both state and county. Existing contacts remain null; **no historical
+backfill**. This is a staged interface only: the contact repository does
+not yet persist/read the new field, and the frozen FT8 context does not
+yet carry a trusted fix timestamp/accuracy. Consequently no production
+QSO automatically receives a county yet. Do not merge or deploy until
+the repository, frozen GPS metadata, manual and FT8 paths, Forge sync,
+and migration rollback tests are complete.

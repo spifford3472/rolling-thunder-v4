@@ -177,6 +177,7 @@ def test_initialize_database_creates_contacts_table(tmp_path: Path) -> None:
         "my_latitude",
         "my_longitude",
         "my_state",
+        "my_county",
         "my_cq_zone",
         "my_itu_zone",
         "source",

@@ -321,6 +321,7 @@ class Contact(DomainModel):
     my_latitude: float | None = Field(default=None, ge=-90, le=90, strict=True)
     my_longitude: float | None = Field(default=None, ge=-180, le=180, strict=True)
     my_state: str | None = None
+    my_county: str | None = None
     my_cq_zone: int | None = Field(default=None, ge=1, le=40, strict=True)
     my_itu_zone: int | None = Field(default=None, ge=1, le=90, strict=True)
     source: ContactSource = ContactSource.UNKNOWN
@@ -398,6 +399,19 @@ class Contact(DomainModel):
             raise ValueError("my_state must be a two-character code")
         return normalized
 
+    @field_validator("my_county", mode="before")
+    @classmethod
+    def normalize_my_county(cls, value: object) -> object:
+        """Accept only a nonempty normalized county name."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        if not normalized or len(normalized) > 100:
+            raise ValueError("my_county must contain 1-100 characters")
+        return normalized
+
     @field_validator("grid_source", "enrichment_state", "source", mode="before")
     @classmethod
     def normalize_contact_enums(cls, value: object) -> object:
@@ -433,6 +447,8 @@ class Contact(DomainModel):
             value is not None for value in jurisdiction_values
         ):
             raise ValueError("local jurisdiction fields must be present together")
+        if self.my_county is not None and (self.my_state is None or self.my_latitude is None):
+            raise ValueError("my_county requires frozen local state and coordinates")
         if self.my_state is not None and self.my_latitude is None:
             raise ValueError("local jurisdiction requires frozen local coordinates")
 
