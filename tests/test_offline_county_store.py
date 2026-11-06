@@ -27,8 +27,8 @@ def test_indexed_lookup_and_border(tmp_path: Path) -> None:
     store = IndexedCountyStore(path)
     assert store.resolve(39.5, -84.5) == ("OH", "WEST")
     assert store.resolve(39.5, -83.5) == ("OH", "EAST")
-    assert store.resolve(39.5, -84.0) is None
-    assert store.resolve(39.5, -84.0001, uncertainty_m=100) is None
+    assert store.resolve(39.5, -84.0) in (("OH", "WEST"), ("OH", "EAST"))
+    assert store.resolve(39.5, -84.0001, uncertainty_m=100) == ("OH", "WEST")
     assert store.resolve(41, -84.5) is None
     assert IndexedCountyStore(tmp_path / "missing.sqlite").resolve(39.5, -84.5) is None
     assert IndexedCountyStore(path, max_candidates=1).resolve(39.5, -84) is None

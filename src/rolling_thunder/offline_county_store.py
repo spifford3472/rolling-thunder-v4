@@ -6,7 +6,7 @@ import json
 import sqlite3
 import zlib
 from datetime import UTC, datetime
-from math import cos, isfinite, radians
+from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,11 +29,11 @@ class IndexedCountyStore:
         self, latitude: float | None, longitude: float | None, *,
         uncertainty_m: float = 30.0,
     ) -> tuple[str, str] | None:
-        """Return unknown if geometry, file, candidate count or accuracy is uncertain.
+        """Choose the polygon containing the GPS point, including near borders.
 
-        A conservative degree buffer includes the uncertainty radius and a
-        fixed 20-m allowance for boundary/source datum discrepancies. This
-        cannot make generalized Census cartographic boundaries survey-grade.
+        A valid fix is required by resolve_gps. Accuracy uncertainty is not
+        grounds for dropping a best-effort county; cartographic boundaries
+        remain approximate, especially when travelling across a county line.
         """
         if (
             latitude is None or longitude is None
@@ -42,17 +42,10 @@ class IndexedCountyStore:
             or not isfinite(uncertainty_m) or uncertainty_m < 0
         ):
             return None
-        buffer_m = max(uncertainty_m, 10.0) + 20.0
-        latitude_degrees = buffer_m / 110_000.0
-        longitude_scale = cos(radians(latitude))
-        if longitude_scale < 0.01:
-            return None
-        longitude_degrees = buffer_m / (110_000.0 * longitude_scale)
-        # The underlying planar polygon test uses one conservative angular
-        # radius, so choose the larger of latitude/longitude degree buffers.
-        epsilon = max(latitude_degrees, longitude_degrees)
-        if epsilon > 0.25:
-            return None
+        # The user prefers a best-effort county to a blank near boundaries.
+        # A tiny geometric epsilon handles floating-point boundary equality,
+        # rather than suppressing fixes within the HDOP uncertainty radius.
+        epsilon = 1e-10
         try:
             with sqlite3.connect(
                 f"{self._path.resolve().as_uri()}?mode=ro&immutable=1", uri=True,
@@ -85,9 +78,20 @@ class IndexedCountyStore:
                         state, county, tuple(map(tuple, part[0])),
                         tuple(tuple(map(tuple, ring)) for ring in part[1:]),
                     ))
-            return OfflineCountyResolver(polygons, boundary_degrees=epsilon).resolve(
-                latitude, longitude
-            )
+            resolver = OfflineCountyResolver(polygons, boundary_degrees=epsilon)
+            match = resolver.resolve(latitude, longitude)
+            if match is not None:
+                return match
+            # An exact boundary is intrinsically ambiguous. Probe tiny offsets
+            # in a stable order; return a county only if a neighboring polygon
+            # actually contains one of the probes. Never invent a county when
+            # there is no geometry (outside US / missing coverage).
+            for dlat, dlon in ((0.0, 1e-7), (0.0, -1e-7),
+                               (1e-7, 0.0), (-1e-7, 0.0)):
+                match = resolver.resolve(latitude + dlat, longitude + dlon)
+                if match is not None:
+                    return match
+            return None
         except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, IndexError, zlib.error):
             return None
 

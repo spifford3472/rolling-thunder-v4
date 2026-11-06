@@ -258,3 +258,26 @@ packaged and its SHA256 matches the documented source artifact.
 GitHub Actions status was not yet confirmed by the connector. The
 remaining Pi hardware/FT8 latency, county-edge field validation, and
 receiver-first deployment gates remain mandatory.
+
+## Approved best-effort county policy (2026-11-05)
+
+Operator-approved behavior supersedes the earlier conservative near-border
+rejection rule: record only **the transmitting station's county** (MY_CNTY)
+from a valid, fresh, frozen GPS fix. A county boundary proximity or broad
+HDOP-based uncertainty must not suppress an otherwise available polygon match.
+On an exact geometric boundary, test tiny deterministic neighboring offsets
+to select a county; this is an estimate, not a surveyed boundary determination.
+Without a valid fresh GPS fix, leave MY_CNTY null; do not reuse the last county.
+Outside supported US county geometry, leave it null.
+
+This policy applies to ordinary QSO logging (POTA, DX, Browse) and FT8.
+Do not derive the *remote* county from its grid, callsign, or GPS.
+Remote CNTY is populated only when explicitly returned by QRZ; existing
+country/DXCC handling is preserved. Never overwrite known remote metadata
+with empty lookup values.
+
+Parked GPS test on 2026-11-05: 3,597 valid differential GGA fixes, 14-20
+satellites, HDOP 0.55-0.88, 95% of positions within 5.62 m of their
+median position. This measures repeatability, not absolute accuracy or
+county-boundary positional accuracy. Driving/boundary validation remains
+a post-deployment observation requirement.
