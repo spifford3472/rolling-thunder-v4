@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 21
+CURRENT_SCHEMA_VERSION: Final = 22
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -849,6 +849,9 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
         CREATE INDEX rf_exposure_scenarios_installation_index
         ON rf_exposure_scenarios (installation_id, frequency_hz)
         """,
+    ),
+    22: (
+        "ALTER TABLE contacts ADD COLUMN my_county TEXT",
     ),
 }
 

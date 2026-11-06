@@ -1048,6 +1048,8 @@ def contact_to_adif(contact: Contact) -> str:
         fields.append(("GRIDSQUARE", str(contact.grid)))
     if contact.my_grid6 is not None:
         fields.append(("MY_GRIDSQUARE", str(contact.my_grid6)))
+    if contact.my_county is not None and contact.my_state is not None:
+        fields.append(("MY_CNTY", f"{contact.my_state},{contact.my_county.title()}"))
     if contact.tx_power_watts is not None:
         fields.append(("TX_PWR", str(contact.tx_power_watts)))
     if contact.pota_reference is not None:

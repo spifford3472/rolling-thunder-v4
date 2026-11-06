@@ -602,11 +602,23 @@ class ApplicationRuntime:
                 None if callsign_info is None else callsign_info.state
             ),
         )
+        # Optional offline asset: absence leaves logging operational with no county.
+        from rolling_thunder.offline_county_store import IndexedCountyStore
+
+        county_database_path = (
+            Path(__file__).resolve().parent / "data" / "us-counties-2025-500k.sqlite"
+        )
+        county_store = (
+            IndexedCountyStore(county_database_path)
+            if county_database_path.is_file()
+            else None
+        )
         contact_logging = ContactLoggingService(
             repository,
             qrz_fallback_available=qrz_provider is not None,
             jurisdiction_resolver=jurisdiction_resolver,
             weather_snapshot_provider=contact_weather_snapshots,
+            county_store=county_store,
         )
         ft8_worked_today = (
             FT8WorkedTodayService(repository) if config.ft8.enabled else None
@@ -633,6 +645,7 @@ class ApplicationRuntime:
             contact_logging,
             completed_contact_handler=ft8_contact_completed,
             pota_spots_provider=ft8_pota_spots,
+            county_store=county_store,
         )
         ft8_performance_outbox = (
             FT8PerformanceOutboxRepository(config.storage.database_path)

@@ -1,6 +1,6 @@
 """Tests for the dashboard-facing contact logging application service."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -324,3 +324,56 @@ def test_next_ordinary_contact_gets_fresh_jurisdiction_snapshot() -> None:
     assert (first.my_state, first.my_cq_zone, first.my_itu_zone) == ("OH", 4, 8)
     assert (second.my_state, second.my_cq_zone, second.my_itu_zone) == ("IN", 4, 8)
     assert repository.contacts == [first, second]
+
+
+def test_manual_commit_resolves_county_from_fresh_frozen_gps() -> None:
+    from pathlib import Path
+
+    from rolling_thunder.offline_county_store import IndexedCountyStore
+
+    now = datetime(2026, 11, 4, 20, 0, tzinfo=UTC)
+    store = IndexedCountyStore(
+        Path(__file__).resolve().parents[1]
+        / "src/rolling_thunder/data/us-counties-2025-500k.sqlite"
+    )
+    repo = RecordingRepository()
+    service = ContactLoggingService(
+        repo, FixedClock(now),
+        jurisdiction_resolver=jurisdiction_resolver(),
+        county_store=store,
+    )
+    position = GPSPosition(
+        fix_state=GPSFixState.THREE_DIMENSIONAL,
+        latitude=39.5298, longitude=-84.0866, altitude_m=250.0,
+        accuracy_m=100.0, updated_at=now,
+    )
+    gps = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=position, updated_at=now,
+    )
+    contact = service.commit(
+        pending_callsign="K7IOC",
+        radio_state=connected_radio_state(),
+        gps_state=gps,
+    )
+    assert contact.my_county == "WARREN"
+    assert repo.contacts[0].my_county == "WARREN"
+
+    stale_service = ContactLoggingService(
+        RecordingRepository(), FixedClock(now),
+        jurisdiction_resolver=jurisdiction_resolver(),
+        county_store=store,
+    )
+    stale_position = position.model_copy(
+        update={"updated_at": now - timedelta(minutes=1)}
+    )
+    stale_gps = GPSState(
+        connection_state=GPSConnectionState.CONNECTED,
+        position=stale_position, updated_at=now,
+    )
+    stale = stale_service.commit(
+        pending_callsign="K7IOC",
+        radio_state=connected_radio_state(),
+        gps_state=stale_gps,
+    )
+    assert stale.my_county is None

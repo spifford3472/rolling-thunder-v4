@@ -435,3 +435,6 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 
 - [Issue246 notes and contact history](issue-246-notes-and-contact-history.md) —
   blank ordinary notes, true Wavelog count/last band, legacy retry preservation.
+
+- `offline-county-lookup.md` — Issue #380 staged county polygon resolver,
+  data provenance and integration gates (not production enabled).

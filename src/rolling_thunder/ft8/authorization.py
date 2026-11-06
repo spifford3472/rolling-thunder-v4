@@ -102,6 +102,19 @@ class FT8QsoAuthorizationService:
         if self.clock.current_period() != current_period:
             raise FT8QsoAuthorizationError("FT8 period changed during authorization")
 
+        frozen_position = (
+            gps_state.position
+            if gps_state is not None
+            and gps_state.connection_state is GPSConnectionState.CONNECTED
+            and gps_state.position is not None
+            and latitude is not None
+            and longitude is not None
+            and gps_state.position.latitude == latitude
+            and gps_state.position.longitude == longitude
+            and gps_state.position.updated_at <= authorized_utc
+            else None
+        )
+
         return FT8QsoContext(
             local_callsign=str(self.local_callsign),
             remote_callsign=activity.callsign,
@@ -117,6 +130,12 @@ class FT8QsoAuthorizationService:
             signal_report_db=activity.snr_db,
             latitude=latitude,
             longitude=longitude,
+            gps_fix_updated_at=(
+                frozen_position.updated_at if frozen_position is not None else None
+            ),
+            gps_accuracy_m=(
+                frozen_position.accuracy_m if frozen_position is not None else None
+            ),
             local_state=jurisdiction.state if jurisdiction is not None else None,
             local_cq_zone=jurisdiction.cq_zone if jurisdiction is not None else None,
             local_itu_zone=jurisdiction.itu_zone if jurisdiction is not None else None,

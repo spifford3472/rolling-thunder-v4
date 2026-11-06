@@ -175,7 +175,7 @@ def test_version_12_migration_preserves_contact_retry_and_constraints(tmp_path: 
     database_path = tmp_path / "rolling-thunder-v11.db"
     _create_version_11_database(database_path)
 
-    assert initialize_database(database_path) == CURRENT_SCHEMA_VERSION == 21
+    assert initialize_database(database_path) == CURRENT_SCHEMA_VERSION == 22
 
     with sqlite3.connect(database_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")

@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from math import isfinite
 from pathlib import Path
 from time import monotonic
 from typing import Protocol, cast
@@ -187,11 +188,25 @@ def parse_gga_sentence(sentence: str, *, updated_at: datetime) -> GPSPosition:
     if altitude_m is None:
         raise GPSParseError("A valid GGA fix must include altitude.")
 
+    # GGA HDOP is dilution of precision, not an accuracy measurement.
+    # Treat it only as a deliberately conservative uncertainty estimate.
+    # If HDOP is unavailable/invalid, leave accuracy unknown (county blank).
+    accuracy_m = None
+    if fields[8]:
+        try:
+            hdop = float(fields[8])
+        except ValueError as error:
+            raise GPSParseError("GGA HDOP is invalid.") from error
+        if not isfinite(hdop) or hdop <= 0:
+            raise GPSParseError("GGA HDOP must be finite and positive.")
+        accuracy_m = max(100.0, hdop * 30.0)
+
     return GPSPosition(
         fix_state=GPSFixState.THREE_DIMENSIONAL,
         latitude=latitude,
         longitude=longitude,
         altitude_m=altitude_m,
+        accuracy_m=accuracy_m,
         satellites=satellites,
         updated_at=updated_at,
     )
