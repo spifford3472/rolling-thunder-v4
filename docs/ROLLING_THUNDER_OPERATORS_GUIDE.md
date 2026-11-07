@@ -1134,6 +1134,8 @@ requires a separate Wavelog provider/API change; no station profile is moved amo
 six-character subsquares as a workaround. Contact sync uses weather already present
 on the QSO without adding weather text to new notes.
 
+For future uploaded contacts, a machine-readable location fallback is placed in ADIF `COMMENT` when available, e.g. `[RTV4:MY_CNTY=OH,Clinton;MY_GRID=EM89al]`. This does not change operator notes or the original county/grid fields. Verify the marker survives Wavelog and QRZ exports before relying on it. Previously synchronized contacts are not modified.
+
 Blank notes are omitted from Wavelog ADIF. Explicit existing notes remain exact;
 old claimed uploads retain their original payload on retry. New POTA and Browse
 contacts do not generate notes from their park or location. Station

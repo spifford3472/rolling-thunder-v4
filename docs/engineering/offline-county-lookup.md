@@ -281,3 +281,7 @@ satellites, HDOP 0.55-0.88, 95% of positions within 5.62 m of their
 median position. This measures repeatability, not absolute accuracy or
 county-boundary positional accuracy. Driving/boundary validation remains
 a post-deployment observation requirement.
+
+## Wavelog mobile location fallback (proposed, not deployed)
+
+New Forge Wavelog ADIF payloads additionally carry a versioned `COMMENT` marker such as `[RTV4:MY_CNTY=OH,Clinton;MY_GRID=EM89al]` to permit future recovery when station-profile location fields replace per-QSO values. Missing components are omitted; missing county is never guessed. The canonical `MY_CNTY` and `MY_GRIDSQUARE` fields remain. This is additive only for newly synchronized payloads; existing claimed payload hashes, historical contacts, and production Wavelog records are not rewritten. Live Wavelog and QRZ export retention remains an acceptance gate before deployment. Rollback is a Forge-only code revert before deployment, with no schema migration.

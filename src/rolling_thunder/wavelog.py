@@ -1054,6 +1054,15 @@ def contact_to_adif(contact: Contact) -> str:
         fields.append(("TX_PWR", str(contact.tx_power_watts)))
     if contact.pota_reference is not None:
         fields.append(("POTA_REF", str(contact.pota_reference)))
+    # Wavelog may replace per-QSO mobile location fields with station-profile values.
+    # Keep a versioned, machine-readable fallback in the ordinary ADIF COMMENT field.
+    location_parts: list[str] = []
+    if contact.my_county is not None and contact.my_state is not None:
+        location_parts.append(f"MY_CNTY={contact.my_state},{contact.my_county.title()}")
+    if contact.my_grid6 is not None:
+        location_parts.append(f"MY_GRID={contact.my_grid6}")
+    if location_parts:
+        fields.append(("COMMENT", f"[RTV4:{';'.join(location_parts)}]"))
     if contact.notes is not None and contact.notes.strip():
         fields.append(("NOTES", contact.notes))
 

@@ -130,7 +130,7 @@ profile grid, and belong to the exact configured logbook. Any legacy `Mobile`
 profile alignment also uses only derived grid4; no station profile follows a
 moving six-character subsquare. Wavelog-bound ADIF
 always carries full frozen `MY_GRIDSQUARE` when present. New Wavelog-bound ADIF
-omits blank `NOTES` and preserves nonblank supplied text exactly. Ordinary new
+omits blank `NOTES` and preserves nonblank supplied text exactly. For new payloads, Forge also emits an ADIF `COMMENT` fallback `[RTV4:MY_CNTY=OH,Clinton;MY_GRID=EM89al]` when captured location values exist. Each component is independently optional; `NOTES` and standard `MY_CNTY`/`MY_GRIDSQUARE` are unchanged. Wavelog/QRZ retention of `COMMENT` still requires live acceptance verification. Ordinary new
 POTA/Browse/FT8 contacts do not generate POTA/mobile/location boilerplate.
 Existing saved text and structured location/POTA/weather evidence remain intact.
 

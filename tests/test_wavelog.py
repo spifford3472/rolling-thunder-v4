@@ -265,6 +265,29 @@ def test_contact_to_adif_preserves_existing_notes_exactly() -> None:
     assert "Mobile QSO" not in adif
 
 
+def test_contact_to_adif_adds_mobile_location_comment_fallback() -> None:
+    qso = contact().model_copy(
+        update={"my_state": "OH", "my_county": "CLINTON", "my_grid": "EM89al"}
+    )
+    adif = contact_to_adif(qso)
+    marker = "[RTV4:MY_CNTY=OH,Clinton;MY_GRID=EM89al]"
+    assert f"<COMMENT:{len(marker)}>{marker}" in adif
+    assert "<MY_CNTY:10>OH,Clinton" in adif
+    assert "<MY_GRIDSQUARE:6>EM89al" in adif
+    assert "<CNTY:" not in adif
+    assert "<NOTES:12>POTA US-0732" in adif
+    assert adif.count(marker) == 1
+
+
+def test_contact_to_adif_location_fallback_handles_missing_gps() -> None:
+    qso = contact().model_copy(update={"my_grid": None, "my_state": None, "my_county": None})
+    assert "<COMMENT:" not in contact_to_adif(qso)
+    qso = contact().model_copy(update={"my_grid": None, "my_state": "OH", "my_county": "FRANKLIN"})
+    assert "[RTV4:MY_CNTY=OH,Franklin]" in contact_to_adif(qso)
+    qso = contact().model_copy(update={"my_grid": "EM89al", "my_state": None, "my_county": None})
+    assert "[RTV4:MY_GRID=EM89al]" in contact_to_adif(qso)
+
+
 def test_contact_to_adif_adds_power_without_automatic_weather_notes() -> None:
     qso = contact().model_copy(
         update={
