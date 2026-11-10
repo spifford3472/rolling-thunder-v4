@@ -1,0 +1,4 @@
+# Rolling Thunder Settings retains its serial-v2 confirmation and runtime safety guards.
+# Permit only these two exact systemd power-transition commands for the operator account.
+geoff ALL=(root) NOPASSWD: /usr/bin/systemctl --no-ask-password reboot
+geoff ALL=(root) NOPASSWD: /usr/bin/systemctl --no-ask-password poweroff
