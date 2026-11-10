@@ -100,8 +100,9 @@ class PreferenceBarrier(Protocol):
 
 
 class LinuxSystemctlPowerAdapter:
-    """Execute one fixed noninteractive systemctl argument vector."""
+    """Execute one allowlisted, noninteractive power request through sudo."""
 
+    _SUDO = "/usr/bin/sudo"
     _SYSTEMCTL = "/usr/bin/systemctl"
 
     def __init__(
@@ -115,7 +116,7 @@ class LinuxSystemctlPowerAdapter:
         if not isinstance(action, PowerAction):
             raise TypeError("Power action must be a PowerAction.")
         completed = self._runner(
-            [self._SYSTEMCTL, "--no-ask-password", action.value],
+            [self._SUDO, "-n", self._SYSTEMCTL, "--no-ask-password", action.value],
             shell=False,
             capture_output=True,
             text=True,

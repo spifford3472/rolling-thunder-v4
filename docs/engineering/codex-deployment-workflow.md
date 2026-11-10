@@ -21,7 +21,38 @@ Repository:
 Codex must not perform normal development inside production runtime
 directories.
 
-## Parked Settings power acceptance
+## Settings power controls on anvilmobile
+
+The Settings REBOOT and SHUTDOWN actions require both the existing application
+confirmation/safety guards and this host authorization:
+
+- `/etc/sudoers.d/rolling-thunder-settings-power` grants `geoff` only the exact
+  `/usr/bin/systemctl --no-ask-password reboot` and `poweroff` vectors through
+  noninteractive sudo.
+- `/home/geoff/.config/autostart/polkit-mate-authentication-agent-1.desktop`
+  disables the duplicate MATE PolicyKit agent; LXPolKit remains the desktop
+  authentication agent.
+- The source configurations are `deploy/rolling-thunder-settings-power.sudoers`
+  and `deploy/polkit-mate-authentication-agent-1.desktop`.
+
+After the approved Rolling Thunder deployment is installed and the device is
+parked, install the host configuration with:
+
+    cd /home/geoff/projects/rolling-thunder-v4
+    sudo ./deploy/install-settings-power-controls.sh
+
+The installer validates the sudoers source with `visudo`, saves the previous
+file states in a root-owned mode-0700 directory under
+`/var/backups/rolling-thunder/`, replaces each target atomically, then validates
+the live sudoers configuration. It prints `BACKUP_DIR=...` on success. To undo:
+
+    sudo ./deploy/rollback-settings-power-controls.sh /var/backups/rolling-thunder/settings-power-controls.<suffix>
+
+Rollback restores the exact prior presence/content of both files and validates
+the resulting sudoers configuration. Preserve the printed backup path in the
+change record. Do not run the UI power acceptance while the Pi is moving or
+operating radios; validate the REBOOT and SHUTDOWN actions separately while
+parked, then verify SIGTERM cleanup and that the intended action completes.
 
 Actual parked reboot/poweroff and physical power-cycle acceptance is owner-only
 and is not established by source tests. Record installed source and configuration
