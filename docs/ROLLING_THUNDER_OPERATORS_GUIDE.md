@@ -768,8 +768,10 @@ manager's actual SIGTERM. The successful request itself does not preemptively
 close the dashboard. A permission, guard, preference-drain, adapter, or timeout
 failure leaves the dashboard usable and shows the action plus a bounded reason.
 Linux shutdown does not disconnect external battery, fan, hub, or radio power; a
-blank screen is not safe-unplug proof. Parked installed power-cycle acceptance and
-Pi full-screen visual acceptance remain separate supervised work.
+blank screen is not safe-unplug proof. Settings power actions also require the
+host's narrow reboot/shutdown authorization; an unavailable authorization is
+reported in the UI without closing the dashboard. Parked installed power-cycle
+acceptance and Pi full-screen visual acceptance remain separate supervised work.
 
 ## Antenna reference / RF exposure screen
 

@@ -153,7 +153,13 @@ def test_guard_or_preference_failure_leaves_runtime_open_and_reports_error() -> 
     assert not blocked.request_or_confirm(PowerAction.REBOOT, proof(3, 1.2))
 
 
-def test_os_adapter_uses_only_fixed_noninteractive_vector() -> None:
+@pytest.mark.parametrize(
+    ("action", "systemctl_action"),
+    [(PowerAction.REBOOT, "reboot"), (PowerAction.SHUTDOWN, "poweroff")],
+)
+def test_os_adapter_uses_only_fixed_noninteractive_sudo_vector(
+    action: PowerAction, systemctl_action: str
+) -> None:
     calls: list[tuple[object, dict[str, object]]] = []
 
     def runner(arguments, **kwargs):  # type: ignore[no-untyped-def]
@@ -161,10 +167,10 @@ def test_os_adapter_uses_only_fixed_noninteractive_vector() -> None:
         return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
     adapter = LinuxSystemctlPowerAdapter(runner=runner)
-    adapter.request(PowerAction.SHUTDOWN)
+    adapter.request(action)
     assert calls == [
         (
-            ["/usr/bin/systemctl", "--no-ask-password", "poweroff"],
+            ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password", systemctl_action],
             {"shell": False, "capture_output": True, "text": True, "timeout": 5.0, "check": False},
         )
     ]

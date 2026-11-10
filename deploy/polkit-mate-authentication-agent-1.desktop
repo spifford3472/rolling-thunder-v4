@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=MATE PolicyKit authentication agent
+Comment=Disabled because LXPolKit is the sole PolicyKit agent in the Raspberry Pi desktop session
+Hidden=true

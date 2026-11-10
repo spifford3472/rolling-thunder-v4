@@ -40,9 +40,14 @@ includes context changes, tuning/selection movement, capture, QSO actions and
 commits. Ordinary navigation remains available during the first SELECT/CONFIRM
 stage. Cleanup-started state has the same all-command guard.
 
-The Linux adapter permits only `/usr/bin/systemctl --no-ask-password reboot` or
-`poweroff`, with `shell=False`, captured output, and a five-second timeout on a
-bounded worker. Failure or timeout leaves the dashboard running and preference
+The Linux adapter invokes `sudo -n` with exactly one of the allowlisted commands
+`/usr/bin/systemctl --no-ask-password reboot` or
+`/usr/bin/systemctl --no-ask-password poweroff`, with `shell=False`, captured
+output, and a five-second timeout on a bounded worker. The host sudoers entry is
+`/etc/sudoers.d/rolling-thunder-settings-power`; it grants only those two exact
+argument vectors to the `geoff` account. It does not permit a shell or arbitrary
+systemctl arguments. The in-app serial-v2 confirmation and radio/commit guards
+remain required. Failure or timeout leaves the dashboard running and preference
 service open, with the bounded reason visible. Success remains pending and does
 not call Tk or start cleanup; the service manager's actual SIGTERM sets a
 thread-safe flag, and the UI refresh starts existing off-Tk cleanup on the main
