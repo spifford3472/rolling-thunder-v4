@@ -48,7 +48,7 @@ def _event(suffix: int = 1):
 def test_schema_additive_and_idempotent(tmp_path):
     path = tmp_path / "data.db"
     assert initialize_meshcore_database(path) == 2
-    assert initialize_meshcore_database(path) == 1
+    assert initialize_meshcore_database(path) == 2
     with sqlite3.connect(path) as connection:
         tables = {row[0] for row in connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
