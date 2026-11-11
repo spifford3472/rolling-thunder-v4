@@ -13,7 +13,6 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-
 _CHANNEL_INFO = 0x12
 _CHANNEL_TEXT_LEGACY = 0x08
 _CHANNEL_TEXT_V3 = 0x11
