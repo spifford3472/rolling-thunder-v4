@@ -595,3 +595,6 @@ contradictory data), test_callsign_info.py/test_forge_callsign_info.py (shared
 history, legacy response defaults), test_forge_contact_sync.py (old pending and
 synchronized claim hashes/changed payload rejection), and existing contact
 metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
+
+- `tests/test_meshcore_passive.py` — synthetic v1.17.1 metadata payload, full-key collisions, 0x8A layout, unsupported frames, malformed lengths, no path synthesis.
+- `tests/test_meshcore_observation_repository.py` — additive schema-23 local SQLite tables, append-only identity summaries, valid/missing/stale/future/low-quality immutable GPS snapshots, invalid timestamp, no serial dependency.
