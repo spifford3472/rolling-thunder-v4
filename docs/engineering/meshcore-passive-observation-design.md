@@ -142,3 +142,27 @@ Next parked action requires owner-assisted USB/power troubleshooting with no una
 - Tests: full CI #3582 passed; host-side regression/fixtures are green, but no physical USB capture or parked functionality test has passed. RSSI/SNR are not present on these supported push frames; they remain null, and no routing path is synthesized.
 - **Current blocking hardware gate:** restore a configured MeshCore tty and existing GPS tty, audit hub power/cable stability and confirm FT-891/controller/GPS functionality. Before activation, verify firmware role, ordinary RF behavior/exposure, log storage retention and backup, and complete parked receive capture.
 - No automatic discovery, advertisement, messaging, trace, CAT/PTT or radio configuration is permitted from Rolling Thunder's MeshCore collector. The owner permits native firmware-managed ACK/forwarding traffic; a physically inaccessible antenna is not by itself an RF exposure assessment.
+
+
+## Heltec V4.3 replacement / firmware evidence (2026-11-11)
+
+With the earlier problematic V3 removed, anvilmobile rebooted cleanly and the
+previously missing GPS CP2102N returned as `/dev/ttyUSB3`. The replacement
+Heltec V4.3 was connected at the same physical USB port `1-1.1.1` and
+successfully enumerated as **Espressif native USB CDC** (`303a:0002`,
+`/dev/ttyACM0`, serial `F85B1BBEC6C4`) without observed USB `-71` errors.
+The existing CP2102/CP2105 controller and GPS device interfaces remained present.
+
+An exclusive local-only diagnostic queried MeshCore `CMD_DEVICE_QUERY=0x16`
+with app protocol 3. The first query, with DTR deasserted, returned no bytes.
+With DTR asserted, the response `RESP_CODE_DEVICE_INFO=0x0D` reported:
+**MeshCore v1.16.0-07a3ca9**, build **06-Jun-2026**, board string
+**Heltec V4.3 OLED**, protocol **13**, client repeat flag **0** (disabled).
+The firmware is older than the V3's v1.17.1. The official upstream
+`companion-v1.16.0` source supports the same push codes `0x80`, `0x81`,
+and `0x8A` and the same serialized contact metadata layout used by the parser.
+Version query was a local USB command, not an RF/discovery request. Nothing was
+flashed or saved to persistent device configuration. The receive collector is
+still disabled in production and must never send this diagnostic automatically.
+A firmware string cannot establish that actual passive events will appear
+without further stationary live acceptance.

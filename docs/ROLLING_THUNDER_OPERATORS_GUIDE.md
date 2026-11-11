@@ -1407,3 +1407,20 @@ suite is not a substitute for a parked physical USB, RF, and GPS/controller
 acceptance check. Rollback: set `meshcore_passive.enabled: false` and restart
 the application through the approved deployment process; retain the separate
 database for later analysis.
+
+
+### Heltec V4.3 USB receiver identification (2026-11-11)
+
+The replacement board is a Heltec WiFi LoRa 32 V4.3 with native ESP32 USB CDC
+(interface `ttyACM0`, USB vendor/product `303a:0002`) and an individual USB
+serial number. The earlier V3 used an ambiguous CP2102 bridge; the V4 uses a
+separate, distinguishable interface. The replacement's local-only MeshCore
+`CMD_DEVICE_QUERY` returned firmware **v1.16.0-07a3ca9**, protocol **13**,
+build **06-Jun-2026**, reported as **Heltec V4.3 OLED** and repeater mode off.
+The firmware's board label does not imply a physically installed display.
+
+V4 native CDC requires DTR asserted to provide USB replies; V3 CP2102 handling
+keeps it deasserted. A firmware query is an intentional parked diagnostic, not
+part of unattended collector behavior. The application retains its default-off
+gate; this identification alone does not prove the radio is receiving nearby
+nodes or that a full drive-tested collector has passed acceptance.
