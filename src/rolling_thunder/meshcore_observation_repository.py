@@ -135,7 +135,7 @@ class MeshcoreObservationRepository:
                 INSERT INTO meshcore_observations (
                     public_key_hex, event_type, received_at_utc,
                     peer_advert_timestamp, node_type_code, advertised_name,
-                    rssi_dbm, snr_dbm, receiver_latitude, receiver_longitude,
+                    rssi_dbm, snr_db, receiver_latitude, receiver_longitude,
                     receiver_gps_updated_at, gps_status
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
