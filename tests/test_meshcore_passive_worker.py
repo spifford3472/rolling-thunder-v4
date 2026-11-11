@@ -13,6 +13,10 @@ class FakeSink:
         self.saved = []
         self.block = None
 
+    def record_signal(self, event, received_at, gps_state):
+        self.saved.append((event, received_at, gps_state))
+        return len(self.saved)
+
     def record(self, event, received_at, gps_state):
         if self.block is not None:
             self.block.wait(timeout=3)
@@ -75,3 +79,18 @@ def test_gps_snapshot_taken_at_offer_not_after_delay():
 def test_invalid_capacity():
     with pytest.raises(ValueError):
         MeshcorePassiveWorker(FakeSink(), lambda: None, capacity=0)
+
+
+def test_raw_rf_payload_is_stripped_before_reaching_sink():
+    """Persistence never receives raw MeshCore packet or guessed sender."""
+    sink = FakeSink()
+    worker = MeshcorePassiveWorker(sink, lambda: None)
+    worker.start()
+    raw = bytes([0x88, 0xF0, 0x9C]) + b"secret-RF-payload"
+    assert worker.offer(raw)
+    worker.stop()
+    assert len(sink.saved) == 1
+    event = sink.saved[0][0]
+    assert event.rssi_dbm == -100
+    assert event.snr_db == -4
+    assert "secret-RF-payload" not in repr(event)
