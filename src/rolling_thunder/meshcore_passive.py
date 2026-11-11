@@ -1,4 +1,4 @@
-"""Pure, offline-only parser for MeshCore v1.17.1 unsolicited notifications.
+"""Pure, offline-only parser for MeshCore v1.16.0+ unsolicited notifications.
 
 Input is an already-deframed companion payload. This module cannot open a
 serial device, control a radio, or issue any outgoing MeshCore command.
@@ -86,3 +86,44 @@ def parse_passive_notification(payload: bytes) -> MeshcoreObservation | None:
         advertised_name=name,
         advertised_timestamp=advert_at or None,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class MeshcoreSignalSample:
+    """Unattributed RF receive metrics; intentionally retains no packet bytes.
+
+    PUSH 0x88 contains SNR (signed quarter-dB), RSSI (signed dBm), and an
+    arbitrary raw RF packet. A raw packet is not a trustworthy node identity.
+    Do not persist or log any of its contents or attribute it to a contact.
+    """
+
+    snr_db: float
+    rssi_dbm: float
+
+
+def parse_passive_signal(payload: bytes) -> MeshcoreSignalSample | None:
+    """Extract metrics from v1.16.0 PUSH_CODE_LOG_RX_DATA (0x88).
+
+    The payload is only emitted when firmware raw-RX logging is enabled.
+    Require at least a minimal packet after the two metric bytes. Ignore
+    every other byte (which may contain private RF traffic).
+    """
+    if len(payload) < 5 or payload[0] != 0x88:
+        return None
+    snr_quarters = int.from_bytes(payload[1:2], "little", signed=True)
+    rssi = int.from_bytes(payload[2:3], "little", signed=True)
+    return MeshcoreSignalSample(snr_db=snr_quarters / 4.0, rssi_dbm=float(rssi))
+
+
+# Type codes come from the upstream advert protocol, not contact names.
+NODE_ROLE_CODES: dict[int, str] = {
+    1: "companion",
+    2: "repeater",
+    3: "room_server",
+    4: "sensor",
+}
+
+
+def node_role_from_type_code(code: int | None) -> str:
+    """Return only roles explicitly identified in the advertised type code."""
+    return NODE_ROLE_CODES.get(code, "unknown")
