@@ -72,3 +72,16 @@ The companion protocol documentation lists `PUSH_CODE_ADVERT=0x80` for received 
 The owner provided another photograph showing `RollingThunder`, `MSG: 0`, a battery icon, and `< Connected >`. This is consistent with a MeshCore **companion-style** status screen and an operator-configured node name, not the typical repeater telemetry screen; **exact firmware role is still a hypothesis until its firmware/image provenance or safely read device identity is verified**. `MSG: 0` is an apparent message count, **not** a passive packet counter or proof that no nodes are reachable. `Connected` indicates a connected-state presentation but cannot alone identify whether USB, Bluetooth or another app transport is connected, nor demonstrate RF reception.
 
 Relevant background: official MeshCore companion protocol documentation at https://docs.meshcore.io/companion_protocol/ and companion radio firmware overview at https://github.com/meshcore-dev/MeshCore/wiki/Companion-Radio-Protocol . Routine companion applications may synchronize contacts/messages or send initialization commands; no standard client connection is approved for the receive-only design until exact v1.17.1 commands and autonomous TX are reviewed. Only safe read-only external examination has occurred. No serial commands or software RF transmissions have been initiated.
+
+## Protocol investigation refinement (after OLED identification)
+
+Official upstream companion protocol references (https://docs.meshcore.io/companion_protocol/ and https://github.com/meshcore-dev/MeshCore/wiki/Companion-Radio-Protocol) document:
+- `PUSH_CODE_ADVERT (0x80)`: asynchronously received advertisement, including a 32-byte node public key. It does **not** itself promise complete signal metrics or rich name/role detail; companion applications usually fetch fuller contact metadata separately.
+- `PUSH_CODE_PATH_UPDATED (0x81)`: public key notification when the saved path for a contact changes. The event alone is not evidence of a complete path.
+- `CMD_GET_CONTACTS (4)`: locally requests stored contact metadata according to docs; its precise v1.17.1 behavior must be source-audited before allowlisting, including whether it can induce RF indirectly.
+- `CMD_APP_START (1)`, `CMD_DEVICE_QUERY (22)`: documented host-side initialization/identity requests; still blocked until the exact build's source is reviewed for RF or persistent side effects.
+- `CMD_SEND_SELF_ADVERT (7)`, send/login/status/trace and related operations intentionally trigger RF and remain forbidden.
+
+The generic companion docs include broader synchronization and device-time-setting examples which are inappropriate to assume safe for this receive-only project. Avoid invoking generic `meshcore_py` connect/bootstrap flows without a verified operation allowlist. A pure inbound framing/parsing implementation and fixture-based tests are possible without hardware, but live serial opening remains gated on role and autonomous-TX evidence.
+
+Even a proven receive-only **application** cannot silence firmware-originated autonomous beacons, advertisements, ACKs, or repeater traffic; firmware configuration and local RF measurements are separate prerequisites for an absolute passive guarantee. Do not infer this guarantee from the companion-like OLED `Connected` state.
