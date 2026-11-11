@@ -516,3 +516,8 @@ TX flag is false, provided every independent local FT8/hardware/PTT/commit guard
 is idle. This supports shutting down with the radio already switched off. A retained
 TX flag is never cleared by disconnection; connecting/error states remain unknown
 and block the action. No live CAT query or radio command is issued by this guard.
+
+
+## Dormant MeshCore passive observation extension
+
+The uncomposed passive MeshCore components may consume a caller-supplied immutable `GPSState` and additive schema-23 tables but must not query a second GPS receiver, infer routes from cached outbound paths, assume RSSI/SNR from 0x80/0x81/0x8A, connect to radio hardware, send RF or introduce an unattended transmit path. Their dormant presence does not authorize operation. A device adapter may not be composed until exact firmware, physical USB identity and transmit-safety gates are independently satisfied.
