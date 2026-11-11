@@ -15,7 +15,6 @@ from rolling_thunder.meshcore_public_intake_protocol import (
     verify_channel_info,
 )
 
-
 SECRET = bytes(range(16))
 APPROVED = ApprovedPublicChannel(
     slot=3,
