@@ -69,3 +69,6 @@ A feature needing one additional radio operation should extend the narrow typed 
 ### Forge
 
 A Pi screen may consume a Forge service, but it does not own that service. Forge APIs should remain presentation-neutral and reusable by future authorized clients.
+
+
+Opt-in MeshCore collector (disabled by default) consumes shared published immutable GPS state and a dedicated SQLite database. It MUST NOT open the GPS serial, change the current grid or modify QSO persistence. When enabled, its own exclusive CP2102 physical USB path is an independent hardware source.

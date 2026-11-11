@@ -437,3 +437,11 @@ Issue246 keeps ownership unchanged: Wavelog adapter normalizes provider history
 and serializes notes; contact-sync alone owns legacy claim compatibility; shared
 callsign presentation consumes count/band without provider access. See
 `issue-246-notes-and-contact-history.md`.
+
+## MeshCore passive observation collector (opt-in)
+
+`meshcore_passive.py` owns only inbound metadata parsing from already-deframed payloads; `meshcore_observation_repository.py` owns a dormant SQLite persistence adapter and reads existing immutable `GPSState` snapshots. The collector is composed only when enabled by typed configuration (default false); it owns its one exclusive USB reader and a dedicated SQLite database but no UI, host RF commands, Forge or GPS-acquisition authority. Its separate version-1 SQLite database does not alter the Rolling Thunder main storage schema. Opt-in hardware integration uses an explicit verified physical /dev/serial/by-path selector, bounded worker and no application commands. Parked physical acceptance, device identity and RF installation review remain deployment gates. See `meshcore-passive-observation-design.md` (architecture PR #384).
+
+The `meshcore_passive_worker.py` is an injected bounded worker; `meshcore_serial_service.py` exclusively owns UART opening, receive framing, nonblocking submission and reconnect when the config enables it. No Tk, Forge or CAT access. Normal MeshCore firmware-managed acknowledgments/retransmissions are owner-permitted; no app-initiated discovery or messages.
+
+`meshcore_inbound_frames.py` owns only framing of already-read serial bytes and explicitly cannot open a device or create outgoing commands. Upstream v1.17.1 `ArduinoSerialInterface.cpp` confirms `>` + little-endian 16-bit length for host-bound frames and a maximum payload of 176 bytes; actual device startup remains gated.

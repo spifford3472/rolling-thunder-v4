@@ -159,6 +159,9 @@ from rolling_thunder.map_zoom import (
     effective_map_zoom_bounds,
     resolve_initial_map_zoom,
 )
+from rolling_thunder.meshcore_observation_repository import MeshcoreObservationRepository
+from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
+from rolling_thunder.meshcore_serial_service import MeshcorePassiveSerialService
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.network_keepalive import (
@@ -250,6 +253,7 @@ class ApplicationRuntime:
     contact_logging: ContactLoggingService
     gps: GPSReceiver | None = None
     gps_polling: GPSPollingService | None = None
+    meshcore_passive: MeshcorePassiveSerialService | None = None
     clock_sync: ClockSynchronizationService | None = None
     live_map: LiveMapService | None = None
     callsign_map: LiveMapService | None = None
@@ -1229,6 +1233,21 @@ class ApplicationRuntime:
             ft8_hardware_transmit=resolved_ft8_executor,
             ft8_ptt_alarm=ft8_ptt_alarm,
         )
+        if config.meshcore_passive.enabled:
+            # Explicit opt-in: separate SQLite database, existing shared GPS,
+            # exclusive USB listener; no host-originated mesh commands.
+            assert config.meshcore_passive.device is not None
+            meshcore_database = config.storage.database_path.with_name(
+                "meshcore-observations.db"
+            )
+            meshcore_worker = MeshcorePassiveWorker(
+                MeshcoreObservationRepository(meshcore_database),
+                lambda: runtime.latest_gps_state,
+            )
+            runtime.meshcore_passive = MeshcorePassiveSerialService(
+                meshcore_worker,
+                config.meshcore_passive.device,
+            )
         if (
             config.ft8.transmit.enabled
             and isinstance(radio, Ft891Radio)
@@ -1676,6 +1695,8 @@ class ApplicationRuntime:
             self.ft8_receive.start()
         if self.gps_polling is not None:
             self.gps_polling.start()
+        if self.meshcore_passive is not None:
+            self.meshcore_passive.start()
         if self.clock_sync is not None:
             self.clock_sync.start()
         if self.pi_forge_location_publishing is not None:
@@ -1780,6 +1801,8 @@ class ApplicationRuntime:
             self.pi_forge_location_publishing.stop()
         if self.clock_sync is not None:
             self.clock_sync.stop()
+        if self.meshcore_passive is not None:
+            self.meshcore_passive.stop()
         if self.gps_polling is not None:
             self.gps_polling.stop()
         self.polling.stop()

@@ -516,3 +516,8 @@ TX flag is false, provided every independent local FT8/hardware/PTT/commit guard
 is idle. This supports shutting down with the radio already switched off. A retained
 TX flag is never cleared by disconnection; connecting/error states remain unknown
 and block the action. No live CAT query or radio command is issued by this guard.
+
+
+## Opt-in MeshCore passive observation extension
+
+The opt-in MeshCore collector may consume a caller-supplied immutable `GPSState` and separate version-1 MeshCore-only tables but must not query a second GPS receiver, infer routes from cached outbound paths, assume RSSI/SNR from 0x80/0x81/0x8A, connect to radio hardware or introduce an application-originated unattended transmit path. Existing MeshCore firmware-managed RF is permitted by the owner but does not authorize the application to send discovery, adverts, messages or other transmissions. Default configuration remains disabled; live activation requires a verified exclusive physical USB path and parked hardware acceptance. No ordinary radio control, PTT, contact logging or GPS acquisition is delegated to MeshCore.

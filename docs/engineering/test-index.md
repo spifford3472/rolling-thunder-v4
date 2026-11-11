@@ -595,3 +595,13 @@ contradictory data), test_callsign_info.py/test_forge_callsign_info.py (shared
 history, legacy response defaults), test_forge_contact_sync.py (old pending and
 synchronized claim hashes/changed payload rejection), and existing contact
 metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
+
+- `tests/test_meshcore_passive.py` — synthetic v1.17.1 metadata payload, full-key collisions, 0x8A layout, unsupported frames, malformed lengths, no path synthesis.
+- `tests/test_meshcore_observation_repository.py` — isolated version-1 MeshCore-only SQLite tables, append-only identity summaries, valid/missing/stale/future/low-quality immutable GPS snapshots, invalid timestamp, no serial dependency.
+
+- `tests/test_meshcore_passive_worker.py` — disabled worker, nonblocking bounded queue/overflow evidence, safe unsupported-frame handling, immutable GPS snapshot timing, deterministic shutdown.
+
+- `tests/test_meshcore_inbound_frames.py` — synthetic fragmented, concatenated, oversized and malformed serial frames; ensures inbound-only decoder and 176-byte firmware bound.
+
+- `tests/test_meshcore_serial_service.py` — fake UART read-only boundary, missing-device degradation, physical path selection and no outgoing command.
+- `tests/test_meshcore_runtime_integration.py` — default-disabled runtime, invalid USB path rejection, and opt-in isolated database composition with no device access during configuration.

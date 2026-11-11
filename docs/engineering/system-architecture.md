@@ -196,3 +196,8 @@ A release/rollback point must identify:
 - database-safe backups/snapshots where required.
 
 Experimental Codex work should begin only after such a restore point exists.
+
+
+### MeshCore passive collection (opt-in, disabled by default)
+
+A dedicated version-1 MeshCore SQLite database provides identity and observation history, leaving Rolling Thunder's existing contact database at schema 22. Pure parsing, a bounded worker, dedicated persistence and an exclusive USB listener are composed in `application_runtime.py` **only** when `meshcore_passive.enabled: true`. With the default `false`, no MeshCore port is opened and no MeshCore database is created. The USB receive service runs off the Tk thread, reuses published immutable GPS and has no command-writing interface. The existing GPS owner is the sole intended source of receiver coordinates. Physical USB-by-path identity, parked hardware acceptance, sustained receive evidence and RF-power/separation review are prerequisites to production enablement. The code itself can be deployed inactive. Firmware-managed ordinary mesh transmissions are owner-permitted; application-originated RF remains disallowed. See draft architecture PR #384.
