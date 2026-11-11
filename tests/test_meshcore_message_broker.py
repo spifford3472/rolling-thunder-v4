@@ -18,10 +18,8 @@ from rolling_thunder.meshcore_message_broker import (
 )
 from rolling_thunder.meshcore_public_intake_protocol import (
     ApprovedPublicChannel,
-    VerifiedChannel,
     verify_channel_info,
 )
-
 
 NOW = datetime(2026, 11, 11, 18, 0, tzinfo=UTC)
 S = MessageStream
