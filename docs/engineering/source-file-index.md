@@ -532,5 +532,5 @@ retain structured metadata instead of generating ordinary QSO notes.
 
 - `src/rolling_thunder/meshcore_inbound_frames.py` — pure inbound-only MeshCore UART framing decoder for bounded `>`-prefixed little-endian lengths, with no serial writer or command encoder.
 
-- `src/rolling_thunder/meshcore_serial_service.py` — opt-in exclusive CP2102-by-path UART receive service and reconnect, never sends host protocol commands; runtime composition is disabled by default.
+- `src/rolling_thunder/meshcore_serial_service.py` — opt-in exclusive V3 CP2102 or V4 native USB CDC ACM by-path receive service and reconnect, never sends host protocol commands; runtime composition is disabled by default.
 - `src/rolling_thunder/config.py` and `application_runtime.py` — typed MeshCore enable/path gate and optional lifecycle using existing immutable GPS snapshots; no UI-thread device work.
