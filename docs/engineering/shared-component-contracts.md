@@ -557,3 +557,11 @@ the existing snapshot at <=1 Hz; its 2–5-second history must be fresh and
 accurate before movement relevance. Heading alone is insufficient to confirm
 route alignment. Decisions cannot issue driver warnings, navigation changes
 or MeshCore RF commands. No new service, schema or external listener.
+
+## MeshCore Forge geographic evidence contracts
+No highway-name centroid becomes a trusted site or confirms a crash.
+Offline reviewed source identity is immutable; the catalog fails closed
+on multi-match, missing or stale records. No public/private messages,
+credentials, GPS track or broker cursor are exposed in the assessment
+store. No existing live database/service is migrated. See
+meshcore-forge-road-evidence.md.

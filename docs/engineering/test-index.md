@@ -650,3 +650,10 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_traffic_worker_integration.py` — full local Unix broker public/private separation, independent consumer cursors, commit-before-ACK and repeated public traffic deduplication
 - `tests/test_meshcore_traffic_worker_main.py` — standalone one-shot real Unix broker/ledger/ACK path, independent SCOUT cursor, exclusive worker lock and CLI argument validation
 - `tests/test_meshcore_traffic_worker_service.py` — staged user-unit isolation, polling, backoff, conservative hardening/resource cap and non-transmitting configuration
+
+### Forge MeshCore geographic evidence and analysis audit tests
+- tests/test_forge_meshcore_geo_catalog.py: exact matching, provenance, review age, privacy.
+- tests/test_forge_meshcore_geo_import.py: reviewed JSON schema and bounded offline import.
+- tests/test_forge_meshcore_geo_main.py: stable read-only CLI and no-match.
+- tests/test_forge_meshcore_geo_adapter.py: injected provider interoperability without network.
+- tests/test_meshcore_traffic_analysis_repository.py: immutable audit, privacy, read-only bounds.

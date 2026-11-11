@@ -79,3 +79,7 @@ Opt-in MeshCore collector (disabled by default) consumes shared published immuta
 
 | MeshCore geographic analysis (source-only) | meshcore_traffic_georeferences.py, meshcore_traffic_gps_samples.py, meshcore_traffic_geocoding.py, meshcore_traffic_relevance.py, meshcore_traffic_analysis.py | Future separately authorized consumer of classified #traffic and existing GPS | Critical: no second GPS authority, default-off provider, no fabricated road/route certainty, no alert or RF authority |
 | MeshCore durable traffic worker | `meshcore_traffic_worker.py`, `meshcore_traffic_ledger.py`, `meshcore_traffic_worker_main.py` | Independently authenticated Rolling Thunder public-broker consumer; future isolated SCOUT worker by separate identity and ledger | Critical: synchronous durable receipt before per-message public cursor ACK, replay/idempotence, bounded duplication, separate DB, no Tk or RF authority |
+
+Forge MeshCore geographic evidence and audit are source-only future
+consumers of public-classified traffic and existing GPS. They cannot
+read a private stream, mutate ACK, send driver alerts or RF.
