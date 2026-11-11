@@ -38,7 +38,9 @@ def receiver_location_at(
         raise ValueError("received_at must be timezone-aware")
     if max_age_s <= 0 or max_accuracy_m <= 0:
         raise ValueError("Freshness limits must be positive")
-    unavailable = lambda reason: ReceiverLocation(None, None, None, reason)
+    def unavailable(reason: str) -> ReceiverLocation:
+        """Retain an observation without inventing receiver coordinates."""
+        return ReceiverLocation(None, None, None, reason)
     if state is None or state.connection_state is not GPSConnectionState.CONNECTED:
         return unavailable("gps_unavailable")
     position = state.position
