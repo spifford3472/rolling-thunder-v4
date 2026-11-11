@@ -451,3 +451,8 @@ The `meshcore_passive_worker.py` is an injected bounded worker; `meshcore_serial
 ## Contact sync retry saturation (2026-11-11)
 
 `contact_retry.py` retains per-contact durable attempt counts in the shared QSO database. After an HTTP 503 or other `HomePlatformError`, it must schedule another attempt at an exponentially increased delay capped by configured maximum **without computing an unbounded exponent**. A high historical count must never terminate `rolling-thunder-radio-poll`, reset or drop a contact, or change QSO synchronization status; due-time persistence and manual retry behavior remain as before. The bounded iterative delay reaches the cap after only a few doublings and is independent of extreme attempt counts. No database migration, network endpoint, UI, or RF change.
+
+
+### MeshCore standalone service replacement (pending live cutover)
+
+`meshcore_collector_main.py` owns the native USB serial reader, metadata parser, independent SQLite writer, bounded background worker, and local Unix-domain API. `meshcore_gps_bridge.py` is the only dependency within Rolling Thunder: it asynchronously publishes the **existing** GPS polling state. No second GPS receiver, no embedded collector construction, no CAT/PTT/transmit authority, and no remote network listener. Previous descriptions of the embedded MeshCore service above are historical after this cutover. The host-level service is independently supervised as `meshcore-collector.service`.
