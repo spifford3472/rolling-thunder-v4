@@ -18,7 +18,6 @@ from rolling_thunder.meshcore_message_broker import (
 )
 from rolling_thunder.meshcore_public_intake_protocol import VerifiedChannel
 
-
 TOKEN_PUBLIC = "scout-" + "a" * 64
 TOKEN_PRIVATE = "owner-" + "b" * 64
 S = MessageStream
