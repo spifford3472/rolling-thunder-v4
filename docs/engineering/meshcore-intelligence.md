@@ -149,3 +149,11 @@ No production deployment of this source is required for existing worker.
 The offline source-verified site catalog and independent immutable
 geographic decision audit are staged, with no live provider configured.
 See meshcore-forge-road-evidence.md.
+
+## MeshCore & OHGO incident context (source-staged)
+
+A new `o` dashboard context combines a receive-only MeshCore label with
+a separate Ohio DOT OHGO incident status/list. The OHGO data path is a
+distinct Forge-owned provider; its reports are not automatically merged
+with community MeshCore claims, and no alert or radio action is enabled.
+See `meshcore-ohgo-incidents.md`.

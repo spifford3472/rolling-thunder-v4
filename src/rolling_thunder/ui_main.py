@@ -83,6 +83,10 @@ from rolling_thunder.log_panel import ContactLogRepository, LogPanelController
 from rolling_thunder.log_panel_commands import LogAwareActivePanelCommands
 from rolling_thunder.log_ui import LogWidgets
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
+from rolling_thunder.meshcore_ohgo_panel import (
+    MeshcoreOhgoPanelWorker,
+    present_meshcore_ohgo,
+)
 from rolling_thunder.operator_commands import OperatorCommandController
 from rolling_thunder.operator_preferences import OperatorPreferenceRepository
 from rolling_thunder.physical_controls import (
@@ -440,6 +444,14 @@ def run_dashboard(
     capture = live_capture if live_capture is not None else mock_transcripts
     if tron_microphone is not None and live_capture is not None:
         capture = PriorityCallsignCapture(live_capture, tron_microphone)
+    # OHGO is read-only and polled off-Tk; Forge alone owns its secret.
+    ohgo_panel_worker = MeshcoreOhgoPanelWorker(
+        str(config.forge.api_url)
+        if config.forge.enabled and config.forge.api_url
+        else None
+    )
+    ohgo_panel_worker.start()
+
     context_navigation = ContextNavigationController(
         include_antennas=config.antenna_reference.enabled
     )
@@ -2125,6 +2137,17 @@ def run_dashboard(
                         friends=friends,
                     )
                 )
+        elif selected_context.selected is ContextId.MESHCORE_OHGO:
+            show_standard_context_body()
+            health_frame.grid_remove()
+            context_title_text.set("MESHCORE & OHGO")
+            context_title_label.configure(font=("DejaVu Sans", 34, "bold"))
+            context_body_label.configure(
+                font=("DejaVu Sans", 21, "bold"), wraplength=720,
+            )
+            context_body_text.set(
+                present_meshcore_ohgo(ohgo_panel_worker.state)
+            )
         elif selected_context.selected is ContextId.FT8:
             health_frame.grid_remove()
             context_title_text.set("FT8")
@@ -2367,6 +2390,7 @@ def run_dashboard(
                     ("physical controls", close_controls),
                     ("callsign audio", stop_callsign_capture),
                     ("Tron audio", stop_tron_microphone),
+                    ("OHGO panel", ohgo_panel_worker.stop),
                     ("DMR", stop_dmr),
                     ("antenna reference", close_antenna),
                     ("log panel", log_panel.stop),

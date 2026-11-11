@@ -583,3 +583,11 @@ retain structured metadata instead of generating ordinary QSO notes.
 - src/rolling_thunder/forge_meshcore_geo_main.py: read-only JSON CLI contract.
 - src/rolling_thunder/forge_meshcore_geo_adapter.py: existing geocoder callback adapter.
 - src/rolling_thunder/meshcore_traffic_analysis_repository.py: independent append-only audit.
+
+### OHGO incident provider and read-only Pi context
+
+- `src/rolling_thunder/forge_ohgo_incidents.py` — OHGO bounded incident domain, retained state and default-off rate-limited provider.
+- `src/rolling_thunder/forge_ohgo_http.py` — official-host-only HTTPS transport and response bounds.
+- `src/rolling_thunder/forge_ohgo_credentials.py` — systemd protected credential loader and independent opt-in.
+- `src/rolling_thunder/forge_ohgo_api.py` — additive retained GET API route and Forge background worker.
+- `src/rolling_thunder/meshcore_ohgo_panel.py` — Pi private Forge reader, stale/status decoder and read-only presentation.

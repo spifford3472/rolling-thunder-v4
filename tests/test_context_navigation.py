@@ -81,6 +81,7 @@ def test_select_next_advances_through_contexts() -> None:
     assert controller.select_next().selected is ContextId.WEATHER
     assert controller.select_next().selected is ContextId.SETTINGS
     assert controller.select_next().selected is ContextId.LOG
+    assert controller.select_next().selected is ContextId.MESHCORE_OHGO
     assert controller.select_next().selected is ContextId.DMR
 
 
@@ -127,3 +128,10 @@ def test_enabled_antenna_context_follows_settings_and_supports_bench_shortcut() 
     assert controller.select_next().selected is ContextId.ANTENNAS
     assert controller.select_shortcut("a") is True
     assert controller.state.definition.title == "ANTENNAS / RF EXPOSURE"
+
+
+def test_meshcore_ohgo_shortcut_preserves_existing_dmr_navigation() -> None:
+    controller = ContextNavigationController()
+    assert controller.select_shortcut("o")
+    assert controller.state.selected is ContextId.MESHCORE_OHGO
+    assert controller.select_next().selected is ContextId.DMR

@@ -83,3 +83,5 @@ Opt-in MeshCore collector (disabled by default) consumes shared published immuta
 Forge MeshCore geographic evidence and audit are source-only future
 consumers of public-classified traffic and existing GPS. They cannot
 read a private stream, mutate ACK, send driver alerts or RF.
+
+| MeshCore & OHGO context (opt-in OHGO) | `forge_ohgo_incidents.py`, `forge_ohgo_api.py`, `meshcore_ohgo_panel.py`, `context_navigation.py`, `ui_main.py` | Forge spots service owns provider/cache; Pi background client owns polling; Tk renders cached status | No API key on Pi, no UI thread HTTP, no MeshCore private cursor, no alerts/navigation or new map layer |

@@ -657,3 +657,11 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - tests/test_forge_meshcore_geo_main.py: stable read-only CLI and no-match.
 - tests/test_forge_meshcore_geo_adapter.py: injected provider interoperability without network.
 - tests/test_meshcore_traffic_analysis_repository.py: immutable audit, privacy, read-only bounds.
+
+### OHGO incidents and MeshCore combined context
+
+- `tests/test_forge_ohgo_incidents.py` — safe parsing, no-key, ETag/caching, stale/upstream failures.
+- `tests/test_forge_ohgo_credentials.py` — systemd-only key loading and symlink/malformed protection.
+- `tests/test_forge_ohgo_api.py` — retained read-only route and existing Forge endpoint delegation.
+- `tests/test_meshcore_ohgo_panel.py` — disabled/stale/live-safe presentation and no Tk network I/O.
+- `tests/test_context_navigation.py` — new `o` context and full-cycle invariants.
