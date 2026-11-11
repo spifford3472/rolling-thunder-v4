@@ -73,10 +73,14 @@ def audit_channels(
         while time.monotonic() < deadline:
             chunk = port.read(256)
             if not chunk:
+                time.sleep(0.01)
                 continue
             for payload in decoder.feed(chunk):
                 if payload[:1] == b"\x01":
-                    # Firmware returns NOT_FOUND on unused channel slots.
+                    # Only explicit ERR_CODE_NOT_FOUND (2) represents an
+                    # unconfigured slot; all other errors fail closed.
+                    if payload != b"\x01\x02":
+                        raise ValueError("MeshCore channel query failed")
                     result_found = True
                     break
                 if payload[:1] != b"\x12":
