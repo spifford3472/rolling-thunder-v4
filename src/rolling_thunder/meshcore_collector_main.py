@@ -44,10 +44,12 @@ class _LocalHttpServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServe
     allow_reuse_address = True
 
     def __init__(
-        self, socket_path: str, db: Path, collector: MeshcorePassiveSerialService
+        self, socket_path: str, db: Path, collector: MeshcorePassiveSerialService,
+        drain: MeshcoreBrokerDrain | None = None,
     ) -> None:
         self.database_path = db
         self.collector = collector
+        self.drain = drain
         super().__init__(socket_path, _Handler)
 
 
@@ -58,7 +60,10 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Serve only bounded, read-only, versioned endpoints."""
-        if self.path not in ("/v1/health", "/v1/nodes", "/v1/signals", "/v1/activity"):
+        if self.path not in (
+            "/v1/health", "/v1/nodes", "/v1/signals", "/v1/activity",
+            "/v1/broker-health",
+        ):
             self._reply(404, {"error": "not_found"})
             return
         if self.path == "/v1/health":
@@ -72,6 +77,25 @@ class _Handler(BaseHTTPRequestHandler):
                 "stored": status.worker.stored,
                 "dropped": status.worker.dropped,
                 "write_errors": status.worker.write_errors,
+            })
+            return
+        if self.path == "/v1/broker-health":
+            drain = self.server.drain
+            if drain is None:
+                self._reply(404, {"error": "not_enabled"})
+                return
+            status = drain.status()
+            self._reply(200, {
+                "schema": "meshcore/broker-health/v1",
+                "enabled": status.enabled,
+                "connected": status.connected,
+                "ready": status.ready,
+                "fault": status.fault,
+                "saved": status.saved,
+                "private_saved": status.private_saved,
+                "public_saved": status.public_saved,
+                "quarantine_saved": status.quarantine_saved,
+                "waiting_for_response": status.waiting_for_response,
             })
             return
         if self.path == "/v1/activity":
@@ -241,7 +265,9 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, request_stop)
     collector.start()
     try:
-        server = _LocalHttpServer(str(options.socket), options.database, collector)
+        server = _LocalHttpServer(
+            str(options.socket), options.database, collector, drain
+        )
         os.chmod(options.socket, 0o600)
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
