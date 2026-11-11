@@ -78,7 +78,7 @@ class _Handler(BaseHTTPRequestHandler):
                         ORDER BY last_seen_utc DESC LIMIT 100
                         """
                     ).fetchall()
-                    keys = ("public_key_hex", "name", "type_code",
+                    keys: tuple[str, ...] = ("public_key_hex", "name", "type_code",
                             "first_seen_utc", "last_seen_utc", "count")
                 else:
                     rows = connection.execute(
