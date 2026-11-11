@@ -1,0 +1,20 @@
+[Unit]
+Description=Independent passive MeshCore V4 observation collector
+Documentation=https://github.com/spifford3472/rolling-thunder-v4
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/projects/rolling-thunder-v4/.venv/bin/rolling-thunder-meshcore-collector --device /dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.1.1:1.0 --database %h/.local/share/meshcore-collector/meshcore-observations.db --gps-snapshot %t/meshcore-gps-snapshot.json --socket %t/meshcore-collector.sock
+Restart=on-failure
+RestartSec=5
+MemoryMax=256M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/meshcore-collector %t
+UMask=0077
+
+[Install]
+WantedBy=default.target

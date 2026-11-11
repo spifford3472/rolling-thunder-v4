@@ -607,3 +607,9 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_runtime_integration.py` — default-disabled runtime, invalid USB path rejection, and opt-in isolated database composition with no device access during configuration.
 
 - `tests/test_contact_retry.py` includes durable 1500-failure overflow regression (next due at configured cap), persisted eligibility after repository recreation, and finite pre-cap doubling behavior; verifies repeated remote HTTP 503 cannot overflow the scheduler backoff calculation.
+
+
+- `tests/test_meshcore_collector_main.py` — local-only HTTP-over-Unix API health/list/query responses, no mutation, no main QSO table.
+- `tests/test_meshcore_gps_bridge.py` — asynchronous atomic GPS publication, no second GPS receiver, stale/unavailable fix rejection.
+- `tests/test_meshcore_observation_repository.py` — schema v1→v2 migration preservation and anonymous signal metrics storage.
+- `tests/test_meshcore_runtime_integration.py` — legacy config flag no longer constructs embedded serial worker; only shared GPS publisher remains.

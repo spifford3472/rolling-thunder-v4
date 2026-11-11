@@ -15,7 +15,9 @@ from typing import Protocol
 from rolling_thunder.gps import GPSState
 from rolling_thunder.meshcore_passive import (
     MeshcoreObservation,
+    MeshcoreSignalSample,
     parse_passive_notification,
+    parse_passive_signal,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,6 +30,13 @@ class ObservationSink(Protocol):
         self, event: MeshcoreObservation, received_at: datetime, gps_state: GPSState | None
     ) -> int:
         """Write one observation and return its identifier."""
+        ...
+
+    def record_signal(
+        self, sample: MeshcoreSignalSample, received_at: datetime,
+        gps_state: GPSState | None,
+    ) -> int:
+        """Store an unattributed RF signal sample; never retain packet bytes."""
         ...
 
 
@@ -148,12 +157,23 @@ class MeshcorePassiveWorker:
             except queue.Empty:
                 continue
             try:
-                parsed = parse_passive_notification(frame.payload)
-                if parsed is None:
-                    with self._lock:
-                        self._ignored += 1
-                    continue
-                self._sink.record(parsed, frame.received_at, frame.gps_state)
+                # Raw RX 0x88 can include private messages; retain only metrics.
+                if frame.payload[:1] == bytes([0x88]):
+                    signal = parse_passive_signal(frame.payload)
+                    if signal is None:
+                        with self._lock:
+                            self._ignored += 1
+                        continue
+                    self._sink.record_signal(
+                        signal, frame.received_at, frame.gps_state
+                    )
+                else:
+                    parsed = parse_passive_notification(frame.payload)
+                    if parsed is None:
+                        with self._lock:
+                            self._ignored += 1
+                        continue
+                    self._sink.record(parsed, frame.received_at, frame.gps_state)
                 with self._lock:
                     self._stored += 1
             except Exception:  # Storage failures must not kill the worker

@@ -166,3 +166,17 @@ flashed or saved to persistent device configuration. The receive collector is
 still disabled in production and must never send this diagnostic automatically.
 A firmware string cannot establish that actual passive events will appear
 without further stationary live acceptance.
+
+
+## Independent collector architecture — proposed November 11, 2026 (pending live cutover)
+
+The owner superseded the embedded collector design and explicitly directed replacing it with a separately supervised service before the first mobile drive. Branch `feature/meshcore-v4-signal-samples-drive-validation` adds `rolling-thunder-meshcore-collector` executed as an independently supervised **systemd user service**. Legacy `meshcore_passive.enabled` remains parsable for compatibility with the existing on-disk config, but Rolling Thunder's runtime does **not** compose or open the MeshCore USB reader even when this old flag is true. The separate service alone owns the physical Heltec V4 CDC path.
+
+- Serial framing: retained allowlisted 0x80/0x81/0x8A notifications; 0x88 raw-RX notifications now strip the two signed RF metrics (SNR signed quarter-dB, RSSI signed dBm), discarding the raw packet entirely. Metrics are **unattributed** unless the firmware supplies a verified binding; do not guess a sender, route, repeater or message content.
+- Advert type codes classify nodes only when supplied in a full 0x8A contact notification, otherwise node role is unknown. Stored cached outbound path is not a verified inbound hop route; path capture remains unavailable without such evidence.
+- Independent persistence: `~/.local/share/meshcore-collector/meshcore-observations.db`; additive MeshCore-only schema v1→v2 adds `meshcore_signal_samples` while preserving historical contact observations. The installer copies previous `config/data/meshcore-observations.db` through the SQLite backup API only after exclusive USB ownership of Rolling Thunder has ended.
+- GPS source: existing `GPSPollingService.add_listener` feeds an asynchronous latest-only queue to `MeshcoreGpsPublisher`. It writes a mode-0600 atomic JSON snapshot under `$XDG_RUNTIME_DIR/meshcore-gps-snapshot.json`; the collector validates publication and fix age against existing receiver GPS metadata and never opens GPS hardware. A stopped RT means GPS unavailable, not fabricated coordinates; MeshCore collection continues.
+- Local consumer API: `$XDG_RUNTIME_DIR/meshcore-collector.sock` (0600), versioned, read-only HTTP-over-Unix endpoints `GET /v1/health`, `/v1/nodes`, `/v1/signals`. All POST methods return 405, and there is no MeshCore host transmit/configuration command path. No TCP listener, Forge dependency or public network permission.
+- Systemd user unit `deploy/meshcore-collector.user.service`, guarded operator installer `deploy/install-meshcore-user-service.sh`. Different user process, bounded RSS and restart policy, no additional background job/scheduler. The service starts after source deployment and SQLite migration; rollback stops the independent unit and restores prior approved RT SHA/config only while parked.
+
+**Required gate:** Ruff, strict MyPy, full pytest, Git diff whitespace, real-unit startup, v1-to-v2 migration on a copy, exclusive port owner, one live advertisement, GPS correlation, no USB resets, drive-soak. Until hardware cutover and validation have occurred this section is **design / code under review, not a claim of production activation**.
