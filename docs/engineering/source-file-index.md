@@ -559,3 +559,5 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_broker_api.py` — separate token-scoped Unix read/ack service with no TCP or radio access
 - `src/rolling_thunder/meshcore_serial_service.py` — existing sole USB owner with optional broker drain; passive default remains
 - `src/rolling_thunder/meshcore_collector_main.py` — optional broker composition and dual Unix socket lifecycle
+
+- `src/rolling_thunder/meshcore_channel_audit.py` — parked-only local 0x1F GET_CHANNEL metadata verification (slot/name/key fingerprint only), no queue dequeue or RF
