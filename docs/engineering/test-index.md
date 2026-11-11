@@ -640,3 +640,7 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_public_consumer.py` — actual Unix API/SQLite integration for independent preview, explicit ACK, permission failures and private isolation
 - `tests/test_meshcore_public_intelligence.py` — exact traffic provenance and no-alert classification for nontraffic/unknown text
 - `tests/test_meshcore_public_consumer_main.py` — bounded preview command, unverified labels, and no implicit ACK
+
+- `tests/test_meshcore_traffic_worker.py` — durable ledger, idempotent ACK replay, duplicate suppression, capacity/storage failures and secure file modes
+- `tests/test_meshcore_traffic_worker_integration.py` — full local Unix broker public/private separation, independent consumer cursors, commit-before-ACK and repeated public traffic deduplication
+- `tests/test_meshcore_traffic_worker_main.py` — standalone one-shot real Unix broker/ledger/ACK path, independent SCOUT cursor, exclusive worker lock and CLI argument validation

@@ -76,3 +76,5 @@ Opt-in MeshCore collector (disabled by default) consumes shared published immuta
 | Optional MeshCore message broker | `meshcore_message_broker.py`, `meshcore_broker_drain.py`, `meshcore_broker_api.py` | Independent collector; future Rolling Thunder and SCOUT token-authorized clients | Critical: firmware destructive dequeue, private-message durability, public channel attestation, capability scopes, no RF authority |
 
 | MeshCore public broker client | `meshcore_public_consumer.py`, `meshcore_public_intelligence.py` | Rolling Thunder manual read-only preview; future independently authorized SCOUT/RT consumers | High: exact public stream only, strict bearer file, no implicit ACK, no private data or unverified traffic alerts |
+
+| MeshCore durable traffic worker | `meshcore_traffic_worker.py`, `meshcore_traffic_ledger.py`, `meshcore_traffic_worker_main.py` | Independently authenticated Rolling Thunder public-broker consumer; future isolated SCOUT worker by separate identity and ledger | Critical: synchronous durable receipt before per-message public cursor ACK, replay/idempotence, bounded duplication, separate DB, no Tk or RF authority |

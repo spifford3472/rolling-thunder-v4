@@ -565,3 +565,7 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_public_consumer.py` — typed public-only bearer-authenticated Unix consumer with bounded preview, strict frame validation and explicit post-processing ACK
 - `src/rolling_thunder/meshcore_public_intelligence.py` — pure traffic keyword candidate adapter with explicit verified slot and unverified-sender semantics
 - `src/rolling_thunder/meshcore_public_consumer_main.py` — local command-line read-only public preview with no implicit acknowledgement or RF authority
+
+- `src/rolling_thunder/meshcore_traffic_ledger.py` — isolated schema-1 SQLite public-message processing receipts, idempotent broker ID replay, 30-minute duplicate suppression, owner-only permissions and bounded storage
+- `src/rolling_thunder/meshcore_traffic_worker.py` — bounded one-batch public consumer, commits each message before individually ACKing the authorized consumer cursor
+- `src/rolling_thunder/meshcore_traffic_worker_main.py` — disabled-by-default standalone one-shot/continuous worker CLI, local single-instance lock and broker backoff; not composed into dashboard/service
