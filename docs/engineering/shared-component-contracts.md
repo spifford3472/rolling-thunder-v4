@@ -532,3 +532,7 @@ The standalone collector is the exclusive MeshCore USB owner; Rolling Thunder on
 ## MeshCore private activity API
 
 The isolated MeshCore collector is the sole owner of its serial device and schema-2 observation database. Only the existing local permission-restricted Unix socket can serve `meshcore/activity/v1` through `GET /v1/activity`. Calls are read-only, bounded to rolling UTC 24 hours with at most 25 receiver-reception bins; POST and unknown routes are rejected. Receiver coordinates are not peer/device coordinates. No new network listener, second GPS reader, raw message persistence or RF command is introduced. UI clients must consume snapshots through a bounded asynchronous adapter; do not synchronously query the socket on Tk.
+
+## MeshCore message broker privacy and delivery
+
+Only the independent collector serial owner may issue audited *host-local* GET_CHANNEL and SYNC_NEXT_MESSAGE requests. Dequeued private contact frames must be synchronously preserved in an isolated protected inbox before the next dequeue; verified public and restricted quarantine streams are separate. A public-looking hashtag is not proof of public channel membership. Acknowledgements are scoped by bearer-verified consumer identity and stream, and never erase another consumer's unread message. The original passive observation API remains read-only. Full storage, mismatched channel identity and uncertain command timeout stop new dequeues. The owner accepts an at-most-one-message power-loss gap between firmware pop and SQLite commit. No RF transmission is authorized.
