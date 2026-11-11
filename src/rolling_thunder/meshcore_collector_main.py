@@ -1,7 +1,7 @@
-"""Independent, receive-only MeshCore daemon with Unix-socket read API.
+"""Independent MeshCore service with optional, separately gated message inbox.
 
-Only this process owns the Heltec serial port and durable observation database.
-No MeshCore command encoder or outbound RF action is exposed.
+The default remains passive and read-only. Opt-in broker composition permits
+only two audited *local* serial commands; no RF transmit capability is exposed.
 """
 from __future__ import annotations
 
@@ -20,7 +20,11 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
+from rolling_thunder.meshcore_broker_api import MeshcoreBrokerApiServer
+from rolling_thunder.meshcore_broker_config import load_broker_config
+from rolling_thunder.meshcore_broker_drain import MeshcoreBrokerDrain
 from rolling_thunder.meshcore_gps_bridge import read_meshcore_gps_snapshot
+from rolling_thunder.meshcore_message_broker import MeshcoreMessageBroker
 from rolling_thunder.meshcore_network_analytics import MeshcoreNetworkAnalytics
 from rolling_thunder.meshcore_observation_repository import MeshcoreObservationRepository
 from rolling_thunder.meshcore_passive import node_role_from_type_code
@@ -154,6 +158,25 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+def _prepare_local_socket(path: Path) -> None:
+    """Never unlink a reachable socket, or an unexpected filesystem entry."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        return
+    if not path.is_socket():
+        raise RuntimeError("MeshCore API path exists but is not a Unix socket")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.3)
+        try:
+            probe.connect(str(path))
+        except OSError as error:
+            if error.errno != errno.ECONNREFUSED:
+                raise
+            path.unlink()
+        else:
+            raise RuntimeError("MeshCore API socket already has an owner")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run collector until SIGTERM; serial failures never kill the HTTP API."""
     parser = argparse.ArgumentParser(description="Local-only passive MeshCore collector")
@@ -161,29 +184,53 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--gps-snapshot", type=Path, required=True)
     parser.add_argument("--socket", type=Path, required=True)
+    parser.add_argument("--enable-message-broker", action="store_true")
+    parser.add_argument("--broker-config", type=Path)
+    parser.add_argument("--broker-database", type=Path)
+    parser.add_argument("--broker-socket", type=Path)
     options = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    options.socket.parent.mkdir(parents=True, exist_ok=True)
-    if options.socket.exists():
-        # A SIGKILL can leave an unbound Unix socket behind. Refuse a
-        # reachable server; only reclaim a proven dead socket inode.
-        if not options.socket.is_socket():
-            raise RuntimeError("MeshCore API path exists but is not a Unix socket")
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
-            probe.settimeout(0.3)
-            try:
-                probe.connect(str(options.socket))
-            except OSError as error:
-                if error.errno != errno.ECONNREFUSED:
-                    raise
-                options.socket.unlink()
-            else:
-                raise RuntimeError("MeshCore API socket already has an owner")
+    broker_options = (
+        options.broker_config, options.broker_database, options.broker_socket
+    )
+    if options.enable_message_broker != all(value is not None for value in broker_options):
+        parser.error("Broker requires explicit enable and all three paths")
+    if (
+        not options.enable_message_broker
+        and any(value is not None for value in broker_options)
+    ):
+        parser.error("Broker paths are invalid without --enable-message-broker")
+    if options.enable_message_broker and (
+        options.broker_socket == options.socket
+        or options.broker_database == options.database
+    ):
+        parser.error("Broker must use its own socket and database")
+    _prepare_local_socket(options.socket)
+    broker: MeshcoreMessageBroker | None = None
+    broker_server: MeshcoreBrokerApiServer | None = None
+    drain: MeshcoreBrokerDrain | None = None
+    if options.enable_message_broker:
+        assert options.broker_config is not None
+        assert options.broker_database is not None
+        assert options.broker_socket is not None
+        config = load_broker_config(options.broker_config)
+        broker = MeshcoreMessageBroker(
+            options.broker_database,
+            consumers={entry.name: entry.streams for entry in config.consumers},
+        )
+        drain = MeshcoreBrokerDrain(broker, config.channels)
+        _prepare_local_socket(options.broker_socket)
+        broker_server = MeshcoreBrokerApiServer(
+            str(options.broker_socket), broker, config.consumers
+        )
+        os.chmod(options.broker_socket, 0o600)
     repository = MeshcoreObservationRepository(options.database)
     writer = MeshcorePassiveWorker(
         repository, lambda: read_meshcore_gps_snapshot(options.gps_snapshot)
     )
-    collector = MeshcorePassiveSerialService(writer, options.device)
+    collector = MeshcorePassiveSerialService(
+        writer, options.device, broker_drain=drain
+    )
     stop = threading.Event()
 
     def request_stop(_signal: int, _frame: object) -> None:
@@ -198,15 +245,27 @@ def main(argv: list[str] | None = None) -> int:
         os.chmod(options.socket, 0o600)
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
+        broker_thread: threading.Thread | None = None
+        if broker_server is not None:
+            broker_thread = threading.Thread(
+                target=broker_server.serve_forever, daemon=True
+            )
+            broker_thread.start()
         try:
             stop.wait()
         finally:
             server.shutdown()
             server.server_close()
             server_thread.join(timeout=3)
+            if broker_server is not None and broker_thread is not None:
+                broker_server.shutdown()
+                broker_server.server_close()
+                broker_thread.join(timeout=3)
     finally:
         collector.stop()
         options.socket.unlink(missing_ok=True)
+        if options.broker_socket is not None and options.enable_message_broker:
+            options.broker_socket.unlink(missing_ok=True)
     return 0
 
 
