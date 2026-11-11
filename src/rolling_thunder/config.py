@@ -855,6 +855,27 @@ class FT8Config(ConfigurationModel):
         return self
 
 
+class MeshcorePassiveConfig(ConfigurationModel):
+    """Opt-in USB receive-only MeshCore collector configuration."""
+
+    enabled: bool = False
+    device: Path | None = None
+
+    @model_validator(mode="after")
+    def validate_receiver_selection(self) -> Self:
+        """Require an explicit physical USB selector on activation."""
+        if not self.enabled:
+            return self
+        if self.device is None or (
+            self.device.parent != Path("/dev/serial/by-path")
+        ):
+            raise ValueError(
+                "meshcore_passive.device must select a /dev/serial/by-path "
+                "interface when enabled"
+            )
+        return self
+
+
 class ApplicationConfig(ConfigurationModel):
     """Complete Rolling Thunder application configuration."""
 
@@ -874,6 +895,7 @@ class ApplicationConfig(ConfigurationModel):
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     ft8: FT8Config = FT8Config()
     antenna_reference: AntennaReferenceConfig = AntennaReferenceConfig()
+    meshcore_passive: MeshcorePassiveConfig = MeshcorePassiveConfig()
     contact_logging: ContactLoggingConfig = ContactLoggingConfig()
     storage: StorageConfig = StorageConfig()
 
