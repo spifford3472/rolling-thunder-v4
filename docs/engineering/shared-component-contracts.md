@@ -544,3 +544,16 @@ The common consumer transport authenticates via the preexisting per-consumer pro
 ## MeshCore durable traffic worker commit-before-ACK
 
 The independent public consumer's broker cursor is ACKed **only after** the worker's separate SQLite ledger transaction has durably committed the exact source broker message ID and analysis disposition. A failed persistence step must not ACK. A committed-but-unacknowledged replay must validate the exact message fingerprint and retry ACK without duplicating a candidate. A broker ID reused with different source payload fails closed. Public general-channel messages are explicitly ignored in analysis but still durably recorded and ACKed; private/quarantined messages must never enter the worker. Similar traffic reports may be recorded as duplicate rather than new candidates within the bounded rolling suppression window, but source IDs remain recorded separately. Neither Tk, SCOUT, FT8 nor another consumer may ACK the worker's cursor or use its candidate rows as verified geographic hazards. The worker remains opt-in and has no RF, alert, route or provider authority.
+
+
+## MeshCore analysis-only geographic relevance
+
+The existing broker and traffic worker retain all public-intake, private
+isolation and ACK ownership. Parsing must not promote unknown or ambiguous
+messages into incidents or invent a point from highway text. An independent
+geocode provider is disabled by default and constrained by rate limits,
+cache, exact road and landmark evidence. The GPS sampler reuses only
+the existing snapshot at <=1 Hz; its 2–5-second history must be fresh and
+accurate before movement relevance. Heading alone is insufficient to confirm
+route alignment. Decisions cannot issue driver warnings, navigation changes
+or MeshCore RF commands. No new service, schema or external listener.

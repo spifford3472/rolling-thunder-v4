@@ -548,6 +548,11 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_incident_classification.py` — deterministic bounded classification of already-verified public traffic/SKYWARN messages; no device, GPS, persistence, UI, or RF authority. See `meshcore-intelligence.md`.
 
 - `src/rolling_thunder/meshcore_geographic_relevance.py` — immutable GPS sample validation, bounded heading history, great-circle distance/bearing and conservative route-confidence classification; no GPS polling, map matching, serial, or RF.
+- src/rolling_thunder/meshcore_traffic_georeferences.py — bounded road/exit/mile/direction parsing and ambiguity rejection.
+- src/rolling_thunder/meshcore_traffic_gps_samples.py — read-only 1 Hz existing GPS snapshot sampler.
+- src/rolling_thunder/meshcore_traffic_geocoding.py — optional disabled injected geographic provider cache and caps.
+- src/rolling_thunder/meshcore_traffic_relevance.py — conservative non-notifying geographic relevance.
+- src/rolling_thunder/meshcore_traffic_analysis.py — noncomposed source-only evidence coordinator.
 
 - `src/rolling_thunder/meshcore_network_analytics.py` — bounded read-only schema-2 aggregation, node/repeater activity and receiver-location reception cells; no collector, DB migration or UI authority.
 
