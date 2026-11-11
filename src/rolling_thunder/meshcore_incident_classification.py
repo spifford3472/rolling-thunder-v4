@@ -19,14 +19,14 @@ _TOKEN_RE = re.compile(r"\b(?:accident|crash|collision|wreck|construction|roadwo
                        r"closure|closed|blocked|congestion|traffic jam|backup|"
                        r"disabled vehicle|stalled vehicle|debris|icy|ice|"
                        r"thunderstorm|tornado|funnel cloud|flooding|flooded|"
-                       r"hail|high winds|strong winds|heavy rain|downpour)\b", re.I)
+                       r"hail|high winds|strong winds|heavy rain|downpour)\b", re.IGNORECASE)
 _ROAD_RE = re.compile(
     r"\b(?:I[- ]?\d{1,3}|US[- ]?\d{1,3}|SR[- ]?\d{1,4}|"
-    r"Route\s+\d{1,4})\b", re.I
+    r"Route\s+\d{1,4})\b", re.IGNORECASE
 )
 _DIRECTION_RE = re.compile(r"\b(northbound|southbound|eastbound|westbound|"
-                            r"NB|SB|EB|WB)\b", re.I)
-_EXIT_RE = re.compile(r"\bexit\s+\d{1,3}[a-z]?\b", re.I)
+                            r"NB|SB|EB|WB)\b", re.IGNORECASE)
+_EXIT_RE = re.compile(r"\bexit\s+\d{1,3}[a-z]?\b", re.IGNORECASE)
 
 
 class IncidentCategory(StrEnum):
@@ -92,7 +92,7 @@ class ClassifiedIncident:
 
 
 _TRAFFIC_RULES: tuple[tuple[IncidentCategory, re.Pattern[str]], ...] = tuple(
-    (category, re.compile(pattern, re.I)) for category, pattern in (
+    (category, re.compile(pattern, re.IGNORECASE)) for category, pattern in (
         (IncidentCategory.ACCIDENT, r"\b(?:accident|crash|collision|wreck)\b"),
         (IncidentCategory.CLOSURE, r"\b(?:closed|closure|blocked)\b"),
         (IncidentCategory.CONSTRUCTION, r"\b(?:construction|roadwork)\b"),
@@ -104,7 +104,7 @@ _TRAFFIC_RULES: tuple[tuple[IncidentCategory, re.Pattern[str]], ...] = tuple(
     )
 )
 _WEATHER_RULES: tuple[tuple[IncidentCategory, re.Pattern[str]], ...] = tuple(
-    (category, re.compile(pattern, re.I)) for category, pattern in (
+    (category, re.compile(pattern, re.IGNORECASE)) for category, pattern in (
         (IncidentCategory.TORNADO, r"\b(?:tornado|funnel cloud)\b"),
         (IncidentCategory.FLOODING, r"\b(?:flooding|flooded)\b"),
         (IncidentCategory.HAIL, r"\bhail\b"),
