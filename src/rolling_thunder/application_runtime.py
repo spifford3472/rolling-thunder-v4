@@ -1685,6 +1685,8 @@ class ApplicationRuntime:
             self.known_callsigns.start()
         if self.ft8_receive is not None:
             self.ft8_receive.start()
+        if self.meshcore_gps_publisher is not None:
+            self.meshcore_gps_publisher.start()
         if self.gps_polling is not None:
             self.gps_polling.start()
         if self.clock_sync is not None:
@@ -1793,6 +1795,8 @@ class ApplicationRuntime:
             self.clock_sync.stop()
         if self.gps_polling is not None:
             self.gps_polling.stop()
+        if self.meshcore_gps_publisher is not None:
+            self.meshcore_gps_publisher.stop()
         self.polling.stop()
         if self.ft8_band_control is not None:
             self.ft8_band_control.restore_normal_settings_for_shutdown()
