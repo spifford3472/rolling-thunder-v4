@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import GPSConnectionState, GPSState
+
 from rolling_thunder.meshcore_observation_repository import (
     MeshcoreObservationRepository,
     receiver_location_at,
