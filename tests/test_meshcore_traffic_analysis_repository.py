@@ -119,3 +119,24 @@ def test_rejects_private_text_or_secrets_in_audit_reason(tmp_path) -> None:
             evaluated_at=NOW,
         )
     assert store.counts() == {}
+
+
+def test_repeated_vehicle_assessments_append_without_rewriting(tmp_path) -> None:
+    """An event may move from ahead to behind as the vehicle travels."""
+
+    from datetime import timedelta
+
+    store = TrafficAssessmentRepository(tmp_path / "store.db", create=True)
+    assert store.record(77, _decision(), evaluated_at=NOW)
+    later = replace(
+        _decision(),
+        relevance=Relevance.BEHIND,
+        reason="reported_site_behind_vehicle_heading",
+        distance_m=250,
+    )
+    assert store.record(77, later, evaluated_at=NOW + timedelta(minutes=2))
+    rows = store.recent()
+    assert len(rows) == 2
+    assert rows[0].relevance == "behind"
+    assert rows[1].relevance == "possibly_ahead"
+    assert store.counts() == {"behind": 1, "possibly_ahead": 1}

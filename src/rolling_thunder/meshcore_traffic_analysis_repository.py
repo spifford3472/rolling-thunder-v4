@@ -62,14 +62,15 @@ class TrafficAssessmentRepository:
                     );
                     INSERT OR IGNORE INTO assessment_schema VALUES (1);
                     CREATE TABLE IF NOT EXISTS assessments(
-                        message_id INTEGER PRIMARY KEY CHECK(message_id>0),
+                        message_id INTEGER NOT NULL CHECK(message_id>0),
                         evaluated_at TEXT NOT NULL,
                         relevance TEXT NOT NULL,
                         confidence TEXT NOT NULL,
                         reason TEXT NOT NULL,
                         source TEXT,
                         distance_m REAL,
-                        digest TEXT NOT NULL
+                        digest TEXT NOT NULL,
+                        PRIMARY KEY(message_id, evaluated_at)
                     );
                     """
                 )
@@ -138,7 +139,8 @@ class TrafficAssessmentRepository:
             db.execute("PRAGMA synchronous=FULL")
             db.execute("BEGIN IMMEDIATE")
             old = db.execute(
-                "SELECT digest FROM assessments WHERE message_id=?", (message_id,)
+                "SELECT digest FROM assessments WHERE message_id=? AND evaluated_at=?",
+                (message_id, fields[1]),
             ).fetchone()
             if old is not None:
                 if old[0] != digest:
@@ -158,7 +160,7 @@ class TrafficAssessmentRepository:
             rows = db.execute(
                 "SELECT message_id,evaluated_at,relevance,confidence,reason,"
                 "source,distance_m,digest FROM assessments "
-                "ORDER BY message_id DESC LIMIT ?",
+                "ORDER BY evaluated_at DESC, message_id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return tuple(PersistedAssessment(*row) for row in rows)

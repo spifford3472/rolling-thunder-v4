@@ -28,7 +28,7 @@ It never writes the broker, message ledger, QSO database, SCOUT cursor,
 radio configuration, or any GPS snapshot. It stores only numeric broker ID,
 time, relevance, confidence, deterministic reason, optional map source,
 approximate distance, and a digest; NO raw message text, private content,
-sender identity or GPS track. Conflicting replays fail closed and no
+sender identity or GPS track. A given message may have multiple different evaluation timestamps so approach/behind progression can be analyzed. Conflicting replays for the same message ID AND timestamp fail closed and no
 automatic pruning or replacement occurs.
 
 Source files:
