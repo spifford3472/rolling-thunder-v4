@@ -548,3 +548,5 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_geographic_relevance.py` — immutable GPS sample validation, bounded heading history, great-circle distance/bearing and conservative route-confidence classification; no GPS polling, map matching, serial, or RF.
 
 - `src/rolling_thunder/meshcore_network_analytics.py` — bounded read-only schema-2 aggregation, node/repeater activity and receiver-location reception cells; no collector, DB migration or UI authority.
+
+- `src/rolling_thunder/meshcore_public_intake_protocol.py` — pure non-actuating v1.16 channel attestation against operator-approved identity/fingerprint and strict legacy/V3 public-text decoding; no USB, queue-drain or RF calls.
