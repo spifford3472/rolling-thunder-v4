@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-CURRENT_SCHEMA_VERSION: Final = 22
+CURRENT_SCHEMA_VERSION: Final = 23
 
 _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     1: (
@@ -852,6 +852,61 @@ _MIGRATIONS: Final[dict[int, tuple[str, ...]]] = {
     ),
     22: (
         "ALTER TABLE contacts ADD COLUMN my_county TEXT",
+    ),
+    23: (
+        """
+        CREATE TABLE meshcore_observed_nodes (
+            public_key_hex TEXT PRIMARY KEY
+                CHECK (length(public_key_hex) = 64),
+            first_seen_utc TEXT NOT NULL,
+            last_seen_utc TEXT NOT NULL,
+            observation_count INTEGER NOT NULL DEFAULT 0
+                CHECK (observation_count >= 0),
+            node_type_code INTEGER
+                CHECK (node_type_code BETWEEN 0 AND 255),
+            advertised_name TEXT,
+            last_rssi_dbm REAL,
+            last_snr_db REAL,
+            receiver_latitude REAL,
+            receiver_longitude REAL,
+            receiver_gps_updated_at TEXT
+        )
+        """,
+        """
+        CREATE TABLE meshcore_observations (
+            observation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            public_key_hex TEXT NOT NULL
+                REFERENCES meshcore_observed_nodes (public_key_hex),
+            event_type TEXT NOT NULL
+                CHECK (event_type IN (
+                    'advertisement', 'new_advertisement', 'path_updated'
+                )),
+            received_at_utc TEXT NOT NULL,
+            peer_advert_timestamp INTEGER,
+            node_type_code INTEGER,
+            advertised_name TEXT,
+            rssi_dbm REAL,
+            snr_db REAL,
+            receiver_latitude REAL,
+            receiver_longitude REAL,
+            receiver_gps_updated_at TEXT,
+            gps_status TEXT NOT NULL,
+            CHECK (
+                (receiver_latitude IS NULL AND receiver_longitude IS NULL)
+                OR
+                (receiver_latitude BETWEEN -90 AND 90
+                 AND receiver_longitude BETWEEN -180 AND 180)
+            )
+        )
+        """,
+        """
+        CREATE INDEX meshcore_observations_received_idx
+        ON meshcore_observations (received_at_utc DESC)
+        """,
+        """
+        CREATE INDEX meshcore_observations_node_idx
+        ON meshcore_observations (public_key_hex, received_at_utc DESC)
+        """,
     ),
 }
 
