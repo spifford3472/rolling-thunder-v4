@@ -99,3 +99,19 @@ In `MyMesh::onDiscoveredContact`, existing contact advertisement notification `0
 A tiny **offline-only research prototype**, `research/meshcore_passive/passive_notifications.py`, has no USB or serial imports and handles only the two exact 33-byte push frames; other frames and malformed lengths are discarded. `research/meshcore_passive/test_passive_notifications.py` provides synthetic cases for 0x80/0x81, collision-safe full keys, unknown/payload exclusions, truncation/extension and absence of serial imports. Six tests passed using `python -m pytest -q` in a separate sandbox on 2026-11-10. This is **not** production code, not a fully validated v1.17.1 receiver, and not evidence of hardware acceptance. Ruff and MyPy were not available in that test sandbox; full repository gates and CI remain pending. No production source modules, configuration, SQLite schema, radio devices or services were modified.
 
 **Gate status remains BLOCKED**: actual flashed image/role/USB-BLE variant, autonomous RF behavior, and v1.17.1 upstream serial *framing* and configuration-dependent broadcasts still require deeper verification. Before expanding prototype into production, inspect exact framing, `0x8A` payload and receive-only notification availability, and decide whether host UART port can be opened without causing firmware transmissions or USB hub disruptions.
+
+## Critical RF audit finding — upstream firmware can transmit in response to reception
+
+Inspected upstream `meshcore-dev/MeshCore` tag `companion-v1.17.1` source in `src/Mesh.cpp` and `examples/companion_radio/MyMesh.cpp`:
+
+- `Mesh::routeDirectRecvAcks` constructs and schedules `createAck` packets with `sendPacket`, potentially also multiple extra ACKs through `getExtraAckTransmitCount`. This is **firmware-originated RF** that does not depend on a USB host sending a command.
+- `Mesh::onRecvPacket` supports retransmission of direct trace/forwarded packets when `allowPacketForward` is enabled. `MyMesh::allowPacketForward` delegates to persisted `_prefs.isRepeatEn()`; constructor defaults are not evidence of the installed saved setting.
+- A successfully received encrypted flood PATH can generate a reciprocal `createPathReturn` / `sendDirect` if the higher-level `onPeerPathRecv` permits it; the implementation may also override this callback. Exact conditional behavior and transport setup need deeper audit.
+- `MyMesh::logRxRaw` can publish `0x88` raw RX records including SNR quantized in quarter-dB and RSSI in signed integer dBm, but also includes the raw RF payload. Do **not** persist that payload; signal values are not automatically attributable to a stable node identity.
+- Therefore **receive-only on the host is not equivalent to receive-only on-air**. A safe USB event parser alone cannot satisfy the owner's strict passive RF boundary. Exact installed firmware image and settings are still unverified. No live serial device access is justified yet.
+
+Official source evidence:
+- https://github.com/meshcore-dev/MeshCore/blob/companion-v1.17.1/src/Mesh.cpp
+- https://github.com/meshcore-dev/MeshCore/blob/companion-v1.17.1/examples/companion_radio/MyMesh.cpp
+
+**Next architectural decision:** For strictly passive RF operation, investigate a dedicated TX-inhibited firmware build or receive-only radio mode that removes every transmit path, test with RF observation, and obtain separate owner authorization before flashing/reconfiguring. A stock Companion build may not qualify. If the owner approves ordinary firmware RF behavior but only forbids *application-initiated* messages, that changes the original safety requirement and must be a separate explicit scope decision. Do not silently take that interpretation.
