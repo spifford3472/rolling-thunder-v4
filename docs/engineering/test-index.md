@@ -600,3 +600,5 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_observation_repository.py` — isolated version-1 MeshCore-only SQLite tables, append-only identity summaries, valid/missing/stale/future/low-quality immutable GPS snapshots, invalid timestamp, no serial dependency.
 
 - `tests/test_meshcore_passive_worker.py` — disabled worker, nonblocking bounded queue/overflow evidence, safe unsupported-frame handling, immutable GPS snapshot timing, deterministic shutdown.
+
+- `tests/test_meshcore_inbound_frames.py` — synthetic fragmented, concatenated, oversized and malformed serial frames; ensures inbound-only decoder and 176-byte firmware bound.
