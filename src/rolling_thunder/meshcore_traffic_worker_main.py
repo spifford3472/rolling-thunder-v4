@@ -89,10 +89,21 @@ def main(argv: list[str] | None = None) -> int:
         logging.basicConfig(level=logging.INFO)
         _LOGGER.info("Local traffic worker started, alerts/transmit disabled")
         failures = 0
+        last_heartbeat = time.monotonic()
         while not stopping:
             try:
-                worker.run_once()
+                cycle = worker.run_once()
                 failures = 0
+                now = time.monotonic()
+                if cycle.stored or now - last_heartbeat >= 300.0:
+                    # Counters only: never include message bodies, tokens or paths.
+                    _LOGGER.info(
+                        "Traffic worker healthy: stored=%d candidates=%d "
+                        "duplicates=%d ignored=%d acked=%d",
+                        cycle.stored, cycle.candidates, cycle.duplicates,
+                        cycle.ignored, cycle.acknowledged,
+                    )
+                    last_heartbeat = now
             except MeshcoreConsumerError:
                 # A disconnected broker or expired token must never ACK.
                 failures = min(failures + 1, 6)
