@@ -448,3 +448,5 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - `meshcore-intelligence.md` includes read-only historical analytics of the existing Phase-1 MeshCore observation database (not yet exposed to UI).
 
 - `meshcore-message-broker.md` — optional message broker, local-only serial dequeue, protected SQLite streams, token-scoped delivery API, rollout gates and recovery.
+
+- `meshcore-traffic-worker.md` — isolated durable public-broker processing worker, traffic candidate deduplication, commit-before-ACK replay, and disabled-by-default launch/rollback gates.
