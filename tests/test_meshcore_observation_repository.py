@@ -2,7 +2,10 @@
 
 import inspect
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import GPSConnectionState, GPSState
@@ -107,3 +110,37 @@ def test_no_runtime_or_serial_ownership():
     source = inspect.getsource(module)
     assert "serial.Serial" not in source
     assert "/dev/tty" not in source
+
+
+def test_upgrade_from_schema_22_preserves_contacts(tmp_path):
+    """An additive migration must not drop existing contact tables or rows."""
+    path = tmp_path / "upgrade.db"
+    initialize_database(path)
+    with sqlite3.connect(path) as connection:
+        # Recreate the immediate pre-upgrade shape, preserving all other tables.
+        connection.execute("DROP TABLE meshcore_observations")
+        connection.execute("DROP TABLE meshcore_observed_nodes")
+        connection.execute(
+            "UPDATE schema_metadata SET schema_version = 22 WHERE singleton_id = 1"
+        )
+        before = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'contacts'"
+        ).fetchone()
+    assert initialize_database(path) == 23
+    with sqlite3.connect(path) as connection:
+        after = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'contacts'"
+        ).fetchone()
+        assert before == after
+        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+
+
+def test_invalid_identity_rejected_without_writes(tmp_path):
+    path = tmp_path / "data.db"
+    repo = MeshcoreObservationRepository(path)
+    with pytest.raises(ValueError):
+        repo.record(replace(_event(), public_key_hex="not-valid"), NOW, None)
+    with sqlite3.connect(path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM meshcore_observations"
+        ).fetchone() == (0,)
