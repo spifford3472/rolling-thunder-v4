@@ -11,8 +11,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol
 
 from rolling_thunder.meshcore_message_broker import MeshcoreMessageBroker
@@ -229,6 +229,4 @@ class MeshcoreBrokerDrain:
 
 def datetime_now() -> datetime:
     """Injectable clock boundary for deterministic future intake simulation."""
-    from datetime import UTC, datetime
-
     return datetime.now(UTC)
