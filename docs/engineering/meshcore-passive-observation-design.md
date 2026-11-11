@@ -115,3 +115,11 @@ Official source evidence:
 - https://github.com/meshcore-dev/MeshCore/blob/companion-v1.17.1/examples/companion_radio/MyMesh.cpp
 
 **Next architectural decision:** For strictly passive RF operation, investigate a dedicated TX-inhibited firmware build or receive-only radio mode that removes every transmit path, test with RF observation, and obtain separate owner authorization before flashing/reconfiguring. A stock Companion build may not qualify. If the owner approves ordinary firmware RF behavior but only forbids *application-initiated* messages, that changes the original safety requirement and must be a separate explicit scope decision. Do not silently take that interpretation.
+
+## Owner-approved RF scope refinement (2026-11-11)
+
+The owner explicitly clarified that ordinary MeshCore firmware-managed RF transmission is acceptable where required; the antenna is installed away from general access. **This supersedes the earlier absolute no-RF-transmission condition for firmware-originated acknowledgments/normal mesh operation only.** The Rolling Thunder collector remains an **application-passive observer** and must never initiate discovery requests, trace requests, adverts, messages, automatic configuration, broadcasts or unrelated RF transmissions. Reading pushed events and narrowly audited local-only read commands may be allowed after static audit and parked checks.
+
+The operator's description of antenna inaccessibility does not independently establish RF-exposure compliance. Evaluate installed transmit power, frequency, duty cycle and separation as appropriate before enabling unattended operation. Normal firmware RF behavior is not evidence that the collector may initiate messages or other host-originated RF.
+
+Revised next gate: prove stable device selection despite duplicate USB serial ID, verify framing and startup sequence from matching firmware source, verify no host-triggered RF in the exact allowlist, and check existing GPS/controller health after hub resets. Keep device adapter opt-in OFF until those tests and local backup/migration validation pass.
