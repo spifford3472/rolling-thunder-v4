@@ -444,3 +444,5 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - `meshcore-intelligence.md` — pure allowlisted public-message classification, privacy boundary, no RF authority, and future verified intake requirements. This is not yet a receiver-integrated feature.
 
 - `meshcore-intelligence.md` also documents published-GPS heading and conservative geographic relevance (domain-only, not live-connected).
+
+- `meshcore-intelligence.md` includes read-only historical analytics of the existing Phase-1 MeshCore observation database (not yet exposed to UI).
