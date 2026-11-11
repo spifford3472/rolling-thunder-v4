@@ -19,6 +19,7 @@ from rolling_thunder.meshcore_message_broker import MeshcoreMessageBroker
 from rolling_thunder.meshcore_public_intake_protocol import (
     ApprovedPublicChannel,
     VerifiedChannel,
+    decode_verified_channel_text,
     verify_channel_info,
 )
 
@@ -152,10 +153,13 @@ class MeshcoreBrokerDrain:
             self._private += 1
         elif (
             payload[0] in (0x08, 0x11)
-            and payload[4 if payload[0] == 0x11 else 1] in self._verified
+            and (
+                verified := self._verified.get(
+                    payload[4 if payload[0] == 0x11 else 1]
+                )
+            ) is not None
+            and decode_verified_channel_text(payload, verified) is not None
         ):
-            # A malformed channel message is quarantined by the repository.
-            # Count it separately only after inspecting its stored stream.
             self._public += 1
         else:
             self._quarantine += 1
