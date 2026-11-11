@@ -11,6 +11,7 @@ from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.meshcore_observation_repository import (
     MeshcoreObservationRepository,
+    initialize_meshcore_database,
     receiver_location_at,
 )
 from rolling_thunder.meshcore_passive import parse_passive_notification
@@ -46,13 +47,14 @@ def _event(suffix: int = 1):
 
 def test_schema_additive_and_idempotent(tmp_path):
     path = tmp_path / "data.db"
-    assert initialize_database(path) == CURRENT_SCHEMA_VERSION
-    assert initialize_database(path) == CURRENT_SCHEMA_VERSION
+    assert initialize_meshcore_database(path) == 1
+    assert initialize_meshcore_database(path) == 1
     with sqlite3.connect(path) as connection:
         tables = {row[0] for row in connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
-        assert {"contacts", "meshcore_observations", "meshcore_observed_nodes"} <= tables
+        assert {"meshcore_schema", "meshcore_observations", "meshcore_observed_nodes"} <= tables
+        assert "contacts" not in tables
         assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 
 
@@ -111,28 +113,38 @@ def test_no_runtime_or_serial_ownership():
     assert "/dev/tty" not in source
 
 
-def test_upgrade_from_schema_22_preserves_contacts(tmp_path):
-    """An additive migration must not drop existing contact tables or rows."""
-    path = tmp_path / "upgrade.db"
-    initialize_database(path)
-    with sqlite3.connect(path) as connection:
-        # Recreate the immediate pre-upgrade shape, preserving all other tables.
-        connection.execute("DROP TABLE meshcore_observations")
-        connection.execute("DROP TABLE meshcore_observed_nodes")
-        connection.execute(
-            "UPDATE schema_metadata SET schema_version = 22 WHERE singleton_id = 1"
-        )
-        before = connection.execute(
-            "SELECT sql FROM sqlite_master WHERE name = 'contacts'"
-        ).fetchone()
-    assert initialize_database(path) == 23
-    with sqlite3.connect(path) as connection:
-        after = connection.execute(
-            "SELECT sql FROM sqlite_master WHERE name = 'contacts'"
-        ).fetchone()
-        assert before == after
-        assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+def test_isolated_schema_preserves_existing_contact_db(tmp_path):
+    """MeshCore initialization cannot change or accidentally own QSO storage."""
+    contacts = tmp_path / "rolling-thunder.db"
+    assert initialize_database(contacts) == CURRENT_SCHEMA_VERSION
+    with sqlite3.connect(contacts) as connection:
+        old_rows = list(connection.execute(
+            "SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name"
+        ))
+    with pytest.raises(ValueError, match="non-MeshCore"):
+        MeshcoreObservationRepository(contacts)
+    with sqlite3.connect(contacts) as connection:
+        assert old_rows == list(connection.execute(
+            "SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name"
+        ))
+        assert connection.execute(
+            "SELECT schema_version FROM schema_metadata WHERE singleton_id=1"
+        ).fetchone() == (CURRENT_SCHEMA_VERSION,)
+    separate = tmp_path / "meshcore.db"
+    MeshcoreObservationRepository(separate).record(_event(), NOW, None)
+    with sqlite3.connect(separate) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM meshcore_observations"
+        ).fetchone() == (1,)
 
+
+def test_unknown_schema_and_corrupt_metadata_fail_closed(tmp_path):
+    path = tmp_path / "meshcore.db"
+    initialize_meshcore_database(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute("UPDATE meshcore_schema SET version = 999")
+    with pytest.raises(ValueError, match="Unsupported"):
+        initialize_meshcore_database(path)
 
 def test_invalid_identity_rejected_without_writes(tmp_path):
     path = tmp_path / "data.db"
