@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 
-
 _EARTH_RADIUS_M = 6_371_000.0
 _MIN_DISPLACEMENT_M = 15.0
 _MAX_REALISTIC_SPEED_MPS = 90.0
