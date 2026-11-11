@@ -13,10 +13,10 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from rolling_thunder.gps import GPSState
-from rolling_thunder.meshcore_observation_repository import (
-    MeshcoreObservationRepository,
+from rolling_thunder.meshcore_passive import (
+    MeshcoreObservation,
+    parse_passive_notification,
 )
-from rolling_thunder.meshcore_passive import parse_passive_notification
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class ObservationSink(Protocol):
     """Small persistence boundary for a replaceable/testable writer."""
 
     def record(
-        self, event: object, received_at: datetime, gps_state: GPSState | None
+        self, event: MeshcoreObservation, received_at: datetime, gps_state: GPSState | None
     ) -> int:
         """Write one observation and return its identifier."""
         ...
@@ -59,7 +59,7 @@ class MeshcorePassiveWorker:
 
     def __init__(
         self,
-        sink: MeshcoreObservationRepository,
+        sink: ObservationSink,
         gps_snapshot: Callable[[], GPSState | None],
         *,
         capacity: int = 256,
@@ -156,7 +156,7 @@ class MeshcorePassiveWorker:
                 self._sink.record(parsed, frame.received_at, frame.gps_state)
                 with self._lock:
                     self._stored += 1
-            except Exception:
+            except Exception:  # noqa: BLE001 - keep writer alive on storage errors
                 _LOGGER.exception("Passive MeshCore observation write failed")
                 with self._lock:
                     self._errors += 1
