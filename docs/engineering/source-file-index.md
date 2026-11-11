@@ -541,6 +541,8 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `deploy/meshcore-collector.user.service` and `deploy/install-meshcore-user-service.sh` — staged separate service install and isolated SQLite data migration after embedded USB release.
 - `src/rolling_thunder/meshcore_passive.py` — now additionally decodes 0x88 signal metadata without retaining raw packets and labels known advertised role codes; other notifications unchanged.
 
+- `deploy/meshcore-traffic-worker.user.service` — staged, disabled-by-default supervisor template for the existing standalone traffic worker, with redacted journal health and bounded resource limits.
+
 ## MeshCore intelligence (pure, noncomposed foundation)
 
 - `src/rolling_thunder/meshcore_incident_classification.py` — deterministic bounded classification of already-verified public traffic/SKYWARN messages; no device, GPS, persistence, UI, or RF authority. See `meshcore-intelligence.md`.
@@ -568,4 +570,4 @@ retain structured metadata instead of generating ordinary QSO notes.
 
 - `src/rolling_thunder/meshcore_traffic_ledger.py` — isolated schema-1 SQLite public-message processing receipts, idempotent broker ID replay, 30-minute duplicate suppression, owner-only permissions and bounded storage
 - `src/rolling_thunder/meshcore_traffic_worker.py` — bounded one-batch public consumer, commits each message before individually ACKing the authorized consumer cursor
-- `src/rolling_thunder/meshcore_traffic_worker_main.py` — disabled-by-default standalone one-shot/continuous worker CLI, local single-instance lock and broker backoff; not composed into dashboard/service
+- `src/rolling_thunder/meshcore_traffic_worker_main.py` — disabled-by-default standalone one-shot/continuous worker CLI, local single-instance lock and broker backoff; not composed into dashboard; service separately gated

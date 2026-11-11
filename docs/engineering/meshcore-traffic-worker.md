@@ -2,10 +2,10 @@
 
 ## Current state and authority
 
-This source-only milestone introduces an independently runnable, **disabled by
-default** background public-message processor. It has **not** been installed,
-started as a service, merged, or deployed by adding the source files. The
-running `meshcore-collector.service` is unchanged and remains the sole USB
+The independently runnable traffic worker is already merged and deployed as
+source, but its **continuous user service is not installed or enabled**. The
+staged systemd unit introduced by this milestone remains inactive unless
+separately approved and installed. The running `meshcore-collector.service` is unchanged and remains the sole USB
 owner. Rolling Thunder and SCOUT's distinct broker credentials/cursors remain
 independent.
 
@@ -85,10 +85,70 @@ alerts. The existing 25-message preview command remains read-only and safe
 for health verification; use that instead when preserving consumer cursor
 state is required.
 
-Continuous `--loop --poll-seconds 10` requires separate explicit approval
-for user-service activation, resource and soak tests, named unit supervision,
-security review and infrastructure documentation. No systemd unit/drop-in,
-cron job, timer, dashboard/Tk composition, or network listener is added here.
+The source repository now includes a **staged, uninstalled** systemd user-unit
+`deploy/meshcore-traffic-worker.user.service`. It is not enabled by source
+checkout, merge, or the existing deployment wrapper. There is no timer, cron
+job, dashboard/Tk composition, or network listener. Service installation and
+activation require separate operator approval and parked acceptance.
+
+### Staged supervision contract (NOT active)
+
+- Standalone `meshcore_traffic_worker_main.py --loop`, 10-second polling,
+  25 messages per bounded pass; the existing ledger's nonblocking `flock`
+  prevents a second consumer using the same database.
+- The worker authenticates **only** with `rolling-thunder.token` and retains
+  the SCOUT cursor, without ever acquiring the MeshCore USB port.
+- `After=meshcore-collector.service` orders startup if both are started;
+  the worker does not require or restart the collector. Broker outage uses
+  the existing bounded exponential retry (up to 120 seconds).
+- `Restart=on-failure`, 10-second retry, 5 starts per 300 seconds, clean
+  SIGTERM/20-second stop timeout. Persistent fatal SQLite errors are **not**
+  retried indefinitely by the Python loop and may trigger the systemd start
+  limit; operator review is required before recovery.
+- `MemoryMax=128M`, `CPUQuota=15%`, `TasksMax=24`, `IOWeight=50`,
+  `UMask=0077`, `ProtectSystem=strict`, `ProtectHome=read-only`,
+  `NoNewPrivileges=yes` and a writable exception limited to the existing
+  owner-private MeshCore data directory. No additional listeners.
+- `journalctl --user -u meshcore-traffic-worker.service` reports startup,
+  broker-retry/fatal errors and redacted count-only progress after each
+  nonempty cycle or five minutes of inactivity. It does not emit payloads,
+  credential contents or message text. No new health HTTP endpoint.
+- Poll and batch parameters are configurable by operator-reviewed systemd
+  unit/drop-in changes; do not edit production source. Service is analysis-only,
+  and will never issue notifications, route changes, geocoding or RF commands.
+
+### Parked activation checklist (approval required)
+
+1. Verify exact source/production SHA, parked state, `systemctl --user status`
+   for the dashboard and collector, broker status, GPS freshness and FT8 health.
+   A stopped dashboard is a blocker to *claiming* dashboard regression success;
+   do not silently start it.
+2. Preserve a consistent SQLite backup of the broker and traffic ledger using
+   SQLite's online backup API; record SHA, file permissions, cursor positions,
+   schema versions, `PRAGMA integrity_check`, and owner-only credentials **without
+   printing any tokens or private messages**. Do not move or overwrite files.
+3. Verify the dedicated worker isn't already running; verify user manager,
+   installed service paths, data-directory mode 0700, credential file mode 0600
+   and the exact authenticated existing Rolling Thunder public cursor.
+4. Only after separate explicit approval, install the reviewed template to
+   `%h/.config/systemd/user/meshcore-traffic-worker.service` with mode 0600,
+   run `systemctl --user daemon-reload`, and explicitly enable/start this **one**
+   unit. A source deployment does not perform those actions.
+5. Monitor the service journal/status, broker socket and collector status,
+   ledger receipts, cursor isolation, resource usage and bounded retry. Verify
+   real ACK only after commit, replay after a controlled isolated interruption,
+   and no FT8, GPS or dashboard degradation during a representative drive.
+6. Commit required QTH infrastructure change records before completion.
+
+**Rollback:** with separate authorization stop/disable only
+`meshcore-traffic-worker.service` and check it is inactive, preserving broker,
+collector, SCOUT cursor, token and every SQLite file. Restore the saved user
+unit/drop-in configuration (if one existed), daemon-reload, and confirm both
+collector and dashboard behavior independently. If source rollback is needed,
+use the restricted exact-SHA wrapper after parked owner approval; NEVER restore
+older broker/QSO/traffic ledgers over newer data. Report any unprocessed public
+backlog rather than automatically pruning it. Service activation remains an
+independent gate from merge and source deployment.
 
 ## Test and release gates
 
@@ -105,7 +165,7 @@ an on-air test.
 ## Rollback and change history
 
 No production process, configuration, job or schema changes are authorized
-by a source merge alone. To undo a later approved source deployment use the
+by this service-template source merge alone. To undo a later approved source deployment use the
 exact prior installed SHA through the restricted deployment wrapper. To
 disable a future independent worker, stop its dedicated process **without**
 stopping the existing collector, preserve its ledger and token credentials,
@@ -116,3 +176,7 @@ healthy. Never replace existing contact/broker databases to undo this feature.
   traffic consumer; built isolated ledger, exact-slot incident classification,
   duplicate suppression, commit-before-ACK worker and separately gated CLI
   with hardware-free regression coverage.
+
+- 2026-11-11: staged independent, bounded systemd user-service template and
+  redacted periodic count-only health logs; offline regression and service
+  contract tests. No unit installed, started, or enabled in production.

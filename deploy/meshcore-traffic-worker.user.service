@@ -1,0 +1,29 @@
+# Staged template only. Source deployment does not install or activate this unit.
+[Unit]
+Description=MeshCore public traffic intelligence worker (analysis only)
+Documentation=https://github.com/spifford3472/rolling-thunder-v4
+After=meshcore-collector.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%h/projects/rolling-thunder-v4/.venv/bin/python -m rolling_thunder.meshcore_traffic_worker_main --socket %t/meshcore-broker.sock --credential %h/.config/rolling-thunder/meshcore-broker-credentials/rolling-thunder.token --database %h/.local/share/meshcore-collector/meshcore-traffic-ledger.db --traffic-slot 1 --batch-size 25 --poll-seconds 10 --loop
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/meshcore-collector
+MemoryMax=128M
+CPUQuota=15%
+TasksMax=24
+IOWeight=50
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
