@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import sqlite3
 import stat
@@ -170,6 +169,7 @@ def test_restart_is_durable_and_does_not_delete_broker_messages(
 def test_fail_closed_on_insecure_storage(tmp_path: Path) -> None:
     parent = tmp_path / "bad"
     parent.mkdir(mode=0o755)
+    os.chmod(parent, 0o755)
     with pytest.raises(TrafficLedgerError):
         TrafficLedger(parent / "ledger.db", approved=_APPROVED)
     private = tmp_path / "private"
