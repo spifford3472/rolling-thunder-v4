@@ -1,6 +1,8 @@
 # MeshCore passive observation collector — architecture gate (2026-11-10)
 
-Status: **BLOCKED pending physical receiver identity and transmit-behavior verification.** This is a design note, not an implementation or authorization to open a serial port, change radio configuration, merge, or deploy.
+**Current status (2026-11-11): source implementation merged in PR #385 at `bfe8a5877fa136fd28b865ef37fe629ccaa3a168`; production is NOT deployed or activated.** The collector is opt-in OFF by default, with a dedicated MeshCore-only SQLite database, shared immutable GPS, no host MeshCore command writer, and a validated physical USB-by-path serial adapter. GitHub CI #3582 passed (3,751 tests; 7 skipped). Physical activation remains **BLOCKED** by unstable USB enumeration and unverified GPS/controller recovery. Normal firmware-managed mesh RF is owner-permitted; host-initiated discovery, adverts, messages and configuration transmissions are not. Earlier sections below preserve the chronological investigation and may describe superseded proposals; this header and the latest engineering guides describe current implementation.
+
+## Historical research record (superseded by implementation where noted)
 
 ## Sources and observed baseline
 
@@ -131,3 +133,12 @@ Anvilmobile's sysfs and USB inventory now show the MeshCore candidate at physica
 Kernel events around 2026-11-10 23:12 EST included extensive USB `-71` protocol errors, repeated hub resets and detach/attach cycles. At 23:14, `1-1.1.1` disconnected and re-enumerated; the candidate still has no usable tty as of recheck. The Rolling Thunder systemd process is active, but this does **not** establish GPS/controller functionality. Do **not** assume a serial path is available or authorize a live read until hub power/cabling/device enumeration and existing radio/GPS/control health recover. No system services, USB state or physical connections were changed in the audit.
 
 Next parked action requires owner-assisted USB/power troubleshooting with no unattended resets: isolate candidate hardware or upstream hub/charger, check stable re-enumeration, then verify all original GPS/controller paths and runtime states before binding a unique `/dev/serial/by-path` path. Consider a separate powered hub/port if supported; do not infer that the MeshCore alone caused the original bus faults.
+
+## Current merged implementation and activation policy
+
+- Application config: `meshcore_passive.enabled` defaults to false; device requires an exact verified `/dev/serial/by-path` selector; `/dev/ttyUSBN` and duplicate `by-id` names rejected.
+- Composition and lifecycle: `application_runtime.py` starts a background reader only when explicitly enabled. The UART reader uses an exclusive port and parses incoming `>` + little-endian-length companion frames; **no outgoing app commands** are implemented.
+- Data: `meshcore_passive.py`, `meshcore_passive_worker.py` and `meshcore_observation_repository.py` decode 0x80, 0x81 and 0x8A; store full peer identity, optional type/name and receive timestamps in **dedicated version-1 MeshCore SQLite** beside the untouched schema-22 QSO database. Existing GPS snapshots are taken at receipt. Stale/no-fix/low-quality data is represented explicitly rather than fabricating coordinates.
+- Tests: full CI #3582 passed; host-side regression/fixtures are green, but no physical USB capture or parked functionality test has passed. RSSI/SNR are not present on these supported push frames; they remain null, and no routing path is synthesized.
+- **Current blocking hardware gate:** restore a configured MeshCore tty and existing GPS tty, audit hub power/cable stability and confirm FT-891/controller/GPS functionality. Before activation, verify firmware role, ordinary RF behavior/exposure, log storage retention and backup, and complete parked receive capture.
+- No automatic discovery, advertisement, messaging, trace, CAT/PTT or radio configuration is permitted from Rolling Thunder's MeshCore collector. The owner permits native firmware-managed ACK/forwarding traffic; a physically inaccessible antenna is not by itself an RF exposure assessment.
