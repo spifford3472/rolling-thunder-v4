@@ -605,3 +605,5 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - `tests/test_meshcore_serial_service.py` — fake UART read-only boundary, missing-device degradation, physical path selection, V3/V4 USB VID/PID/transport validation, native CDC DTR policy, and no outgoing command.
 - `tests/test_meshcore_runtime_integration.py` — default-disabled runtime, invalid USB path rejection, and opt-in isolated database composition with no device access during configuration.
+
+- `tests/test_contact_retry.py` includes durable 1500-failure overflow regression (next due at configured cap), persisted eligibility after repository recreation, and finite pre-cap doubling behavior; verifies repeated remote HTTP 503 cannot overflow the scheduler backoff calculation.
