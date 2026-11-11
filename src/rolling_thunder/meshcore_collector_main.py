@@ -84,18 +84,18 @@ class _Handler(BaseHTTPRequestHandler):
             if drain is None:
                 self._reply(404, {"error": "not_enabled"})
                 return
-            status = drain.status()
+            drain_status = drain.status()
             self._reply(200, {
                 "schema": "meshcore/broker-health/v1",
-                "enabled": status.enabled,
-                "connected": status.connected,
-                "ready": status.ready,
-                "fault": status.fault,
-                "saved": status.saved,
-                "private_saved": status.private_saved,
-                "public_saved": status.public_saved,
-                "quarantine_saved": status.quarantine_saved,
-                "waiting_for_response": status.waiting_for_response,
+                "enabled": drain_status.enabled,
+                "connected": drain_status.connected,
+                "ready": drain_status.ready,
+                "fault": drain_status.fault,
+                "saved": drain_status.saved,
+                "private_saved": drain_status.private_saved,
+                "public_saved": drain_status.public_saved,
+                "quarantine_saved": drain_status.quarantine_saved,
+                "waiting_for_response": drain_status.waiting_for_response,
             })
             return
         if self.path == "/v1/activity":
