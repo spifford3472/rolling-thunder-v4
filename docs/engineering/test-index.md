@@ -623,3 +623,5 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_network_analytics.py` — read-only schema-2 SQL, UTC window bounds, missing/wrong database rejection, role/count integrity, receiver-location semantics and cell limits.
 
 - `tests/test_meshcore_collector_main.py` also asserts the private `GET /v1/activity` bounded response, absence of public query controls, and 405 on write methods; no real serial or radio fixture.
+
+- `tests/test_meshcore_public_intake_protocol.py` — exact v1.16 channel identity/fingerprint, malformed reply rejection, private/binary redaction, legacy/V3 message framing, untrusted timestamps and opcode fuzz coverage; no live hardware.
