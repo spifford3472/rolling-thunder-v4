@@ -43,7 +43,14 @@ Requests are limited to at most once per 120 seconds, with a four-second
 timeout and a 2 MB maximum body. Unexpected redirects and external hosts are
 rejected. Any error, rejected region filter, invalid envelope, or multi-page
 response becomes **unavailable** rather than an incomplete list presented as
-all incidents. Region coverage and live API data remain unverified until the
+all incidents. In the live OHGO response, the documented model is serialized
+using **camelCase** JSON names (for example `results`, `rejectedFilters`,
+`totalPageCount`, `currentResultCount`, `totalResultCount`, `routeName`),
+whereas older test fixtures and the model documentation used PascalCase.
+The parser supports both spellings, rejects conflicting aliases, and checks
+all paging/count fields before publishing a successful snapshot. A verified
+HTTP 200 can otherwise be mistakenly reported as `upstream_unavailable`.
+Official model reference: https://publicapi.ohgo.com/docs/v1/api-results . Region coverage and live API data remain unverified until the
 operator activates a real key on Forge.
 
 Each retained item has only a provider ID, coordinate, route, travel direction,

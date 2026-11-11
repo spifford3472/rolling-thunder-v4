@@ -61,6 +61,8 @@ def test_current_ohgo_incident_route_never_returns_credentials() -> None:
             }
         ],
         "TotalPageCount": 1,
+        "CurrentResultCount": 1,
+        "TotalResultCount": 1,
         "RejectedFilters": [],
     }
 

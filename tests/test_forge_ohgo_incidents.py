@@ -19,6 +19,8 @@ NOW = datetime(2026, 11, 11, 22, tzinfo=UTC)
 DATA = {
     "RejectedFilters": [],
     "TotalPageCount": 1,
+    "CurrentResultCount": 1,
+    "TotalResultCount": 1,
     "Results": [
         {
             "Id": "ohgo-42",
@@ -111,6 +113,8 @@ def test_missing_or_malformed_coordinates_are_skipped() -> None:
         {"Id": "ok", "Latitude": 39.5, "Longitude": -84},
         {"Id": "ok", "Latitude": 39.5, "Longitude": -84},
     ]
+    payload["CurrentResultCount"] = 3
+    payload["TotalResultCount"] = 3
     result = parse_ohgo_incidents(json.dumps(payload).encode(), received_at=NOW)
     assert len(result.incidents) == 1
 
@@ -131,3 +135,68 @@ def test_stale_and_upstream_failure_distinguished() -> None:
     assert provider.refresh(NOW).state == OhgoState.CURRENT
     ticks[0] = 200
     assert provider.refresh(NOW + timedelta(minutes=10)).state == OhgoState.STALE
+
+
+def test_real_camel_case_ohgo_envelope_and_incident_fields() -> None:
+    """Regression for HTTP 200 with actual OHGO JSON serialization."""
+
+    payload = {
+        "accecptedFilters": [],
+        "rejectedFilters": [],
+        "results": [
+            {
+                "id": "ohgo-42",
+                "latitude": 39.58,
+                "longitude": -84.13,
+                "routeName": "I-75",
+                "direction": "Northbound",
+                "description": "Crash reported",
+                "location": "Near Exit 44",
+                "category": "Crash",
+                "roadStatus": "Open",
+            }
+        ],
+        "totalPageCount": 1,
+        "currentResultCount": 1,
+        "totalResultCount": 1,
+        "lastUpdated": "2026-11-11T22:00:00Z",
+        "links": [],
+    }
+    parsed = parse_ohgo_incidents(json.dumps(payload).encode(), received_at=NOW)
+    assert parsed.state == OhgoState.CURRENT
+    assert len(parsed.incidents) == 1
+    assert parsed.incidents[0].route == "I-75"
+    assert parsed.incidents[0].point.longitude == -84.13
+
+
+def test_camel_case_rejected_filter_and_incomplete_pages_fail_closed() -> None:
+    payload = {
+        "results": [],
+        "rejectedFilters": [{"name": "region"}],
+        "currentResultCount": 0,
+        "totalResultCount": 0,
+        "totalPageCount": 1,
+    }
+    with pytest.raises(OhgoProtocolError):
+        parse_ohgo_incidents(json.dumps(payload).encode(), received_at=NOW)
+    payload["rejectedFilters"] = []
+    payload["totalPageCount"] = 2
+    with pytest.raises(OhgoProtocolError):
+        parse_ohgo_incidents(json.dumps(payload).encode(), received_at=NOW)
+    payload["totalPageCount"] = 1
+    payload["totalResultCount"] = 1
+    with pytest.raises(OhgoProtocolError):
+        parse_ohgo_incidents(json.dumps(payload).encode(), received_at=NOW)
+
+
+def test_conflicting_ohgo_case_aliases_are_not_silently_accepted() -> None:
+    payload = {
+        "results": [],
+        "Results": [{"id": "mismatched"}],
+        "rejectedFilters": [],
+        "currentResultCount": 0,
+        "totalResultCount": 0,
+        "totalPageCount": 1,
+    }
+    with pytest.raises(OhgoProtocolError):
+        parse_ohgo_incidents(json.dumps(payload).encode(), received_at=NOW)
