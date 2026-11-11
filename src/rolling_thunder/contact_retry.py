@@ -53,7 +53,14 @@ class ContactRetryRepository:
                     (str(contact_id),),
                 ).fetchone()
                 attempt_count = 1 if existing is None else int(existing[0]) + 1
-                delay_s = min(initial_delay_s * (2 ** (attempt_count - 1)), max_delay_s)
+                # Double a bounded delay rather than computing 2 ** attempt_count.
+                # Persisted contacts can have hundreds or thousands of failures;
+                # converting such an integer to float previously overflowed.
+                delay_s = initial_delay_s
+                remaining_doublings = attempt_count - 1
+                while remaining_doublings > 0 and delay_s < max_delay_s:
+                    delay_s = min(delay_s * 2.0, max_delay_s)
+                    remaining_doublings -= 1
                 next_attempt_at = timestamp + timedelta(seconds=delay_s)
                 connection.execute(
                     """
