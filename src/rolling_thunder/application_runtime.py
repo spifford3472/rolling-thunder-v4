@@ -1236,7 +1236,8 @@ class ApplicationRuntime:
         # opens or owns the MeshCore serial port or its SQLite database.
         if runtime.gps_polling is not None:
             publisher = MeshcoreGpsPublisher(
-                Path("/run/user/1000/meshcore-gps-snapshot.json")
+                Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+                / "meshcore-gps-snapshot.json"
             )
             runtime.gps_polling.add_listener(publisher.offer)
             runtime.meshcore_gps_publisher = publisher
