@@ -9,7 +9,6 @@ import pytest
 
 from rolling_thunder.meshcore_channel_audit import audit_channels
 
-
 KEY1 = b"\x01" * 16
 KEY2 = b"\x02" * 16
 
