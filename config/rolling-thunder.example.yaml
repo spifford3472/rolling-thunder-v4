@@ -278,3 +278,12 @@ storage:
     enabled: false
     directory: backups/contacts
     retention_count: 10
+
+# Optional, host receive-only MeshCore observation collector.
+# The normal MeshCore firmware may ACK/forward packets independently.
+# Never select by-id: two CP2102 devices share USB serial ID 0001.
+meshcore_passive:
+  enabled: false
+  device: null
+  # After parked, verified binding:
+  # device: /dev/serial/by-path/<verified-physical-meshcore-interface>
