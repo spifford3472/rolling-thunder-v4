@@ -14,7 +14,7 @@ from rolling_thunder.meshcore_observation_repository import (
     initialize_meshcore_database,
     receiver_location_at,
 )
-from rolling_thunder.meshcore_passive import parse_passive_notification
+from rolling_thunder.meshcore_passive import MeshcoreSignalSample, parse_passive_notification
 from rolling_thunder.storage import CURRENT_SCHEMA_VERSION, initialize_database
 
 NOW = datetime(2026, 11, 11, 5, 0, tzinfo=UTC)
@@ -47,13 +47,13 @@ def _event(suffix: int = 1):
 
 def test_schema_additive_and_idempotent(tmp_path):
     path = tmp_path / "data.db"
-    assert initialize_meshcore_database(path) == 1
+    assert initialize_meshcore_database(path) == 2
     assert initialize_meshcore_database(path) == 1
     with sqlite3.connect(path) as connection:
         tables = {row[0] for row in connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
-        assert {"meshcore_schema", "meshcore_observations", "meshcore_observed_nodes"} <= tables
+        assert {"meshcore_schema", "meshcore_observations", "meshcore_observed_nodes", "meshcore_signal_samples"} <= tables
         assert "contacts" not in tables
         assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 
@@ -155,3 +155,41 @@ def test_invalid_identity_rejected_without_writes(tmp_path):
         assert connection.execute(
             "SELECT COUNT(*) FROM meshcore_observations"
         ).fetchone() == (0,)
+
+
+def test_upgrade_existing_meshcore_v1_preserves_history(tmp_path):
+    """Add signal storage while retaining pre-cutover public observations."""
+    path = tmp_path / "meshcore.db"
+    repo = MeshcoreObservationRepository(path)
+    repo.record(_event(1), NOW, _gps())
+    with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE meshcore_signal_samples")
+        connection.execute("UPDATE meshcore_schema SET version = 1")
+    assert initialize_meshcore_database(path) == 2
+    assert initialize_meshcore_database(path) == 2
+    with sqlite3.connect(path) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM meshcore_observations"
+        ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT version FROM meshcore_schema WHERE id=1"
+        ).fetchone() == (2,)
+
+
+def test_signal_storage_rejects_raw_packet_and_unknown_identity(tmp_path):
+    """Only anonymous RF metrics and receiver GPS enter the new table."""
+    path = tmp_path / "meshcore.db"
+    repo = MeshcoreObservationRepository(path)
+    repo.record_signal(
+        MeshcoreSignalSample(snr_db=-4.25, rssi_dbm=-96), NOW, _gps()
+    )
+    with sqlite3.connect(path) as connection:
+        rows = connection.execute(
+            "SELECT rssi_dbm,snr_db,gps_status FROM meshcore_signal_samples"
+        ).fetchall()
+        assert rows == [(-96.0, -4.25, "gps_valid")]
+        columns = {row[1] for row in connection.execute(
+            "PRAGMA table_info(meshcore_signal_samples)"
+        )}
+        assert "public_key_hex" not in columns
+        assert "payload" not in columns
