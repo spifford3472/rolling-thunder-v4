@@ -9,6 +9,7 @@ from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
 from rolling_thunder.meshcore_serial_service import (
     MeshcorePassiveSerialService,
     validate_meshcore_usb_path,
+    _require_supported_usb_identity,
 )
 
 
@@ -82,3 +83,50 @@ def test_missing_device_degrades_without_interrupting_services():
     assert service.status().last_error == "OSError"
     service.stop()
     assert not service.status().running
+
+
+@pytest.mark.parametrize(
+    ("tty", "vid", "pid"),
+    [
+        ("ttyUSB2", "10c4", "ea60"),
+        ("ttyACM0", "303a", "0002"),
+    ],
+)
+def test_supported_meshcore_usb_interfaces(
+    tmp_path: Path, tty: str, vid: str, pid: str
+) -> None:
+    """Accept V3 bridge and V4 native CDC by expected transport family."""
+    usb = tmp_path / "usb-device"
+    iface = usb / "1-1.1.1:1.0"
+    iface.mkdir(parents=True)
+    (usb / "idVendor").write_text(vid, encoding="utf-8")
+    (usb / "idProduct").write_text(pid, encoding="utf-8")
+    _require_supported_usb_identity(tty, iface)
+
+
+@pytest.mark.parametrize(
+    ("tty", "vid", "pid"),
+    [
+        ("ttyUSB2", "303a", "0002"),
+        ("ttyACM0", "10c4", "ea60"),
+        ("ttyACM0", "2341", "0043"),
+        ("ttyUSB2", "ffff", "0000"),
+    ],
+)
+def test_reject_other_or_mismatched_usb_identity(
+    tmp_path: Path, tty: str, vid: str, pid: str
+) -> None:
+    """Do not claim any arbitrary serial adapter as MeshCore."""
+    usb = tmp_path / "usb-device"
+    iface = usb / "1-1.1.1:1.0"
+    iface.mkdir(parents=True)
+    (usb / "idVendor").write_text(vid, encoding="utf-8")
+    (usb / "idProduct").write_text(pid, encoding="utf-8")
+    with pytest.raises(ValueError, match="USB family"):
+        _require_supported_usb_identity(tty, iface)
+
+
+def test_missing_usb_descriptors_fail_closed(tmp_path: Path) -> None:
+    """A half-enumerated USB device cannot be used for collection."""
+    with pytest.raises(OSError, match="descriptor"):
+        _require_supported_usb_identity("ttyACM0", tmp_path)
