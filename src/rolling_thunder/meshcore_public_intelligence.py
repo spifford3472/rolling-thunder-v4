@@ -19,15 +19,21 @@ from rolling_thunder.meshcore_incident_classification import (
 )
 from rolling_thunder.meshcore_public_consumer import PublicBrokerMessage
 
-_TRAFFIC_SLOT = 1
-_TRAFFIC_NAME = "#traffic"
-_TRAFFIC_ID = "1:#traffic"
-_SKYWARN_ID = "5:#skywarn"
 _UNVERIFIED_SENDER = "unverified-meshcore-sender"
-_POLICY = PublicChannelPolicy(
-    traffic_ids=frozenset({_TRAFFIC_ID}),
-    skywarn_ids=frozenset({_SKYWARN_ID}),
-)
+
+
+@dataclass(frozen=True, slots=True)
+class TrafficChannelSelection:
+    """Explicit operator-approved public slot; not inferred from channel text."""
+
+    slot: int
+    name: str
+
+    def __post_init__(self) -> None:
+        if type(self.slot) is not int or not 0 <= self.slot < 8:
+            raise ValueError("Invalid approved traffic slot")
+        if self.name != "#traffic":
+            raise ValueError("Only the explicitly approved #traffic channel is supported")
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,24 +46,30 @@ class TrafficCandidate:
 
 def classify_traffic_snapshot(
     messages: tuple[PublicBrokerMessage, ...],
+    approved: TrafficChannelSelection,
 ) -> tuple[TrafficCandidate, ...]:
     """Never interpret generic Public messages or other slots as #traffic.
 
     The underlying classifier is only applied to the exact broker-attested
     #traffic slot and channel label. Unknown/unmatched text is not an alert.
     """
+    channel_id = f"{approved.slot}:{approved.name}"
+    policy = PublicChannelPolicy(
+        traffic_ids=frozenset({channel_id}),
+        skywarn_ids=frozenset({"skywarn-not-enabled"}),
+    )
     candidates: list[TrafficCandidate] = []
     for message in messages:
-        if message.channel_slot != _TRAFFIC_SLOT or message.channel_name != _TRAFFIC_NAME:
+        if message.channel_slot != approved.slot or message.channel_name != approved.name:
             continue
         classified = classify_public_message(
             PublicMessage(
-                channel_id=_TRAFFIC_ID,
+                channel_id=channel_id,
                 sender=_UNVERIFIED_SENDER,
                 text=message.text,
                 received_at=message.received_at,
             ),
-            _POLICY,
+            policy,
         )
         if classified is not None and classified.category != IncidentCategory.UNKNOWN:
             candidates.append(TrafficCandidate(message.message_id, classified))
