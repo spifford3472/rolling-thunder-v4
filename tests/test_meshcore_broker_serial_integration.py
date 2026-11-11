@@ -6,7 +6,7 @@ import hashlib
 import threading
 import time
 from collections import deque
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from rolling_thunder.meshcore_broker_drain import MeshcoreBrokerDrain
@@ -17,7 +17,6 @@ from rolling_thunder.meshcore_message_broker import (
 from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
 from rolling_thunder.meshcore_public_intake_protocol import ApprovedPublicChannel
 from rolling_thunder.meshcore_serial_service import MeshcorePassiveSerialService
-
 
 SECRET = bytes(range(16))
 APPROVED = ApprovedPublicChannel(
