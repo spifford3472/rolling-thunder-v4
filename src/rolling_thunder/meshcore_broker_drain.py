@@ -77,6 +77,7 @@ class MeshcoreBrokerDrain:
         self._deadline = 0.0
         self._channel_pos = 0
         self._need_drain = False
+        self._push_during_dequeue = False
         self._burst = 0
         self._saved = 0
         self._public = 0
@@ -91,6 +92,7 @@ class MeshcoreBrokerDrain:
         self._pending = None
         self._channel_pos = 0
         self._need_drain = True
+        self._push_during_dequeue = False
         self._burst = 0
 
     def disconnected(self) -> None:
@@ -112,6 +114,8 @@ class MeshcoreBrokerDrain:
             return False
         if payload == b"\x83":
             self._need_drain = True
+            if self._pending == "dequeue":
+                self._push_during_dequeue = True
             return True
         if self._pending == "channel":
             if payload[:1] == b"\x12":
@@ -132,7 +136,10 @@ class MeshcoreBrokerDrain:
             return False
         if payload == b"\x0a":
             self._pending = None
-            self._need_drain = False
+            # A newer tickle could have arrived after the request began.
+            # Do one more bounded check rather than silently ignoring it.
+            self._need_drain = self._push_during_dequeue
+            self._push_during_dequeue = False
             self._burst = 0
             return True
         if payload[:1] == b"\x01":
@@ -196,6 +203,7 @@ class MeshcoreBrokerDrain:
             return
         self._write_command(writer, _DEQUEUE, "dequeue")
         if self._pending == "dequeue":
+            self._push_during_dequeue = False
             self._burst += 1
 
     def _write_command(
