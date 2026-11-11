@@ -67,3 +67,11 @@ pending after a separately validated integration.
 A geographic incident candidate requires an independently trusted geocode; the classifier does not create one. Distances/bearings are informational, **not road or route matching**. An incident only becomes `ahead_confirmed_route` when a future, independent map-matching service positively verifies the road/travel direction and supplies `route_confirmed=True`. Otherwise proximity may mean `possibly_ahead`, `behind`, `nearby_route_unknown`, `not_relevant`, or `insufficient_information`. A future system must confirm freshness and accuracy of incident location, and must not infer truth from a public report.
 
 This domain module is deliberately not composed into the UI, database, or collector yet. Unit tests do not establish field GPS or dashboard acceptance.
+
+## Observation analytics foundation
+
+`meshcore_network_analytics.py` provides bounded read-only aggregate queries over the existing isolated MeshCore schema-2 SQLite history. It does not create a new database, alter tables, migrate contact storage, or open serial/GPS devices. Requests use an explicit UTC interval (maximum 31 days), constrained receiver-location cell count (maximum 200), query-only SQLite access, and fail closed if the database is missing or uses an unsupported schema.
+
+Counters distinguish distinct observed identities, identities currently carrying a verified repeater type, first-seen identities, observation event counts, and independent unattributed RSSI/SNR sample counts. A currently advertised repeater role cannot prove it performed a relay, and these counts cannot establish uptime, full coverage, or total regional node populations.
+
+Coarse coordinate cells represent **receiver locations where observations or signal samples were recorded**, not coordinates of the MeshCore nodes. Unsampled routes and periods with no activity are not evidence of no coverage. No raw private RF packet content is queried. A future bounded service API and dashboard will be needed to render the summaries; this module is not yet composed into production.
