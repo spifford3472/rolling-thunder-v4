@@ -1,6 +1,6 @@
 """Inbound-only MeshCore v1.17.1 USB serial frame decoder.
 
-The upstream ArduinoSerialInterface sends '>\xLL\xHH<payload>' to the host.
+The upstream ArduinoSerialInterface sends '>' + two length bytes + payload.
 This pure decoder provides no port, writer, framing encoder or RF command path.
 """
 
