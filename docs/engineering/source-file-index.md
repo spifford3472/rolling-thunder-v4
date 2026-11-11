@@ -550,3 +550,12 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_network_analytics.py` — bounded read-only schema-2 aggregation, node/repeater activity and receiver-location reception cells; no collector, DB migration or UI authority.
 
 - `src/rolling_thunder/meshcore_public_intake_protocol.py` — pure non-actuating v1.16 channel attestation against operator-approved identity/fingerprint and strict legacy/V3 public-text decoding; no USB, queue-drain or RF calls.
+
+## MeshCore message broker
+
+- `src/rolling_thunder/meshcore_message_broker.py` — isolated synchronous SQLite inbox for public/private/quarantine messages, storage caps and per-consumer durable cursors
+- `src/rolling_thunder/meshcore_broker_drain.py` — single-flight audited host-local serial queries and destructive dequeue safety gate
+- `src/rolling_thunder/meshcore_broker_config.py` — strict owner-only channel attestation and consumer-token fingerprint configuration
+- `src/rolling_thunder/meshcore_broker_api.py` — separate token-scoped Unix read/ack service with no TCP or radio access
+- `src/rolling_thunder/meshcore_serial_service.py` — existing sole USB owner with optional broker drain; passive default remains
+- `src/rolling_thunder/meshcore_collector_main.py` — optional broker composition and dual Unix socket lifecycle
