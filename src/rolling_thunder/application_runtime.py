@@ -144,9 +144,6 @@ from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
 from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
 from rolling_thunder.maidenhead import maidenhead_grid
-from rolling_thunder.meshcore_observation_repository import MeshcoreObservationRepository
-from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
-from rolling_thunder.meshcore_serial_service import MeshcorePassiveSerialService
 from rolling_thunder.map_solar import MapSolarStyleService, SynchronizedMapStyleTarget
 from rolling_thunder.map_sources import (
     InstalledMapRegistry,
@@ -162,6 +159,9 @@ from rolling_thunder.map_zoom import (
     effective_map_zoom_bounds,
     resolve_initial_map_zoom,
 )
+from rolling_thunder.meshcore_observation_repository import MeshcoreObservationRepository
+from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
+from rolling_thunder.meshcore_serial_service import MeshcorePassiveSerialService
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.network_keepalive import (
