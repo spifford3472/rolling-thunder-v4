@@ -15,11 +15,13 @@ import socket
 import socketserver
 import sqlite3
 import threading
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
 from rolling_thunder.meshcore_gps_bridge import read_meshcore_gps_snapshot
+from rolling_thunder.meshcore_network_analytics import MeshcoreNetworkAnalytics
 from rolling_thunder.meshcore_observation_repository import MeshcoreObservationRepository
 from rolling_thunder.meshcore_passive import node_role_from_type_code
 from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
@@ -52,7 +54,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Serve only bounded, read-only, versioned endpoints."""
-        if self.path not in ("/v1/health", "/v1/nodes", "/v1/signals"):
+        if self.path not in ("/v1/health", "/v1/nodes", "/v1/signals", "/v1/activity"):
             self._reply(404, {"error": "not_found"})
             return
         if self.path == "/v1/health":
@@ -66,6 +68,40 @@ class _Handler(BaseHTTPRequestHandler):
                 "stored": status.worker.stored,
                 "dropped": status.worker.dropped,
                 "write_errors": status.worker.write_errors,
+            })
+            return
+        if self.path == "/v1/activity":
+            # Bounded history is computed on an HTTP worker thread, never Tk.
+            # No URL-controlled SQL, raw messages, secrets, or private network.
+            try:
+                end = datetime.now(UTC)
+                summary = MeshcoreNetworkAnalytics(
+                    self.server.database_path
+                ).summarize(end - timedelta(hours=24), end, maximum_cells=25)
+            except (sqlite3.Error, ValueError):
+                _LOGGER.exception("MeshCore activity query failed")
+                self._reply(503, {"error": "storage_unavailable"})
+                return
+            self._reply(200, {
+                "schema": "meshcore/activity/v1",
+                "period": "rolling_24h_utc",
+                "start_utc": summary.start_utc.isoformat(),
+                "end_utc": summary.end_utc.isoformat(),
+                "observed_nodes": summary.distinct_nodes,
+                "observed_repeaters_latest_role":
+                    summary.distinct_repeaters_latest_role,
+                "newly_seen_nodes": summary.first_seen_nodes,
+                "advertisement_events": summary.advertisement_events,
+                "unattributed_signal_samples": summary.signal_samples,
+                "receiver_reception_cells": [
+                    {
+                        "receiver_latitude_bin": cell.latitude_bin,
+                        "receiver_longitude_bin": cell.longitude_bin,
+                        "observation_count": cell.observations,
+                        "signal_count": cell.signal_samples,
+                    }
+                    for cell in summary.receiver_cells
+                ],
             })
             return
         try:

@@ -75,3 +75,9 @@ This domain module is deliberately not composed into the UI, database, or collec
 Counters distinguish distinct observed identities, identities currently carrying a verified repeater type, first-seen identities, observation event counts, and independent unattributed RSSI/SNR sample counts. A currently advertised repeater role cannot prove it performed a relay, and these counts cannot establish uptime, full coverage, or total regional node populations.
 
 Coarse coordinate cells represent **receiver locations where observations or signal samples were recorded**, not coordinates of the MeshCore nodes. Unsampled routes and periods with no activity are not evidence of no coverage. No raw private RF packet content is queried. A future bounded service API and dashboard will be needed to render the summaries; this module is not yet composed into production.
+
+## Read-only private service API
+
+The independent collector's existing permission-restricted Unix-socket HTTP service now exposes `GET /v1/activity` as an additional **read-only** endpoint. It requires no TCP listener, extra process, new filesystem path, token, or schema migration. The response schema is `meshcore/activity/v1`; it reports a rolling 24-hour UTC interval, observed node/repeater-role/new-identity/event/signal counters and at most 25 coarse **receiver** reception cells. The query is performed by the local HTTP worker, not the Tkinter thread; it fails with HTTP 503 if collector history is unavailable or incompatible. Unknown paths are 404; mutation requests remain 405.
+
+The endpoint does not expose raw RF payloads, channel secrets, private messages, or any controls. It does not claim repeater availability or node physical distance. A future dashboard/SCOUT client must respect the existing protected socket authorization and bind this schema to an immutable state adapter rather than reading SQLite directly.

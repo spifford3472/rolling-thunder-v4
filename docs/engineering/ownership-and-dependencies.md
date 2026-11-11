@@ -456,3 +456,7 @@ The `meshcore_passive_worker.py` is an injected bounded worker; `meshcore_serial
 ### MeshCore standalone service replacement (pending live cutover)
 
 `meshcore_collector_main.py` owns the native USB serial reader, metadata parser, independent SQLite writer, bounded background worker, and local Unix-domain API. `meshcore_gps_bridge.py` is the only dependency within Rolling Thunder: it asynchronously publishes the **existing** GPS polling state. No second GPS receiver, no embedded collector construction, no CAT/PTT/transmit authority, and no remote network listener. Previous descriptions of the embedded MeshCore service above are historical after this cutover. The host-level service is independently supervised as `meshcore-collector.service`.
+
+## MeshCore intelligence and observation API
+
+The independent `meshcore_collector_main.py` owns its local Unix API, while `meshcore_network_analytics.py` owns the bounded schema-2 read-only aggregation contract. It consumes existing MeshCore observation tables and never owns physical USB, GPS, CAT, UI widgets or MeshCore transmission. Future Rolling Thunder and SCOUT integrations must be versioned read-only clients; do not add SQL or blocking socket I/O to Tkinter.

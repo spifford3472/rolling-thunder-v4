@@ -528,3 +528,7 @@ Heltec V4 native CDC ACM is an approved receive-adapter transport only for a phy
 ### MeshCore independent ownership (cutover implementation)
 
 The standalone collector is the exclusive MeshCore USB owner; Rolling Thunder only publishes nonblocking, atomic snapshots of its current GPS state from the existing polling listener. Absence of fresh GPS state causes explicit null receiver location, never a new GPS acquisition. The read API uses a permission-restricted Unix socket, has no mutating endpoints and never exposes raw RF message data. RF signal metrics from 0x88 carry no trusted sender identity or routing attribution. Durable MeshCore-only SQLite is outside the RT production worktree and separately migrated; local QSO SQLite and FT8/Radio/CAT are untouched.
+
+## MeshCore private activity API
+
+The isolated MeshCore collector is the sole owner of its serial device and schema-2 observation database. Only the existing local permission-restricted Unix socket can serve `meshcore/activity/v1` through `GET /v1/activity`. Calls are read-only, bounded to rolling UTC 24 hours with at most 25 receiver-reception bins; POST and unknown routes are rejected. Receiver coordinates are not peer/device coordinates. No new network listener, second GPS reader, raw message persistence or RF command is introduced. UI clients must consume snapshots through a bounded asynchronous adapter; do not synchronously query the socket on Tk.

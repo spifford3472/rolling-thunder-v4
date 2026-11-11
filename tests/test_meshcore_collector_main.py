@@ -61,6 +61,16 @@ def test_unix_api_health_no_mutations_no_raw_payload(tmp_path: Path) -> None:
         assert status == 200 and nodes["items"] == []
         status, signals = _request(sock, "GET", "/v1/signals")
         assert status == 200 and signals["items"] == []
+        status, activity = _request(sock, "GET", "/v1/activity")
+        assert status == 200
+        assert activity["schema"] == "meshcore/activity/v1"
+        assert activity["period"] == "rolling_24h_utc"
+        assert activity["observed_nodes"] == 0
+        assert activity["receiver_reception_cells"] == []
+        status, rejected = _request(sock, "GET", "/v1/activity?hours=100000")
+        assert status == 404
+        status, rejected = _request(sock, "POST", "/v1/activity")
+        assert status == 405 and rejected["error"] == "read_only"
         status, rejected = _request(sock, "POST", "/v1/nodes")
         assert status == 405 and rejected["error"] == "read_only"
         status, rejected = _request(sock, "GET", "/v1/private")
