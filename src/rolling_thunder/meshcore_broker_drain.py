@@ -160,6 +160,7 @@ class MeshcoreBrokerDrain:
             self._private += 1
         elif (
             payload[0] in (0x08, 0x11)
+            and len(payload) > (4 if payload[0] == 0x11 else 1)
             and (
                 verified := self._verified.get(
                     payload[4 if payload[0] == 0x11 else 1]
