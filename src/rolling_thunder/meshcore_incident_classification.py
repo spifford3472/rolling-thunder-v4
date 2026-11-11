@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 
-
 _MAX_MESSAGE_LENGTH = 512
 _MAX_SENDER_LENGTH = 128
 _TOKEN_RE = re.compile(r"\b(?:accident|crash|collision|wreck|construction|roadwork|"
