@@ -6,9 +6,9 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+
 from rolling_thunder.domain import GPSFixState, GPSPosition
 from rolling_thunder.gps import GPSConnectionState, GPSState
-
 from rolling_thunder.meshcore_observation_repository import (
     MeshcoreObservationRepository,
     initialize_meshcore_database,
