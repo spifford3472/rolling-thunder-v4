@@ -41,5 +41,6 @@ def test_truncation_and_extension_rejected():
 
 def test_does_not_require_serial():
     import inspect
+
     import passive_notifications
     assert "serial" not in inspect.getsource(passive_notifications).split("from dataclasses")[1]
