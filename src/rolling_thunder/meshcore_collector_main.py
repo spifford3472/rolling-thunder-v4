@@ -6,10 +6,12 @@ No MeshCore command encoder or outbound RF action is exposed.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import logging
 import os
 import signal
+import socket
 import socketserver
 import sqlite3
 import threading
@@ -127,7 +129,20 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO)
     options.socket.parent.mkdir(parents=True, exist_ok=True)
     if options.socket.exists():
-        raise RuntimeError("Existing MeshCore API socket; refuse double owner")
+        # A SIGKILL can leave an unbound Unix socket behind. Refuse a
+        # reachable server; only reclaim a proven dead socket inode.
+        if not options.socket.is_socket():
+            raise RuntimeError("MeshCore API path exists but is not a Unix socket")
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.3)
+            try:
+                probe.connect(str(options.socket))
+            except OSError as error:
+                if error.errno != errno.ECONNREFUSED:
+                    raise
+                options.socket.unlink()
+            else:
+                raise RuntimeError("MeshCore API socket already has an owner")
     repository = MeshcoreObservationRepository(options.database)
     writer = MeshcorePassiveWorker(
         repository, lambda: read_meshcore_gps_snapshot(options.gps_snapshot)
