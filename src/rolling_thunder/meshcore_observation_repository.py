@@ -14,8 +14,6 @@ from rolling_thunder.domain import GPSFixState
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.meshcore_passive import MeshcoreObservation
 
-
-
 _MESHCORE_SCHEMA_VERSION = 1
 
 
