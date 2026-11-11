@@ -156,3 +156,16 @@ def test_store_failure_halts_without_logging_secret(tmp_path: Path) -> None:
     assert drain.status().saved == 0
     drain.tick(writer)
     assert writer.commands.count(b"<\x01\x00\x0a") == 1
+
+
+def test_new_push_during_no_more_response_is_not_lost(tmp_path: Path) -> None:
+    _, drain, writer = _setup(tmp_path)
+    _attest(drain, writer)
+    drain.tick(writer)
+    assert drain.receive(b"\x83")
+    assert drain.receive(b"\x0a")
+    drain.tick(writer)
+    assert writer.commands.count(b"<\x01\x00\x0a") == 2
+    assert drain.receive(b"\x0a")
+    drain.tick(writer)
+    assert writer.commands.count(b"<\x01\x00\x0a") == 2
