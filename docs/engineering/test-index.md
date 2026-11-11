@@ -597,6 +597,6 @@ synchronized claim hashes/changed payload rejection), and existing contact
 metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - `tests/test_meshcore_passive.py` — synthetic v1.17.1 metadata payload, full-key collisions, 0x8A layout, unsupported frames, malformed lengths, no path synthesis.
-- `tests/test_meshcore_observation_repository.py` — additive schema-23 local SQLite tables, append-only identity summaries, valid/missing/stale/future/low-quality immutable GPS snapshots, invalid timestamp, no serial dependency.
+- `tests/test_meshcore_observation_repository.py` — isolated version-1 MeshCore-only SQLite tables, append-only identity summaries, valid/missing/stale/future/low-quality immutable GPS snapshots, invalid timestamp, no serial dependency.
 
 - `tests/test_meshcore_passive_worker.py` — disabled worker, nonblocking bounded queue/overflow evidence, safe unsupported-frame handling, immutable GPS snapshot timing, deterministic shutdown.
