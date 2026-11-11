@@ -36,3 +36,15 @@ Status: **BLOCKED pending physical receiver identity and transmit-behavior verif
 - **Blocking:** determine exactly which packet notifications and metrics this firmware exposes without active discovery; no claim is made that every nearby node or full route can be observed.
 - **Pending:** confirm GPS freshness threshold, data retention policy, DB choice after performance/backup review.
 - No source changes, migration, RF command, hardware configuration, merge or deployment authorized by this note. Follow the owner-approved implementation prompt and request separate merge and deployment approvals after testing.
+
+## Connected-device evidence — 2026-11-10 at 22:59 EST
+
+After the owner connected the candidate MeshCore device, read-only USB enumeration showed one additional `10c4:ea60` CP2102 USB UART at physical USB path `1-1.1.1`, currently `/dev/ttyUSB0`. No serial port was opened and no bytes were sent.
+
+**Critical identity collision:** The new CP2102 advertises `ID_SERIAL_SHORT=0001`, which is *identical* to a pre-existing CP2102 now at physical path `1-1.1.2` (`/dev/ttyUSB3`). The standard `/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0` resolves to **ttyUSB3**, not the new candidate device. Thus a by-id rule would select the wrong radio; use validated device physical topology and/or provision a unique identifier only after explicit authorization. Do not open either during the identification gate.
+
+Connecting the hardware caused a wider USB disconnect/re-enumeration around 22:59:29; the prior tty numbers changed (CP2105 interfaces now ttyUSB1/ttyUSB2, original CP2102 now ttyUSB3, CP2102N GPS now ttyUSB4). A kernel log included a CP210x USB -71 protocol error during this reset. The Rolling Thunder service remained active with PID 18258 and 0 restarts; current process holds ttyUSB1, ttyUSB3 and ttyUSB4. This alone does not establish full GPS/controller functional recovery. Verify published GPS/controller state non-invasively before accepting hardware.
+
+Only chipset and connection topology have been established, **not** the device manufacturer/model, MeshCore firmware role/version, command semantics, current RF state or receive event content. USB enumeration cannot prove absence of firmware-autonomous RF transmissions. Firmware/protocol identification remains blocked until source-specific evidence or owner-provided model details can be matched safely.
+
+**Architecture consequence:** enforce collision-resistant hardware binding; do not match CP2102 VID/PID/serial `0001` alone. Include a simulated duplicate-USB-serial test and a hot-plug/re-enumeration regression test. Account for shared hub reset and existing rolling-thunder consumer recovery.
