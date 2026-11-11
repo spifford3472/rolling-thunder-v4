@@ -116,10 +116,12 @@ def test_duplicate_window_expires(ledger_path: Path) -> None:
     first = ledger.process(_record(1))
     second = ledger.process(_record(2, when=_NOW + timedelta(minutes=15)))
     third = ledger.process(_record(3, when=_NOW + timedelta(minutes=31)))
+    fourth = ledger.process(_record(4, when=_NOW + timedelta(minutes=62)))
     assert first.disposition == TrafficDisposition.CANDIDATE
     assert second.disposition == TrafficDisposition.DUPLICATE
     # Dedup is based on the most recently observed matching report.
     assert third.disposition == TrafficDisposition.DUPLICATE
+    assert fourth.disposition == TrafficDisposition.CANDIDATE
 
 
 def test_traffic_report_reused_id_with_changed_text_fails_closed(
