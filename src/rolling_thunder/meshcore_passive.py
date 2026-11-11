@@ -126,4 +126,6 @@ NODE_ROLE_CODES: dict[int, str] = {
 
 def node_role_from_type_code(code: int | None) -> str:
     """Return only roles explicitly identified in the advertised type code."""
+    if code is None:
+        return "unknown"
     return NODE_ROLE_CODES.get(code, "unknown")
