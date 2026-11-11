@@ -8,9 +8,9 @@ import pytest
 from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
 from rolling_thunder.meshcore_serial_service import (
     MeshcorePassiveSerialService,
+    _require_supported_usb_identity,
     open_meshcore_read_only,
     validate_meshcore_usb_path,
-    _require_supported_usb_identity,
 )
 
 
