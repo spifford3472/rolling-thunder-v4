@@ -205,3 +205,7 @@ A dedicated version-1 MeshCore SQLite database provides identity and observation
 ## Optional MeshCore message broker
 
 The independent MeshCore user-service retains sole USB serial ownership. Explicit operator opt-in adds a bounded host-local serial dequeue state machine, separate protected SQLite public/personal/quarantine inbox and a *second* token-scoped local Unix read/ack socket. The existing passive observation DB/socket and published GPS snapshot are unchanged. No new TCP ports, firewall configuration, RF commands, or additional process. A source deploy alone does not activate the broker; refer to `meshcore-message-broker.md`.
+
+## MeshCore read-only consumer contract
+
+The opt-in collector and separate protected broker Unix socket retain all ingest/storage ownership. An additive public-only consumer library uses a separate Rolling Thunder or SCOUT credential to read bounded immutable messages; a manual CLI preview can classify unverified #traffic candidates without ACKs, UI blocking, network TCP or RF commands. No new deployed service/unit, scheduler, Tk caller or automatic alert pipeline exists in this source slice. Future consumer workers must explicitly isolate durable processing, cursor ACK, backoff and presentation outside Tk.
