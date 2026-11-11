@@ -142,7 +142,7 @@ class MeshcoreObservationRepository:
                 (
                     event.public_key_hex, event.event_type.value, received,
                     event.advertised_timestamp, event.node_type_code,
-                    event.advertised_name, event.rssi_dbm, event.snr_dbm,
+                    event.advertised_name, event.rssi_dbm, event.snr_db,
                     location.latitude, location.longitude, gps_time,
                     location.status,
                 ),
