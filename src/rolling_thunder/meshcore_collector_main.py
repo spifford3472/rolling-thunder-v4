@@ -19,6 +19,7 @@ from typing import Any
 
 from rolling_thunder.meshcore_gps_bridge import read_meshcore_gps_snapshot
 from rolling_thunder.meshcore_observation_repository import MeshcoreObservationRepository
+from rolling_thunder.meshcore_passive import node_role_from_type_code
 from rolling_thunder.meshcore_passive_worker import MeshcorePassiveWorker
 from rolling_thunder.meshcore_serial_service import MeshcorePassiveSerialService
 
@@ -89,8 +90,11 @@ class _Handler(BaseHTTPRequestHandler):
                         """
                     ).fetchall()
                     keys = ("received_at_utc", "rssi_dbm", "snr_db", "gps_status")
-            self._reply(200, {"schema": "meshcore/v1",
-                              "items": [dict(zip(keys, row)) for row in rows]})
+            items = [dict(zip(keys, row)) for row in rows]
+            if self.path == "/v1/nodes":
+                for item in items:
+                    item["role"] = node_role_from_type_code(item["type_code"])
+            self._reply(200, {"schema": "meshcore/v1", "items": items})
         except sqlite3.Error:
             _LOGGER.exception("MeshCore read-only query failed")
             self._reply(503, {"error": "storage_unavailable"})
