@@ -529,3 +529,5 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_observation_repository.py` — dormant versioned MeshCore-only SQLite observation repository and immutable existing-GPS snapshot correlation; only called by explicit client, no hardware ownership or automatic worker.
 
 - `src/rolling_thunder/meshcore_passive_worker.py` — uncomposed, bounded opt-in background writer; reads injected immutable GPS snapshots at frame receipt, drops on overflow with counters, ignores unsupported frames, and drains on stop. It contains no USB or transmit interface.
+
+- `src/rolling_thunder/meshcore_inbound_frames.py` — pure inbound-only MeshCore UART framing decoder for bounded `>`-prefixed little-endian lengths, with no serial writer or command encoder.
