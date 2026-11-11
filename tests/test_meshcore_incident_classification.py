@@ -90,7 +90,7 @@ def test_road_and_direction_do_not_imply_geocoding() -> None:
         PublicMessage("public-traffic-01", "node", "x" * 513, NOW),
         PublicMessage("public-traffic-01", "", "Accident", NOW),
         PublicMessage("public-traffic-01", "node", "Crash\x00", NOW),
-        PublicMessage("public-traffic-01", "node", "Crash", datetime(2026, 11, 11)),
+        PublicMessage("public-traffic-01", "node", "Crash", NOW.replace(tzinfo=None)),
         PublicMessage("not-authorized", "node", "Crash", NOW),
         PublicMessage("#traffic", "node", "Crash", NOW),
     ],
