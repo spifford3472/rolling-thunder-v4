@@ -21,6 +21,7 @@ class ContextId(StrEnum):
     DMR = "dmr"
     FT8 = "ft8"
     ANTENNAS = "antennas"
+    MESHCORE_OHGO = "meshcore_ohgo"
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "Recent local Rolling Thunder contacts.",
     ),
     ContextDefinition(
+        ContextId.MESHCORE_OHGO,
+        "MESHCORE & OHGO",
+        "o",
+        "MESHCORE & OHGO",
+        "Receive-only MeshCore and Ohio DOT traffic intelligence.",
+    ),
+    ContextDefinition(
         ContextId.DMR,
         "DMR",
         "8",
@@ -131,6 +139,7 @@ def context_definitions(*, include_antennas: bool = False) -> tuple[ContextDefin
         ANTENNA_CONTEXT_DEFINITION,
         *CONTEXT_DEFINITIONS[insertion_index:],
     )
+
 
 _DEFINITIONS_BY_ID: Final[dict[ContextId, ContextDefinition]] = {
     definition.context_id: definition

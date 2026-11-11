@@ -492,3 +492,12 @@ operator import owns mutations. A new audit store owns only immutable
 analysis decisions and query-only projections, not broker ACK, SCOUT,
 GPS acquisition, dashboard, FT8 or radio controls.
 See meshcore-forge-road-evidence.md.
+
+### OHGO incident provider and read-only mobile context
+
+Forge alone owns the systemd credential, HTTPS provider fetch and retained
+OHGO source snapshot. The existing Forge spots API publishes the optional
+read-only versioned route; an isolated Pi view adapter reads it in a
+background worker, and Tkinter renders only the immutable snapshot.
+The independent MeshCore broker, GPS, FT8 and radio authorities remain
+unchanged. See `meshcore-ohgo-incidents.md`.

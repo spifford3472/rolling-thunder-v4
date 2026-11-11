@@ -1436,3 +1436,20 @@ A remote Home Platform/Wavelog HTTP 503 does not invalidate the locally saved QS
 The standalone `meshcore-collector.service` operates independently of the Rolling Thunder interface and captures passive node observations while the dashboard is off. It owns the Heltec V4 USB connection exclusively. GPS positions, when available, are copied from the normal Rolling Thunder GPS service through a nonblocking local snapshot publisher; while Rolling Thunder is down, observations continue with no valid receiver GPS. History is in `~/.local/share/meshcore-collector/meshcore-observations.db`, outside the RT checkout. The private read-only local API is `$XDG_RUNTIME_DIR/meshcore-collector.sock` for authorized Rolling Thunder and SCOUT users. No network port, host-initiated RF messaging, or raw-payload persistence is added. If firmware emits 0x88 raw-RX events, only unattributed RSSI/SNR measurements are kept; no message text or presumed node association.
 
 Cutover requires parked stop of old USB owner, lossless database copy, approved source deployment, independent service enablement, and hardware/GPS/SQLite/USB acceptance. Roll back by stopping the service and restoring the approved prior configuration and source through the deployment wrapper; never delete saved SQLite history. The installation remains pending until the owner performs or confirms those commands and verification succeeds.
+
+## MeshCore & OHGO (read-only)
+
+Select the **MESHCORE & OHGO** context with the `o` shortcut or existing
+context navigation. The top label identifies the separately running passive
+MeshCore collector; the OHGO section displays up to four short incident
+reports returned by Ohio DOT through Forge. It may show **not configured**,
+**unavailable**, **stale**, **no reports**, or **current reports**. An empty
+list while the provider is unavailable is not evidence of clear roads.
+
+OHGO is disabled until a Forge administrator registers for an OHGO API key
+and separately activates its protected Forge configuration. The Pi never
+stores the key or talks directly to OHGO. Reports are informational,
+unverified for the current route, and must not be used instead of attentive
+driving or official roadway information. There are **no** automatic warnings,
+navigation changes, MeshCore transmissions or construction/map overlays.
+Future map overlays are tracked in GitHub issue #408.

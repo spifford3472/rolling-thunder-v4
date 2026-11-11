@@ -565,3 +565,13 @@ on multi-match, missing or stale records. No public/private messages,
 credentials, GPS track or broker cursor are exposed in the assessment
 store. No existing live database/service is migrated. See
 meshcore-forge-road-evidence.md.
+
+## OHGO optional Forge provider / mobile read-only view
+
+New screen `MESHCORE & OHGO` does not grant transport, broker, map,
+radio or navigation authority. Forge alone reads the OHGO credential
+from systemd `LoadCredential`; no key is transported to Pi or persisted
+in source. Its optional background provider must fail closed on stale,
+unauthorized, malformed or paginated data and must never block the Forge
+HTTP handler. Pi's background poll must never run on Tk's refresh thread.
+No unsolicited alert/route change is permitted.

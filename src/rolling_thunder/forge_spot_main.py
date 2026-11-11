@@ -40,6 +40,16 @@ from rolling_thunder.forge_mobile_location_repository import (
 )
 from rolling_thunder.forge_noaa_radar import NoaaNwsRadarProvider
 from rolling_thunder.forge_nws_weather_alerts import NwsWeatherAlertProvider
+from rolling_thunder.forge_ohgo_api import (
+    ForgeOhgoBackgroundService,
+    OhgoAwareForgeSpotApiApplication,
+)
+from rolling_thunder.forge_ohgo_credentials import (
+    load_ohgo_credential,
+    ohgo_enabled_by_operator,
+)
+from rolling_thunder.forge_ohgo_http import fetch_ohgo_https
+from rolling_thunder.forge_ohgo_incidents import ForgeOhgoIncidentProvider
 from rolling_thunder.forge_open_meteo_weather import OpenMeteoForgeWeatherProvider
 from rolling_thunder.forge_pota_provider import ForgePotaSpotProvider
 from rolling_thunder.forge_qrz_enrichment import ForgeQrzEnricher
@@ -141,6 +151,7 @@ class ForgeSpotRuntime:
         weather_alert_polling: ForgeWeatherAlertPollingService | None = None,
         radar: ForgeRadarService | None = None,
         radar_polling: ForgeRadarPollingService | None = None,
+        ohgo: ForgeOhgoBackgroundService | None = None,
         dxspider: ForgeDxSpiderSpotProvider | None = None,
         dxsummit: ForgeDxSummitSpotProvider | None = None,
         logger: logging.Logger,
@@ -154,6 +165,7 @@ class ForgeSpotRuntime:
         self.weather_alert_polling = weather_alert_polling
         self.radar = radar
         self.radar_polling = radar_polling
+        self.ohgo = ohgo
         self.dxspider = dxspider
         self.dxsummit = dxsummit
         self._logger = logger
@@ -174,6 +186,8 @@ class ForgeSpotRuntime:
                 self.dxspider.start()
             if self.dxsummit is not None:
                 self.dxsummit.start()
+            if self.ohgo is not None:
+                self.ohgo.start()
             self.polling.start()
             if self.weather_polling is not None:
                 self.weather_polling.start()
@@ -184,6 +198,8 @@ class ForgeSpotRuntime:
             server_thread.join()
         finally:
             self.server.shutdown()
+            if self.ohgo is not None:
+                self.ohgo.stop()
             if self.radar_polling is not None:
                 self.radar_polling.stop()
             if self.weather_alert_polling is not None:
@@ -225,9 +241,7 @@ def configure_forge_logging(level: ForgeLogLevel) -> logging.Logger:
     logger.handlers.clear()
 
     handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     logger.addHandler(handler)
     return logger
 
@@ -274,9 +288,7 @@ def build_forge_runtime(
         providers.append(ForgePotaSpotProvider(source))
 
     if config.dxspider.enabled and config.dxsummit.enabled:
-        raise ForgeRuntimeConfigurationError(
-            "DXSpider and DX Summit cannot both be enabled."
-        )
+        raise ForgeRuntimeConfigurationError("DXSpider and DX Summit cannot both be enabled.")
 
     dxspider: ForgeDxSpiderSpotProvider | None = None
     if config.dxspider.enabled:
@@ -324,10 +336,7 @@ def build_forge_runtime(
             transport=transport,
         )
         enricher = ForgeQrzEnricher(config.qrz, lookup)
-        providers = [
-            ForgeQrzEnrichedSpotProvider(provider, enricher)
-            for provider in providers
-        ]
+        providers = [ForgeQrzEnrichedSpotProvider(provider, enricher) for provider in providers]
 
     snapshot_repository = SqliteForgeSnapshotRepository(config.storage.database_path)
     aggregation = ForgeSpotAggregationService(tuple(providers), snapshot_repository)
@@ -456,10 +465,27 @@ def build_forge_runtime(
         radar_application,
         map_renderer,
     )
-    application = WeatherAlertAwareForgeSpotApiApplication(
+    application: ForgeSpotApiApplication = WeatherAlertAwareForgeSpotApiApplication(
         map_application,
         weather_alert_service,
     )
+    # A disabled provider always publishes a truthful unavailable state.
+    # The operator must separately configure OHGO credentials on Forge.
+    ohgo_enabled = ohgo_enabled_by_operator()
+    ohgo_key = load_ohgo_credential() if ohgo_enabled else None
+    ohgo_provider = (
+        ForgeOhgoIncidentProvider(
+            transport=fetch_ohgo_https,
+            api_key=ohgo_key,
+            enabled=ohgo_enabled,
+            region="sw-ohio",
+        )
+        if ohgo_enabled and ohgo_key
+        else None
+    )
+    ohgo_service = ForgeOhgoBackgroundService(ohgo_provider)
+    application = OhgoAwareForgeSpotApiApplication(application, ohgo_service)
+
     factory = server_factory or _default_server_factory
     server = factory(
         config.server.bind_host,
@@ -476,6 +502,7 @@ def build_forge_runtime(
         weather_alert_polling=weather_alert_polling,
         radar=radar_service,
         radar_polling=radar_polling,
+        ohgo=ohgo_service,
         dxspider=dxspider,
         dxsummit=dxsummit,
         logger=process_logger,

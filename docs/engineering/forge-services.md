@@ -362,3 +362,13 @@ callback is compatible with the existing default-disabled geocoder.
 A separate append-only analysis store has query-only inspection. No
 network listener, external provider calls or live background jobs.
 See meshcore-forge-road-evidence.md.
+
+### OHGO incidents on the existing Forge spot service
+
+Optional, source-staged `ForgeOhgoIncidentProvider` polls the official
+OHGO incidents resource using a systemd-only private key, ETag and bounded
+120-second cadence. A separate thread publishes an immutable retained
+snapshot; `GET /api/v1/ohgo/incidents` is a read-only, disabled-by-default
+route layered over the existing Forge spot API. There is no new port or map
+provider. The Pi consumes retained state on a background thread. See
+`meshcore-ohgo-incidents.md`.
