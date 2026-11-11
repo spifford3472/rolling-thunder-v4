@@ -636,3 +636,7 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_broker_cli.py` — disabled-by-default startup gates and existing socket ownership protection
 
 - `tests/test_meshcore_channel_audit.py` — fake-response channel audit, key redaction, only permitted local commands, malformed identity and bounds
+
+- `tests/test_meshcore_public_consumer.py` — actual Unix API/SQLite integration for independent preview, explicit ACK, permission failures and private isolation
+- `tests/test_meshcore_public_intelligence.py` — exact traffic provenance and no-alert classification for nontraffic/unknown text
+- `tests/test_meshcore_public_consumer_main.py` — bounded preview command, unverified labels, and no implicit ACK

@@ -561,3 +561,7 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_collector_main.py` — optional broker composition and dual Unix socket lifecycle
 
 - `src/rolling_thunder/meshcore_channel_audit.py` — parked-only local 0x1F GET_CHANNEL metadata verification (slot/name/key fingerprint only), no queue dequeue or RF
+
+- `src/rolling_thunder/meshcore_public_consumer.py` — typed public-only bearer-authenticated Unix consumer with bounded preview, strict frame validation and explicit post-processing ACK
+- `src/rolling_thunder/meshcore_public_intelligence.py` — pure traffic keyword candidate adapter with explicit verified slot and unverified-sender semantics
+- `src/rolling_thunder/meshcore_public_consumer_main.py` — local command-line read-only public preview with no implicit acknowledgement or RF authority
