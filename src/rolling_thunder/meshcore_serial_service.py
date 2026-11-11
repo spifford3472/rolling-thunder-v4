@@ -89,8 +89,9 @@ class ByteReader(Protocol):
 def open_meshcore_read_only(device_path: Path) -> ByteReader:
     """Open a validated USB serial interface without emitting command frames.
 
-    DTR and RTS are deasserted before port open; some bridges may still pulse
-    them during OS initialization, so parked device acceptance is required.
+    Legacy CP2102 uses DTR low; the V4 native ESP32 CDC requires DTR high
+    before sending replies. This is USB control signaling, not an RF command.
+    Parked hardware acceptance remains required.
     """
     resolved = validate_meshcore_usb_path(device_path)
     port = serial.Serial(
@@ -101,7 +102,7 @@ def open_meshcore_read_only(device_path: Path) -> ByteReader:
         rtscts=False,
         dsrdtr=False,
     )
-    port.dtr = False
+    port.dtr = resolved.name.startswith("ttyACM")
     port.rts = False
     port.port = str(resolved)
     port.open()
