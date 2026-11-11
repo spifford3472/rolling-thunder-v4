@@ -527,3 +527,5 @@ retain structured metadata instead of generating ordinary QSO notes.
 
 - `src/rolling_thunder/meshcore_passive.py` — dormant pure MeshCore companion-v1.17.1 already-deframed 0x80/0x81/0x8A identity metadata parser; no device access, RF commands, or runtime integration.
 - `src/rolling_thunder/meshcore_observation_repository.py` — dormant local SQLite observation repository and immutable existing-GPS snapshot correlation; only called by explicit client, no hardware ownership or automatic worker.
+
+- `src/rolling_thunder/meshcore_passive_worker.py` — uncomposed, bounded opt-in background writer; reads injected immutable GPS snapshots at frame receipt, drops on overflow with counters, ignores unsupported frames, and drains on stop. It contains no USB or transmit interface.
