@@ -91,6 +91,19 @@ def _plain_string(value: object, *, maximum: int = _MAX_FIELD) -> str:
     return "".join(ch for ch in value if ch.isprintable()).strip()[:maximum]
 
 
+def _ohgo_field(record: dict[str, object], field: str) -> object:
+    """Read canonical OHGO PascalCase or observed camelCase JSON names.
+
+    OHGO's documented model uses PascalCase, but live JSON serialization
+    begins with lowercase letters. Reject contradictory duplicate spellings.
+    """
+
+    alternate = field[0].lower() + field[1:]
+    if field in record and alternate in record and record[field] != record[alternate]:
+        raise OhgoProtocolError("Conflicting OHGO field aliases")
+    return record.get(alternate, record.get(field))
+
+
 def parse_ohgo_incidents(
     body: bytes, *, received_at: datetime, limit: int = _MAX_ITEMS
 ) -> OhioIncidentSnapshot:
@@ -111,26 +124,46 @@ def parse_ohgo_incidents(
         raise OhgoProtocolError("Malformed OHGO JSON") from exc
     if not isinstance(payload, dict):
         raise OhgoProtocolError("Unexpected OHGO result")
-    if payload.get("RejectedFilters"):
+    rejected = _ohgo_field(payload, "RejectedFilters")
+    if not isinstance(rejected, list):
+        raise OhgoProtocolError("OHGO rejected-filter status absent")
+    if rejected:
         raise OhgoProtocolError("OHGO rejected requested region filter")
-    rows = payload.get("Results")
+    rows = _ohgo_field(payload, "Results")
     if not isinstance(rows, list):
         raise OhgoProtocolError("OHGO result list absent")
-    # Bound and reject truncation; do not silently drop a loaded incident page.
-    if len(rows) > limit or payload.get("TotalPageCount", 1) != 1:
-        raise OhgoProtocolError("OHGO response paginated; incomplete snapshot")
+    # A missing or incorrect count is not evidence of an empty, complete page.
+    pages = _ohgo_field(payload, "TotalPageCount")
+    count = _ohgo_field(payload, "CurrentResultCount")
+    total = _ohgo_field(payload, "TotalResultCount")
+    if (
+        type(pages) is not int
+        or pages not in (0, 1)
+        or (pages == 0 and len(rows) != 0)
+        or type(count) is not int
+        or count != len(rows)
+        or type(total) is not int
+        or total != len(rows)
+        or len(rows) > limit
+    ):
+        raise OhgoProtocolError("OHGO response truncated or paginated")
     results: list[OhioIncident] = []
     known: set[str] = set()
     for row in rows:
         if not isinstance(row, dict):
             continue
-        incident_id = _plain_string(row.get("Id"), maximum=96)
+        incident_id = _plain_string(_ohgo_field(row, "Id"), maximum=96)
         if not incident_id or incident_id in known:
             continue
         try:
-            lat = row["Latitude"]
-            lon = row["Longitude"]
-            if type(lat) not in (float, int) or type(lon) not in (float, int):
+            lat = _ohgo_field(row, "Latitude")
+            lon = _ohgo_field(row, "Longitude")
+            if (
+                not isinstance(lat, (float, int))
+                or not isinstance(lon, (float, int))
+                or isinstance(lat, bool)
+                or isinstance(lon, bool)
+            ):
                 continue
             point = GeoPoint(float(lat), float(lon))
         except (KeyError, TypeError, ValueError):
@@ -140,12 +173,12 @@ def parse_ohgo_incidents(
             OhioIncident(
                 incident_id=incident_id,
                 point=point,
-                route=_plain_string(row.get("RouteName")),
-                direction=_plain_string(row.get("Direction"), maximum=32),
-                category=_plain_string(row.get("Category"), maximum=64),
-                description=_plain_string(row.get("Description")),
-                location=_plain_string(row.get("Location")),
-                road_status=_plain_string(row.get("RoadStatus"), maximum=64),
+                route=_plain_string(_ohgo_field(row, "RouteName")),
+                direction=_plain_string(_ohgo_field(row, "Direction"), maximum=32),
+                category=_plain_string(_ohgo_field(row, "Category"), maximum=64),
+                description=_plain_string(_ohgo_field(row, "Description")),
+                location=_plain_string(_ohgo_field(row, "Location")),
+                road_status=_plain_string(_ohgo_field(row, "RoadStatus"), maximum=64),
             )
         )
     return OhioIncidentSnapshot(
