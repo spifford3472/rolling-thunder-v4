@@ -2,7 +2,9 @@
 
 from rolling_thunder.meshcore_passive import (
     ObservationType,
+    node_role_from_type_code,
     parse_passive_notification,
+    parse_passive_signal,
 )
 
 
@@ -61,3 +63,24 @@ def test_other_frames_and_bad_lengths_rejected() -> None:
     assert parse_passive_notification(valid + b"\x00") is None
     for code in (0, 1, 7, 0x82, 0x83, 0x88, 0x89, 0x8B, 0xFF):
         assert parse_passive_notification(bytes([code]) + bytes(32)) is None
+
+
+def test_receiver_signal_metrics_are_unattributed() -> None:
+    """A raw RF packet is discarded, not retained or assigned to a node."""
+    private_packet = b"private-message-should-not-be-stored"
+    event = parse_passive_signal(bytes([0x88, 0xEF, 0x9A]) + private_packet)
+    assert event is not None
+    assert event.snr_db == -4.25
+    assert event.rssi_dbm == -102
+    assert private_packet not in repr(event).encode()
+    assert not hasattr(event, "public_key_hex")
+    assert parse_passive_signal(bytes([0x88, 0xEF, 0x9A])) is None
+    assert parse_passive_signal(b"\x80" + bytes(32)) is None
+
+
+def test_repeater_classification_uses_only_verified_type_code() -> None:
+    """A node's name is never evidence of its protocol role."""
+    assert node_role_from_type_code(2) == "repeater"
+    assert node_role_from_type_code(1) == "companion"
+    assert node_role_from_type_code(None) == "unknown"
+    assert node_role_from_type_code(255) == "unknown"
