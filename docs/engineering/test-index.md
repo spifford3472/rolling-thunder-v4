@@ -618,6 +618,11 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - `tests/test_meshcore_incident_classification.py` — hardware-free classification categories, channel allowlisting, invalid input, unknown reports and conservative no-geocoding extraction. This does not prove live RF reception.
 
+- `tests/test_meshcore_traffic_georeferences.py` — bounded references, ambiguity and unknown incident rejection.
+- `tests/test_meshcore_traffic_gps_samples.py` — one-Hz snapshot reading and multi-fix validation.
+- `tests/test_meshcore_traffic_geocoding.py` — default-disabled provider, cache, throttling and specificity.
+- `tests/test_meshcore_traffic_relevance.py` — freshness, motion, site evidence and zero-alert behavior.
+- `tests/test_meshcore_traffic_analysis.py` — injected offline provider, fail-closed before lookup.
 - `tests/test_meshcore_geographic_relevance.py` — stationary/stale/invalid GPS, jitter, implausible motion, heading and direction, route-confidence distinction and distance limits.
 
 - `tests/test_meshcore_network_analytics.py` — read-only schema-2 SQL, UTC window bounds, missing/wrong database rejection, role/count integrity, receiver-location semantics and cell limits.

@@ -56,8 +56,7 @@ class VehicleFix:
         ):
             raise ValueError("Invalid GPS speed")
         if self.course_deg is not None and (
-            not math.isfinite(self.course_deg)
-            or not 0 <= self.course_deg < 360
+            not math.isfinite(self.course_deg) or not 0 <= self.course_deg < 360
         ):
             raise ValueError("Invalid GPS course")
 
@@ -93,9 +92,7 @@ def distance_bearing(origin: GeoPoint, destination: GeoPoint) -> tuple[float, fl
     )
     distance = 2 * _EARTH_RADIUS_M * math.asin(min(1.0, math.sqrt(hav)))
     y = math.sin(delta_lon) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - (
-        math.sin(lat1) * math.cos(lat2) * math.cos(delta_lon)
-    )
+    x = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1) * math.cos(lat2) * math.cos(delta_lon))
     bearing = (math.degrees(math.atan2(y, x)) + 360) % 360
     return distance, bearing
 
@@ -110,13 +107,14 @@ class PublishedGpsHeading:
         """Accept new samples no more frequently than 1 Hz, reject out-of-order."""
         timestamp = fix.observed_at.astimezone(UTC)
         if self._fixes:
-            interval = (timestamp - self._fixes[-1].observed_at.astimezone(UTC))
+            interval = timestamp - self._fixes[-1].observed_at.astimezone(UTC)
             if interval.total_seconds() < 1:
                 return False
         self._fixes.append(fix)
-        while self._fixes and (
-            timestamp - self._fixes[0].observed_at.astimezone(UTC)
-        ).total_seconds() > 5:
+        while (
+            self._fixes
+            and (timestamp - self._fixes[0].observed_at.astimezone(UTC)).total_seconds() > 5
+        ):
             self._fixes.popleft()
         return True
 
@@ -124,12 +122,19 @@ class PublishedGpsHeading:
         """Return fresh GPS only; the consumer owns its clock/source verification."""
         if now.tzinfo is None or now.utcoffset() is None or not self._fixes:
             return None
-        age = (
-            now.astimezone(UTC) - self._fixes[-1].observed_at.astimezone(UTC)
-        ).total_seconds()
+        age = (now.astimezone(UTC) - self._fixes[-1].observed_at.astimezone(UTC)).total_seconds()
         if age < 0 or age > max_age_s:
             return None
         return self._fixes[-1]
+
+    def has_recent_span(self, now: datetime, *, min_seconds: float = 2.0) -> bool:
+        """Require two fresh, ordered existing samples across 2–5 seconds."""
+        latest = self.latest(now)
+        if latest is None or len(self._fixes) < 2:
+            return False
+        earlier = self._fixes[0]
+        age = (latest.observed_at - earlier.observed_at).total_seconds()
+        return min_seconds <= age <= 5.0
 
     def heading(self, now: datetime) -> float | None:
         """Prefer valid moving course; otherwise derive from 2–5 s displacement."""
@@ -150,9 +155,7 @@ class PublishedGpsHeading:
         if seconds < 2 or seconds > 5:
             return None
         distance, bearing = distance_bearing(older.point, latest.point)
-        if distance < max(
-            _MIN_DISPLACEMENT_M, older.accuracy_m + latest.accuracy_m
-        ):
+        if distance < max(_MIN_DISPLACEMENT_M, older.accuracy_m + latest.accuracy_m):
             return None
         if distance / seconds > _MAX_REALISTIC_SPEED_MPS:
             return None
@@ -184,23 +187,14 @@ def assess_relevance(
     if distance > maximum_distance_m:
         return RelevanceResult(Relevance.NOT_RELEVANT, distance, bearing, heading)
     if distance <= max(50.0, fix.accuracy_m):
-        return RelevanceResult(
-            Relevance.NEARBY_ROUTE_UNKNOWN, distance, bearing, heading
-        )
+        return RelevanceResult(Relevance.NEARBY_ROUTE_UNKNOWN, distance, bearing, heading)
     if heading is None:
-        return RelevanceResult(
-            Relevance.NEARBY_ROUTE_UNKNOWN, distance, bearing, None
-        )
+        return RelevanceResult(Relevance.NEARBY_ROUTE_UNKNOWN, distance, bearing, None)
 
     delta = abs((bearing - heading + 180) % 360 - 180)
     if delta >= 135:
         return RelevanceResult(Relevance.BEHIND, distance, bearing, heading)
     if delta <= 60:
-        state = (
-            Relevance.AHEAD_CONFIRMED if route_confirmed
-            else Relevance.POSSIBLY_AHEAD
-        )
+        state = Relevance.AHEAD_CONFIRMED if route_confirmed else Relevance.POSSIBLY_AHEAD
         return RelevanceResult(state, distance, bearing, heading)
-    return RelevanceResult(
-        Relevance.NEARBY_ROUTE_UNKNOWN, distance, bearing, heading
-    )
+    return RelevanceResult(Relevance.NEARBY_ROUTE_UNKNOWN, distance, bearing, heading)

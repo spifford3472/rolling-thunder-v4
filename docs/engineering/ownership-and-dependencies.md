@@ -473,6 +473,15 @@ The existing independent collector remains the sole MeshCore serial owner. Its o
 
 `meshcore_public_consumer.py` is the separate, transport-only read adapter available to Rolling Thunder and future SCOUT under their distinct local bearer credentials. The independent collector and `meshcore_broker_api.py` remain sole owners of serial intake and consumer cursor state. The consumer exposes public-only immutable records and **does not automatically acknowledge**; an application with durable processing evidence must explicitly call the ACK method. `meshcore_public_intelligence.py` is a pure adapter to the existing traffic-classifier and assumes neither verified sender nor geocoded hazard. `meshcore_public_consumer_main.py` is an optional manual local preview, **not** wired into the Tk/application-runtime or autonomous SCOUT services. No expansion of QSO, map, voice, CAT/PTT or RF authority.
 
+### MeshCore geographic relevance source-only analysis
+
+Traffic georeference parsing owns only classified public-text interpretation.
+The snapshot sampler reads the existing GPS publisher with no acquisition
+authority. The default-disabled geocoding adapter requires an independently
+approved provider and does not itself create HTTP traffic. The relevance
+coordinator owns read-only evidence decisions, not broker ACK, persistence,
+Tkinter/UI, SCOUT voice, navigation, radio or RF operations.
+
 ### MeshCore durable traffic processing worker (Issue #395)
 
 The standalone `meshcore_traffic_worker.py` consumes the existing authenticated **public-only** `meshcore_public_consumer.py`, derives no additional radio or message authority, and durably commits processing outcomes to the dedicated `meshcore_traffic_ledger.py` before explicitly ACKing that consumer's existing broker cursor. The broker service retains sole ownership of serial collection and private/unknown streams. The worker does not run in the UI process and has no Tk, CAT/PTT, FT8, GPS, map, voice, geocoding, alert display or RF effect. `meshcore_traffic_worker_main.py` supports separately authorized isolated one-shot/loop execution; a systemd user-service template is staged but not installed or enabled by default. Public traffic candidates are unverified observations, not validated hazard notifications. See `meshcore-traffic-worker.md`.

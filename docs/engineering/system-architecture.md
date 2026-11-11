@@ -210,6 +210,13 @@ The independent MeshCore user-service retains sole USB serial ownership. Explici
 
 The opt-in collector and separate protected broker Unix socket retain all ingest/storage ownership. An additive public-only consumer library uses a separate Rolling Thunder or SCOUT credential to read bounded immutable messages; a manual CLI preview can classify unverified #traffic candidates without ACKs, UI blocking, network TCP or RF commands. No new deployed service/unit, scheduler, Tk caller or automatic alert pipeline exists in this source slice. Future consumer workers must explicitly isolate durable processing, cursor ACK, backoff and presentation outside Tk.
 
+## MeshCore traffic geographic relevance (source-only, disabled)
+
+Additive classified-text georeferences, existing published GPS sample reuse,
+externally injected geocode evidence and conservative read-only route analysis
+remain uncomposed. No additional GPS, provider calls, service, SQLite migration,
+radio/RF authority or operator alerts. See meshcore-intelligence.md.
+
 ## MeshCore durable traffic consumer (staged supervision, inactive)
 
 An uncomposed independent public-broker consumer can use the existing local Unix API and per-consumer token, storing processing/duplicate outcomes in a separate owner-only SQLite ledger and ACKing only after full commit. The standalone worker entrypoint supports single-run or cancellable polling with local locking, and has a staged `deploy/meshcore-traffic-worker.user.service` systemd user-unit template that is **not installed/enabled**. There is no additional live source, socket, network listener, GPS pipeline, Tk/UI thread, audio service, radio command, RF transmission, or traffic notification pipeline. Explicit later authorization and documented rollback are required to deploy or activate; see `meshcore-traffic-worker.md`.

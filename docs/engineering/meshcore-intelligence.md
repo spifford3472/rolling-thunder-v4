@@ -99,3 +99,48 @@ The installed Heltec V4.3 companion build reports v1.16.0-07a3ca9. The upstream 
 ## Issue #395 — message broker supersedes prior no-dequeue plan
 
 The owner accepted the narrow firmware dequeue-to-SQLite-commit power-loss window. The adopted design **preserves** dequeued private/contact replies in a protected personal stream rather than discarding them; verified public-channel text and unverified/binary frames have distinct public and quarantine streams. Every consumer has an independent durable acknowledgement cursor. The optional single USB owner may issue only audited *local* GET_CHANNEL (0x1F) and SYNC_NEXT_MESSAGE (0x0A) commands; there is no new radio/RF transmit authority. Activation remains disabled by default until a protected configuration with real channel identities and parked acceptance exists. See `meshcore-message-broker.md` for current source, limits and rollback; this supersedes the earlier firmware-fork recommendation.
+
+## Traffic GPS and geographic relevance — source-only analysis (2026-11-11)
+
+This additive, pure-code slice is not composed into the live traffic worker,
+collector, Tkinter, or SCOUT. It never changes broker cursors, QSO storage,
+radio settings, navigation, or RF behavior.
+
+- meshcore_traffic_georeferences.py extracts bounded canonical route, exit,
+  mile-marker and travel direction from verified public-channel classified
+  incidents. Unknown, conflicting and underspecified text fails closed.
+- meshcore_traffic_gps_samples.py reads only the existing published GPS
+  snapshot using the existing bridge, at most 1 Hz, with no new receiver.
+  The published snapshot currently has no speed or course, so validated
+  displacement over 2–5 seconds must provide any derived heading.
+- meshcore_traffic_geocoding.py is an injected, **disabled-by-default**
+  provider-neutral adapter. No HTTP code or default provider exists.
+  It enforces a maximum number of attempted queries, >=2-second spacing,
+  and positive/negative cached results. Only exact site-specific,
+  matching road/exit evidence may be accepted; road centroids are rejected.
+- meshcore_traffic_relevance.py conservatively combines qualified traffic,
+  independently supplied site evidence and fresh GPS (accuracy <=30 m).
+  It rejects reports older than ten minutes for *analysis*, not historical
+  retention. Multiple existing samples are required even if external
+  course/speed were available. Result states include approaching on
+  independently verified route, possibly approaching, behind, nearby
+  route unknown, not relevant, and insufficient information. It never
+  asserts that an incident actually happened.
+- meshcore_traffic_analysis.py joins the above boundaries. An unclassified,
+  expired, ambiguous or poor-GPS report triggers no provider lookup.
+  Driver alerts are unconditionally forbidden by this source milestone.
+
+Provider policy: the OSMF public Nominatim service limits lookup rates,
+expects meaningful User-Agent, caching, attribution and discourages
+periodic/background bulk lookups. This source does not issue any such calls.
+Policy: https://operations.osmfoundation.org/policies/nominatim/
+An approved, separately reviewed Forge/provider implementation or licensed
+local geographic dataset must supply trustworthy point/road evidence. A
+roadway name or arbitrary highway center is not a crash location.
+
+This is **NOT a fully field-accepted geographic alert pipeline**.
+Still gated: approved geographic provider, source-specific road alignment,
+read-only durable candidate projection, inspected persistence, controlled
+service composition, actual verified #traffic reception, representative
+driving GPS/FT8/UI performance and operator notification authority.
+No production deployment of this source is required for existing worker.
