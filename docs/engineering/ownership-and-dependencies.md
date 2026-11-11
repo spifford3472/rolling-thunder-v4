@@ -485,3 +485,10 @@ Tkinter/UI, SCOUT voice, navigation, radio or RF operations.
 ### MeshCore durable traffic processing worker (Issue #395)
 
 The standalone `meshcore_traffic_worker.py` consumes the existing authenticated **public-only** `meshcore_public_consumer.py`, derives no additional radio or message authority, and durably commits processing outcomes to the dedicated `meshcore_traffic_ledger.py` before explicitly ACKing that consumer's existing broker cursor. The broker service retains sole ownership of serial collection and private/unknown streams. The worker does not run in the UI process and has no Tk, CAT/PTT, FT8, GPS, map, voice, geocoding, alert display or RF effect. `meshcore_traffic_worker_main.py` supports separately authorized isolated one-shot/loop execution; a systemd user-service template is staged but not installed or enabled by default. Public traffic candidates are unverified observations, not validated hazard notifications. See `meshcore-traffic-worker.md`.
+
+### Forge MeshCore geographic evidence (source only)
+Forge catalog owns attested site-specific map records; explicit offline
+operator import owns mutations. A new audit store owns only immutable
+analysis decisions and query-only projections, not broker ACK, SCOUT,
+GPS acquisition, dashboard, FT8 or radio controls.
+See meshcore-forge-road-evidence.md.

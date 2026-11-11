@@ -144,3 +144,8 @@ read-only durable candidate projection, inspected persistence, controlled
 service composition, actual verified #traffic reception, representative
 driving GPS/FT8/UI performance and operator notification authority.
 No production deployment of this source is required for existing worker.
+
+## Forge site evidence (not deployed)
+The offline source-verified site catalog and independent immutable
+geographic decision audit are staged, with no live provider configured.
+See meshcore-forge-road-evidence.md.

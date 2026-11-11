@@ -576,3 +576,10 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_traffic_ledger.py` — isolated schema-1 SQLite public-message processing receipts, idempotent broker ID replay, 30-minute duplicate suppression, owner-only permissions and bounded storage
 - `src/rolling_thunder/meshcore_traffic_worker.py` — bounded one-batch public consumer, commits each message before individually ACKing the authorized consumer cursor
 - `src/rolling_thunder/meshcore_traffic_worker_main.py` — disabled-by-default standalone one-shot/continuous worker CLI, local single-instance lock and broker backoff; not composed into dashboard; service separately gated
+
+### Forge MeshCore geographic catalog and analysis audit
+- src/rolling_thunder/forge_meshcore_geo_catalog.py: site-specific private SQLite evidence.
+- src/rolling_thunder/forge_meshcore_geo_import.py: reviewed, offline JSON import.
+- src/rolling_thunder/forge_meshcore_geo_main.py: read-only JSON CLI contract.
+- src/rolling_thunder/forge_meshcore_geo_adapter.py: existing geocoder callback adapter.
+- src/rolling_thunder/meshcore_traffic_analysis_repository.py: independent append-only audit.
