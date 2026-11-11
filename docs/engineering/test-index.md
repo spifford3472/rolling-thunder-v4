@@ -603,5 +603,5 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - `tests/test_meshcore_inbound_frames.py` — synthetic fragmented, concatenated, oversized and malformed serial frames; ensures inbound-only decoder and 176-byte firmware bound.
 
-- `tests/test_meshcore_serial_service.py` — fake UART read-only boundary, missing-device degradation, physical path selection and no outgoing command.
+- `tests/test_meshcore_serial_service.py` — fake UART read-only boundary, missing-device degradation, physical path selection, V3/V4 USB VID/PID/transport validation, native CDC DTR policy, and no outgoing command.
 - `tests/test_meshcore_runtime_integration.py` — default-disabled runtime, invalid USB path rejection, and opt-in isolated database composition with no device access during configuration.
