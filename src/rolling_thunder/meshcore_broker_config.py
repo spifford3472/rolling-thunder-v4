@@ -79,7 +79,7 @@ def load_broker_config(path: Path) -> BrokerRuntimeConfig:
         decoded["approved_channels"], decoded["consumers"]
     )
     if not isinstance(channels_raw, list) or not isinstance(consumers_raw, list):
-        raise ValueError("Invalid broker configuration entries")
+        raise TypeError("Invalid broker configuration entries")
     channels: list[ApprovedPublicChannel] = []
     for item in channels_raw:
         if not isinstance(item, dict) or set(item) != {
@@ -102,6 +102,8 @@ def load_broker_config(path: Path) -> BrokerRuntimeConfig:
             isinstance(item[k], str) for k in ("name", "token_sha256")
         ) or not isinstance(item["streams"], list):
             raise ValueError("Invalid consumer fields")
+        if not all(isinstance(s, str) for s in item["streams"]):
+            raise TypeError("Consumer streams must be strings")
         try:
             streams = frozenset(MessageStream(s) for s in item["streams"])
         except ValueError as error:
