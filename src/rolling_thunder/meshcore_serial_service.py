@@ -1,8 +1,7 @@
-"""Opt-in MeshCore companion serial receive service with no outgoing commands.
+"""Exclusive MeshCore serial owner for passive observations and optional inbox.
 
-This adapter is intentionally read-only at the application protocol level.
-Firmware-managed mesh RF is independent and owner-permitted; this implementation
-cannot issue MeshCore advertisements, discovery, text, config or trace commands.
+By default it is receive-only. Explicit opt-in permits only firmware-local
+channel-identity queries and saved-message dequeue; never any RF send opcode.
 """
 
 import logging
@@ -11,10 +10,11 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import serial
 
+from rolling_thunder.meshcore_broker_drain import MeshcoreBrokerDrain
 from rolling_thunder.meshcore_inbound_frames import MeshcoreInboundFrames
 from rolling_thunder.meshcore_passive_worker import (
     MeshcorePassiveWorker,
@@ -86,6 +86,15 @@ class ByteReader(Protocol):
         ...
 
 
+@runtime_checkable
+class LocalCommandPort(ByteReader, Protocol):
+    """Optional host-local companion command capability; no RF interface."""
+
+    def write(self, payload: bytes) -> int | None:
+        """Write a single pre-approved, framed local firmware request."""
+        ...
+
+
 def open_meshcore_read_only(device_path: Path) -> ByteReader:
     """Open a validated USB serial interface without emitting command frames.
 
@@ -128,10 +137,12 @@ class MeshcorePassiveSerialService:
         device_path: Path,
         *,
         reader_factory: Callable[[Path], ByteReader] = open_meshcore_read_only,
+        broker_drain: MeshcoreBrokerDrain | None = None,
     ) -> None:
         self._worker = worker
         self._device_path = device_path
         self._reader_factory = reader_factory
+        self._broker_drain = broker_drain
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -177,6 +188,12 @@ class MeshcorePassiveSerialService:
             reader: ByteReader | None = None
             try:
                 reader = self._reader_factory(self._device_path)
+                # The opt-in broker cannot assume that every fake/read-only
+                # adapter has a write method. No command is issued by default.
+                if self._broker_drain is not None:
+                    if not isinstance(reader, LocalCommandPort):
+                        raise ValueError("Broker requires a local serial writer")
+                    self._broker_drain.connected()
                 decoder = MeshcoreInboundFrames()
                 with self._lock:
                     self._connected = True
@@ -185,14 +202,26 @@ class MeshcorePassiveSerialService:
                     data = reader.read(256)
                     if data:
                         for payload in decoder.feed(data):
+                            if (
+                                self._broker_drain is not None
+                                and self._broker_drain.receive(payload)
+                            ):
+                                continue
                             self._worker.offer(payload)
-                    else:
+                    if (
+                        self._broker_drain is not None
+                        and isinstance(reader, LocalCommandPort)
+                    ):
+                        self._broker_drain.tick(reader)
+                    if not data:
                         self._stop.wait(0.05)
             except (OSError, ValueError, serial.SerialException) as error:
                 with self._lock:
                     self._last_error = type(error).__name__
                 _LOGGER.warning("MeshCore receiver unavailable: %s", error)
             finally:
+                if self._broker_drain is not None:
+                    self._broker_drain.disconnected()
                 with self._lock:
                     self._connected = False
                 if reader is not None:

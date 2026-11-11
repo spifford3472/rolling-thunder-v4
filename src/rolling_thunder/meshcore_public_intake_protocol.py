@@ -81,8 +81,10 @@ def verify_channel_info(
     if response[0] != _CHANNEL_INFO or response[1] != approved.slot:
         return None
     name_bytes = response[2:34]
-    name_bytes, terminator, rest = name_bytes.partition(b"\x00")
-    if not terminator or any(rest):
+    name_bytes, terminator, _unused_padding = name_bytes.partition(b"\x00")
+    # v1.16 uses strcpy() then advances 32 bytes without zeroing padding;
+    # stale bytes after NUL are not part of the name or an identity signal.
+    if not terminator:
         return None
     try:
         name = name_bytes.decode("utf-8", errors="strict")

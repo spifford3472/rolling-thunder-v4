@@ -72,3 +72,5 @@ A Pi screen may consume a Forge service, but it does not own that service. Forge
 
 
 Opt-in MeshCore collector (disabled by default) consumes shared published immutable GPS state and a dedicated SQLite database. It MUST NOT open the GPS serial, change the current grid or modify QSO persistence. When enabled, its own exclusive CP2102 physical USB path is an independent hardware source.
+
+| Optional MeshCore message broker | `meshcore_message_broker.py`, `meshcore_broker_drain.py`, `meshcore_broker_api.py` | Independent collector; future Rolling Thunder and SCOUT token-authorized clients | Critical: firmware destructive dequeue, private-message durability, public channel attestation, capability scopes, no RF authority |

@@ -63,6 +63,14 @@ def test_channel_attestation_fails_closed(response: bytes) -> None:
     assert verify_channel_info(response, APPROVED) is None
 
 
+def test_v116_ignored_channel_name_padding_may_be_nonzero() -> None:
+    # The installed firmware copies the NUL-terminated name without
+    # clearing the rest of the fixed 32-byte name field.
+    field = b"#traffic\x00" + b"\xff" * (32 - len(b"#traffic\x00"))
+    response = bytes([0x12, 3]) + field + SECRET
+    assert verify_channel_info(response, APPROVED) == VERIFIED
+
+
 def test_operator_approval_required() -> None:
     denied = ApprovedPublicChannel(
         APPROVED.slot, APPROVED.name, APPROVED.secret_sha256, False

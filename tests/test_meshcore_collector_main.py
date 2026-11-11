@@ -71,6 +71,8 @@ def test_unix_api_health_no_mutations_no_raw_payload(tmp_path: Path) -> None:
         assert status == 404
         status, rejected = _request(sock, "POST", "/v1/activity")
         assert status == 405 and rejected["error"] == "read_only"
+        status, disabled = _request(sock, "GET", "/v1/broker-health")
+        assert status == 404 and disabled["error"] == "not_enabled"
         status, rejected = _request(sock, "POST", "/v1/nodes")
         assert status == 405 and rejected["error"] == "read_only"
         status, rejected = _request(sock, "GET", "/v1/private")

@@ -625,3 +625,14 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_collector_main.py` also asserts the private `GET /v1/activity` bounded response, absence of public query controls, and 405 on write methods; no real serial or radio fixture.
 
 - `tests/test_meshcore_public_intake_protocol.py` — exact v1.16 channel identity/fingerprint, malformed reply rejection, private/binary redaction, legacy/V3 message framing, untrusted timestamps and opcode fuzz coverage; no live hardware.
+
+## MeshCore message broker
+
+- `tests/test_meshcore_message_broker.py` — privacy stream separation, independent cursor/restart, file security and backpressure
+- `tests/test_meshcore_broker_drain.py` — fake host-local commands, channel mismatch, commit before next dequeue and timeout failures
+- `tests/test_meshcore_broker_serial_integration.py` — fake Heltec framing through existing reader into durable public/private streams
+- `tests/test_meshcore_broker_config.py` — owner-only config, strict channel/token fields and scope rejection
+- `tests/test_meshcore_broker_api.py` — token isolation and independent stream acknowledgement over Unix socket
+- `tests/test_meshcore_broker_cli.py` — disabled-by-default startup gates and existing socket ownership protection
+
+- `tests/test_meshcore_channel_audit.py` — fake-response channel audit, key redaction, only permitted local commands, malformed identity and bounds

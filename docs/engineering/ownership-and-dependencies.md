@@ -464,3 +464,7 @@ The independent `meshcore_collector_main.py` owns its local Unix API, while `mes
 ### MeshCore public-channel protocol intake (Issue #395)
 
 `meshcore_public_intake_protocol.py` is a *noncomposed* pure protocol/attestation domain. Its only allowed input is an independently operator-approved index/name/secret fingerprint and a transient firmware response. Serial ownership remains exclusively `meshcore_serial_service.py`; that service is not modified and does not transmit local commands. Future queue retrieval must resolve firmware-v1.16 destructive dequeue of private/contact messages before integration, even if the retrieval opcode itself does not transmit RF. See `meshcore-intelligence.md`.
+
+### MeshCore optional message broker (Issue #395)
+
+The existing independent collector remains the sole MeshCore serial owner. Its optional `meshcore_broker_drain.py` can issue only audited firmware-local 0x1F and 0x0A requests after explicit configuration; it does not add RF transmit authority. `meshcore_message_broker.py` owns separate SQLite storage and consumer cursors, and `meshcore_broker_api.py` owns a separate token-scoped private Unix read/ack API. The existing observation SQLite, GPS bridge, QSO database, Tk UI and passive read-only Unix API remain independent. All activation requires parked verification of exact channel identity; see `meshcore-message-broker.md`.
