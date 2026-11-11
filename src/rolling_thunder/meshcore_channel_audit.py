@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     port = open_meshcore_read_only(options.device)
     try:
         if not isinstance(port, LocalCommandPort):
-            raise RuntimeError("Device does not support local command replies")
+            raise TypeError("Device does not support local command replies")
         details = audit_channels(port)
     finally:
         port.close()
