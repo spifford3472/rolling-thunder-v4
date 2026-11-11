@@ -438,3 +438,7 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 
 - `offline-county-lookup.md` — Issue #380 staged county polygon resolver,
   data provenance and integration gates (not production enabled).
+
+## MeshCore intelligence foundation
+
+- `meshcore-intelligence.md` — pure allowlisted public-message classification, privacy boundary, no RF authority, and future verified intake requirements. This is not yet a receiver-integrated feature.
