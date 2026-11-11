@@ -437,3 +437,7 @@ Issue246 keeps ownership unchanged: Wavelog adapter normalizes provider history
 and serializes notes; contact-sync alone owns legacy claim compatibility; shared
 callsign presentation consumes count/band without provider access. See
 `issue-246-notes-and-contact-history.md`.
+
+## MeshCore passive observation staging (uncomposed)
+
+`meshcore_passive.py` owns only inbound metadata parsing from already-deframed payloads; `meshcore_observation_repository.py` owns a dormant SQLite persistence adapter and reads existing immutable `GPSState` snapshots. The collector is **not composed**, owns no serial device or UI, and has no transmit, radio, Forge or GPS-acquisition authority. Its schema-23 tables are additive. Future hardware integration requires a verified exclusive serial adapter, bounded worker, firmware-autonomous RF safety audit, and explicit activation approval. See `meshcore-passive-observation-design.md` (architecture PR #384).
