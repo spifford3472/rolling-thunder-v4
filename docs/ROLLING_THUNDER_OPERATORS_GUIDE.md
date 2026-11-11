@@ -1424,3 +1424,8 @@ keeps it deasserted. A firmware query is an intentional parked diagnostic, not
 part of unattended collector behavior. The application retains its default-off
 gate; this identification alone does not prove the radio is receiving nearby
 nodes or that a full drive-tested collector has passed acceptance.
+
+
+### Contact-sync repeated remote failures (2026-11-11)
+
+A remote Home Platform/Wavelog HTTP 503 does not invalidate the locally saved QSO. The retry schedule doubles initially but is capped by the configured maximum, even for contacts with a very large previous failure count. The persistent retry mechanism continues to schedule future eligible attempts instead of crashing on numeric overflow. This correction does not imply the remote HTTP 503 itself is resolved. Contact-sync error status and normal manual retry remain governed by the existing logging interface.
