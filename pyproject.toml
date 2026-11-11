@@ -34,6 +34,7 @@ rolling-thunder-forge-voacap-capture-plan = "rolling_thunder.forge_voacap_schedu
 rolling-thunder-forge-voacap-plan = "rolling_thunder.forge_voacap_plan_main:main"
 rolling-thunder-forge-solar-ssn = "rolling_thunder.forge_solar_ssn:main"
 rolling-thunder-pota-catalog = "rolling_thunder.pota_catalog_main:main"
+rolling-thunder-meshcore-collector = "rolling_thunder.meshcore_collector_main:main"
 
 [project.optional-dependencies]
 speech = [
