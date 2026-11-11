@@ -15,7 +15,6 @@ from typing import Protocol
 
 import serial
 
-from rolling_thunder.gps import GPSState
 from rolling_thunder.meshcore_inbound_frames import MeshcoreInboundFrames
 from rolling_thunder.meshcore_passive_worker import (
     MeshcorePassiveWorker,
