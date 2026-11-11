@@ -524,3 +524,6 @@ history without comments/notes. contact_commit_controller.py and contact_metadat
 retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/offline_county.py` — pure, not-yet-integrated offline county polygon lookup primitive; returns unknown on invalid or ambiguous geometry; see `offline-county-lookup.md`.
 - `src/rolling_thunder/offline_county_store.py` — indexed read-only offline county SQLite candidate reader and frozen GPS freshness/accuracy gate; not yet connected to logging.
+
+- `src/rolling_thunder/meshcore_passive.py` — dormant pure MeshCore companion-v1.17.1 already-deframed 0x80/0x81/0x8A identity metadata parser; no device access, RF commands, or runtime integration.
+- `src/rolling_thunder/meshcore_observation_repository.py` — dormant local SQLite observation repository and immutable existing-GPS snapshot correlation; only called by explicit client, no hardware ownership or automatic worker.
