@@ -169,3 +169,15 @@ def test_new_push_during_no_more_response_is_not_lost(tmp_path: Path) -> None:
     assert drain.receive(b"\x0a")
     drain.tick(writer)
     assert writer.commands.count(b"<\x01\x00\x0a") == 2
+
+
+def test_truncated_channel_reply_is_quarantined_not_crashed(
+    tmp_path: Path,
+) -> None:
+    inbox, drain, writer = _setup(tmp_path)
+    _attest(drain, writer)
+    drain.tick(writer)
+    assert drain.receive(b"\x11")
+    assert inbox.status()["quarantine"] == 1
+    assert drain.status().quarantine_saved == 1
+    assert drain.status().fault is None
