@@ -47,13 +47,19 @@ def validate_meshcore_usb_path(device_path: Path) -> Path:
         raise ValueError("MeshCore path does not identify a USB serial interface")
 
     sys_dev = (Path("/sys/class/tty") / resolved.name / "device").resolve(strict=True)
-    # The physical USB device node is above the interface and tty adapter.
+    _require_supported_usb_identity(resolved.name, sys_dev)
+    return resolved
+
+
+def _require_supported_usb_identity(tty_name: str, sys_dev: Path) -> None:
+    """Match USB vendor/product and tty transport without trusting by-id links."""
+    # The physical USB device is an ancestor of the interface/tty adapter.
     candidate = sys_dev
-    for _ in range(5):
+    for _ in range(8):
         vendor = candidate / "idVendor"
         product = candidate / "idProduct"
         if vendor.is_file() and product.is_file():
-            tty_kind = "ttyACM" if resolved.name.startswith("ttyACM") else "ttyUSB"
+            tty_kind = "ttyACM" if tty_name.startswith("ttyACM") else "ttyUSB"
             identity = (
                 tty_kind,
                 vendor.read_text(encoding="utf-8").strip().lower(),
@@ -61,7 +67,7 @@ def validate_meshcore_usb_path(device_path: Path) -> Path:
             )
             if identity not in _ALLOWED_USB_IDENTITIES:
                 raise ValueError("Configured MeshCore port USB family is not allowed")
-            return resolved
+            return
         if candidate.parent == candidate:
             break
         candidate = candidate.parent
