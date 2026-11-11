@@ -634,3 +634,5 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_broker_config.py` — owner-only config, strict channel/token fields and scope rejection
 - `tests/test_meshcore_broker_api.py` — token isolation and independent stream acknowledgement over Unix socket
 - `tests/test_meshcore_broker_cli.py` — disabled-by-default startup gates and existing socket ownership protection
+
+- `tests/test_meshcore_channel_audit.py` — fake-response channel audit, key redaction, only permitted local commands, malformed identity and bounds
