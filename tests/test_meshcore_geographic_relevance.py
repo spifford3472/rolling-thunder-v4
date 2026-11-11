@@ -104,7 +104,7 @@ def test_out_of_order_and_high_frequency_samples_rejected() -> None:
 def test_position_derived_heading_without_gps_course() -> None:
     tracker = PublishedGpsHeading()
     tracker.offer(_fix(NOW - timedelta(seconds=3), HOME, speed=None, course=None))
-    tracker.offer(_fix(NOW, NORTH, speed=None, course=None))
+    tracker.offer(_fix(NOW, GeoPoint(39.5407, -84.10), speed=None, course=None))
     assert tracker.heading(NOW) == pytest.approx(0, abs=0.1)
 
 
