@@ -59,3 +59,11 @@ fabricated geographic location.
 
 This foundation is not field acceptance; actual driving/RF testing remains
 pending after a separately validated integration.
+
+## Geographic relevance foundation
+
+`meshcore_geographic_relevance.py` is a pure geographic utility, not a second GPS acquisition pipeline. A caller may offer timestamped points from the established Rolling Thunder GPS publisher no more frequently than 1 Hz. A maximum six-element, five-second in-memory history derives a heading only when displacement exceeds GPS jitter and implies plausible speed. Verified course over ground takes precedence when reported speed confirms movement; stationary, stale, invalid, or implausible fixes fail closed.
+
+A geographic incident candidate requires an independently trusted geocode; the classifier does not create one. Distances/bearings are informational, **not road or route matching**. An incident only becomes `ahead_confirmed_route` when a future, independent map-matching service positively verifies the road/travel direction and supplies `route_confirmed=True`. Otherwise proximity may mean `possibly_ahead`, `behind`, `nearby_route_unknown`, `not_relevant`, or `insufficient_information`. A future system must confirm freshness and accuracy of incident location, and must not infer truth from a public report.
+
+This domain module is deliberately not composed into the UI, database, or collector yet. Unit tests do not establish field GPS or dashboard acceptance.
