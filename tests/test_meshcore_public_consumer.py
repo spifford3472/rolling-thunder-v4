@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import socket
 import stat
 import threading
 from datetime import UTC, datetime
