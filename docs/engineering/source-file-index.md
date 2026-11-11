@@ -544,3 +544,5 @@ retain structured metadata instead of generating ordinary QSO notes.
 ## MeshCore intelligence (pure, noncomposed foundation)
 
 - `src/rolling_thunder/meshcore_incident_classification.py` — deterministic bounded classification of already-verified public traffic/SKYWARN messages; no device, GPS, persistence, UI, or RF authority. See `meshcore-intelligence.md`.
+
+- `src/rolling_thunder/meshcore_geographic_relevance.py` — immutable GPS sample validation, bounded heading history, great-circle distance/bearing and conservative route-confidence classification; no GPS polling, map matching, serial, or RF.
