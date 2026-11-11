@@ -1371,3 +1371,39 @@ and block the action. No live CAT query or radio command is issued by this guard
 ### QSO popup and vehicle status readability (2026-11-04)
 
 The QSO map popup shows the remote station local-time label at twice its previous font size (48-point bold); the white background is sized from the rendered text bounds. The bottom vehicle status-bar ticker text is also doubled (36-point bold). The status icons and QSO workflow are unchanged. Longer messages may not fit the available ticker width; the UI does not automatically scroll or abbreviate them.
+
+---
+
+## Optional MeshCore observation collector (disabled by default)
+
+An optional, background-only MeshCore collector can be enabled by a deliberate
+operator configuration change **after parked USB and GPS/controller acceptance**.
+There is currently no MeshCore dashboard screen or map overlay. It monitors
+incoming companion-protocol node identity announcements (including new contacts
+and path-update notifications), preserves first/last seen history, and stores
+each received observation with UTC time and the existing Rolling Thunder GPS
+snapshot where valid. No extra GPS receiver or network pipeline is started.
+
+`meshcore_passive.enabled` defaults to `false`. When off, the MeshCore port
+is never opened and its database is not created. When explicitly enabled, the
+`device` setting must be a verified physical `/dev/serial/by-path/...` USB
+selector, never `/dev/ttyUSB#` or `/dev/serial/by-id`, because the installed
+MeshCore CP2102 shares its generic serial identifier with another device.
+Data goes into `meshcore-observations.db` beside the configured contact database,
+without changing contact-log schema, QSO logging or Wavelog synchronization.
+
+The software never sends discovery requests, advertisements, messages, radio
+configuration or trace commands. Ordinary firmware-managed MeshCore ACK and mesh
+routing transmissions may still occur, as permitted by the owner; no absolute
+RF silence is implied. RSSI/SNR and complete observed paths are stored only
+when actually available and validated; the initially supported identity
+notifications provide neither. A stale, absent or low-quality GPS fix causes
+an explicit null receiver location rather than an invented coordinate.
+
+**Do not enable the collector during a drive or while the USB bus is unstable.**
+The 2026-11-11 hardware investigation observed repeated USB hub protocol errors
+and missing MeshCore/GPS serial interfaces. A successful software regression
+suite is not a substitute for a parked physical USB, RF, and GPS/controller
+acceptance check. Rollback: set `meshcore_passive.enabled: false` and restart
+the application through the approved deployment process; retain the separate
+database for later analysis.
