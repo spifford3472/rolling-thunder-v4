@@ -12,9 +12,9 @@ from pathlib import Path
 
 from rolling_thunder.domain import GPSFixState
 from rolling_thunder.gps import GPSConnectionState, GPSState
-from rolling_thunder.meshcore_passive import MeshcoreObservation
+from rolling_thunder.meshcore_passive import MeshcoreObservation, MeshcoreSignalSample
 
-_MESHCORE_SCHEMA_VERSION = 1
+_MESHCORE_SCHEMA_VERSION = 2
 
 
 def initialize_meshcore_database(database_path: Path) -> int:
@@ -34,7 +34,7 @@ def initialize_meshcore_database(database_path: Path) -> int:
         }
         allowed = {
             "meshcore_schema", "meshcore_observed_nodes",
-            "meshcore_observations",
+            "meshcore_observations", "meshcore_signal_samples",
         }
         if objects - allowed:
             raise ValueError("Database contains non-MeshCore tables")
@@ -42,9 +42,18 @@ def initialize_meshcore_database(database_path: Path) -> int:
             existing = connection.execute(
                 "SELECT version FROM meshcore_schema WHERE id = 1"
             ).fetchone()
-            if existing != (_MESHCORE_SCHEMA_VERSION,):
+            if existing not in ((1,), (_MESHCORE_SCHEMA_VERSION,)):
                 raise ValueError("Unsupported MeshCore database schema")
             if not {"meshcore_observed_nodes", "meshcore_observations"} <= objects:
+                raise ValueError("Incomplete MeshCore database schema")
+            if existing == (1,):
+                # Additive v1-to-v2 migration; preserve all historical observations.
+                _create_signal_table(connection)
+                connection.execute(
+                    "UPDATE meshcore_schema SET version = ? WHERE id = 1",
+                    (_MESHCORE_SCHEMA_VERSION,),
+                )
+            elif "meshcore_signal_samples" not in objects:
                 raise ValueError("Incomplete MeshCore database schema")
             return _MESHCORE_SCHEMA_VERSION
         if objects:
@@ -105,11 +114,38 @@ def initialize_meshcore_database(database_path: Path) -> int:
             CREATE INDEX meshcore_observations_node_idx
             ON meshcore_observations(public_key_hex, received_at_utc DESC)
         """)
+        _create_signal_table(connection)
         connection.execute(
             "INSERT INTO meshcore_schema(id, version) VALUES(1, ?)",
             (_MESHCORE_SCHEMA_VERSION,),
         )
     return _MESHCORE_SCHEMA_VERSION
+
+
+def _create_signal_table(connection: sqlite3.Connection) -> None:
+    """Create unattributed RF metrics storage; never store the raw packet."""
+    connection.execute("""
+        CREATE TABLE meshcore_signal_samples (
+            sample_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            received_at_utc TEXT NOT NULL,
+            rssi_dbm REAL NOT NULL,
+            snr_db REAL NOT NULL,
+            receiver_latitude REAL,
+            receiver_longitude REAL,
+            gps_status TEXT NOT NULL,
+            CHECK (rssi_dbm BETWEEN -128 AND 127),
+            CHECK (snr_db BETWEEN -32 AND 31.75),
+            CHECK (
+                (receiver_latitude IS NULL AND receiver_longitude IS NULL)
+                OR (receiver_latitude BETWEEN -90 AND 90
+                    AND receiver_longitude BETWEEN -180 AND 180)
+            )
+        )
+    """)
+    connection.execute("""
+        CREATE INDEX meshcore_signal_samples_received_idx
+        ON meshcore_signal_samples(received_at_utc DESC)
+    """)
 
 @dataclass(frozen=True, slots=True)
 class ReceiverLocation:
@@ -166,6 +202,36 @@ class MeshcoreObservationRepository:
     def __init__(self, database_path: Path) -> None:
         self._database_path = database_path
         initialize_meshcore_database(database_path)
+
+    def record_signal(
+        self,
+        sample: MeshcoreSignalSample,
+        received_at: datetime,
+        gps_state: GPSState | None,
+    ) -> int:
+        """Store only RF signal metrics, without RF payload or assumed node ID."""
+        if received_at.tzinfo is None or received_at.utcoffset() is None:
+            raise ValueError("received_at must be timezone-aware")
+        if not math.isfinite(sample.rssi_dbm) or not math.isfinite(sample.snr_db):
+            raise ValueError("RF signal metrics must be finite")
+        location = receiver_location_at(gps_state, received_at)
+        with sqlite3.connect(self._database_path, timeout=5.0) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO meshcore_signal_samples (
+                    received_at_utc, rssi_dbm, snr_db,
+                    receiver_latitude, receiver_longitude, gps_status
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    received_at.astimezone(UTC).isoformat(),
+                    sample.rssi_dbm, sample.snr_db, location.latitude,
+                    location.longitude, location.status,
+                ),
+            )
+            if cursor.lastrowid is None:
+                raise RuntimeError("No signal sample ID returned by SQLite")
+            return cursor.lastrowid
 
     def record(
         self,
