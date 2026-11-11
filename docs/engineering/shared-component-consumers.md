@@ -69,3 +69,6 @@ A feature needing one additional radio operation should extend the narrow typed 
 ### Forge
 
 A Pi screen may consume a Forge service, but it does not own that service. Forge APIs should remain presentation-neutral and reusable by future authorized clients.
+
+
+Future MeshCore collector (currently uncomposed) would consume shared published GPS state and local schema-23 SQLite tables. It MUST NOT open GPS serial, change current grid or modify other feature persistence. No runtime consumer is connected in this branch.
