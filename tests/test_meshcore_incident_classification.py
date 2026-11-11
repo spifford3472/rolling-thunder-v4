@@ -13,7 +13,6 @@ from rolling_thunder.meshcore_incident_classification import (
     classify_public_message,
 )
 
-
 POLICY = PublicChannelPolicy(
     traffic_ids=frozenset({"public-traffic-01"}),
     skywarn_ids=frozenset({"public-skywarn-02"}),
