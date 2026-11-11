@@ -643,3 +643,4 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - `tests/test_meshcore_traffic_worker.py` — durable ledger, idempotent ACK replay, duplicate suppression, capacity/storage failures and secure file modes
 - `tests/test_meshcore_traffic_worker_integration.py` — full local Unix broker public/private separation, independent consumer cursors, commit-before-ACK and repeated public traffic deduplication
+- `tests/test_meshcore_traffic_worker_main.py` — standalone one-shot real Unix broker/ledger/ACK path, independent SCOUT cursor, exclusive worker lock and CLI argument validation
