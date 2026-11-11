@@ -617,3 +617,5 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 ## MeshCore intelligence classification
 
 - `tests/test_meshcore_incident_classification.py` — hardware-free classification categories, channel allowlisting, invalid input, unknown reports and conservative no-geocoding extraction. This does not prove live RF reception.
+
+- `tests/test_meshcore_geographic_relevance.py` — stationary/stale/invalid GPS, jitter, implausible motion, heading and direction, route-confidence distinction and distance limits.
