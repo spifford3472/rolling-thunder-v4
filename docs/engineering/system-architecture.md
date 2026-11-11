@@ -196,3 +196,8 @@ A release/rollback point must identify:
 - database-safe backups/snapshots where required.
 
 Experimental Codex work should begin only after such a restore point exists.
+
+
+### MeshCore passive collection (code staged, runtime disabled)
+
+Schema 23 provides additive local MeshCore identity/observation history tables. Pure parsing, a bounded injected worker and a persistence adapter exist but are **not composed** in `application_runtime.py`, so no hardware, GPS, radio or database writes occur from this feature during normal application execution. The existing GPS owner is the sole intended source of receiver coordinates. RF-safe companion-v1.17.1 serial framing, installed binary verification and autonomous transmission review are still mandatory before any device connection. See draft architecture PR #384.
