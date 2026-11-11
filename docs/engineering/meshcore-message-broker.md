@@ -202,3 +202,7 @@ Preserve the private message DB for later recovery; never publish it.
   single-flight drain, verified public-channel gate, capability-scoped
   local Unix API, disabled-by-default startup, offline tests and runbook.
   No firmware changes or RF transmit support.
+
+## Parked, non-transmitting channel audit utility
+
+Before activating, the operator can inspect exact configured MeshCore channel metadata using `python -m rolling_thunder.meshcore_channel_audit --device /dev/serial/by-path/<verified-physical-selector>` from the installed venv. **Park and stop only the independent `meshcore-collector.service` first**, because the serial device is exclusively owned; do not run during a commute. Restore the independent collector immediately afterward. The tool only issues 0x1F GET_CHANNEL for indices 0–7, never 0x0A dequeue, and never sends an RF command. It prints channel names/slots and **SHA-256 fingerprints only**, not raw 16-byte keys, in local JSON. Treat its output as station metadata and do not upload it publicly. Configure the verified operator-approved public slots and corresponding fingerprints in the protected broker JSON. Strict tests inject framed responses and prove that no send/dequeue opcode can be emitted. The tool does not create the config, token credentials or systemd activation automatically.
