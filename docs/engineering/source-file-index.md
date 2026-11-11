@@ -534,3 +534,9 @@ retain structured metadata instead of generating ordinary QSO notes.
 
 - `src/rolling_thunder/meshcore_serial_service.py` — opt-in exclusive V3 CP2102 or V4 native USB CDC ACM by-path receive service and reconnect, never sends host protocol commands; runtime composition is disabled by default.
 - `src/rolling_thunder/config.py` and `application_runtime.py` — typed MeshCore enable/path gate and optional lifecycle using existing immutable GPS snapshots; no UI-thread device work.
+
+
+- `src/rolling_thunder/meshcore_collector_main.py` — independent user-service entrypoint, read-only HTTP-over-Unix API, separate serial/worker/SQLite lifecycle; no Tk, CAT/PTT or host RF command encoder.
+- `src/rolling_thunder/meshcore_gps_bridge.py` — nonblocking GPS listener publisher and freshness-checked file reader; reuses the existing GPS state, no new hardware acquisition.
+- `deploy/meshcore-collector.user.service` and `deploy/install-meshcore-user-service.sh` — staged separate service install and isolated SQLite data migration after embedded USB release.
+- `src/rolling_thunder/meshcore_passive.py` — now additionally decodes 0x88 signal metadata without retaining raw packets and labels known advertised role codes; other notifications unchanged.
