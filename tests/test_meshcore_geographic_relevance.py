@@ -15,7 +15,6 @@ from rolling_thunder.meshcore_geographic_relevance import (
     distance_bearing,
 )
 
-
 NOW = datetime(2026, 11, 11, 15, 0, tzinfo=UTC)
 HOME = GeoPoint(39.54, -84.10)
 NORTH = GeoPoint(39.56, -84.10)
