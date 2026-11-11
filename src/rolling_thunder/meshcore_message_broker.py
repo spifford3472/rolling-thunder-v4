@@ -11,11 +11,11 @@ from __future__ import annotations
 import os
 import sqlite3
 import stat
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Mapping
 
 from rolling_thunder.meshcore_public_intake_protocol import (
     VerifiedChannel,
