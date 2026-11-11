@@ -13,8 +13,105 @@ from pathlib import Path
 from rolling_thunder.domain import GPSFixState
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.meshcore_passive import MeshcoreObservation
-from rolling_thunder.storage import initialize_database
 
+
+
+_MESHCORE_SCHEMA_VERSION = 1
+
+
+def initialize_meshcore_database(database_path: Path) -> int:
+    """Initialize isolated collector storage without migrating the QSO database.
+
+    Reject databases owned by any other subsystem and unsupported future schema
+    versions. Creation and metadata publication share one SQLite transaction.
+    """
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(database_path, timeout=5.0) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        objects = {
+            row[0] for row in connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+        allowed = {
+            "meshcore_schema", "meshcore_observed_nodes",
+            "meshcore_observations",
+        }
+        if objects - allowed:
+            raise ValueError("Database contains non-MeshCore tables")
+        if "meshcore_schema" in objects:
+            existing = connection.execute(
+                "SELECT version FROM meshcore_schema WHERE id = 1"
+            ).fetchone()
+            if existing != (_MESHCORE_SCHEMA_VERSION,):
+                raise ValueError("Unsupported MeshCore database schema")
+            if not {"meshcore_observed_nodes", "meshcore_observations"} <= objects:
+                raise ValueError("Incomplete MeshCore database schema")
+            return _MESHCORE_SCHEMA_VERSION
+        if objects:
+            raise ValueError("Incomplete unversioned MeshCore database")
+
+        connection.execute("""
+            CREATE TABLE meshcore_schema (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL
+            )
+        """)
+        connection.execute("""
+            CREATE TABLE meshcore_observed_nodes (
+                public_key_hex TEXT PRIMARY KEY CHECK (length(public_key_hex)=64),
+                first_seen_utc TEXT NOT NULL,
+                last_seen_utc TEXT NOT NULL,
+                observation_count INTEGER NOT NULL CHECK (observation_count >= 0),
+                node_type_code INTEGER CHECK (node_type_code BETWEEN 0 AND 255),
+                advertised_name TEXT,
+                last_rssi_dbm REAL,
+                last_snr_db REAL,
+                receiver_latitude REAL,
+                receiver_longitude REAL,
+                receiver_gps_updated_at TEXT
+            )
+        """)
+        connection.execute("""
+            CREATE TABLE meshcore_observations (
+                observation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                public_key_hex TEXT NOT NULL REFERENCES meshcore_observed_nodes,
+                event_type TEXT NOT NULL CHECK (
+                    event_type IN (
+                        'advertisement', 'new_advertisement', 'path_updated'
+                    )
+                ),
+                received_at_utc TEXT NOT NULL,
+                peer_advert_timestamp INTEGER,
+                node_type_code INTEGER,
+                advertised_name TEXT,
+                rssi_dbm REAL,
+                snr_db REAL,
+                receiver_latitude REAL,
+                receiver_longitude REAL,
+                receiver_gps_updated_at TEXT,
+                gps_status TEXT NOT NULL,
+                CHECK (
+                    (receiver_latitude IS NULL AND receiver_longitude IS NULL)
+                    OR (receiver_latitude BETWEEN -90 AND 90
+                        AND receiver_longitude BETWEEN -180 AND 180)
+                )
+            )
+        """)
+        connection.execute("""
+            CREATE INDEX meshcore_observations_received_idx
+            ON meshcore_observations(received_at_utc DESC)
+        """)
+        connection.execute("""
+            CREATE INDEX meshcore_observations_node_idx
+            ON meshcore_observations(public_key_hex, received_at_utc DESC)
+        """)
+        connection.execute(
+            "INSERT INTO meshcore_schema(id, version) VALUES(1, ?)",
+            (_MESHCORE_SCHEMA_VERSION,),
+        )
+    return _MESHCORE_SCHEMA_VERSION
 
 @dataclass(frozen=True, slots=True)
 class ReceiverLocation:
@@ -66,11 +163,11 @@ def receiver_location_at(
 
 
 class MeshcoreObservationRepository:
-    """Store append-only receive observations in the existing app database."""
+    """Store append-only observations in an isolated MeshCore-only database."""
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = database_path
-        initialize_database(database_path)
+        initialize_meshcore_database(database_path)
 
     def record(
         self,
