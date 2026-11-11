@@ -540,3 +540,7 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_gps_bridge.py` — nonblocking GPS listener publisher and freshness-checked file reader; reuses the existing GPS state, no new hardware acquisition.
 - `deploy/meshcore-collector.user.service` and `deploy/install-meshcore-user-service.sh` — staged separate service install and isolated SQLite data migration after embedded USB release.
 - `src/rolling_thunder/meshcore_passive.py` — now additionally decodes 0x88 signal metadata without retaining raw packets and labels known advertised role codes; other notifications unchanged.
+
+## MeshCore intelligence (pure, noncomposed foundation)
+
+- `src/rolling_thunder/meshcore_incident_classification.py` — deterministic bounded classification of already-verified public traffic/SKYWARN messages; no device, GPS, persistence, UI, or RF authority. See `meshcore-intelligence.md`.
