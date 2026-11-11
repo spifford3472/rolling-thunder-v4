@@ -460,3 +460,7 @@ The `meshcore_passive_worker.py` is an injected bounded worker; `meshcore_serial
 ## MeshCore intelligence and observation API
 
 The independent `meshcore_collector_main.py` owns its local Unix API, while `meshcore_network_analytics.py` owns the bounded schema-2 read-only aggregation contract. It consumes existing MeshCore observation tables and never owns physical USB, GPS, CAT, UI widgets or MeshCore transmission. Future Rolling Thunder and SCOUT integrations must be versioned read-only clients; do not add SQL or blocking socket I/O to Tkinter.
+
+### MeshCore public-channel protocol intake (Issue #395)
+
+`meshcore_public_intake_protocol.py` is a *noncomposed* pure protocol/attestation domain. Its only allowed input is an independently operator-approved index/name/secret fingerprint and a transient firmware response. Serial ownership remains exclusively `meshcore_serial_service.py`; that service is not modified and does not transmit local commands. Future queue retrieval must resolve firmware-v1.16 destructive dequeue of private/contact messages before integration, even if the retrieval opcode itself does not transmit RF. See `meshcore-intelligence.md`.
