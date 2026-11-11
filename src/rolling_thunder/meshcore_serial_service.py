@@ -22,15 +22,21 @@ from rolling_thunder.meshcore_passive_worker import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-_TTY_PATTERN = re.compile(r"ttyUSB[0-9]+")
+_TTY_PATTERN = re.compile(r"tty(?:USB|ACM)[0-9]+")
+# Validated USB transport identities; do not treat an arbitrary CDC port as MeshCore.
+_ALLOWED_USB_IDENTITIES = {
+    ("ttyUSB", "10c4", "ea60"),  # Legacy Heltec V3 CP2102 bridge.
+    ("ttyACM", "303a", "0002"),  # Heltec V4 ESP32-S3 native USB CDC.
+}
 
 
 def validate_meshcore_usb_path(device_path: Path) -> Path:
-    """Bind to a physical USB port, not a duplicate CP2102 serial number.
+    """Validate an explicit MeshCore physical-port selector and USB family.
 
-    The connected receiver has the same generic CP2102 serial ID as another
-    device already used by Rolling Thunder. Reject `by-id` and numbered tty
-    selectors to avoid stealing the FT-891/controller or GPS interface.
+    The earlier Heltec V3 reused a generic CP2102 serial identifier. The
+    replacement Heltec V4 presents native Espressif CDC ACM. Refuse numbered
+    ports, by-id aliases and mismatched USB descriptor/tty combinations.
+    This cannot establish the installed firmware role or version.
     """
     if device_path.parent != Path("/dev/serial/by-path"):
         raise ValueError("MeshCore must use /dev/serial/by-path device identity")
@@ -47,10 +53,14 @@ def validate_meshcore_usb_path(device_path: Path) -> Path:
         vendor = candidate / "idVendor"
         product = candidate / "idProduct"
         if vendor.is_file() and product.is_file():
-            if vendor.read_text().strip().lower() != "10c4" or (
-                product.read_text().strip().lower() != "ea60"
-            ):
-                raise ValueError("Configured MeshCore port is not a CP2102")
+            tty_kind = "ttyACM" if resolved.name.startswith("ttyACM") else "ttyUSB"
+            identity = (
+                tty_kind,
+                vendor.read_text(encoding="utf-8").strip().lower(),
+                product.read_text(encoding="utf-8").strip().lower(),
+            )
+            if identity not in _ALLOWED_USB_IDENTITIES:
+                raise ValueError("Configured MeshCore port USB family is not allowed")
             return resolved
         if candidate.parent == candidate:
             break
@@ -71,7 +81,7 @@ class ByteReader(Protocol):
 
 
 def open_meshcore_read_only(device_path: Path) -> ByteReader:
-    """Open validated UART exclusively without emitting command frames.
+    """Open a validated USB serial interface without emitting command frames.
 
     DTR and RTS are deasserted before port open; some bridges may still pulse
     them during OS initialization, so parked device acceptance is required.
