@@ -613,3 +613,7 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_meshcore_gps_bridge.py` — asynchronous atomic GPS publication, no second GPS receiver, stale/unavailable fix rejection.
 - `tests/test_meshcore_observation_repository.py` — schema v1→v2 migration preservation and anonymous signal metrics storage.
 - `tests/test_meshcore_runtime_integration.py` — legacy config flag no longer constructs embedded serial worker; only shared GPS publisher remains.
+
+## MeshCore intelligence classification
+
+- `tests/test_meshcore_incident_classification.py` — hardware-free classification categories, channel allowlisting, invalid input, unknown reports and conservative no-geocoding extraction. This does not prove live RF reception.
