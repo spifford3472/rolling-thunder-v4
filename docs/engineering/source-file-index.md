@@ -531,3 +531,6 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_passive_worker.py` — uncomposed, bounded opt-in background writer; reads injected immutable GPS snapshots at frame receipt, drops on overflow with counters, ignores unsupported frames, and drains on stop. It contains no USB or transmit interface.
 
 - `src/rolling_thunder/meshcore_inbound_frames.py` — pure inbound-only MeshCore UART framing decoder for bounded `>`-prefixed little-endian lengths, with no serial writer or command encoder.
+
+- `src/rolling_thunder/meshcore_serial_service.py` — opt-in exclusive CP2102-by-path UART receive service and reconnect, never sends host protocol commands; runtime composition is disabled by default.
+- `src/rolling_thunder/config.py` and `application_runtime.py` — typed MeshCore enable/path gate and optional lifecycle using existing immutable GPS snapshots; no UI-thread device work.
