@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
 from pathlib import Path
 
 from rolling_thunder.meshcore_broker_drain import MeshcoreBrokerDrain
@@ -12,7 +11,6 @@ from rolling_thunder.meshcore_message_broker import (
     MessageStream,
 )
 from rolling_thunder.meshcore_public_intake_protocol import ApprovedPublicChannel
-
 
 S = MessageStream
 SECRET = bytes(range(16))
