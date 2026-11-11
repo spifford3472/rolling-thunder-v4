@@ -1,4 +1,4 @@
-"""Opt-in MeshCore configuration and runtime composition regression tests."""
+"""Embedded collector decommission and GPS-only runtime regression tests."""
 
 from pathlib import Path
 
@@ -23,7 +23,7 @@ def _config(tmp_path: Path, meshcore: dict[str, object]) -> ApplicationConfig:
 def test_default_disabled_never_builds_collector(tmp_path: Path) -> None:
     config = _config(tmp_path, {"enabled": False})
     runtime = ApplicationRuntime.from_config(config)
-    assert runtime.meshcore_passive is None
+    assert runtime.meshcore_gps_publisher is not None
     assert not (tmp_path / "meshcore-observations.db").exists()
 
 
@@ -33,11 +33,9 @@ def test_enabling_requires_physical_usb_path(tmp_path: Path) -> None:
             _config(tmp_path, {"enabled": True, "device": invalid})
 
 
-def test_opt_in_creates_isolated_storage_without_opening_device(tmp_path: Path) -> None:
+def test_legacy_enabled_flag_does_not_open_usb_or_create_storage(tmp_path: Path) -> None:
     path = "/dev/serial/by-path/meshcore-on-anvilmobile"
     config = _config(tmp_path, {"enabled": True, "device": path})
     runtime = ApplicationRuntime.from_config(config)
-    assert runtime.meshcore_passive is not None
-    assert not runtime.meshcore_passive.status().running
-    assert not runtime.meshcore_passive.status().device_connected
-    assert (tmp_path / "meshcore-observations.db").exists()
+    assert runtime.meshcore_gps_publisher is not None
+    assert not (tmp_path / "meshcore-observations.db").exists()
