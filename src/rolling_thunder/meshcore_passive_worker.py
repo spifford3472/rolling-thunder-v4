@@ -156,7 +156,7 @@ class MeshcorePassiveWorker:
                 self._sink.record(parsed, frame.received_at, frame.gps_state)
                 with self._lock:
                     self._stored += 1
-            except Exception:  # noqa: BLE001 - keep writer alive on storage errors
+            except Exception:  # Storage failures must not kill the worker
                 _LOGGER.exception("Passive MeshCore observation write failed")
                 with self._lock:
                     self._errors += 1
