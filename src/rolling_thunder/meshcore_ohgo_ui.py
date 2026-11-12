@@ -90,12 +90,17 @@ class MeshcoreOhgoWidgets:
             anchor="center",
         ).grid(row=1, column=0, sticky="ew", pady=(1, 0))
         self._last_content: str | None = None
+        self._visible = True
+        self._last_more = ""
         self.hide()
 
     def _on_scroll(self, first: float, last: float) -> None:
         """Derive MORE from actual rendered text geometry, not guessed line count."""
 
-        self._more.set("MORE" if float(last) < 0.999 else "")
+        more = "MORE" if float(last) < 0.999 else ""
+        if more != self._last_more:
+            self._last_more = more
+            self._more.set(more)
 
     def update(self, content: str) -> None:
         """Only replace changed data, preserving the operator's scroll position."""
@@ -120,12 +125,22 @@ class MeshcoreOhgoWidgets:
             return True
         return False
 
-    def show(self) -> None:
-        """Show only while the MeshCore/OHGO context is selected."""
+    @property
+    def visible(self) -> bool:
+        """Whether the viewport is selected and should remain mapped."""
 
-        self.frame.grid()
+        return self._visible
+
+    def show(self) -> None:
+        """Map only on context entry, avoiding refresh-driven blank frames."""
+
+        if not self._visible:
+            self.frame.grid()
+            self._visible = True
 
     def hide(self) -> None:
-        """Hide without disturbing the content or scrolling of other contexts."""
+        """Unmap only on context exit, not during routine refreshes."""
 
-        self.frame.grid_remove()
+        if self._visible:
+            self.frame.grid_remove()
+            self._visible = False

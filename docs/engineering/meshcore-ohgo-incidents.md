@@ -20,6 +20,11 @@ The rotary encoder scrolls wrapped text by display line in both directions
 only on MESHCORE & OHGO; existing context/selection behavior elsewhere is
 unchanged. The viewport preserves scroll position across identical
 background refreshes and resets to the top only when the content changes.
+The context must map the Tk text viewport **once when selected**, not
+hide/re-grid it during every refresh (the earlier loop caused flashing).
+Only an actual context exit can unmap the viewport; repeated show/hide
+requests are idempotent. The MORE label is rewritten only when the
+scrollable-overflow state changes, not on every geometry callback.
 It shows explicit disabled, stale, and unavailable states. The existing context
 navigation, FT8, POTA/DX, DMR, radio, GPS and map behavior are unchanged aside
 from the new context. There are no map-layer overlays or driver alerts.

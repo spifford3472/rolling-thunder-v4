@@ -1447,7 +1447,11 @@ at double the previous size and wraps in the available space. When the text
 extends below the display, a white **MORE** indicator appears at the bottom.
 Turn the rotary encoder clockwise to scroll down or counterclockwise to
 scroll up; MORE disappears when the bottom is reached. Scrolling works only
-within this screen and does not change selection on other screens. It may show **not configured**,
+within this screen and does not change selection on other screens.
+The panel should remain visually steady while new GPS and status snapshots
+arrive; routine refreshes do not blank or redraw the entire text widget.
+The same fixed 42-point font, encoder scroll behavior, and incident
+separators are retained. It may show **not configured**,
 **unavailable**, **stale**, **no reports**, or **current reports**. An empty
 list while the provider is unavailable is not evidence of clear roads.
 
