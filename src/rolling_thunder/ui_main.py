@@ -2169,9 +2169,12 @@ def run_dashboard(
                     )
                 )
         elif selected_context.selected is ContextId.MESHCORE_OHGO:
-            show_standard_context_body()
-            context_body_label.grid_remove()
-            ohgo_widgets.show()
+            # Reconfigure the viewport on entry only. Hiding and showing the
+            # Text widget every refresh caused the observed flashing.
+            if not ohgo_widgets.visible:
+                show_standard_context_body()
+                context_body_label.grid_remove()
+                ohgo_widgets.show()
             health_frame.grid_remove()
             context_title_text.set("MESHCORE & OHGO")
             context_title_label.configure(font=("DejaVu Sans", 34, "bold"))

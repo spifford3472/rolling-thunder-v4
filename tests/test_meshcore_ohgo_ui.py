@@ -103,6 +103,7 @@ def test_more_indicator_reflects_actual_scrollable_geometry() -> None:
     widget = object.__new__(MeshcoreOhgoWidgets)
     indicator = FakeMore()
     widget._more = indicator  # type: ignore[assignment]
+    widget._last_more = ""
     widget._on_scroll(0.0, 0.45)
     assert indicator.content == "MORE"
     widget._on_scroll(0.55, 1.0)
@@ -120,3 +121,67 @@ def test_rotary_scroll_does_not_activate_any_selection() -> None:
     assert widget.scroll(ControlAction.MOVE_PREVIOUS)
     assert not widget.scroll(ControlAction.COMMIT)
     assert body.movements == [(1, "units"), (-1, "units")]
+
+
+@dataclass
+class FakeFrame:
+    """Count geometry changes that would trigger a visible redraw."""
+
+    mapped: bool = False
+    grid_calls: int = 0
+    remove_calls: int = 0
+
+    def grid(self) -> None:
+        self.mapped = True
+        self.grid_calls += 1
+
+    def grid_remove(self) -> None:
+        self.mapped = False
+        self.remove_calls += 1
+
+
+def test_repeated_ohgo_refresh_never_unmaps_or_remaps_visible_text() -> None:
+    """Regression for the blank/flash every UI refresh on the OHGO page."""
+
+    widget = object.__new__(MeshcoreOhgoWidgets)
+    frame = FakeFrame()
+    widget.frame = frame  # type: ignore[assignment]
+    widget._visible = False
+
+    # First entry: one mapping, then many normal render cycles.
+    for _ in range(100):
+        if not widget.visible:
+            widget.show()
+    assert widget.visible
+    assert frame.grid_calls == 1
+    assert frame.remove_calls == 0
+
+    # Context exit and reentry each cause exactly one geometry transition.
+    for _ in range(50):
+        widget.hide()
+    assert frame.remove_calls == 1
+    widget.show()
+    assert frame.grid_calls == 2
+
+
+def test_more_indicator_not_rewritten_when_overflow_state_is_unchanged() -> None:
+    """Avoid unnecessary white footer repaints while text is steady."""
+
+    class TrackedMore(FakeMore):
+        changes = 0
+
+        def set(self, value: str) -> None:
+            self.changes += 1
+            super().set(value)
+
+    widget = object.__new__(MeshcoreOhgoWidgets)
+    indicator = TrackedMore()
+    widget._more = indicator  # type: ignore[assignment]
+    widget._last_more = ""
+    for _ in range(100):
+        widget._on_scroll(0.0, 0.5)
+    assert indicator.content == "MORE"
+    assert indicator.changes == 1
+    widget._on_scroll(0.5, 1.0)
+    assert indicator.content == ""
+    assert indicator.changes == 2
