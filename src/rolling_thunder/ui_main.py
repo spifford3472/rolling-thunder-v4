@@ -87,6 +87,10 @@ from rolling_thunder.meshcore_ohgo_panel import (
     MeshcoreOhgoPanelWorker,
     present_meshcore_ohgo,
 )
+from rolling_thunder.meshcore_ohgo_ui import (
+    MeshcoreOhgoScrollInterceptor,
+    MeshcoreOhgoWidgets,
+)
 from rolling_thunder.operator_commands import OperatorCommandController
 from rolling_thunder.operator_preferences import OperatorPreferenceRepository
 from rolling_thunder.physical_controls import (
@@ -702,6 +706,14 @@ def run_dashboard(
         ),
     )
 
+    # Defer scroll target binding until Tk widgets exist; events are drained
+    # from Tk's own refresh loop after all widgets have been constructed.
+    ohgo_scroll_handlers: list[Callable[[ControlAction], bool] | None] = [None]
+
+    def scroll_ohgo(action: ControlAction) -> bool:
+        handler = ohgo_scroll_handlers[0]
+        return handler(action) if handler is not None else False
+
     control_source: ControlSource | None = None
     control_dispatcher: ControlDispatcher | None = None
     if config.physical_controls.enabled:
@@ -742,6 +754,16 @@ def run_dashboard(
             event_interceptor=CompositeEventInterceptor(
                 tron_toggle_interceptor,
                 settings_interceptor,
+                MeshcoreOhgoScrollInterceptor(
+                    selected_context=lambda: context_navigation.state.selected,
+                    scroll=scroll_ohgo,
+                    allowed=lambda: (
+                        not power_confirmation.state.pending
+                        and not close_started.is_set()
+                        and not runtime.ft8_ptt_alarm.active
+                        and not runtime.ft8_ptt_alarm.tx_inhibited
+                    ),
+                ),
             ),
         )
 
@@ -952,6 +974,12 @@ def run_dashboard(
         wraplength=560,
     )
     context_body_label.grid(row=1, column=0, sticky="nsew")
+    ohgo_widgets = MeshcoreOhgoWidgets(
+        context_content,
+        background=_SECONDARY_BACKGROUND,
+        foreground=_BRIGHT,
+    )
+    ohgo_scroll_handlers[0] = ohgo_widgets.scroll
 
     settings_widgets = SettingsWidgets(context_content)
     antenna_widgets = (
@@ -1371,6 +1399,7 @@ def run_dashboard(
 
     def show_standard_context_body() -> None:
         """Show the reusable text body and hide specialized context viewports."""
+        ohgo_widgets.hide()
         browse_frame.grid_remove()
         pota_panel_frame.grid_remove()
         repeater_widgets.hide()
@@ -1961,6 +1990,8 @@ def run_dashboard(
             )
 
         selected_context = context_navigation.state
+        if selected_context.selected is not ContextId.MESHCORE_OHGO:
+            ohgo_widgets.hide()
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.set_polling_enabled(
                 selected_context.selected is ContextId.DMR
@@ -2139,15 +2170,12 @@ def run_dashboard(
                 )
         elif selected_context.selected is ContextId.MESHCORE_OHGO:
             show_standard_context_body()
+            context_body_label.grid_remove()
+            ohgo_widgets.show()
             health_frame.grid_remove()
             context_title_text.set("MESHCORE & OHGO")
             context_title_label.configure(font=("DejaVu Sans", 34, "bold"))
-            context_body_label.configure(
-                font=("DejaVu Sans", 21, "bold"), wraplength=720,
-            )
-            context_body_text.set(
-                present_meshcore_ohgo(ohgo_panel_worker.state)
-            )
+            ohgo_widgets.update(present_meshcore_ohgo(ohgo_panel_worker.state))
         elif selected_context.selected is ContextId.FT8:
             health_frame.grid_remove()
             context_title_text.set("FT8")
@@ -2444,6 +2472,16 @@ def run_dashboard(
     )
 
     def execute_panel_action(action: ControlAction) -> None:
+        if (
+            action in (ControlAction.MOVE_NEXT, ControlAction.MOVE_PREVIOUS)
+            and context_navigation.state.selected is ContextId.MESHCORE_OHGO
+            and not power_confirmation.state.pending
+            and not close_started.is_set()
+            and not runtime.ft8_ptt_alarm.active
+            and not runtime.ft8_ptt_alarm.tx_inhibited
+        ):
+            scroll_ohgo(action)
+            return
         operator_commands.execute(action)
 
     root.bind(

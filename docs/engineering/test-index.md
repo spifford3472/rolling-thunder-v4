@@ -665,3 +665,6 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_forge_ohgo_api.py` — retained read-only route and existing Forge endpoint delegation.
 - `tests/test_meshcore_ohgo_panel.py` — disabled/stale/live-safe presentation and no Tk network I/O.
 - `tests/test_context_navigation.py` — new `o` context and full-cycle invariants.
+
+- `tests/test_meshcore_ohgo_ui.py` — context-gated rotary isolation, scroll persistence, new-data top reset and actual-overflow MORE behavior (mock Tk, no radio).
+- `tests/test_meshcore_ohgo_panel.py` — all bounded OHGO incidents displayed with separators without four-item truncation.

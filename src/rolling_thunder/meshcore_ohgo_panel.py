@@ -57,7 +57,7 @@ def decode_forge_ohgo(data: bytes, *, received_at: datetime) -> MeshcoreOhgoPane
         items = raw.get("incidents")
         if not isinstance(items, list) or len(items) > 100:
             raise ValueError("Invalid incident preview count")
-        for item in items[:4]:
+        for item in items:
             if not isinstance(item, dict):
                 continue
             route = _safe_label(item.get("route"), 22)
@@ -154,4 +154,10 @@ def present_meshcore_ohgo(state: MeshcoreOhgoPanelState) -> str:
         status = "No incidents returned for configured Ohio region."
     else:
         status = "CURRENT OHGO INCIDENT REPORTS (unverified for your route)"
-    return "\n\n".join((header, status, *state.lines))
+    return "\n\n".join(
+        (
+            header,
+            status,
+            *("──────────────\n" + line if i else line for i, line in enumerate(state.lines)),
+        )
+    )
