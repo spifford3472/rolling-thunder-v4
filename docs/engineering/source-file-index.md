@@ -591,3 +591,5 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/forge_ohgo_credentials.py` — systemd protected credential loader and independent opt-in.
 - `src/rolling_thunder/forge_ohgo_api.py` — additive retained GET API route and Forge background worker.
 - `src/rolling_thunder/meshcore_ohgo_panel.py` — Pi private Forge reader, stale/status decoder and read-only presentation.
+
+- `src/rolling_thunder/meshcore_ohgo_ui.py` — dedicated 42-point Tk OHGO viewport, fixed MORE visibility from actual scroll geometry and safe context-specific physical-control interception.

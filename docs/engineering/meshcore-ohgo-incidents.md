@@ -12,8 +12,15 @@ matched navigation route.
 The UI remains local-first: the Pi only polls a retained, read-only endpoint
 from the **existing Forge spot service** at
 `GET /api/v1/ohgo/incidents`. The request runs on a small background thread,
-not the Tkinter refresh. It shows at most four brief official records and
-explicit disabled, stale, and unavailable states. The existing context
+not the Tkinter refresh. The dedicated OHGO viewport renders all accepted
+records (bounded by Forge's 100-record response), with a 42-point bold
+read-only text body, word wrapping, horizontal separators between incidents,
+and a fixed white MORE footer only while additional lines remain below.
+The rotary encoder scrolls wrapped text by display line in both directions
+only on MESHCORE & OHGO; existing context/selection behavior elsewhere is
+unchanged. The viewport preserves scroll position across identical
+background refreshes and resets to the top only when the content changes.
+It shows explicit disabled, stale, and unavailable states. The existing context
 navigation, FT8, POTA/DX, DMR, radio, GPS and map behavior are unchanged aside
 from the new context. There are no map-layer overlays or driver alerts.
 
@@ -50,8 +57,9 @@ whereas older test fixtures and the model documentation used PascalCase.
 The parser supports both spellings, rejects conflicting aliases, and checks
 all paging/count fields before publishing a successful snapshot. A verified
 HTTP 200 can otherwise be mistakenly reported as `upstream_unavailable`.
-Official model reference: https://publicapi.ohgo.com/docs/v1/api-results . Region coverage and live API data remain unverified until the
-operator activates a real key on Forge.
+Official model reference: https://publicapi.ohgo.com/docs/v1/api-results .
+Authenticated incident retrieval was validated on Forge on November 11,
+2026; this does not establish geographic completeness or route relevance.
 
 Each retained item has only a provider ID, coordinate, route, travel direction,
 category, short description, location, and road status. Malformed coordinates
@@ -62,8 +70,9 @@ Provider records are not copied into the traffic ledger or QSO log.
 ## Secrets and activation
 
 OHGO requires registration at https://publicapi.ohgo.com/ before a real
-API key can be obtained. **No key has been provisioned or enabled in this
-source change.** A separate operator-approved Forge maintenance step must:
+API key can be obtained. Forge's protected systemd credential was activated
+on November 11, 2026, and provider results were validated. These steps
+describe the installed credential contract and future recovery/rotation:
 
 1. Review actual Forge spot-service identity and existing secrets policy.
    Current observed service uses `rolling-thunder-forge-spots.service`,
@@ -72,7 +81,7 @@ source change.** A separate operator-approved Forge maintenance step must:
 2. Place the API key in a root-protected outside-Git file
    `/etc/rolling-thunder/ohgo-api-key`, mode 0600. Never paste the key into
    chat or console command history.
-3. Review and install the **staged, uninstalled** unit drop-in template
+3. Review the installed unit drop-in against the source template
    `deploy/forge-ohgo-credentials.conf` under
    `/etc/systemd/system/rolling-thunder-forge-spots.service.d/30-ohgo.conf`.
    It uses `LoadCredential=ohgo-api-key:/etc/rolling-thunder/ohgo-api-key`

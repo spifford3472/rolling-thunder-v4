@@ -501,3 +501,11 @@ read-only versioned route; an isolated Pi view adapter reads it in a
 background worker, and Tkinter renders only the immutable snapshot.
 The independent MeshCore broker, GPS, FT8 and radio authorities remain
 unchanged. See `meshcore-ohgo-incidents.md`.
+
+### OHGO large-text scroll ownership
+
+`meshcore_ohgo_panel.py` retains presentation-neutral incident/status text.
+`meshcore_ohgo_ui.py` owns the Tk-only scrollable text surface and white
+MORE indicator, and intercepts validated MOVE_NEXT / MOVE_PREVIOUS only while
+the OHGO context is active. The shared dispatcher, hardware mappings, active
+panel controller and Forge provider remain the original owners elsewhere.

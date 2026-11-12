@@ -1441,14 +1441,20 @@ Cutover requires parked stop of old USB owner, lossless database copy, approved 
 
 Select the **MESHCORE & OHGO** context with the `o` shortcut or existing
 context navigation. The top label identifies the separately running passive
-MeshCore collector; the OHGO section displays up to four short incident
-reports returned by Ohio DOT through Forge. It may show **not configured**,
+MeshCore collector; the OHGO section displays all incident reports received
+from Forge, separated by horizontal divider lines. Its text is displayed
+at double the previous size and wraps in the available space. When the text
+extends below the display, a white **MORE** indicator appears at the bottom.
+Turn the rotary encoder clockwise to scroll down or counterclockwise to
+scroll up; MORE disappears when the bottom is reached. Scrolling works only
+within this screen and does not change selection on other screens. It may show **not configured**,
 **unavailable**, **stale**, **no reports**, or **current reports**. An empty
 list while the provider is unavailable is not evidence of clear roads.
 
-OHGO is disabled until a Forge administrator registers for an OHGO API key
-and separately activates its protected Forge configuration. The Pi never
-stores the key or talks directly to OHGO. Reports are informational,
+OHGO is enabled on Forge with a protected service credential as of the
+November 11 incident-source acceptance. If the feed is unavailable or not
+configured, the screen states that instead of implying roads are clear.
+The Pi never stores the key or talks directly to OHGO. Reports are informational,
 unverified for the current route, and must not be used instead of attentive
 driving or official roadway information. There are **no** automatic warnings,
 navigation changes, MeshCore transmissions or construction/map overlays.

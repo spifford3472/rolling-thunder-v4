@@ -74,3 +74,15 @@ def test_disabled_worker_has_no_external_fetch() -> None:
     assert worker.state == MeshcoreOhgoPanelState()
     assert "not configured" in present_meshcore_ohgo(worker.state)
     worker.stop()
+
+
+def test_multiple_incidents_have_visible_dividers_and_no_four_item_truncation() -> None:
+    payload = _payload()
+    item = payload["incidents"][0]
+    assert isinstance(item, dict)
+    payload["incidents"] = [{**item, "route": f"I-{n}", "location": f"Exit {n}"} for n in range(5)]
+    state = decode_forge_ohgo(json.dumps(payload).encode(), received_at=NOW)
+    result = present_meshcore_ohgo(state)
+    assert len(state.lines) == 5
+    assert result.count("──────────────") == 4
+    assert "Exit 4" in result

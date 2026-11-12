@@ -575,3 +575,13 @@ in source. Its optional background provider must fail closed on stale,
 unauthorized, malformed or paginated data and must never block the Forge
 HTTP handler. Pi's background poll must never run on Tk's refresh thread.
 No unsolicited alert/route change is permitted.
+
+### MeshCore/OHGO context-scoped rotary scrolling
+
+The dashboard's shared physical control input remains guarded/deduplicated
+by the existing control dispatcher. Its MOVE_NEXT / MOVE_PREVIOUS actions
+may scroll the OHGO read-only text viewport **only when that context is
+selected**, with existing safety/lock gates preserved. All other contexts
+retain their original active-panel navigation and encoder semantics.
+No new radio, GPS, broker, voice or transmitter permissions are introduced.
+See `meshcore-ohgo-incidents.md`.
