@@ -82,7 +82,7 @@ def test_unmanaged_dashboard_fails_closed(tmp_path: Path) -> None:
     """A preexisting process must not produce a false successful service start."""
     env = _launcher_environment(tmp_path, uptime="181.50", minimum=180)
     fake_pgrep = Path(env["PATH"].split(os.pathsep)[0]) / "pgrep"
-    fake_pgrep.write_text("\n".join(("#!/usr/bin/env bash", "exit 0", "")), encoding="utf-8")
+    fake_pgrep.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
     result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
     assert result.returncode != 0
     assert "unmanaged dashboard" in result.stdout
