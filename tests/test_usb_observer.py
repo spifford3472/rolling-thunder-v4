@@ -2,8 +2,8 @@
 
 import importlib.util
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from unittest.mock import Mock
 
 MODULE = Path(__file__).resolve().parents[1] / "deploy/diagnostics/rt-usb-observer.py"
