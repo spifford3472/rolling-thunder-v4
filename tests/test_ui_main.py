@@ -61,6 +61,32 @@ def test_cleanup_runner_attempts_every_step_after_failures() -> None:
     assert errors == ["control: broken"]
 
 
+def test_cleanup_runner_continues_after_multiple_failures() -> None:
+    """All later resources are released even when earlier cleanup fails."""
+    calls: list[str] = []
+    errors: list[str] = []
+
+    def fail(label: str) -> None:
+        calls.append(label)
+        raise RuntimeError(f"{label} unavailable")
+
+    _run_cleanup_steps(
+        (
+            ("controls", lambda: fail("controls")),
+            ("audio", lambda: calls.append("audio")),
+            ("preferences", lambda: fail("preferences")),
+            ("runtime", lambda: calls.append("runtime")),
+        ),
+        errors,
+    )
+
+    assert calls == ["controls", "audio", "preferences", "runtime"]
+    assert errors == [
+        "controls: controls unavailable",
+        "preferences: preferences unavailable",
+    ]
+
+
 def _activity(callsign: str = "W1AW", grid: str | None = "FN31") -> FT8CQActivity:
     return FT8CQActivity(
         callsign=callsign,
