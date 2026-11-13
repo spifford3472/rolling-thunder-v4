@@ -8,6 +8,13 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `tron-voice-control.md` — Issue #374 offline Vosk worker, callsign microphone priority, physical start/stop gesture, large transient feedback popups, hardware acceptance, and FT8 terminal return.
 - `meshcore-ohgo-incidents.md` — Forge OHGO incident source, protected credential gate, retained API and combined read-only dashboard context.
+## Active reconciliation
+
+- `reconciliation-2026-11-13.md` — evidence-led documentation-to-source audit,
+  known drift, production verification gates, and pending acceptance. Until the
+  inventory is independently reconciled, `source-file-index.md` is a useful
+  navigation catalog but not a proven exhaustive file listing.
+
 ## Engineering document set
 
 - `r1-a-ui-timing.md` — bounded UI timing aggregates, R1-C2 correlated slow-refresh diagnostics, validation and interpretation limits.
