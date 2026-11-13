@@ -50,6 +50,27 @@ The dashboard process composes the application through:
 - typed background polling and worker services;
 - local SQLite repositories and retained-state caches.
 
+## Shutdown diagnostic evidence (pending deployment)
+
+The dashboard's SIGTERM handler sets an event; the Tk refresh loop initiates the
+existing orderly-close worker. The worker now prints flushed `RT_SHUTDOWN`
+records for `close_requested`, `worker_start`, each `step_start` and
+`step_end` (with monotonic `duration_ms` and `result`), `cleanup_end`
+(with total duration and error count), `worker_end`, and `destroy_root`.
+Inspect `journalctl -u rolling-thunder.service` after a parked stop. A
+`step_start` without its corresponding `step_end` identifies the last
+entered callback when systemd kills a stuck process. These messages contain
+step labels, not secrets or radio commands.
+
+This is **diagnostic instrumentation only**: callbacks are still sequential,
+and the service's installed `TimeoutStopSec=20` is unchanged. A hung callback
+can prevent later cleanup, including radio disconnect. A clean `step_end`
+does not independently prove RF-safe hardware state. No additional CAT/PTT
+authority, automatic restart, service unit change, or deployment is implied.
+The November 13 pre-instrumentation stop exceeded 20 seconds and was killed
+by systemd; its exact blocking callback remains unknown. Perform offline
+failure/blocked-step tests before any separately approved parked release.
+
 ## Pi concurrency rule
 
 Tkinter is a presentation/command surface. Slow or blocking work belongs in

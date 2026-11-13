@@ -170,12 +170,40 @@ def _run_cleanup_steps(
     steps: tuple[tuple[str, Callable[[], object]], ...],
     errors: list[str],
 ) -> None:
-    """Attempt every bounded cleanup step, preserving each truthful failure."""
-    for label, callback in steps:
-        try:
-            callback()
-        except Exception as error:  # noqa: BLE001 - cleanup must continue after any step
-            errors.append(f"{label}: {error}")
+    """Attempt every cleanup step and emit monotonic duration evidence.
+
+    Timing is diagnostic only: a blocking callback still blocks this worker.
+    """
+    shutdown_start = monotonic()
+    print("RT_SHUTDOWN phase=cleanup_start", flush=True)
+    try:
+        for label, callback in steps:
+            step_start = monotonic()
+            print(f"RT_SHUTDOWN phase=step_start step={label!r}", flush=True)
+            try:
+                callback()
+            except Exception as error:  # noqa: BLE001 - cleanup must continue
+                errors.append(f"{label}: {error}")
+                print(
+                    f"RT_SHUTDOWN phase=step_end step={label!r} "
+                    f"duration_ms={(monotonic() - step_start) * 1000:.1f} "
+                    "result=error",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"RT_SHUTDOWN phase=step_end step={label!r} "
+                    f"duration_ms={(monotonic() - step_start) * 1000:.1f} "
+                    "result=ok",
+                    flush=True,
+                )
+    finally:
+        print(
+            f"RT_SHUTDOWN phase=cleanup_end "
+            f"duration_ms={(monotonic() - shutdown_start) * 1000:.1f} "
+            f"errors={len(errors)}",
+            flush=True,
+        )
 _BACKGROUND = "#080808"
 _PANEL_BACKGROUND = "#101010"
 _SECONDARY_BACKGROUND = "#151515"
@@ -2386,10 +2414,12 @@ def run_dashboard(
             root.after(50, finish_close)
             return
         for message in close_errors:
-            print(f"Rolling Thunder shutdown error: {message}")
+            print(f"Rolling Thunder shutdown error: {message}", flush=True)
+        print("RT_SHUTDOWN phase=destroy_root", flush=True)
         root.destroy()
 
     def close_worker() -> None:
+        print("RT_SHUTDOWN phase=worker_start", flush=True)
         def close_controls() -> None:
             control_close_error = close_control_source(control_source)
             if control_close_error is not None:
@@ -2433,12 +2463,14 @@ def run_dashboard(
                 close_errors,
             )
         finally:
+            print("RT_SHUTDOWN phase=worker_end", flush=True)
             close_finished.set()
 
     def close() -> None:
         if close_started.is_set():
             return
         close_started.set()
+        print("RT_SHUTDOWN phase=close_requested", flush=True)
         Thread(target=close_worker, daemon=True, name="rt-orderly-close").start()
         finish_close()
 
