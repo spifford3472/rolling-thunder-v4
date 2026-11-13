@@ -52,3 +52,40 @@ This is a **read-only reconciliation ledger**, not a declaration that production
 ## Audit change history
 
 - 2026-11-13: Verified source template, PTT alarm, UI lockout handler, collector and OHGO boundaries; committed focused engineering/operator documentation corrections. Remaining tree-wide and production checks are blocked and explicitly open.
+
+## Reproducible current-checkout verification packet (read-only)
+
+Run only in an isolated, current-main or PR checkout. Do not run in the Pi production
+checkout or overwrite installed configuration. These commands do not transmit,
+restart, or alter application databases.
+
+```bash
+set -euo pipefail
+git status --short
+git rev-parse HEAD
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+for index, prefix in [
+    (Path('docs/engineering/source-file-index.md'), 'src/rolling_thunder/'),
+    (Path('docs/engineering/test-index.md'), 'tests/'),
+]:
+    text = index.read_text(encoding='utf-8')
+    listed = set(re.findall(r'(?:src/rolling_thunder/|tests/)[A-Za-z0-9_./-]+\\.py', text))
+    listed = {p for p in listed if p.startswith(prefix)}
+    actual = {p.as_posix() for p in Path(prefix).rglob('*.py')}
+    print(f'{index}: actual={len(actual)} indexed={len(listed)}')
+    print('  missing from index:', *sorted(actual - listed), sep='\\n    ')
+    print('  stale references:', *sorted(listed - actual), sep='\\n    ')
+PY
+ruff check .
+mypy src/rolling_thunder
+pytest
+git diff --check
+```
+
+Also verify every documented `deploy/` path and each claimed service unit,
+listener, data store and API against the current source tree. A green static
+check cannot prove installed systemd scope or actual radio PTT behavior; those
+require separate safe production observation and supervised acceptance.
