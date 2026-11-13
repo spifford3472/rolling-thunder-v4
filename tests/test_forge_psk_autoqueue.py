@@ -55,3 +55,34 @@ def test_batch_bounds(tmp_path: Path) -> None:
     kwargs = config(tmp_path)
     with pytest.raises(ValueError, match="batch_size"):
         unqueued_events(**kwargs, batch_size=101)
+
+
+def test_operator_county_snapshot_enqueues_without_duplicates(tmp_path: Path) -> None:
+    """A county-bearing synchronized QSO must survive the PSK queue boundary."""
+    import json
+    import sqlite3
+
+    kwargs = config(tmp_path)
+    with sqlite3.connect(kwargs["snapshot_database"]) as db:
+        row = db.execute(
+            "SELECT contact_id, contact_json FROM synchronized_contact_snapshots"
+        ).fetchone()
+        assert row is not None
+        payload = json.loads(row[1])
+        payload.update(
+            my_state="OH",
+            my_county="CLINTON",
+            my_latitude=39.55,
+            my_longitude=-83.95,
+            my_cq_zone=4,
+            my_itu_zone=8,
+        )
+        db.execute(
+            "UPDATE synchronized_contact_snapshots SET contact_json=? WHERE contact_id=?",
+            (json.dumps(payload), row[0]),
+        )
+    events = unqueued_events(**kwargs)
+    assert len(events) == 1
+    assert events[0].contact.my_county == "CLINTON"
+    assert run_once(**kwargs, enqueue_enabled=True, now_utc=START + timedelta(minutes=20)) == (1, 1)
+    assert run_once(**kwargs, enqueue_enabled=True, now_utc=START + timedelta(minutes=21)) == (0, 0)
