@@ -72,12 +72,12 @@ for index, prefix in [
     (Path('docs/engineering/test-index.md'), 'tests/'),
 ]:
     text = index.read_text(encoding='utf-8')
-    listed = set(re.findall(r'(?:src/rolling_thunder/|tests/)[A-Za-z0-9_./-]+\\.py', text))
+    listed = set(re.findall(r'(?:src/rolling_thunder/|tests/)[A-Za-z0-9_./-]+\.py', text))
     listed = {p for p in listed if p.startswith(prefix)}
     actual = {p.as_posix() for p in Path(prefix).rglob('*.py')}
     print(f'{index}: actual={len(actual)} indexed={len(listed)}')
-    print('  missing from index:', *sorted(actual - listed), sep='\\n    ')
-    print('  stale references:', *sorted(listed - actual), sep='\\n    ')
+    print('  missing from index:', *sorted(actual - listed), sep='\n    ')
+    print('  stale references:', *sorted(listed - actual), sep='\n    ')
 PY
 ruff check .
 mypy src/rolling_thunder
