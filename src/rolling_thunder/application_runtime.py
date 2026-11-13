@@ -1763,16 +1763,16 @@ class ApplicationRuntime:
         if self.ft8_receive is not None:
         attempt("FT8 receive", self.ft8_receive.stop)
         if self.pota_spot_polling is not None:
-        attempt("POTA spot polling", self.pota_spot_polling.stop)
+            attempt("POTA spot polling", self.pota_spot_polling.stop)
         attempt("POTA enrichment", self.pota_enrichment.stop)
         if self.pi_forge_weather_alert_polling is not None:
-        attempt("weather alerts", self.pi_forge_weather_alert_polling.stop)
+            attempt("weather alerts", self.pi_forge_weather_alert_polling.stop)
         if self.pi_forge_weather_polling is not None:
-        attempt("weather polling", self.pi_forge_weather_polling.stop)
+            attempt("weather polling", self.pi_forge_weather_polling.stop)
         if self.pi_forge_spot_polling is not None:
-        attempt("Forge spots", self.pi_forge_spot_polling.stop)
+            attempt("Forge spots", self.pi_forge_spot_polling.stop)
         if self.network_keepalive is not None:
-        attempt("network keepalive", self.network_keepalive.stop)
+            attempt("network keepalive", self.network_keepalive.stop)
         if self.ft8_completed_qso_delivery is not None:
         attempt("completed QSO delivery", self.ft8_completed_qso_delivery.stop)
         if self.ft8_attempt_delivery is not None:
@@ -1780,40 +1780,40 @@ class ApplicationRuntime:
         if self.ft8_performance_sync is not None:
         attempt("FT8 performance sync", self.ft8_performance_sync.stop)
         if self.contact_sync is not None:
-        attempt("contact sync", self.contact_sync.stop)
+            attempt("contact sync", self.contact_sync.stop)
         if self.contact_qrz_enrichment is not None:
-        attempt("QRZ enrichment", self.contact_qrz_enrichment.stop)
+            attempt("QRZ enrichment", self.contact_qrz_enrichment.stop)
         if self.home_platform_health is not None:
-        attempt("platform health", self.home_platform_health.stop)
+            attempt("platform health", self.home_platform_health.stop)
         if self.live_radar is not None:
-        attempt("radar", self.live_radar.stop)
+            attempt("radar", self.live_radar.stop)
         if self.map_solar is not None:
-        attempt("solar map", self.map_solar.stop)
+            attempt("solar map", self.map_solar.stop)
         if self.pota_map_markers is not None:
-        attempt("POTA markers", self.pota_map_markers.stop)
+            attempt("POTA markers", self.pota_map_markers.stop)
         if self.callsign_map is not None:
-        attempt("callsign map", self.callsign_map.stop)
+            attempt("callsign map", self.callsign_map.stop)
         if self.live_map is not None:
-        attempt("live map", self.live_map.stop)
+            attempt("live map", self.live_map.stop)
         if self.known_callsigns is not None:
-        attempt("known callsigns", self.known_callsigns.stop)
+            attempt("known callsigns", self.known_callsigns.stop)
         if self.callsign_info is not None:
-        attempt("callsign info", self.callsign_info.stop)
+            attempt("callsign info", self.callsign_info.stop)
         if self.operator_preferences is not None:
-        attempt("operator preferences", self.operator_preferences.stop)
+            attempt("operator preferences", self.operator_preferences.stop)
         if self.pi_forge_location_publishing is not None:
-        attempt("location publishing", self.pi_forge_location_publishing.stop)
+            attempt("location publishing", self.pi_forge_location_publishing.stop)
         if self.clock_sync is not None:
-        attempt("clock sync", self.clock_sync.stop)
+            attempt("clock sync", self.clock_sync.stop)
         if self.gps_polling is not None:
-        attempt("GPS polling", self.gps_polling.stop)
+            attempt("GPS polling", self.gps_polling.stop)
         if self.meshcore_gps_publisher is not None:
-        attempt("MeshCore GPS", self.meshcore_gps_publisher.stop)
+            attempt("MeshCore GPS", self.meshcore_gps_publisher.stop)
         attempt("radio polling", self.polling.stop)
         if self.ft8_band_control is not None:
         attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
         if self.gps is not None:
-        attempt("GPS", self.gps.disconnect)
+            attempt("GPS", self.gps.disconnect)
         state = attempt("radio disconnect", self.radio.disconnect)
         if state is not None:
             self._started = False
