@@ -2,6 +2,17 @@
 
 ## Status
 
+**Historical scope notice (2026-11-13):** The opening paragraphs below
+describe the *initial pure classification foundation*, not the full current
+MeshCore implementation. Subsequent source includes a separate
+`meshcore_collector_main.py` process, opt-in broker and message-drain components,
+and standalone traffic worker. In particular, the older statement that the
+collector does not preserve any message text must not be generalized to the
+later broker's explicitly classified durable message inbox. Consult
+`meshcore-message-broker.md`, `meshcore-ohgo-incidents.md`, the current source,
+and `reconciliation-2026-11-13.md` before deciding what to remove. None of
+these later components grants unattended RF transmission authority by default.
+
 The initial classification module is **not yet wired to a receiver, database,
 UI, or RF transmitter**. It is a pure function tested using synthetic public
 messages. The independent collector introduced in PR #388 remains unchanged.

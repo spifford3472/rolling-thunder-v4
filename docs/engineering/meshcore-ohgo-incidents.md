@@ -1,5 +1,20 @@
 # MeshCore & OHGO incident view — source staging and operational gates
 
+## Dependency boundary for prospective MeshCore removal (2026-11-13)
+
+The combined screen title is **not** evidence that MeshCore and OHGO share a
+collector, data source, or service lifecycle. Current source inspection confirms
+`meshcore_collector_main.py` is a separately composed serial/Unix-socket collector
+with read-only local endpoints and an optionally gated broker; `ui_main.py`
+imports `meshcore_ohgo_panel.py` and `meshcore_ohgo_ui.py`. OHGO incidents are
+retrieved separately through the retained Forge spot-service API. Before removing
+MeshCore, trace all collector/broker configuration, background processes, device
+paths, databases, tests, and screen consumers. Preserve OHGO's provider worker,
+API and operator access unless separately approved. Retain historical MeshCore
+data and a rollback path. This paragraph describes source evidence and a removal
+gate, **not** an approved or completed removal. See
+`reconciliation-2026-11-13.md`.
+
 ## Scope and actual state
 
 This source update adds a dashboard context labelled **MESHCORE & OHGO** (keyboard

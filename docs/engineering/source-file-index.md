@@ -7,7 +7,13 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 340.**
+**Catalog status (2026-11-13): count requires regeneration.** The earlier
+headline of 340 is stale: a read-only scan of this Markdown file found **386
+distinct source paths in module-list entries**, with six repeated entries across
+historical appendices. That is an *index-reference count*, not an independently
+verified count of files present in GitHub main. Do not treat the list as an
+exhaustive filesystem inventory until a current-checkout path reconciliation
+has run. See `reconciliation-2026-11-13.md`.
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task

@@ -2,6 +2,28 @@
 
 ## About this guide
 
+## FT8 stuck-transmit safety and controller lockout (2026-11-13)
+
+**If the FT-891's red TX indicator stays on unexpectedly, stop automated FT8
+operation and turn the radio off if it cannot be safely returned to receive.**
+Do not attempt another unattended FT8 transmission until the transmit-control
+fault has been investigated and accepted in a supervised test. Preserve Pi logs
+and do not reset USB devices merely to clear a warning. The radio's red TX
+indicator is stronger evidence of actual transmission than an application status.
+
+The current source contains a latched FT8 PTT alarm and transmit-inhibit state.
+Acknowledging/dismissing its warning does **not** clear the transmit inhibit.
+The code's intended unlock gesture is command buttons **1, 3, 1** while the FT8
+context is selected and after the warning is acknowledged. The operator must
+first independently establish that the radio has returned to receive. **The
+present UI unlock handler passes a constant receive-confirmation flag to the
+alarm rather than independently verifying the radio's physical RX state**; do
+not treat a successful gesture as proof of RF safety. Conversely, a failed
+gesture may reflect alarm-acknowledgment state, context selection, or input
+handling rather than a radio defect. This is an open safety review, not a
+recommendation to bypass the lockout. See
+`engineering/reconciliation-2026-11-13.md`.
+
 Rolling Thunder is a mobile amateur-radio operating console built to reduce the
 number of separate applications, displays, and manual lookups an operator must
 manage while driving or operating portable/mobile.

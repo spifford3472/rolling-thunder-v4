@@ -32,6 +32,37 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[development]"
 
+      - name: Documentation inventory audit (report-only)
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          for index, root in (
+              (Path("docs/engineering/source-file-index.md"), Path("src/rolling_thunder")),
+              (Path("docs/engineering/test-index.md"), Path("tests")),
+          ):
+              content = index.read_text(encoding="utf-8")
+              prefix = root.as_posix() + "/"
+              indexed = {
+                  value
+                  for value in re.findall(
+                      r"(?:src/rolling_thunder/|tests/)[A-Za-z0-9_./-]+\.py",
+                      content,
+                  )
+                  if value.startswith(prefix)
+              }
+              actual = {p.as_posix() for p in root.rglob("*.py")}
+              print(f"INVENTORY {index}: actual={len(actual)} indexed={len(indexed)}")
+              for label, paths in (
+                  ("MISSING_FROM_INDEX", sorted(actual - indexed)),
+                  ("STALE_INDEX_REFERENCE", sorted(indexed - actual)),
+              ):
+                  print(f"{label} count={len(paths)}")
+                  for item in paths:
+                      print(f"{label} {item}")
+          PY
+
       - name: Run Ruff
         run: ruff check src tests
 

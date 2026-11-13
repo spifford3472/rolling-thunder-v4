@@ -37,8 +37,25 @@ major process/lifecycle boundaries an agent must preserve.
 
 ## Process model on anvilmobile
 
-The installed dashboard is started by `rolling-thunder.service`, which invokes
-`deploy/rolling-thunder-autostart`.
+The repository contains a **system-level** service template at
+`deploy/systemd/rolling-thunder.service` (`User=geoff`, `Type=simple`,
+`Restart=on-failure`, `TimeoutStopSec=20`, `KillSignal=SIGTERM`) whose
+`ExecStart` invokes `deploy/rolling-thunder-autostart`. The template's presence
+does not prove it is installed, enabled, or supervising the live process.
+The repository also contains `deploy/rolling-thunder-autostart`, a launcher. The launcher checks for an existing
+dashboard process using `pgrep` for the invoking user, waits for minimum system
+uptime, validates the checkout/configuration/entry point, and then `exec`s the
+virtual-environment `rolling-thunder-ui` command. These are **source-level
+behaviors**, not proof of the installed service manager or actual parent process.
+
+**Production supervision requires independent verification.** Issue #410
+reported a running dashboard while a user-level systemd check did not find a
+matching unit. A missing user-level unit is compatible with this system-level template;
+verify the actual installed unit and process ancestry rather than inferring
+supervision from either observation, or infer successful supervision merely because the dashboard process is
+alive. Before any restart/deployment, identify the actual unit scope, launcher,
+process ancestry, stop behavior, and duplicate-instance protections. See
+`reconciliation-2026-11-13.md` for the open evidence gate.
 
 The launcher enforces a 180-second minimum **system uptime**, not a fixed delay
 after every service restart. Once the Pi has exceeded that uptime, restarting

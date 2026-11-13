@@ -2,6 +2,15 @@
 
 This document prevents feature-scoped work from accidentally breaking shared behavior. It is intentionally conservative: when a component is listed as shared, an agent must inspect all named consumers before modifying its contract.
 
+**Reconciliation note (2026-11-13):** Entries labeled `source-only` or
+`future` may describe a particular module's integration status at the time
+it was added, not the lifecycle of the entire feature today. MeshCore now has
+an independent collector and optional broker source, while OHGO has a distinct
+Forge provider and Pi presentation path. Before removing either feature, trace
+actual imports, startup units, configuration gates, database ownership and UI
+consumers from the current checkout; do not remove OHGO solely because the
+screen title also contains MeshCore. See `reconciliation-2026-11-13.md`.
+
 | Shared component | Primary modules | Known consumers | Change risk |
 | --- | --- | --- | --- |
 | Callsign/contact-info overlay | `callsign_info*.py`, `callsign_info_ui.py` | POTA-selected contacts, DX-selected contacts, Browse/pending callsign workflow, FT8 selected/preparing/active targets, dashboard overlay lifecycle | High: visual or lifecycle changes can affect multiple operating modes |

@@ -6,7 +6,11 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 383.**
+**Indexed Python test paths: 383 distinct references (documentation scan,
+2026-11-13).** This count matches the existing headline but is not proof all
+files exist on the current branch, nor that all current tests are indexed.
+Reconcile against the actual repository tree before asserting completeness.
+See `reconciliation-2026-11-13.md`.
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
