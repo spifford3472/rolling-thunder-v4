@@ -243,6 +243,29 @@ def test_runtime_stop_cancels_polling_and_disconnects_hardware() -> None:
     assert runtime.gps.get_state().connection_state is GPSConnectionState.DISCONNECTED
 
 
+def test_runtime_shutdown_disconnects_radio_after_service_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Failure of an earlier worker cannot skip radio and GPS disconnection."""
+    runtime = ApplicationRuntime.from_config(
+        mock_config(), scheduler=ManualScheduler(), gps_scheduler=ManualScheduler()
+    )
+    runtime.start()
+
+    def failed_stop() -> None:
+        raise RuntimeError("simulated enrichment failure")
+
+    monkeypatch.setattr(runtime.pota_enrichment, "stop", failed_stop)
+    with pytest.raises(ExceptionGroup, match="Rolling Thunder shutdown errors") as caught:
+        runtime.stop()
+
+    assert any("POTA enrichment: simulated enrichment failure" in str(error) for error in caught.value.exceptions)
+    assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
+    assert runtime.gps is not None
+    assert runtime.gps.get_state().connection_state is GPSConnectionState.DISCONNECTED
+    assert runtime._started is False
+
+
 def test_non_mock_runtime_composes_serial_gps() -> None:
     runtime = ApplicationRuntime.from_config(
         hardware_config(),
