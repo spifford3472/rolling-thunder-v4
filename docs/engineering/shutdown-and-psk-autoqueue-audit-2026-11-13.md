@@ -38,3 +38,13 @@ Source `src/rolling_thunder/forge_psk_autoqueue.py` attaches all three SQLite da
 ## Change/rollback record
 
 2026-11-13: Read-only service, process, source, and directory checks only. No systemd, ACL, database, deployment wrapper, USB, or radio changes. A future Forge permission/unit change requires separate owner approval, narrow regression tests, verified backup/rollback, and the mandatory private QTH infrastructure repository change history before completion.
+
+## 2026-11-13 follow-up: confirmed cause and Forge-only deployment
+
+The earlier permissions hypothesis above was **disproved** by the privileged service journal. The feeder successfully read the synchronized snapshot but the installed October PSK Reporter release (`e09903b5fe06bd5ca350f80648acf45d5d7011c6`) rejected a legitimate `my_county=CLINTON` contact field with Pydantic `extra_forbidden`, raising `AutoQueueError`. Do not change directory ACLs or source contacts to fix this incident.
+
+The current `Contact` schema accepts `my_county`. PR #423 added a regression covering a county-bearing confirmed FT8 event, successful queueing and replay deduplication; CI passed Ruff, MyPy and 4,063 tests (7 skipped). PR #423 was merged as `52a6036d762a67c2533c56b7e9068325b35e059e`.
+
+Owner executed a Forge-only exact-SHA release script on 2026-11-13. Active release now resolves to `/opt/rolling-thunder-forge-pskreporter/releases/52a6036d762a67c2533c56b7e9068325b35e059e`. Queue backup was reported at `/var/backups/rolling-thunder/pskreporter/orchestration.20261113T225343Z.sqlite3`. The feeder subsequently reported `eligible=50 inserted=50 provider_requests=0`; independent systemd inspection found worker `active/running`, autoqueue timer `active/waiting`, last feeder exit 0, and worker restart count 0. No AnvilMobile restart was performed.
+
+Remaining acceptance: verify successive feeder batches reach a stable no-duplicate state and inspect downstream PSK provider processing separately. A successful offline enqueue with `provider_requests=0` does not prove external provider queries. Preserve the prior release temporarily for rollback, but recognize that rolling back to `e09903b5` restores the known county-schema failure. Do not replace durable SQLite state with the backup unless explicitly justified; retain an exact source/configuration identity and service-status record for rollback. Deployment procedure is owner-executed; no claim is made here that the generic Forge deployment wrapper supports PSK Reporter.
