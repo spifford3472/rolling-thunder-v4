@@ -87,6 +87,61 @@ def test_cleanup_runner_continues_after_multiple_failures() -> None:
     ]
 
 
+def test_cleanup_timing_reports_each_step_and_total(capsys: pytest.CaptureFixture[str]) -> None:
+    """Slow and failing callbacks leave ordered, flushed diagnostic evidence."""
+    from time import sleep
+
+    errors: list[str] = []
+
+    def slow() -> None:
+        sleep(0.01)
+
+    def fail() -> None:
+        raise RuntimeError("simulated")
+
+    _run_cleanup_steps(
+        (("slow", slow), ("failure", fail), ("radio", lambda: None)),
+        errors,
+    )
+    output = capsys.readouterr().out
+    assert output.index("step='slow'") < output.index("step='failure'")
+    assert output.index("step='failure'") < output.index("step='radio'")
+    assert "RT_SHUTDOWN phase=cleanup_start" in output
+    assert "phase=step_end step='slow'" in output
+    assert "phase=step_end step='failure'" in output
+    assert "result=error" in output
+    assert "phase=step_end step='radio'" in output
+    assert "phase=cleanup_end" in output
+    assert "errors=1" in output
+    assert errors == ["failure: simulated"]
+
+
+def test_cleanup_hung_callback_leaves_start_marker(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A callback that never returns still emits its entry marker immediately."""
+    from threading import Event, Thread
+
+    release = Event()
+    entered = Event()
+
+    def blocked() -> None:
+        entered.set()
+        assert release.wait(timeout=2.0)
+
+    worker = Thread(target=_run_cleanup_steps, args=((("blocked", blocked),), []))
+    worker.start()
+    try:
+        assert entered.wait(timeout=1.0)
+        output = capsys.readouterr().out
+        assert "phase=step_start step='blocked'" in output
+        assert "phase=step_end step='blocked'" not in output
+    finally:
+        release.set()
+        worker.join(timeout=2.0)
+    assert not worker.is_alive()
+
+
 def _activity(callsign: str = "W1AW", grid: str | None = "FN31") -> FT8CQActivity:
     return FT8CQActivity(
         callsign=callsign,
