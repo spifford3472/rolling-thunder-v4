@@ -1734,75 +1734,90 @@ class ApplicationRuntime:
             self.pota_spot_polling.start()
 
     def stop(self) -> RadioState:
-        """Stop polling and disconnect configured hardware safely."""
+        """Attempt every cleanup action, preserving failures and radio release."""
+        errors: list[Exception] = []
+
+        def attempt(label: str, action: Callable[[], object]) -> object | None:
+            try:
+                return action()
+            except Exception as error:  # noqa: BLE001 - shutdown must continue
+                errors.append(RuntimeError(f"{label}: {error}"))
+                return None
+
         if self.ft8_browser_ranking is not None:
-            self.ft8_browser_ranking.close()
+            attempt("FT8 browser ranking", self.ft8_browser_ranking.close)
             self.ft8_browser_ranking = None
         if not self._started:
             if self.ft8_qso is not None:
-                self.ft8_qso.close()
+                attempt("FT8 QSO", self.ft8_qso.close)
             if self.ft8_hardware_transmit is not None:
-                self.ft8_hardware_transmit.close()
+                attempt("FT8 transmit", self.ft8_hardware_transmit.close)
+            if errors:
+                raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
             return self.radio.get_state()
 
         if self.ft8_qso is not None:
-            self.ft8_qso.close()
+        attempt("FT8 QSO", self.ft8_qso.close)
         if self.ft8_hardware_transmit is not None:
-            self.ft8_hardware_transmit.close()
+        attempt("FT8 transmit", self.ft8_hardware_transmit.close)
         if self.ft8_receive is not None:
-            self.ft8_receive.stop()
+        attempt("FT8 receive", self.ft8_receive.stop)
         if self.pota_spot_polling is not None:
-            self.pota_spot_polling.stop()
-        self.pota_enrichment.stop()
+        attempt("POTA spot polling", self.pota_spot_polling.stop)
+        attempt("POTA enrichment", self.pota_enrichment.stop)
         if self.pi_forge_weather_alert_polling is not None:
-            self.pi_forge_weather_alert_polling.stop()
+        attempt("weather alerts", self.pi_forge_weather_alert_polling.stop)
         if self.pi_forge_weather_polling is not None:
-            self.pi_forge_weather_polling.stop()
+        attempt("weather polling", self.pi_forge_weather_polling.stop)
         if self.pi_forge_spot_polling is not None:
-            self.pi_forge_spot_polling.stop()
+        attempt("Forge spots", self.pi_forge_spot_polling.stop)
         if self.network_keepalive is not None:
-            self.network_keepalive.stop()
+        attempt("network keepalive", self.network_keepalive.stop)
         if self.ft8_completed_qso_delivery is not None:
-            self.ft8_completed_qso_delivery.stop()
+        attempt("completed QSO delivery", self.ft8_completed_qso_delivery.stop)
         if self.ft8_attempt_delivery is not None:
-            self.ft8_attempt_delivery.stop()
+        attempt("FT8 attempt delivery", self.ft8_attempt_delivery.stop)
         if self.ft8_performance_sync is not None:
-            self.ft8_performance_sync.stop()
+        attempt("FT8 performance sync", self.ft8_performance_sync.stop)
         if self.contact_sync is not None:
-            self.contact_sync.stop()
+        attempt("contact sync", self.contact_sync.stop)
         if self.contact_qrz_enrichment is not None:
-            self.contact_qrz_enrichment.stop()
+        attempt("QRZ enrichment", self.contact_qrz_enrichment.stop)
         if self.home_platform_health is not None:
-            self.home_platform_health.stop()
+        attempt("platform health", self.home_platform_health.stop)
         if self.live_radar is not None:
-            self.live_radar.stop()
+        attempt("radar", self.live_radar.stop)
         if self.map_solar is not None:
-            self.map_solar.stop()
+        attempt("solar map", self.map_solar.stop)
         if self.pota_map_markers is not None:
-            self.pota_map_markers.stop()
+        attempt("POTA markers", self.pota_map_markers.stop)
         if self.callsign_map is not None:
-            self.callsign_map.stop()
+        attempt("callsign map", self.callsign_map.stop)
         if self.live_map is not None:
-            self.live_map.stop()
+        attempt("live map", self.live_map.stop)
         if self.known_callsigns is not None:
-            self.known_callsigns.stop()
+        attempt("known callsigns", self.known_callsigns.stop)
         if self.callsign_info is not None:
-            self.callsign_info.stop()
+        attempt("callsign info", self.callsign_info.stop)
         if self.operator_preferences is not None:
-            self.operator_preferences.stop()
+        attempt("operator preferences", self.operator_preferences.stop)
         if self.pi_forge_location_publishing is not None:
-            self.pi_forge_location_publishing.stop()
+        attempt("location publishing", self.pi_forge_location_publishing.stop)
         if self.clock_sync is not None:
-            self.clock_sync.stop()
+        attempt("clock sync", self.clock_sync.stop)
         if self.gps_polling is not None:
-            self.gps_polling.stop()
+        attempt("GPS polling", self.gps_polling.stop)
         if self.meshcore_gps_publisher is not None:
-            self.meshcore_gps_publisher.stop()
-        self.polling.stop()
+        attempt("MeshCore GPS", self.meshcore_gps_publisher.stop)
+        attempt("radio polling", self.polling.stop)
         if self.ft8_band_control is not None:
-            self.ft8_band_control.restore_normal_settings_for_shutdown()
+        attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
         if self.gps is not None:
-            self.gps.disconnect()
-        state = self.radio.disconnect()
-        self._started = False
+        attempt("GPS", self.gps.disconnect)
+        state = attempt("radio disconnect", self.radio.disconnect)
+        if state is not None:
+            self._started = False
+        if errors:
+            raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
+        assert state is not None
         return state
