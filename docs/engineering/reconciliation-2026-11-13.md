@@ -14,13 +14,13 @@ This is a **read-only reconciliation ledger**, not a declaration that production
 
 | Priority | Documented assertion / concern | Required source/live verification | Disposition |
 | --- | --- | --- | --- |
-| P0 | `system-architecture.md` states `rolling-thunder.service` invokes `deploy/rolling-thunder-autostart`. Issue #410 reported dashboard PID running with no matching independently queried user unit. | Inspect exact-SHA wrapper, system vs user unit, launcher, process ancestry, restart/shutdown semantics and duplicate prevention. Do not infer service supervision from process existence. | **Unverified; do not rewrite as settled** |
-| P0 | Actual FT-891 TX LED remained on during a stuck-transmit warning on 2026-11-13; subsequent reboot of radio cleared TX, but FT8 overruns and controller-unlock failures followed. | Inspect FT8 PTT release and watchdog code, CAT/audio failure paths, timeout independence, hardware controller state machine, relevant tests and timestamped logs. | **Safety incident; no unattended FT8 until accepted** |
+| P0 | The repository contains `deploy/systemd/rolling-thunder.service` (system-level `User=geoff`, `Restart=on-failure`) invoking `deploy/rolling-thunder-autostart`, which uses `pgrep` duplicate detection, waits for system uptime >=180 s, then `exec`s `rolling-thunder-ui`. Issue #410 reported dashboard PID running without a matching *user* unit. | Verify installed system unit and process ancestry, exact-SHA wrapper, stop/kill behavior, and duplicate prevention; a missing user unit does not disprove a system unit. | **Template and launcher verified in source; installed supervision unresolved** |
+| P0 | Actual FT-891 TX LED remained on during a stuck-transmit warning; radio power-cycle cleared TX, followed by FT8 overruns and controller-unlock failure. `ft8/ptt_alarm.py` latches TX inhibit until warning acknowledged plus 1-3-1 on FT8. **`ui_main.py` calls `unlock_step(..., radio_confirmed_receive=True)` unconditionally**, relying on manual operator recovery, not a verified physical RX readback. | Review watchdog independence, PTT release, CAT/audio failure paths, controller events and whether constant RX flag meets safety policy; add regression coverage in separate approved code change. | **Confirmed source-level safety gap; no unattended FT8 until accepted** |
 | P1 | `meshcore-ohgo-incidents.md` presents a combined UI context but distinguishes passive MeshCore collection from independently fetched Forge OHGO incidents. | Trace MeshCore collector, broker, serial paths, configuration, UI and data consumers; trace OHGO dependencies separately. Document reversible removal preserving OHGO and historical data. | **Separation documented; full code dependency audit pending** |
 | P1 | reSpeaker XVF3800 USB re-enumerated at full speed with `error -28` bandwidth allocation failures; Digirig playback failed; after microphone removal a completed FT8 QSO was reported. | Reconcile USB topology, audio capture/playback configuration, reconnect behavior, observer and kernel logs, and bounded recovery tests. | **Field evidence, cause not proven** |
 | P1 | Contact display reported 15 unsynced of 352; Forge contact-sync process running. | Compare Pi contact and retry SQLite state with Forge UUID ledger and Wavelog records; distinguish FT8 attempt failures from sync failures. Preserve records. | **Unresolved** |
 | P1 | Controller displayed command 1, 3, 1 unlock instruction, but operator reported it did not unlock. | Inspect physical control parser, lock state transitions, event telemetry, controller firmware and UI tests. | **Unresolved** |
-| P2 | Engineering source index declares 340 Python modules. | Enumerate actual `src/rolling_thunder/**/*.py` on current main and diff against index, identify orphan/stale entries, tests, configuration and deployment files. | **Not yet verified** |
+| P2 | Engineering source index headline declared 340 modules, but its current module-list entries contain 386 distinct source paths and six repeated entries. Test index contains 383 distinct test paths, matching its headline. | Enumerate actual `src/rolling_thunder/**/*.py` and `tests/**/*.py` on current main and diff against both indexes; confirm missing/orphan entries. | **Document-count drift confirmed; filesystem comparison blocked** |
 
 ## Completion criteria
 
@@ -34,3 +34,21 @@ This is a **read-only reconciliation ledger**, not a declaration that production
 ## Change history
 
 - 2026-11-13: Initial reconciliation ledger created on a documentation branch; findings are explicitly preliminary.
+
+## 2026-11-13 verified documentation changes
+
+- Corrected `system-architecture.md` to identify the actual system-level template at `deploy/systemd/rolling-thunder.service`, its launcher and unverified installed state. Qwen's initial assertion that the service template was missing was rejected after locating the actual source file.
+- Clarified `meshcore-ohgo-incidents.md` that independent MeshCore collection/broker and Forge OHGO incident APIs must be evaluated separately before removal.
+- Corrected misleading module inventory headline in `source-file-index.md`; updated `test-index.md` to distinguish documented path references from actual file-tree verification; linked this ledger from engineering index.
+- Added a source-verified FT8 stuck-TX and controller-lockout safety note to the operator guide. In particular, `ui_main.py` currently passes a constant receive flag to the alarm unlock handler; this is not independent RF-state verification.
+
+## Blockers and continuation
+
+1. The accessible Forge checkout is at old commit `a63e286`; the other Forge development checkout was `1062bfb`, not proven equivalent to current GitHub main. Git fetch over SSH from the remote account failed `Permission denied (publickey)`. **Do not run repository quality gates on those old trees and claim current-main validation.** GitHub connector supports targeted source reads and documentation commits, but does not provide a recursive tree listing through the used action. A current complete tree and CI run remain pending.
+2. Live Pi system journal and protected runtime directory were not readable through the current remote account. No service or radio state was modified. Runtime assertions remain explicitly unverified.
+3. Qwen `qwen3-coder:30b` via Forge Ollama completed a narrow architecture comparison, but incorrectly inferred the service unit was absent; independent source review found `deploy/systemd/rolling-thunder.service`. Treat its suggestions as hypotheses requiring source confirmation.
+4. Required gates `ruff check .`, `mypy src/rolling_thunder`, `pytest`, and `git diff --check` have **not** run against the current PR head. Do not merge as fully validated until the current source tree is available and those checks are completed or an explicitly reviewed docs-only exception is approved.
+
+## Audit change history
+
+- 2026-11-13: Verified source template, PTT alarm, UI lockout handler, collector and OHGO boundaries; committed focused engineering/operator documentation corrections. Remaining tree-wide and production checks are blocked and explicitly open.
