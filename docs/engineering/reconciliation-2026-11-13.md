@@ -89,3 +89,16 @@ Also verify every documented `deploy/` path and each claimed service unit,
 listener, data store and API against the current source tree. A green static
 check cannot prove installed systemd scope or actual radio PTT behavior; those
 require separate safe production observation and supervised acceptance.
+
+## Automated inventory evidence collection (2026-11-13 continuation)
+
+The current PR now adds a **report-only** inventory step to
+`.github/workflows/ci.yml`. It runs against the GitHub Actions checkout and
+prints actual vs indexed Python path counts, missing index entries and stale
+references for `src/rolling_thunder` and `tests`. This closes the earlier
+*access-method* blocker without granting remote access to protected Forge/Pi
+workspaces. The check is non-mutating and does not affect RF, startup, devices,
+application configuration or databases. The inventory discrepancy is not
+considered resolved until the workflow log has been reviewed and index entries
+have been corrected and rechecked. The existing Ruff, MyPy and pytest jobs
+remain mandatory. No production deployment is required for this change.
