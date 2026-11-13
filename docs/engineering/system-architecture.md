@@ -220,3 +220,7 @@ radio/RF authority or operator alerts. See meshcore-intelligence.md.
 ## MeshCore durable traffic consumer (staged supervision, inactive)
 
 An uncomposed independent public-broker consumer can use the existing local Unix API and per-consumer token, storing processing/duplicate outcomes in a separate owner-only SQLite ledger and ACKing only after full commit. The standalone worker entrypoint supports single-run or cancellable polling with local locking, and has a staged `deploy/meshcore-traffic-worker.user.service` systemd user-unit template that is **not installed/enabled**. There is no additional live source, socket, network listener, GPS pipeline, Tk/UI thread, audio service, radio command, RF transmission, or traffic notification pipeline. Explicit later authorization and documented rollback are required to deploy or activate; see `meshcore-traffic-worker.md`.
+
+## Runtime shutdown failure isolation
+
+`ApplicationRuntime.stop()` attempts each configured worker and hardware cleanup in the established order even if an earlier step raises. It retains labeled errors and raises a grouped shutdown exception after attempting radio disconnect. The dashboard's existing cleanup runner reports this failure without skipping other dashboard cleanup. The runtime marks itself stopped only after radio disconnect returns successfully. This is best-effort cleanup, **not** a guarantee of hardware PTT deassertion or bounded shutdown when a cleanup method hangs; those require separate parked hardware validation.
