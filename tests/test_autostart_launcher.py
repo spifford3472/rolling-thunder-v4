@@ -83,7 +83,7 @@ def test_unmanaged_dashboard_fails_closed(tmp_path: Path) -> None:
     env = _launcher_environment(tmp_path, uptime="181.50", minimum=180)
     fake_pgrep = Path(env["PATH"].split(os.pathsep)[0]) / "pgrep"
     fake_pgrep.write_text("#!/usr/bin/env bash\\nexit 0\\n", encoding="utf-8")
-    result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True)
+    result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
     assert result.returncode != 0
     assert "unmanaged dashboard" in result.stdout
     assert "FAKE_UI_STARTED" not in result.stdout
@@ -97,7 +97,7 @@ def test_locked_dashboard_refuses_second_launcher(tmp_path: Path) -> None:
     lock_path = Path(env["ROLLING_THUNDER_INSTANCE_LOCK_PATH"])
     with lock_path.open("w", encoding="utf-8") as lock_file:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True)
+        result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
     assert result.returncode != 0
     assert "owns the instance lock" in result.stdout
     assert "FAKE_UI_STARTED" not in result.stdout
@@ -109,6 +109,6 @@ def test_symlink_lock_path_is_rejected(tmp_path: Path) -> None:
     target = tmp_path / "do-not-touch"
     target.write_text("preserve", encoding="utf-8")
     Path(env["ROLLING_THUNDER_INSTANCE_LOCK_PATH"]).symlink_to(target)
-    result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True)
+    result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
     assert result.returncode != 0
     assert target.read_text(encoding="utf-8") == "preserve"
