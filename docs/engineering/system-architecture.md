@@ -40,7 +40,7 @@ major process/lifecycle boundaries an agent must preserve.
 The installed dashboard is started by `rolling-thunder.service`, which invokes
 `deploy/rolling-thunder-autostart`.
 
-The launcher enforces a 180-second minimum **system uptime**, not a fixed delay
+The launcher acquires a nonblocking advisory `flock` on a per-user instance lock before its uptime wait and inherits the lock into the dashboard via `exec`. Contending launches fail nonzero; an independently running unmanaged dashboard also fails closed rather than reporting a healthy managed service. The lock prevents duplicate launches through this launcher; independently launched programs that ignore the lock are detected only by the additional process check. The lock path defaults to `${XDG_RUNTIME_DIR:-/tmp}/rolling-thunder-ui-<uid>.lock` and can be overridden for isolated tests. Do not remove the lock file while a dashboard is running. The change does not alter the installed systemd unit or its restart policy.\n\nThe launcher enforces a 180-second minimum **system uptime**, not a fixed delay
 after every service restart. Once the Pi has exceeded that uptime, restarting
 the service launches the dashboard immediately.
 
