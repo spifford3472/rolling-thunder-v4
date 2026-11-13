@@ -1814,9 +1814,12 @@ class ApplicationRuntime:
             attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
         if self.gps is not None:
             attempt("GPS", self.gps.disconnect)
-        state = attempt("radio disconnect", self.radio.disconnect)
-        if state is not None:
+        state: RadioState | None = None
+        try:
+            state = self.radio.disconnect()
             self._started = False
+        except Exception as error:  # noqa: BLE001 - report after other cleanup
+            errors.append(RuntimeError(f"radio disconnect: {error}"))
         if errors:
             raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
         assert state is not None
