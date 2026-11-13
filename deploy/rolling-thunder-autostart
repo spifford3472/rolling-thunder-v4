@@ -8,6 +8,7 @@ readonly MIN_UPTIME_SECONDS="${ROLLING_THUNDER_MIN_UPTIME_SECONDS:-${ROLLING_THU
 readonly UPTIME_PATH="${ROLLING_THUNDER_UPTIME_PATH:-/proc/uptime}"
 readonly DISPLAY_VALUE="${DISPLAY:-:0}"
 readonly XAUTHORITY_VALUE="${XAUTHORITY:-/home/geoff/.Xauthority}"
+readonly LOCK_PATH="${ROLLING_THUNDER_INSTANCE_LOCK_PATH:-${XDG_RUNTIME_DIR:-/tmp}/rolling-thunder-ui-$(id -u).lock}"
 
 log() {
     printf '%s rolling-thunder-autostart: %s\n' "$(date --iso-8601=seconds)" "$*"
@@ -62,9 +63,22 @@ if [[ ! "$MIN_UPTIME_SECONDS" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
+# Kernel lock is inherited across exec by the UI process.
+# Unlike pgrep, flock atomically serializes concurrent launch attempts.
+require_executable /usr/bin/flock "flock instance guard"
+if [[ -L "$LOCK_PATH" ]]; then
+    log "ERROR: refusing symlink instance lock: $LOCK_PATH"
+    exit 1
+fi
+exec 9>"$LOCK_PATH"
+if ! /usr/bin/flock -n 9; then
+    log "ERROR: another launcher or dashboard owns the instance lock"
+    exit 1
+fi
+
 if dashboard_is_running; then
-    log "dashboard already running for user $(id -un); not starting a duplicate"
-    exit 0
+    log "ERROR: unmanaged dashboard already running; refusing false successful startup"
+    exit 1
 fi
 
 UPTIME_SECONDS="$(system_uptime_seconds)"
@@ -78,8 +92,8 @@ else
 fi
 
 if dashboard_is_running; then
-    log "dashboard was started while waiting; not starting a duplicate"
-    exit 0
+    log "ERROR: unmanaged dashboard started while waiting; refusing duplicate"
+    exit 1
 fi
 
 require_file "${APP_DIR}/pyproject.toml" "Rolling Thunder production checkout"

@@ -44,6 +44,7 @@ def _launcher_environment(tmp_path: Path, *, uptime: str, minimum: int) -> dict[
             "ROLLING_THUNDER_UPTIME_PATH": str(uptime_path),
             "XAUTHORITY": str(tmp_path / "missing-Xauthority"),
             "DISPLAY": ":99",
+            "ROLLING_THUNDER_INSTANCE_LOCK_PATH": str(tmp_path / "dashboard.lock"),
         }
     )
     return env
@@ -75,3 +76,39 @@ def test_autostart_waits_only_until_minimum_uptime(tmp_path: Path) -> None:
 
     assert "waiting 1s until minimum uptime 1s" in result.stdout
     assert "FAKE_UI_STARTED" in result.stdout
+
+
+def test_unmanaged_dashboard_fails_closed(tmp_path: Path) -> None:
+    """A preexisting process must not produce a false successful service start."""
+    env = _launcher_environment(tmp_path, uptime="181.50", minimum=180)
+    fake_pgrep = Path(env["PATH"].split(os.pathsep)[0]) / "pgrep"
+    fake_pgrep.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
+    assert result.returncode != 0
+    assert "unmanaged dashboard" in result.stdout
+    assert "FAKE_UI_STARTED" not in result.stdout
+
+
+def test_locked_dashboard_refuses_second_launcher(tmp_path: Path) -> None:
+    """The inherited instance lock prevents a concurrent second dashboard."""
+    import fcntl
+
+    env = _launcher_environment(tmp_path, uptime="181.50", minimum=180)
+    lock_path = Path(env["ROLLING_THUNDER_INSTANCE_LOCK_PATH"])
+    with lock_path.open("w", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
+    assert result.returncode != 0
+    assert "owns the instance lock" in result.stdout
+    assert "FAKE_UI_STARTED" not in result.stdout
+
+
+def test_symlink_lock_path_is_rejected(tmp_path: Path) -> None:
+    """Do not truncate a symlink substituted for the lock path."""
+    env = _launcher_environment(tmp_path, uptime="181.50", minimum=180)
+    target = tmp_path / "do-not-touch"
+    target.write_text("preserve", encoding="utf-8")
+    Path(env["ROLLING_THUNDER_INSTANCE_LOCK_PATH"]).symlink_to(target)
+    result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
+    assert result.returncode != 0
+    assert target.read_text(encoding="utf-8") == "preserve"
