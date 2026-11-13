@@ -10,6 +10,10 @@ This guide describes the implemented repository rather than an aspirational arch
 - `meshcore-ohgo-incidents.md` — Forge OHGO incident source, protected credential gate, retained API and combined read-only dashboard context.
 ## Engineering document set
 
+- `usb-ft8-incident-2026-11-13.md` — observed USB topology, FT8 audio failure timeline, temporary observer, validation and rollback; cause unresolved.
+- `issue-410-supervision-reconciliation.md` — system versus user systemd discrepancy, actual dashboard ownership, unverified wrapper and shutdown gates.
+- `production-inventory-2026-11-13.md` — dated read-only Pi/Forge service and timer inventory, PSK autoqueue failure, and documentation follow-ups.
+
 - `r1-a-ui-timing.md` — bounded UI timing aggregates, R1-C2 correlated slow-refresh diagnostics, validation and interpretation limits.
 - `production-baseline-and-recovery.md` — R0-01 host/service/data identity,
   representative restore evidence, provenance limits, and fresh deployment gates.
