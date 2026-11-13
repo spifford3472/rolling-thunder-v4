@@ -1757,11 +1757,11 @@ class ApplicationRuntime:
             return self.radio.get_state()
 
         if self.ft8_qso is not None:
-        attempt("FT8 QSO", self.ft8_qso.close)
+            attempt("FT8 QSO", self.ft8_qso.close)
         if self.ft8_hardware_transmit is not None:
-        attempt("FT8 transmit", self.ft8_hardware_transmit.close)
+            attempt("FT8 transmit", self.ft8_hardware_transmit.close)
         if self.ft8_receive is not None:
-        attempt("FT8 receive", self.ft8_receive.stop)
+            attempt("FT8 receive", self.ft8_receive.stop)
         if self.pota_spot_polling is not None:
             attempt("POTA spot polling", self.pota_spot_polling.stop)
         attempt("POTA enrichment", self.pota_enrichment.stop)
@@ -1774,11 +1774,11 @@ class ApplicationRuntime:
         if self.network_keepalive is not None:
             attempt("network keepalive", self.network_keepalive.stop)
         if self.ft8_completed_qso_delivery is not None:
-        attempt("completed QSO delivery", self.ft8_completed_qso_delivery.stop)
+            attempt("completed QSO delivery", self.ft8_completed_qso_delivery.stop)
         if self.ft8_attempt_delivery is not None:
-        attempt("FT8 attempt delivery", self.ft8_attempt_delivery.stop)
+            attempt("FT8 attempt delivery", self.ft8_attempt_delivery.stop)
         if self.ft8_performance_sync is not None:
-        attempt("FT8 performance sync", self.ft8_performance_sync.stop)
+            attempt("FT8 performance sync", self.ft8_performance_sync.stop)
         if self.contact_sync is not None:
             attempt("contact sync", self.contact_sync.stop)
         if self.contact_qrz_enrichment is not None:
@@ -1811,7 +1811,7 @@ class ApplicationRuntime:
             attempt("MeshCore GPS", self.meshcore_gps_publisher.stop)
         attempt("radio polling", self.polling.stop)
         if self.ft8_band_control is not None:
-        attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
+            attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
         if self.gps is not None:
             attempt("GPS", self.gps.disconnect)
         state = attempt("radio disconnect", self.radio.disconnect)
