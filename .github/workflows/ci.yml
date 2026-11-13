@@ -47,7 +47,7 @@ jobs:
               indexed = {
                   value
                   for value in re.findall(
-                      r"(?:src/rolling_thunder/|tests/)[A-Za-z0-9_./-]+\\.py",
+                      r"(?:src/rolling_thunder/|tests/)[A-Za-z0-9_./-]+\.py",
                       content,
                   )
                   if value.startswith(prefix)
