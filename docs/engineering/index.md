@@ -8,7 +8,9 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `tron-voice-control.md` — Issue #374 offline Vosk worker, callsign microphone priority, physical start/stop gesture, large transient feedback popups, hardware acceptance, and FT8 terminal return.
 - `meshcore-ohgo-incidents.md` — Forge OHGO incident source, protected credential gate, retained API and combined read-only dashboard context.
-- `stab04-shutdown-deadline.md` — current shutdown critical-path blocking evidence, strict expected-failure test, and fail-closed acceptance gate.
+- `stab04-shutdown-deadline.md` — current shutdown critical-path blocking evidence, passing ordering/concurrency regressions and outstanding safety gates.
+
+- `stab05-cat-ptt-uncertainty.md` — current CAT/PTT lock and failed release evidence, preserved single-command authority, and parked acceptance gates.
 
 ## Engineering document set
 
