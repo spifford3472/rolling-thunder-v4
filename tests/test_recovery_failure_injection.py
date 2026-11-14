@@ -115,5 +115,7 @@ def test_atomic_replace_failure_keeps_prior_journal(
 def test_malformed_journal_never_yields_success_or_reconciliation(tmp_path: Path) -> None:
     path = _path(tmp_path)
     path.write_text(json.dumps({"version": 1, "phase": "committed"}), encoding="utf-8")
+    # Isolate schema corruption rather than umask-dependent permissions.
+    path.chmod(0o600)
     with pytest.raises(journal.JournalError, match="SHA"):
         journal.begin(path, A, B, "/backup/new.db")
