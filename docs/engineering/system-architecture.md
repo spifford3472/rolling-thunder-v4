@@ -5,6 +5,10 @@
 This document describes the current deployed shape of Rolling Thunder and the
 major process/lifecycle boundaries an agent must preserve.
 
+## Observed Forge installation versus feature gates (2026-11-13)
+
+The descriptions below of staged/disabled-by-default source composition are **design and default-configuration descriptions**, not evidence that production units are absent or stopped. Read-only systemd inspection on Forge confirmed active processes for `rolling-thunder-forge-propagation.service`, `rolling-thunder-forge-propagation-qso-worker.service`, `rolling-thunder-forge-pskreporter.service`, and `rolling-thunder-forge-psk-evidence.service`. These observations establish service installation and process activity **only**; configured ingestion, provider egress, prediction and scheduling gates have not been independently verified. The separate `rolling-thunder-forge-psk-autoqueue.service` oneshot was failed (`ExecMainStatus=1`) while its timer remained scheduled. See `production-inventory-2026-11-13.md`. Do not infer feature enablement from `systemctl is-active`.
+
 ## Topology
 
 ```text

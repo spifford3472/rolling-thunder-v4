@@ -8,6 +8,10 @@ A Forge process must not assume that the only future caller is the Rolling Thund
 
 Screen-specific presentation belongs on clients, not Forge.
 
+## Production installation and feature-gate distinction (2026-11-13)
+
+The sections below use `disabled-by-default` to describe source defaults and independently gated capabilities. They must **not** be interpreted as saying the services are not installed or running on Forge. Read-only production inspection confirmed active systemd processes for the environmental collector, completed-QSO propagation worker, PSK Reporter worker, and PSK evidence listener. Their provider egress, ingestion, worker and source-delivery gates require separate configuration and runtime verification; no such enablement is asserted here. A separate timer-triggered PSK autoqueue oneshot was observed failed with exit code 1. See `production-inventory-2026-11-13.md` for observed names and evidence boundaries.
+
 ## Current process families
 
 ### Spot / weather / radar / map service
