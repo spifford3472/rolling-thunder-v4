@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from time import monotonic
 
 from rolling_thunder.active_panel_commands import (
@@ -164,6 +164,18 @@ def _sigterm_close_handler(requested: Event) -> Callable[[int, object], None]:
         requested.set()
 
     return handle
+
+
+def _request_close_once(
+    started: Event, guard: Lock, launch: Callable[[], None],
+) -> bool:
+    """Claim the existing shutdown worker exactly once across competing callers."""
+    with guard:
+        if started.is_set():
+            return False
+        started.set()
+    launch()
+    return True
 
 
 def _run_orderly_shutdown(
@@ -2422,6 +2434,7 @@ def run_dashboard(
         root.after(_REFRESH_MS, refresh)
 
     close_started = Event()
+    close_guard = Lock()
     close_finished = Event()
     sigterm_requested = Event()
     close_errors: list[str] = []
@@ -2484,12 +2497,12 @@ def run_dashboard(
             close_finished.set()
 
     def close() -> None:
-        if close_started.is_set():
-            return
-        close_started.set()
-        print("RT_SHUTDOWN phase=close_requested", flush=True)
-        Thread(target=close_worker, daemon=True, name="rt-orderly-close").start()
-        finish_close()
+        def launch_close() -> None:
+            print("RT_SHUTDOWN phase=close_requested", flush=True)
+            Thread(target=close_worker, daemon=True, name="rt-orderly-close").start()
+            finish_close()
+
+        _request_close_once(close_started, close_guard, launch_close)
 
     previous_sigterm_handler = signal.signal(
         signal.SIGTERM,
