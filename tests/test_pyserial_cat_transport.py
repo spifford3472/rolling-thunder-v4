@@ -127,3 +127,29 @@ def test_transport_validates_device_and_command() -> None:
 
     with pytest.raises(ValueError, match="semicolon-terminated"):
         transport.command(b"FA")
+
+
+
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -1.0, 0.0, 60.01])
+def test_transport_rejects_nonfinite_or_unbounded_cat_timeout(timeout: float) -> None:
+    """Serial I/O timeout must remain finite, even outside typed config."""
+    with pytest.raises(ValueError, match="finite"):
+        PySerialCatTransport(Path("/dev/ttyUSB0"), timeout_s=timeout)
+
+
+def test_serial_factory_receives_same_bound_for_read_and_write() -> None:
+    """The installed pyserial factory uses the configured timeout for both."""
+    observed: list[float] = []
+    port = FakeSerialPort()
+
+    def serial_factory(_device: Path, _baud: int, timeout_s: float) -> FakeSerialPort:
+        observed.append(timeout_s)
+        return port
+
+    transport = PySerialCatTransport(
+        Path("/dev/ttyUSB0"), timeout_s=1.25, serial_factory=serial_factory,
+    )
+    transport.open()
+    transport.command(b"TX0;")
+    assert observed == [1.25]
+    assert port.writes == [b"TX0;"]
