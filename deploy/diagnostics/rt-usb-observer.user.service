@@ -1,0 +1,13 @@
+[Unit]
+Description=Rolling Thunder read-only USB stability diagnostics
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/geoff/.local/bin/rt-usb-observer.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
