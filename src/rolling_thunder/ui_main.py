@@ -2610,6 +2610,9 @@ def run_dashboard(
     for definition in context_navigation.definitions:
         root.bind(definition.shortcut, select_context_shortcut)
     root.protocol("WM_DELETE_WINDOW", close)
+    from rolling_thunder.ui_readiness import start_ui_heartbeat
+
+    start_ui_heartbeat(root)
     refresh()
     try:
         root.mainloop()

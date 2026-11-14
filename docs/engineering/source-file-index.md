@@ -593,3 +593,9 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_ohgo_panel.py` — Pi private Forge reader, stale/status decoder and read-only presentation.
 
 - `src/rolling_thunder/meshcore_ohgo_ui.py` — dedicated 42-point Tk OHGO viewport, fixed MORE visibility from actual scroll geometry and safe context-specific physical-control interception.
+
+### STAB-06D candidate source
+
+- src/rolling_thunder/ui_readiness.py: Tk-loop heartbeat only.
+- src/rolling_thunder/deployment_readiness.py: read-only service and UI readiness check.
+- deploy/rolling-thunder-deploy.candidate: nonexecutable inspected-wrapper derivative.
