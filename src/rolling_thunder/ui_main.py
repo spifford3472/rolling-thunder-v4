@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 import signal
+from _thread import LockType
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from time import monotonic
 
 from rolling_thunder.active_panel_commands import (
@@ -164,6 +165,34 @@ def _sigterm_close_handler(requested: Event) -> Callable[[int, object], None]:
         requested.set()
 
     return handle
+
+
+def _request_close_once(
+    started: Event, guard: LockType, launch: Callable[[], None],
+) -> bool:
+    """Claim the existing shutdown worker exactly once across competing callers."""
+    with guard:
+        if started.is_set():
+            return False
+        started.set()
+    launch()
+    return True
+
+
+def _run_orderly_shutdown(
+    runtime_stop: Callable[[], object],
+    peripheral_steps: tuple[tuple[str, Callable[[], object]], ...],
+    errors: list[str],
+) -> None:
+    """Enter the existing radio-owning runtime before unrelated UI cleanup.
+
+    Shutdown runs on the established close worker. FT8 and CAT/PTT authority
+    remain inside ApplicationRuntime.stop(); no second radio path is created.
+    """
+    _run_cleanup_steps(
+        (("application runtime", runtime_stop), *peripheral_steps),
+        errors,
+    )
 
 
 def _run_cleanup_steps(
@@ -779,6 +808,7 @@ def run_dashboard(
             action_observer=(
                 ui_timing.observe_control_action if ui_timing.enabled else None
             ),
+            dispatch_blocked=lambda: close_started.is_set(),
             event_interceptor=CompositeEventInterceptor(
                 tron_toggle_interceptor,
                 settings_interceptor,
@@ -2405,6 +2435,7 @@ def run_dashboard(
         root.after(_REFRESH_MS, refresh)
 
     close_started = Event()
+    close_guard = Lock()
     close_finished = Event()
     sigterm_requested = Event()
     close_errors: list[str] = []
@@ -2446,7 +2477,8 @@ def run_dashboard(
                 raise RuntimeError("queued operator preferences did not drain")
 
         try:
-            _run_cleanup_steps(
+            _run_orderly_shutdown(
+                runtime.stop,
                 (
                     ("physical controls", close_controls),
                     ("callsign audio", stop_callsign_capture),
@@ -2458,7 +2490,6 @@ def run_dashboard(
                     ("status monitor", status_monitor.stop),
                     ("operator preferences", drain_preferences),
                     ("power worker", power_confirmation.stop),
-                    ("application runtime", runtime.stop),
                 ),
                 close_errors,
             )
@@ -2467,12 +2498,12 @@ def run_dashboard(
             close_finished.set()
 
     def close() -> None:
-        if close_started.is_set():
-            return
-        close_started.set()
-        print("RT_SHUTDOWN phase=close_requested", flush=True)
-        Thread(target=close_worker, daemon=True, name="rt-orderly-close").start()
-        finish_close()
+        def launch_close() -> None:
+            print("RT_SHUTDOWN phase=close_requested", flush=True)
+            Thread(target=close_worker, daemon=True, name="rt-orderly-close").start()
+            finish_close()
+
+        _request_close_once(close_started, close_guard, launch_close)
 
     previous_sigterm_handler = signal.signal(
         signal.SIGTERM,
@@ -2480,7 +2511,10 @@ def run_dashboard(
     )
 
     root.bind("<Escape>", lambda _event: close())
-    root.bind("<F12>", lambda _event: toggle_tron_listening())
+    root.bind(
+        "<F12>",
+        lambda _event: None if close_started.is_set() else toggle_tron_listening(),
+    )
     root.bind(
         "<v>",
         lambda _event: operator_commands.execute(ControlAction.VOICE),

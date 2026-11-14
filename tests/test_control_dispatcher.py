@@ -179,3 +179,87 @@ def test_rejected_command_is_not_reported_as_accepted_action() -> None:
 
     assert observed.dispatch_available().rejected == 1
     assert observations == []
+
+
+def test_shutdown_gate_discards_controller_events_before_interceptors() -> None:
+    """Shutdown must prevent even privileged hardware interceptors from running."""
+    from threading import Event
+
+    closed = Event()
+    source = MockControlSource(
+        (event("voice-button", "event-1", 1.0),)
+    )
+    commands = RecordingCommands()
+
+    class ObservingInterceptor:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def intercept(
+            self, _event: ControlInputEvent, _action: ControlAction,
+        ) -> bool | None:
+            self.calls += 1
+            return True
+
+    interceptor = ObservingInterceptor()
+    dispatched = ControlDispatcher(
+        source,
+        ControlActionMapper({"voice-button": ControlAction.VOICE}),
+        ControlEventGate(repeat_suppression_s=0.25),
+        commands,
+        event_interceptor=interceptor,
+        dispatch_blocked=closed.is_set,
+    )
+    closed.set()
+    result = dispatched.dispatch_available()
+    assert result.drained == 1
+    assert result.rejected == 1
+    assert result.accepted == 0
+    assert commands.actions == []
+    assert interceptor.calls == 0
+
+    # Events queued after closing remain inert.
+    assert dispatched.dispatch_available().accepted == 0
+
+
+
+def test_shutdown_mid_batch_rejects_later_physical_events() -> None:
+    """A batch already drained must stop dispatching when close begins."""
+    from threading import Event
+
+    closing = Event()
+    commands = RecordingCommands()
+
+    class CloseOnFirst:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def intercept(
+            self, _event: ControlInputEvent, _action: ControlAction,
+        ) -> bool | None:
+            self.calls += 1
+            closing.set()
+            return True
+
+    interceptor = CloseOnFirst()
+    source = MockControlSource((
+        event("voice-button", "first", 1.0),
+        event("commit-button", "second", 2.0),
+    ))
+    dispatched = ControlDispatcher(
+        source,
+        ControlActionMapper({
+            "voice-button": ControlAction.VOICE,
+            "commit-button": ControlAction.COMMIT,
+        }),
+        ControlEventGate(repeat_suppression_s=0.25),
+        commands,
+        event_interceptor=interceptor,
+        dispatch_blocked=closing.is_set,
+    )
+    result = dispatched.dispatch_available()
+    assert result.drained == 2
+    assert result.accepted == 1
+    assert result.rejected == 1
+    assert interceptor.calls == 1
+    assert commands.actions == []

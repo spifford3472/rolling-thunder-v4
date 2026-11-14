@@ -429,9 +429,15 @@ class BoundedFT8HardwareTransmitExecutor:
             if qso_id is not None and self._intent_started is not None:
                 intent_id = uuid4()
                 self._intent_started(intent_id, qso_id, expected_radio_frequency_hz, verified_power)
-            self._ptt.key()
-            keyed = True
+            # Serialize the final permission check and PTT assertion with close().
+            # Verification may block: shutdown can revoke authority meanwhile.
+            # Hold only the executor's existing lock; the radio adapter retains
+            # exclusive ownership of the underlying CAT transport.
             with self._lock:
+                if self._closed:
+                    raise RuntimeError("FT8 hardware transmit executor is closed")
+                self._ptt.key()
+                keyed = True
                 self._keyed = True
             emission_started = datetime.now(UTC)
             def watchdog_release() -> None:

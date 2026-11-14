@@ -1,5 +1,15 @@
 # Rolling Thunder Operator's Guide
 
+## Shutdown safety status (STAB-04 candidate, not deployed)
+
+An engineering candidate prioritizes the existing FT8 transmit release and
+radio adapter shutdown ahead of unrelated background worker cleanup. Shutdown
+messages do not independently prove the FT-891 has returned to receive. If its
+TX indicator remains on, stop operating and follow the established supervised
+radio recovery procedure; do not assume software shutdown or a restart
+de-keyed the radio. This candidate still requires a parked acceptance test
+and does not authorize any unattended RF operation.
+
 ## About this guide
 
 Rolling Thunder is a mobile amateur-radio operating console built to reduce the

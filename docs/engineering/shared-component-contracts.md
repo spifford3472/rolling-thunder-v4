@@ -213,6 +213,25 @@ workflows. Feature code should submit typed intent rather than issue raw CAT.
 A new screen-specific raw-CAT shortcut is an architectural regression unless
 explicitly approved.
 
+## STAB-04B shutdown command and FT8 authority
+
+The dashboard close event revokes the existing `OperatorCommandController`
+mutation boundary. The physical-control dispatcher must also discard queued
+events without invoking event interceptors once closing begins, and re-check
+the event between actions in a drained batch. The dashboard's F12 Tron
+shortcut is inert once closing begins. The once-only close worker uses
+an atomic shutdown-request claim, retaining one lifecycle owner.
+
+The bounded FT8 executor must serialize `PTT.key()` with its own existing
+`close()` latch, including final authorization **after** radio verification
+that may have yielded to shutdown. A request that was already admitted but
+has not keyed must not key after shutdown has closed the executor. Hardware
+CAT continues to be serialized exclusively by the existing FT-891 adapter.
+
+A successful software `TX0;` write is not physical proof of de-keying.
+Stuck CAT I/O and pre-existing in-flight audio/worker behavior remain
+subject to supervised STAB-05/REL-01 acceptance.
+
 ## Radio/transmit authority
 
 During incomplete application startup, shutdown must release an already-CONNECTED radio only through the existing radio adapter, after existing FT8 transmit/QSO cleanup. A failed adapter disconnect must remain a reported shutdown error and retryable; a radio not yet connected must not be opened just to shut it down. No parallel or implicit transmit authority is introduced.
