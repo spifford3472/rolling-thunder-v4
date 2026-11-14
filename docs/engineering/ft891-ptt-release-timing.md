@@ -1,0 +1,7 @@
+# FT-891 CAT PTT release timing diagnostics
+
+The FT-891 adapter logs `RT_PTT_RELEASE phase=end` when its existing CAT PTT release method is called. The line reports `lock_wait_ms` (time waiting to acquire the radio operation lock), `cat_ms` (time inside the guarded connection check and CAT TX-off command), and `result` (`ok`, `error`, or `noop`). The instrumentation does not change lock ordering, transmit authorization, PTT state, serial timeouts, or the existing uncertain-transmit retry policy. A failed release remains an error and leaves the capability retryable.
+
+During a parked, radio-safe stop/start, correlate `RT_PTT_RELEASE` with `RT_RUNTIME_SHUTDOWN step='FT8 transmit'`. A large `lock_wait_ms` indicates another radio operation held the shared lock; a large `cat_ms` indicates time in the guarded CAT path. These are diagnostic durations, not proof of a specific USB or radio hardware fault. The service stop deadline remains 20 seconds. The earlier 1.817-second FT8 transmit cleanup and 707-ms GPS polling cleanup are observations from one successful test, not guaranteed bounds.
+
+Validation: hardware-free tests in `tests/test_ft891_ptt_release_timing.py`, existing `tests/test_ft891_radio.py` and `tests/test_shutdown_contention.py`, plus standard Ruff, MyPy, and pytest gates. Deploy only through the exact-SHA wrapper after approval, preserve the prior production SHA for rollback, and repeat the parked stop/start acceptance with the FT-891 off. No infrastructure networking or OPNsense changes are involved.
