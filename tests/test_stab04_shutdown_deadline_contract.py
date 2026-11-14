@@ -9,6 +9,8 @@ from threading import Event, Thread
 
 import pytest
 
+from rolling_thunder.application_runtime import ApplicationRuntime
+from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.ui_main import _run_cleanup_steps, _run_orderly_shutdown
 
 
@@ -120,3 +122,58 @@ def test_runtime_error_is_reported_before_peripheral_cleanup(
         "step='physical controls'"
     )
     assert "result=error" in output
+
+
+
+def test_runtime_shutdown_preserves_ft8_release_before_radio_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No extra PTT path; the existing owner releases before slow workers."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(config)
+    runtime.start()
+    calls: list[str] = []
+
+    class QsoClose:
+        def close(self) -> None:
+            calls.append("FT8 QSO")
+
+    class TransmitClose:
+        def close(self) -> None:
+            calls.append("FT8 transmit")
+
+    class BandRestore:
+        def restore_normal_settings_for_shutdown(self) -> None:
+            calls.append("band restore")
+
+    runtime.ft8_qso = QsoClose()  # type: ignore[assignment]
+    runtime.ft8_hardware_transmit = TransmitClose()  # type: ignore[assignment]
+    runtime.ft8_band_control = BandRestore()  # type: ignore[assignment]
+    original_stop_polling = runtime.polling.stop
+    original_radio_disconnect = runtime.radio.disconnect
+    original_pota_stop = runtime.pota_enrichment.stop
+
+    def stop_polling() -> object:
+        calls.append("radio polling")
+        return original_stop_polling()
+
+    def disconnect() -> object:
+        calls.append("radio disconnect")
+        return original_radio_disconnect()
+
+    def stop_pota() -> None:
+        calls.append("POTA")
+        original_pota_stop()
+
+    monkeypatch.setattr(runtime.polling, "stop", stop_polling)
+    monkeypatch.setattr(runtime.radio, "disconnect", disconnect)
+    monkeypatch.setattr(runtime.pota_enrichment, "stop", stop_pota)
+
+    runtime.stop()
+    assert calls == [
+        "FT8 QSO", "FT8 transmit", "radio polling", "band restore",
+        "radio disconnect", "POTA",
+    ]
