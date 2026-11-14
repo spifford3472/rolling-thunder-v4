@@ -366,3 +366,21 @@ def test_runtime_unrelated_blocking_stop_delays_radio_disconnect(
     assert shutdown_finished.is_set()
     assert radio_disconnect_entered.is_set()
     assert stop_errors == []
+
+
+
+def test_repeated_runtime_shutdown_keeps_radio_disconnected() -> None:
+    """Repeated sequential requests must not reconnect or re-key the radio."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(config)
+    runtime.start()
+
+    first = runtime.stop()
+    second = runtime.stop()
+
+    assert first.connection_state is RadioConnectionState.DISCONNECTED
+    assert second.connection_state is RadioConnectionState.DISCONNECTED
+    assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
