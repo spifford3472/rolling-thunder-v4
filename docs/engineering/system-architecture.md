@@ -245,3 +245,20 @@ An uncomposed independent public-broker consumer can use the existing local Unix
 ## Runtime shutdown failure isolation
 
 `ApplicationRuntime.stop()` attempts each configured worker and hardware cleanup in the established order even if an earlier step raises. It retains labeled errors and raises a grouped shutdown exception after attempting radio disconnect. The dashboard's existing cleanup runner reports this failure without skipping other dashboard cleanup. The runtime marks itself stopped only after radio disconnect returns successfully. This is best-effort cleanup, **not** a guarantee of hardware PTT deassertion or bounded shutdown when a cleanup method hangs; those require separate parked hardware validation.
+
+
+## Runtime shutdown diagnostic evidence (November 2026)
+
+The UI's `RT_SHUTDOWN` markers measure the outer orderly-close lifecycle.
+`ApplicationRuntime.stop()` now additionally emits `RT_RUNTIME_SHUTDOWN`
+markers at warning level: `phase=start`, `phase=step_start step='name'`,
+`phase=step_end step='name' duration_ms=N result=ok|error`, and
+`phase=end duration_ms=N errors=N`. These markers bracket each existing
+runtime cleanup callback, including the final radio disconnect. They use
+monotonic elapsed time; a missing `step_end` after a `step_start` identifies
+the action active when systemd terminated a blocked shutdown. They are
+diagnostics only: the cleanup order, exception isolation, radio authority,
+systemd timeout, and existing deployment/rollback path are unchanged.
+Do not interpret a successful parked stop as proof that intermittent blocking
+is fixed. Use parked, RF-idle acceptance and inspect the service journal
+for the first unmatched `step_start` before proposing targeted changes.
