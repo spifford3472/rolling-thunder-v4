@@ -14,6 +14,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab06e-durable-transaction-reconciliation.md` — offline crash-surviving deployment journal, refused retries and operator reconciliation gates.
+
 - STAB-06D: see stab06d-wrapper-candidate.md for offline deployment readiness and recovery findings.
 
 - `usb-ft8-incident-2026-11-13.md` — observed USB topology, FT8 audio failure timeline, temporary observer, validation and rollback; cause unresolved.
