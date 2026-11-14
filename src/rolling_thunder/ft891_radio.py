@@ -1,6 +1,8 @@
 """FT-891 radio adapter built on the typed CAT transport boundary."""
 
 from collections.abc import Callable
+import logging
+from time import perf_counter
 from datetime import UTC, datetime
 from threading import RLock
 from typing import cast
@@ -83,6 +85,8 @@ from rolling_thunder.radio_band import (
     RadioBandResolutionError,
     resolve_radio_band,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 Clock = Callable[[], datetime]
 
@@ -178,14 +182,33 @@ class Ft891Radio:
             self._cp6_cat_ptt_asserted = True
 
     def _release_cp6_cat_ptt(self) -> None:
+        """Release PTT and measure lock contention separately from CAT I/O."""
+        started = perf_counter()
         with self._operation_lock:
+            acquired = perf_counter()
+            lock_wait_ms = (acquired - started) * 1000
             if not self._cp6_cat_ptt_asserted:
+                _LOGGER.info(
+                    "RT_PTT_RELEASE phase=end lock_wait_ms=%.1f cat_ms=0.0 result=noop",
+                    lock_wait_ms,
+                )
                 return
-            self._require_connected()
-            # Preserve uncertain TX state if CAT release fails; a later
-            # cancel/release must retry rather than incorrectly no-op.
-            self._transport.command(encode_cat_transmit_off())
-            self._cp6_cat_ptt_asserted = False
+            cat_started = perf_counter()
+            result = "error"
+            try:
+                self._require_connected()
+                # Preserve uncertain TX state if CAT release fails; a later
+                # cancel/release must retry rather than incorrectly no-op.
+                self._transport.command(encode_cat_transmit_off())
+                self._cp6_cat_ptt_asserted = False
+                result = "ok"
+            finally:
+                _LOGGER.info(
+                    "RT_PTT_RELEASE phase=end lock_wait_ms=%.1f cat_ms=%.1f result=%s",
+                    lock_wait_ms,
+                    (perf_counter() - cat_started) * 1000,
+                    result,
+                )
 
     def read_cp6_tx_meters(self) -> tuple[int, int, int]:
         """Read raw ALC, power, and SWR meters for the supervised CP6 test."""
