@@ -12,13 +12,22 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `stab05-cat-ptt-uncertainty.md` — current CAT/PTT lock and failed release evidence, preserved single-command authority, and parked acceptance gates.
 
+- `stab06-supervision-recovery.md` — system-level service ownership, inherited flock test evidence, and unresolved wrapper/recovery gates.
+
+- `doc02-current-state-reconciliation.md` — verified editorial/status corrections, historical evidence pointers, DOC-03 audit gates.
+
+- `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
+
 ## Engineering document set
+
+- `stab07-integration-and-parked-release-plan.md` — integrated STAB-06C–F review, open safety blockers, PR lineage and a gated, nonexecuted parked installation/rollback plan.
 
 - `stab06f-recovery-inspection-reconciliation.md` — uninstalled read-only recovery evidence, approval-gated attestation, security gates and operator procedure.
 
 - `stab06e-durable-transaction-reconciliation.md` — offline crash-surviving deployment journal, refused retries and operator reconciliation gates.
 
 - STAB-06D: see stab06d-wrapper-candidate.md for offline deployment readiness and recovery findings.
+- `stab06c-deployment-transaction-lock.md` — offline deployment transaction guard contract, tests and remaining production integration/readiness gates.
 
 - `usb-ft8-incident-2026-11-13.md` — observed USB topology, FT8 audio failure timeline, temporary observer, validation and rollback; cause unresolved.
 - `issue-410-supervision-reconciliation.md` — system versus user systemd discrepancy, actual dashboard ownership, unverified wrapper and shutdown gates.

@@ -610,3 +610,25 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `deploy/rolling-thunder-recovery-inspect.py`: separate read-only systemd, Git, journal, SQLite and backup evidence collector.
 - `deploy/rolling-thunder-reconcile.py`: stable privileged candidate for explicit approval-bounded attestation only; no service, Git or DB mutation.
 - `deploy/rolling-thunder-deployment-journal.py`: preserves prior committed or reconciled records in a private history file before new transactions.
+
+### STAB-07 Source-module inventory gap closure (exact paths, 2026-11-14)
+
+The entries below close the exact-file inventory gap observed against the
+integration candidate. They are discoverability references only; feature
+ownership, API contracts and actual deployment composition remain subject
+to independent DOC-03 / PR #414 source review. No code or test behavior
+has been changed by this inventory correction.
+
+- `src/rolling_thunder/forge_contact_snapshots.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_ft8_periods.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_autoqueue.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_bridge_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_event_bridge.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_normalized_history.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/dx_ranking.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/first_rf_test.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/period_correlation.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/period_repository.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/power_advisor.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/ptt_alarm.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/local_jurisdiction.py` — referenced in current repository; review related feature guide for ownership and behavior.

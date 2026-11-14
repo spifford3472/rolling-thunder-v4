@@ -44,7 +44,9 @@ The descriptions below of staged/disabled-by-default source composition are **de
 The installed dashboard is started by `rolling-thunder.service`, which invokes
 `deploy/rolling-thunder-autostart`.
 
-The launcher acquires a nonblocking advisory `flock` on a per-user instance lock before its uptime wait and inherits the lock into the dashboard via `exec`. Contending launches fail nonzero; an independently running unmanaged dashboard also fails closed rather than reporting a healthy managed service. The lock prevents duplicate launches through this launcher; independently launched programs that ignore the lock are detected only by the additional process check. The lock path defaults to `${XDG_RUNTIME_DIR:-/tmp}/rolling-thunder-ui-<uid>.lock` and can be overridden for isolated tests. Do not remove the lock file while a dashboard is running. The change does not alter the installed systemd unit or its restart policy.\n\nThe launcher enforces a 180-second minimum **system uptime**, not a fixed delay
+The launcher acquires a nonblocking advisory `flock` on a per-user instance lock before its uptime wait and inherits the lock into the dashboard via `exec`. Contending launches fail nonzero; an independently running unmanaged dashboard also fails closed rather than reporting a healthy managed service. The lock prevents duplicate launches through this launcher; independently launched programs that ignore the lock are detected only by the additional process check. The lock path defaults to `${XDG_RUNTIME_DIR:-/tmp}/rolling-thunder-ui-<uid>.lock` and can be overridden for isolated tests. Do not remove the lock file while a dashboard is running. The change does not alter the installed systemd unit or its restart policy.
+
+The launcher enforces a 180-second minimum **system uptime**, not a fixed delay
 after every service restart. Once the Pi has exceeded that uptime, restarting
 the service launches the dashboard immediately.
 
@@ -54,7 +56,7 @@ The dashboard process composes the application through:
 - typed background polling and worker services;
 - local SQLite repositories and retained-state caches.
 
-## Shutdown diagnostic evidence (pending deployment)
+## Shutdown diagnostic evidence and remaining acceptance
 
 The dashboard's SIGTERM handler sets an event; the Tk refresh loop initiates the
 existing orderly-close worker. The worker now prints flushed `RT_SHUTDOWN`
@@ -71,8 +73,12 @@ and the service's installed `TimeoutStopSec=20` is unchanged. A hung callback
 can prevent later cleanup, including radio disconnect. A clean `step_end`
 does not independently prove RF-safe hardware state. No additional CAT/PTT
 authority, automatic restart, service unit change, or deployment is implied.
-The November 13 pre-instrumentation stop exceeded 20 seconds and was killed
-by systemd; its exact blocking callback remains unknown. Perform offline
+A November 13 stop exceeded 20 seconds and was killed by systemd; its
+exact blocking callback remains unknown. A later parked, FT-891-powered-off
+stop/start completed in approximately 1.413 seconds with zero reported
+shutdown errors, but did not exercise active CAT/PTT release. The timestamped
+evidence remains in `stab01-doc01-evidence-2026-11-13.md` and
+`issue-410-wrapper-review-2026-11-13.md`. Perform offline
 failure/blocked-step tests before any separately approved parked release.
 
 ## Pi concurrency rule
