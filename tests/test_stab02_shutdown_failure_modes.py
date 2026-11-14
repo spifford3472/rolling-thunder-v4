@@ -5,6 +5,7 @@ The partial-startup case is an explicit strict xfail until its safety contract
 has been resolved in a separately reviewed implementation change.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from threading import Event, Thread
 
@@ -12,8 +13,11 @@ import pytest
 
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
-from rolling_thunder.domain import RadioConnectionState
+from rolling_thunder.domain import RadioConnectionState, RadioState
 from rolling_thunder.ft891_radio import Ft891Radio
+from rolling_thunder.gps import GPSState
+from rolling_thunder.gps_polling import GPSPollingService
+from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.ui_main import _run_cleanup_steps
 
@@ -241,3 +245,124 @@ def test_startup_failure_after_radio_polling_rolls_back_hardware(
 
     assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
     assert not runtime._started
+
+
+
+class ManualCancellation:
+    """Minimal scheduled callback with an observable cancel boundary."""
+
+    def __init__(self) -> None:
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+
+class ManualGPSPollScheduler:
+    """Allow a GPS poll callback to run on a controlled test thread."""
+
+    def __init__(self) -> None:
+        self.callback: Callable[[], None] | None = None
+        self.handle = ManualCancellation()
+
+    def schedule_repeating(
+        self, interval_s: float, callback: Callable[[], None]
+    ) -> ManualCancellation:
+        assert interval_s == 1.0
+        self.callback = callback
+        return self.handle
+
+
+def test_gps_stop_cancels_future_polls_but_not_a_blocked_inflight_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Document cancellation's boundary without starting new GPS readers."""
+    receiver = MockGPSReceiver()
+    scheduler = ManualGPSPollScheduler()
+    gps_polling = GPSPollingService(receiver, scheduler)
+    gps_polling.start()
+    entered = Event()
+    unblock = Event()
+    finished = Event()
+
+    def blocked_refresh() -> GPSState:
+        entered.set()
+        assert unblock.wait(timeout=3.0)
+        return receiver.get_state()
+
+    monkeypatch.setattr(receiver, "refresh_state", blocked_refresh)
+    assert scheduler.callback is not None
+
+    def run_poll() -> None:
+        try:
+            assert scheduler.callback is not None
+            scheduler.callback()
+        finally:
+            finished.set()
+
+    worker = Thread(target=run_poll, daemon=True)
+    worker.start()
+    try:
+        assert entered.wait(timeout=1.0)
+        gps_polling.stop()
+        assert scheduler.handle.cancelled
+        assert not gps_polling.is_running
+        assert not finished.is_set()
+    finally:
+        unblock.set()
+        worker.join(timeout=3.0)
+
+    assert not worker.is_alive()
+    assert finished.is_set()
+
+
+def test_runtime_unrelated_blocking_stop_delays_radio_disconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test actual runtime ordering, not only the generic UI cleanup runner."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(config)
+    runtime.start()
+    blocked_entered = Event()
+    unblock = Event()
+    radio_disconnect_entered = Event()
+    shutdown_finished = Event()
+    stop_errors: list[Exception] = []
+    original_disconnect = runtime.radio.disconnect
+
+    def stuck_enrichment_stop() -> None:
+        blocked_entered.set()
+        assert unblock.wait(timeout=3.0)
+
+    def observe_disconnect() -> RadioState:
+        radio_disconnect_entered.set()
+        return original_disconnect()
+
+    monkeypatch.setattr(runtime.pota_enrichment, "stop", stuck_enrichment_stop)
+    monkeypatch.setattr(runtime.radio, "disconnect", observe_disconnect)
+
+    def stop_runtime() -> None:
+        try:
+            runtime.stop()
+        except Exception as error:  # noqa: BLE001 - record worker failures
+            stop_errors.append(error)
+        finally:
+            shutdown_finished.set()
+
+    worker = Thread(target=stop_runtime, daemon=True)
+    worker.start()
+    try:
+        assert blocked_entered.wait(timeout=2.0)
+        assert not radio_disconnect_entered.is_set()
+        assert not shutdown_finished.wait(timeout=0.05)
+    finally:
+        unblock.set()
+        worker.join(timeout=5.0)
+
+    assert not worker.is_alive()
+    assert shutdown_finished.is_set()
+    assert radio_disconnect_entered.is_set()
+    assert stop_errors == []
