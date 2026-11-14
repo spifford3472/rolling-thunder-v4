@@ -255,14 +255,17 @@ STAB-03 partial-startup correction: when runtime startup is not complete but the
 
 ### STAB-04 UI close ordering candidate (not deployed)
 
-The reviewed STAB-04 branch calls the existing `ApplicationRuntime.stop()`
-before peripheral UI cleanup inside the **same** `rt-orderly-close` worker.
-This prevents a stuck peripheral UI callback from preventing the first runtime
-cleanup call. Existing exception aggregation and per-step logging remain.
-It does **not** bound a stalled runtime worker, CAT lock or transport, and it
-does not independently prove physical PTT release. Input/event inhibition
-during the background close worker and FT8/radio ownership ordering remain
-separate safety review gates. Do not treat this as parked acceptance.
+The STAB-04 candidate calls the existing `ApplicationRuntime.stop()` before
+peripheral UI cleanup inside the **same** `rt-orderly-close` worker. Within
+that runtime it closes FT8 QSO/transmit, cancels radio polling, restores FT8
+radio settings, then calls existing `radio.disconnect()` before unrelated
+polling, network, GPS and persistence worker stops. No competing CAT writer
+is added. Exceptions remain aggregated and logged. This prevents unrelated
+peripheral-worker stalls from delaying **entry** to the radio-owner release
+path under the tested assumptions, but does not bound FT8/CAT I/O stalls,
+ensure physical de-keying, or independently establish that UI/physical inputs
+are fully inhibited during background shutdown. Do not deploy without the
+remaining race and parked hardware acceptance gates.
 
 ## Runtime shutdown diagnostic evidence (November 2026)
 
