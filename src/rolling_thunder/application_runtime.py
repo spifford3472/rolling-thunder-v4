@@ -49,7 +49,7 @@ from rolling_thunder.contact_repository import ContactRepository
 from rolling_thunder.contact_retry import ContactRetryRepository
 from rolling_thunder.contact_sync import ContactSyncService
 from rolling_thunder.contact_weather import PublishedContactWeatherSnapshotProvider
-from rolling_thunder.domain import Contact, RadioState
+from rolling_thunder.domain import Contact, RadioConnectionState, RadioState
 from rolling_thunder.forge_radar_client import HttpForgeRadarClient
 from rolling_thunder.ft8.activity import FT8CQActivityManager, is_us_cq_dx
 from rolling_thunder.ft8.attempt_history import (
@@ -1770,13 +1770,20 @@ class ApplicationRuntime:
                 attempt("FT8 QSO", self.ft8_qso.close)
             if self.ft8_hardware_transmit is not None:
                 attempt("FT8 transmit", self.ft8_hardware_transmit.close)
+            # A radio can already be connected before full runtime startup.
+            # Keep FT8 release first and use the existing radio owner for cleanup.
+            prestart_state = self.radio.get_state()
+            if prestart_state.connection_state is RadioConnectionState.CONNECTED:
+                disconnected = attempt("radio disconnect", self.radio.disconnect)
+                if disconnected is not None:
+                    prestart_state = cast(RadioState, disconnected)
             shutdown_logger.warning(
                 "RT_RUNTIME_SHUTDOWN phase=end duration_ms=%.1f errors=%d",
                 (monotonic() - shutdown_started) * 1000, len(errors),
             )
             if errors:
                 raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
-            return self.radio.get_state()
+            return prestart_state
 
         if self.ft8_qso is not None:
             attempt("FT8 QSO", self.ft8_qso.close)
