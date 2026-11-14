@@ -14,6 +14,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab06c-deployment-transaction-lock.md` — offline deployment transaction guard contract, tests and remaining production integration/readiness gates.
+
 - `usb-ft8-incident-2026-11-13.md` — observed USB topology, FT8 audio failure timeline, temporary observer, validation and rollback; cause unresolved.
 - `issue-410-supervision-reconciliation.md` — system versus user systemd discrepancy, actual dashboard ownership, unverified wrapper and shutdown gates.
 - `production-inventory-2026-11-13.md` — dated read-only Pi/Forge service and timer inventory, PSK autoqueue failure, and documentation follow-ups.

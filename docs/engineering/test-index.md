@@ -675,3 +675,13 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - tests/test_meshcore_ohgo_ui.py also guards against OHGO widget geometry
   toggling on repeated refreshes and redundant MORE StringVar writes.
+
+### STAB-06C deployment transaction guard (uninstalled candidate)
+
+- `tests/test_deployment_transaction_lock.py` verifies the standalone
+  `deploy/rolling-thunder-deploy-lock` kernel lock lifetime through `exec`,
+  concurrent refusal before mutation, lock release, symlink/missing-parent
+  refusal and child exit status. This does not validate the installed root-owned
+  wrapper, application readiness, rollback, backup integrity, systemd recovery,
+  or physical radio/PTT state. See
+  `stab06c-deployment-transaction-lock.md` for integration gates.
