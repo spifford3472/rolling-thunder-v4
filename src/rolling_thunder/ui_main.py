@@ -166,6 +166,22 @@ def _sigterm_close_handler(requested: Event) -> Callable[[int, object], None]:
     return handle
 
 
+def _run_orderly_shutdown(
+    runtime_stop: Callable[[], object],
+    peripheral_steps: tuple[tuple[str, Callable[[], object]], ...],
+    errors: list[str],
+) -> None:
+    """Enter the existing radio-owning runtime before unrelated UI cleanup.
+
+    Shutdown runs on the established close worker. FT8 and CAT/PTT authority
+    remain inside ApplicationRuntime.stop(); no second radio path is created.
+    """
+    _run_cleanup_steps(
+        (("application runtime", runtime_stop), *peripheral_steps),
+        errors,
+    )
+
+
 def _run_cleanup_steps(
     steps: tuple[tuple[str, Callable[[], object]], ...],
     errors: list[str],
@@ -2446,7 +2462,8 @@ def run_dashboard(
                 raise RuntimeError("queued operator preferences did not drain")
 
         try:
-            _run_cleanup_steps(
+            _run_orderly_shutdown(
+                runtime.stop,
                 (
                     ("physical controls", close_controls),
                     ("callsign audio", stop_callsign_capture),
@@ -2458,7 +2475,6 @@ def run_dashboard(
                     ("status monitor", status_monitor.stop),
                     ("operator preferences", drain_preferences),
                     ("power worker", power_confirmation.stop),
-                    ("application runtime", runtime.stop),
                 ),
                 close_errors,
             )
