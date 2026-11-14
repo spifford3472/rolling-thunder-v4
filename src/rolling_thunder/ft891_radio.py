@@ -1,10 +1,10 @@
 """FT-891 radio adapter built on the typed CAT transport boundary."""
 
-from collections.abc import Callable
 import logging
-from time import perf_counter
+from collections.abc import Callable
 from datetime import UTC, datetime
 from threading import RLock
+from time import perf_counter
 from typing import cast
 
 from rolling_thunder.cat_transport import CatTransport
