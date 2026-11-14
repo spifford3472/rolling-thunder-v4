@@ -238,6 +238,14 @@ def reconcile(
             raise ValueError("running process not independently verified")
         if report["service"].get("responsiveness") != "tk_heartbeat_fresh":
             raise ValueError("UI readiness unknown, possibly legacy release")
+        # Neither Git HEAD nor a signed human-written boolean proves the
+        # loaded Python modules. Current inspector deliberately fails closed
+        # until an independent, launch-bound in-memory identity source exists.
+        if (
+            report.get("runtime_code_identity", {}).get("loaded_python_bytes_independently_proven")
+            is not True
+        ):
+            raise ValueError("running Python bytes lack independent identity proof")
         sha = report.get("git_sha")
         if sha not in (record["previous_sha"], record["target_sha"]):
             raise ValueError("unexpected installed checkout SHA")

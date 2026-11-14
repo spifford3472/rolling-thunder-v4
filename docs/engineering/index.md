@@ -20,6 +20,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab07c-running-code-identity.md` — read-only actual Pi process evidence, protected release/process binding candidate and explicit lack of in-memory Python byte proof.
+
 - `stab07-security-acceptance.md` — offline Ed25519 approval validation, privileged-file hash inspection, unverified running SHA and physical-PTT NO-GO gates.
 
 - `stab07-integration-and-parked-release-plan.md` — integrated STAB-06C–F review, open safety blockers, PR lineage and a gated, nonexecuted parked installation/rollback plan.

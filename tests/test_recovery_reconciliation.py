@@ -102,6 +102,9 @@ def _setup(
             "responsiveness": "tk_heartbeat_fresh",
         },
         "radio_ptt_state": "not_independently_verified",
+        # The synthetic true signal exercises only the downstream signed
+        # receipt path; the actual inspector NEVER emits this proof.
+        "runtime_code_identity": {"loaded_python_bytes_independently_proven": True},
     }
     approv_dir = tmp_path / "approvals"
     approv_dir.mkdir(mode=0o700)
@@ -303,5 +306,17 @@ def test_cryptographic_approval_boundary_rejects_unsafe_receipts(
         paths["approval"].write_text(json.dumps(receipt), encoding="utf-8")
     before = paths["journal"].read_bytes()
     with pytest.raises((ValueError, OSError)):
+        _attempt(paths)
+    assert paths["journal"].read_bytes() == before
+
+
+def test_unproven_in_memory_python_bytes_never_reconcile_even_with_signed_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A signature cannot substitute for an independent running-code proof."""
+    report, paths = _setup(tmp_path, monkeypatch)
+    report["runtime_code_identity"] = {"loaded_python_bytes_independently_proven": False}
+    before = paths["journal"].read_bytes()
+    with pytest.raises(ValueError, match="running Python bytes lack independent identity proof"):
         _attempt(paths)
     assert paths["journal"].read_bytes() == before

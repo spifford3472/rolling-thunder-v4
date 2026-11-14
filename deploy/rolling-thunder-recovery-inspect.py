@@ -252,6 +252,10 @@ def inspect(
         "database": {},
         "backup": {},
         "radio_ptt_state": "not_independently_verified",
+        "runtime_code_identity": {
+            "loaded_python_bytes_independently_proven": False,
+            "state": "unverified_mutable_or_unattested_runtime",
+        },
     }
     try:
         reader = _journal_reader()

@@ -632,3 +632,7 @@ has been changed by this inventory correction.
 - `src/rolling_thunder/ft8/power_advisor.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `src/rolling_thunder/ft8/ptt_alarm.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `src/rolling_thunder/local_jurisdiction.py` — referenced in current repository; review related feature guide for ownership and behavior.
+
+### STAB-07C separate runtime artifact identity evidence
+
+- `deploy/rolling-thunder-runtime-identity.py` — uninstalled independent read-only protected release manifest and process path binding; deliberately cannot claim loaded Python bytes independently proven.
