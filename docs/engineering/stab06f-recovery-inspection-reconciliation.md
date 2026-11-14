@@ -60,3 +60,7 @@ This candidate intentionally does not authorize reconciliation of a legacy versi
 2026-11-14: Implemented and tested **offline only**. No host permissions, wrappers, jobs, integrations or infrastructure changes were installed. Revert this PR to remove the source candidate.
 
 Before a future approved production change, document and commit all installation paths, integrations, validation, rollback, job/unit changes and this change history in private `spifford3472/ki5vnb-qth-infrastructure`. Keep backups and journals after rollback; do not restore outdated databases over new QSOs. Merge, privileged installation, parked deployment/restart and RF acceptance each require independent explicit owner authorization.
+
+## STAB-07B security supersession (2026-11-14)
+
+The earlier locally protected JSON approval was **not cryptographically authenticated**. The new uninstalled reconciler requires a trusted Ed25519 issuer signature scoped to the exact project, host, recovery action, transaction and fresh evidence; the issuer and trusted public-key installation remain separate blocked gates. Do not treat the old unsigned approval procedure above as production-safe. See `stab07-security-acceptance.md`.

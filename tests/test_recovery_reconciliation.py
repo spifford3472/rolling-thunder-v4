@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 import fcntl
 import importlib.util
 import json
+import os
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +30,55 @@ def _load(name: str, filename: str) -> Any:
 
 journal = _load("stab06f_journal", "rolling-thunder-deployment-journal.py")
 reconciler = _load("stab06f_reconcile", "rolling-thunder-reconcile.py")
+
+
+def _make_signing_key(tmp_path: Path) -> tuple[Path, Path]:
+    """Create disposable test-only Ed25519 keys; never use on production."""
+    key_dir = tmp_path / "approval-key"
+    key_dir.mkdir(mode=0o700, parents=True)
+    private = key_dir / "private.pem"
+    public = key_dir / "public.pem"
+    subprocess.run(
+        ["/usr/bin/openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private)],
+        check=True,
+        capture_output=True,
+        timeout=5,
+    )
+    subprocess.run(
+        ["/usr/bin/openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+        check=True,
+        capture_output=True,
+        timeout=5,
+    )
+    private.chmod(0o600)
+    public.chmod(0o600)
+    return private, public
+
+
+def _sign(receipt: dict[str, Any], private: Path, path: Path) -> None:
+    """Sign the exact canonical receipt bytes with a fixture-only key."""
+    canonical = reconciler._canonical_receipt(receipt)
+    message_path = path.parent / "message.bin"
+    message_path.write_bytes(canonical)
+    result = subprocess.run(
+        [
+            "/usr/bin/openssl",
+            "pkeyutl",
+            "-sign",
+            "-rawin",
+            "-inkey",
+            str(private),
+            "-in",
+            str(message_path),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=5,
+    )
+    receipt["signature_b64"] = base64.b64encode(result.stdout).decode("ascii")
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    path.chmod(0o600)
+    message_path.unlink()
 
 
 def _setup(
@@ -57,7 +109,11 @@ def _setup(
     lock_path = tmp_path / "deploy.lock"
     lock_path.write_text("", encoding="utf-8")
     lock_path.chmod(0o600)
+    private_key, public_key = _make_signing_key(tmp_path)
     receipt = {
+        "version": 1,
+        "project": "spifford3472/rolling-thunder-v4",
+        "target_host": "anvilmobile",
         "decision": "attest_existing_running_release",
         "transaction_id": record["transaction_id"],
         "approval_id": "APPROVAL-001",
@@ -65,10 +121,10 @@ def _setup(
         "evidence_sha256": reconciler._evidence_hash(report),
         "running_sha_independently_verified": True,
         "running_sha_verification_method": "operator parked independent process verification",
+        "issued_utc": datetime.now(UTC).isoformat(),
         "expires_utc": (datetime.now(UTC) + timedelta(minutes=3)).isoformat(),
     }
-    approval_path.write_text(json.dumps(receipt), encoding="utf-8")
-    approval_path.chmod(0o600)
+    _sign(receipt, private_key, approval_path)
     real_load = reconciler._load
 
     def fake_loader(filename: str, name: str) -> Any:
@@ -83,6 +139,8 @@ def _setup(
         "lock": lock_path,
         "app": tmp_path / "app",
         "db": tmp_path / "station.db",
+        "public_key": public_key,
+        "private_key": private_key,
     }
 
 
@@ -94,6 +152,8 @@ def _attempt(paths: dict[str, Path]) -> dict[str, str]:
         lock_path=paths["lock"],
         approval_path=paths["approval"],
         require_root=False,
+        approval_public_key=paths["public_key"],
+        trusted_approval_key_uid=os.geteuid(),
     )
 
 
@@ -187,3 +247,61 @@ def test_reconciliation_rejects_contact_row_replacement_even_at_same_count(
     with pytest.raises(ValueError, match="original QSO rows"):
         _attempt(paths)
     assert journal.read(paths["journal"])["phase"] == "prepared"
+
+
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "unsigned",
+        "alter_expected_sha",
+        "wrong_host",
+        "wrong_project",
+        "wrong_operation",
+        "forged_signing_key",
+        "future_issued",
+        "excessive_lifetime",
+        "public_key_symlink",
+        "public_key_group_write",
+    ],
+)
+def test_cryptographic_approval_boundary_rejects_unsafe_receipts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, attack: str
+) -> None:
+    """Neither tampering nor an untrusted signing authority may clear a journal."""
+    _report, paths = _setup(tmp_path, monkeypatch)
+    receipt = json.loads(paths["approval"].read_text(encoding="utf-8"))
+    if attack == "unsigned":
+        receipt.pop("signature_b64")
+    elif attack == "alter_expected_sha":
+        receipt["expected_sha"] = OLD
+    elif attack in ("wrong_host", "wrong_project", "wrong_operation"):
+        field = {
+            "wrong_host": "target_host",
+            "wrong_project": "project",
+            "wrong_operation": "decision",
+        }[attack]
+        receipt[field] = "different-scope"
+        _sign(receipt, paths["private_key"], paths["approval"])
+    elif attack == "forged_signing_key":
+        other_private, _ = _make_signing_key(tmp_path / "attacker")
+        _sign(receipt, other_private, paths["approval"])
+    elif attack == "future_issued":
+        receipt["issued_utc"] = (datetime.now(UTC) + timedelta(minutes=2)).isoformat()
+        receipt["expires_utc"] = (datetime.now(UTC) + timedelta(minutes=4)).isoformat()
+        _sign(receipt, paths["private_key"], paths["approval"])
+    elif attack == "excessive_lifetime":
+        receipt["expires_utc"] = (datetime.now(UTC) + timedelta(hours=3)).isoformat()
+        _sign(receipt, paths["private_key"], paths["approval"])
+    elif attack == "public_key_symlink":
+        original = paths["public_key"]
+        duplicate = original.with_suffix(".trusted")
+        original.rename(duplicate)
+        original.symlink_to(duplicate)
+    elif attack == "public_key_group_write":
+        paths["public_key"].chmod(0o660)
+    if attack in ("unsigned", "alter_expected_sha"):
+        paths["approval"].write_text(json.dumps(receipt), encoding="utf-8")
+    before = paths["journal"].read_bytes()
+    with pytest.raises((ValueError, OSError)):
+        _attempt(paths)
+    assert paths["journal"].read_bytes() == before

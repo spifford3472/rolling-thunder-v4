@@ -205,3 +205,7 @@ not proof of health.
   source/installed evidence boundaries; prepared this nonexecuted release plan.
   Undo by abandoning this scratch integration branch. No host rollback exists
   because no host or service change was made.
+
+## STAB-07B security review addendum (2026-11-14)
+
+Offline candidate validation now requires Ed25519-signed recovery approval receipts, a root-controlled verification public key, strict project/host/operation scoping, and bounded validity. The signer service, trusted verification key, and independent actual running-code SHA proof are **not** installed or independently accepted. A noninstalled read-only root-wrapper/drop-in evidence script exists with redaction, but no privileged file read has been executed. Physical FT8 PTT release remains an explicit NO GO because the current UI sets `radio_confirmed_receive=True` without independent receive evidence. See `stab07-security-acceptance.md`.
