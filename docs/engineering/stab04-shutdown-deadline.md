@@ -1,6 +1,6 @@
 # STAB-04 — shutdown deadline and safety critical-path evidence
 
-Status: **UI-priority correction proposed; broader safety gate unresolved**. This document is
+Status: **STAB-04B concurrency guard candidate; physical safety gate unresolved**. This document is
 a current-code analysis after STAB-03; it does not authorize a deployment, RF
 test, change in systemd stop timeout, or additional CAT command path.
 
@@ -35,12 +35,45 @@ test, change in systemd stop timeout, or additional CAT command path.
 | Runtime unrelated worker blocks after radio release | `tests/test_stab02_shutdown_failure_modes.py` | Candidate correction: radio disconnect is reached first; worker can still stall completion |
 | CAT lock holder delays PTT release | STAB-02 CAT lock test | Characterization: no unauthorized competing TX0 path |
 | Startup incomplete, connected radio | STAB-03 merged tests | Corrected in existing adapter; does not address blocked callbacks |
+| Transmit verification overlaps shutdown | `tests/test_ft8_hardware_transmit.py` | Late `PTT.key()` rejected after executor close; pre-key/close serialized |
+| Active PTT key overlaps executor close | Same module | Existing executor lock serializes final key and shutdown release |
+| Controller input during shutdown | `tests/test_control_dispatcher.py` | Queued events rejected before interceptor and command execution |
+| Duplicate concurrent close | `tests/test_stab04_shutdown_deadline_contract.py` | One close worker claimed under a lock |
+| FT8 release raises | Same module | Error retained; radio adapter disconnect still attempted, not falsely declared RF safe |
+| CAT `TX0;` overlaps disconnect | `tests/test_stab02_shutdown_failure_modes.py` | Existing FT-891 CAT lock serializes release and disconnect; no second CAT writer |
 | 20-second hard real-time guarantee | No such guarantee exists in current implementation | **Not accepted** |
 
 The tests use controlled events and bounded joins, **not** a real twenty-second
 sleep or a physical radio. The prior strict xfail is replaced with a normal regression for **UI-level
 ordering only**. This is not a passing runtime-internal or physical safety
 acceptance.
+
+## STAB-04B concurrency changes
+
+- `BoundedFT8HardwareTransmitExecutor` checks the existing closed flag
+  **again at the final key boundary**, under the same executor lock as
+  `close()`. A transmit request paused during radio verification can no
+  longer issue a late new PTT key after executor shutdown. A key already
+  underway finishes its serialized operation before executor close can
+  release PTT. This uses only the existing radio/CAT owner.
+- The dashboard's existing shutdown event is claimed once under a lock,
+  preventing two overlapping calls from starting duplicate close workers.
+  Existing `OperatorCommandController.mutation_blocked` also blocks
+  commands as soon as this event is set.
+- `ControlDispatcher` now takes an optional shutdown gate that rejects and
+  drains pending physical events before any interceptor is called. The
+  dashboard wires this to the existing close event; it also blocks the F12
+  Tron shortcut once closing starts. This avoids relying solely on command
+  mutation inhibition for event interceptors.
+- Failure and lock-contended tests assert only software ordering; neither a
+  successful CAT `TX0;` write nor a stopped worker independently verifies
+  the radio has physically returned to receive.
+
+**Residual risk:** already active transmit audio, controller interrupts
+already dispatched before the close event, uncooperative CAT I/O and FT8 QSO
+worker termination need full operational acceptance. A hung CAT lock or
+transport remains a STAB-05B stop condition. The shutdown no-go remains in
+force.
 
 ## Gate and smallest candidate correction
 
@@ -67,7 +100,7 @@ acceptance.
    requires separate explicit owner approval.
 
 **Stop condition:** Do not market this as 'bounded shutdown' or deploy while
-control-input inhibition and concurrent runtime-worker access remain unverified,
+independent installed input-inhibition and runtime-worker scheduling remain unverified,
 FT8/radio-owner cleanup itself can hang, or STAB-05's CAT-unavailable uncertainty
 remains. Peripheral worker stalls no longer delay *entry* to the original radio
 release path under this candidate; this is NOT a hard real-time guarantee. The UI-runtime-first candidate
@@ -90,3 +123,8 @@ before unrelated network/GPS persistence workers. The original STAB-02 blocked
 runtime worker characterization was updated to assert the new ordering. No
 second radio path or supervisor was introduced; concurrent-input and parked
 hardware acceptance remain mandatory.
+
+2026-11-14: STAB-04B adds atomic close-worker claim, early physical-event
+rejection, and executor-key versus close serialization, with mocked race tests.
+No host or RF changes; verify full CI and operator-guided parked acceptance
+before approval to merge or deploy.
