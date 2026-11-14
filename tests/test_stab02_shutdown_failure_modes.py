@@ -429,3 +429,54 @@ def test_prestart_stop_does_not_disconnect_radio_that_was_never_connected(
 
     monkeypatch.setattr(runtime.radio, "disconnect", unexpected_disconnect)
     assert runtime.stop().connection_state is RadioConnectionState.DISCONNECTED
+
+
+
+def test_disconnect_waits_for_inflight_ptt_release_without_duplicate_cat_writer() -> None:
+    """FT-891 CAT release and disconnect retain one serialized transport."""
+    transport = BlockingReleaseTransport()
+    radio = Ft891Radio(transport)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+    ptt.key()
+    completed_release = Event()
+    completed_disconnect = Event()
+    failures: list[Exception] = []
+
+    def release_ptt() -> None:
+        try:
+            ptt.close()
+        except Exception as error:
+            failures.append(error)
+        finally:
+            completed_release.set()
+
+    def disconnect() -> None:
+        try:
+            radio.disconnect()
+        except Exception as error:
+            failures.append(error)
+        finally:
+            completed_disconnect.set()
+
+    release_worker = Thread(target=release_ptt, daemon=True)
+    disconnect_worker = Thread(target=disconnect, daemon=True)
+    release_worker.start()
+    try:
+        assert transport.release_entered.wait(timeout=1.0)
+        disconnect_worker.start()
+        assert not completed_disconnect.wait(timeout=0.05)
+        assert transport.opened
+        assert transport.commands == [b"TX1;", b"TX0;"]
+    finally:
+        transport.allow_release.set()
+        release_worker.join(timeout=3.0)
+        if disconnect_worker.ident is not None:
+            disconnect_worker.join(timeout=3.0)
+
+    assert completed_release.is_set() and completed_disconnect.is_set()
+    assert not release_worker.is_alive() and not disconnect_worker.is_alive()
+    assert failures == []
+    assert transport.commands == [b"TX1;", b"TX0;"]
+    assert not transport.opened
+    assert radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
