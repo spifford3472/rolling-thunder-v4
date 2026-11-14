@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+
+APP_DIR="/home/geoff/projects/rolling-thunder-v4"
+VENV_DIR="${APP_DIR}/.venv"
+DB_PATH="${APP_DIR}/config/data/rolling-thunder.db"
+BACKUP_DIR="/var/backups/rolling-thunder-deploy"
+SERVICE="rolling-thunder.service"
+DEPLOY_USER="geoff"
+
+log() {
+    printf '%s rolling-thunder-deploy: %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+fail() {
+    log "ERROR: $*"
+    exit 1
+}
+
+run_as_geoff() {
+    sudo -u "$DEPLOY_USER" \
+        env HOME="/home/geoff" \
+        "$@"
+}
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    fail "must run as root"
+fi
+
+if [[ "$#" -ne 1 ]]; then
+    fail "usage: rolling-thunder-deploy <40-character-git-sha>"
+fi
+
+TARGET_SHA="$1"
+
+if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    fail "target must be an exact 40-character lowercase Git SHA"
+fi
+
+# Transaction lock must cover every mutable step (including fetch), rollback,
+# and final verification. /run is root-owned and not writable by ordinary users.
+# This candidate must not replace the installed wrapper before parked approval.
+LOCK_PATH=/run/rolling-thunder-deploy.lock
+[[ ! -L "$LOCK_PATH" ]] || fail "symlink deployment lock refused"
+if [[ -e "$LOCK_PATH" ]]; then
+    [[ -f "$LOCK_PATH" ]] || fail "deployment lock is not a regular file"
+    [[ "$(/usr/bin/stat -c %u "$LOCK_PATH")" == 0 ]] || fail "deployment lock is not root-owned"
+    [[ "$(/usr/bin/stat -c %a "$LOCK_PATH")" == 600 ]] || fail "deployment lock permissions are not private"
+fi
+umask 077
+exec 9>>"$LOCK_PATH" || fail "cannot open deployment lock"
+[[ ! -L "$LOCK_PATH" && "$LOCK_PATH" -ef /proc/self/fd/9 ]] \
+    || fail "deployment lock identity mismatch"
+if ! /usr/bin/flock -n 9; then
+    fail "deployment already in progress"
+fi
+log "exclusive deployment transaction lock acquired"
+
+[[ -d "${APP_DIR}/.git" ]] || fail "production Git checkout not found"
+[[ -x "${VENV_DIR}/bin/python" ]] || fail "production Python venv not found"
+[[ -x "${VENV_DIR}/bin/pip" ]] || fail "production pip not found"
+[[ -f "$DB_PATH" ]] || fail "production database not found: $DB_PATH"
+[[ -d "$BACKUP_DIR" && -w "$BACKUP_DIR" ]] || fail "backup directory missing or unwritable"
+
+STATUS="$(run_as_geoff git -C "$APP_DIR" status --porcelain)" \
+    || fail "could not inspect production worktree"
+
+if [[ -n "$STATUS" ]]; then
+    fail "production worktree is not clean"
+fi
+
+PREVIOUS_SHA="$(run_as_geoff git -C "$APP_DIR" rev-parse HEAD)" \
+    || fail "could not determine current production SHA"
+
+log "current production SHA: $PREVIOUS_SHA"
+log "requested target SHA:   $TARGET_SHA"
+
+log "refreshing GitHub references"
+run_as_geoff env GIT_TERMINAL_PROMPT=0 \
+    git -C "$APP_DIR" fetch --prune origin \
+    || fail "GitHub fetch failed"
+
+run_as_geoff git -C "$APP_DIR" cat-file -e "${TARGET_SHA}^{commit}" \
+    || fail "target SHA is not a valid fetched commit"
+
+REMOTE_CONTAINS_RAW="$(
+    run_as_geoff git -C "$APP_DIR" branch -r --contains "$TARGET_SHA"
+)" || fail "could not verify remote containment"
+
+REMOTE_CONTAINS="$(
+    printf '%s\n' "$REMOTE_CONTAINS_RAW" | sed 's/^[[:space:]]*//'
+)"
+
+if [[ -z "$REMOTE_CONTAINS" ]]; then
+    fail "target SHA is not contained in any pushed origin branch"
+fi
+
+log "target exists on:"
+printf '%s\n' "$REMOTE_CONTAINS"
+
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+BACKUP_PATH="${BACKUP_DIR}/rolling-thunder-${TIMESTAMP}-${PREVIOUS_SHA}.db"
+
+rollback() {
+    log "ROLLBACK: preserving current data and restoring previous code $PREVIOUS_SHA"
+
+    if ! systemctl stop "$SERVICE"; then
+        log "ROLLBACK ERROR: could not stop service; database and code left untouched"
+        return 1
+    fi
+
+    /usr/bin/python3 - "$DB_PATH" "$BACKUP_PATH" <<'PY'
+from pathlib import Path
+import sqlite3
+import sys
+
+def signature(path):
+    with sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True) as db:
+        db.execute("PRAGMA query_only=ON")
+        db.execute("BEGIN")
+        if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise ValueError("integrity")
+        if any(db.execute("PRAGMA foreign_key_check")):
+            raise ValueError("foreign_keys")
+        schema = db.execute(
+            "SELECT type, name, tbl_name, sql FROM sqlite_master "
+            "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+        ).fetchall()
+        metadata = db.execute("SELECT * FROM schema_metadata ORDER BY 1").fetchall()
+        return schema, metadata, db.execute("PRAGMA user_version").fetchone()
+
+try:
+    if signature(sys.argv[1]) != signature(sys.argv[2]):
+        raise ValueError("schema_changed")
+except Exception:
+    print("ROLLBACK BLOCKED: schema/integrity check failed; current data preserved, service stopped.", file=sys.stderr)
+    raise SystemExit(1)
+print("rollback_schema_compatible=yes; current_database_preserved=yes")
+PY
+    if [[ "$?" -ne 0 ]]; then
+        log "ROLLBACK ERROR: retain current database and backup for reviewed recovery"
+        return 1
+    fi
+    DB_RC=0
+
+    run_as_geoff git -C "$APP_DIR" checkout --detach --force "$PREVIOUS_SHA"
+    GIT_RC=$?
+
+    if [[ "$GIT_RC" -eq 0 ]]; then
+        run_as_geoff "${VENV_DIR}/bin/pip" install --no-deps -e "$APP_DIR"
+        PIP_RC=$?
+    else
+        PIP_RC=1
+    fi
+
+    systemctl restart "$SERVICE"
+    SERVICE_RC=$?
+
+    if [[ "$GIT_RC" -eq 0 && "$DB_RC" -eq 0 && "$PIP_RC" -eq 0 && "$SERVICE_RC" -eq 0 ]]; then
+        log "ROLLBACK: previous code/package restored; current database preserved; service restarted"
+    else
+        log "ROLLBACK ERROR: manual intervention required"
+        return 1
+    fi
+}
+
+log "stopping $SERVICE"
+systemctl stop "$SERVICE" \
+    || fail "could not stop $SERVICE"
+
+log "creating SQLite deployment backup: $BACKUP_PATH"
+/usr/bin/python3 - "$DB_PATH" "$BACKUP_PATH" <<'PY'
+import sqlite3
+import sys
+
+source_path, backup_path = sys.argv[1], sys.argv[2]
+
+with sqlite3.connect(source_path) as source:
+    with sqlite3.connect(backup_path) as backup:
+        source.backup(backup)
+
+with sqlite3.connect(backup_path) as check:
+    result = check.execute("PRAGMA integrity_check").fetchone()
+
+if result != ("ok",):
+    raise SystemExit(f"backup integrity check failed: {result!r}")
+PY
+
+if [[ "$?" -ne 0 ]]; then
+    systemctl start "$SERVICE" || log "RECOVERY ERROR: failed to restart prior service after backup failure"
+    fail "database backup failed; deployment not attempted"
+fi
+
+if ! chmod 600 "$BACKUP_PATH" || ! chown root:root "$BACKUP_PATH"; then
+    systemctl start "$SERVICE" || log "RECOVERY ERROR: failed to restart prior service after backup permission failure"
+    fail "database backup permissions could not be secured; deployment not attempted"
+fi
+
+log "checking out exact target SHA"
+run_as_geoff git -C "$APP_DIR" checkout --detach --force "$TARGET_SHA"
+
+if [[ "$?" -ne 0 ]]; then
+    rollback
+    fail "target checkout failed"
+fi
+
+ACTUAL_SHA="$(run_as_geoff git -C "$APP_DIR" rev-parse HEAD)"
+
+if [[ "$ACTUAL_SHA" != "$TARGET_SHA" ]]; then
+    rollback
+    fail "post-checkout SHA verification failed"
+fi
+
+log "refreshing editable installation"
+run_as_geoff "${VENV_DIR}/bin/pip" install --no-deps -e "$APP_DIR"
+
+if [[ "$?" -ne 0 ]]; then
+    rollback
+    fail "editable package refresh failed"
+fi
+
+log "applying/validating database schema"
+run_as_geoff "${VENV_DIR}/bin/python" - "$DB_PATH" <<'PY'
+from pathlib import Path
+import sqlite3
+import sys
+
+from rolling_thunder.storage import initialize_database
+
+database = Path(sys.argv[1])
+version = initialize_database(database)
+
+with sqlite3.connect(database) as connection:
+    integrity = connection.execute("PRAGMA integrity_check").fetchone()
+    foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
+
+if integrity != ("ok",):
+    raise SystemExit(f"database integrity check failed: {integrity!r}")
+
+if foreign_keys:
+    raise SystemExit(f"database foreign key check failed: {foreign_keys!r}")
+
+print(f"schema_version={version}")
+print("integrity_check=ok")
+print("foreign_key_check=ok")
+PY
+
+if [[ "$?" -ne 0 ]]; then
+    rollback
+    fail "database migration/validation failed"
+fi
+
+log "starting $SERVICE"
+systemctl start "$SERVICE"
+
+if [[ "$?" -ne 0 ]]; then
+    rollback
+    fail "service start command failed"
+fi
+
+# The Tk event-loop marker is written only by the active dashboard process.
+# A systemd-active launcher waiting for boot uptime is not sufficient readiness.
+if ! run_as_geoff "${VENV_DIR}/bin/python" -m rolling_thunder.deployment_readiness --timeout 210; then
+    rollback || log "RECOVERY ERROR: rollback failed after dashboard readiness timeout"
+    fail "supervised dashboard did not become responsive"
+fi
+
+FINAL_SHA="$(run_as_geoff git -C "$APP_DIR" rev-parse HEAD)"
+
+if [[ "$FINAL_SHA" != "$TARGET_SHA" ]]; then
+    rollback
+    fail "final production SHA does not match requested target"
+fi
+
+log "DEPLOYMENT SUCCESS"
+log "production SHA: $FINAL_SHA"
+log "database backup: $BACKUP_PATH"
+log "service state: $(systemctl is-active "$SERVICE")"

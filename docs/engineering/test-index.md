@@ -675,3 +675,10 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - tests/test_meshcore_ohgo_ui.py also guards against OHGO widget geometry
   toggling on repeated refreshes and redundant MORE StringVar writes.
+
+### STAB-06D offline verification
+
+- tests/test_deployment_wrapper_candidate.py: shell candidate syntax and locking/readiness contract.
+- tests/test_deployment_wrapper_offline.py: mocked Git, service and SQLite failure injection.
+- tests/test_ui_deployment_readiness.py: fake Tk callback, heartbeat freshness, cgroup and singleton checks.
+- Real RF receive state and parked host acceptance are outside these tests.
