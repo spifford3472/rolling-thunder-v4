@@ -14,6 +14,7 @@ from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.domain import RadioConnectionState
 from rolling_thunder.ft891_radio import Ft891Radio
+from rolling_thunder.radio import RadioConnectionError
 from rolling_thunder.ui_main import _run_cleanup_steps
 
 
@@ -58,7 +59,7 @@ def test_blocked_cat_tx0_cannot_be_reported_as_success(
     def release_ptt() -> None:
         try:
             ptt.close()
-        except Exception as error:  # pragma: no cover - reported by assertion
+        except RadioConnectionError as error:  # pragma: no cover - reported by assertion
             errors.append(error)
         finally:
             finished.set()
