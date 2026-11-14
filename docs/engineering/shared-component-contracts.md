@@ -215,6 +215,9 @@ explicitly approved.
 
 ## Radio/transmit authority
 
+During incomplete application startup, shutdown must release an already-CONNECTED radio only through the existing radio adapter, after existing FT8 transmit/QSO cleanup. A failed adapter disconnect must remain a reported shutdown error and retryable; a radio not yet connected must not be opened just to shut it down. No parallel or implicit transmit authority is introduced.
+
+
 General UI/controller code does not have blanket transmit authority.
 
 FT8 has a deliberately bounded transmit path requiring explicit operator

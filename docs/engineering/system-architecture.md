@@ -250,6 +250,8 @@ An uncomposed independent public-broker consumer can use the existing local Unix
 
 `ApplicationRuntime.stop()` attempts each configured worker and hardware cleanup in the established order even if an earlier step raises. It retains labeled errors and raises a grouped shutdown exception after attempting radio disconnect. The dashboard's existing cleanup runner reports this failure without skipping other dashboard cleanup. The runtime marks itself stopped only after radio disconnect returns successfully. This is best-effort cleanup, **not** a guarantee of hardware PTT deassertion or bounded shutdown when a cleanup method hangs; those require separate parked hardware validation.
 
+STAB-03 partial-startup correction: when runtime startup is not complete but the existing radio adapter reports **CONNECTED**, `stop()` closes FT8 QSO/transmit resources first, then attempts radio disconnect via that same adapter. A failure is logged and propagated in the existing grouped cleanup errors; a second `stop()` can retry. An already-disconnected radio is not reopened or unnecessarily disconnected. This does not create another CAT/PTT command path, handle indefinitely blocked CAT I/O, or prove live hardware de-keying. The normal started-runtime shutdown sequence is unchanged. Offline regression coverage checks connected pre-start cleanup, failure reporting with retry, and an untouched never-connected radio; a real FT-891 release must still be verified separately during approved parked acceptance.
+
 
 ## Runtime shutdown diagnostic evidence (November 2026)
 
