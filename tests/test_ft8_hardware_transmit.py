@@ -932,13 +932,13 @@ def test_close_waits_for_inflight_key_and_releases_with_one_ptt_owner() -> None:
     def transmit() -> None:
         try:
             executor.execute_test(_hardware_request())
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - capture worker failure in test
             transmit_errors.append(error)
 
     def stop_executor() -> None:
         try:
             executor.close()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - capture worker failure in test
             close_errors.append(error)
         finally:
             close_done.set()
