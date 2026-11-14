@@ -60,6 +60,15 @@ exit 0''',
     text = text.replace("/home/geoff/projects/rolling-thunder-v4", str(app))
     text = text.replace("/var/backups/rolling-thunder-deploy", str(backup))
     text = text.replace("/run/rolling-thunder-deploy.lock", str(lock))
+    journal_dir = tmp_path / "journal"
+    journal_dir.mkdir(mode=0o700)
+    text = text.replace(
+        "/var/lib/rolling-thunder-deploy/transaction.json", str(journal_dir / "transaction.json")
+    )
+    text = text.replace(
+        "/usr/local/libexec/rolling-thunder-deployment-journal.py",
+        str(CANDIDATE.parent / "rolling-thunder-deployment-journal.py"),
+    )
     text = text.replace(
         '/usr/bin/python3 - "$DB_PATH" "$BACKUP_PATH"',
         f'{bins / "python3"} - "$DB_PATH" "$BACKUP_PATH"',
@@ -199,3 +208,54 @@ def test_failed_service_start_restores_old_code_without_replacing_database(tmp_p
     assert (tmp_path / "current-sha").read_text(encoding="utf-8").strip() == PREVIOUS
     with sqlite3.connect(tmp_path / "app" / "config" / "data" / "rolling-thunder.db") as db:
         assert db.execute("SELECT callsign FROM contacts").fetchone() == ("KI5VNB",)
+
+
+def test_unreconciled_failed_backup_blocks_followup_before_mutation(tmp_path: Path) -> None:
+    """A failed transaction must survive the wrapper exit and reject the next deploy."""
+    wrapper, _, trace, env = _sandbox(tmp_path)
+    first = subprocess.run(
+        ["bash", str(wrapper), TARGET],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+    assert first.returncode != 0
+    journal_path = tmp_path / "journal" / "transaction.json"
+    import json
+
+    assert json.loads(journal_path.read_text(encoding="utf-8"))["phase"] == "backing_up"
+    trace.unlink()
+    second = subprocess.run(
+        ["bash", str(wrapper), TARGET],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+    assert second.returncode != 0
+    assert "unreconciled or invalid deployment transaction" in second.stdout
+    observations = trace.read_text(encoding="utf-8") if trace.exists() else ""
+    assert " fetch " not in observations
+    assert " checkout " not in observations
+    assert "systemctl" not in observations
+
+
+def test_corrupted_existing_journal_refuses_before_fetch(tmp_path: Path) -> None:
+    """Corrupt evidence is never overwritten to start a new transaction."""
+    wrapper, _, trace, env = _sandbox(tmp_path)
+    marker = tmp_path / "journal" / "transaction.json"
+    marker.write_text("{not-json", encoding="utf-8")
+    result = subprocess.run(
+        ["bash", str(wrapper), TARGET],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+    assert result.returncode != 0
+    assert not trace.exists()
+    assert marker.read_text(encoding="utf-8") == "{not-json"

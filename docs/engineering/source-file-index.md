@@ -599,3 +599,8 @@ retain structured metadata instead of generating ordinary QSO notes.
 - src/rolling_thunder/ui_readiness.py: Tk-loop heartbeat only.
 - src/rolling_thunder/deployment_readiness.py: read-only service and UI readiness check.
 - deploy/rolling-thunder-deploy.candidate: nonexecutable inspected-wrapper derivative.
+
+### STAB-06E offline privileged deployment journal
+
+- `deploy/rolling-thunder-deployment-journal.py`: standalone stdlib journal tool, intended only for separately approved stable root-owned installation.
+- `deploy/rolling-thunder-deploy.candidate`: uninstalled wrapper candidate now records monotonic deployment phases and refuses unresolved transactions.

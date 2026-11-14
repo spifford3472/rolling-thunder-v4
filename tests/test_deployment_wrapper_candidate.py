@@ -55,3 +55,23 @@ def test_candidate_replaces_weak_three_second_readiness_check() -> None:
     assert "sleep 3" not in script
     assert "rolling_thunder.deployment_readiness --timeout 210" in script
     assert "supervised dashboard did not become responsive" in script
+
+
+def test_durable_journal_is_locked_and_ordered_before_fetch() -> None:
+    """Journal must be initialized before the first mutable Git operation."""
+    script = CANDIDATE.read_text(encoding="utf-8")
+    assert script.index('journal begin "$PREVIOUS_SHA"') < script.index('git -C "$APP_DIR" fetch')
+    expected = [
+        "stopping",
+        "backing_up",
+        "checkout",
+        "installing",
+        "migrating",
+        "starting",
+        "verifying",
+    ]
+    indices = [script.index(f"journal phase {phase}") for phase in expected]
+    assert indices == sorted(indices)
+    assert script.index("journal commit") < script.index('log "DEPLOYMENT SUCCESS"')
+    assert script.index("/usr/bin/flock -n 9") < script.index("journal begin")
+    assert "/usr/local/libexec/rolling-thunder-deployment-journal.py" in script

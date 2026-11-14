@@ -682,3 +682,10 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - tests/test_deployment_wrapper_offline.py: mocked Git, service and SQLite failure injection.
 - tests/test_ui_deployment_readiness.py: fake Tk callback, heartbeat freshness, cgroup and singleton checks.
 - Real RF receive state and parked host acceptance are outside these tests.
+
+### STAB-06E durable transaction journal (offline)
+
+- `tests/test_deployment_transaction_journal.py` checks retained interrupted phases, corruption rejection, atomic private records and commit-only success.
+- `tests/test_deployment_wrapper_offline.py` also asserts failed/invalid journals block new mutation before fetch or systemd.
+- `tests/test_deployment_wrapper_candidate.py` checks durable phase ordering and commit-before-success reporting.
+- No live host, powered FT-891, crash reboot or data recovery acceptance is established by these tests.
