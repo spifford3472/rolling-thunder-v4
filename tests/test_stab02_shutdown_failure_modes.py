@@ -26,6 +26,7 @@ class BlockingReleaseTransport:
         self.release_entered = Event()
         self.allow_release = Event()
         self.commands: list[bytes] = []
+        self.fail_release = False
 
     def open(self) -> None:
         self.opened = True
@@ -42,6 +43,8 @@ class BlockingReleaseTransport:
             self.release_entered.set()
             # The test always releases the fake to avoid leaking a test thread.
             assert self.allow_release.wait(timeout=3.0)
+            if self.fail_release:
+                raise RadioConnectionError("simulated unavailable CAT TX0")
 
 
 def test_blocked_cat_tx0_cannot_be_reported_as_success(
@@ -139,3 +142,102 @@ def test_partial_startup_cleanup_disconnects_connected_radio() -> None:
     # Characterizes the currently missing cleanup, without calling start().
     runtime.stop()
     assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
+
+
+
+def test_failed_cat_tx0_during_disconnect_keeps_ptt_uncertain(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed radio disconnect must not claim the radio was safely released."""
+    transport = BlockingReleaseTransport()
+    transport.allow_release.set()
+    radio = Ft891Radio(transport)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+    ptt.key()
+    transport.fail_release = True
+
+    with caplog.at_level("INFO", logger="rolling_thunder.ft891_radio"):
+        with pytest.raises(RadioConnectionError, match="unavailable CAT TX0"):
+            radio.disconnect()
+        assert "result=error" in caplog.text
+        assert "result=ok" not in caplog.text
+
+        # A failed release keeps the transport open and permits an explicit retry.
+        assert transport.opened
+        transport.fail_release = False
+        radio.disconnect()
+
+    assert transport.commands == [b"TX1;", b"TX0;", b"TX0;"]
+    assert not transport.opened
+    assert "result=ok" in caplog.text
+
+
+def test_held_cat_operation_lock_defers_release_without_parallel_cat_commands() -> None:
+    """Characterize a lock holder that has not yielded: no competing TX0 path."""
+    transport = BlockingReleaseTransport()
+    transport.allow_release.set()
+    radio = Ft891Radio(transport)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+    ptt.key()
+
+    lock_held = Event()
+    release_lock = Event()
+    release_done = Event()
+    ptt_errors: list[RadioConnectionError] = []
+
+    def hold_unrelated_cat_lock() -> None:
+        # Test-only simulated stuck operation; no real CAT or timer dependency.
+        with radio._operation_lock:
+            lock_held.set()
+            assert release_lock.wait(timeout=3.0)
+
+    def close_ptt() -> None:
+        try:
+            ptt.close()
+        except RadioConnectionError as error:
+            ptt_errors.append(error)
+        finally:
+            release_done.set()
+
+    holder = Thread(target=hold_unrelated_cat_lock, daemon=True)
+    closer = Thread(target=close_ptt, daemon=True)
+    holder.start()
+    try:
+        assert lock_held.wait(timeout=1.0)
+        closer.start()
+        assert not release_done.wait(timeout=0.05)
+        assert transport.commands == [b"TX1;"]
+    finally:
+        release_lock.set()
+        holder.join(timeout=3.0)
+        if closer.ident is not None:
+            closer.join(timeout=3.0)
+
+    assert not holder.is_alive()
+    assert not closer.is_alive()
+    assert release_done.is_set()
+    assert ptt_errors == []
+    assert transport.commands == [b"TX1;", b"TX0;"]
+
+
+def test_startup_failure_after_radio_polling_rolls_back_hardware(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed service startup after radio connect must invoke normal cleanup."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(config)
+
+    def fail_remaining_services() -> None:
+        raise RuntimeError("simulated partial service startup")
+
+    monkeypatch.setattr(runtime, "_start_remaining_services", fail_remaining_services)
+    with pytest.raises(RuntimeError, match="simulated partial service startup"):
+        runtime.start()
+
+    assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
+    assert not runtime._started
