@@ -103,6 +103,9 @@ class Ft891Radio:
         self._clock = clock
         self._operation_lock = RLock()
         self._cp6_cat_ptt_asserted = False
+        # A failed CAT write may have reached the radio. Do not authorize
+        # another key until an existing-owner TX0 write completes.
+        self._cp6_cat_ptt_uncertain = False
         self._state = RadioState(
             connection_state=RadioConnectionState.DISCONNECTED,
             updated_at=self._timestamp(),
@@ -164,6 +167,10 @@ class Ft891Radio:
     def _assert_cp6_cat_ptt(self) -> None:
         with self._operation_lock:
             self._require_connected()
+            if self._cp6_cat_ptt_uncertain:
+                raise RadioConnectionError(
+                    "FT-891 CAT PTT release is unverified; refusing new key."
+                )
             if self._cp6_cat_ptt_asserted:
                 return
             try:
@@ -172,12 +179,14 @@ class Ft891Radio:
                 # A failed TX-on write may still have reached the radio.
                 # Treat PTT as uncertain until transmit-off actually succeeds.
                 self._cp6_cat_ptt_asserted = True
+                self._cp6_cat_ptt_uncertain = True
                 try:
                     self._transport.command(encode_cat_transmit_off())
                 except RadioConnectionError:
                     pass
                 else:
                     self._cp6_cat_ptt_asserted = False
+                    self._cp6_cat_ptt_uncertain = False
                 raise
             self._cp6_cat_ptt_asserted = True
 
@@ -201,7 +210,13 @@ class Ft891Radio:
                 # cancel/release must retry rather than incorrectly no-op.
                 self._transport.command(encode_cat_transmit_off())
                 self._cp6_cat_ptt_asserted = False
+                self._cp6_cat_ptt_uncertain = False
                 result = "ok"
+            except Exception:
+                # The failed/partial write may still have reached the rig.
+                # Preserve retryable release while forbidding a future key.
+                self._cp6_cat_ptt_uncertain = True
+                raise
             finally:
                 _LOGGER.info(
                     "RT_PTT_RELEASE phase=end lock_wait_ms=%.1f cat_ms=%.1f result=%s",
