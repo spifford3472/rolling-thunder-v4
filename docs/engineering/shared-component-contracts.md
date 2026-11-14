@@ -232,6 +232,24 @@ A successful software `TX0;` write is not physical proof of de-keying.
 Stuck CAT I/O and pre-existing in-flight audio/worker behavior remain
 subject to supervised STAB-05/REL-01 acceptance.
 
+## STAB-05B CAT/PTT uncertainty fail-closed contract
+
+The single FT-891 adapter serializes CAT operations under its existing lock.
+An uncertain or failed CAT transmit-off write must **not** permit a subsequent
+`PTT.key()` call to silently succeed. After failed TX0, partial TX1 with
+failed TX0 compensation, or failed radio disconnect during asserted PTT, the
+adapter retains an internal *unverified release* latch. Further key requests
+raise `RadioConnectionError` without issuing a TX1. The original owner
+may explicitly retry TX0, and only successful completion of that existing
+write clears the software latch. A transport success is **not** independent
+proof that the FT-891 is physically receiving.
+
+The PySerial CAT adapter must reject nonfinite or unbounded configured
+read/write timeouts. Default read/write timeout is 1 second; contention on
+the radio lock and a driver that never returns are **not** made bounded by
+this setting. No second CAT path, automatic RF retry, or implicit release
+acceptance is granted.
+
 ## Radio/transmit authority
 
 During incomplete application startup, shutdown must release an already-CONNECTED radio only through the existing radio adapter, after existing FT8 transmit/QSO cleanup. A failed adapter disconnect must remain a reported shutdown error and retryable; a radio not yet connected must not be opened just to shut it down. No parallel or implicit transmit authority is introduced.
