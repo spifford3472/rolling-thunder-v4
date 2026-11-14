@@ -253,6 +253,17 @@ An uncomposed independent public-broker consumer can use the existing local Unix
 STAB-03 partial-startup correction: when runtime startup is not complete but the existing radio adapter reports **CONNECTED**, `stop()` closes FT8 QSO/transmit resources first, then attempts radio disconnect via that same adapter. A failure is logged and propagated in the existing grouped cleanup errors; a second `stop()` can retry. An already-disconnected radio is not reopened or unnecessarily disconnected. This does not create another CAT/PTT command path, handle indefinitely blocked CAT I/O, or prove live hardware de-keying. The normal started-runtime shutdown sequence is unchanged. Offline regression coverage checks connected pre-start cleanup, failure reporting with retry, and an untouched never-connected radio; a real FT-891 release must still be verified separately during approved parked acceptance.
 
 
+### STAB-04 UI close ordering candidate (not deployed)
+
+The reviewed STAB-04 branch calls the existing `ApplicationRuntime.stop()`
+before peripheral UI cleanup inside the **same** `rt-orderly-close` worker.
+This prevents a stuck peripheral UI callback from preventing the first runtime
+cleanup call. Existing exception aggregation and per-step logging remain.
+It does **not** bound a stalled runtime worker, CAT lock or transport, and it
+does not independently prove physical PTT release. Input/event inhibition
+during the background close worker and FT8/radio ownership ordering remain
+separate safety review gates. Do not treat this as parked acceptance.
+
 ## Runtime shutdown diagnostic evidence (November 2026)
 
 The UI's `RT_SHUTDOWN` markers measure the outer orderly-close lifecycle.
