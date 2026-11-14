@@ -890,3 +890,63 @@ def test_runtime_routes_explicit_incoming_acceptance_to_responder_start(
     assert seed.callsign == incoming.callsign
     assert seed.remote_grid == incoming.grid
     assert seed.received_report_db == expected_report
+
+
+def test_runtime_shutdown_logs_individual_steps_and_radio_release(caplog: pytest.LogCaptureFixture) -> None:
+    """Every cleanup action should be identifiable without changing shutdown order."""
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    runtime.start()
+    with caplog.at_level("WARNING", logger="rolling_thunder.application_runtime"):
+        runtime.stop()
+
+    messages = [record.message for record in caplog.records]
+    assert any("RT_RUNTIME_SHUTDOWN phase=start" in message for message in messages)
+    assert any(
+        "RT_RUNTIME_SHUTDOWN phase=step_start step='radio disconnect'" in message
+        for message in messages
+    )
+    assert any(
+        "RT_RUNTIME_SHUTDOWN phase=step_end step='radio disconnect'"
+        in message and "result=ok" in message
+        for message in messages
+    )
+    assert any(
+        "RT_RUNTIME_SHUTDOWN phase=end" in message and "errors=0" in message
+        for message in messages
+    )
+
+
+def test_runtime_shutdown_records_failure_and_continues(caplog: pytest.LogCaptureFixture) -> None:
+    """A failing optional cleanup must not prevent radio disconnect."""
+    runtime = ApplicationRuntime.from_config(
+        mock_config(),
+        scheduler=ManualScheduler(),
+        gps_scheduler=ManualScheduler(),
+    )
+    runtime.start()
+
+    class FailingCleanup:
+        def stop(self) -> None:
+            raise RuntimeError("injected cleanup failure")
+
+    runtime.pota_enrichment = FailingCleanup()  # type: ignore[assignment]
+    with (
+        caplog.at_level("WARNING", logger="rolling_thunder.application_runtime"),
+        pytest.raises(ExceptionGroup, match="Rolling Thunder shutdown errors"),
+    ):
+        runtime.stop()
+
+    messages = [record.message for record in caplog.records]
+    assert any(
+        "step='POTA enrichment'" in message and "result=error" in message
+        for message in messages
+    )
+    assert any(
+        "step='radio disconnect'" in message and "result=ok" in message
+        for message in messages
+    )
+    assert any("phase=end" in message and "errors=1" in message for message in messages)

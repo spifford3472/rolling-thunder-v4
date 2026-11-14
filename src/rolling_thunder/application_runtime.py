@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from time import monotonic
+from typing import cast
 from uuid import UUID, uuid4
 
 from rolling_thunder.application_secrets import ApplicationSecrets
@@ -1736,13 +1737,30 @@ class ApplicationRuntime:
     def stop(self) -> RadioState:
         """Attempt every cleanup action, preserving failures and radio release."""
         errors: list[Exception] = []
+        shutdown_started = monotonic()
+        shutdown_logger = logging.getLogger(__name__)
+        shutdown_logger.warning("RT_RUNTIME_SHUTDOWN phase=start", stacklevel=2)
 
         def attempt(label: str, action: Callable[[], object]) -> object | None:
+            """Record a durable start marker before invoking potentially blocking cleanup."""
+            step_started = monotonic()
+            shutdown_logger.warning(
+                "RT_RUNTIME_SHUTDOWN phase=step_start step=%r", label
+            )
             try:
-                return action()
+                result = action()
             except Exception as error:  # noqa: BLE001 - shutdown must continue
                 errors.append(RuntimeError(f"{label}: {error}"))
+                shutdown_logger.warning(
+                    "RT_RUNTIME_SHUTDOWN phase=step_end step=%r duration_ms=%.1f result=error",
+                    label, (monotonic() - step_started) * 1000,
+                )
                 return None
+            shutdown_logger.warning(
+                "RT_RUNTIME_SHUTDOWN phase=step_end step=%r duration_ms=%.1f result=ok",
+                label, (monotonic() - step_started) * 1000,
+            )
+            return result
 
         if self.ft8_browser_ranking is not None:
             attempt("FT8 browser ranking", self.ft8_browser_ranking.close)
@@ -1752,6 +1770,10 @@ class ApplicationRuntime:
                 attempt("FT8 QSO", self.ft8_qso.close)
             if self.ft8_hardware_transmit is not None:
                 attempt("FT8 transmit", self.ft8_hardware_transmit.close)
+            shutdown_logger.warning(
+                "RT_RUNTIME_SHUTDOWN phase=end duration_ms=%.1f errors=%d",
+                (monotonic() - shutdown_started) * 1000, len(errors),
+            )
             if errors:
                 raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
             return self.radio.get_state()
@@ -1814,13 +1836,14 @@ class ApplicationRuntime:
             attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
         if self.gps is not None:
             attempt("GPS", self.gps.disconnect)
-        state: RadioState | None = None
-        try:
-            state = self.radio.disconnect()
+        state = attempt("radio disconnect", self.radio.disconnect)
+        if state is not None:
             self._started = False
-        except Exception as error:  # noqa: BLE001 - report after other cleanup
-            errors.append(RuntimeError(f"radio disconnect: {error}"))
+        shutdown_logger.warning(
+            "RT_RUNTIME_SHUTDOWN phase=end duration_ms=%.1f errors=%d",
+            (monotonic() - shutdown_started) * 1000, len(errors),
+        )
         if errors:
             raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
         assert state is not None
-        return state
+        return cast(RadioState, state)
