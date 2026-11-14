@@ -116,3 +116,7 @@ runtime identity even when an approval is correctly signed.
 2026-11-14: Added only offline read-only evidence and conservative reconciliation
 NO-GO enforcement. Rollback is revert of this draft code; no installed host
 changes or runtime recovery actions occurred.
+
+## STAB-07D continuation (2026-11-14)
+
+A reproducible **source-only** archive builder and an independent signed process-start observation verifier have been built offline. Neither includes pinned Pi wheels, protected host installation, trusted launch observer, or actual imported Python bytecode proof. The inspector/reconciler must continue to fail closed. See `stab07d-protected-release-and-launch-witness.md`.

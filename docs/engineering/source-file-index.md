@@ -636,3 +636,8 @@ has been changed by this inventory correction.
 ### STAB-07C separate runtime artifact identity evidence
 
 - `deploy/rolling-thunder-runtime-identity.py` — uninstalled independent read-only protected release manifest and process path binding; deliberately cannot claim loaded Python bytes independently proven.
+
+### STAB-07D offline release provenance tools
+
+- `deploy/rolling-thunder-release-build.py` — deterministic exact-Git-tree source bundle with allowlist and source manifest; excludes secrets/dependencies, not installable.
+- `deploy/rolling-thunder-launch-witness.py` — signed launch-observation verifier bound to boot ID, PID and start ticks; does not prove loaded Python bytes.

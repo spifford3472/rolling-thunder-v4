@@ -771,3 +771,8 @@ has been changed by this inventory correction.
 
 - `tests/test_runtime_release_identity.py` — private fake release/procfs manifest, source-file inventory, path and process identity, untrusted-code refusal and explicit no-in-memory-proof semantics.
 - `tests/test_recovery_reconciliation.py` — signed approvals cannot bypass an unverified loaded Python code identity; transactions remain blocked.
+
+### STAB-07D protected release and launch provenance (offline)
+
+- `tests/test_protected_release_build.py` — deterministic exact commit source bundle, mutable worktree immunity, secret exclusion and malicious tree refusal.
+- `tests/test_launch_witness.py` — disposable Ed25519 signature verification, process identity, stale/tampered/forged evidence refusal and fail-closed loaded-byte status.

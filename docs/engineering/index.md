@@ -20,6 +20,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab07d-protected-release-and-launch-witness.md` — deterministic Git-source candidate, signed launch observation, offline tests and explicit deployment blockers.
+
 - `stab07c-running-code-identity.md` — read-only actual Pi process evidence, protected release/process binding candidate and explicit lack of in-memory Python byte proof.
 
 - `stab07-security-acceptance.md` — offline Ed25519 approval validation, privileged-file hash inspection, unverified running SHA and physical-PTT NO-GO gates.
