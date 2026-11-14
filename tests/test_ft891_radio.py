@@ -602,8 +602,9 @@ def test_h3_failed_release_cannot_authorize_second_cat_key() -> None:
     transport.command_errors[b"TX0;"] = RadioConnectionError("CAT write timeout")
     with pytest.raises(RadioConnectionError):
         ptt.release()
-    # Preserve uncertain TX state; never send another TX1 while unresolved.
-    ptt.key()
+    # Reject a new key while CAT release is uncertain: silent success is unsafe.
+    with pytest.raises(RadioConnectionError, match="release is unverified"):
+        ptt.key()
     assert transport.commands.count(b"TX1;") == 1
     del transport.command_errors[b"TX0;"]
     ptt.cancel()
