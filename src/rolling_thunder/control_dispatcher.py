@@ -94,6 +94,10 @@ class ControlDispatcher:
         unknown = 0
 
         for event in events:
+            # Recheck per event: shutdown can begin while a batch is drained.
+            if self._dispatch_blocked():
+                rejected += 1
+                continue
             if not self._gate.accept(event):
                 rejected += 1
                 continue
@@ -104,6 +108,9 @@ class ControlDispatcher:
                 continue
 
             started = self._clock() if self._action_observer is not None else 0.0
+            if self._dispatch_blocked():
+                rejected += 1
+                continue
             intercepted = (
                 None
                 if self._event_interceptor is None
