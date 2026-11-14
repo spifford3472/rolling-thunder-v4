@@ -10,6 +10,20 @@ radio recovery procedure; do not assume software shutdown or a restart
 de-keyed the radio. This candidate still requires a parked acceptance test
 and does not authorize any unattended RF operation.
 
+## CAT/PTT release safety (STAB-05B candidate — not deployed)
+
+The proposed FT-891 CAT safety correction rejects any new FT8 PTT key
+request after an unsuccessful transmit-off attempt until the existing radio
+adapter successfully retries the release command. This is an additional
+**software inhibit**, not proof that the rig is physically in receive.
+A successful CAT TX0 write alone is not physical confirmation.
+
+If the FT-891 indicates transmit unexpectedly, stop automated operation;
+independently confirm receive or safely turn off the radio, and inspect the
+failure before allowing any new transmissions. Do not override the safety
+inhibit merely because a software retry or service restart completed.
+Supervised parked/radio testing must be approved separately.
+
 ## About this guide
 
 Rolling Thunder is a mobile amateur-radio operating console built to reduce the
