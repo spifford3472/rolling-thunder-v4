@@ -604,3 +604,9 @@ retain structured metadata instead of generating ordinary QSO notes.
 
 - `deploy/rolling-thunder-deployment-journal.py`: standalone stdlib journal tool, intended only for separately approved stable root-owned installation.
 - `deploy/rolling-thunder-deploy.candidate`: uninstalled wrapper candidate now records monotonic deployment phases and refuses unresolved transactions.
+
+### STAB-06F offline recovery components
+
+- `deploy/rolling-thunder-recovery-inspect.py`: separate read-only systemd, Git, journal, SQLite and backup evidence collector.
+- `deploy/rolling-thunder-reconcile.py`: stable privileged candidate for explicit approval-bounded attestation only; no service, Git or DB mutation.
+- `deploy/rolling-thunder-deployment-journal.py`: preserves prior committed or reconciled records in a private history file before new transactions.

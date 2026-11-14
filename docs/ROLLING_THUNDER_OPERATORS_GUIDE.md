@@ -193,6 +193,10 @@ three-minute delay.
 The launcher also prevents a second dashboard process from being started for the
 same user.
 
+## Unfinished deployment recovery (future gated capability)
+
+STAB-06F is an **offline engineering candidate**, not currently installed. If a future authorized deployment reports an incomplete transaction, do not clear its journal, reinstall an old database or repeatedly restart the service. Park safely and preserve the transaction ID, exact running SHA, protected backups and database. The read-only inspector is diagnostic only; owner-approved reconciliation is a separate privileged process and does not itself restart the UI, restore data or prove physical PTT release. A previous version without the new UI heartbeat remains unverified, even if systemd reports active. Consult `docs/engineering/stab06f-recovery-inspection-reconciliation.md` after the capability has been separately reviewed and installed.
+
 ## What to expect after startup
 
 The dashboard may initially show unavailable or degraded states while hardware
