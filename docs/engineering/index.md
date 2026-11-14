@@ -20,6 +20,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab07-security-acceptance.md` — offline Ed25519 approval validation, privileged-file hash inspection, unverified running SHA and physical-PTT NO-GO gates.
+
 - `stab07-integration-and-parked-release-plan.md` — integrated STAB-06C–F review, open safety blockers, PR lineage and a gated, nonexecuted parked installation/rollback plan.
 
 - `stab06f-recovery-inspection-reconciliation.md` — uninstalled read-only recovery evidence, approval-gated attestation, security gates and operator procedure.

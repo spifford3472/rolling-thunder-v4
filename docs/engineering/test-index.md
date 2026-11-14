@@ -761,3 +761,8 @@ has been changed by this inventory correction.
 - `tests/test_shutdown_contention.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `tests/test_ui_timing.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `tests/test_usb_observer.py` — referenced in current repository; review related feature guide for ownership and behavior.
+
+### STAB-07B security and privileged evidence (offline only)
+
+- `tests/test_recovery_reconciliation.py` now verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals.
+- `tests/test_stab07_privileged_evidence.py` tests installed-wrapper snapshot identity checks and strictly redacted protected FT8 directive names with temporary files. No installed root files or RF tested.

@@ -9,12 +9,15 @@ from an ordinary development checkout or during a drive.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import fcntl
 import hashlib
 import importlib.util
 import json
 import os
 import stat
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,7 +34,92 @@ def _load(filename: str, name: str) -> Any:
     return module
 
 
-def _approval(path: Path) -> dict[str, Any]:
+# A root-private public key is provisioned separately from this repository.
+# The corresponding signing key must remain OUTSIDE the deployment host.
+APPROVAL_PUBLIC_KEY = Path("/etc/rolling-thunder/approver-ed25519.pub")
+
+
+def _check_public_key(path: Path, *, trusted_uid: int = 0) -> None:
+    """Fail closed if the trusted verification key or its parent is unsafe."""
+    parent = path.parent.lstat()
+    metadata = path.lstat()
+    if (
+        not stat.S_ISDIR(parent.st_mode)
+        or parent.st_uid != trusted_uid
+        or parent.st_mode & 0o022
+        or path.parent.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != trusted_uid
+        or metadata.st_mode & 0o022
+        or path.is_symlink()
+        or metadata.st_size > 4096
+    ):
+        raise ValueError("untrusted recovery approval verification key")
+
+
+def _canonical_receipt(receipt: dict[str, Any]) -> bytes:
+    """Canonical UTF-8 signed payload excluding only its detached signature."""
+    body = {name: value for name, value in receipt.items() if name != "signature_b64"}
+    return json.dumps(
+        body, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False
+    ).encode("utf-8")
+
+
+def _verify_signature(receipt: dict[str, Any], public_key: Path, *, trusted_uid: int = 0) -> None:
+    """Verify OpenSSL Ed25519 signature without disk-based temporary payloads.
+
+    Linux memfd signatures and message are passed as inherited descriptors.
+    Failure to verify MUST reject before any journal modification.
+    """
+    _check_public_key(public_key, trusted_uid=trusted_uid)
+    try:
+        signature = base64.b64decode(receipt["signature_b64"], validate=True)
+    except (KeyError, TypeError, ValueError, binascii.Error) as exc:
+        raise ValueError("missing or malformed approval signature") from exc
+    if len(signature) != 64:
+        raise ValueError("invalid Ed25519 approval signature length")
+    payload = _canonical_receipt(receipt)
+    if len(payload) > 4096:
+        raise ValueError("approval payload exceeds verification limit")
+    message_fd = os.memfd_create("rt-approval-message", flags=0)
+    signature_fd = os.memfd_create("rt-approval-signature", flags=0)
+    try:
+        os.write(message_fd, payload)
+        os.write(signature_fd, signature)
+        os.lseek(message_fd, 0, os.SEEK_SET)
+        os.lseek(signature_fd, 0, os.SEEK_SET)
+        try:
+            verification = subprocess.run(
+                [
+                    "/usr/bin/openssl",
+                    "pkeyutl",
+                    "-verify",
+                    "-pubin",
+                    "-inkey",
+                    str(public_key),
+                    "-rawin",
+                    "-in",
+                    f"/proc/self/fd/{message_fd}",
+                    "-sigfile",
+                    f"/proc/self/fd/{signature_fd}",
+                ],
+                pass_fds=(message_fd, signature_fd),
+                capture_output=True,
+                check=False,
+                timeout=3,
+            )
+        except (subprocess.SubprocessError, OSError) as exc:
+            raise ValueError("approval signature verifier unavailable") from exc
+        if verification.returncode != 0:
+            raise ValueError("approval signature verification failed")
+    finally:
+        os.close(message_fd)
+        os.close(signature_fd)
+
+
+def _approval(
+    path: Path, *, public_key: Path = APPROVAL_PUBLIC_KEY, trusted_uid: int = 0
+) -> dict[str, Any]:
     """Read a private, externally approved one-time receipt, without following links."""
     parent = path.parent.lstat()
     if not stat.S_ISDIR(parent.st_mode) or parent.st_uid != os.geteuid() or parent.st_mode & 0o077:
@@ -54,12 +142,27 @@ def _approval(path: Path) -> dict[str, Any]:
         os.close(fd)
     if not isinstance(receipt, dict):
         raise TypeError("approval payload invalid")
-    if receipt.get("decision") != "attest_existing_running_release":
-        raise ValueError("approval does not authorize reviewed attestation")
+    if receipt.get("version") != 1:
+        raise ValueError("unsupported recovery approval receipt version")
+    if (
+        receipt.get("project") != "spifford3472/rolling-thunder-v4"
+        or receipt.get("target_host") != "anvilmobile"
+        or receipt.get("decision") != "attest_existing_running_release"
+    ):
+        raise ValueError("approval scope does not match project, host, or operation")
+    _verify_signature(receipt, public_key, trusted_uid=trusted_uid)
     try:
         expires = datetime.fromisoformat(receipt["expires_utc"])
-        if expires.tzinfo is None or not datetime.now(UTC) < expires.astimezone(UTC):
-            raise ValueError("approval expired or missing timezone")
+        issued = datetime.fromisoformat(receipt["issued_utc"])
+        now = datetime.now(UTC)
+        if issued.tzinfo is None or expires.tzinfo is None:
+            raise ValueError("approval timestamps must include timezones")
+        issued_utc, expires_utc = issued.astimezone(UTC), expires.astimezone(UTC)
+        if not (
+            issued_utc <= now < expires_utc
+            and 0 < (expires_utc - issued_utc).total_seconds() <= 300
+        ):
+            raise ValueError("approval expired, premature, or excessively long-lived")
     except (KeyError, TypeError) as exc:
         raise ValueError("invalid approval expiration") from exc
     return receipt
@@ -81,6 +184,8 @@ def reconcile(
     approval_path: Path,
     proc: Path = Path("/proc"),
     require_root: bool = True,
+    approval_public_key: Path = APPROVAL_PUBLIC_KEY,
+    trusted_approval_key_uid: int = 0,
 ) -> dict[str, str]:
     """Only attest a preexisting, responsive, schema-compatible release.
 
@@ -136,7 +241,11 @@ def reconcile(
         sha = report.get("git_sha")
         if sha not in (record["previous_sha"], record["target_sha"]):
             raise ValueError("unexpected installed checkout SHA")
-        receipt = _approval(approval_path)
+        receipt = _approval(
+            approval_path,
+            public_key=approval_public_key,
+            trusted_uid=trusted_approval_key_uid,
+        )
         digest = _evidence_hash(report)
         if (
             receipt.get("running_sha_independently_verified") is not True
