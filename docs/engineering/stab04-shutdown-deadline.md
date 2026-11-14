@@ -1,6 +1,6 @@
 # STAB-04 — shutdown deadline and safety critical-path evidence
 
-Status: **unresolved safety gate; offline characterization only**. This document is
+Status: **UI-priority correction proposed; broader safety gate unresolved**. This document is
 a current-code analysis after STAB-03; it does not authorize a deployment, RF
 test, change in systemd stop timeout, or additional CAT command path.
 
@@ -8,10 +8,12 @@ test, change in systemd stop timeout, or additional CAT command path.
 
 - `src/rolling_thunder/ui_main.py`: the SIGTERM handler queues the normal
   Tk-triggered close worker. `close_worker()` executes `_run_cleanup_steps`
-  synchronously and in order. Physical controls, callsign audio, Tron, OHGO,
-  DMR, antenna, log panel, status, preferences and power worker all precede
-  `runtime.stop()`. Its per-step markers are truthful but cannot progress
-  after a callback stops returning.
+  synchronously and in order. The STAB-04 candidate now invokes
+  `runtime.stop()` first via `_run_orderly_shutdown`, followed by physical
+  controls, callsign audio, Tron, OHGO, DMR, antenna, log panel, status,
+  preferences and power worker. This prevents a *peripheral UI* callback
+  from starving entry to the existing runtime cleanup, but a runtime-internal
+  callback can still block indefinitely.
 - `src/rolling_thunder/application_runtime.py`: once entered, the existing
   `stop()` attempts FT8 QSO/transmit cleanup first, then multiple workers
   before radio polling, band restoration, GPS and finally radio disconnect.
@@ -28,16 +30,17 @@ test, change in systemd stop timeout, or additional CAT command path.
 
 | Scenario | Evidence | Result |
 | --- | --- | --- |
-| Peripheral UI callback never returns | `tests/test_stab04_shutdown_deadline_contract.py` | Strict xfail against desired 'runtime reached' contract |
-| Stall logging | Same module | `step_start` without `step_end` or `cleanup_end` until unblocked |
+| Peripheral UI callback never returns | `tests/test_stab04_shutdown_deadline_contract.py` | Proposed correction: runtime entered before peripheral callback, then stall is exposed truthfully |
+| Stall logging for generic sequential cleanup | Same module | `step_start` without `step_end` or `cleanup_end` until unblocked |
 | Runtime unrelated worker blocks radio release | `tests/test_stab02_shutdown_failure_modes.py` | Characterization: radio disconnect delayed until worker unblocks |
 | CAT lock holder delays PTT release | STAB-02 CAT lock test | Characterization: no unauthorized competing TX0 path |
 | Startup incomplete, connected radio | STAB-03 merged tests | Corrected in existing adapter; does not address blocked callbacks |
 | 20-second hard real-time guarantee | No such guarantee exists in current implementation | **Not accepted** |
 
 The tests use controlled events and bounded joins, **not** a real twenty-second
-sleep or a physical radio. A strict expected failure is an explicit open
-requirement, never a passing safety acceptance.
+sleep or a physical radio. The prior strict xfail is replaced with a normal regression for **UI-level
+ordering only**. This is not a passing runtime-internal or physical safety
+acceptance.
 
 ## Gate and smallest candidate correction
 
@@ -61,9 +64,11 @@ requirement, never a passing safety acceptance.
    journal and observed UI/systemd ownership. FT-891 powered-on/RF testing
    requires separate explicit owner approval.
 
-**Stop condition:** Do not merge a speculative production reorder or deploy a
-release marketed as 'bounded shutdown' while either the strict xfail above or
-STAB-05's CAT-unavailable uncertainty is outstanding. The currently merged
+**Stop condition:** Do not market this as 'bounded shutdown' or deploy while
+runtime-internal workers can still starve radio disconnect, control-input
+inhibition has not been validated during the background close worker, or
+STAB-05's CAT-unavailable uncertainty remains. The UI-runtime-first candidate
+has not independently proved FT8/PTT safety. The currently merged
 STAB-03 partial-startup fix remains useful but does not close these gaps.
 
 ## Change history / rollback
@@ -71,3 +76,8 @@ STAB-03 partial-startup fix remains useful but does not close these gaps.
 2026-11-14: Added offline failure evidence and a deliberately failing desired
 contract. No production code, host, service, or network configuration changed.
 Rollback: revert the test/document commit; there is no installed-system effect.
+
+2026-11-14: Proposed explicit runtime-first UI close ordering in the existing
+single close worker; no new CAT/PTT command writer, systemd change or timer.
+Acceptance remains blocked on the runtime-internal cleanup order and input
+inhibition/race review. Roll back with the candidate commit before deployment.
