@@ -1,8 +1,8 @@
 """STAB-02 hardware-free characterizations of shutdown failure boundaries.
 
 These tests deliberately do not operate serial devices, radios, or systemd.
-The partial-startup case is an explicit strict xfail until its safety contract
-has been resolved in a separately reviewed implementation change.
+The partial-startup case is now an ordinary regression asserting the corrected
+safety contract; no radio or systemd hardware is used.
 """
 
 from collections.abc import Callable
@@ -126,13 +126,6 @@ def test_blocked_ui_cleanup_prevents_later_radio_step_until_released() -> None:
     assert errors == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "STAB-03: runtime.stop() skips radio disconnect when _started is false, "
-        "even if the radio was independently connected during partial startup"
-    ),
-)
 def test_partial_startup_cleanup_disconnects_connected_radio() -> None:
     """Desired fail-safe contract for a pre-start hardware connection."""
     config = ApplicationConfig.model_validate(
@@ -384,3 +377,55 @@ def test_repeated_runtime_shutdown_keeps_radio_disconnected() -> None:
     assert first.connection_state is RadioConnectionState.DISCONNECTED
     assert second.connection_state is RadioConnectionState.DISCONNECTED
     assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
+
+
+
+def test_prestart_radio_disconnect_error_is_reported_and_remains_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Do not silently return a connected state after failed pre-start cleanup."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(config)
+    runtime.radio.connect()
+    original_disconnect = runtime.radio.disconnect
+    attempts = 0
+
+    def fail_disconnection() -> RadioState:
+        nonlocal attempts
+        attempts += 1
+        raise RadioConnectionError("simulated pre-start disconnect error")
+
+    monkeypatch.setattr(runtime.radio, "disconnect", fail_disconnection)
+    with pytest.raises(ExceptionGroup, match="Rolling Thunder shutdown errors") as caught:
+        runtime.stop()
+
+    assert attempts == 1
+    assert any(
+        "radio disconnect: simulated pre-start disconnect error" in str(error)
+        for error in caught.value.exceptions
+    )
+    assert runtime.radio.get_state().connection_state is RadioConnectionState.CONNECTED
+
+    monkeypatch.setattr(runtime.radio, "disconnect", original_disconnect)
+    state = runtime.stop()
+    assert state.connection_state is RadioConnectionState.DISCONNECTED
+
+
+def test_prestart_stop_does_not_disconnect_radio_that_was_never_connected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Avoid unnecessary hardware access during shutdown before a real connect."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(config)
+
+    def unexpected_disconnect() -> RadioState:
+        raise AssertionError("unused radio must not be accessed")
+
+    monkeypatch.setattr(runtime.radio, "disconnect", unexpected_disconnect)
+    assert runtime.stop().connection_state is RadioConnectionState.DISCONNECTED
