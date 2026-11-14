@@ -8,6 +8,7 @@ from concurrent.futures import Executor
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
+from typing import cast
 from time import monotonic
 from uuid import UUID, uuid4
 
@@ -1845,4 +1846,4 @@ class ApplicationRuntime:
         if errors:
             raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
         assert state is not None
-        return state
+        return cast(RadioState, state)
