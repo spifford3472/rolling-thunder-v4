@@ -42,6 +42,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 ## Application/runtime/UI
 
 - `tests/test_autostart_launcher.py`
+- `tests/test_stab02_shutdown_failure_modes.py` — STAB-02 hardware-free blocked CAT TX0, sequential UI shutdown, and strict expected-failure characterization of connected-radio cleanup before completed startup; expected failure is not safety acceptance.
 - `tests/test_dashboard_health_compatibility.py`
 - `tests/test_dashboard_state.py`
 - `tests/test_home_platform_runtime.py`
