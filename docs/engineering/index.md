@@ -8,6 +8,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `tron-voice-control.md` — Issue #374 offline Vosk worker, callsign microphone priority, physical start/stop gesture, large transient feedback popups, hardware acceptance, and FT8 terminal return.
 - `meshcore-ohgo-incidents.md` — Forge OHGO incident source, protected credential gate, retained API and combined read-only dashboard context.
+- `stab04-shutdown-deadline.md` — current shutdown critical-path blocking evidence, strict expected-failure test, and fail-closed acceptance gate.
+
 ## Engineering document set
 
 - `usb-ft8-incident-2026-11-13.md` — observed USB topology, FT8 audio failure timeline, temporary observer, validation and rollback; cause unresolved.
