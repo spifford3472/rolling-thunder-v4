@@ -136,7 +136,7 @@ def test_partial_startup_cleanup_disconnects_connected_radio() -> None:
     runtime.radio.connect()
     assert runtime.radio.get_state().connection_state is RadioConnectionState.CONNECTED
 
-    # Characterizes the currently missing cleanup, without calling start().
+    # Regression: an already-connected radio must be released even before start().
     runtime.stop()
     assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
 
