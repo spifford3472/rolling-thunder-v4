@@ -118,3 +118,7 @@ files. No production/privileged path is called in tests.
 2026-11-14: Added offline cryptographic verification boundary and protected
 metadata evidence design. Revert this branch for rollback; no installed host
 state changed. Live deployment decision: **NO GO**.
+
+## STAB-07C status (2026-11-14)
+
+Read-only AnvilMobile inspection proved the running interpreter is launched from a `geoff`-writable editable checkout; HEAD and MainPID cannot establish loaded Python bytes. An offline protected-release artifact/process binder was built and tested, but it explicitly does **not** attest in-memory modules. The recovery inspector and reconciler now fail closed until genuinely independent loaded-code proof exists; a signed receipt alone cannot bypass it. See `stab07c-running-code-identity.md`. The real service was not modified.

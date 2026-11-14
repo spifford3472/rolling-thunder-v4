@@ -766,3 +766,8 @@ has been changed by this inventory correction.
 
 - `tests/test_recovery_reconciliation.py` now verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals.
 - `tests/test_stab07_privileged_evidence.py` tests installed-wrapper snapshot identity checks and strictly redacted protected FT8 directive names with temporary files. No installed root files or RF tested.
+
+### STAB-07C running-code release identity (offline)
+
+- `tests/test_runtime_release_identity.py` — private fake release/procfs manifest, source-file inventory, path and process identity, untrusted-code refusal and explicit no-in-memory-proof semantics.
+- `tests/test_recovery_reconciliation.py` — signed approvals cannot bypass an unverified loaded Python code identity; transactions remain blocked.
