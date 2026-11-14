@@ -221,3 +221,7 @@ An offline SHA-pinned wheelhouse for 26 Pi CPython 3.13 ARM64 packages, includin
 ## STAB-07F offline stage (2026-11-14)
 
 An exact-source noneditable app wheel built reproducibly and an unprivileged Forge-only transport candidate was staged with atomic no-replace and post-stage hash verification. **No native ARM64 interpreter launch, production unit integration, privileged immutable installation or physical radio validation occurred.** Forge lacks accessible ARM64 emulation; Docker access is restricted. See `stab07f-isolated-runtime-staging.md`. Production remains NO GO.
+
+## STAB-07G isolated ARM64 execution (2026-11-14)
+
+Isolated QEMU ARM64 in a private, network-disabled Forge namespace now executes Debian Python 3.13.5, installs 26 hash-locked dependencies and the noneditable app wheel, and passes native imports and installed RECORD checks. This is an emulated Debian `deb13u5` build, **not** an exact Pi (`deb13u4`) OS image. A real Tk event-loop startup, independent loaded-byte runtime identity, protected root-owned installation, SQLite/WAL, PTT physical RX and owner authorization remain mandatory NO-GO gates. See `stab07g-isolated-arm64-execution.md`.

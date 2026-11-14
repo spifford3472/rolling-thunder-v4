@@ -784,3 +784,9 @@ has been changed by this inventory correction.
 ### STAB-07F private offline release staging tests
 
 - `tests/test_protected_candidate_stage.py` — deterministic staged artifact checks, no-clobber semantics, tamper/permission refusal, fake approval/removed files, and no executed ARM64 runtime.
+
+### STAB-07G isolated native ARM64 execution and record audit
+
+- `tests/test_arm64_sandbox.py` — ensure no network, host/radio mounts or arbitrary execution; reject unsafe emulator and fake production approvals.
+- `tests/test_arm64_record_audit.py` — exact wheel-installed file inventories and SHA256 RECORD validation, reject tamper, path escape, unexpected/missing packages and symlinks.
+- Independent Forge hardware-free QEMU smoke: all 18 native/app imports passed, ARM64 pip check clean, 2,213 installed RECORD hashes checked; not part of x86_64 CI.

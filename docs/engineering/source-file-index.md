@@ -651,3 +651,10 @@ has been changed by this inventory correction.
 ### STAB-07F private offline release staging
 
 - `deploy/rolling-thunder-stage-candidate.py` — Forge-only user-private, hash-verified, atomic no-replace offline transport/app-wheel staging and independent post-stage integrity check. No installed venv, no production restart.
+
+### STAB-07G isolated ARM64 test tools
+
+- `deploy/rolling-thunder-arm64-sandbox.py` — fixed-action, read-only QEMU/bwrap import and pip integrity tests with private network/dev namespace; no deployment authority.
+- `deploy/rolling-thunder-arm64-native-smoke.py` — import-only Python ARM64 native/UI module smoke with I/O startup guards; never starts UI.
+- `deploy/rolling-thunder-arm64-record-audit.py` — offline installed `RECORD` hash/metadata validation for 26 wheels and noneditable application.
+- `deploy/locks/stab07g-debian-arm64-sysroot.json` — 55 exact Debian test package archive hashes and static QEMU digest; GPG Release signature not independently verified.
