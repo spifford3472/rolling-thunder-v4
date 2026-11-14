@@ -46,6 +46,9 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_autostart_launcher.py`
 - `tests/test_stab04_shutdown_deadline_contract.py` — STAB-04/04B runtime-first UI shutdown, atomic single close worker, failed FT8 release reporting, early radio cleanup, truthful blocked-step logs and failure isolation; **not** physical RF safety acceptance.
 - `tests/test_stab02_shutdown_failure_modes.py` — STAB-02 hardware-free blocked CAT TX0, held CAT lock, failed release/retry and concurrent TX0/disconnect serialization, sequential UI/runtime shutdown, GPS cancellation with a blocked in-flight read, repeat shutdown, rollback after interrupted service startup, and STAB-03 regression for connected-radio cleanup before completed startup, retry after injected disconnect failure, and no unnecessary adapter access when never connected; no live RF acceptance implied.
+
+- `tests/test_autostart_launcher.py` — STAB-06 inherited flock survives `exec`, refuses concurrent UI, and permits launch after owner exits.
+- `tests/test_stab02_shutdown_failure_modes.py` — STAB-02 hardware-free blocked CAT TX0, held CAT lock, failed release/retry during disconnect, sequential UI/runtime shutdown, GPS cancellation with a blocked in-flight read, repeat shutdown, rollback after interrupted service startup, and STAB-03 regression for connected-radio cleanup before completed startup, retry after injected disconnect failure, and no unnecessary adapter access when never connected; no live RF acceptance implied.
 - `tests/test_dashboard_health_compatibility.py`
 - `tests/test_dashboard_state.py`
 - `tests/test_home_platform_runtime.py`
@@ -697,3 +700,64 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_recovery_reconciliation.py`: root-only approval receipt, exact evidence binding, expiry, serialization and replay denial.
 - `tests/test_recovery_failure_injection.py`: SIGKILL, failed file/directory fsync, failed rename and corrupt journal refusal.
 - `tests/test_deployment_transaction_journal.py`: archive retention, collision refusal and terminal reconciled transaction.
+
+### STAB-06C deployment transaction guard (uninstalled candidate)
+
+- `tests/test_deployment_transaction_lock.py` verifies the standalone
+  `deploy/rolling-thunder-deploy-lock` kernel lock lifetime through `exec`,
+  concurrent refusal before mutation, lock release, symlink/missing-parent
+  refusal and child exit status. This does not validate the installed root-owned
+  wrapper, application readiness, rollback, backup integrity, systemd recovery,
+  or physical radio/PTT state. See
+  `stab06c-deployment-transaction-lock.md` for integration gates.
+
+### STAB-07 Test-file inventory gap closure (exact paths, 2026-11-14)
+
+The entries below close the exact-file inventory gap observed against the
+integration candidate. They are discoverability references only; feature
+ownership, API contracts and actual deployment composition remain subject
+to independent DOC-03 / PR #414 source review. No code or test behavior
+has been changed by this inventory correction.
+
+- `tests/test_callsign_clock_background.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_county_persistence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_c6_service_units.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_contact_snapshots.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_ft8_periods.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_autoqueue.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_bridge_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_coverage_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_event_bridge.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_evidence_api.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_evidence_server.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_evidence_snapshot.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_normalized_history.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_path_evidence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_python_access_script.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_voacap_noaa_refresh_main.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_voacap_response_identity.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft891_ptt_release_timing.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_band_presentation.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_browser_outbound_evidence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_browser_ranking.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_country_allocations.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_cp31_trial_report.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_cp3_power_sequence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_dx_ranking.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_p1_pi_cutover_script.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_period_correlation.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_period_delivery_integration.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_period_repository.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_power_advisor.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_propagation_inputs.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_psk_evidence_client.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_psk_evidence_http_acceptance.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_ptt_alarm.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_ranking_cache.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_target_activity.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_local_jurisdiction.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_offline_county.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_offline_county_store.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_shutdown_contention.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ui_timing.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_usb_observer.py` — referenced in current repository; review related feature guide for ownership and behavior.

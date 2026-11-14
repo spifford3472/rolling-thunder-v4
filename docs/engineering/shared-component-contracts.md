@@ -103,9 +103,7 @@ are independently scheduled and disabled by default. VOACAP reliability is not Q
 probability, dB-Hz is not decoder dB, missing is not zero, and retrospective results
 are not pre-choice evidence.
 
-The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
-
-The disabled Forge propagation inbox accepts the complete frozen `Contact` under
+The disabled-by-default Forge propagation inbox accepts the complete frozen `Contact` under
 that same UUID without provider work. Exact replay is idempotent; changed frozen
 grids, coordinates, UTC start, frequency/mode, or power under the same UUID is a
 conflict. Provider correlation runs only from a separately scheduled bounded worker,
