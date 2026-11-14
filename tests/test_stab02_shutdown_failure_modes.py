@@ -446,7 +446,7 @@ def test_disconnect_waits_for_inflight_ptt_release_without_duplicate_cat_writer(
     def release_ptt() -> None:
         try:
             ptt.close()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - capture worker failure in test
             failures.append(error)
         finally:
             completed_release.set()
@@ -454,7 +454,7 @@ def test_disconnect_waits_for_inflight_ptt_release_without_duplicate_cat_writer(
     def disconnect() -> None:
         try:
             radio.disconnect()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - capture worker failure in test
             failures.append(error)
         finally:
             completed_disconnect.set()
