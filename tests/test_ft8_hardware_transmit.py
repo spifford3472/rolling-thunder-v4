@@ -870,3 +870,97 @@ def test_cp3_power_readback_mismatch_inhibits_next_ptt() -> None:
     with pytest.raises(RuntimeError, match="readback mismatch"):
         executor.execute_qso(request)
     assert radio.ptt.events.count("key") == 1
+
+
+def test_shutdown_during_ft8_verification_rejects_late_ptt_key() -> None:
+    """Revoked FT8 authority cannot key even after stale verification returns."""
+    entered = threading.Event()
+    continue_verify = threading.Event()
+
+    class PausedRadio(_FakeRadio):
+        def refresh_state(self) -> RadioState:
+            entered.set()
+            assert continue_verify.wait(timeout=3.0)
+            return super().refresh_state()
+
+    radio = PausedRadio(_connected_state())
+    audio = _FakeAudioOutput()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, audio)
+    errors: list[Exception] = []
+
+    def start_transmit() -> None:
+        try:
+            executor.execute_test(_hardware_request())
+        except RuntimeError as error:
+            errors.append(error)
+
+    worker = threading.Thread(target=start_transmit, daemon=True)
+    worker.start()
+    try:
+        assert entered.wait(timeout=1.0)
+        executor.close()
+    finally:
+        continue_verify.set()
+        worker.join(timeout=3.0)
+
+    assert not worker.is_alive()
+    assert len(errors) == 1
+    assert "executor is closed" in str(errors[0])
+    assert "key" not in radio.ptt.events
+    assert radio.ptt.events.count("close") == 1
+    assert audio.waveforms == []
+
+
+def test_close_waits_for_inflight_key_and_releases_with_one_ptt_owner() -> None:
+    """Close and key serialize through executor and radio-owned locks."""
+    key_entered = threading.Event()
+    release_key = threading.Event()
+    close_done = threading.Event()
+    transmit_errors: list[Exception] = []
+    close_errors: list[Exception] = []
+
+    class PausedPtt(_FakePtt):
+        def key(self) -> None:
+            key_entered.set()
+            assert release_key.wait(timeout=3.0)
+            super().key()
+
+    radio = _FakeRadio(_connected_state())
+    radio.ptt = PausedPtt()
+    executor = BoundedFT8HardwareTransmitExecutor(radio, _FakeAudioOutput())
+
+    def transmit() -> None:
+        try:
+            executor.execute_test(_hardware_request())
+        except Exception as error:
+            transmit_errors.append(error)
+
+    def stop_executor() -> None:
+        try:
+            executor.close()
+        except Exception as error:
+            close_errors.append(error)
+        finally:
+            close_done.set()
+
+    key_worker = threading.Thread(target=transmit, daemon=True)
+    close_worker = threading.Thread(target=stop_executor, daemon=True)
+    key_worker.start()
+    try:
+        assert key_entered.wait(timeout=1.0)
+        close_worker.start()
+        assert not close_done.wait(timeout=0.05)
+    finally:
+        release_key.set()
+        key_worker.join(timeout=3.0)
+        if close_worker.ident is not None:
+            close_worker.join(timeout=3.0)
+
+    assert not key_worker.is_alive()
+    assert not close_worker.is_alive()
+    assert close_done.is_set()
+    assert close_errors == []
+    assert transmit_errors == []
+    assert radio.ptt.events.count("key") == 1
+    assert radio.ptt.events.count("close") == 1
+    assert radio.ptt.events.index("key") < radio.ptt.events.index("close")
