@@ -1,0 +1,151 @@
+{
+  "packages": {
+    "annotated-types": {
+      "file": "annotated_types-0.8.0-py3-none-any.whl",
+      "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0",
+      "version": "0.8.0"
+    },
+    "bleak": {
+      "file": "bleak-3.0.2-py3-none-any.whl",
+      "sha256": "39092feb9e83f1df5ad2f88e837723c7211c982ce9e9cda6235104bc2ebe0d0d",
+      "version": "3.0.2"
+    },
+    "certifi": {
+      "file": "certifi-2026.7.22-py3-none-any.whl",
+      "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+      "version": "2026.7.22"
+    },
+    "cffi": {
+      "file": "cffi-2.1.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+      "sha256": "ff067a8d8d880e7809e4ac88eb009bb848870115317b306666502ccad30b147f",
+      "version": "2.1.0"
+    },
+    "charset-normalizer": {
+      "file": "charset_normalizer-3.4.9-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "sha256": "21e764fd1e70b6a3e205a0e46f3051701f98a8cb3fad66eeb80e48bb502f8698",
+      "version": "3.4.9"
+    },
+    "dbus-fast": {
+      "file": "dbus_fast-5.0.22-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "sha256": "de10ff3b3cb2acb1c09fe17158a470519000d37bb5ee5fd69c4075e81ce8dcf5",
+      "version": "5.0.22"
+    },
+    "idna": {
+      "file": "idna-3.18-py3-none-any.whl",
+      "sha256": "7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2",
+      "version": "3.18"
+    },
+    "librt": {
+      "file": "librt-0.13.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "sha256": "32c26893cd085c1efe83219e78d866da23fb20a066101b8f68210004361d224c",
+      "version": "0.13.0"
+    },
+    "pillow": {
+      "file": "pillow-12.3.0-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+      "sha256": "f7401aebd7f581d7f83a439d87d474999317ee099218e5ad25d125290990ba65",
+      "version": "12.3.0"
+    },
+    "pycayennelpp": {
+      "file": "pycayennelpp-2.4.0-py3-none-any.whl",
+      "sha256": "a3e69ea4da9e2971a44d1e275d5555617b2345eea752325f28c0356f64901d62",
+      "version": "2.4.0"
+    },
+    "pycountry": {
+      "file": "pycountry-26.2.16-py3-none-any.whl",
+      "sha256": "115c4baf7cceaa30f59a4694d79483c9167dbce7a9de4d3d571c5f3ea77c305a",
+      "version": "26.2.16"
+    },
+    "pycparser": {
+      "file": "pycparser-3.0-py3-none-any.whl",
+      "sha256": "b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992",
+      "version": "3.0"
+    },
+    "pycryptodome": {
+      "file": "pycryptodome-3.23.0-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+      "sha256": "67bd81fcbe34f43ad9422ee8fd4843c8e7198dd88dd3d40e6de42ee65fbe1490",
+      "version": "3.23.0"
+    },
+    "pydantic": {
+      "file": "pydantic-2.13.4-py3-none-any.whl",
+      "sha256": "45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba",
+      "version": "2.13.4"
+    },
+    "pydantic-core": {
+      "file": "pydantic_core-2.46.4-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+      "sha256": "f027324c56cd5406ca49c124b0db10e56c69064fec039acc571c29020cc87c76",
+      "version": "2.46.4"
+    },
+    "pyserial": {
+      "file": "pyserial-3.5-py2.py3-none-any.whl",
+      "sha256": "c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0",
+      "version": "3.5"
+    },
+    "pyserial-asyncio-fast": {
+      "file": "pyserial_asyncio_fast-0.16-py3-none-any.whl",
+      "sha256": "88939d94e341a04c0c8bc3c1ed4e874439cb5a1e21ccfb0fd7315a8e45df1687",
+      "version": "0.16"
+    },
+    "pyyaml": {
+      "file": "pyyaml-6.0.3-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "sha256": "ee2922902c45ae8ccada2c5b501ab86c36525b883eff4255313a253a3160861c",
+      "version": "6.0.3"
+    },
+    "requests": {
+      "file": "requests-2.34.2-py3-none-any.whl",
+      "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+      "version": "2.34.2"
+    },
+    "srt": {
+      "file": "srt-3.5.3-py3-none-any.whl",
+      "sha256": "a8c17cb4d88016230151f55c1d51ab4a3ff01cca9a3057653b1c2a1c6aba16ca",
+      "version": "3.5.3"
+    },
+    "tqdm": {
+      "file": "tqdm-4.69.1-py3-none-any.whl",
+      "sha256": "0a654b96f7a2660cceb615b56f307ec2bef96c515409014a429a561981ab52b4",
+      "version": "4.69.1"
+    },
+    "typing-extensions": {
+      "file": "typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+      "version": "4.16.0"
+    },
+    "typing-inspection": {
+      "file": "typing_inspection-0.4.2-py3-none-any.whl",
+      "sha256": "4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7",
+      "version": "0.4.2"
+    },
+    "urllib3": {
+      "file": "urllib3-2.7.0-py3-none-any.whl",
+      "sha256": "9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897",
+      "version": "2.7.0"
+    },
+    "vosk": {
+      "file": "vosk-0.3.45-py3-none-manylinux2014_aarch64.whl",
+      "sha256": "54efb47dd890e544e9e20f0316413acec7f8680d04ec095c6140ab4e70262704",
+      "version": "0.3.45"
+    },
+    "websockets": {
+      "file": "websockets-16.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "sha256": "bae954c382e013d5ea5b190d2830526bfa45ad121c326da0049b8c769f185db6",
+      "version": "16.1.1"
+    }
+  },
+  "schema": 1,
+  "source_builds": {
+    "srt": {
+      "independent_target_validation": false,
+      "sdist_sha256": "4884315043a4f0740fd1f878ed6caa376ac06d70e135f306a6dc44632eed0cc0",
+      "source_date_epoch": 1700000000,
+      "version": "3.5.3",
+      "wheel_sha256": "a8c17cb4d88016230151f55c1d51ab4a3ff01cca9a3057653b1c2a1c6aba16ca"
+    }
+  },
+  "target": {
+    "abi": "cp313",
+    "architecture": "aarch64",
+    "glibc": "2.41",
+    "python": "3.13.5"
+  },
+  "upstream_review_pending": true
+}

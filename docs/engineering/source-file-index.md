@@ -641,3 +641,9 @@ has been changed by this inventory correction.
 
 - `deploy/rolling-thunder-release-build.py` — deterministic exact-Git-tree source bundle with allowlist and source manifest; excludes secrets/dependencies, not installable.
 - `deploy/rolling-thunder-launch-witness.py` — signed launch-observation verifier bound to boot ID, PID and start ticks; does not prove loaded Python bytes.
+
+### STAB-07E offline ARM64 dependency and payload artifacts
+
+- `deploy/rolling-thunder-wheelhouse.py` — read-only locked wheel metadata, architecture, ELF and PEP 508 dependency-closure verifier.
+- `deploy/rolling-thunder-release-payload.py` — deterministic Git-source and verified-wheel transport archive builder, not an installer.
+- `deploy/locks/stab07e-anvilmobile-cp313-aarch64.json` and `.requirements.txt` — exact 26-package SHA-pinned target wheel set, pending independent provenance review.

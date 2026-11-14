@@ -118,3 +118,7 @@ installation or service state was modified; there is nothing to roll back on
 AnvilMobile. Change history: 2026-11-14, initial source archive/witness candidate
 and deterministic tests added. Do not misstate this as completed in-memory
 runtime attestation.
+
+## STAB-07E candidate wheelhouse (2026-11-14)
+
+The follow-on work collected a 26-package CPython 3.13 ARM64 SHA-pinned wheelhouse and built two identical offline source-plus-wheel transport archives. This does not bundle the interpreter/OS libraries, sign the release or install a noneditable protected runtime. The trusted launch-observer, loaded Python code verification and parked RF/data acceptance remain NO GO. See `stab07e-arm64-wheelhouse-and-release.md`.

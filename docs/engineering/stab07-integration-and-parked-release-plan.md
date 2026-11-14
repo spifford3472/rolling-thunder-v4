@@ -213,3 +213,7 @@ Offline candidate validation now requires Ed25519-signed recovery approval recei
 ## STAB-07D source/witness status (2026-11-14)
 
 An exact-Git source archive is reproducible offline and a verifier can reject signed process-start observations with wrong boot ID, PID or start ticks. These are candidate components only. A hash-pinned dependency environment, protected release installation, actual trusted launch observer and independent in-memory Python code evidence are still missing; production remains NO GO. See `stab07d-protected-release-and-launch-witness.md`.
+
+## STAB-07E ARM64 dependency-layer status (2026-11-14)
+
+An offline SHA-pinned wheelhouse for 26 Pi CPython 3.13 ARM64 packages, including Vosk and reproducibly locally built `srt`, is now verified with independent no-index pip hash resolution. A deterministic 46 MB source-and-wheel transport archive was produced twice. This is not a complete pinned interpreter, installed noneditable app, signed release, trusted launch attestation, or physical safety acceptance. Production NO GO; see `stab07e-arm64-wheelhouse-and-release.md`.

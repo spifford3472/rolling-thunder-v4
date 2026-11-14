@@ -776,3 +776,7 @@ has been changed by this inventory correction.
 
 - `tests/test_protected_release_build.py` — deterministic exact commit source bundle, mutable worktree immunity, secret exclusion and malicious tree refusal.
 - `tests/test_launch_witness.py` — disposable Ed25519 signature verification, process identity, stale/tampered/forged evidence refusal and fail-closed loaded-byte status.
+
+### STAB-07E ARM64 wheelhouse integrity and reproducible transport (offline)
+
+- `tests/test_arm64_wheelhouse_payload.py` — reject missing, tampered, symlinked, wrong-platform wheels, fake native ELF, `.pth` injection and missing transitive pins; verify repeated canonical transport source/payload identity.
