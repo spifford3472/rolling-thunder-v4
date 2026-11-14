@@ -5,13 +5,15 @@ Events let tests observe the blocked phase without sleeping for 20 seconds or
 opening hardware. The runtime internal blocked-worker risk remains a separate acceptance gate.
 """
 
-from threading import Event, Thread
+from threading import Barrier, Event, Lock, Thread
 
 import pytest
 
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
-from rolling_thunder.ui_main import _run_cleanup_steps, _run_orderly_shutdown
+from rolling_thunder.ui_main import (
+    _request_close_once, _run_cleanup_steps, _run_orderly_shutdown,
+)
 
 
 def test_runtime_close_is_reachable_while_unrelated_ui_step_is_stuck() -> None:
@@ -177,3 +179,66 @@ def test_runtime_shutdown_preserves_ft8_release_before_radio_owner(
         "FT8 QSO", "FT8 transmit", "radio polling", "band restore",
         "radio disconnect", "POTA",
     ]
+
+
+
+def test_overlapping_close_requests_launch_exactly_one_worker() -> None:
+    """Simultaneous close requests share a single atomic launch decision."""
+    started = Event()
+    guard = Lock()
+    gate = Barrier(3)
+    launches: list[str] = []
+    results: list[bool] = []
+
+    def request() -> None:
+        gate.wait(timeout=3.0)
+        results.append(_request_close_once(
+            started, guard, lambda: launches.append("worker"),
+        ))
+
+    workers = [Thread(target=request, daemon=True) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    try:
+        gate.wait(timeout=3.0)
+    finally:
+        for worker in workers:
+            worker.join(timeout=3.0)
+    assert all(not worker.is_alive() for worker in workers)
+    assert sorted(results) == [False, True]
+    assert launches == ["worker"]
+    assert started.is_set()
+    assert not _request_close_once(started, guard, lambda: launches.append("second"))
+    assert launches == ["worker"]
+
+
+def test_failed_ft8_release_reports_error_and_radio_owner_still_attempted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FT8 failure is reported; existing radio owner still tries de-key/close."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(config)
+    runtime.start()
+    reached_radio = Event()
+
+    class FailingFt8:
+        def close(self) -> None:
+            raise RuntimeError("simulated uncertain TX0")
+
+    runtime.ft8_hardware_transmit = FailingFt8()  # type: ignore[assignment]
+    radio_disconnect = runtime.radio.disconnect
+
+    def observed_disconnect() -> object:
+        reached_radio.set()
+        return radio_disconnect()
+
+    monkeypatch.setattr(runtime.radio, "disconnect", observed_disconnect)
+    with pytest.raises(ExceptionGroup, match="Rolling Thunder shutdown errors") as caught:
+        runtime.stop()
+
+    assert reached_radio.is_set()
+    assert any("FT8 transmit: simulated uncertain TX0" in str(e)
+               for e in caught.value.exceptions)
