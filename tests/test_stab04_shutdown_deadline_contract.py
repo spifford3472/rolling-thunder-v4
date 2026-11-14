@@ -12,7 +12,9 @@ import pytest
 from rolling_thunder.application_runtime import ApplicationRuntime
 from rolling_thunder.config import ApplicationConfig
 from rolling_thunder.ui_main import (
-    _request_close_once, _run_cleanup_steps, _run_orderly_shutdown,
+    _request_close_once,
+    _run_cleanup_steps,
+    _run_orderly_shutdown,
 )
 
 
