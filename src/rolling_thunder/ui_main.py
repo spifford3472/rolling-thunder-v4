@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import signal
+from _thread import LockType
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -167,7 +168,7 @@ def _sigterm_close_handler(requested: Event) -> Callable[[int, object], None]:
 
 
 def _request_close_once(
-    started: Event, guard: Lock, launch: Callable[[], None],
+    started: Event, guard: LockType, launch: Callable[[], None],
 ) -> bool:
     """Claim the existing shutdown worker exactly once across competing callers."""
     with guard:
