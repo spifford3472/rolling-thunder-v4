@@ -309,10 +309,10 @@ def test_gps_stop_cancels_future_polls_but_not_a_blocked_inflight_read(
     assert finished.is_set()
 
 
-def test_runtime_unrelated_blocking_stop_delays_radio_disconnect(
+def test_runtime_unrelated_blocking_stop_cannot_delay_radio_disconnect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test actual runtime ordering, not only the generic UI cleanup runner."""
+    """The radio owner closes before an unrelated runtime worker blocks."""
     config = ApplicationConfig.model_validate(
         {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
          "hardware": {"mock": True}}
@@ -349,7 +349,7 @@ def test_runtime_unrelated_blocking_stop_delays_radio_disconnect(
     worker.start()
     try:
         assert blocked_entered.wait(timeout=2.0)
-        assert not radio_disconnect_entered.is_set()
+        assert radio_disconnect_entered.wait(timeout=1.0)
         assert not shutdown_finished.wait(timeout=0.05)
     finally:
         unblock.set()
