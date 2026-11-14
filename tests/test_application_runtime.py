@@ -934,9 +934,11 @@ def test_runtime_shutdown_records_failure_and_continues(caplog: pytest.LogCaptur
             raise RuntimeError("injected cleanup failure")
 
     runtime.pota_enrichment = FailingCleanup()  # type: ignore[assignment]
-    with caplog.at_level("WARNING", logger="rolling_thunder.application_runtime"):
-        with pytest.raises(ExceptionGroup, match="Rolling Thunder shutdown errors"):
-            runtime.stop()
+    with (
+        caplog.at_level("WARNING", logger="rolling_thunder.application_runtime"),
+        pytest.raises(ExceptionGroup, match="Rolling Thunder shutdown errors"),
+    ):
+        runtime.stop()
 
     messages = [record.message for record in caplog.records]
     assert any(
