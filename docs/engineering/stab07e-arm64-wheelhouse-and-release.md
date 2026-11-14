@@ -136,3 +136,7 @@ transport builder, local real-payload reproducibility check and developer
 instructions. Rollback is to abandon the draft branch and delete only the
 explicitly named Forge candidate files after independent owner review; there
 are no production host changes to undo. **Release decision: NO GO.**
+
+## STAB-07F staging continuation (2026-11-14)
+
+The exact Git application wheel was built twice identically and a 30-file payload candidate was verified and staged in a private Forge-only directory using no-replace atomic publication. A native ARM64 test runner and full interpreter/OS dependency closure are still missing; the staging utility explicitly refuses production-ready claims. See `stab07f-isolated-runtime-staging.md`.

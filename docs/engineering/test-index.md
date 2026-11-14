@@ -780,3 +780,7 @@ has been changed by this inventory correction.
 ### STAB-07E ARM64 wheelhouse integrity and reproducible transport (offline)
 
 - `tests/test_arm64_wheelhouse_payload.py` — reject missing, tampered, symlinked, wrong-platform wheels, fake native ELF, `.pth` injection and missing transitive pins; verify repeated canonical transport source/payload identity.
+
+### STAB-07F private offline release staging tests
+
+- `tests/test_protected_candidate_stage.py` — deterministic staged artifact checks, no-clobber semantics, tamper/permission refusal, fake approval/removed files, and no executed ARM64 runtime.

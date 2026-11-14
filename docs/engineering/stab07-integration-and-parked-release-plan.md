@@ -217,3 +217,7 @@ An exact-Git source archive is reproducible offline and a verifier can reject si
 ## STAB-07E ARM64 dependency-layer status (2026-11-14)
 
 An offline SHA-pinned wheelhouse for 26 Pi CPython 3.13 ARM64 packages, including Vosk and reproducibly locally built `srt`, is now verified with independent no-index pip hash resolution. A deterministic 46 MB source-and-wheel transport archive was produced twice. This is not a complete pinned interpreter, installed noneditable app, signed release, trusted launch attestation, or physical safety acceptance. Production NO GO; see `stab07e-arm64-wheelhouse-and-release.md`.
+
+## STAB-07F offline stage (2026-11-14)
+
+An exact-source noneditable app wheel built reproducibly and an unprivileged Forge-only transport candidate was staged with atomic no-replace and post-stage hash verification. **No native ARM64 interpreter launch, production unit integration, privileged immutable installation or physical radio validation occurred.** Forge lacks accessible ARM64 emulation; Docker access is restricted. See `stab07f-isolated-runtime-staging.md`. Production remains NO GO.

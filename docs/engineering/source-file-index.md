@@ -647,3 +647,7 @@ has been changed by this inventory correction.
 - `deploy/rolling-thunder-wheelhouse.py` — read-only locked wheel metadata, architecture, ELF and PEP 508 dependency-closure verifier.
 - `deploy/rolling-thunder-release-payload.py` — deterministic Git-source and verified-wheel transport archive builder, not an installer.
 - `deploy/locks/stab07e-anvilmobile-cp313-aarch64.json` and `.requirements.txt` — exact 26-package SHA-pinned target wheel set, pending independent provenance review.
+
+### STAB-07F private offline release staging
+
+- `deploy/rolling-thunder-stage-candidate.py` — Forge-only user-private, hash-verified, atomic no-replace offline transport/app-wheel staging and independent post-stage integrity check. No installed venv, no production restart.

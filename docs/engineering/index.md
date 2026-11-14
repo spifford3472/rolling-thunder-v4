@@ -20,6 +20,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab07f-isolated-runtime-staging.md` — source wheel reproducibility, exact Pi interpreter evidence, fail-closed offline staging and isolated ARM64 runtime blocker.
+
 - `stab07e-arm64-wheelhouse-and-release.md` — hash-pinned Pi ARM64/Python 3.13 wheelhouse, deterministic transport payload, provenance gaps and parked NO-GO gates.
 
 - `stab07d-protected-release-and-launch-witness.md` — deterministic Git-source candidate, signed launch observation, offline tests and explicit deployment blockers.
