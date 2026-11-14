@@ -69,6 +69,7 @@ class ControlDispatcher:
         action_observer: Callable[[str, float], None] | None = None,
         clock: Callable[[], float] = monotonic,
         event_interceptor: EventAwareInterceptor | None = None,
+        dispatch_blocked: Callable[[], bool] | None = None,
     ) -> None:
         self._source = source
         self._mapper = mapper
@@ -77,10 +78,17 @@ class ControlDispatcher:
         self._action_observer = action_observer
         self._clock = clock
         self._event_interceptor = event_interceptor
+        self._dispatch_blocked = dispatch_blocked or (lambda: False)
 
     def dispatch_available(self) -> ControlDispatchResult:
         """Drain available events without blocking and dispatch safe actions."""
         events = self._source.drain()
+        if self._dispatch_blocked():
+            # Drain stale controller input without invoking any interceptor or
+            # command after shutdown has revoked application authority.
+            return ControlDispatchResult(
+                drained=len(events), accepted=0, rejected=len(events), unknown=0,
+            )
         accepted = 0
         rejected = 0
         unknown = 0
