@@ -689,3 +689,11 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_deployment_wrapper_offline.py` also asserts failed/invalid journals block new mutation before fetch or systemd.
 - `tests/test_deployment_wrapper_candidate.py` checks durable phase ordering and commit-before-success reporting.
 - No live host, powered FT-891, crash reboot or data recovery acceptance is established by these tests.
+
+### STAB-06F recovery acceptance tests (offline, no radio)
+
+- `tests/test_recovery_inspector.py`: database/WAL, full backup QSO row preservation (not just counts), journal, legacy heartbeat and no-write evidence behavior.
+- `tests/test_recovery_process_identity.py`: system manager PID, cgroup and singleton identity with fake procfs.
+- `tests/test_recovery_reconciliation.py`: root-only approval receipt, exact evidence binding, expiry, serialization and replay denial.
+- `tests/test_recovery_failure_injection.py`: SIGKILL, failed file/directory fsync, failed rename and corrupt journal refusal.
+- `tests/test_deployment_transaction_journal.py`: archive retention, collision refusal and terminal reconciled transaction.

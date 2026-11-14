@@ -30,6 +30,7 @@ PHASES = (
     "rolling_back",
     "requires_review",
     "committed",
+    "reconciled",
 )
 FORWARD = (
     "prepared",
@@ -118,6 +119,40 @@ def _write(path: Path, record: dict[str, Any]) -> None:
             temp_path.unlink(missing_ok=True)
 
 
+def _archive_terminal_record(path: Path, current: dict[str, Any]) -> None:
+    """Preserve committed/reconciled history before an eventual new begin.
+
+    Idempotence handles a crash after archiving but before the next journal
+    replacement. An existing mismatched archive permanently blocks new work.
+    """
+    identifier = current["transaction_id"]
+    if re.fullmatch(r"[0-9a-f]{32}", identifier) is None:
+        raise JournalError("invalid transaction identifier for archive")
+    archive = path.parent / f"history-{identifier}.json"
+    payload = json.dumps(current, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
+    try:
+        fd = os.open(archive, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        info = archive.lstat()
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.geteuid()
+            or info.st_mode & 0o077
+            or archive.read_bytes() != payload
+        ):
+            raise JournalError("transaction archive mismatch or unsafe file") from None
+        return
+    with os.fdopen(fd, "wb") as output:
+        output.write(payload)
+        output.flush()
+        os.fsync(output.fileno())
+    parent_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
+
+
 def begin(path: Path, previous: str, target: str, backup: str) -> None:
     """An incomplete transaction always blocks all subsequent deployments."""
     if SHA.fullmatch(previous) is None or SHA.fullmatch(target) is None:
@@ -125,10 +160,12 @@ def begin(path: Path, previous: str, target: str, backup: str) -> None:
     if not Path(backup).is_absolute():
         raise JournalError("backup must use an absolute path")
     current = read(path)
-    if current is not None and current["phase"] != "committed":
+    if current is not None and current["phase"] not in ("committed", "reconciled"):
         raise JournalError(
             f"unreconciled transaction {current['transaction_id']} phase={current['phase']}"
         )
+    if current is not None:
+        _archive_terminal_record(path, current)
     _write(
         path,
         {
@@ -145,7 +182,7 @@ def begin(path: Path, previous: str, target: str, backup: str) -> None:
 
 def advance(path: Path, phase: str) -> None:
     """Record entry to a potentially destructive phase before it begins."""
-    if phase not in PHASES or phase in ("prepared", "committed"):
+    if phase not in PHASES or phase in ("prepared", "committed", "reconciled"):
         raise JournalError("invalid phase transition")
     current = read(path)
     if current is None or current["phase"] == "committed":
@@ -169,6 +206,49 @@ def commit(path: Path) -> None:
     if current is None or current["phase"] != "verifying":
         raise JournalError("transaction not eligible for completion")
     current["phase"] = "committed"
+    current["updated_utc"] = datetime.now(UTC).isoformat()
+    _write(path, current)
+
+
+def attest_reconciled(
+    path: Path,
+    *,
+    transaction_id: str,
+    approval_id: str,
+    evidence_hash: str,
+    verified_sha: str,
+) -> None:
+    """Only an external, approval-gated executor may attest a reviewed state.
+
+    This does not execute rollback, delete backups, or update SQLite. The
+    CLI intentionally does not expose this operation directly.
+    """
+    if (
+        not approval_id
+        or len(approval_id) > 128
+        or any(
+            c not in "-_.0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            for c in approval_id
+        )
+    ):
+        raise JournalError("invalid approval identifier")
+    if re.fullmatch(r"[0-9a-f]{64}", evidence_hash) is None:
+        raise JournalError("invalid evidence hash")
+    current = read(path)
+    if current is None or current["phase"] in ("committed", "reconciled"):
+        raise JournalError("no outstanding transaction")
+    if current["transaction_id"] != transaction_id or verified_sha not in (
+        current["target_sha"],
+        current["previous_sha"],
+    ):
+        raise JournalError("transaction identity or verified commit mismatch")
+    current["phase"] = "reconciled"
+    current["reconciliation"] = {
+        "approval_id": approval_id,
+        "evidence_sha256": evidence_hash,
+        "verified_sha": verified_sha,
+        "outcome": "reviewed_existing_running_version_no_restore",
+    }
     current["updated_utc"] = datetime.now(UTC).isoformat()
     _write(path, current)
 
