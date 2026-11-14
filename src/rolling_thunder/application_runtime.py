@@ -8,8 +8,8 @@ from concurrent.futures import Executor
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import cast
 from time import monotonic
+from typing import cast
 from uuid import UUID, uuid4
 
 from rolling_thunder.application_secrets import ApplicationSecrets
