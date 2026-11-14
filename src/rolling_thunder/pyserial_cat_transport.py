@@ -1,5 +1,6 @@
 """PySerial implementation of the CAT transport boundary."""
 
+import math
 import termios
 from collections.abc import Callable
 from pathlib import Path
@@ -68,8 +69,8 @@ class PySerialCatTransport:
             raise ValueError("CAT serial device must be an absolute path.")
         if baud_rate <= 0:
             raise ValueError("CAT baud rate must be positive.")
-        if timeout_s <= 0:
-            raise ValueError("CAT timeout must be positive.")
+        if not math.isfinite(timeout_s) or timeout_s <= 0 or timeout_s > 60:
+            raise ValueError("CAT timeout must be finite and within (0, 60] seconds.")
         if maximum_reply_bytes < 2:
             raise ValueError("CAT maximum reply length must be at least 2 bytes.")
 
