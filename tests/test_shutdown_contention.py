@@ -23,7 +23,8 @@ class BlockingCatTransport:
 
     def query(self, command: bytes) -> bytes:
         self.commands.append(command)
-        if command == b"FA;" and self.query_started.is_set():
+        if command == b"FA;" and self.opened and self.commands.count(b"FA;") > 1:
+            self.query_started.set()
             self.allow_query.wait(timeout=2)
         if command == b"FA;":
             return b"FA014250000;"
@@ -46,9 +47,9 @@ def test_ptt_close_waits_for_concurrent_cat_operation_then_releases() -> None:
     ptt.key()
 
     # Keep refresh inside the radio operation lock until explicitly released.
-    transport.query_started.set()
     refresh = Thread(target=radio.refresh_state)
     refresh.start()
+    assert transport.query_started.wait(timeout=1)
     closed = Event()
 
     def close_ptt() -> None:
