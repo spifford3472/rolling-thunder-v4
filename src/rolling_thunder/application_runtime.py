@@ -1789,6 +1789,13 @@ class ApplicationRuntime:
             attempt("FT8 QSO", self.ft8_qso.close)
         if self.ft8_hardware_transmit is not None:
             attempt("FT8 transmit", self.ft8_hardware_transmit.close)
+        # The existing radio/CAT owner must be reached before unrelated
+        # network, GPS, and persistence workers that might block indefinitely.
+        # Do not bypass the single CAT operation lock or skip FT8 release.
+        attempt("radio polling", self.polling.stop)
+        if self.ft8_band_control is not None:
+            attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
+        radio_shutdown_state = attempt("radio disconnect", self.radio.disconnect)
         if self.ft8_receive is not None:
             attempt("FT8 receive", self.ft8_receive.stop)
         if self.pota_spot_polling is not None:
@@ -1838,13 +1845,9 @@ class ApplicationRuntime:
             attempt("GPS polling", self.gps_polling.stop)
         if self.meshcore_gps_publisher is not None:
             attempt("MeshCore GPS", self.meshcore_gps_publisher.stop)
-        attempt("radio polling", self.polling.stop)
-        if self.ft8_band_control is not None:
-            attempt("FT8 band restore", self.ft8_band_control.restore_normal_settings_for_shutdown)
         if self.gps is not None:
             attempt("GPS", self.gps.disconnect)
-        state = attempt("radio disconnect", self.radio.disconnect)
-        if state is not None:
+        if radio_shutdown_state is not None:
             self._started = False
         shutdown_logger.warning(
             "RT_RUNTIME_SHUTDOWN phase=end duration_ms=%.1f errors=%d",
@@ -1852,5 +1855,5 @@ class ApplicationRuntime:
         )
         if errors:
             raise ExceptionGroup("Rolling Thunder shutdown errors", errors)
-        assert state is not None
-        return cast(RadioState, state)
+        assert radio_shutdown_state is not None
+        return cast(RadioState, radio_shutdown_state)
