@@ -795,6 +795,7 @@ def run_dashboard(
             action_observer=(
                 ui_timing.observe_control_action if ui_timing.enabled else None
             ),
+            dispatch_blocked=lambda: close_started.is_set(),
             event_interceptor=CompositeEventInterceptor(
                 tron_toggle_interceptor,
                 settings_interceptor,
@@ -2496,7 +2497,10 @@ def run_dashboard(
     )
 
     root.bind("<Escape>", lambda _event: close())
-    root.bind("<F12>", lambda _event: toggle_tron_listening())
+    root.bind(
+        "<F12>",
+        lambda _event: None if close_started.is_set() else toggle_tron_listening(),
+    )
     root.bind(
         "<v>",
         lambda _event: operator_commands.execute(ControlAction.VOICE),
