@@ -42,7 +42,7 @@ Live acceptance should use an exact commit SHA and record rollback information.
 ## Application/runtime/UI
 
 - `tests/test_autostart_launcher.py`
-- `tests/test_stab04_shutdown_deadline_contract.py` — STAB-04 blocked UI cleanup and explicit strict expected failure for runtime-release starvation; **not** safety acceptance.
+- `tests/test_stab04_shutdown_deadline_contract.py` — STAB-04 normal regressions for runtime-first UI shutdown, FT8/radio-owner early cleanup, truthful blocked-step logs and failure isolation; **not** physical RF safety acceptance.
 - `tests/test_stab02_shutdown_failure_modes.py` — STAB-02 hardware-free blocked CAT TX0, held CAT lock, failed release/retry during disconnect, sequential UI/runtime shutdown, GPS cancellation with a blocked in-flight read, repeat shutdown, rollback after interrupted service startup, and STAB-03 regression for connected-radio cleanup before completed startup, retry after injected disconnect failure, and no unnecessary adapter access when never connected; no live RF acceptance implied.
 - `tests/test_dashboard_health_compatibility.py`
 - `tests/test_dashboard_state.py`
