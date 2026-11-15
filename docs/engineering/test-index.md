@@ -869,3 +869,12 @@ backup integrity; blocked-worker returned an explicit expected refusal, never
 an asserted clean shutdown. Runner exit 0 in a negative test means expected
 refusal was correctly observed, **not** successful physical release. Refer to
 the consolidated STAB-07 integration report for private evidence file paths.
+
+
+### DOC-X documentation drift regression (2026-11-15)
+
+- `tests/test_docx_inventory.py` — verifies that the current module/test
+  indexes are exhaustive, the displayed source count matches the actual
+  checkout, broken local Markdown links fail, external links are not fetched,
+  and disposable fixture mutations are detected. The production-independent
+  CLI is `python tools/docx_inventory.py`, also enforced in GitHub CI.

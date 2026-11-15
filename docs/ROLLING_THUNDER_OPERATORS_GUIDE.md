@@ -1,8 +1,15 @@
 # Rolling Thunder Operator's Guide
 
-## STAB-07I preference drain candidate (not deployed)
+## Current source versus installed state — November 15, 2026
 
-An offline ARM64 mock-dashboard test found the UI tried to flush preferences after the runtime had stopped that queue. An unmerged correction drains once within the runtime, after its radio cleanup attempt and before stopping preferences, while still reporting real errors. This is not deployed or validated on physical hardware; radio receive/PTT recovery procedures remain unchanged.
+The STAB-07 preference-drain and startup-rollback corrections are **merged in
+source** at `b792151313e60596e6ff3ad51f6ed4e260078718` (PR #472), not an open
+candidate. The runtime now owns the one preference drain after radio cleanup;
+when a prior shutdown stopped the preference executor, a retry does not flush
+that stopped executor a second time. Isolated ARM64 fake-hardware tests passed;
+**this does not mean the code has been installed or physically accepted on the
+Pi**. Observe the actual installed SHA and radio receive state before claiming
+live readiness. A successful software release result never proves RF receive.
 
 ## Shutdown safety status (STAB-04 candidate, not deployed)
 
@@ -27,6 +34,23 @@ independently confirm receive or safely turn off the radio, and inspect the
 failure before allowing any new transmissions. Do not override the safety
 inhibit merely because a software retry or service restart completed.
 Supervised parked/radio testing must be approved separately.
+
+## FT8 stuck-transmit lockout: software acknowledgment is not RF proof
+
+If the FT-891's red TX indicator remains on unexpectedly, stop automated FT8
+operation. Safely return the radio to receive or power it off before further
+transmission attempts. A software timeout, reconnect, warning dismissal,
+`TX0;` command, or service restart cannot by itself establish physical receive.
+
+The FT8 PTT warning and transmit inhibit are separate. Acknowledging the alarm
+silences its warning but retains the inhibit. The source's unlock sequence is
+physical controls **1–3–1**, in the FT8 context after acknowledgment. This
+gesture is **not** a physical receive-state verification: the current UI
+handler passes a constant `radio_confirmed_receive=True` to the alarm, relying
+on independent operator confirmation. Never use that gesture to override an
+unresolved red TX indicator or assume an incomplete release was successful.
+A supervised parked physical acceptance remains required before changing
+transmit safety policy. This guide does not authorize an unattended test.
 
 ## About this guide
 
