@@ -852,3 +852,20 @@ has been changed by this inventory correction.
   executed the real Tk binding and recorded DX/Browse/POTA selection. Tested
   wheel hash, source SHA and full verification matrix are in the consolidated
   STAB-07 integration report.
+
+### STAB-07 consolidated I/J–L functional acceptance (2026-11-15)
+
+Draft PR #472 retains the stronger original I full-dashboard safety scenarios
+and adds its navigation mode. On the reconciled source tree the complete Forge
+suite passed 4,376 tests with seven skips; separate private ARM64/Xvfb execution
+verified real Tk navigation, single close ownership despite duplicate requests,
+mutation inhibition, and synthetic SQLite/backup integrity. Exact tree, status
+and remaining acceptance gates are in the consolidated integration report.
+
+The final reconciled ARM64 negative acceptance also passed: injected startup
+failure returned application code 3 with no Tk root and rolled-back mock radio;
+injected cleanup failure returned code 4 while keeping disposable SQLite and
+backup integrity; blocked-worker returned an explicit expected refusal, never
+an asserted clean shutdown. Runner exit 0 in a negative test means expected
+refusal was correctly observed, **not** successful physical release. Refer to
+the consolidated STAB-07 integration report for private evidence file paths.

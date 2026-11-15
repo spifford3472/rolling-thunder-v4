@@ -538,3 +538,98 @@ head **must** receive its own independent CI result before acceptance.
   retain or explicitly remove only its newly created private Forge test
   directories after reviewing provenance. Original STAB-07G/I scratch and
   all production state remain untouched.
+
+## Final integration reconciliation — 2026-11-15 (authoritative for consolidated draft)
+
+This section supersedes the earlier focused-only review-head summary for the
+**consolidated integration** and does not change historical experiment results.
+The complete combined STAB-06D–F/STAB-07I–L/focused candidate is published in
+draft PR #472 against `main` at GitHub commit
+`b142d29adf9faf17d8cbc1fe3c93f96329fbee90`, with verified source tree
+`7b23d12a7b2f9ee82816ad8f28f55ff460c353eb`. The local review tree on
+Forge is byte-for-byte identical. A read-only `git merge-tree` check against
+main `dab86ab907f49ca0f64683c8ec4b2cc350d10039` returned no conflicts.
+No original review PR was rewritten or merged.
+
+**Architectural conflict resolved in the isolated candidate:** PR #465's J
+branch was forked independently from STAB-07H and recreated STAB-07I's
+full-dashboard test harness, which conflicted with the separately developed
+stronger I branch (#463). The consolidated candidate preserves I's stronger
+real Tk refresh, duplicate close, stopped-command mutation refusal,
+SQLite/online-backup fixture checks, startup rollback, cleanup-failure and
+blocked-worker NO-GO acceptance, then adds the J-only native provenance,
+K signed archive comparison, L quarantine evidence, and focused runtime
+corrections. Tk navigation adds a genuine DX → Browse → POTA key sequence to
+this stronger harness. It neither introduces an alternate CAT/PTT path nor
+weakens the real-hardware authorization boundary.
+
+The independent source-correct Forge regression suite on the reconciled tree
+completed with **4,376 passed, 7 skipped**. Strict MyPy passed all 401 source
+modules. Ruff passed `src`, `tests` and the changed ARM64/provenance scripts;
+Git diff whitespace validation passed. The whole-repository USB observer lint
+findings remain the same four pre-existing, unrelated issues. The private
+ARM64/Xvfb `navigation` scenario returned code 0, four actual UI refreshes,
+ordered DX/Browse/POTA selection, exactly one close worker from two requests,
+post-close mutation refusal, intact synthetic SQLite and online backup,
+connected-then-disconnected mock radio/GPS, and `production_ready=false`.
+The isolated source-mounted I harness **does not certify a wheel installed on
+AnvilMobile**, an exact Pi operating system, physical PTT release or live QSO
+persistence. Its run log is in
+`/home/rt-remote/workspaces/rt-stab07-reconcile-navigation/result.log`.
+
+The earlier wheel SHA256 `d9ede5...` belongs to the prior smaller J-based mock
+rehearsal. It must not be misrepresented as the source-installed identity of
+the reconciled I-based candidate; the latter is a read-only bound source tree
+inside an independent network/USB-isolated ARM64 test namespace. Production
+NO GO, and Track B historical signature provenance remains BLOCKED/DEFERRED
+at 14/16 authenticated packages. PR #414 stays separate and unreviewed;
+independent #438/#439/#440/#442 drafts are not silently included.
+
+Final GitHub exact-head CI for PR #472 and the remaining synthetic ARM64 failure
+modes must be recorded before declaring the consolidated draft merge-ready.
+No owner merge approval is implied, and no privileged installation, service,
+network, OPNsense, radio, RF, or production SQLite changes were made.
+
+### Final reconciled ARM64 failure-mode acceptance (2026-11-15)
+
+The complete isolated reconciled STAB-07I/J–L dashboard source passed the
+remaining bounded negative scenarios in the existing private ARM64 QEMU/Xvfb
+framework, with each guest in a fresh disposable display and synthetic database:
+
+- `startup-failure`: runner exit **0** for the expected application return
+  code **3**, no Tk root, `runtime_closed=true`, mock radio rollback and
+  loopback-only networking. Evidence:
+  `/home/rt-remote/workspaces/rt-stab07-reconcile-startup-failure/result.log`.
+- `cleanup-failure`: runner exit **0** for the expected application return
+  code **4**, reporting cleanup error without certifying normal shutdown;
+  real Tk readiness, one close worker despite two requests, mock radio/GPS
+  released, rejected post-close command, and synthetic SQLite/online-backup
+  integrity all preserved. Evidence:
+  `/home/rt-remote/workspaces/rt-stab07-reconcile-cleanup-failure/result.log`.
+- `blocked-worker`: runner exit **0** only because the guest's incomplete
+  shutdown produced the independently validated **expected refusal**
+  (`expected_refusal=true`, `production_ready=false`). This must never be
+  interpreted as a completed cleanup, a radio de-key, or a safe physical
+  shutdown. Evidence:
+  `/home/rt-remote/workspaces/rt-stab07-reconcile-blocked-worker/result.log`.
+
+Previously verified reconciled ARM64 `navigation` completed genuine Tk
+DX/Browse/POTA key dispatch, four refreshes, duplicate close inhibition,
+post-close mutation refusal and intact SQLite backup. All four scenarios
+use only mock hardware with no actual station credentials, physical radio,
+production databases, privileged installation, external network access or RF.
+The reconciled host full pytest result remains **4,376 passed, 7 skipped**;
+strict MyPy (401 source files), scoped Ruff and whitespace validation pass.
+
+**Final offline disposition:** Track A's defined hardware-disabled mock
+application and synthetic failure matrix are completed and regression-verified;
+Track B remains **BLOCKED / DEFERRED** under the historical signature stop
+rule. The consolidated draft PR #472 is ready for owner merge review once CI
+passes on the final documentation-complete exact head. Physical monitor,
+USB/GPS disconnection, full FT8/CAT/PTT receive verification, protected
+release identity, systemd behavior, QSO/WAL recovery and parked rollback
+remain distinct production acceptance gates. **Production NO GO.**
+
+No original stacked PR was merged, retargeted or rewritten; PR #414 remains
+an unreviewed independent documentation draft. This consolidation proposal
+requires separate explicit owner authorization before merging even after CI.
