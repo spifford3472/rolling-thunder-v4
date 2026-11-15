@@ -33,7 +33,7 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
 | Previous production | Current installed source SHA, runtime executable and cgroup, installed unit/drop-in hashes, approved launch witness | Clean editable checkout at `ba58b0b2a3b9b10b73dcdcb1ee046528f79b6d62`, Python 3.13.5, package 4.4.1; current `main` is 47 commits ahead. MainPID 60400 in the system service cgroup. Protected drop-in `60`, runtime loaded-byte witness and independent readiness heartbeat remain unverified. |
 | Host identity | System scope `rolling-thunder.service`, MainPID, one process, runtime heartbeats, current boot ID and monotonic start ticks | Active `Type=simple` service, MainPID 60400, cgroup `/system.slice/rolling-thunder.service`; launcher flock is held. FT8 `arecord` and DMR SSH child are present. `NotifyAccess=none`; `active` is not application readiness. |
 | Deploy path | Root-owned exact `/usr/local/sbin/rolling-thunder-deploy` contents/hash, SSH identity, sudo allowlist, single serialized lock and reconciliation | Wrapper is root-owned mode 0750, SHA-256 `476ecdbdbcc70bcb1025ac1ce97bae1982b98d8842d5e333ea43632378512daf`. It validates exact SHA/clean checkout/remote containment, stops the unit, SQLite-backs up only the primary DB to `/var/backups/rolling-thunder-deploy`, validates integrity, deploys/migrates, then waits 3 seconds and checks systemd active state/SHA. No mutex, transaction journal, or independent readiness check is visible. Target dir exists root:root 0700; the newest listed database backup has now passed read-only validation and matched the observed live contact IDs and aggregate state. Wrapper source is absent from current main; no production action taken. |
-| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. A 2026-11-15 read-only comparison verified the newest deployment backup (timestamp 2026-11-14 01:06:36Z): both DBs pass integrity/FK checks and match schema 22, 355 contacts and all contact IDs, sync counts, 15 retry rows, 693 synchronized FT8 outbox rows, and latest QSO timestamp. Per-retry field values and FT8 outbox IDs/payloads were not compared. At 16:43 EST, all 15 failed contacts still had the generic HTTP 503 error after their scheduled retry; Forge `/health` returned available at 16:43, but that read-only check does not test QSO upload. The Pi client discards the Forge 503 response body, so the cause is not distinguishable from local retry state. Read-only Forge ledger and Wavelog application-log inspection is required. Wrapper backup targets only the main DB; optional outbox path and its data remain to be reconciled. |
+| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. A 2026-11-15 read-only comparison verified the newest deployment backup (timestamp 2026-11-14 01:06:36Z): both DBs pass integrity/FK checks and match schema 22, 355 contacts and all contact IDs, sync counts, 15 retry rows, 693 synchronized FT8 outbox rows, and latest QSO timestamp. Per-retry field values and FT8 outbox IDs/payloads were not compared. At 16:43 and 16:48 EST, Forge logged 15 `/contacts` POSTs returning HTTP 503 while `/health` continued returning HTTP 200. At 16:49 the Forge ledger passed integrity and contained 349 synchronized/imported rows with no pending entries. A grouped read-only Pi query showed all 15 failed contacts lack grid/state/CQ/ITU routing metadata, so source routes them to `Mobile - Unknown Location` before claiming the contact UUID. This points to fallback-station resolution/creation/logbook linking or its Forge binding, but is not proven: the 15 UUIDs have not been correlated against the ledger, and the fallback binding/profile/membership have not been inspected. The Pi client discards the Forge 503 body. Wrapper backup targets only the main DB; optional outbox path and its data remain to be reconciled. |
 | Rollback | Original exact SHA and dependency compatibility; schema migration direction; wrapper rollback route, protected backup and responsible operator | Not tested against current release |
 | Physical safety | FT-891 red TX indicator, manual safe receive/power-off plan, FT8 alarm inhibit after fault, no unrestricted rekey | Merged #474 disables unverified unlock; a separate owner-directed review restores deliberate in-app 1–3–1 override after acknowledgment, and session restart clears alarm; physical RX remains unverified |
 | USB/GPS/FT8 RX | Actual controller serial, DigiRig/audio capture, GPS freshness, native decoder receive-only and local UI latency | Configured radio CP2105/`ttyUSB1`, physical controls CP2102/`ttyUSB0`, GPS CP2102N/`ttyUSB3` are open by the dashboard process. FT8 capture process and C-Media device are present. Speech selects `CARD=Array`, not listed among capture devices. Operation and receive-only acceptance remain unverified. |
@@ -65,14 +65,17 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
    remain quarantined pending authenticated historic signed package indexes;
    do not execute or silently treat those as equivalent. If release path
    requires this exact image, STOP until provenance resolved.
-7. Diagnose the 15 HTTP 503 contact-sync failures with read-only Forge
-   ledger and Wavelog application-log evidence. Forge `/health` currently
-   reports available, but it does not exercise contact upload; the Pi stores
-   only the generic 503 because it discards the response body. Fix the confirmed
-   server-side cause, then let the normal idempotent retry path run and verify
-   all 15 contacts synchronize without rewriting local state or manually
-   replaying QSOs. Recheck Forge service/job state; the successful PSK autoqueue
-   oneshot is not end-to-end QSO delivery evidence.
+7. Correlate the 15 failed Pi contact UUIDs with the Forge ledger and
+   inspect the `Mobile - Unknown Location` station binding, Wavelog profile,
+   and configured-logbook membership read-only. Forge logs show `/contacts`
+   POSTs return 503 while `/health` is 200; all 15 failed contacts lack routing
+   metadata and use the unknown-location fallback before the ledger claim.
+   Determine whether Wavelog fallback station resolution/creation/linking or
+   Forge binding storage is failing. Fix only the confirmed cause, then let the
+   normal idempotent retry path run and verify all 15 contacts synchronize
+   without rewriting local state or manually replaying QSOs. Recheck Forge
+   service/job state; the successful PSK autoqueue oneshot is not end-to-end
+   QSO delivery evidence.
 
 ## Approved deployment sequence (future only)
 
@@ -189,3 +192,12 @@ transaction receipts, not this planning checklist.
   Forge can return 503 for either Wavelog or ledger unavailability. Exact cause
   remains unresolved; inspect Forge ledger and Wavelog application logs before
   repair. No manual sync or production mutation was performed.
+
+- 2026-11-15 16:49 EST read-only follow-up: Forge logged 15 `/contacts` 503s
+  around 16:43 and 16:48 while `/health` remained 200. Its ledger integrity
+  check passed with 349 synchronized/imported entries and no pending entries.
+  All 15 failed Pi contacts lack grid/state/CQ/ITU metadata and route through
+  `Mobile - Unknown Location` before the ledger claim. This narrows the fault
+  domain but does not prove the cause; failed UUID correlation and fallback
+  station binding/profile/logbook checks remain. No production data or profile
+  was changed.
