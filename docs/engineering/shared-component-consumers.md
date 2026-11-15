@@ -99,3 +99,13 @@ isolated visual test may exercise its own alarm but has no transmit authority.
 Review `test_ft8_ptt_alarm.py`, `test_ft8_hardware_transmit.py`,
 `test_operator_commands.py` and supervised physical acceptance before changing
 this safety contract.
+
+
+### FT8 PTT operator override (owner-directed)
+
+The real FT8 alarm consumes the 1–3–1 physical-control recovery gesture only
+after Voice Cancel acknowledgement; the operator may explicitly clear the
+session-local inhibit without a claim of physically verified RX. The visual
+alarm is isolated, the radio adapter keeps its own CAT uncertain latch, and
+no override initiates CAT/PTT. Cross-check `test_ft8_ptt_alarm.py`,
+`test_operator_commands.py`, and `test_ft8_hardware_transmit.py`.

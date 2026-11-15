@@ -19,6 +19,9 @@ This guide describes the implemented repository rather than an aspirational arch
 - `doc02-current-state-reconciliation.md` — verified DOC-02 editorial/status corrections and historical evidence pointers.
 - `docx-current-state-audit-2026-11-15.md` — merged-source documentation truth ledger, ownership/dependency map, prioritized drift and architecture risks, validation gates.
 
+- `pr-reconciliation-2026-11-15.md` — 20 historical open-draft PR dispositions and supersession evidence, without changing their GitHub state.
+- `rel01-parked-acceptance-packet-2026-11-15.md` — current exact-main parked release readiness, separate RF approval, data-preserving rollback and unexecuted NO GO record.
+
 - `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
 
 ## Engineering document set

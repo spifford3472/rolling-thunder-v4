@@ -647,12 +647,23 @@ release. Voice Cancel acknowledges its warning without restoring authorization.
 The UI may consume physical controls during inhibition but may **not** turn
 an operator gesture, stale `RadioState.transmitting=False`, CAT TX0 write, or
 application-state snapshot into independent physical-RX verification. The
-real alarm's 1–3–1 unlock path remains fail-closed until a separately approved,
-trustworthy physical receive confirmation capability exists. The isolated
+real alarm's 1–3–1 path requires Voice Cancel acknowledgement and a deliberate
+operator override; it never claims independent physical receive verification. The isolated
 visual-test instance has no linkage to production transmit authority. Never
 create an alternate CAT/PTT writer or reset the transmit inhibit as a side
 effect of UI navigation, cancellation, screen refresh, or shutdown.
 
+
+### Owner-authorized manual FT8 recovery (2026-11-15 review)
+
+An acknowledged uncertain-PTT alarm must permit a deliberate 1–3–1 operator
+recovery gesture in FT8 and must reset on a process restart. This is operator
+authority, not independently verified receive evidence. The UI must pass
+`radio_confirmed_receive=False` for the real alarm and a separately named
+`operator_recovery_override=True`; do not silently equate that gesture, CAT
+TX0 or firmware LED status with actual RF de-key. Other normal authorization
+and the adapter's uncertain-CAT latch remain independent, and the manual
+recovery sequence must not transmit. New alarm events retrigger inhibition.
 
 ## FT8-RX-02 radio readback evidence (source-only)
 

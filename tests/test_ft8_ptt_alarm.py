@@ -115,5 +115,68 @@ def test_real_operator_overlay_explains_no_automatic_unlock() -> None:
 
     source = (Path(__file__).resolve().parents[1]
               / 'src/rolling_thunder/ui_main.py').read_text(encoding='utf-8')
-    assert 'NO IN-APP UNLOCK.' in source
+    assert 'PRESS COMMAND 1, 3, 1 TO OVERRIDE.' in source
     assert 'VISUAL TEST ONLY: COMMAND 1, 3, 1 TO CLEAR TEST' in source
+
+
+def test_manual_override_requires_acknowledged_complete_sequence() -> None:
+    """An operator can explicitly clear a live alarm without fabricated RX proof."""
+    from rolling_thunder.physical_controls import ControlAction as A
+
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    for action in (A.PANEL_PRIMARY, A.PANEL_TERTIARY, A.PANEL_PRIMARY):
+        assert not alarm.unlock_step(action, ft8_screen=True,
+                                     radio_confirmed_receive=False,
+                                     operator_recovery_override=True)
+    assert alarm.tx_inhibited
+    alarm.voice_cancel()
+    assert not alarm.unlock_step(A.PANEL_PRIMARY, ft8_screen=False,
+                                 radio_confirmed_receive=False,
+                                 operator_recovery_override=True)
+    for action in (A.PANEL_PRIMARY, A.PANEL_TERTIARY):
+        assert not alarm.unlock_step(action, ft8_screen=True,
+                                     radio_confirmed_receive=False,
+                                     operator_recovery_override=True)
+    assert alarm.tx_inhibited
+    assert alarm.unlock_step(A.PANEL_PRIMARY, ft8_screen=True,
+                             radio_confirmed_receive=False,
+                             operator_recovery_override=True)
+    assert not alarm.active and not alarm.tx_inhibited
+
+
+def test_restart_creates_new_alarm_with_no_session_lockout() -> None:
+    """An unresolved session latch is not persisted across application restart."""
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    alarm.voice_cancel()
+    assert alarm.tx_inhibited
+    restarted = FT8PttAlarm()
+    assert not restarted.tx_inhibited and not restarted.active
+
+
+def test_second_fault_rearms_after_manual_override() -> None:
+    """Manual recovery cannot permanently disable subsequent failure alarms."""
+    from rolling_thunder.physical_controls import ControlAction as A
+
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    alarm.voice_cancel()
+    for action in (A.PANEL_PRIMARY, A.PANEL_TERTIARY, A.PANEL_PRIMARY):
+        alarm.unlock_step(action, ft8_screen=True,
+                          radio_confirmed_receive=False,
+                          operator_recovery_override=True)
+    assert not alarm.tx_inhibited
+    alarm.trigger()
+    assert alarm.active and alarm.tx_inhibited
+
+
+def test_ui_operator_override_does_not_claim_verified_receive() -> None:
+    """Verify the real override path explicitly retains RX-unverified semantics."""
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1]
+              / 'src/rolling_thunder/ui_main.py').read_text(encoding='utf-8')
+    assert 'operator_recovery_override=True' in source
+    assert 'radio_confirmed_receive=False' in source
+    assert 'physical_rx_verified=false transmit_started=false' in source
