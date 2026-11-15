@@ -62,6 +62,19 @@ physical acceptance remains required before changing transmit safety policy.
 This guide does not authorize an unattended test. The correction is **not
 installed** merely because it is present on a review branch.
 
+## FT8-RX-02 proposed receive-status diagnostics (not installed)
+
+Yaesu provides read-only FT-891 CAT queries for the radio/CAT transmit
+status and TX/RX indicator states. Their strict source-only parser is under
+review; the dashboard does **not** currently issue those queries or use them
+to unlock FT8. The reported indicators come from the radio's firmware and
+cannot independently prove the absence of RF transmission. A real PTT alarm
+continues to require safe operator intervention and supervised recovery.
+Power-cycling or restarting the dashboard is **not a validated recovery
+procedure**; the current alarm is in-memory and must not be relied on to
+persist its inhibit across a process restart. See
+`engineering/ft8-rx02-receive-evidence-and-supervised-recovery.md`.
+
 ## About this guide
 
 Rolling Thunder is a mobile amateur-radio operating console built to reduce the

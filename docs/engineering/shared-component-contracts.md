@@ -652,3 +652,15 @@ trustworthy physical receive confirmation capability exists. The isolated
 visual-test instance has no linkage to production transmit authority. Never
 create an alternate CAT/PTT writer or reset the transmit inhibit as a side
 effect of UI navigation, cancellation, screen refresh, or shutdown.
+
+
+## FT8-RX-02 radio readback evidence (source-only)
+
+The FT-891 `TX;` and `RI[A/B];` read-only codec produces **firmware-sourced
+advisory data** only. A tuple that reports `TX0;`, TX LED OFF and RX LED ON
+is neither independently measured RF power nor sufficient permission to
+clear `FT8PttAlarm.tx_inhibited`. The existing CAT owner and its single
+serialized transport remain authoritative for all queries; no Tk callback,
+alternate port or separate PTT writer may be added. A crash/restart can
+recreate the in-memory PTT alarm: persistence and privileged supervised
+recovery remain future, separately reviewed work.

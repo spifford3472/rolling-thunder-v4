@@ -378,3 +378,108 @@ def test_ssb_mic_select_reply_requires_bytes() -> None:
 
     with pytest.raises(TypeError):
         parse_ssb_mic_select_reply("EX11050;")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [(b"TX0;", "both_off"), (b"TX1;", "cat_on"), (b"TX2;", "radio_on")],
+)
+def test_readonly_tx_status_round_trip(reply: bytes, expected: str) -> None:
+    """FT-891 readback is decoded without issuing a write/key command."""
+    from rolling_thunder.ft891_cat import (
+        encode_read_tx_readback,
+        parse_tx_readback,
+    )
+
+    transport = FakeCatTransport()
+    transport.open()
+    transport.replies[b"TX;"] = reply
+    assert parse_tx_readback(transport.query(encode_read_tx_readback())) == expected
+    assert transport.commands == [b"TX;"]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [b"", b"TX;", b"TX3;", b"TX0", b"TX0;;", b"tx0;", b"TX0;TX1;"],
+)
+def test_tx_status_invalid_or_ambiguous_reply_fails_closed(invalid: bytes) -> None:
+    """Never infer RX status from an unknown or partial CAT response."""
+    from rolling_thunder.ft891_cat import parse_tx_readback
+
+    with pytest.raises(Ft891CatError, match="Malformed FT-891 TX status"):
+        parse_tx_readback(invalid)
+
+
+def test_tx_status_nonbytes_rejected() -> None:
+    """CAT codec does not coerce untrusted object data into valid telemetry."""
+    from rolling_thunder.ft891_cat import parse_tx_readback
+
+    with pytest.raises(TypeError, match="bytes"):
+        parse_tx_readback("TX0;")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("selector", "expected_command", "answer", "expected_enabled"),
+    [
+        ("A", b"RIA;", b"RIA0;", False),
+        ("A", b"RIA;", b"RIA1;", True),
+        ("B", b"RIB;", b"RIB0;", False),
+        ("B", b"RIB;", b"RIB1;", True),
+    ],
+)
+def test_readonly_radio_led_reports(
+    selector: str, expected_command: bytes, answer: bytes, expected_enabled: bool
+) -> None:
+    """RI A/B indicators are read-only firmware telemetry, not RF sensors."""
+    from rolling_thunder.ft891_cat import (
+        encode_read_rx_led,
+        encode_read_tx_led,
+        parse_radio_led_reply,
+    )
+
+    query = encode_read_tx_led() if selector == "A" else encode_read_rx_led()
+    assert query == expected_command
+    assert parse_radio_led_reply(answer, indicator=selector) is expected_enabled
+
+
+@pytest.mark.parametrize(
+    ("indicator", "reply"),
+    [("A", b"RIB0;"), ("B", b"RIA1;"), ("A", b"RIA2;"),
+     ("B", b"RIB;"), ("A", b"RIA0;RIB1;"), ("A", b"ria0;")],
+)
+def test_radio_led_bad_or_crossed_responses_fail_closed(
+    indicator: str, reply: bytes
+) -> None:
+    """Crossed TX/RX replies must never be misclassified as receive."""
+    from rolling_thunder.ft891_cat import parse_radio_led_reply
+
+    with pytest.raises(Ft891CatError, match="Malformed or mismatched"):
+        parse_radio_led_reply(reply, indicator=indicator)
+
+
+def test_radio_led_rejects_invalid_selector_and_type() -> None:
+    """The protocol parser supports only documented TX/RX LED reads."""
+    from rolling_thunder.ft891_cat import parse_radio_led_reply
+
+    with pytest.raises(ValueError, match="indicator"):
+        parse_radio_led_reply(b"RIA0;", indicator="0")
+    with pytest.raises(TypeError, match="bytes"):
+        parse_radio_led_reply("RIA0;", indicator="A")  # type: ignore[arg-type]
+
+
+def test_readonly_receive_codec_does_not_grant_transmit_authority() -> None:
+    """Parsing all three nominal receive reports leaves live alarm inhibited."""
+    from rolling_thunder.ft8.ptt_alarm import FT8PttAlarm
+    from rolling_thunder.ft891_cat import parse_radio_led_reply, parse_tx_readback
+    from rolling_thunder.physical_controls import ControlAction as A
+
+    assert parse_tx_readback(b"TX0;").value == "both_off"
+    assert not parse_radio_led_reply(b"RIA0;", indicator="A")
+    assert parse_radio_led_reply(b"RIB1;", indicator="B")
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    alarm.voice_cancel()
+    for action in (A.PANEL_PRIMARY, A.PANEL_TERTIARY, A.PANEL_PRIMARY):
+        assert not alarm.unlock_step(action, ft8_screen=True,
+                                     radio_confirmed_receive=False)
+    assert alarm.tx_inhibited

@@ -533,3 +533,14 @@ source-only correction until an authorized physical RX source exists. Visual
 test alarm state is independently constructed and cannot clear production TX
 inhibit. Changing alarm recovery requires FT8 transmit, controller routing,
 operator UI and hardware-acceptance regression evidence.
+
+
+## FT8-RX-02 source-only evidence ownership
+
+The `ft891_cat.py` codec owns strict parsing for vendor `TX;`, `RIA;`,
+`RIB;` readback formats, but does not execute any queries. Any future
+runtime observation must remain under `Ft891Radio`'s existing CAT operation
+lock, publish only immutable, stale-aware advisory state, and keep the
+`FT8PttAlarm` live transmit inhibit independent of the readback data.
+Physical receive verification and cross-restart recovery remain separate
+unimplemented safety boundaries.
