@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 17368)
-Total output lines: 1517
-
 # Rolling Thunder Operator's Guide
 
 ## Current source versus installed state — November 15, 2026
@@ -563,7 +560,510 @@ Typical states include:
 - **yellow** — actual CQ age 0-1 periods;
 - **white** — actual CQ age 2-3 periods;
 - **gray** — actual CQ age 4-5 periods;
-- **red + !** — failed/exhausted attempt for that c…5368 tokens truncated…gn use; the regional I-71
+- **red + !** — failed/exhausted attempt for that callsign/band today;
+- **blue + square marker** — operator-aborted attempt;
+- **tree/POTA marker** — CQ explicitly included a POTA indication.
+
+A successful callsign/band contact is removed from the eligible list for the
+rest of the UTC date. A U.S. callsign explicitly calling `CQ DX` is not listed as
+an eligible FT8 target. An explicit `CQ POTA` remains eligible and carries the
+green tree marker. The far-right side of the FT8 status area shows the parsed
+decode count from the most recently completed decode cycle in the same large type as
+the FT8 header. It is hidden when no count is available and on every other screen.
+
+## Controls
+
+- **Encoder** — move through eligible CQ stations.
+- **Encoder press** — explicitly authorize/start one QSO with the selected
+  station when transmit is enabled and all checks pass.
+- **Context Button #1** — cycle supported FT8 bands and tune the standard FT8
+  dial frequency.
+- **Context Button #3** — abort an active FT8 QSO; in terminal/result state it
+  returns to the browser.
+- **Back** — abort active work, acknowledge terminal state, or clear selection
+  depending on current FT8 state.
+- A terminal QSO result stays visible for about three seconds, then Rolling
+  Thunder returns the FT8 lifecycle to its CQ browser. The cleanup also occurs
+  if another context is selected; it does not move you back to FT8.
+- Leaving the FT8 context aborts active FT8 work before restoration.
+
+An accepted explicit CQ activation may show the shared station-information popup.
+Encoder browsing, an accepted FT8 band change, or leaving FT8 dismisses it and it
+stays hidden across refresh, even if a highlighted or active target remains. A later
+accepted activation of the same or another station can show it again. Popup behavior
+does not add a press, authorize transmission, or change the bounded QSO workflow.
+
+While the CQ browser is idle, a valid decode addressed to the configured local
+callsign opens a prominent incoming-call alert showing the caller, received SNR,
+and grid when known. **Context Button #2** explicitly answers that exact caller
+through the bounded responder workflow. A grid-bearing inbound starts with our
+signal report; an inbound signal report starts with our acknowledged report.
+Both continue to the normal final 73. **Context Button #3** ignores the caller.
+The alert never interrupts an active or terminal QSO, and a decode never grants
+transmit authority by itself.
+
+Button #2 leaves the alert present if the responder workflow cannot start. After
+a completed QSO, repeat addressed traffic from that same station is suppressed
+for the next six FT8 periods so the final exchange is not mistaken for a new
+call. Other callsigns appear immediately; the worked callsign can appear again
+after the bounded cutoff. Failed and aborted attempts are not suppressed this
+way.
+
+## One authorization means one QSO
+
+Rolling Thunder never automatically moves from a completed/failed station to a
+new station and transmits again.
+
+Each QSO requires a new explicit operator authorization for one selected target.
+
+## Radio preparation
+
+Before transmit, Rolling Thunder prepares and verifies the approved FT-891 FT8
+state. The current operating design uses the documented FT8 dial frequency,
+SSB-BFO USB, and a one-time initial power target calculated from the frozen local
+and remote Maidenhead grids. Unknown distance and paths through 3,000 km start at
+20 W; increasingly long paths use documented 5 W steps and paths beyond 14,500
+km start at the hard 70 W maximum. Failure is fail-closed: no PTT and no
+transmit audio. Rolling Thunder does not continually reset power after QSO start,
+so a manual operator adjustment remains authoritative.
+
+Leaving FT8 restores the documented normal radio values.
+
+## QSO grid behavior
+
+At the start of a QSO attempt, Rolling Thunder accepts GPS location for logging
+only when the latest position is no more than 120 seconds old. A trusted position
+freezes the full six-character Maidenhead grid plus coordinates and jurisdiction
+for that QSO; those values remain fixed until that QSO succeeds, fails, is aborted,
+or otherwise ends.
+
+If GPS is missing or older than 120 seconds, FT8 may still use the configured home
+grid for the on-air protocol exchange, but the completed contact does not claim that
+grid as its mobile logging location. Forge routes that contact to `Mobile - Unknown
+Location`. The next QSO evaluates GPS freshness again and obtains the then-current
+location.
+
+## Logging
+
+A successful FT8 QSO enters the normal Rolling Thunder local contact path.
+Failed/aborted attempts are not logged as ordinary QSOs, but may be retained as
+performance/analysis telemetry.
+
+Phase B retains every terminal FT8 attempt locally for later diagnostics, including
+success, no answer, busy-target exhaustion, abort, interruption and equipment/
+preparation faults. This adds no screen or control and does not change selection,
+power policy, transmit authority, contact logging or Wavelog. Optional Forge
+delivery and VOACAP processing are off by default; network/provider loss leaves the
+local attempt queued and never turns missing data into a propagation failure.
+
+Phase C4/C6 forecast sampling is a separately supervised Forge-only service. Its
+production timer may run four times daily under an immutable, bounded plan; it has
+no dashboard control, AI recommendation, band ranking, power advice, radio command,
+or transmit authority. Any stored 20-W value is a model reference, not a measurement
+or instruction, and VOACAP reliability is not QSO success probability. A successful
+timer exit is not by itself proof of forecast coverage: cycle JSON and the
+administrator-only query-only `--health` report distinguish provider-stored ready,
+cache-reused ready, unavailable, pending, missing, stale, skipped, and failed/missed
+slots. It also binds coverage to the exact plan and per-day slot identities rather
+than treating matching totals as sufficient evidence.
+
+Phase C5 adds offline Forge evaluation and a shadow-only explanatory data contract.
+It still adds no dashboard control or displayed recommendation and cannot reorder a
+CQ, set power, authorize a QSO, key PTT or transmit. The configuration term
+`armed_when_ready` means scientific readiness only in this phase. Normal FT8 starts
+remain at the current 20-W baseline under the existing operator-approved policy;
+Forge loss or a failed readiness check cannot change radio operation.
+
+After local persistence, successful FT8 contacts request the same background
+Forge/Wavelog synchronization as ordinary contacts. A trusted mobile grid routes to
+`Mobile - XXXX - YY`; an untrusted/missing mobile location routes to `Mobile - Unknown
+Location`. For an explicit `CQ POTA`, Rolling Thunder also checks the current cached
+POTA spots and records the park reference only when callsign/frequency/mode identify
+exactly one park; ambiguous matches are left blank rather than guessed. A local
+success or performance record does not prove remote upload: check the LOG row for
+SYNC. WAIT can include optional QRZ
+enrichment; Sync Now does not bypass that readiness gate. A failed optional QRZ
+lookup releases the contact without a remote grid. If WAIT persists, collect
+the contact/enrichment and sync evidence described in `FORGE_CONTACT_SYNC.md`.
+
+For additional detail see `FT8_OPERATOR_GUIDE.md`.
+
+---
+
+# 9. Repeaters Screen
+
+## Purpose
+
+The repeater screen presents nearby configured six-meter repeaters based on the
+current trusted GPS location and local repeater deployment data.
+
+## What is shown
+
+Each row can show:
+
+- repeater/channel name;
+- receive frequency;
+- shift/offset;
+- RX/TX tone information;
+- distance from current GPS position;
+- effective Active/Inactive state.
+
+The default view shows Active repeaters only.
+
+## Controls
+
+- **Encoder** — move stable selection through the current repeater list.
+- **Encoder press** — configure/tune the selected repeater through the typed
+  repeater radio-configuration path.
+- **Context Button #1** — toggle Active-only / All.
+- **Context Button #2** — toggle the selected repeater's local Active preference.
+- **Back** — cancel transient state or clear selection.
+
+Changing the Active flag is a local operator preference. It does not itself
+configure the radio.
+
+## GPS requirements
+
+Distance filtering requires a current usable GPS fix. Missing/stale GPS produces
+an explicit unavailable/stale state rather than guessed distances.
+
+---
+
+# 10. DMR Screen
+
+## Purpose
+
+The DMR screen monitors the configured WPSD/MMDVM hotspot and supports local
+logging of DMR contacts. It does not grant Rolling Thunder DMR transmit
+authority.
+
+## Monitored talkgroup
+
+Rolling Thunder learns the monitored talkgroup from RF activity by the
+configured operator callsign. It does not assume a fixed talkgroup such as
+TG3100.
+
+Until a monitored talkgroup is known, selection/logging is restricted and the
+screen can show an unknown talkgroup state.
+
+## Controls
+
+- **Context Button #1** — stage the currently active caller on the monitored
+  talkgroup.
+- **Context Button #2** — commit the currently staged DMR QSO.
+- **Encoder** — browse completed caller history for the monitored talkgroup.
+- **Encoder press** — stage the selected history caller.
+- **Back** — cancel staged QSO first, then clear history selection.
+
+A talkgroup change invalidates a stage from the previous talkgroup.
+
+## Failure behavior
+
+Loss of live feed clears current-audio state rather than inventing a caller.
+Usable prior history can remain while a source is marked degraded.
+
+---
+
+# 11. Weather Screen
+
+## Purpose
+
+The Weather screen presents retained current conditions, near-term forecast,
+solar information, and location-relevant severe-weather alerts.
+
+Provider work occurs on Forge; the Pi displays retained immutable state.
+
+## Current conditions
+
+The screen can show:
+
+- Fahrenheit and Celsius temperature;
+- relative humidity;
+- normalized condition/icon;
+- sunrise and sunset;
+- next three future hourly temperatures;
+- precipitation probability;
+- provider attribution.
+
+## Weather status
+
+Common states:
+
+- **LIVE** — current usable retained/provider state;
+- **RETAINED** — prior valid data remains useful;
+- **STALE** — useful but aged;
+- **DISABLED** — feature intentionally off;
+- **UNAVAILABLE** — no usable state;
+- **ERROR** — latest attempt failed while prior data may still be displayed.
+
+## Severe-weather alerts
+
+Alerts are location-aware. Rolling Thunder should only claim an alert is
+currently applicable when it has a trustworthy current location relationship.
+
+The screen distinguishes verified-current alerts from retained/unverified alert
+state.
+
+Important warning/watch categories may also produce an audible notification
+according to the configured policy. Repeated polling of the same unchanged
+alert should not repeatedly replay audio.
+
+When alert text exceeds the viewport, encoder movement scrolls the already-
+published alert summary.
+
+## Audible policy
+
+The current policy distinguishes urgent warnings, watches, other warnings, and
+advisories. The audio is a Rolling Thunder notification and is not an EAS
+emulator.
+
+---
+
+# 12. Settings Screen
+
+## Purpose
+
+Settings exposes operator controls that can safely change selected runtime
+preferences without editing configuration files.
+
+## Current controls
+
+- **Encoder** — move the highlight through MAP ZOOM, RADAR, CALLSIGN INFO,
+  MAP STYLE, REBOOT, and SHUTDOWN; rotation never changes a value.
+- **Context Button #1 / encoder press** — no Settings action.
+- **Context Button #2** — selected-row OUT, OFF, NIGHT, or CANCEL.
+- **Context Button #3** — selected-row IN, ON, DAY, or power SELECT/CONFIRM.
+
+All six rows are visible at once at the supported display size and retain the
+installed readable type sizes. A fixed footer shows the highlighted row's button
+instruction. Text shows actual zoom/style, ON/OFF or
+UNAVAILABLE, the selected marker, and the highlight. Power is UNAVAILABLE unless
+a healthy trusted serial-v2 controller is current. The first Button #3 says
+SELECT; only an active named confirmation says CONFIRM. Reboot or shutdown needs
+two fresh deliberate Button #3 releases on the same row. Button #2, row/page
+change, timeout, unhealthy controller, or session loss cancels.
+
+Radio/FT8/PTT or local-commit activity blocks the request. After a power request
+is accepted, all new commands—including tuning, selection, context, capture, QSO,
+and commit actions—are blocked while Rolling Thunder waits for the service
+manager's actual SIGTERM. The successful request itself does not preemptively
+close the dashboard. A permission, guard, preference-drain, adapter, or timeout
+failure leaves the dashboard usable and shows the action plus a bounded reason.
+Linux shutdown does not disconnect external battery, fan, hub, or radio power; a
+blank screen is not safe-unplug proof. Settings power actions also require the
+host's narrow reboot/shutdown authorization; an unavailable authorization is
+reported in the UI without closing the dashboard. Parked installed power-cycle
+acceptance and Pi full-screen visual acceptance remain separate supervised work.
+
+## Antenna reference / RF exposure screen
+
+This optional screen is disabled by default. When enabled, it appears after SETTINGS
+in next-context navigation and can be opened with `a` on a bench keyboard. Encoder
+movement reviews already-loaded HF, VHF, and UHF antenna/installation cards. Encoder
+press and Context Buttons do nothing on this screen; it cannot tune, key, transmit,
+change power, or edit any displayed value. Back also has no Antennas-screen action.
+
+The screen's sole authority is a manually maintained antenna-reference YAML file.
+Update it only off-car, using retained manufacturer, installation, or measurement
+sources, then restart Rolling Thunder through the normal approved procedure. There
+is no in-app editor or reload. Keyboard, mouse, touchscreen, encoder, context button,
+physical button, and voice input cannot alter antenna, installation, operating mode,
+power, distance, reflection, RF duty, or either transmit fraction. Future voice
+changes are not implemented and have no mutation authority.
+
+The checked-in example starts empty. The screen never fabricates gain, treats missing
+loss as zero, assumes HF includes 6 m, or uses current radio settings. A six-metre
+antenna needs its own explicit VHF association. Cards retain gain/loss provenance and
+the original dBi/dBd unit. Configured scenarios separately show mode RF-envelope duty,
+forward power, controlled 6-minute and uncontrolled 30-minute TX fractions,
+reflection assumption, and source.
+
+The separate checked-in `config/antenna-reference.mobile-example.yaml` records a
+specific set of operator claims dated 2026-10-13 and is not enabled or copied into
+production automatically. It deliberately leaves all cable and duplexer loss values
+unknown and every loss inventory incomplete, so it cannot produce a complete
+exposure estimate. The ATAS-120A chain is ONLY 6.5 ft RG316. The 2 m Comet SSB224
+chain is 6.5 ft RG316, CF-4160J duplexer, then 2 ft RG8X; it is distinct from the
+generic dual-band antenna assigned to 70 cm, whose chain is 6 ft RG58, CF-4160J,
+then 2 ft RG8X. No cable or duplexer loss or third-party certification is inferred.
+The ATAS-120A record omits 30, 17, and 12 m pending confirmation, and the generic
+antenna's nominal 70 cm gain remains pending datasheet mapping verification.
+
+ONLY DRIVER antenna distance is verified in that mobile example: 90 in / 2.286 m
+for the ATAS-120A, 64 in / 1.6256 m for the 2 m Comet SSB224, and 84 in / 2.1336 m
+for the generic dual-band antenna operating on 70 cm. All 12 scenarios identify
+that value as `front_seat_measured`. Passenger and public distances remain unknown,
+so risk or safety cannot be concluded for passengers, other occupants, the public,
+or aggregate/multiantenna exposure.
+
+Distance is explicit: `hypothetical_six_foot` is exactly 6 ft / 1.8288 m and is
+always unverified; `front_seat_measured` and `public_measured` require real measured
+geometry. Missing, unreadable, malformed, or invalid YAML produces a visible error,
+not an empty or safe-looking estimate.
+
+The underlying calculations retain peak ERP/EIRP, both FCC limits, calculated
+plane-wave distances, and missing-input details. The driving view intentionally
+shows only the selected card's public-scenario summary rather than those long
+diagnostics. Neither the view nor the underlying result declares an installation
+safe, unsafe, compliant, or noncompliant. Near-field coupling, vehicle
+body/metal/glass, real antenna pattern, occupants, and aggregate simultaneous-source
+exposure remain outside the estimate. Do not rely operationally on the screen until
+real sourced data has been reviewed, results have been compared with the current
+ARRL reference, and vehicle-specific geometry and near-field questions have been
+addressed.
+
+A manual DAY/NIGHT selection can temporarily override automatic solar style
+selection until the next real solar transition. The callsign-information
+mini-map follows the same accepted DAY/NIGHT selection; map zoom remains a
+primary-live-map-only setting.
+
+---
+
+# 13. LOG Screen
+
+## Purpose
+
+The LOG screen is a glanceable view of recent locally stored contacts and remote
+synchronization state.
+
+## What is shown
+
+The panel shows recent contacts with:
+
+- time;
+- callsign;
+- amateur band;
+- conservative country abbreviation where available;
+- synchronization state.
+
+Synchronization markers include:
+
+- **SYNC** — remotely synchronized;
+- **WAIT** — pending;
+- **FAIL** — last synchronization attempt failed.
+
+The summary also shows unsynchronized and total local-contact counts.
+
+## Control
+
+- **Context Button #1** — request an operator-forced synchronization pass.
+
+The local contact database remains authoritative even when synchronization
+fails.
+
+## Retention
+
+Rolling Thunder can prune old contacts only after they are proven synchronized,
+under the configured retention policy. Unsynchronized contacts are not discarded
+merely to meet a size target.
+
+---
+
+# 14. AI Screen
+
+The AI context currently exists in dashboard navigation but remains a reserved/
+placeholder screen.
+
+Operators should not assume that an AI-advisor recommendation engine is active
+merely because the context is selectable.
+
+Future implementation should be documented here before it is presented as an
+operational feature.
+
+---
+
+# 15. Live Map and Situational Display
+
+## Purpose
+
+The live map provides continuous location and environmental awareness alongside
+the active operating context.
+
+## Map sources
+
+The primary map is local-first:
+
+1. installed regional map package when available;
+2. runtime cache;
+3. approved online provider;
+4. explicit unavailable/partial presentation.
+
+The installed system contains regional DAY/NIGHT packages so the map can remain
+useful without cellular service inside covered areas.
+
+## Map information
+
+The map can display:
+
+- current/last-known vehicle location;
+- local time;
+- UTC;
+- Maidenhead grid;
+- retained local weather temperature;
+- MAP/GPS/RADAR health.
+
+GPS health and map-data health are separate. A cached map can be usable while
+GPS is degraded, and a good GPS fix can exist while online map data is
+unavailable.
+
+## Vehicle marker
+
+The vehicle marker uses course-over-ground while moving. At low speed it retains
+the last reliable heading rather than visibly jittering.
+
+## POTA park markers
+
+The map can display approximate POTA catalog locations.
+
+At higher zoom, markers include park reference/name; at lower zoom they become
+compact dots. These coordinates are situational pins only and are not legal
+activation-boundary evidence.
+
+## Radar
+
+Radar is an optional overlay with an independent lifecycle from the base map.
+Radar failure must not blank or block the base map.
+
+---
+
+# 16. Callsign Information Overlay
+
+## Purpose
+
+The callsign-information overlay answers four questions while leaving the
+current operating screen intact:
+
+1. Who is the station?
+2. Where are they?
+3. What is the weather there?
+4. Have I worked them before?
+
+## Information sources
+
+The Pi requests a compact contact-intelligence response from the independent
+Forge callsign-info service.
+
+Depending on available data, the overlay may include:
+
+- callsign/name/address identity;
+- a contact mini-map;
+- current target weather;
+- target local time in black text on a compact white background at the top-right of the mini-map when a reliable IANA timezone accompanies that weather;
+- WORKED N TIMES plus the last QSO date/location and band; notes/comments are omitted;
+- FIRST CONTACT when no prior QSO is found.
+
+The contact mini-map follows the primary live map's DAY/NIGHT theme. A configured
+worldwide style-aware source supplies its own NIGHT tiles. When no dedicated
+callsign source is configured, the normal worldwide online source supplies DAY
+tiles and Rolling Thunder locally converts validated NIGHT requests into a
+genuinely dark raster. DAY tiles stay unchanged, and separate cache partitions
+prevent DAY pixels from being presented or stored as NIGHT.
+
+When configured for Forge tiles, that source is an optional disabled-by-default
+route on the existing private Forge spot/weather/radar service. A renderer or
+map-route failure affects only the mini-map; spots, health, weather, location,
+radar, local logging, and radio operation continue independently.
+The route must have worldwide backing data for callsign use; the regional I-71
 renderer is not worldwide coverage.
 
 ## Location priority
