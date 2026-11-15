@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from subprocess import run
+from subprocess import Popen, TimeoutExpired, run
+from time import monotonic, sleep
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO_ROOT / "deploy" / "rolling-thunder-autostart"
@@ -112,3 +113,65 @@ def test_symlink_lock_path_is_rejected(tmp_path: Path) -> None:
     result = run(["/usr/bin/bash", str(LAUNCHER)], env=env, text=True, capture_output=True, check=False)
     assert result.returncode != 0
     assert target.read_text(encoding="utf-8") == "preserve"
+
+
+
+def test_launcher_lock_survives_exec_and_prevents_second_dashboard(
+    tmp_path: Path,
+) -> None:
+    """The UI process must own the inherited flock until it exits."""
+    env = _launcher_environment(tmp_path, uptime="181.50", minimum=180)
+    ui = Path(env["ROLLING_THUNDER_VENV_DIR"]) / "bin" / "rolling-thunder-ui"
+    started = tmp_path / "started"
+    finish = tmp_path / "finish"
+    # The stub UI must run long enough to observe the launcher lock after exec.
+    ui.write_text(
+        "#!/usr/bin/env bash\n"
+        f"touch {str(started)!r}\n"
+        f"while [[ ! -f {str(finish)!r} ]]; do sleep 0.05; done\n",
+        encoding="utf-8",
+    )
+    ui.chmod(0o755)
+
+    first = Popen(
+        ["/usr/bin/bash", str(LAUNCHER)],
+        env=env,
+        text=True,
+        stdout=-1,
+        stderr=-1,
+    )
+    try:
+        deadline = monotonic() + 3.0
+        while not started.exists() and first.poll() is None and monotonic() < deadline:
+            sleep(0.01)
+        assert started.exists(), "initial dashboard did not start"
+
+        second = run(
+            ["/usr/bin/bash", str(LAUNCHER)],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=3.0,
+        )
+        assert second.returncode != 0
+        assert "owns the instance lock" in second.stdout
+        assert first.poll() is None
+    finally:
+        finish.touch()
+        try:
+            first.communicate(timeout=3.0)
+        except TimeoutExpired:
+            first.kill()
+            first.communicate(timeout=3.0)
+
+    third = run(
+        ["/usr/bin/bash", str(LAUNCHER)],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=3.0,
+    )
+    assert third.returncode == 0
+    assert "starting dashboard" in third.stdout

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Execute one complete deployment transaction under a nonblocking kernel lock.
+# This is a candidate for approved integration into the installed root wrapper.
+set -euo pipefail
+
+usage() {
+    printf 'usage: %s LOCK_PATH -- COMMAND [ARG ...]\n' "$0" >&2
+    exit 64
+}
+
+[[ $# -ge 3 ]] || usage
+lock_path=$1
+shift
+[[ $1 == -- ]] || usage
+shift
+[[ $# -ge 1 ]] || usage
+
+# Refuse evident symlinks; a trusted parent directory is required to prevent races.
+# The parent must be root-owned and not writable by untrusted users when
+# installed as a privileged deployment guard.
+[[ ! -L "$lock_path" ]] || { echo 'ERROR: symlink deployment lock refused' >&2; exit 73; }
+[[ -d "${lock_path%/*}" && "$lock_path" == */* ]] || { echo 'ERROR: missing lock directory' >&2; exit 73; }
+exec 9>>"$lock_path"
+[[ ! -L "$lock_path" ]] || { echo 'ERROR: symlink deployment lock refused' >&2; exit 73; }
+if ! /usr/bin/flock -n 9; then
+    echo 'ERROR: deployment already in progress' >&2
+    exit 75
+fi
+# The descriptor and lock remain held by the transaction after exec.
+exec "$@"

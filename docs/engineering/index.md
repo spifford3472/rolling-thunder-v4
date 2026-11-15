@@ -12,7 +12,44 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `stab05-cat-ptt-uncertainty.md` — current CAT/PTT lock and failed release evidence, preserved single-command authority, and parked acceptance gates.
 
+- `stab06-supervision-recovery.md` — system-level service ownership, inherited flock test evidence, and unresolved wrapper/recovery gates.
+
+- `doc02-current-state-reconciliation.md` — verified editorial/status corrections, historical evidence pointers, DOC-03 audit gates.
+
+- `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
+
 ## Engineering document set
+
+- `stab07l-rpi-historical-package-quarantine.md` — exact Raspberry Pi libc/OpenSSL candidate bytes, independent Pi hash match, unsigned-index quarantine and NO-GO gates.
+
+- `stab07k-authenticated-exact-arm64-os-reconstruction.md` — 14/16 exact signed ARM64 OS archives verified, historical Debian snapshots, incomplete Pi-native image and NO-GO gates.
+
+- `stab07i-mock-full-dashboard-lifecycle.md` — actual ARM64 mock dashboard startup/readiness/refresh/shutdown, synthetic SQLite and failure/refusal evidence, preference drain fix and release NO GO.
+
+- `stab07j-native-runtime-provenance-and-release-readiness.md` — read-only native Pi ELF/dpkg SHA evidence, exact Forge comparison and protected-release NO-GO gates.
+
+- `stab07h-hardware-disabled-tk-lifecycle.md` — private ARM64 Xvfb/Tk heartbeat, signal/cleanup failure tests, no-RF boundary, rollback preservation and NO-GO gates.
+
+- `stab07g-isolated-arm64-execution.md` — isolated emulated ARM64 CPython 3.13.5, 26-wheel/app installation, native import/RECORD evidence and remaining NO-GO gates.
+
+- `stab07f-isolated-runtime-staging.md` — source wheel reproducibility, exact Pi interpreter evidence, fail-closed offline staging and isolated ARM64 runtime blocker.
+
+- `stab07e-arm64-wheelhouse-and-release.md` — hash-pinned Pi ARM64/Python 3.13 wheelhouse, deterministic transport payload, provenance gaps and parked NO-GO gates.
+
+- `stab07d-protected-release-and-launch-witness.md` — deterministic Git-source candidate, signed launch observation, offline tests and explicit deployment blockers.
+
+- `stab07c-running-code-identity.md` — read-only actual Pi process evidence, protected release/process binding candidate and explicit lack of in-memory Python byte proof.
+
+- `stab07-security-acceptance.md` — offline Ed25519 approval validation, privileged-file hash inspection, unverified running SHA and physical-PTT NO-GO gates.
+
+- `stab07-integration-and-parked-release-plan.md` — integrated STAB-06C–F review, open safety blockers, PR lineage and a gated, nonexecuted parked installation/rollback plan.
+
+- `stab06f-recovery-inspection-reconciliation.md` — uninstalled read-only recovery evidence, approval-gated attestation, security gates and operator procedure.
+
+- `stab06e-durable-transaction-reconciliation.md` — offline crash-surviving deployment journal, refused retries and operator reconciliation gates.
+
+- STAB-06D: see stab06d-wrapper-candidate.md for offline deployment readiness and recovery findings.
+- `stab06c-deployment-transaction-lock.md` — offline deployment transaction guard contract, tests and remaining production integration/readiness gates.
 
 - `usb-ft8-incident-2026-11-13.md` — observed USB topology, FT8 audio failure timeline, temporary observer, validation and rollback; cause unresolved.
 - `issue-410-supervision-reconciliation.md` — system versus user systemd discrepancy, actual dashboard ownership, unverified wrapper and shutdown gates.

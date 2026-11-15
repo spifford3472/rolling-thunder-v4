@@ -16,6 +16,18 @@ The same query with `systemctl --user` returned `LoadState=not-found`, `ActiveSt
 
 The system unit runs as `User=geoff`, starts `/usr/bin/bash /home/geoff/projects/rolling-thunder-v4/deploy/rolling-thunder-autostart`, and sets `Restart=on-failure`, `RestartSec=10`, `TimeoutStopSec=20`, and `KillSignal=SIGTERM`. It is enabled under `graphical.target.wants`. It sets a minimum system uptime of 180 seconds and X11 display environment. Active drop-ins include R1A timing and FT8 environment files. A protected `60-ft8-period.conf` drop-in was not readable by the restricted remote account and its contents were **not** inferred.
 
+## Current-source supersession notice (2026-11-14)
+
+The launcher interpretation below is a **dated 2026-11-13 snapshot** and is
+not the current implementation. Current repository
+`deploy/rolling-thunder-autostart` acquires a nonblocking inherited `flock`
+before the uptime wait and rejects unmanaged processes with `pgrep` as a
+secondary guard. See `system-architecture.md`,
+`stab01-doc01-evidence-2026-11-13.md`, and STAB-06 tests for current
+source-level evidence. This correction does not independently attest that
+the installed launcher matches source or that the protected systemd drop-ins
+were inspected. Keep the original incident text as historical evidence.
+
 ## Source-level lifecycle and duplicate risk
 
 The repository's `deploy/rolling-thunder-autostart` checks for an existing process matching `[p]ython.*rolling_thunder\\.ui_main|[r]olling-thunder-ui` before and after the 180-second uptime wait. If found, it logs and exits successfully; otherwise it validates config/venv and uses `exec` to replace itself with `rolling-thunder-ui`. This provides a *best-effort* duplicate check, **not an atomic singleton lock**. Concurrent launches could both pass `pgrep`; a pre-existing unmanaged dashboard could make the service exit successfully, leaving systemd without ownership of that dashboard. In this observed instance, cgroup membership and MainPID prove ownership.

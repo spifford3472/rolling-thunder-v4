@@ -147,6 +147,12 @@ class OperatorPreferenceService:
         self._stopped = False
 
     @property
+    def is_stopped(self) -> bool:
+        """Report whether this service already rejected further queued writes."""
+        with self._lock:
+            return self._stopped
+
+    @property
     def last_error(self) -> str | None:
         """Return the most recent asynchronous persistence error, if any."""
         with self._lock:

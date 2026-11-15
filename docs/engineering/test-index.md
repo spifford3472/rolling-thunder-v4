@@ -46,6 +46,9 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_autostart_launcher.py`
 - `tests/test_stab04_shutdown_deadline_contract.py` — STAB-04/04B runtime-first UI shutdown, atomic single close worker, failed FT8 release reporting, early radio cleanup, truthful blocked-step logs and failure isolation; **not** physical RF safety acceptance.
 - `tests/test_stab02_shutdown_failure_modes.py` — STAB-02 hardware-free blocked CAT TX0, held CAT lock, failed release/retry and concurrent TX0/disconnect serialization, sequential UI/runtime shutdown, GPS cancellation with a blocked in-flight read, repeat shutdown, rollback after interrupted service startup, and STAB-03 regression for connected-radio cleanup before completed startup, retry after injected disconnect failure, and no unnecessary adapter access when never connected; no live RF acceptance implied.
+
+- `tests/test_autostart_launcher.py` — STAB-06 inherited flock survives `exec`, refuses concurrent UI, and permits launch after owner exits.
+- `tests/test_stab02_shutdown_failure_modes.py` — STAB-02 hardware-free blocked CAT TX0, held CAT lock, failed release/retry during disconnect, sequential UI/runtime shutdown, GPS cancellation with a blocked in-flight read, repeat shutdown, rollback after interrupted service startup, and STAB-03 regression for connected-radio cleanup before completed startup, retry after injected disconnect failure, and no unnecessary adapter access when never connected; no live RF acceptance implied.
 - `tests/test_dashboard_health_compatibility.py`
 - `tests/test_dashboard_state.py`
 - `tests/test_home_platform_runtime.py`
@@ -675,3 +678,194 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
 - tests/test_meshcore_ohgo_ui.py also guards against OHGO widget geometry
   toggling on repeated refreshes and redundant MORE StringVar writes.
+
+### STAB-06D offline verification
+
+- tests/test_deployment_wrapper_candidate.py: shell candidate syntax and locking/readiness contract.
+- tests/test_deployment_wrapper_offline.py: mocked Git, service and SQLite failure injection.
+- tests/test_ui_deployment_readiness.py: fake Tk callback, heartbeat freshness, cgroup and singleton checks.
+- Real RF receive state and parked host acceptance are outside these tests.
+
+### STAB-06E durable transaction journal (offline)
+
+- `tests/test_deployment_transaction_journal.py` checks retained interrupted phases, corruption rejection, atomic private records and commit-only success.
+- `tests/test_deployment_wrapper_offline.py` also asserts failed/invalid journals block new mutation before fetch or systemd.
+- `tests/test_deployment_wrapper_candidate.py` checks durable phase ordering and commit-before-success reporting.
+- No live host, powered FT-891, crash reboot or data recovery acceptance is established by these tests.
+
+### STAB-06F recovery acceptance tests (offline, no radio)
+
+- `tests/test_recovery_inspector.py`: database/WAL, full backup QSO row preservation (not just counts), journal, legacy heartbeat and no-write evidence behavior.
+- `tests/test_recovery_process_identity.py`: system manager PID, cgroup and singleton identity with fake procfs.
+- `tests/test_recovery_reconciliation.py`: root-only approval receipt, exact evidence binding, expiry, serialization and replay denial.
+- `tests/test_recovery_failure_injection.py`: SIGKILL, failed file/directory fsync, failed rename and corrupt journal refusal.
+- `tests/test_deployment_transaction_journal.py`: archive retention, collision refusal and terminal reconciled transaction.
+
+### STAB-06C deployment transaction guard (uninstalled candidate)
+
+- `tests/test_deployment_transaction_lock.py` verifies the standalone
+  `deploy/rolling-thunder-deploy-lock` kernel lock lifetime through `exec`,
+  concurrent refusal before mutation, lock release, symlink/missing-parent
+  refusal and child exit status. This does not validate the installed root-owned
+  wrapper, application readiness, rollback, backup integrity, systemd recovery,
+  or physical radio/PTT state. See
+  `stab06c-deployment-transaction-lock.md` for integration gates.
+
+### STAB-07 Test-file inventory gap closure (exact paths, 2026-11-14)
+
+The entries below close the exact-file inventory gap observed against the
+integration candidate. They are discoverability references only; feature
+ownership, API contracts and actual deployment composition remain subject
+to independent DOC-03 / PR #414 source review. No code or test behavior
+has been changed by this inventory correction.
+
+- `tests/test_callsign_clock_background.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_county_persistence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_c6_service_units.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_contact_snapshots.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_ft8_periods.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_autoqueue.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_bridge_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_coverage_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_event_bridge.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_evidence_api.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_evidence_server.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_evidence_snapshot.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_normalized_history.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_path_evidence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_python_access_script.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_voacap_noaa_refresh_main.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_voacap_response_identity.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft891_ptt_release_timing.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_band_presentation.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_browser_outbound_evidence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_browser_ranking.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_country_allocations.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_cp31_trial_report.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_cp3_power_sequence.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_dx_ranking.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_p1_pi_cutover_script.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_period_correlation.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_period_delivery_integration.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_period_repository.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_power_advisor.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_propagation_inputs.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_psk_evidence_client.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_psk_evidence_http_acceptance.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_ptt_alarm.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_ranking_cache.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ft8_target_activity.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_local_jurisdiction.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_offline_county.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_offline_county_store.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_shutdown_contention.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_ui_timing.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_usb_observer.py` — referenced in current repository; review related feature guide for ownership and behavior.
+
+### STAB-07B security and privileged evidence (offline only)
+
+- `tests/test_recovery_reconciliation.py` now verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals.
+- `tests/test_stab07_privileged_evidence.py` tests installed-wrapper snapshot identity checks and strictly redacted protected FT8 directive names with temporary files. No installed root files or RF tested.
+
+### STAB-07C running-code release identity (offline)
+
+- `tests/test_runtime_release_identity.py` — private fake release/procfs manifest, source-file inventory, path and process identity, untrusted-code refusal and explicit no-in-memory-proof semantics.
+- `tests/test_recovery_reconciliation.py` — signed approvals cannot bypass an unverified loaded Python code identity; transactions remain blocked.
+
+### STAB-07D protected release and launch provenance (offline)
+
+- `tests/test_protected_release_build.py` — deterministic exact commit source bundle, mutable worktree immunity, secret exclusion and malicious tree refusal.
+- `tests/test_launch_witness.py` — disposable Ed25519 signature verification, process identity, stale/tampered/forged evidence refusal and fail-closed loaded-byte status.
+
+### STAB-07E ARM64 wheelhouse integrity and reproducible transport (offline)
+
+- `tests/test_arm64_wheelhouse_payload.py` — reject missing, tampered, symlinked, wrong-platform wheels, fake native ELF, `.pth` injection and missing transitive pins; verify repeated canonical transport source/payload identity.
+
+### STAB-07F private offline release staging tests
+
+- `tests/test_protected_candidate_stage.py` — deterministic staged artifact checks, no-clobber semantics, tamper/permission refusal, fake approval/removed files, and no executed ARM64 runtime.
+
+### STAB-07G isolated native ARM64 execution and record audit
+
+- `tests/test_arm64_sandbox.py` — ensure no network, host/radio mounts or arbitrary execution; reject unsafe emulator and fake production approvals.
+- `tests/test_arm64_record_audit.py` — exact wheel-installed file inventories and SHA256 RECORD validation, reject tamper, path escape, unexpected/missing packages and symlinks.
+- Independent Forge hardware-free QEMU smoke: all 18 native/app imports passed, ARM64 pip check clean, 2,213 installed RECORD hashes checked; not part of x86_64 CI.
+
+### STAB-07H emulated ARM64 Tk lifecycle
+
+- `tests/test_arm64_tk_lifecycle_runner.py` — deterministic fixed command, private display isolation, bad-signer/forged completion and process-cleanup safety checks; no live Xvfb in CI.
+- Independent private Forge ARM64 QEMU/Xvfb trial: SIGTERM, real Tk heartbeat, one close worker, ordered inert fake cleanup, exception continuation and delayed-cleanup behavior; physical FT8/PTT remains NO GO.
+
+### STAB-07I full-dashboard mock-hardware lifecycle
+
+- `tests/test_stab07i_preference_shutdown_order.py` — radio-first preference flush order and failure reporting.
+- `tests/test_stab07i_full_dashboard_probe.py` — normal evidence, readiness and mutation inhibition, SQLite/backup preservation, startup/cleanup/stale-heartbeat/blocked-worker refusal, and false-claim rejection.
+- Independent Forge ARM64/QEMU/Xvfb actual `run_dashboard` uses mock radio/GPS, private Xvfb, fixed offline status probes and disposable SQLite; no physical PTT/RF.
+
+### STAB-07J native runtime comparison
+
+- `tests/test_stab07j_native_runtime_compare.py` — exact sampled hash/revision comparison; reject forged release claims, symlink escape, traversal, missing files and unresolved libraries. Matched samples never establish trusted loaded-code identity.
+- Independent Forge comparison to current read-only Pi sample: 27/52 ELF files match, 10 differ, 15 absent; package revisions 6/16 match, 9 differ, 1 absent. Strict parity exit 75; production NO GO.
+
+### STAB-07K exact ARM64 OS archive provenance tests
+
+- `tests/test_stab07k_signed_apt_closure.py` — ephemeral real GPG signatures, hash and package-version/architecture linkage, modified archive/index/release refusal, forged key, duplicate/unsafe paths and nonproduction verdict.
+- Independent private Forge checks: 14/16 signed exact archives, missing Raspberry Pi patched libc6 and OpenSSL; incomplete extracted image has 17/52 identical sampled Pi file hashes and 35 absent, including exact Python interpreter match; NOT a runnable image.
+
+### STAB-07L Raspberry Pi archive quarantine tests
+
+- `tests/test_stab07l_rpi_quarantine_compare.py` — bounded fake archive/native-file comparison; reject modified archives, symlinks/path escape, mismatched Pi bytes, duplicate sources and false release claims. Quarantine remains NO GO after matching.
+- Separate Forge read-only archive extraction: Raspberry Pi libc6 and libssl3t64 five file SHA matches; with 14 signed-package extraction, 22/52 Pi sampled native files match, 30 missing. Two RPi packages lack historical signed index evidence.
+
+### STAB-07 focused functional recovery (2026-11-15)
+
+- `tests/test_stab07_functional_startup_recovery.py` — synthetic unexpected
+  worker-start exception after mock radio connection must trigger runtime
+  rollback and disconnect; regression reproduced against parent source. It
+  also verifies that rollback `ExceptionGroup` does not obscure the original
+  startup exception.
+- Always set `PYTHONPATH="$PWD/src"` in a worktree using a reused venv to prevent
+  installed-package shadowing during regression verification.
+- The same test module also injects a failure after radio polling connects and
+  registers a callback, asserting rollback cancels the callback and disconnects.
+- See the November 15 consolidated status in
+  `stab07-integration-and-parked-release-plan.md` for exact verified and
+  unverified ARM64, Tk, SQLite, GPS, FT8 and production acceptance boundaries.
+
+### STAB-07 focused shutdown and SQLite durability (2026-11-15)
+
+- `tests/test_stab07_functional_shutdown.py` — mock-only duplicate startup,
+  radio-first release before a blocked unrelated worker, failed radio disconnect
+  reporting and retry without an already-stopped preference queue false error.
+- `tests/test_stab07_functional_persistence.py` — disposable schema migration
+  failure rollback, proper v22 retry/idempotence and opt-in synthetic WAL
+  commit/rollback/reopen integrity; not production QSO recovery acceptance.
+- The shutdown module also injects a synthetic GPS disconnect failure to
+  verify reported error isolation after the mock radio has been released.
+
+
+### STAB-07 focused Tk navigation regression (2026-11-15)
+
+- `tests/test_stab07i_full_dashboard_probe.py` now requires ordered real-key
+  context evidence in `navigation` mode and rejects absent, shuffled or false
+  responsiveness reports. The independent Forge ARM64/Xvfb dashboard test
+  executed the real Tk binding and recorded DX/Browse/POTA selection. Tested
+  wheel hash, source SHA and full verification matrix are in the consolidated
+  STAB-07 integration report.
+
+### STAB-07 consolidated I/J–L functional acceptance (2026-11-15)
+
+Draft PR #472 retains the stronger original I full-dashboard safety scenarios
+and adds its navigation mode. On the reconciled source tree the complete Forge
+suite passed 4,376 tests with seven skips; separate private ARM64/Xvfb execution
+verified real Tk navigation, single close ownership despite duplicate requests,
+mutation inhibition, and synthetic SQLite/backup integrity. Exact tree, status
+and remaining acceptance gates are in the consolidated integration report.
+
+The final reconciled ARM64 negative acceptance also passed: injected startup
+failure returned application code 3 with no Tk root and rolled-back mock radio;
+injected cleanup failure returned code 4 while keeping disposable SQLite and
+backup integrity; blocked-worker returned an explicit expected refusal, never
+an asserted clean shutdown. Runner exit 0 in a negative test means expected
+refusal was correctly observed, **not** successful physical release. Refer to
+the consolidated STAB-07 integration report for private evidence file paths.

@@ -1,0 +1,339 @@
+{
+  "files": {
+    "/lib/aarch64-linux-gnu/libLerc.so.4": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libLerc.so.4",
+      "sha256": "e365ccd59a08752ba3ed96cb644e9455a207a55d993cf12349ec201c5d699d24",
+      "size": 526368
+    },
+    "/lib/aarch64-linux-gnu/libX11.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libX11.so.6.4.0",
+      "sha256": "94938979e2e2030f3471823a186eec66f994b128125ea2f4b4c18b502444b0a0",
+      "size": 1395344
+    },
+    "/lib/aarch64-linux-gnu/libXau.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libXau.so.6.0.0",
+      "sha256": "66ba1611449064d4beb81d33d9200eed4cfad41771dbbf38895774690c29bb26",
+      "size": 67752
+    },
+    "/lib/aarch64-linux-gnu/libXdmcp.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libXdmcp.so.6.0.0",
+      "sha256": "d2374e9168c2d221a527088b18781cd11da9735b8053b8231359f4fe11428298",
+      "size": 67728
+    },
+    "/lib/aarch64-linux-gnu/libXext.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libXext.so.6.4.0",
+      "sha256": "1c169c283fde27467ad2dc72e7efafe99881c973bb32f8779e02718b6027b651",
+      "size": 134768
+    },
+    "/lib/aarch64-linux-gnu/libXft.so.2": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libXft.so.2.3.6",
+      "sha256": "6dc749640eb9079e9cd04df892e5db4e8797facb7f9d9ffc3fe53229d79dd868",
+      "size": 134600
+    },
+    "/lib/aarch64-linux-gnu/libXrender.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libXrender.so.1.3.0",
+      "sha256": "33fe5e2aefc2e3b63699cc856a6703a871b6f54f8d187ce0424fae64042af102",
+      "size": 68080
+    },
+    "/lib/aarch64-linux-gnu/libXss.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libXss.so.1.0.0",
+      "sha256": "c683ed386e09bd5ab0045b39d1f261d8ef9801fc8e6089d9be2aea3ebde15e6f",
+      "size": 67752
+    },
+    "/lib/aarch64-linux-gnu/libbrotlicommon.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libbrotlicommon.so.1.1.0",
+      "sha256": "077a32bb1d3d9b50d74d03aec2758c6ef94a422f28baab5fa6f3c04f1a0bc69e",
+      "size": 198880
+    },
+    "/lib/aarch64-linux-gnu/libbrotlidec.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libbrotlidec.so.1.1.0",
+      "sha256": "3ac5116be503e51a11954f9b4dff0932319368501eb26be8ff06f0618eac624e",
+      "size": 67784
+    },
+    "/lib/aarch64-linux-gnu/libbz2.so.1.0": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libbz2.so.1.0.4",
+      "sha256": "810fa9b02adc39be4a7542bde79f1da0575e9bbdf8fc3c27deeb1ee97f59fe46",
+      "size": 70584
+    },
+    "/lib/aarch64-linux-gnu/libc.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libc.so.6",
+      "sha256": "9d465df210ffba519f96fef9477749896b3f67601b5b38c67c1b024b891617b5",
+      "size": 1716616
+    },
+    "/lib/aarch64-linux-gnu/libcrypto.so.3": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libcrypto.so.3",
+      "sha256": "0ce8344e00d599a1d488f17a73b988350b515bb8a26ef4691fbe9599f2d08535",
+      "size": 6302952
+    },
+    "/lib/aarch64-linux-gnu/libdeflate.so.0": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libdeflate.so.0",
+      "sha256": "b04eeb6d40708bddf45876a92261b3e8a28bef367ae7e2a07f55cd85ba0a2e86",
+      "size": 133008
+    },
+    "/lib/aarch64-linux-gnu/libexpat.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libexpat.so.1.10.2",
+      "sha256": "46fcd57623ecc066642df372ffc6a480f4eb6298b124e0b7ff96b280e962b45f",
+      "size": 198792
+    },
+    "/lib/aarch64-linux-gnu/libffi.so.8": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libffi.so.8.1.4",
+      "sha256": "f0527ef7efeaf85fc2f5855d68fddb63bf7b3b90f1228c6b49fb6020b0dca490",
+      "size": 68088
+    },
+    "/lib/aarch64-linux-gnu/libfontconfig.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libfontconfig.so.1.12.1",
+      "sha256": "6a9db1b9262267a0c291de43c0e827263fed8d3f39138d1d7853d2a8d45ba8ad",
+      "size": 329664
+    },
+    "/lib/aarch64-linux-gnu/libfreetype.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libfreetype.so.6.20.2",
+      "sha256": "037c1e131385f08bf00cf6159b5f4a8063876312787d754407ca228d75dafc3e",
+      "size": 854184
+    },
+    "/lib/aarch64-linux-gnu/libgcc_s.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libgcc_s.so.1",
+      "sha256": "9a146967dc38c3820c5dc21c3209812655f66b6551264072b187bd0e787947e0",
+      "size": 133768
+    },
+    "/lib/aarch64-linux-gnu/libgomp.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libgomp.so.1.0.0",
+      "sha256": "a2286e5fa0f7601afdfae2a750536f409bc8c3cc5b0bb9e93a4afc5c3779a510",
+      "size": 331528
+    },
+    "/lib/aarch64-linux-gnu/libimagequant.so.0": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libimagequant.so.0",
+      "sha256": "b5081783ccc1115a284066c0cedc714006ea7971a57e722c07cb72e1e65f3e1f",
+      "size": 67440
+    },
+    "/lib/aarch64-linux-gnu/libjbig.so.0": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libjbig.so.0",
+      "sha256": "fe0c644918faea38de24a7a518359eb894a78bb944dc433a43184ce7f4486424",
+      "size": 78528
+    },
+    "/lib/aarch64-linux-gnu/libjpeg.so.62": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libjpeg.so.62.3.0",
+      "sha256": "c16e513a19cbc9a5a296d71000cf59b0221c66ae3c0d0305110a44662a4b9b87",
+      "size": 395344
+    },
+    "/lib/aarch64-linux-gnu/liblzma.so.5": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/liblzma.so.5.8.1",
+      "sha256": "4b40b41d7f4f982c6e544f2ff1c82e4d49654711f50631faf60cae830aa14f84",
+      "size": 198664
+    },
+    "/lib/aarch64-linux-gnu/libm.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libm.so.6",
+      "sha256": "a8afb2d1f4a0c5e14c0fc82f794ec839eafe29738907aa92895410f57630bbe2",
+      "size": 591960
+    },
+    "/lib/aarch64-linux-gnu/libopenjp2.so.7": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libopenjp2.so.2.5.3",
+      "sha256": "4aef3d9074095224e3fe50176cdd3a72390ab7d134ccd1d05c7ea4b30dcfee7d",
+      "size": 461288
+    },
+    "/lib/aarch64-linux-gnu/libpng16.so.16": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libpng16.so.16.48.0",
+      "sha256": "7113982f81eef42c185f09262d20cd7024da0919df0b092f7918768bad7d6e1e",
+      "size": 264200
+    },
+    "/lib/aarch64-linux-gnu/libsharpyuv.so.0": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libsharpyuv.so.0.1.1",
+      "sha256": "b68429dfdfad881c8b22915d9cc70085c641ac04476445e79bbf6ea9190afe72",
+      "size": 67648
+    },
+    "/lib/aarch64-linux-gnu/libsqlite3.so.0": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libsqlite3.so.0.8.6",
+      "sha256": "9865b5990181843284595a2c290e5aa9e1df1b3ee438ce7fc6cdc2ec1c411985",
+      "size": 1592144
+    },
+    "/lib/aarch64-linux-gnu/libssl.so.3": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libssl.so.3",
+      "sha256": "b72505343068b27ab23e56c9887d2d71b184378067a5eef796b70ced9c621ef8",
+      "size": 1195960
+    },
+    "/lib/aarch64-linux-gnu/libstdc++.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libstdc++.so.6.0.33",
+      "sha256": "fff1f0050a33ddf29c44634c7639ac16e2573a61e3daab4fcc4c007b432ccf19",
+      "size": 2502136
+    },
+    "/lib/aarch64-linux-gnu/libtcl8.6.so": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libtcl8.6.so",
+      "sha256": "f240f017fa78602cbc1b5b906da4b8c870e07c9e595d7b6d3681276a2dde96fb",
+      "size": 1910472
+    },
+    "/lib/aarch64-linux-gnu/libtiff.so.6": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libtiff.so.6.1.0",
+      "sha256": "0ba2c529e3b06cee7dfde35f4de3fb1a99eedc3802d12f3eb0acc434332ccca6",
+      "size": 591896
+    },
+    "/lib/aarch64-linux-gnu/libtk8.6.so": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libtk8.6.so",
+      "sha256": "f6506357b7b13c515dc971cb8e836eaae7eb34c68ca76766499063830548df54",
+      "size": 1609912
+    },
+    "/lib/aarch64-linux-gnu/libwebp.so.7": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libwebp.so.7.1.10",
+      "sha256": "979c17adab6dff218b8bae090e8ec9a1ca1af0116f6c7e0e107f670eacddaed4",
+      "size": 395936
+    },
+    "/lib/aarch64-linux-gnu/libxcb.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libxcb.so.1.1.0",
+      "sha256": "e8ede627b1ff9101854931904ee57a7c19ed2a359fa7bc2fb9522cf923950210",
+      "size": 199640
+    },
+    "/lib/aarch64-linux-gnu/libyaml-0.so.2": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libyaml-0.so.2.0.9",
+      "sha256": "57b735699969110cc77734b45966c4740be78ffb136f4f5cf44acb1554f2fc51",
+      "size": 133072
+    },
+    "/lib/aarch64-linux-gnu/libz.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libz.so.1.3.1",
+      "sha256": "6fe00acadf8119ff245855e5dcc7f26c6c0ffaf4bfa2baa88feab58f23727d65",
+      "size": 133600
+    },
+    "/lib/aarch64-linux-gnu/libzstd.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7",
+      "sha256": "1279c4edfbfb08878b5b7fb40d392c1bdc9b30100d9b7a019d4aefaf10d2046c",
+      "size": 723048
+    },
+    "/lib/ld-linux-aarch64.so.1": {
+      "resolved": "/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+      "sha256": "5212aea7a664da8436a7b3a4c69f61b37a08090cf431d401c8446a02df2ab2b4",
+      "size": 201344
+    },
+    "/usr/bin/python3.13": {
+      "resolved": "/usr/bin/python3.13",
+      "sha256": "bd241b38381974ae27d7d5098a6d0e6dda0a744b5e9fdd6fe3a1ae632588961e",
+      "size": 6673736
+    },
+    "/usr/lib/python3.13/lib-dynload/_bz2.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_bz2.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "b261ef4d640ac83c1385a67256498f91eda74ade159ef79a3e7493e10a58d739",
+      "size": 68768
+    },
+    "/usr/lib/python3.13/lib-dynload/_ctypes.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_ctypes.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "21b7348c41890e15bb1a3fe1bd243fd295e0da3dba0e0bd7da0a18e885c70df9",
+      "size": 141792
+    },
+    "/usr/lib/python3.13/lib-dynload/_decimal.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_decimal.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "93f258f37cc15f40194a1634318c3bdd971d9bc7ec2997da24e80c98b4219201",
+      "size": 338768
+    },
+    "/usr/lib/python3.13/lib-dynload/_hashlib.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_hashlib.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "2434e05fa4d96f8a6e2c5e09e8db081009b090d0fe4ee704be319519b49d0690",
+      "size": 71880
+    },
+    "/usr/lib/python3.13/lib-dynload/_lzma.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_lzma.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "1cb5cda5594eeab0884c5f702aec634367e434343a29cc3d6d2aee6257293686",
+      "size": 69416
+    },
+    "/usr/lib/python3.13/lib-dynload/_sqlite3.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_sqlite3.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "930fe36f54cae88b3899da59bd2ee9b12a802997f6704acae9b70c375cb85214",
+      "size": 140152
+    },
+    "/usr/lib/python3.13/lib-dynload/_ssl.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_ssl.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "32f05696d3931d2cad42c297c37fc956e04288f4737166e231f9332e86fc3ed4",
+      "size": 235592
+    },
+    "/usr/lib/python3.13/lib-dynload/_tkinter.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3.13/lib-dynload/_tkinter.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "9be7303666545899809c106c6970c729bde232ad24add863685ab75d767deb1e",
+      "size": 70608
+    },
+    "/usr/lib/python3/dist-packages/PIL/_imaging.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3/dist-packages/PIL/_imaging.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "f1c7154ca1967f197129faf0bf2d848c9a7542a80475cd369fc7c09ab7e6e675",
+      "size": 473296
+    },
+    "/usr/lib/python3/dist-packages/_cffi_backend.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3/dist-packages/_cffi_backend.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "8072c306b08770d92e2ed0249085d32c6059d15424cf0f4333446daecd094924",
+      "size": 276104
+    },
+    "/usr/lib/python3/dist-packages/yaml/_yaml.cpython-313-aarch64-linux-gnu.so": {
+      "resolved": "/usr/lib/python3/dist-packages/yaml/_yaml.cpython-313-aarch64-linux-gnu.so",
+      "sha256": "991be341401a2ef29e4dd259974facf592f7343667917750dde3e44bd69b4145",
+      "size": 268784
+    }
+  },
+  "host": "anvilmobile",
+  "loaded_python_bytes_independently_proven": false,
+  "mode": "read_only_sample",
+  "packages": {
+    "libc6:arm64": {
+      "arch": "arm64",
+      "version": "2.41-12+rpt1+deb13u3"
+    },
+    "libexpat1:arm64": {
+      "arch": "arm64",
+      "version": "2.7.1-2"
+    },
+    "libffi8:arm64": {
+      "arch": "arm64",
+      "version": "3.4.8-2"
+    },
+    "libgcc-s1:arm64": {
+      "arch": "arm64",
+      "version": "14.2.0-19"
+    },
+    "libpython3.13": {
+      "arch": "arm64",
+      "version": "3.13.5-2+deb13u4"
+    },
+    "libpython3.13-minimal": {
+      "arch": "arm64",
+      "version": "3.13.5-2+deb13u4"
+    },
+    "libpython3.13-stdlib": {
+      "arch": "arm64",
+      "version": "3.13.5-2+deb13u4"
+    },
+    "libsqlite3-0:arm64": {
+      "arch": "arm64",
+      "version": "3.46.1-7+deb13u1"
+    },
+    "libssl3t64:arm64": {
+      "arch": "arm64",
+      "version": "3.5.6-1~deb13u2+rpt1"
+    },
+    "libstdc++6:arm64": {
+      "arch": "arm64",
+      "version": "14.2.0-19"
+    },
+    "libtcl8.6:arm64": {
+      "arch": "arm64",
+      "version": "8.6.16+dfsg-1"
+    },
+    "libtk8.6:arm64": {
+      "arch": "arm64",
+      "version": "8.6.16-1"
+    },
+    "python3.13": {
+      "arch": "arm64",
+      "version": "3.13.5-2+deb13u4"
+    },
+    "python3.13-minimal": {
+      "arch": "arm64",
+      "version": "3.13.5-2+deb13u4"
+    },
+    "python3.13-tk": {
+      "arch": "arm64",
+      "version": "3.13.5-2+deb13u4"
+    },
+    "zlib1g:arm64": {
+      "arch": "arm64",
+      "version": "1:1.3.dfsg+really1.3.1-1+b1"
+    }
+  },
+  "physical_radio_tested": false,
+  "production_ready": false,
+  "python": "3.13.5",
+  "schema": 1,
+  "soabi": "cpython-313-aarch64-linux-gnu",
+  "unresolved": []
+}

@@ -103,9 +103,7 @@ are independently scheduled and disabled by default. VOACAP reliability is not Q
 probability, dB-Hz is not decoder dB, missing is not zero, and retrospective results
 are not pre-choice evidence.
 
-The undeployed Forge propagation inbox accepts the complete frozen `Contact` under
-
-The disabled Forge propagation inbox accepts the complete frozen `Contact` under
+The disabled-by-default Forge propagation inbox accepts the complete frozen `Contact` under
 that same UUID without provider work. Exact replay is idempotent; changed frozen
 grids, coordinates, UTC start, frequency/mode, or power under the same UUID is a
 conflict. Provider correlation runs only from a separately scheduled bounded worker,
@@ -625,3 +623,18 @@ selected**, with existing safety/lock gates preserved. All other contexts
 retain their original active-panel navigation and encoder semantics.
 No new radio, GPS, broker, voice or transmitter permissions are introduced.
 See `meshcore-ohgo-incidents.md`.
+
+## STAB-07I preference shutdown drain
+
+The application runtime is the single preference service lifecycle owner. Drain only after the radio-owner release attempt and before stopping the executor. Report failed drains and continue cleanup; UI must not reflush after `runtime.stop`. No physical PTT authority change. See `stab07i-mock-full-dashboard-lifecycle.md`.
+
+## STAB-07 functional shutdown retry observation (2026-11-15)
+
+`OperatorPreferenceService.is_stopped` is a lock-protected, read-only lifecycle
+status for its runtime owner. After an earlier shutdown attempt has already
+stopped the queue executor, `ApplicationRuntime.stop()` skips repeat preference
+drain and executor stop during a retry, while **still attempting FT8/radio
+release first** and reporting any fresh radio failure. This avoids inventing
+an inability to drain a queue that was previously shut down. The first drain
+failure is never suppressed. No UI worker or hardware adapter gains ownership
+of preference persistence or CAT/PTT.

@@ -509,3 +509,15 @@ unchanged. See `meshcore-ohgo-incidents.md`.
 MORE indicator, and intercepts validated MOVE_NEXT / MOVE_PREVIOUS only while
 the OHGO context is active. The shared dispatcher, hardware mappings, active
 panel controller and Forge provider remain the original owners elsewhere.
+
+### STAB-07I preference shutdown ownership (2026-11-14)
+
+`ApplicationRuntime` owns `OperatorPreferenceService`: shutdown flushes boundedly after radio cleanup and before stopping its executor. Tk `ui_main` does not reflush the stopped queue. No new UI or radio authority. See `stab07i-mock-full-dashboard-lifecycle.md`.
+
+### STAB-07 functional retry ownership (2026-11-15)
+
+`ApplicationRuntime` remains the sole shutdown owner of both radio release and
+`OperatorPreferenceService` drain/stop. A stopped preference executor must not
+be re-flushed merely because radio disconnect failed and shutdown was retried.
+The `is_stopped` observation is read-only and lock-protected; no new process,
+executor, hardware control, or radio ownership is introduced.

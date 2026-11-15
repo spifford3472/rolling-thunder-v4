@@ -1669,14 +1669,31 @@ class ApplicationRuntime:
         if self._started:
             raise RuntimeError("Application runtime is already started.")
 
-        state = self.polling.start()
+        try:
+            state = self.polling.start()
+        except Exception:
+            # Poll scheduling can fail after opening the radio. Cancel any
+            # partial polling registration before the pre-start radio release.
+            try:
+                self.polling.stop()
+            except Exception as cleanup_error:  # noqa: BLE001 - preserve startup cause
+                print(f"Rolling Thunder startup polling cleanup error: {cleanup_error}")
+            try:
+                self.stop()
+            except Exception as cleanup_error:  # noqa: BLE001 - preserve startup cause
+                print(f"Rolling Thunder startup cleanup error: {cleanup_error}")
+            raise
         self._started = True
         try:
             self._start_remaining_services()
-        except (OSError, RuntimeError, ValueError):
+        except Exception:
+            # A worker may fail with an unexpected exception class after the
+            # radio has connected; do not leave the startup owner running.
             try:
                 self.stop()
-            except (OSError, RuntimeError, ValueError) as cleanup_error:
+            except Exception as cleanup_error:  # noqa: BLE001 - report rollback ExceptionGroup
+                # stop() aggregates partial cleanup failures in ExceptionGroup;
+                # preserve the initiating failure while reporting the rollback.
                 print(f"Rolling Thunder startup cleanup error: {cleanup_error}")
             raise
         return state
@@ -1836,7 +1853,18 @@ class ApplicationRuntime:
         if self.callsign_info is not None:
             attempt("callsign info", self.callsign_info.stop)
         if self.operator_preferences is not None:
-            attempt("operator preferences", self.operator_preferences.stop)
+            preferences = self.operator_preferences
+            # Shutdown may be retried after a radio disconnect failure. A
+            # previously stopped preference executor cannot be drained again.
+            if not preferences.is_stopped:
+                # The runtime owns this queue. Drain after radio cleanup,
+                # before stopping its executor; the UI must not flush it again.
+                def drain_preferences() -> None:
+                    if not preferences.flush(3.0):
+                        raise RuntimeError("queued operator preferences did not drain")
+
+                attempt("operator preferences drain", drain_preferences)
+                attempt("operator preferences", preferences.stop)
         if self.pi_forge_location_publishing is not None:
             attempt("location publishing", self.pi_forge_location_publishing.stop)
         if self.clock_sync is not None:

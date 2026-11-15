@@ -1,0 +1,180 @@
+{
+  "apt_cached_historical_archives_found": 0,
+  "authenticated_historical_repository": {
+    "debian-20260801": {
+      "component": "main/binary-arm64/Packages",
+      "gpgv_verified": true,
+      "historical_release_not_asserted_current": true,
+      "index_sha256_bound_to_signed_release": true,
+      "inrelease_sha256": "98b25b5cd185c59d34aa6e4c3e9b5b8f01bbe9d104fe2dcfbcd30dc0a14a59ed",
+      "packages_sha256": "7d45e6f90e5cc4e4f215c4e4965ac2e6076572c9e5cbb5f88dfc880c76002a96",
+      "source": "https://snapshot.debian.org/archive/debian/20260801T000000Z/",
+      "suite": "trixie",
+      "verified_keyring_sha256": "c042cf3ba41a234f709a6f50053ce3c23031d2d4f109a563ffc1193403b26895"
+    },
+    "debian-updates-20260720": {
+      "component": "main/binary-arm64/Packages",
+      "gpgv_verified": true,
+      "historical_release_not_asserted_current": true,
+      "index_sha256_bound_to_signed_release": true,
+      "inrelease_sha256": "bd8aee7ca2a980563032065681fd39b1e284e511841399f3730eac279a1bd2f7",
+      "packages_sha256": "860a644dcb3ccd96a058f6c7717488f3d88ed42b0a53a6eac3ced6adf88e853b",
+      "source": "https://snapshot.debian.org/archive/debian/20260720T000000Z/",
+      "suite": "trixie-updates",
+      "verified_keyring_sha256": "c042cf3ba41a234f709a6f50053ce3c23031d2d4f109a563ffc1193403b26895"
+    }
+  },
+  "collection_date": "2026-11-14",
+  "complete_OS_ELF_closure_proven": false,
+  "complete_native_runtime_image_assembled": false,
+  "evidence_type": "operator_observed_current_signed_apt_metadata_not_complete_historical_runtime",
+  "exact_apt_archives_verified_from_signed_current_index": {
+    "libffi8": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/libf/libffi/libffi8_3.4.8-2_arm64.deb",
+      "sha256": "d84a783b818f2386627604e64b793eb4ac5bb9ea1ba321a194a1c9c82fe09a01",
+      "size": 21260,
+      "version": "3.4.8-2"
+    },
+    "libgcc-s1": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/g/gcc-14/libgcc-s1_14.2.0-19_arm64.deb",
+      "sha256": "1108bc87879833d6d9a145f22a4a15cddb34e065b4b5f4b97bee586adbac2851",
+      "size": 54104,
+      "version": "14.2.0-19"
+    },
+    "libstdc++6": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/g/gcc-14/libstdc++6_14.2.0-19_arm64.deb",
+      "sha256": "6669b0c52a2e7c6af9adfdabce3ff6e286065cdfbc7b85280862b5f799daebee",
+      "size": 637536,
+      "version": "14.2.0-19"
+    },
+    "libtcl8.6": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/t/tcl8.6/libtcl8.6_8.6.16+dfsg-1_arm64.deb",
+      "sha256": "7a9f7eda696d505657a6cf54550fe50d4684bd79dc888d6b72f486f8066a14f5",
+      "size": 983536,
+      "version": "8.6.16+dfsg-1"
+    },
+    "libtk8.6": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/t/tk8.6/libtk8.6_8.6.16-1_arm64.deb",
+      "sha256": "b852fdd017cce982dd693fceed9f37f6deae399de306f14b147b88e8101a189c",
+      "size": 740504,
+      "version": "8.6.16-1"
+    },
+    "zlib1g": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.1-1+b1_arm64.deb",
+      "sha256": "209aa5cf671e97b9eb0410844fa6df4cae2e75b0c72e7802ab6c8ece13e6ddef",
+      "size": 85116,
+      "version": "1:1.3.dfsg+really1.3.1-1+b1"
+    }
+  },
+  "exact_apt_archives_verified_from_signed_historical_index": {
+    "libexpat1": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/e/expat/libexpat1_2.7.1-2_arm64.deb",
+      "sha256": "7f6868227f4893a11123e43b9ed291950b550c7dc209905b2fb871c74678d1bf",
+      "size": 93320,
+      "version": "2.7.1-2"
+    },
+    "libsqlite3-0": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/s/sqlite3/libsqlite3-0_3.46.1-7+deb13u1_arm64.deb",
+      "sha256": "69dd4b705eca29fe134c17f18aaa4cc9e7ecd01c0250d5e195358801514c76ac",
+      "size": 853772,
+      "version": "3.46.1-7+deb13u1"
+    }
+  },
+  "exact_apt_archives_verified_from_signed_updates_historical_index": {
+    "libpython3.13": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/p/python3.13/libpython3.13_3.13.5-2+deb13u4_arm64.deb",
+      "sha256": "d8f0a0d8d829988605ad66aff280c8c9770060b21868aae14a45e8ef872589ec",
+      "size": 1977636,
+      "version": "3.13.5-2+deb13u4"
+    },
+    "libpython3.13-minimal": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/p/python3.13/libpython3.13-minimal_3.13.5-2+deb13u4_arm64.deb",
+      "sha256": "774474a023c4835c5362222419b57959d97ebe3ef63d7c54f8a8801226cef163",
+      "size": 856336,
+      "version": "3.13.5-2+deb13u4"
+    },
+    "libpython3.13-stdlib": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/p/python3.13/libpython3.13-stdlib_3.13.5-2+deb13u4_arm64.deb",
+      "sha256": "37cce6086b7c1ca93086f83b68761737607689e634693b6972b5dbfd6c080872",
+      "size": 1894644,
+      "version": "3.13.5-2+deb13u4"
+    },
+    "python3.13": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/p/python3.13/python3.13_3.13.5-2+deb13u4_arm64.deb",
+      "sha256": "db41afdb3d84d2d00ba5c6e4e2e4e70dc1e21d7710c152a7b04d4fce6b2f74e9",
+      "size": 757420,
+      "version": "3.13.5-2+deb13u4"
+    },
+    "python3.13-minimal": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/p/python3.13/python3.13-minimal_3.13.5-2+deb13u4_arm64.deb",
+      "sha256": "0fec1a8d1c46c8fd715d022a2bddc6917e499addf82cadd0fb68d92b23a0c24f",
+      "size": 2003160,
+      "version": "3.13.5-2+deb13u4"
+    },
+    "python3.13-tk": {
+      "architecture": "arm64",
+      "repository_path": "pool/main/p/python3.13/python3.13-tk_3.13.5-2+deb13u4_arm64.deb",
+      "sha256": "8b787a2ef6ceaaeb4fff4ea83011f416a8df8a89c3865c4f13e2909cb6bd2ab8",
+      "size": 105896,
+      "version": "3.13.5-2+deb13u4"
+    }
+  },
+  "exact_installed_versions_not_present_in_verified_archived_indices": {
+    "libc6:arm64": "2.41-12+rpt1+deb13u3",
+    "libssl3t64:arm64": "3.5.6-1~deb13u2+rpt1"
+  },
+  "historical_versions_found_in_snapshot_metadata_only": false,
+  "loaded_python_bytes_independently_proven": false,
+  "production_ready": false,
+  "project": "spifford3472/rolling-thunder-v4",
+  "release_decision": "NO_GO",
+  "repositories": {
+    "debian": {
+      "component": "main/binary-arm64/Packages",
+      "inrelease_sha256": "0584fba32e13e0ab8285fb16c27adea1ec03a73669c18702821094fd6ca86675",
+      "packages_sha256": "f97011263173eaccb1a215a28a6ec7ba1f6e5cebd8bb68e8fa0475b1d4021161",
+      "pinned_public_keyring_sha256": "c042cf3ba41a234f709a6f50053ce3c23031d2d4f109a563ffc1193403b26895",
+      "signatures_valid_gpgv": true,
+      "signed_index_sha256_verified": true,
+      "suite": "trixie",
+      "url": "https://deb.debian.org/debian/"
+    },
+    "raspberrypi": {
+      "component": "main/binary-arm64/Packages",
+      "inrelease_sha256": "0aef879eff647d01c1f05cfaafc24de13e3038458249cb07596f0343b7627c74",
+      "packages_sha256": "e8068708a7b5c882ba4b6cb7fdfb3587899f4cfcb08f3f84cbbbe749c606e24f",
+      "pinned_public_keyring_sha256": "3a29901549ae65a910de13a32551e6eea7f45ba1fd70f0cb67e5c70d98488071",
+      "signatures_valid_gpgv": true,
+      "signed_index_sha256_verified": true,
+      "suite": "trixie",
+      "url": "https://archive.raspberrypi.com/debian/"
+    }
+  },
+  "root_owned_release_installed": false,
+  "schema": 1,
+  "source_keyring_sha256_observed_on_pi": {
+    "debian_bookworm_automatic": "59dbde1397f8edc4e4aa24829ba36f9583ea5b4480091c34b89dad9e56360a19",
+    "debian_trixie_automatic": "8dbd0029697f8c9b009eeb9a153c6536b62ca031fa0a5b4cec74e8d718fccef6",
+    "debian_trixie_stable": "abced156a22aa8683b228299ac35c1ea51515eef900cec0e562f56716dfe3915",
+    "raspberrypi_archive": "3a29901549ae65a910de13a32551e6eea7f45ba1fd70f0cb67e5c70d98488071"
+  },
+  "source_observation": "deploy/locks/stab07j-anvilmobile-native-observed.json",
+  "target_arch": "aarch64",
+  "target_host": "anvilmobile",
+  "unresolved_exact_historical_package_count": 2,
+  "verified_current_exact_archive_count": 6,
+  "verified_exact_archive_count": 14
+}

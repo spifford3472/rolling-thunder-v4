@@ -593,3 +593,105 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/meshcore_ohgo_panel.py` — Pi private Forge reader, stale/status decoder and read-only presentation.
 
 - `src/rolling_thunder/meshcore_ohgo_ui.py` — dedicated 42-point Tk OHGO viewport, fixed MORE visibility from actual scroll geometry and safe context-specific physical-control interception.
+
+### STAB-06D candidate source
+
+- src/rolling_thunder/ui_readiness.py: Tk-loop heartbeat only.
+- src/rolling_thunder/deployment_readiness.py: read-only service and UI readiness check.
+- deploy/rolling-thunder-deploy.candidate: nonexecutable inspected-wrapper derivative.
+
+### STAB-06E offline privileged deployment journal
+
+- `deploy/rolling-thunder-deployment-journal.py`: standalone stdlib journal tool, intended only for separately approved stable root-owned installation.
+- `deploy/rolling-thunder-deploy.candidate`: uninstalled wrapper candidate now records monotonic deployment phases and refuses unresolved transactions.
+
+### STAB-06F offline recovery components
+
+- `deploy/rolling-thunder-recovery-inspect.py`: separate read-only systemd, Git, journal, SQLite and backup evidence collector.
+- `deploy/rolling-thunder-reconcile.py`: stable privileged candidate for explicit approval-bounded attestation only; no service, Git or DB mutation.
+- `deploy/rolling-thunder-deployment-journal.py`: preserves prior committed or reconciled records in a private history file before new transactions.
+
+### STAB-07 Source-module inventory gap closure (exact paths, 2026-11-14)
+
+The entries below close the exact-file inventory gap observed against the
+integration candidate. They are discoverability references only; feature
+ownership, API contracts and actual deployment composition remain subject
+to independent DOC-03 / PR #414 source review. No code or test behavior
+has been changed by this inventory correction.
+
+- `src/rolling_thunder/forge_contact_snapshots.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_ft8_periods.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_autoqueue.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_bridge_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_event_bridge.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/forge_psk_normalized_history.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/dx_ranking.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/first_rf_test.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/period_correlation.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/period_repository.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/power_advisor.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/ft8/ptt_alarm.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `src/rolling_thunder/local_jurisdiction.py` — referenced in current repository; review related feature guide for ownership and behavior.
+
+### STAB-07C separate runtime artifact identity evidence
+
+- `deploy/rolling-thunder-runtime-identity.py` — uninstalled independent read-only protected release manifest and process path binding; deliberately cannot claim loaded Python bytes independently proven.
+
+### STAB-07D offline release provenance tools
+
+- `deploy/rolling-thunder-release-build.py` — deterministic exact-Git-tree source bundle with allowlist and source manifest; excludes secrets/dependencies, not installable.
+- `deploy/rolling-thunder-launch-witness.py` — signed launch-observation verifier bound to boot ID, PID and start ticks; does not prove loaded Python bytes.
+
+### STAB-07E offline ARM64 dependency and payload artifacts
+
+- `deploy/rolling-thunder-wheelhouse.py` — read-only locked wheel metadata, architecture, ELF and PEP 508 dependency-closure verifier.
+- `deploy/rolling-thunder-release-payload.py` — deterministic Git-source and verified-wheel transport archive builder, not an installer.
+- `deploy/locks/stab07e-anvilmobile-cp313-aarch64.json` and `.requirements.txt` — exact 26-package SHA-pinned target wheel set, pending independent provenance review.
+
+### STAB-07F private offline release staging
+
+- `deploy/rolling-thunder-stage-candidate.py` — Forge-only user-private, hash-verified, atomic no-replace offline transport/app-wheel staging and independent post-stage integrity check. No installed venv, no production restart.
+
+### STAB-07G isolated ARM64 test tools
+
+- `deploy/rolling-thunder-arm64-sandbox.py` — fixed-action, read-only QEMU/bwrap import and pip integrity tests with private network/dev namespace; no deployment authority.
+- `deploy/rolling-thunder-arm64-native-smoke.py` — import-only Python ARM64 native/UI module smoke with I/O startup guards; never starts UI.
+- `deploy/rolling-thunder-arm64-record-audit.py` — offline installed `RECORD` hash/metadata validation for 26 wheels and noneditable application.
+- `deploy/locks/stab07g-debian-arm64-sysroot.json` — 55 exact Debian test package archive hashes and static QEMU digest; GPG Release signature not independently verified.
+
+### STAB-07H isolated ARM64 Tk lifecycle tools
+
+- `deploy/rolling-thunder-arm64-tk-lifecycle.py` — actual Tk event loop and existing UI shutdown helpers, inert fakes only, clean/error/stall scenarios, no dashboard/radio startup.
+- `deploy/rolling-thunder-arm64-tk-runner.py` — private Xvfb authenticated display and allowlisted QEMU guest lifecycle tests, bounded termination and fail-closed evidence.
+
+### STAB-07I full-dashboard isolated ARM64 lifecycle
+
+- `deploy/rolling-thunder-arm64-dashboard-probe.py` — real `run_dashboard` with mock radio/GPS, synthetic SQLite/online backup, fresh heartbeat and injected startup, cleanup, stale-heartbeat and blocked-worker cases.
+- `deploy/rolling-thunder-arm64-dashboard-runner.py` — private QEMU/Xvfb full-composition runner; refuses reused DB/display, unexpected guest exits and incomplete/misordered evidence.
+- `src/rolling_thunder/application_runtime.py` — owner drains preferences after radio cleanup and before executor stop.
+- `src/rolling_thunder/ui_main.py` — duplicate preference flush removed; orderly cleanup errors return status 4.
+
+### STAB-07J read-only Pi native provenance comparator
+
+- `deploy/rolling-thunder-native-runtime-compare.py` — strict offline SHA256 and Debian package revision comparison of bounded Pi observations to private ARM64 sysroot; refusal on mismatch, no production attestation authority.
+- `deploy/locks/stab07j-anvilmobile-native-observed.json` — 52 read-only Pi native-file SHA256 observations, 16 package version samples and explicitly untrusted/nonproduction flags.
+
+### STAB-07K signed historical ARM64 APT archive chain
+
+- `deploy/rolling-thunder-signed-apt-closure.py` — bounded offline GPG-pinned InRelease → signed ARM64 Packages → exact SHA256/size-validated .deb verification; no install and never production attestation.
+- `deploy/locks/stab07k-signed-exact-apt-evidence.json` — 14 of 16 Pi installed revisions source-authenticated across current and historical signed Debian indexes; two Pi-patched versions unresolved; strict NO GO.
+
+### STAB-07L untrusted Raspberry Pi package quarantine
+
+- `deploy/rolling-thunder-rpi-quarantine-compare.py` — fail-closed comparison of exact captured Pi file SHA observations against independent signed and quarantined nonexecuted extracts; never source-authenticates quarantined archives.
+- `deploy/locks/stab07l-untrusted-rpi-archive-pins.json` — SHA256 of two exact-version Raspberry Pi archive candidates, explicitly UNTRUSTED until separately signed historical package-index proof exists.
+
+
+### STAB-07 focused ARM64 mock dashboard navigation evidence (2026-11-15)
+
+- `deploy/rolling-thunder-arm64-dashboard-probe.py` — now also verifies real
+  mock UI Tk key dispatch and measured DX/Browse/POTA navigation under the
+  existing network/USB-isolated full dashboard test root.
+- `deploy/rolling-thunder-arm64-dashboard-runner.py` — strictly accepts
+  navigation evidence only with all normal shutdown, radio-off and provenance
+  guardrails; unchanged arbitrary-command refusal behavior.

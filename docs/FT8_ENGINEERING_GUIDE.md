@@ -1,6 +1,10 @@
 # Rolling Thunder FT8 Engineering / Design Guide
 
-Status: CP9.1 engineering-guide source. This document is intended to become the basis for a printable design/engineering guide after final production acceptance.
+Status: **living FT8 engineering reference**, with legacy CP9.1 design material
+and newer implemented subsystems recorded below. The CP9.1 label is historical;
+it is not a declaration of the current runtime feature version or a completed
+hardware acceptance. Reconcile live/installed FT8 behavior against the exact
+code SHA and current tests before issuing a printable, release-certified guide.
 
 ## Design Intent
 
