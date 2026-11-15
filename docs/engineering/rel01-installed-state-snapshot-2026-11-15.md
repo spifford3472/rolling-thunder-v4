@@ -24,7 +24,9 @@ At 07:51:35 EST, AnvilMobile reported Raspberry Pi Linux `aarch64`, kernel
 | unit policy | Base unit starts `/home/geoff/projects/rolling-thunder-v4/deploy/rolling-thunder-autostart`; `Restart=on-failure`, `RestartSec=10`, `TimeoutStopSec=20`, `KillSignal=SIGTERM`; `ROLLING_THUNDER_MIN_UPTIME_SECONDS=180`; working directory/app and venv paths point to the production checkout. | These values were visible in the installed base unit. Do not infer that the inaccessible protected drop-ins have no overrides. |
 | installed drop-ins | The owner-provided `sudo systemctl cat` output confirms the base unit and all four installed drop-ins: `50`, `60`, `70`, and `r1a-timing.conf`. `60` points to `/etc/rolling-thunder/ft8-period.env`; `70` points to the optional `completed-qso-delivery.env`. `r1a` sets `RT_R1A_UI_TIMING=1`. | Drop-in paths/content are now verified; environment-file values were not printed or inspected. |
 | external MeshCore process | PID 1078 is supervised by enabled, active user unit `meshcore-collector.service` under user systemd PID 1005; the broker drop-in is active. | Its configured by-path device does not currently exist, no serial device appears in its open descriptors, and its recent logs repeatedly report “MeshCore USB path is not present.” It remains outside the dashboard cgroup and continues its 5-second retry policy. The enabled traffic worker is currently inactive/dead. Leave both units and all databases untouched pending separately approved cutover. |
-| deploy serialization | The dashboard launcher has its own user-runtime `flock`, held by PID 60400. The installed root-owned wrapper is mode 0750, SHA-256 `476ecdbdbcc70bcb1025ac1ce97bae1982b98d8842d5e333ea43632378512daf`. | The inspected wrapper has no visible mutex/`flock`, transaction journal, or readiness heartbeat. It stops the system unit, backs up only the primary QSO DB to `/var/backups/rolling-thunder-deploy` using SQLite `Connection.backup`, validates backup integrity, checks out and installs the exact SHA, initializes/validates the DB, starts the unit, waits 3 seconds, and checks systemd active state and SHA. The target directory exists root:root mode 0700; its contents were not inventoried. No deployment lock or recovery transaction is established. |
+| deploy serialization | The dashboard launcher has its own user-runtime `flock`, held by PID 60400. The installed root-owned wrapper is mode 0750, SHA-256 `476ecdbdbcc70bcb1025ac1ce97bae1982b98d8842d5e333ea43632378512daf`. | The inspected wrapper has no visible mutex/`flock`, transaction journal, or readiness heartbeat. It stops the system unit, backs up only the primary QSO DB to `/var/backups/rolling-thunder-deploy` using SQLite `Connection.backup`, validates backup integrity, checks out and installs the exact SHA, initializes/validates the DB, starts the unit, waits 3 seconds, and checks systemd active state and SHA. The target directory exists root:root mode 0700. Its inventory includes files;
+the newest listed backup is timestamped 2026-11-14 01:06:36Z and remains
+unvalidated. No deployment lock or recovery transaction is established. |
 | config and application state | The active config is `config/rolling-thunder.yaml`; its relative database path resolves against the config directory. | The user-owned config and device selectors were read without printing secrets. Root-only `/etc/rolling-thunder` contents remain inaccessible. See the follow-up evidence below. |
 
 The 07:51 `rt-remote` session could not read `/home/geoff`. A later
@@ -171,15 +173,19 @@ marked `ignored`. Read-only integrity checks passed with zero foreign-key
 violations for the Rolling Thunder DB and all three active MeshCore databases.
 No database, WAL or SHM file was copied or altered.
 
-No current QSO backup was verified. The owner’s root-level listing covered
-`/var/backups/rolling-thunder`, which contains older subsystem backups;
-these are not evidence of a current AnvilMobile QSO backup. The wrapper instead
-targets `/var/backups/rolling-thunder-deploy` (root:root mode 0700).
-Its contents were not listed, so no current backup can be confirmed or ruled out
-there. The similarly named repository-root `data/rolling-thunder.db` is
-dated 2026-09-27, and `data/rolling-thunder.pre182-20260809T195346Z.db` is
-dated 2026-08-09; neither is accepted as a current backup. Historical MeshCore
-rollback DB files were not validated as backups.
+The root-level inventory confirms multiple deployment backup files under
+`/var/backups/rolling-thunder-deploy`. The newest listed file is
+`/var/backups/rolling-thunder-deploy/rolling-thunder-20261114T010636Z-179c005f0f7f61df1004641db75897f42b3dd8ad.db`, 5,455,872 bytes; its embedded UTC timestamp is
+2026-11-14 01:06:36Z. It predates the current dashboard process start on
+2026-11-13 at 20:07 EST by about a minute and predates the later live-database
+inspection. Its integrity, schema, row counts, and contact/retry contents have
+not been checked. It is an existing candidate backup, not a verified rollback
+backup. The earlier listing of `/var/backups/rolling-thunder` covered a
+separate directory containing subsystem backups. The similarly named
+repository-root `data/rolling-thunder.db` is dated 2026-09-27, and
+`data/rolling-thunder.pre182-20260809T195346Z.db` is dated 2026-08-09;
+neither is accepted as current. Historical MeshCore rollback DB files were not
+validated as backups.
 
 The installed wrapper uses SQLite's backup API after stopping the service and
 checks only `PRAGMA integrity_check` on that backup. The script does not
@@ -193,10 +199,11 @@ compatibility before any rollback.
 
 The previous checkout SHA and editable package path are identified. The process's
 loaded source bytes, native package provenance/hashes, environment-file values,
-and exact wrapper-target backup inventory remain unverified. The installed
-wrapper hash/source are now known, but its missing mutex/journal and absence from
-the repository leave deployment serialization and provenance unresolved. No
-verified current backup exists; rollback readiness is **not established**.
+and integrity/row contents of the newest deployment backup remain unverified. The
+installed wrapper hash/source are known, but its missing mutex/journal and absence
+from the repository leave deployment serialization and provenance unresolved.
+Rollback readiness is **not established** until a candidate backup is validated
+against current durable state.
 
 ## Focused safety and reliability matrix
 
