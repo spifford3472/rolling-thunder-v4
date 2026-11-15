@@ -806,3 +806,8 @@ has been changed by this inventory correction.
 
 - `tests/test_stab07j_native_runtime_compare.py` — exact sampled hash/revision comparison; reject forged release claims, symlink escape, traversal, missing files and unresolved libraries. Matched samples never establish trusted loaded-code identity.
 - Independent Forge comparison to current read-only Pi sample: 27/52 ELF files match, 10 differ, 15 absent; package revisions 6/16 match, 9 differ, 1 absent. Strict parity exit 75; production NO GO.
+
+### STAB-07K exact ARM64 OS archive provenance tests
+
+- `tests/test_stab07k_signed_apt_closure.py` — ephemeral real GPG signatures, hash and package-version/architecture linkage, modified archive/index/release refusal, forged key, duplicate/unsafe paths and nonproduction verdict.
+- Independent private Forge checks: 14/16 signed exact archives, missing Raspberry Pi patched libc6 and OpenSSL; incomplete extracted image has 17/52 identical sampled Pi file hashes and 35 absent, including exact Python interpreter match; NOT a runnable image.

@@ -675,3 +675,8 @@ has been changed by this inventory correction.
 
 - `deploy/rolling-thunder-native-runtime-compare.py` — strict offline SHA256 and Debian package revision comparison of bounded Pi observations to private ARM64 sysroot; refusal on mismatch, no production attestation authority.
 - `deploy/locks/stab07j-anvilmobile-native-observed.json` — 52 read-only Pi native-file SHA256 observations, 16 package version samples and explicitly untrusted/nonproduction flags.
+
+### STAB-07K signed historical ARM64 APT archive chain
+
+- `deploy/rolling-thunder-signed-apt-closure.py` — bounded offline GPG-pinned InRelease → signed ARM64 Packages → exact SHA256/size-validated .deb verification; no install and never production attestation.
+- `deploy/locks/stab07k-signed-exact-apt-evidence.json` — 14 of 16 Pi installed revisions source-authenticated across current and historical signed Debian indexes; two Pi-patched versions unresolved; strict NO GO.

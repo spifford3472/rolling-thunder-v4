@@ -237,3 +237,7 @@ Real `run_dashboard` under isolated Forge QEMU/Xvfb reached Tk readiness and cle
 ## STAB-07J read-only native Pi runtime provenance (2026-11-14)
 
 AnvilMobile's sampled Debian 13 native runtime differs materially from the private emulated Forge ARM64 sysroot (27/52 ELF hashes identical; 10 different, 15 absent; 6/16 package revisions identical). A new bounded offline verifier refuses to infer complete runtime equivalence, signed release or loaded Python identity. Existing protected-release and witness candidates remain uninstalled. See `stab07j-native-runtime-provenance-and-release-readiness.md`. Production NO GO.
+
+## STAB-07K signed exact native OS package reconstruction (2026-11-14)
+
+14/16 sampled Pi exact package versions have been obtained from independently signed current/historical Debian ARM64 indexes and their exact SHA256-verified archives. Six are from current Debian, two from 2026-08-01 signed `trixie`, and six Python 3.13 `deb13u4` from signed 2026-07-20 `trixie-updates`. The remaining two Raspberry Pi-patched libc6/OpenSSL versions are not authenticated against signed historical Pi repository metadata. Extracted incomplete 14-package overlay matches 17/52 sampled Pi files and is not bootable. **NO GO for complete emulator, loaded-code attestation or production deployment.** See `stab07k-authenticated-exact-arm64-os-reconstruction.md`.
