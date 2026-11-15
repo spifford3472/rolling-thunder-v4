@@ -143,6 +143,27 @@ failure. Forge ledger state and Wavelog application logs around the 16:43 retry
 must be inspected read-only before selecting a repair. No manual sync, state
 reset, database write, service change, or contact replay was performed.
 
+
+## Contact-sync routing follow-up (16:49 EST)
+
+Forge's journal records 15 `POST /contacts` responses with HTTP 503 around
+16:43 and again around 16:48, while periodic `GET /health` requests continue
+returning HTTP 200. The Forge contact-sync ledger passed `integrity_check` and
+contained 349 entries, all `synchronized/imported`, with no pending entries.
+
+A grouped AnvilMobile query found all 15 failed contacts have NULL/absent
+`my_grid`, `my_state`, `my_cq_zone`, and `my_itu_zone`. Source inspection
+shows these route through `Mobile - Unknown Location`; target resolution,
+including fallback station verification/creation/logbook linking, happens
+before the ledger claim.
+
+This narrows the likely fault to resolving or provisioning the
+`Mobile - Unknown Location` Wavelog target (or writing its Forge station
+binding), before contact upload is recorded in the ledger. It is not yet
+proven: the failed UUIDs have not been correlated against the 349 ledger rows,
+and the unknown-location binding/profile/logbook membership have not been
+checked. Do not create or edit a profile until those read-only checks are done.
+
 ## USB and peripheral inventory
 
 At 07:51 EST, `lsusb` showed VIA USB hubs, a SanDisk Extreme 55DD storage device,
