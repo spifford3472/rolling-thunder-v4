@@ -229,3 +229,7 @@ Isolated QEMU ARM64 in a private, network-disabled Forge namespace now executes 
 ## STAB-07H mock Tk lifecycle validation (2026-11-14)
 
 Isolated ARM64/QEMU using a private Xvfb virtual display exercised genuine Tk callbacks, current heartbeat and shutdown helper boundaries with inert fake runtime/peripherals. Normal, runtime-error, peripheral-error and delayed cleanup cases passed; a stalled fake worker deliberately returned status 75/refused, and the original 30-file staged candidate passed independent integrity verification. This does **not** start full dashboard composition, prove RF receive, or validate protected production rollback. See `stab07h-hardware-disabled-tk-lifecycle.md`. Production remains NO GO.
+
+## STAB-07I ARM64 full mock dashboard (2026-11-14)
+
+Real `run_dashboard` under isolated Forge QEMU/Xvfb reached Tk readiness and clean shutdown with a mock radio and synthetic SQLite. The first version exposed duplicate post-runtime-stop preference flushing; a narrow runtime-owned drain-before-stop correction passed ARM64 retest and startup-failure mock-radio rollback. No real radio, production service, WAL or privileged install acceptance occurred. See `stab07i-mock-full-dashboard-lifecycle.md`. Production NO GO.

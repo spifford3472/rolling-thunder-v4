@@ -1,5 +1,9 @@
 # Rolling Thunder Operator's Guide
 
+## STAB-07I preference drain candidate (not deployed)
+
+An offline ARM64 mock-dashboard test found the UI tried to flush preferences after the runtime had stopped that queue. An unmerged correction drains once within the runtime, after its radio cleanup attempt and before stopping preferences, while still reporting real errors. This is not deployed or validated on physical hardware; radio receive/PTT recovery procedures remain unchanged.
+
 ## Shutdown safety status (STAB-04 candidate, not deployed)
 
 An engineering candidate prioritizes the existing FT8 transmit release and

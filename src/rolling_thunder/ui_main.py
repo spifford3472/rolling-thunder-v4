@@ -2472,10 +2472,6 @@ def run_dashboard(
             if antenna_panel is not None:
                 antenna_panel.close()
 
-        def drain_preferences() -> None:
-            if not preference_service.flush(3.0):
-                raise RuntimeError("queued operator preferences did not drain")
-
         try:
             _run_orderly_shutdown(
                 runtime.stop,
@@ -2488,7 +2484,6 @@ def run_dashboard(
                     ("antenna reference", close_antenna),
                     ("log panel", log_panel.stop),
                     ("status monitor", status_monitor.stop),
-                    ("operator preferences", drain_preferences),
                     ("power worker", power_confirmation.stop),
                 ),
                 close_errors,

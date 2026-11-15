@@ -795,3 +795,9 @@ has been changed by this inventory correction.
 
 - `tests/test_arm64_tk_lifecycle_runner.py` — deterministic fixed command, private display isolation, bad-signer/forged completion and process-cleanup safety checks; no live Xvfb in CI.
 - Independent private Forge ARM64 QEMU/Xvfb trial: SIGTERM, real Tk heartbeat, one close worker, ordered inert fake cleanup, exception continuation and delayed-cleanup behavior; physical FT8/PTT remains NO GO.
+
+### STAB-07I full-dashboard mock-hardware lifecycle
+
+- `tests/test_stab07i_preference_shutdown_order.py` — radio-first preference flush order and failure reporting.
+- `tests/test_stab07i_full_dashboard_probe.py` — required real UI evidence, startup mock rollback and no production safety claims.
+- Independent Forge ARM64/QEMU/Xvfb actual `run_dashboard` uses mock radio/GPS, disposable SQLite, and no physical PTT/RF.

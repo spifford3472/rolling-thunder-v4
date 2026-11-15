@@ -663,3 +663,10 @@ has been changed by this inventory correction.
 
 - `deploy/rolling-thunder-arm64-tk-lifecycle.py` — actual Tk event loop and existing UI shutdown helpers, inert fakes only, clean/error/stall scenarios, no dashboard/radio startup.
 - `deploy/rolling-thunder-arm64-tk-runner.py` — private Xvfb authenticated display and allowlisted QEMU guest lifecycle tests, bounded termination and fail-closed evidence.
+
+### STAB-07I full-dashboard isolated ARM64 lifecycle
+
+- `deploy/rolling-thunder-arm64-dashboard-probe.py` — real mock-radio dashboard, throwaway SQLite, offline Xvfb, and injected startup rollback.
+- `deploy/rolling-thunder-arm64-dashboard-runner.py` — bounded QEMU/Xvfb full-composition runner and strict evidence.
+- `src/rolling_thunder/application_runtime.py` — owner drains preferences before stopping them, after radio release.
+- `src/rolling_thunder/ui_main.py` — duplicate preference flush after runtime stop removed.

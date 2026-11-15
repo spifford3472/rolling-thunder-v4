@@ -623,3 +623,7 @@ selected**, with existing safety/lock gates preserved. All other contexts
 retain their original active-panel navigation and encoder semantics.
 No new radio, GPS, broker, voice or transmitter permissions are introduced.
 See `meshcore-ohgo-incidents.md`.
+
+## STAB-07I preference shutdown drain
+
+The application runtime is the single preference service lifecycle owner. Drain only after the radio-owner release attempt and before stopping the executor. Report failed drains and continue cleanup; UI must not reflush after `runtime.stop`. No physical PTT authority change. See `stab07i-mock-full-dashboard-lifecycle.md`.

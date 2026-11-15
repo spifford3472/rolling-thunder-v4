@@ -1836,6 +1836,14 @@ class ApplicationRuntime:
         if self.callsign_info is not None:
             attempt("callsign info", self.callsign_info.stop)
         if self.operator_preferences is not None:
+            preferences = self.operator_preferences
+            # The runtime owns this queue. Drain after radio-owner cleanup,
+            # before stopping its executor; the UI must not flush it again.
+            def drain_preferences() -> None:
+                if not preferences.flush(3.0):
+                    raise RuntimeError("queued operator preferences did not drain")
+
+            attempt("operator preferences drain", drain_preferences)
             attempt("operator preferences", self.operator_preferences.stop)
         if self.pi_forge_location_publishing is not None:
             attempt("location publishing", self.pi_forge_location_publishing.stop)
