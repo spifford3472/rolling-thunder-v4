@@ -21,6 +21,7 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `pr-reconciliation-2026-11-15.md` — 20 historical open-draft PR dispositions and supersession evidence, without changing their GitHub state.
 - `rel01-parked-acceptance-packet-2026-11-15.md` — current exact-main parked release readiness, separate RF approval, data-preserving rollback and unexecuted NO GO record.
+- `rel01-installed-state-snapshot-2026-11-15.md` — read-only AnvilMobile/Forge installed-state observation, evidence limits, acceptance matrix, and separately gated rollback/cutover plan.
 
 - `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
 

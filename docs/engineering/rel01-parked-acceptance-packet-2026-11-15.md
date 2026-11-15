@@ -1,7 +1,7 @@
 # REL-01 — parked production acceptance packet (prepared; NO GO)
 
 **Preparation baseline:** merged `main`
-`96b0aa0838eaf2f2c78cec4e9c3355e57b97c9d1` as of 2026-11-15.
+`91315847e313d6b3f1e1eaad1f5a2b7dee7659e3` as of 2026-11-15.
 **Status:** written and reviewable **only**. No deployment, restart, privileged
 execution, CAT, physical PTT, USB reconfiguration, database copy, rollback or
 RF test has been performed by this packet.
@@ -19,19 +19,23 @@ is not approval for any of those actions. No unattended transmission.
 attestation, independent physical RX, complete native package provenance,
 or a tested data-preserving rollback. Do not schedule a release automatically.
 
+## Verified installed-state snapshot
+
+The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`rel01-installed-state-snapshot-2026-11-15.md`](rel01-installed-state-snapshot-2026-11-15.md). It confirms the system-scoped dashboard unit and identifies an independent MeshCore collector process outside its cgroup. The protected checkout/configuration/databases remain inaccessible; installed SHA and data backup are still unverified.
+
 ## Immutable evidence record to populate before execution
 
 | Evidence field | Required source and validation | Current evidence |
 | --- | --- | --- |
 | Release candidate | Exact merged commit SHA; exact-head CI link/checks; dependency/wheel and source digests | Current `main` SHA above is a *planning reference*, not an approved candidate |
-| Previous production | Current installed source SHA, runtime `/proc` executable and cgroup, installed unit/drop-in hashes, approved launch witness | Unverified now; 2026-11-13/14 snapshots are historical only |
-| Host identity | System scope `rolling-thunder.service`, MainPID, one process, runtime heartbeats, current boot ID and monotonic start ticks | Must be independently observed parked |
-| Deploy path | Root-owned exact `/usr/local/sbin/rolling-thunder-deploy` contents/hashes, SSH identity, sudo allowlist, serialized lock and reconciliation approval | Installed wrapper hash and protected drop-ins **not independently attested** |
-| QSO persistence | Live schema, counts/max UUIDs, `PRAGMA integrity_check`, foreign keys, verified SQLite **online consistent backup with WAL** and encrypted/protected copy | Not taken; NEVER use immutable reads of active WAL as consistency proof |
+| Previous production | Current installed source SHA, runtime executable and cgroup, installed unit/drop-in hashes, approved launch witness | Unit active; MainPID 60400 in `/system.slice/rolling-thunder.service`; launcher path and 4 drop-in names observed. Runtime source SHA, protected drop-in contents/hashes, and fresh heartbeat inaccessible. A separate MeshCore collector PID 1078 is outside this cgroup. See 2026-11-15 snapshot. |
+| Host identity | System scope `rolling-thunder.service`, MainPID, one process, runtime heartbeats, current boot ID and monotonic start ticks | System service is active/running, MainPID 60400, cgroup `/system.slice/rolling-thunder.service`; one listed UI process plus DMR SSH child. UI heartbeat, boot ID and protected full process identity not verified. |
+| Deploy path | Root-owned exact `/usr/local/sbin/rolling-thunder-deploy` contents/hashes, SSH identity, sudo allowlist, serialized lock and reconciliation approval | Unit launcher path visible; wrapper, lock, SSH identity, sudo allowlist and protected drop-in hashes remain inaccessible. |
+| QSO persistence | Live schema, counts/max UUIDs, `PRAGMA integrity_check`, foreign keys, verified SQLite **online consistent backup with WAL** and encrypted/protected copy | DB paths, schemas, counts, retry/outbox state, WAL and backup are inaccessible; no copy or backup was taken. Never use a raw active-WAL copy as consistency proof. |
 | Rollback | Original exact SHA and dependency compatibility; schema migration direction; wrapper rollback route, protected backup and responsible operator | Not tested against current release |
 | Physical safety | FT-891 red TX indicator, manual safe receive/power-off plan, FT8 alarm inhibit after fault, no unrestricted rekey | Merged #474 disables unverified unlock; a separate owner-directed review restores deliberate in-app 1–3–1 override after acknowledgment, and session restart clears alarm; physical RX remains unverified |
-| USB/GPS/FT8 RX | Actual controller serial, DigiRig/audio capture, GPS freshness, native decoder receive-only and local UI latency | ARM64 fake-only validation; no live acceptance |
-| Forge continuity | Read-only status for existing spots, weather, Wavelog/contact sync, PSK autoqueue timer/oneshot | Prior PSK oneshot failure unresolved, not proof of current failure |
+| USB/GPS/FT8 RX | Actual controller serial, DigiRig/audio capture, GPS freshness, native decoder receive-only and local UI latency | Two CP210x, one CP2105 dual UART, C-Media USB audio, hubs and storage enumerated. Protected config-to-role mapping, GPS freshness, audio capture, native decoder and UI latency not verified. |
+| Forge continuity | Read-only status for existing spots, weather, Wavelog/contact sync, PSK autoqueue timer/oneshot | Forge spots and contact-sync services active; PSK autoqueue oneshot at 08:04 EST succeeded (exit 0), next timer 08:05. End-to-end backlog and delivery remain unverified; prior oneshot failure is historical, not current proof. |
 
 ## Parked preflight — no mutation until separately authorized
 
@@ -56,8 +60,9 @@ or a tested data-preserving rollback. Do not schedule a release automatically.
    remain quarantined pending authenticated historic signed package indexes;
    do not execute or silently treat those as equivalent. If release path
    requires this exact image, STOP until provenance resolved.
-7. Read-only status of Forge interfaces, PSK autoqueue and contact delivery;
-   known bad status is separately triaged, not fixed as a side effect.
+7. Recheck the current Forge interface and job state. The 2026-11-15 snapshot
+   observed a successful PSK autoqueue oneshot, but did not establish end-to-end
+   contact delivery or clear the durable contact-sync backlog.
 
 ## Approved deployment sequence (future only)
 
@@ -137,3 +142,7 @@ transaction receipts, not this planning checklist.
 
 - 2026-11-15: Prepared exact-main parked readiness, rollback and separate
   physical-radio gates. All execution fields intentionally remain NO GO.
+- 2026-11-15 read-only update: recorded the live system-scoped Pi unit,
+  independent MeshCore collector PID, USB enumeration, Forge active services,
+  and successful PSK autoqueue invocation; protected state and backups remain
+  unverified, so the verdict remains NO GO.
