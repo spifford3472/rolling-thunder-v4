@@ -195,6 +195,11 @@ def _run_orderly_shutdown(
     )
 
 
+def _dashboard_shutdown_exit_code(errors: list[str]) -> int:
+    """Return a refusal status when any orderly shutdown step failed."""
+    return 4 if errors else 0
+
+
 def _run_cleanup_steps(
     steps: tuple[tuple[str, Callable[[], object]], ...],
     errors: list[str],
@@ -2472,10 +2477,6 @@ def run_dashboard(
             if antenna_panel is not None:
                 antenna_panel.close()
 
-        def drain_preferences() -> None:
-            if not preference_service.flush(3.0):
-                raise RuntimeError("queued operator preferences did not drain")
-
         try:
             _run_orderly_shutdown(
                 runtime.stop,
@@ -2488,7 +2489,6 @@ def run_dashboard(
                     ("antenna reference", close_antenna),
                     ("log panel", log_panel.stop),
                     ("status monitor", status_monitor.stop),
-                    ("operator preferences", drain_preferences),
                     ("power worker", power_confirmation.stop),
                 ),
                 close_errors,
@@ -2618,7 +2618,7 @@ def run_dashboard(
         root.mainloop()
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm_handler)
-    return 0
+    return _dashboard_shutdown_exit_code(close_errors)
 
 
 def main() -> int:

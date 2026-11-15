@@ -28,11 +28,18 @@ from rolling_thunder.ui_main import (
     _callsign_info_presentation_boundary,
     _callsign_info_target,
     _context_decode_header_text,
+    _dashboard_shutdown_exit_code,
     _pota_card_colors,
     _run_cleanup_steps,
     _sigterm_close_handler,
     _status_foreground,
 )
+
+
+def test_shutdown_error_returns_nonzero_dashboard_status() -> None:
+    """UI teardown errors cannot be reported as a successful dashboard exit."""
+    assert _dashboard_shutdown_exit_code([]) == 0
+    assert _dashboard_shutdown_exit_code(["OHGO panel: injected cleanup failure"]) == 4
 
 
 def test_sigterm_handler_schedules_existing_orderly_close() -> None:

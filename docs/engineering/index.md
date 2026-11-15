@@ -20,6 +20,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab07i-mock-full-dashboard-lifecycle.md` — actual ARM64 mock dashboard startup/readiness/refresh/shutdown, synthetic SQLite and failure/refusal evidence, preference drain fix and release NO GO.
+
 - `stab07h-hardware-disabled-tk-lifecycle.md` — private ARM64 Xvfb/Tk heartbeat, signal/cleanup failure tests, no-RF boundary, rollback preservation and NO-GO gates.
 
 - `stab07g-isolated-arm64-execution.md` — isolated emulated ARM64 CPython 3.13.5, 26-wheel/app installation, native import/RECORD evidence and remaining NO-GO gates.
