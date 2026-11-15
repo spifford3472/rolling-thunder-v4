@@ -101,13 +101,21 @@ the service. That path is not exercised or verified here. The service-active
 check after three seconds does not prove Tk/UI readiness.
 
 The wrapper target is `/var/backups/rolling-thunder-deploy`, a separate
-root:root mode-0700 directory. The attached `find` output listed
-`/var/backups/rolling-thunder` instead, so the exact wrapper target
-inventory and existence of a current QSO backup remain unverified. The wrapper
-source is not present at `deploy/rolling-thunder-deploy` on current
-GitHub `main`; installed wrapper provenance is therefore not tied to a
-tracked, tested repository source. The owner’s commands only read files and
-metadata; no service, wrapper, or database was changed.
+root:root mode-0700 directory. The owner inventoried it and validated its
+newest listed candidate read-only:
+`rolling-thunder-20261114T010636Z-179c005f0f7f61df1004641db75897f42b3dd8ad.db`
+(5,455,872 bytes; filename timestamp 2026-11-14 01:06:36Z). On 2026-11-15,
+both live and backup databases reported schema 22, `integrity_check=ok`,
+zero foreign-key violations, 355 contacts (340 synchronized, 15 failed),
+15 retry rows, 693 synchronized FT8 outbox rows, and the same latest QSO
+timestamp, `2026-11-13T09:38:52.594808Z`. All 355 contact IDs matched, with
+zero IDs present only in either database. The backup therefore matches the
+observed live QSO/contact state and passed these read-only checks. Per-retry
+field values and FT8 outbox IDs/payloads were not compared, and optional
+outbox/durable stores remain to be reconciled. The wrapper source is not
+present at `deploy/rolling-thunder-deploy` on current GitHub `main`;
+installed wrapper provenance is therefore not tied to a tracked, tested
+repository source. No service, wrapper, or database was changed.
 
 ## USB and peripheral inventory
 
@@ -177,10 +185,16 @@ The root-level inventory confirms multiple deployment backup files under
 `/var/backups/rolling-thunder-deploy`. The newest listed file is
 `/var/backups/rolling-thunder-deploy/rolling-thunder-20261114T010636Z-179c005f0f7f61df1004641db75897f42b3dd8ad.db`, 5,455,872 bytes; its embedded UTC timestamp is
 2026-11-14 01:06:36Z. It predates the current dashboard process start on
-2026-11-13 at 20:07 EST by about a minute and predates the later live-database
-inspection. Its integrity, schema, row counts, and contact/retry contents have
-not been checked. It is an existing candidate backup, not a verified rollback
-backup. The earlier listing of `/var/backups/rolling-thunder` covered a
+2026-11-13 at 20:07 EST by about a minute. On 2026-11-15, read-only inspection
+of both live and backup databases showed schema 22, `integrity_check=ok`,
+zero foreign-key violations, 355 contacts (340 synchronized, 15 failed),
+15 retry rows, 693 synchronized FT8 performance-outbox records, and the same
+latest QSO timestamp (`2026-11-13T09:38:52.594808Z`). All 355 contact IDs
+matched; no contact IDs were present only in either database. The file is
+therefore a validated candidate backup of the observed QSO/contact state.
+Per-retry field values and FT8 outbox IDs/payloads were not compared, and the
+optional completed-QSO outbox path and other durable stores remain to be
+reconciled. The earlier listing of `/var/backups/rolling-thunder` covered a
 separate directory containing subsystem backups. The similarly named
 repository-root `data/rolling-thunder.db` is dated 2026-09-27, and
 `data/rolling-thunder.pre182-20260809T195346Z.db` is dated 2026-08-09;
@@ -202,8 +216,10 @@ loaded source bytes, native package provenance/hashes, environment-file values,
 and integrity/row contents of the newest deployment backup remain unverified. The
 installed wrapper hash/source are known, but its missing mutex/journal and absence
 from the repository leave deployment serialization and provenance unresolved.
-Rollback readiness is **not established** until a candidate backup is validated
-against current durable state.
+Rollback readiness for the primary QSO database now has a validated candidate
+snapshot matching the observed live contact set and aggregate sync state.
+Full retry-row/outbox content comparison, optional durable stores, and a tested
+code/schema rollback path are still outstanding.
 
 ## Focused safety and reliability matrix
 
@@ -254,8 +270,9 @@ against current durable state.
 ## Recommendation and approvals
 
 **Current recommendation: NO GO.** The production checkout and live databases
-are identified and passed read-only integrity checks, but no current QSO backup
-is verified and 15 QSOs have HTTP 503 sync failures. The deployed wrapper hash
+are identified and passed read-only integrity checks, and the newest deployment backup now passes read-only integrity/FK checks and
+matches the live contact IDs and reported aggregate QSO state. Fifteen QSOs
+still have HTTP 503 sync failures. The deployed wrapper hash
 and source are known, but it is untracked in the repository and contains no
 visible mutex, transaction journal, or independent app-readiness check. Its
 separate target-backup directory inventory and environment-dependent data paths
