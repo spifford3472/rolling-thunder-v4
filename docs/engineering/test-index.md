@@ -828,3 +828,6 @@ has been changed by this inventory correction.
   installed-package shadowing during regression verification.
 - The same test module also injects a failure after radio polling connects and
   registers a callback, asserting rollback cancels the callback and disconnects.
+- See the November 15 consolidated status in
+  `stab07-integration-and-parked-release-plan.md` for exact verified and
+  unverified ARM64, Tk, SQLite, GPS, FT8 and production acceptance boundaries.

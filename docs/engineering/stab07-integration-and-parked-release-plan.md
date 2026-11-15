@@ -285,3 +285,111 @@ active scheduler despite the unsuccessful `ApplicationRuntime.start()`. The
 runtime now attempts polling cancellation, then pre-start FT8/radio release,
 without masking the initial exception if either cleanup path reports a failure.
 The additional regression asserts disconnected mock radio and no active poll.
+
+## Consolidated current STAB-07 focused status — November 15, 2026
+
+**Overall offline workstream: IN PROGRESS. Track A: PARTIAL / TESTED.
+Track B: BLOCKED / DEFERRED. Production release: NO GO.** This status
+supersedes any interpretation that the STAB-07G–I proof of two smoke paths
+established full application acceptance. Continue the Track A independent
+application tests without reconstructing the exact Pi OS.
+
+### Confirmed defect ledger
+
+| Defect / reproduction | Small correction | Deterministic result |
+| --- | --- | --- |
+| Unexpected `LookupError` from post-radio worker initialization skips narrowly typed startup exception handler, leaves mock radio connected | Roll back on any ordinary `Exception`, re-raise original | Red before / green after, synthetic mock only |
+| `stop()` raises `ExceptionGroup` during failed startup rollback, masking initiating `LookupError` | Report rollback exception while re-raising original failure | Red before / green after, no real device |
+| Radio polling raises after radio connection and callback registration, before `_started` assignment; connection and callback remain live | Cancel partial radio polling and run existing pre-start FT8/radio cleanup, preserving original cause | Red before / green after; disconnected mock radio, no scheduled poll |
+
+All changes are in the existing `ApplicationRuntime.start()` lifecycle; no new
+radio-control owner, manager, watchdog, queue, service or CAT path was added.
+`tests/test_stab07_functional_startup_recovery.py` owns these synthetic
+regressions. No operator-visible behavior change or shared consumer interface
+change was made. Previous STAB-07I preference-flush correctness is preserved.
+
+### Measured validation and provenance
+
+- Reviewed parent STAB-07L GitHub commit:
+  `6c97dc0d2730eee6d564ed3b9ee238d856fb9191` (draft PR #469).
+- Source-correct baseline on Forge: **4,348 passed, 7 skipped**.
+- Three startup rollback cases fixed and validated on host x86 with a
+  synthetic database and fake radio, followed by **4,351 passed, 7 skipped**.
+- Strict MyPy: all 401 source modules pass; scoped Ruff passes;
+  `git diff --check` passes. Whole-repo Ruff still reports four prior diagnostics
+  in the unrelated USB observer; no observer changes were made.
+- Forge isolated worktree:
+  `/home/rt-remote/projects/rt-stab07-focused-20261115`.
+  Run the reused development venv with `PYTHONPATH="$PWD/src"` to avoid
+  importing a stale installed package.
+- Draft review PR #471 is stacked on #469, never merged. The GitHub-generated
+  first change commit was `f39fc3477c7f9f2a5a813741b26629b14e0af198`;
+  the additional polling fix commit is
+  `1f78668207ce63a8015c3f79ed1c4d221bf12fc8`.
+  GitHub tree digest `12d69762e71b2d77139f729929e323888b107362`
+  matches the independent Forge worktree commit tree exactly.
+- Exact-head CI is via a *CI-only* `feature/**` ref pointing at the review
+  commit because `.github/workflows/ci.yml` triggers on `feature/**` pushes
+  and `main` PRs, not on stacked draft PRs. GitHub CI must be checked on
+  the *latest* head, not inferred from a previous successful head.
+
+### Track A acceptance coverage and unfinished gates
+
+- Tested: existing single clean ARM64 mock-dashboard startup/heartbeat/shutdown
+  and injected startup failure (STAB-07I); the three additional isolated mock
+  startup rollback cases; existing broad Python regression coverage.
+- Not yet demonstrated with the updated wheel in ARM64/Xvfb: full dashboard
+  navigation responsiveness, every worker ownership combination, duplicate
+  startup/shutdown under contention, partially initialized GUI teardown,
+  permanently blocked worker stop/recovery, and unexpected Tk callbacks.
+- Not yet independently accepted in the new scenario matrix: synthetic
+  SQLite transaction/WAL and schema rollback across runs, GPS hot-unplug,
+  fake FT8 state/PTT release under failure, and full GUI recovery.
+- Physical screen, GPS/USB, CAT/PTT receive proof, production QSO/WAL safe
+  rollback, trusted release/launch identity and parked systemd acceptance
+  remain production-only gates with separate owner authorization.
+
+### Track B bounded research conclusion — BLOCKED / DEFERRED
+
+The exact Pi target remains `libc6:arm64 2.41-12+rpt1+deb13u3` and
+`libssl3t64:arm64 3.5.6-1~deb13u2+rpt1`. **Only 14 of 16 exact candidate
+archives are publisher-index-authenticated.** The other two `.deb` archives
+are quarantined; five extracted native file hashes match Pi observations but
+neither the archive signatures nor a complete executable native closure is
+proven. Approaches checked without recovering a signed historical chain:
+
+1. Signed current Raspberry Pi `trixie` InRelease and Packages indexes:
+   cryptographically valid but do not contain the installed historical
+   revisions.
+2. Historical third-party snapshot discovery, including prior Internet
+   Archive CDX queries and subsequent public snapshot/mirror research:
+   no independently authenticated matching historical InRelease and Packages
+   pair found.
+3. Direct dated historical publisher index path attempts and publisher pool
+   discovery: guessed historical index returned no signed metadata; official
+   pool still supplies candidate bytes but cannot authenticate historical
+   publisher release intent.
+
+**Research stop rule invoked.** Do not run a fourth equivalent search or
+execute quarantined ELF files. More complete Pi loaded-library and native
+file inventory and a new isolated exact-image rebuild remain deferred until
+new publisher-signed evidence or separately approved equivalent proof appears.
+The earlier STAB-07G/I Debian ARM64 test image remains suitable for functional
+mock application testing, with its OS non-equivalence clearly recorded.
+
+### Integration, dependency and release dispositions
+
+- PR #469 (STAB-07L) remains open draft; #471 depends on its exact head.
+  Merge order after **separate** owner approval and successful exact-head CI:
+  review earlier STAB-07 parent chain, then #469, then #471. Retarget/retest
+  after any upstream merge before considering integration complete.
+- PR #414 (DOC-03 architecture reconciliation) remains an unfinished separate
+  draft; do not silently incorporate its unpublished observations or CI changes.
+- DOC-01/DOC-02/DOC-03 inventory and responsibility reconciliation remain
+  pending beyond the precise runtime startup ownership updated here.
+- No production service, radio, SQLite/QSO data, RF, OPNsense, or network
+  configuration was changed. No infrastructure repository commit is required
+  for these offline code/documentation changes.
+- Rollback: leave drafts unmerged or discard the specific review branch;
+  private synthetic databases/worktrees are disposable after manual review.
+  No production rollback was executed or is implied.
