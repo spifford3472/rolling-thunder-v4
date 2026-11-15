@@ -162,7 +162,11 @@ This narrows the likely fault to resolving or provisioning the
 binding), before contact upload is recorded in the ledger. It is not yet
 proven: the failed UUIDs have not been correlated against the 349 ledger rows,
 and the unknown-location binding/profile/logbook membership have not been
-checked. Do not create or edit a profile until those read-only checks are done.
+checked. A subsequent read-only Forge query confirmed there is no row in
+`forge_wavelog_station_bindings` for `Mobile - Unknown Location`. This proves
+the durable Forge binding is absent, but does not prove whether the Wavelog
+profile itself is absent, hidden, unlinked, or incompatible. Do not create or
+edit a profile until those read-only checks are done.
 
 ## USB and peripheral inventory
 
