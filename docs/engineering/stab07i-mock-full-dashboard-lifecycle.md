@@ -57,3 +57,17 @@ Still outstanding: independently matching exact Pi interpreter/OS/native library
 ## STAB-07J runtime provenance qualification (2026-11-14)
 
 The ARM64 mock-dashboard compatibility evidence remains valid for the Forge test image, but STAB-07J's read-only Pi ELF/package sampling independently demonstrated that the Forge sysroot is not bit-for-bit identical to installed Pi native libraries. See `stab07j-native-runtime-provenance-and-release-readiness.md`. No protected production release or physical acceptance was performed.
+
+
+## Focused Track A continuation (2026-11-15)
+
+The later isolated cloned ARM64 test environment, built from a newly hash-pinned
+wheel containing the current startup/shutdown fixes, passed `normal` twice,
+`startup-failure` once, and new `navigation` once. The navigation probe verifies
+real Tk event dispatch `2` → `b` → `1` and observed controller transitions
+DX → Browse → POTA, then orderly SIGTERM, Tk heartbeat and full shutdown.
+The unchanged STAB-07H `stalled-worker` fake returned **75/NO GO** on the new
+clone, rejecting an uncompleted close. It does not de-key a real radio. See
+`stab07-integration-and-parked-release-plan.md` for wheel SHA256, exact logs,
+remaining physical gates and current consolidated acceptance. No production
+release or exact Raspberry Pi native-image reconstruction occurred.

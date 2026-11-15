@@ -33,7 +33,7 @@ def _module(name: str, path: Path) -> Any:
     return item
 
 
-MODES = ("normal", "startup-failure")
+MODES = ("normal", "startup-failure", "navigation")
 
 
 def make_guest(root: Path, display: Path, *, mode: str = "normal") -> list[str]:
@@ -74,7 +74,7 @@ def validate_result(report: dict[str, Any], output: str, *, mode: str = "normal"
             and report.get("physical_radio_tested") is False
             and "Rolling Thunder startup error" in output
         )
-    if mode != "normal":
+    if mode not in ("normal", "navigation"):
         return False
     needed_phases = (
         "RT_SHUTDOWN phase=close_requested",
@@ -84,7 +84,11 @@ def validate_result(report: dict[str, Any], output: str, *, mode: str = "normal"
         "RT_SHUTDOWN phase=destroy_root",
     )
     return (
-        report.get("mode") == "normal"
+        report.get("mode") == mode
+        and (mode != "navigation" or (
+            report.get("navigation_responsive") is True
+            and report.get("navigation_events") == ["dx", "browse", "pota"]
+        ))
         and report.get("return_code") == 0
         and report.get("root_created") is True
         and report.get("tk_ready") is True

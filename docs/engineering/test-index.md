@@ -842,3 +842,13 @@ has been changed by this inventory correction.
   commit/rollback/reopen integrity; not production QSO recovery acceptance.
 - The shutdown module also injects a synthetic GPS disconnect failure to
   verify reported error isolation after the mock radio has been released.
+
+
+### STAB-07 focused Tk navigation regression (2026-11-15)
+
+- `tests/test_stab07i_full_dashboard_probe.py` now requires ordered real-key
+  context evidence in `navigation` mode and rejects absent, shuffled or false
+  responsiveness reports. The independent Forge ARM64/Xvfb dashboard test
+  executed the real Tk binding and recorded DX/Browse/POTA selection. Tested
+  wheel hash, source SHA and full verification matrix are in the consolidated
+  STAB-07 integration report.

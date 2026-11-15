@@ -120,3 +120,18 @@ def test_mock_startup_failure_requires_radio_rollback_and_no_ui() -> None:
 
 def test_unsupported_test_mode_is_not_accepted() -> None:
     assert not runner.validate_result(_report(), _output(), mode="live-radio")
+
+
+def test_navigation_mode_requires_real_ordered_context_dispatch() -> None:
+    """Tk heartbeat alone cannot certify keyboard/navigation responsiveness."""
+    valid = _report()
+    valid.update(mode="navigation", navigation_responsive=True,
+                 navigation_events=["dx", "browse", "pota"])
+    assert runner.validate_result(valid, _output(), mode="navigation")
+    for bad in ([], ["dx", "pota"], ["dx", "browse", "dx"]):
+        assert not runner.validate_result(
+            dict(valid, navigation_events=bad), _output(), mode="navigation"
+        )
+    assert not runner.validate_result(
+        dict(valid, navigation_responsive=False), _output(), mode="navigation"
+    )

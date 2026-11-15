@@ -685,3 +685,13 @@ has been changed by this inventory correction.
 
 - `deploy/rolling-thunder-rpi-quarantine-compare.py` — fail-closed comparison of exact captured Pi file SHA observations against independent signed and quarantined nonexecuted extracts; never source-authenticates quarantined archives.
 - `deploy/locks/stab07l-untrusted-rpi-archive-pins.json` — SHA256 of two exact-version Raspberry Pi archive candidates, explicitly UNTRUSTED until separately signed historical package-index proof exists.
+
+
+### STAB-07 focused ARM64 mock dashboard navigation evidence (2026-11-15)
+
+- `deploy/rolling-thunder-arm64-dashboard-probe.py` — now also verifies real
+  mock UI Tk key dispatch and measured DX/Browse/POTA navigation under the
+  existing network/USB-isolated full dashboard test root.
+- `deploy/rolling-thunder-arm64-dashboard-runner.py` — strictly accepts
+  navigation evidence only with all normal shutdown, radio-off and provenance
+  guardrails; unchanged arbitrary-command refusal behavior.

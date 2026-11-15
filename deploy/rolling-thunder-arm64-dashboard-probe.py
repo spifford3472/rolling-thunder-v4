@@ -22,7 +22,7 @@ from rolling_thunder.ui_readiness import has_fresh_heartbeat, heartbeat_path
 def main() -> int:
     """Run the actual UI entry point with strictly scoped mock composition."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", required=True, choices=("normal", "startup-failure"))
+    parser.add_argument("--mode", required=True, choices=("normal", "startup-failure", "navigation"))
     mode = parser.parse_args().mode
     root_dir = Path("/test")
     if os.environ.get("DISPLAY") != ":95" or not root_dir.is_dir():
@@ -91,6 +91,20 @@ def main() -> int:
         ui_main.ApplicationRuntime.from_config = failing_runtime
 
     original_tk = tk.Tk
+    # Instrument the existing controller, not a second navigation path. This
+    # records actual root key-binding dispatch in the private Tk event loop.
+    original_select_shortcut = ui_main.ContextNavigationController.select_shortcut
+    navigation_events: list[str] = []
+
+    def observed_shortcut(controller: object, shortcut: str) -> bool:
+        changed = original_select_shortcut(controller, shortcut)
+        if changed:
+            navigation_events.append(controller.state.selected.value)
+        return changed
+
+    if mode == "navigation":
+        ui_main.ContextNavigationController.select_shortcut = observed_shortcut
+
     state = {
         "mode": mode,
         "root_created": False,
@@ -110,8 +124,25 @@ def main() -> int:
                 path and has_fresh_heartbeat(path, expected_pid=os.getpid(), now=time.time())
             )
             if state["tk_ready"]:
-                state["sent_sigterm"] = True
-                os.kill(os.getpid(), signal.SIGTERM)
+                if mode == "navigation":
+                    # Exercise real keyboard bindings after the dashboard has
+                    # installed them; reject missing events before SIGTERM.
+                    root.focus_force()
+                    for delay, keysym in ((150, "2"), (300, "b"), (450, "1")):
+                        root.after(delay, lambda key=keysym: root.event_generate(
+                            "<KeyPress>", keysym=key, when="tail"
+                        ))
+                    def finish_navigation() -> None:
+                        state["navigation_events"] = list(navigation_events)
+                        state["navigation_responsive"] = navigation_events == [
+                            "dx", "browse", "pota"
+                        ]
+                        state["sent_sigterm"] = True
+                        os.kill(os.getpid(), signal.SIGTERM)
+                    root.after(850, finish_navigation)
+                else:
+                    state["sent_sigterm"] = True
+                    os.kill(os.getpid(), signal.SIGTERM)
             else:
                 root.after(300, check_ready)
 
@@ -125,6 +156,8 @@ def main() -> int:
         result = ui_main.run_dashboard(root_dir / "no-config-read.yaml")
     finally:
         tk.Tk = original_tk
+        if mode == "navigation":
+            ui_main.ContextNavigationController.select_shortcut = original_select_shortcut
     state["after_close"] = True
     if mode == "startup-failure":
         runtime = rollback.get("instance")
@@ -158,6 +191,7 @@ def main() -> int:
         or not state["tk_ready"]
         or not state["sent_sigterm"]
         or not state["database_exists"]
+        or (mode == "navigation" and state.get("navigation_responsive") is not True)
     ):
         return 75
     return 0

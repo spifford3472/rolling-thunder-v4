@@ -286,10 +286,11 @@ runtime now attempts polling cancellation, then pre-start FT8/radio release,
 without masking the initial exception if either cleanup path reports a failure.
 The additional regression asserts disconnected mock radio and no active poll.
 
-## Consolidated current STAB-07 focused status — November 15, 2026
+## STAB-07 prior focused baseline — November 15, 2026 (superseded)
 
-**Overall offline workstream: IN PROGRESS. Track A: PARTIAL / TESTED.
-Track B: BLOCKED / DEFERRED. Production release: NO GO.** This status
+**Historical checkpoint only; superseded by the final Track A acceptance below.**
+At this earlier point, Track A was PARTIAL / TESTED and Track B was
+BLOCKED / DEFERRED. Production release was and remains NO GO. This status
 supersedes any interpretation that the STAB-07G–I proof of two smoke paths
 established full application acceptance. Continue the Track A independent
 application tests without reconstructing the exact Pi OS.
@@ -428,3 +429,112 @@ suite after the shutdown retry, SQLite and GPS fake-failure tests is
 whole-repository USB-observer Ruff findings are unchanged. This establishes
 host deterministic regression coverage only; the new source has not yet been
 rebuilt and re-executed as a freshly installed ARM64 dashboard wheel.
+
+
+## Consolidated STAB-07 offline acceptance — 2026-11-15 (current)
+
+**Track A: COMPLETE for the explicitly hardware-disabled mock application and
+standalone deterministic fake-adapter scope, pending final exact-head CI.
+Track B: BLOCKED / DEFERRED under the three-approach research stop rule.
+Overall offline workstream: READY FOR DRAFT PR REVIEW once exact-head CI passes.
+Production: NO GO. Owner-authorized merge and parked physical acceptance remain
+separate gates.**
+
+### Confirmed defects and smallest corrections
+
+1. Ordinary unexpected startup exception bypassed rollback and left a mock
+   radio connected; `ApplicationRuntime.start()` now performs owned cleanup.
+2. Rollback `ExceptionGroup` masked the original startup cause; it is recorded
+   while the initiating exception is preserved.
+3. `polling.start()` failed after radio connection but before runtime `_started`
+   assignment; partial poll registration and connected radio are now released.
+4. After failed radio disconnect, retry re-flushed a previously stopped
+   preference executor and reported a false new failure; the existing runtime
+   owner now skips only that already-completed preference cleanup, using a
+   lock-protected read-only `is_stopped` status. No radio/PTT priority changes.
+
+Each defect was reproduced in deterministic fake-device tests before its
+correction. No new manager, daemon, watchdog, queue, CAT path or privilege
+boundary was added. Other confirmed behavioral defects: **none** in the tested
+cases. Separate theoretical unverified production risks are not defects.
+
+### Exact test evidence and scope
+
+| Test requirement | Evidence and result | Scope/limitation |
+| --- | --- | --- |
+| Real complete Tk dashboard startup/shutdown | Private ARM64 QEMU/Xvfb updated wheel normal PASS twice; real heartbeat, SIGTERM and ordered cleanup, no errors | Disabled physical radio, FT8, sound, network, GPS device, radar and Forge adapters |
+| Screen navigation and responsiveness | Updated ARM64 mock dashboard real Tk key dispatch `2`, `b`, `1` produced **DX → Browse → POTA**; heartbeat and orderly close PASS | Headless Xvfb, not the vehicle display/touchscreen |
+| Worker start/stop ownership | Mock full runtime starts; ordering tests confirm radio release before blocked nonradio cleanup and one runtime-owned preferences drain | Not proof every possible worker is enabled simultaneously |
+| Duplicate launch/close | Second `ApplicationRuntime.start()` refused without disrupting first; existing `_request_close_once` concurrent close test passes | One Tk close worker; no independent second process launched |
+| Unexpected initialization/partial rollback | Three red-before-green startup regressions; ARM64 injected failure returns expected `3`, mock radio disconnected and no Tk root | No physical transmission test |
+| Delayed, failed, permanently blocked cleanup | Fake cleanup error reporting/continuation tests, held-worker ordering test; private ARM64 Tk stalled-worker returns **75, NO GO**, never false success | No forced physical CAT/PTT recovery established |
+| SQLite schema/data | Synthetic partial migration rollback retains schema v21, authentic v22 retry/idempotence succeeds, WAL commit/rollback/reopen and integrity check pass | Never touched production contacts/QSO/WAL; WAL explicitly enabled for synthetic trial |
+| GPS/hardware disconnection | Mock GPS disconnect exception reported while radio already disconnected, safe isolation PASS | Actual USB hot-unplug remains parked acceptance |
+| FT8 state and failed PTT release | Existing fake FT8 alarm/PTT timing and STAB-04 shutdown tests PASS, attempted radio release even when FT8 cleanup fails | Full FT8 UI disabled in ARM64 dashboard; physical RX cannot be certified |
+| Exception recovery | Startup rollback preserves original error, cleanup attempts recorded; all fake tests PASS | Systemd crash recovery and hardware-specific exceptions remain production gates |
+
+Fresh local package built only for private testing:
+`rolling_thunder-4.4.1-py3-none-any.whl` SHA256
+`d9ede5a4384794ac797bf77eeef856b038eb6df681d936e3f43be19c635dc28d`.
+The installed ARM64 `application_runtime.py` and `operator_preferences.py`
+were independently byte-compared with reviewed source. The installation used
+an exact-hash, no-index, no-dependencies wheel into a **new clone** of the
+existing STAB-07G/I sysroot and venv, never replacing that original evidence.
+The embedded dashboard probe was separately hash-checked against checked-in
+source. The native test sysroot is Debian-based and **not** Pi-byte-equivalent.
+
+Private Forge evidence locations:
+
+- Updated ARM64 sysroot and venv:
+  `/home/rt-remote/workspaces/rt-stab07-focused-arm64`.
+- Initial normal dashboard:
+  `/home/rt-remote/workspaces/rt-stab07-focused-display/normal.log`.
+- Injected startup failure:
+  `/home/rt-remote/workspaces/rt-stab07-focused-display-failure/result.log`.
+- Genuine Tk navigation:
+  `/home/rt-remote/workspaces/rt-stab07-focused-display-navigation/result.log`.
+- Repeated normal dashboard:
+  `/home/rt-remote/workspaces/rt-stab07-focused-display-normal-repeat/result.log`.
+- Expected blocked-worker NO-GO:
+  `/home/rt-remote/workspaces/rt-stab07-focused-display-stalled-worker/result.log`.
+- Source-correct host suite:
+  `/tmp/rt-stab07-tracka-navigation-final.log` — **4,358 passed, 7 skipped**.
+
+Tested Forge displays left no Xauthority or X95 socket residue, and no
+`qemu-aarch64-static` / private Xvfb test process remained after completion.
+Strict MyPy: 401 source files PASS. `ruff check src tests` plus scoped ARM64
+runner/probe Ruff PASS, and `git diff --check` PASS. Whole-repo Ruff's four
+existing USB-observer diagnostics remain unrelated and unchanged. The preceding
+code commit `9a5d3acae0b84307514de49d7393cc359828db32` passed GitHub
+Actions run `43681085328` on the exact commit; the final documentation/probe
+head **must** receive its own independent CI result before acceptance.
+
+### Integration decisions, deferred work and production gates
+
+- Draft PR #471 contains functional fixes, deterministic tests and this
+  consolidated status. It depends on open draft PR #469 and the earlier STAB-07
+  parent chain. No merge is approved or performed. Check each parent CI and
+  integration conflicts at the actual proposed merge heads. A CI-only feature
+  ref enables exact-head GitHub Actions for the stacked draft branch.
+- DOC-01/02/03 reconciliation remains separate. PR #414 is a **draft and
+  unreviewed** and was not merged or silently imported. The scoped lifecycle
+  ownership and test indexes were updated here; full historical architectural
+  reconciliation is not a blocker for these reviewed functional corrections.
+- Track B historical publisher metadata was sought by three materially distinct
+  approaches and not found. The two Raspberry Pi-patched archives remain
+  quarantined; 14/16 source-authenticated package count is unchanged, with
+  only 22/52 sampled native bytes matching across the two partial extracts.
+  Exact Pi reconstruction is **deferred** and not a gate for Track A.
+- No live AnvilMobile state, service, CAT/PTT, RF, QSO database, privileged
+  installer, network, or OPNsense configuration was accessed or changed in
+  this focused validation. Accordingly, no infrastructure repository change
+  was required.
+- Parked acceptance still requires separate owner approval for the actual
+  protected release, process supervision/identity, real-screen responsiveness,
+  full physical USB/GPS/FT8 receive and de-key proof, QSO/WAL preservation,
+  stop-deadline behavior and a real rollback. An abnormal physical transmit
+  state must not be inferred safe from any fake run. **Production NO GO.**
+- Rollback of this unmerged offline work is to abandon the review branch and
+  retain or explicitly remove only its newly created private Forge test
+  directories after reviewing provenance. Original STAB-07G/I scratch and
+  all production state remain untouched.
