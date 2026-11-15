@@ -811,3 +811,8 @@ has been changed by this inventory correction.
 
 - `tests/test_stab07k_signed_apt_closure.py` — ephemeral real GPG signatures, hash and package-version/architecture linkage, modified archive/index/release refusal, forged key, duplicate/unsafe paths and nonproduction verdict.
 - Independent private Forge checks: 14/16 signed exact archives, missing Raspberry Pi patched libc6 and OpenSSL; incomplete extracted image has 17/52 identical sampled Pi file hashes and 35 absent, including exact Python interpreter match; NOT a runnable image.
+
+### STAB-07L Raspberry Pi archive quarantine tests
+
+- `tests/test_stab07l_rpi_quarantine_compare.py` — bounded fake archive/native-file comparison; reject modified archives, symlinks/path escape, mismatched Pi bytes, duplicate sources and false release claims. Quarantine remains NO GO after matching.
+- Separate Forge read-only archive extraction: Raspberry Pi libc6 and libssl3t64 five file SHA matches; with 14 signed-package extraction, 22/52 Pi sampled native files match, 30 missing. Two RPi packages lack historical signed index evidence.

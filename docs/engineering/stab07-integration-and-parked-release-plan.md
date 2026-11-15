@@ -241,3 +241,7 @@ AnvilMobile's sampled Debian 13 native runtime differs materially from the priva
 ## STAB-07K signed exact native OS package reconstruction (2026-11-14)
 
 14/16 sampled Pi exact package versions have been obtained from independently signed current/historical Debian ARM64 indexes and their exact SHA256-verified archives. Six are from current Debian, two from 2026-08-01 signed `trixie`, and six Python 3.13 `deb13u4` from signed 2026-07-20 `trixie-updates`. The remaining two Raspberry Pi-patched libc6/OpenSSL versions are not authenticated against signed historical Pi repository metadata. Extracted incomplete 14-package overlay matches 17/52 sampled Pi files and is not bootable. **NO GO for complete emulator, loaded-code attestation or production deployment.** See `stab07k-authenticated-exact-arm64-os-reconstruction.md`.
+
+## STAB-07L historical Raspberry Pi package byte-equivalence (2026-11-14)
+
+Exact ARM64 libc6 and libssl3t64 .deb bytes are available in the official Raspberry Pi pool and five unexecuted extracted ELF files match the Pi read-only SHA sample. The required historical signed RPi package index linking these .debs was not found, so they remain quarantined. Authenticated OS archive count stays 14/16, and the combined partial extracts match 22/52 Pi native-file samples with 30 absent. No executable complete image or production approval. See `stab07l-rpi-historical-package-quarantine.md`.

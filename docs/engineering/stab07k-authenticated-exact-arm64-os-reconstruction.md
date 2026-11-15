@@ -107,3 +107,7 @@ The output documents **six source-authenticated Python archives**, never a produ
 This milestone does **not** complete the exact image objective. No GitHub PR merge, systemd launch or Pi change is authorized. Any later host/network change affecting 192.168.9.0/24, 192.168.10.0/24 or OPNsense must have configuration paths, integrations, jobs, validation, rollback and change history documented and committed to `spifford3472/ki5vnb-qth-infrastructure` before completion.
 
 **Change history and rollback (2026-11-14):** Built and tested strict signed APT source-to-archive verifier, independently verified three Debian repository vintages plus current Raspberry Pi metadata, recovered 14 exact packages and nonexecuting matching interpreter files, and recorded the remaining historical provenance blocker. Roll back by abandoning this draft and deleting only separately reviewed private Forge scratch artifacts; there is no production rollback to perform. **Release NO GO.**
+
+## STAB-07L quarantine qualification (2026-11-14)
+
+Both exact Raspberry Pi-patched libc6 and OpenSSL archive *bytes* were recovered by HTTPS and match five additional installed Pi ELF SHA samples. Their historical signed InRelease → Packages → archive hash linkage was not established, so these two .deb files are quarantined, not part of the 14 authenticated archive inputs. The combined partial extracted samples show 22/52 matching Pi files, 30 missing, and **no production-equivalent runtime**. See `stab07l-rpi-historical-package-quarantine.md`.

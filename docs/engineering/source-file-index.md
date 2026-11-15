@@ -680,3 +680,8 @@ has been changed by this inventory correction.
 
 - `deploy/rolling-thunder-signed-apt-closure.py` — bounded offline GPG-pinned InRelease → signed ARM64 Packages → exact SHA256/size-validated .deb verification; no install and never production attestation.
 - `deploy/locks/stab07k-signed-exact-apt-evidence.json` — 14 of 16 Pi installed revisions source-authenticated across current and historical signed Debian indexes; two Pi-patched versions unresolved; strict NO GO.
+
+### STAB-07L untrusted Raspberry Pi package quarantine
+
+- `deploy/rolling-thunder-rpi-quarantine-compare.py` — fail-closed comparison of exact captured Pi file SHA observations against independent signed and quarantined nonexecuted extracts; never source-authenticates quarantined archives.
+- `deploy/locks/stab07l-untrusted-rpi-archive-pins.json` — SHA256 of two exact-version Raspberry Pi archive candidates, explicitly UNTRUSTED until separately signed historical package-index proof exists.
