@@ -258,6 +258,62 @@ def parse_operating_context_reply(reply: bytes) -> Ft891OperatingContext:
     }.get(context_code, Ft891OperatingContext.UNKNOWN)
 
 
+class Ft891TxReadback(StrEnum):
+    """Documented TX; status; firmware report, not physical RF proof."""
+
+    BOTH_OFF = "both_off"
+    CAT_ON = "cat_on"
+    RADIO_ON = "radio_on"
+
+
+def encode_read_tx_readback() -> bytes:
+    """Read radio/CAT transmit status without issuing a key/de-key command."""
+    return b"TX;"
+
+
+def parse_tx_readback(reply: bytes) -> Ft891TxReadback:
+    """Parse only an exact, documented FT-891 TX; status answer.
+
+    A syntactically valid BOTH_OFF reply is still radio firmware telemetry,
+    not independent hardware/RF receive verification or unlock authority.
+    """
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    statuses = {
+        b"TX0;": Ft891TxReadback.BOTH_OFF,
+        b"TX1;": Ft891TxReadback.CAT_ON,
+        b"TX2;": Ft891TxReadback.RADIO_ON,
+    }
+    try:
+        return statuses[reply]
+    except KeyError as error:
+        raise Ft891CatError("Malformed FT-891 TX status response") from error
+
+
+def encode_read_tx_led() -> bytes:
+    """Request firmware's view of the FT-891 front-panel TX LED (read only)."""
+    return b"RIA;"
+
+
+def encode_read_rx_led() -> bytes:
+    """Request firmware's view of the FT-891 front-panel RX LED (read only)."""
+    return b"RIB;"
+
+
+def parse_radio_led_reply(reply: bytes, *, indicator: str) -> bool:
+    """Parse one RI indicator answer; never treat it as independent RF proof."""
+    if indicator not in {"A", "B"}:
+        raise ValueError("indicator must be A (TX LED) or B (RX LED)")
+    if not isinstance(reply, bytes):
+        raise TypeError("reply must be bytes")
+    prefix = f"RI{indicator}".encode("ascii")
+    if reply == prefix + b"0;":
+        return False
+    if reply == prefix + b"1;":
+        return True
+    raise Ft891CatError("Malformed or mismatched FT-891 RI indicator response")
+
+
 def encode_cat_transmit_on() -> bytes:
     """Return the FT-891 CAT command for CAT-controlled transmit."""
     return b"TX1;"

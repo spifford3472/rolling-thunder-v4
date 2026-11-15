@@ -897,3 +897,12 @@ the consolidated STAB-07 integration report for private evidence file paths.
   session-local alarm, and a new fault re-latching the inhibit. The real UI
   explicitly keeps `radio_confirmed_receive=False` and labels the action as
   manual recovery. No automated CAT or RF tests are authorized here.
+
+### FT8-RX-02 receive readback protocol (2026-11-15)
+
+- `tests/test_ft891_cat.py` verifies the optional pure `TX;`, `RIA;`, `RIB;`
+  read-only command codecs with documented three-state TX status, crossed or
+  invalid LED replies, malformed and partial responses, no write/key
+  commands, and no restored FT8 alarm transmit authority. These queries
+  are **not composed into production** and no physical receive sensing has
+  been accepted; see `ft8-rx02-receive-evidence-and-supervised-recovery.md`.

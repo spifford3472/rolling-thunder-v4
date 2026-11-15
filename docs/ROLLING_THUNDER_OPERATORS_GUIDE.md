@@ -63,6 +63,21 @@ exercise care before separately starting an FT8 transmit operation. New
 uncertain-PTT events still trigger a fresh alarm. No unattended RF test is
 authorized, and this new recovery design is not installed by writing this guide.
 
+## FT8-RX-02 proposed receive-status diagnostics (not installed)
+
+Yaesu provides read-only FT-891 CAT queries for the radio/CAT transmit
+status and TX/RX indicator states. Their strict source-only parser is under
+review; the dashboard does **not** currently issue those queries or use them
+to unlock FT8. The reported indicators come from the radio's firmware and
+cannot independently prove the absence of RF transmission. A real PTT alarm
+continues to require safe operator intervention and supervised recovery.
+The operator controls recovery: the session-local alarm intentionally clears
+on a dashboard restart. The proposed separate owner override allows Voice
+Cancel then 1-3-1 on FT8 to clear it without rebooting. Neither recovery
+path proves the radio is in receive; inspect the rig and avoid transmitting
+while physical TX is uncertain. See
+`engineering/ft8-rx02-receive-evidence-and-supervised-recovery.md`.
+
 ## About this guide
 
 Rolling Thunder is a mobile amateur-radio operating console built to reduce the

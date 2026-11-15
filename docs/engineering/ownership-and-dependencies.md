@@ -528,8 +528,8 @@ executor, hardware control, or radio ownership is introduced.
 `ft8/ptt_alarm.py` owns the warning and inhibit state; `ui_main.py` is the
 physical-control and warning-overlay consumer. The `ft891_radio.py` adapter
 owns the existing serialized CAT/PTT path, not an independently verified RF
-receive sensor. The real alarm unlock is deliberately fail-closed in the
-source-only correction until an authorized physical RX source exists. Visual
+receive sensor. The owner-approved explicit 1-3-1 override remains a deliberate
+human decision rather than independent physical RX verification. Visual
 test alarm state is independently constructed and cannot clear production TX
 inhibit. Changing alarm recovery requires FT8 transmit, controller routing,
 operator UI and hardware-acceptance regression evidence.
@@ -543,3 +543,13 @@ acknowledged operator override may clear that session's alarm without claiming
 physical RX verification; the existing `Ft891Radio` single-owner CAT/PTT
 latch and authorization checks remain unchanged. Process restart resets the
 alarm by design; this is **not** proof of physical radio receive.
+
+## FT8-RX-02 source-only evidence ownership
+
+The `ft891_cat.py` codec owns strict parsing for vendor `TX;`, `RIA;`,
+`RIB;` readback formats, but does not execute any queries. Any future
+runtime observation must remain under `Ft891Radio`'s existing CAT operation
+lock, publish only immutable, stale-aware advisory state, and keep the
+`FT8PttAlarm` live transmit inhibit independent of the readback data.
+Physical receive verification remains unimplemented. By explicit owner
+policy a process restart clears the session alarm; a new fault re-latches it.
