@@ -117,6 +117,32 @@ present at `deploy/rolling-thunder-deploy` on current GitHub `main`;
 installed wrapper provenance is therefore not tied to a tracked, tested
 repository source. No service, wrapper, or database was changed.
 
+## Contact-sync retry follow-up (16:43 EST)
+
+At 16:43:33 EST on 2026-11-15, a SQLite read-only inspection on AnvilMobile
+still showed 355 contacts: 340 synchronized and 15 failed, with 15 retry rows.
+Each retry's stored error remained the generic
+`Home Station Platform contact upload returned HTTP 503.`; the persisted retry
+counts had advanced to 858–2,262 and the next attempts were due at 16:48:22–26
+EST. This confirms the normal retry loop is running, but none of these contacts
+has recovered.
+
+The Forge contact-sync unit remained active (MainPID 788703). A read-only
+`GET http://192.168.9.170:8767/health` returned HTTP 200 with
+`availability=available` at 16:43:31 EST. This verifies the health path's
+Wavelog authentication and configured target resolution at that time; it does
+not exercise the Wavelog QSO import POST.
+
+Source inspection explains why the Pi's retry row lacks a more specific cause:
+`http_home_platform.py` raises an error containing only the HTTP status for
+non-2xx contact responses and discards the response body. Forge's `/contacts`
+handler can return HTTP 503 for either `wavelog_unavailable` or
+`sync_ledger_unavailable`. The currently available Pi-side error therefore
+cannot distinguish a Wavelog QSO-write failure from a Forge ledger-storage
+failure. Forge ledger state and Wavelog application logs around the 16:43 retry
+must be inspected read-only before selecting a repair. No manual sync, state
+reset, database write, service change, or contact replay was performed.
+
 ## USB and peripheral inventory
 
 At 07:51 EST, `lsusb` showed VIA USB hubs, a SanDisk Extreme 55DD storage device,
@@ -272,7 +298,8 @@ code/schema rollback path are still outstanding.
 **Current recommendation: NO GO.** The production checkout and live databases
 are identified and passed read-only integrity checks, and the newest deployment backup now passes read-only integrity/FK checks and
 matches the live contact IDs and reported aggregate QSO state. Fifteen QSOs
-still have HTTP 503 sync failures. The deployed wrapper hash
+still fail with HTTP 503 despite the normal retry loop; Forge health is green,
+but the exact POST failure source is hidden by the Pi client's generic error. The deployed wrapper hash
 and source are known, but it is untracked in the repository and contains no
 visible mutex, transaction journal, or independent app-readiness check. Its
 separate target-backup directory inventory and environment-dependent data paths
