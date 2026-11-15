@@ -1,6 +1,11 @@
 # REL-01 — one controlled parked deployment and rollback acceptance
 
-Status: **BLOCKED; procedure staged, not executed**. This is not approval to
+Status: **BLOCKED; procedure staged, not executed**.
+
+**2026-11-15 current packet:** See `rel01-parked-acceptance-packet-2026-11-15.md`
+for the current merged source baseline, distinct approvals, verified-state
+gates, protected QSO/WAL backups, and hard NO GO disposition. This 2026-11-14
+checklist remains historical context, not authorization for deployment. This is not approval to
 restart AnvilMobile or energize/transmit with the FT-891. Review exact current
 `main` and all active maintenance PRs before considering a release.
 
