@@ -29,7 +29,7 @@ or a tested data-preserving rollback. Do not schedule a release automatically.
 | Deploy path | Root-owned exact `/usr/local/sbin/rolling-thunder-deploy` contents/hashes, SSH identity, sudo allowlist, serialized lock and reconciliation approval | Installed wrapper hash and protected drop-ins **not independently attested** |
 | QSO persistence | Live schema, counts/max UUIDs, `PRAGMA integrity_check`, foreign keys, verified SQLite **online consistent backup with WAL** and encrypted/protected copy | Not taken; NEVER use immutable reads of active WAL as consistency proof |
 | Rollback | Original exact SHA and dependency compatibility; schema migration direction; wrapper rollback route, protected backup and responsible operator | Not tested against current release |
-| Physical safety | FT-891 red TX indicator, manual safe receive/power-off plan, FT8 alarm inhibit after fault, no unrestricted rekey | Real 1–3–1 unlock disabled in merged #474; field acceptance pending |
+| Physical safety | FT-891 red TX indicator, manual safe receive/power-off plan, FT8 alarm inhibit after fault, no unrestricted rekey | Merged #474 disables unverified unlock; a separate owner-directed review restores deliberate in-app 1–3–1 override after acknowledgment, and session restart clears alarm; physical RX remains unverified |
 | USB/GPS/FT8 RX | Actual controller serial, DigiRig/audio capture, GPS freshness, native decoder receive-only and local UI latency | ARM64 fake-only validation; no live acceptance |
 | Forge continuity | Read-only status for existing spots, weather, Wavelog/contact sync, PSK autoqueue timer/oneshot | Prior PSK oneshot failure unresolved, not proof of current failure |
 
@@ -84,9 +84,11 @@ After *new* owner approval for a specific parked target SHA:
 
 ## Physical FT8 gate: separate authorization only
 
-A source-only fail-closed fix (#474) stops 1–3–1 from clearing real PTT
-inhibition after ambiguous transmission. No verified in-app recovery is
-present. On any red TX indicator, unclear radio power, stuck CAT, unexpected
+Merged #474 stops unverified automatic-style release; a separate owner-directed
+recovery proposal permits Voice Cancel followed by deliberate 1–3–1 in FT8,
+and a process restart intentionally starts a clear session alarm. These are
+operator-controlled recovery actions, **not** independent physical RX proof.
+Neither procedure issues CAT/PTT or starts an FT8 QSO. On any red TX indicator, unclear radio power, stuck CAT, unexpected
 FT8 audio or uncertain release: cease automation, physically de-key/power down
 using the owner's safe procedure, preserve logs and STOP the release. Software
 TX0 success or polled `transmitting=False` never substitutes for observation.

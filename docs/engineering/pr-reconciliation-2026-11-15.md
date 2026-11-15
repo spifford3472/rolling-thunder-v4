@@ -75,3 +75,12 @@ production state remain unchanged.
 - 2026-11-15: Audited 20 open draft PRs and source-path coverage against
   exact merged main; documented proposed supersessions and protected #414
   history without modifying any PR state, service, firewall or radio.
+
+## Owner-directed recovery follow-up (2026-11-15)
+
+A subsequent owner requirement clarified that software PTT lockouts must be
+recoverable: session restart clears the alarm, and an explicitly acknowledged
+1–3–1 operator override is being developed as a separate PR. This does not
+establish physical receive or authorize RF testing, and does not change the
+historical draft dispositions above. When merged, this newer user-facing
+recovery policy supersedes the absolute no-in-app-unlock wording of #474.
