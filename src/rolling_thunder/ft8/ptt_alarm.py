@@ -28,14 +28,21 @@ class FT8PttAlarm:
             self._active = False
 
     def unlock_step(self, action: ControlAction, *, ft8_screen: bool,
-                    radio_confirmed_receive: bool) -> bool:
-        """Only an acknowledged alarm, verified RX, and 1-3-1 on FT8 unlock."""
+                    radio_confirmed_receive: bool,
+                    operator_recovery_override: bool = False) -> bool:
+        """Clear only on acknowledged FT8 1-3-1 and an explicit recovery choice.
+
+        The operator override is manual authority, not a physical RX sensor.
+        Neither path keys the radio or starts an FT8 transmission.
+        """
         sequence = (ControlAction.PANEL_PRIMARY, ControlAction.PANEL_TERTIARY,
                     ControlAction.PANEL_PRIMARY)
         with self._lock:
             if not self._tx_inhibited or self._active:
                 return False
-            if not ft8_screen or not radio_confirmed_receive:
+            if not ft8_screen or not (
+                radio_confirmed_receive or operator_recovery_override
+            ):
                 self._unlock_progress = 0
                 return False
             if action not in sequence:

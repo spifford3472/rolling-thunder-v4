@@ -533,3 +533,13 @@ source-only correction until an authorized physical RX source exists. Visual
 test alarm state is independently constructed and cannot clear production TX
 inhibit. Changing alarm recovery requires FT8 transmit, controller routing,
 operator UI and hardware-acceptance regression evidence.
+
+
+### Operator FT8 recovery ownership (2026-11-15 review)
+
+`FT8PttAlarm` owns session-local warning/inhibit and 1–3–1 sequence state,
+`ui_main.py` routes physical controls and displays the warning. An explicitly
+acknowledged operator override may clear that session's alarm without claiming
+physical RX verification; the existing `Ft891Radio` single-owner CAT/PTT
+latch and authorization checks remain unchanged. Process restart resets the
+alarm by design; this is **not** proof of physical radio receive.

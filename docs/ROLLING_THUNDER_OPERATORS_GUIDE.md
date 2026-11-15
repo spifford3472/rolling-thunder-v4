@@ -42,25 +42,26 @@ operation. Safely return the radio to receive or power it off before further
 transmission attempts. A software timeout, reconnect, warning dismissal,
 `TX0;` command, or service restart cannot by itself establish physical receive.
 
-The FT8 PTT warning and transmit inhibit are separate. Acknowledging the alarm
-silences its warning but retains the inhibit. The **source-only fail-closed
-correction under review** no longer allows physical controls **1–3–1** to
-clear the *real* alarm: a radio RX verification capability does not currently
-exist, and a polled `transmitting=False` or successful CAT `TX0;` write is not
-physical proof. The controls are consumed while locked, and the dashboard
-states that there is **no in-app unlock**. The 1–3–1 sequence remains usable
-only for the isolated, receive-only visual alarm test; it cannot alter live
-transmit authority.
+The FT8 warning and transmit inhibit are separate. Voice Cancel acknowledges
+the warning but does not itself remove the inhibit. Under the **proposed
+operator-recovery update** (not deployed), after you have safely checked the
+radio, you can explicitly override the current session lockout using physical
+command buttons **1–3–1**, on the FT8 screen after acknowledging the alarm.
+This is **your recovery decision**, not a declaration that the software has
+verified physical receive. A successful CAT `TX0;` response or
+`RadioState.transmitting=False` also cannot establish physical receive.
+The override clears the alarm inhibit but **does not key the transmitter,
+start an FT8 QSO, or override other radio-adapter safety checks**.
 
-If a real alarm fires, stop operating, safely inspect the radio's red TX
-indicator, power down the radio if its receive state is uncertain, and preserve
-logs. Do **not** retry an automated transmission or repeatedly restart the
-service to silence the fault. Recovery requires supervised diagnosis and
-separately approved parked acceptance, with independent physical receive
-verification, before returning to FT8 transmit operation. A supervised parked
-physical acceptance remains required before changing transmit safety policy.
-This guide does not authorize an unattended test. The correction is **not
-installed** merely because it is present on a review branch.
+If a real alarm fires, stop operating and safely inspect the FT-891's red TX
+indicator. Manually de-key or power down the radio if its state is uncertain;
+do not override while it might still be transmitting. The operator may
+explicitly recover using the gesture after resolving the issue. The alarm is
+**session-local**: a dashboard process restart creates a new clear instance,
+per owner policy. Restart is not proof of de-key, so observe radio state and
+exercise care before separately starting an FT8 transmit operation. New
+uncertain-PTT events still trigger a fresh alarm. No unattended RF test is
+authorized, and this new recovery design is not installed by writing this guide.
 
 ## About this guide
 

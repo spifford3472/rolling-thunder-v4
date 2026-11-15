@@ -652,3 +652,15 @@ trustworthy physical receive confirmation capability exists. The isolated
 visual-test instance has no linkage to production transmit authority. Never
 create an alternate CAT/PTT writer or reset the transmit inhibit as a side
 effect of UI navigation, cancellation, screen refresh, or shutdown.
+
+
+### Owner-authorized manual FT8 recovery (2026-11-15 review)
+
+An acknowledged uncertain-PTT alarm must permit a deliberate 1–3–1 operator
+recovery gesture in FT8 and must reset on a process restart. This is operator
+authority, not independently verified receive evidence. The UI must pass
+`radio_confirmed_receive=False` for the real alarm and a separately named
+`operator_recovery_override=True`; do not silently equate that gesture, CAT
+TX0 or firmware LED status with actual RF de-key. Other normal authorization
+and the adapter's uncertain-CAT latch remain independent, and the manual
+recovery sequence must not transmit. New alarm events retrigger inhibition.
