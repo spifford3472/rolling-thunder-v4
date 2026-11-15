@@ -119,6 +119,7 @@ def station(
         "name": name,
         "callsign": callsign,
         "gridsquare": gridsquare,
+        "city": "",
         "dxcc": dxcc,
         "cq": cq,
         "itu": itu,
@@ -699,6 +700,47 @@ def test_incompatible_exact_dynamic_station_fails_closed(
         managed_client(transport).resolve_station_target(dynamic_contact())
 
 
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"gridsquare": "EM79XM"},
+        {"city": "Ohio"},
+        {"state": "OH"},
+        {"cq": 5},
+        {"itu": 9},
+        {"callsign": "W1AW"},
+        {"dxcc": 110},
+    ],
+)
+def test_unknown_mobile_station_requires_locationless_identity_and_required_zones(
+    override: dict[str, object],
+) -> None:
+    unknown = {
+        **station(99, "Mobile - Unknown Location", ""),
+        "state": "",
+        **override,
+    }
+    qso = dynamic_contact().model_copy(
+        update={
+            "my_grid": None,
+            "my_latitude": None,
+            "my_longitude": None,
+            "my_state": None,
+            "my_cq_zone": None,
+            "my_itu_zone": None,
+        }
+    )
+    transport = ScriptedTransport(
+        [
+            station_response(station(42, "Mobile", "EM79XM"), unknown),
+            logbook_response(1, 42, 99),
+        ]
+    )
+
+    with pytest.raises(WavelogStationLocationError, match="incompatible"):
+        managed_client(transport).resolve_station_target(qso)
+
+
 def test_insufficient_frozen_context_routes_to_unknown_mobile_station() -> None:
     unknown = {
         "id": 99,
@@ -706,9 +748,10 @@ def test_insufficient_frozen_context_routes_to_unknown_mobile_station() -> None:
         "name": "Mobile - Unknown Location",
         "callsign": "KI5VNB",
         "gridsquare": "",
+        "city": "",
         "dxcc": 291,
-        "cq": None,
-        "itu": None,
+        "cq": 4,
+        "itu": 8,
         "state": "",
     }
     transport = ScriptedTransport(
@@ -736,8 +779,9 @@ def test_insufficient_frozen_context_routes_to_unknown_mobile_station() -> None:
     assert target.location.station_id == 99
     assert target.location.name == "Mobile - Unknown Location"
     assert target.location.gridsquare == ""
+    assert target.location.city == ""
     assert target.location.state == ""
-    assert target.location.cq is None and target.location.itu is None
+    assert target.location.cq == 4 and target.location.itu == 8
     assert target.dynamic
     assert [request[0] for request in transport.requests] == ["GET", "GET", "POST", "PATCH", "GET"]
     create_payload = loads(transport.requests[2][3] or b"{}")
@@ -745,6 +789,8 @@ def test_insufficient_frozen_context_routes_to_unknown_mobile_station() -> None:
         "name": "Mobile - Unknown Location",
         "callsign": "KI5VNB",
         "dxcc": 291,
+        "cq": 4,
+        "itu": 8,
     }
 
 
