@@ -661,6 +661,6 @@ advisory data** only. A tuple that reports `TX0;`, TX LED OFF and RX LED ON
 is neither independently measured RF power nor sufficient permission to
 clear `FT8PttAlarm.tx_inhibited`. The existing CAT owner and its single
 serialized transport remain authoritative for all queries; no Tk callback,
-alternate port or separate PTT writer may be added. A crash/restart can
-recreate the in-memory PTT alarm: persistence and privileged supervised
-recovery remain future, separately reviewed work.
+alternate port or separate PTT writer may be added. A restart intentionally resets the session-local PTT alarm by owner policy;
+CAT advisory reports cannot auto-clear it, while separately acknowledged
+operator override remains a human recovery decision without RF proof.

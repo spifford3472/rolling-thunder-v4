@@ -51,8 +51,8 @@ CAT lock owner, UI HTTP/serial call, feature gate or persistent database.
    sample age, monotonic timestamps and no request made on Tk. Publish an
    immutable telemetry result such as `consistent_rx`, `tx_reported`,
    `conflicting`, `stale`, `timeout`, `disconnected` or `unsupported`.
-   This may explain an incident, but **none of those states authorizes
-   unlocking**, not even `consistent_rx`. If the shared CAT lock is stuck,
+   This may explain an incident, but **none of those states by themselves
+   authorizes unlocking**, not even `consistent_rx`. If the shared CAT lock is stuck,
    do not create a second CAT port or force-close an in-flight command.
 2. **Independent receive proof (future design review, not built):** To
    automatically restore transmission after a real uncertain PTT event,
@@ -66,24 +66,26 @@ CAT lock owner, UI HTTP/serial call, feature gate or persistent database.
    TX-state line can still misreport RF power; select sensor architecture
    after an electrical/installation review, not from this CAT manual alone.
 
-Human visual confirmation of a non-red TX lamp and a safe powered-off rig
-is appropriate for *operator emergency recovery*, but it is not an in-band
-machine-verifiable sensor measurement. It cannot be encoded as
+Human visual confirmation of a non-red TX lamp or safely powering off the rig
+is appropriate for *operator-directed recovery*, but is not an in-band
+machine-verifiable sensor measurement. It must not be encoded as
 `radio_confirmed_receive=True` merely because the 1-3-1 gesture occurred.
-Do not re-enable the real unlock in #474 as part of introducing telemetry.
+The operator's independent manual 1-3-1 override (proposed in a separate
+owner-directed fix) is an **explicit human decision**, never evidence from
+these CAT replies and never permission for automatic keying.
 
-## Important unresolved restart/latch semantics
+## Owner policy — session-only alarm and manual override
 
-The current `FT8PttAlarm` is an in-memory object created at dashboard
-startup. The corrected lockout is effective **during that process**;
-a process restart can construct a fresh alarm that has not observed the
-prior uncertain-PTT event. This is a significant remaining safety boundary:
-**do not promise cross-restart containment from the current source.** A
-separately reviewed design must consider crash/reboot persistence, fail-closed
-startup on an unresolved PTT incident, and safe recovery after manual
-radio power-off. Persistence must not be implemented casually through the
-contact/QSO database, nor should it create a new unsafe hardware-control
-path. Any owner-authorized recovery should leave a durable audited receipt.
+The current `FT8PttAlarm` is intentionally an in-memory object created at
+dashboard startup. **The owner requires a restart to clear the session alarm**
+and rejects any permanent/unrecoverable software lockout. The separate
+operator-recovery change proposes acknowledgment plus explicit 1-3-1 on the
+FT8 screen to clear it in-app; no CAT report may auto-clear it. Both a restart
+and manual override are operator recovery decisions, **not proof that the
+radio has de-keyed**. Hardware/CAT uncertainty requires safe observation
+and no new QSO until resolved. Do not introduce persistent reboot-proof
+lockout without separate owner approval. The manual override should produce
+a clear audit log, but there is no new credential or privileged operation.
 
 ## Offline acceptance criteria for future stages
 
@@ -99,8 +101,9 @@ path. Any owner-authorized recovery should leave a durable audited receipt.
 - A future separate supervised sensor prototype must prove real physical
   semantics with an operator-present parked radio. Require distinct approvals
   for powered CAT polling and especially any live RF transmission.
-- Runtime restart/crash tests verify an unresolved PTT incident cannot
-  silently regain transmit authority by replacing an in-memory object.
+- Restart/crash tests verify the intentionally session-local alarm resets
+  on a new runtime instance, while a freshly observed fault re-inhibits TX;
+  no unexpected CAT/PTT or automatic transmit can occur on restart.
 - Full Ruff/MyPy/pytest, security review, documentation, verified running
   exact SHA, rollback/data protection and separately approved parked
   hardware acceptance precede deployment.
