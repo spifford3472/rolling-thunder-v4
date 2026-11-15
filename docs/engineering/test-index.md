@@ -831,3 +831,14 @@ has been changed by this inventory correction.
 - See the November 15 consolidated status in
   `stab07-integration-and-parked-release-plan.md` for exact verified and
   unverified ARM64, Tk, SQLite, GPS, FT8 and production acceptance boundaries.
+
+### STAB-07 focused shutdown and SQLite durability (2026-11-15)
+
+- `tests/test_stab07_functional_shutdown.py` — mock-only duplicate startup,
+  radio-first release before a blocked unrelated worker, failed radio disconnect
+  reporting and retry without an already-stopped preference queue false error.
+- `tests/test_stab07_functional_persistence.py` — disposable schema migration
+  failure rollback, proper v22 retry/idempotence and opt-in synthetic WAL
+  commit/rollback/reopen integrity; not production QSO recovery acceptance.
+- The shutdown module also injects a synthetic GPS disconnect failure to
+  verify reported error isolation after the mock radio has been released.

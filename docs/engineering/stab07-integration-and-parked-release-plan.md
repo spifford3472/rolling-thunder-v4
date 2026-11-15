@@ -393,3 +393,38 @@ mock application testing, with its OS non-equivalence clearly recorded.
 - Rollback: leave drafts unmerged or discard the specific review branch;
   private synthetic databases/worktrees are disposable after manual review.
   No production rollback was executed or is implied.
+
+### Track A follow-up: shutdown retry and disposable persistence (2026-11-15)
+
+A separate deterministic mock test exposed a confirmed shutdown retry defect:
+when the first attempt fails to disconnect the radio, `ApplicationRuntime`
+correctly retains `_started=True` and continues stopping unrelated services,
+including the preference executor. On a second shutdown attempt, radio release
+can succeed, but a second preference flush on that already-stopped executor
+reports a **false new shutdown failure**. The first failure is still reported
+truthfully. The minimum fix adds a lock-protected read-only
+`OperatorPreferenceService.is_stopped` property and skips repeat preference
+flush/stop during a retry; it does not bypass radio disconnect or FT8 cleanup.
+New deterministic tests validate first-attempt failure reporting, successful
+retry, duplicate-start rejection, and radio release before a deliberately
+blocked nonradio cleanup callback. They use mock radio/GPS only; an indefinitely
+blocked callback still requires external supervision and remains an acceptance
+limitation, not a proven recoverable operation.
+
+Disposable SQLite tests independently exercised transactional migration rollback
+of an injected partial schema update, recovery by replaying the genuine v22
+migration, repeat initialization, and synthetic WAL commit/rollback/reopen
+integrity. This is **not** a production QSO rollback rehearsal and does not
+assert that all application's runtime connections use WAL by default.
+
+Test ownership: `tests/test_stab07_functional_shutdown.py` and
+`tests/test_stab07_functional_persistence.py`. The new preference service
+property is a read-only lifecycle observation, not a new public write path.
+
+**Expanded current Forge gate (2026-11-15):** The complete source-correct
+suite after the shutdown retry, SQLite and GPS fake-failure tests is
+**4,357 passed, 7 skipped**. Strict MyPy covers **401 source files**, and
+`ruff check src tests` plus `git diff --check` pass. The separate legacy
+whole-repository USB-observer Ruff findings are unchanged. This establishes
+host deterministic regression coverage only; the new source has not yet been
+rebuilt and re-executed as a freshly installed ARM64 dashboard wheel.
