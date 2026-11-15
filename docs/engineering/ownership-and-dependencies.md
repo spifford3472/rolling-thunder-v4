@@ -521,3 +521,15 @@ panel controller and Forge provider remain the original owners elsewhere.
 be re-flushed merely because radio disconnect failed and shutdown was retried.
 The `is_stopped` observation is read-only and lock-protected; no new process,
 executor, hardware control, or radio ownership is introduced.
+
+
+## FT8 uncertain-PTT alarm ownership (2026-11-15)
+
+`ft8/ptt_alarm.py` owns the warning and inhibit state; `ui_main.py` is the
+physical-control and warning-overlay consumer. The `ft891_radio.py` adapter
+owns the existing serialized CAT/PTT path, not an independently verified RF
+receive sensor. The real alarm unlock is deliberately fail-closed in the
+source-only correction until an authorized physical RX source exists. Visual
+test alarm state is independently constructed and cannot clear production TX
+inhibit. Changing alarm recovery requires FT8 transmit, controller routing,
+operator UI and hardware-acceptance regression evidence.

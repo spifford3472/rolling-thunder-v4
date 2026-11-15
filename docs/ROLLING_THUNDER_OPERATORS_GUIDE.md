@@ -43,14 +43,24 @@ transmission attempts. A software timeout, reconnect, warning dismissal,
 `TX0;` command, or service restart cannot by itself establish physical receive.
 
 The FT8 PTT warning and transmit inhibit are separate. Acknowledging the alarm
-silences its warning but retains the inhibit. The source's unlock sequence is
-physical controls **1–3–1**, in the FT8 context after acknowledgment. This
-gesture is **not** a physical receive-state verification: the current UI
-handler passes a constant `radio_confirmed_receive=True` to the alarm, relying
-on independent operator confirmation. Never use that gesture to override an
-unresolved red TX indicator or assume an incomplete release was successful.
-A supervised parked physical acceptance remains required before changing
-transmit safety policy. This guide does not authorize an unattended test.
+silences its warning but retains the inhibit. The **source-only fail-closed
+correction under review** no longer allows physical controls **1–3–1** to
+clear the *real* alarm: a radio RX verification capability does not currently
+exist, and a polled `transmitting=False` or successful CAT `TX0;` write is not
+physical proof. The controls are consumed while locked, and the dashboard
+states that there is **no in-app unlock**. The 1–3–1 sequence remains usable
+only for the isolated, receive-only visual alarm test; it cannot alter live
+transmit authority.
+
+If a real alarm fires, stop operating, safely inspect the radio's red TX
+indicator, power down the radio if its receive state is uncertain, and preserve
+logs. Do **not** retry an automated transmission or repeatedly restart the
+service to silence the fault. Recovery requires supervised diagnosis and
+separately approved parked acceptance, with independent physical receive
+verification, before returning to FT8 transmit operation. A supervised parked
+physical acceptance remains required before changing transmit safety policy.
+This guide does not authorize an unattended test. The correction is **not
+installed** merely because it is present on a review branch.
 
 ## About this guide
 

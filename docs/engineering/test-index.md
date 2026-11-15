@@ -878,3 +878,13 @@ the consolidated STAB-07 integration report for private evidence file paths.
   checkout, broken local Markdown links fail, external links are not fetched,
   and disposable fixture mutations are detected. The production-independent
   CLI is `python tools/docx_inventory.py`, also enforced in GitHub CI.
+
+
+### FT8 receive-confirmation fail-closed regression (2026-11-15)
+
+- `tests/test_ft8_ptt_alarm.py` now covers interrupted/unverified receive
+  resetting the unlock sequence and statically verifies the real UI call does
+  not pass a fabricated True. The independent visual-test call deliberately
+  retains True only for its mock alarm. Existing hardware-transmit and
+  operator-command tests protect the other consumers; physical RX state
+  remains untested and requires parked supervision.

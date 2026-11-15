@@ -43,3 +43,77 @@ def test_wrong_order_resets_unlock_sequence() -> None:
     assert not alarm.unlock_step(A.PANEL_PRIMARY, ft8_screen=True, radio_confirmed_receive=True)
     assert not alarm.unlock_step(A.PANEL_TERTIARY, ft8_screen=True, radio_confirmed_receive=True)
     assert alarm.unlock_step(A.PANEL_PRIMARY, ft8_screen=True, radio_confirmed_receive=True)
+
+
+def test_missing_radio_confirmation_resets_partial_unlock_progress() -> None:
+    """An interrupted 1-3-1 cannot finish after missing RX confirmation."""
+    from rolling_thunder.physical_controls import ControlAction as A
+
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    alarm.voice_cancel()
+    assert not alarm.unlock_step(A.PANEL_PRIMARY, ft8_screen=True,
+                                 radio_confirmed_receive=True)
+    assert not alarm.unlock_step(A.PANEL_TERTIARY, ft8_screen=True,
+                                 radio_confirmed_receive=False)
+    assert not alarm.unlock_step(A.PANEL_TERTIARY, ft8_screen=True,
+                                 radio_confirmed_receive=True)
+    assert not alarm.unlock_step(A.PANEL_PRIMARY, ft8_screen=True,
+                                 radio_confirmed_receive=True)
+    assert alarm.tx_inhibited
+
+
+def test_production_ui_never_asserts_unverified_physical_receive() -> None:
+    """Guard real UI source against reintroducing the unsafe constant True."""
+    import ast
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1]
+              / 'src/rolling_thunder/ui_main.py').read_text(encoding='utf-8')
+    module = ast.parse(source)
+    handlers = [node for node in ast.walk(module)
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == 'handle_ptt_unlock_action']
+    assert len(handlers) == 1
+    confirmations = []
+    for node in ast.walk(handlers[0]):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != 'unlock_step':
+            continue
+        value = next((item.value for item in node.keywords
+                      if item.arg == 'radio_confirmed_receive'), None)
+        assert isinstance(value, ast.Constant) and isinstance(value.value, bool)
+        confirmations.append((node.func.value, value.value))
+    assert len(confirmations) == 2
+    assert any(isinstance(owner, ast.Name) and owner.id == 'visual_test' and passed
+               for owner, passed in confirmations)
+    assert any(isinstance(owner, ast.Name) and owner.id == 'alarm' and not passed
+               for owner, passed in confirmations)
+
+
+def test_acknowledged_real_alarm_stays_inhibited_without_rx_evidence() -> None:
+    """Every repeated unlock attempt must fail without physical RX evidence."""
+    from rolling_thunder.physical_controls import ControlAction as A
+
+    alarm = FT8PttAlarm()
+    alarm.trigger()
+    alarm.voice_cancel()
+    for _ in range(3):
+        for action in (A.PANEL_PRIMARY, A.PANEL_TERTIARY, A.PANEL_PRIMARY):
+            assert not alarm.unlock_step(action, ft8_screen=True,
+                                         radio_confirmed_receive=False)
+            assert alarm.tx_inhibited
+    # A second latched uncertain event must not restore authorization.
+    alarm.trigger()
+    assert alarm.active and alarm.tx_inhibited
+
+
+def test_real_operator_overlay_explains_no_automatic_unlock() -> None:
+    """Operator instructions must not promise a gesture that now fails closed."""
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1]
+              / 'src/rolling_thunder/ui_main.py').read_text(encoding='utf-8')
+    assert 'NO IN-APP UNLOCK.' in source
+    assert 'VISUAL TEST ONLY: COMMAND 1, 3, 1 TO CLEAR TEST' in source
