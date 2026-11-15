@@ -26,7 +26,37 @@ states remain Forge-owned.
 | OHGO-only | Forge OHGO domain/provider, HTTPS adapter, credential loader, route/background service, Pi cached client, large-text panel, scroll interceptor, `o` shortcut and rendering tests | Preserve. Rename `meshcore_ohgo_panel.py`/`meshcore_ohgo_ui.py` to `ohgo_panel.py`/`ohgo_ui.py`; screen label is `OHGO`. |
 | Shared | Existing Forge spots listener/API, `forge_spot_main.py`, `context_navigation.py`, `ui_main.py`, `live_map.GeoPoint`, shared GPS, radio/CAT/PTT, DMR controls, contact/QSO SQLite, logging/sync, weather, spots, map and startup/shutdown owners | Preserve contracts; remove only the MeshCore registrations and GPS snapshot listener. `GeoPoint` now comes from shared `live_map.py`. |
 | Historical evidence | Prior MeshCore engineering designs, incidents, tests recorded in Git history, dated operator hardware observations, and `research/meshcore_passive/` | Retain. Mark old descriptions as historical; do not reintroduce them into runtime indexes. |
-| Uncertain / production-only | Installed MeshCore collector process, protected user unit/configuration, collector and broker databases/queues, service credentials and installation provenance | Preserve untouched pending separate authorization and a data-preserving cutover. The 2026-11-15 read-only snapshot observed a collector process outside `rolling-thunder.service`; protected files and database state were inaccessible. |
+| Production-only, separately gated | Enabled user-level `meshcore-collector.service` and `meshcore-traffic-worker.service`, broker config/credential files, active collector/broker/traffic databases and queue state | Preserve untouched pending separately approved cutover. Follow-up read-only evidence identifies both unit states and verifies active database integrity; it does not authorize stop/disable, uninstall, migration, or deletion. |
+
+## Follow-up installed-state evidence (2026-11-15)
+
+This is read-only production evidence, not part of the source change. See the
+REL-01 installed-state snapshot for the full host, device, and QSO evidence.
+
+- `meshcore-collector.service` is an enabled, active user unit under
+  `/home/geoff/.config/systemd/user`, with broker activation in drop-in
+  `10-message-broker.conf`. Its process is PID 1078, outside
+  `/system.slice/rolling-thunder.service`.
+- The unit's configured `/dev/serial/by-path/...usb-0:1.1.1:1.0` link is absent
+  from the current serial inventory. PID 1078 has no open serial descriptor;
+  recent logs repeat that the receiver path is not present. The service remains
+  active and retries every five seconds. No action was taken.
+- `meshcore-traffic-worker.service` is enabled but inactive/dead. The user
+  system manager recorded an ordering cycle involving the worker,
+  `meshcore-collector.service`, and `default.target` on 2026-07-23. No action
+  was taken.
+- The collector observation DB reports schema 2, 568 observations, 236 nodes,
+  and 4,074 signal samples. The broker DB has 236 messages (228 public and 8
+  quarantined); its public cursor is at 199, with 34 public records beyond that
+  cursor. The traffic ledger has 194 records, all `ignored`. SQLite
+  `integrity_check` passed and foreign-key checks returned zero violations for
+  the observation, broker, and traffic DBs. No message payloads were read and
+  no database or sidecar was copied.
+
+The source PR intentionally does not stop or uninstall these units. A later
+production package must not be installed until the owner separately approves a
+parked cutover through the actual user-level systemd supervisor, queue/consumer
+disposition, and preservation of all observation, broker, and traffic history.
 
 ## Active source and runtime removal inventory
 
@@ -62,17 +92,21 @@ retired feature.
 ## Preservation and production cutover
 
 No SQLite table is dropped, truncated, migrated, opened, or copied by this
-change. Existing contact/QSO storage is untouched. Historical MeshCore data
-remains recoverable outside this source patch. The production collector process
-and any system/user unit remain untouched; the packaging change means a later
-application install cannot provide its removed entry point. Before deploying
-MC-REMOVE, obtain separate parked cutover approval, identify and stop the actual
-collector through its verified supervisor, verify broker/traffic consumers,
-confirm database and queue retention, and retain the previous exact source and
-rollback package. Do not uninstall a unit or delete data as part of the source
-PR.
+source change. Existing contact/QSO storage is untouched. The installed
+MeshCore databases were inspected with read-only SQLite connections and passed
+integrity checks; history and queued messages remain present. The production
+collector process and user units remain untouched. The packaging change means a
+later application install cannot provide the removed collector entry point.
+Before deploying MC-REMOVE, obtain separate parked cutover approval, stop and
+disable the active collector through its verified user-level supervisor, decide
+the enabled inactive traffic worker's disposition, confirm queue/consumer
+retention, and retain the previous exact source and rollback package. Do not
+uninstall units or delete data as part of the source PR.
 
 ## Change history
 
 - 2026-11-15: recorded the source-level dependency classification and separated
   OHGO from MeshCore. Installed-state handling remains a separate REL-01 gate.
+- 2026-11-15 follow-up: identified the enabled user collector/broker unit, the
+  missing-device-path retry condition and inactive traffic worker; recorded
+  read-only database counts and integrity checks. No production state changed.
