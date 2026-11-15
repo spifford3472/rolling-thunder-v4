@@ -155,7 +155,6 @@ def main() -> int:
             "radar": {"enabled": False},
             "dmr": {"enabled": False},
             "antenna_reference": {"enabled": False},
-            "meshcore_passive": {"enabled": False},
             "storage": {"database_path": str(database_path)},
         }
     )
@@ -170,7 +169,6 @@ def main() -> int:
         or config.home_platform.enabled
         or config.network_keepalive.enabled
         or config.dmr.enabled
-        or config.meshcore_passive.enabled
         or config.speech.enabled
         or config.tron.enabled
     ):
@@ -213,7 +211,7 @@ def main() -> int:
     original_thread = ui_main.Thread
     original_request = ui_main._request_close_once
     original_start_heartbeat = ui_readiness.start_ui_heartbeat
-    original_panel_stop = ui_main.MeshcoreOhgoPanelWorker.stop
+    original_panel_stop = ui_main.OhgoPanelWorker.stop
 
     def runtime_factory(*args: object, **kwargs: object) -> object:
         runtime = original_factory(*args, **kwargs)
@@ -271,7 +269,7 @@ def main() -> int:
     ui_main.Thread = tracked_thread
     ui_main._request_close_once = tracked_request
     ui_main.build_dashboard_state = tracked_dashboard_state
-    ui_main.MeshcoreOhgoPanelWorker.stop = injected_panel_stop
+    ui_main.OhgoPanelWorker.stop = injected_panel_stop
     if mode == "missing-heartbeat":
         ui_readiness.start_ui_heartbeat = lambda _root: None
         heartbeat = runtime_dir / ui_readiness.HEARTBEAT_NAME
@@ -379,7 +377,7 @@ def main() -> int:
         ui_main.OperatorCommandController = original_commands
         ui_main.Thread = original_thread
         ui_main._request_close_once = original_request
-        ui_main.MeshcoreOhgoPanelWorker.stop = original_panel_stop
+        ui_main.OhgoPanelWorker.stop = original_panel_stop
         ui_readiness.start_ui_heartbeat = original_start_heartbeat
 
     state["after_close"] = True

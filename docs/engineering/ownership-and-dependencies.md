@@ -438,77 +438,24 @@ and serializes notes; contact-sync alone owns legacy claim compatibility; shared
 callsign presentation consumes count/band without provider access. See
 `issue-246-notes-and-contact-history.md`.
 
-## MeshCore passive observation collector (opt-in)
+## OHGO incident provider and read-only mobile context
 
-`meshcore_passive.py` owns only inbound metadata parsing from already-deframed payloads; `meshcore_observation_repository.py` owns a dormant SQLite persistence adapter and reads existing immutable `GPSState` snapshots. The collector is composed only when enabled by typed configuration (default false); it owns its one exclusive USB reader and a dedicated SQLite database but no UI, host RF commands, Forge or GPS-acquisition authority. Its separate version-1 SQLite database does not alter the Rolling Thunder main storage schema. Opt-in hardware integration uses an explicit verified physical /dev/serial/by-path selector, bounded worker and no application commands. Parked physical acceptance, device identity and RF installation review remain deployment gates. See `meshcore-passive-observation-design.md` (architecture PR #384).
+Forge alone owns the protected OHGO credential, provider fetch/cache, and
+versioned read-only route. The existing Pi Forge client polls that route on a
+bounded worker; `ohgo_panel.py` publishes immutable status and incident text,
+while `ohgo_ui.py` owns the Tk-only viewport and context-scoped rotary scrolling.
+The OHGO screen has no MeshCore collector, GPS publisher, broker, queue, or
+SQLite dependency. See `ohgo-incidents.md`.
 
-The `meshcore_passive_worker.py` is an injected bounded worker; `meshcore_serial_service.py` exclusively owns UART opening, receive framing, nonblocking submission and reconnect when the config enables it. No Tk, Forge or CAT access. Normal MeshCore firmware-managed acknowledgments/retransmissions are owner-permitted; no app-initiated discovery or messages.
+### Historical MeshCore integration (removed from active source)
 
-`meshcore_inbound_frames.py` owns only framing of already-read serial bytes and explicitly cannot open a device or create outgoing commands. Upstream v1.17.1 `ArduinoSerialInterface.cpp` confirms `>` + little-endian 16-bit length for host-bound frames and a maximum payload of 176 bytes; actual device startup remains gated.
-
-**Heltec V4 hardware acceptance (2026-11-11):** the replacement V4.3 enumerates at physical port `1-1.1.1` as Espressif `303a:0002`, native `ttyACM0`, unique serial `F85B1BBEC6C4`. A scoped, local-only device query reported MeshCore **v1.16.0-07a3ca9** (build 06-Jun-2026, Companion protocol 13, repeat disabled). This native USB CDC transport requires DTR asserted before reply; prior CP2102 handling retains DTR low. Firmware version discovery is a separate operator diagnostic, never a periodic host command in the collector. Actual observation reception remains unverified.
-
-## Contact sync retry saturation (2026-11-11)
-
-`contact_retry.py` retains per-contact durable attempt counts in the shared QSO database. After an HTTP 503 or other `HomePlatformError`, it must schedule another attempt at an exponentially increased delay capped by configured maximum **without computing an unbounded exponent**. A high historical count must never terminate `rolling-thunder-radio-poll`, reset or drop a contact, or change QSO synchronization status; due-time persistence and manual retry behavior remain as before. The bounded iterative delay reaches the cap after only a few doublings and is independent of extreme attempt counts. No database migration, network endpoint, UI, or RF change.
-
-
-### MeshCore standalone service replacement (pending live cutover)
-
-`meshcore_collector_main.py` owns the native USB serial reader, metadata parser, independent SQLite writer, bounded background worker, and local Unix-domain API. `meshcore_gps_bridge.py` is the only dependency within Rolling Thunder: it asynchronously publishes the **existing** GPS polling state. No second GPS receiver, no embedded collector construction, no CAT/PTT/transmit authority, and no remote network listener. Previous descriptions of the embedded MeshCore service above are historical after this cutover. The host-level service is independently supervised as `meshcore-collector.service`.
-
-## MeshCore intelligence and observation API
-
-The independent `meshcore_collector_main.py` owns its local Unix API, while `meshcore_network_analytics.py` owns the bounded schema-2 read-only aggregation contract. It consumes existing MeshCore observation tables and never owns physical USB, GPS, CAT, UI widgets or MeshCore transmission. Future Rolling Thunder and SCOUT integrations must be versioned read-only clients; do not add SQL or blocking socket I/O to Tkinter.
-
-### MeshCore public-channel protocol intake (Issue #395)
-
-`meshcore_public_intake_protocol.py` is a *noncomposed* pure protocol/attestation domain. Its only allowed input is an independently operator-approved index/name/secret fingerprint and a transient firmware response. Serial ownership remains exclusively `meshcore_serial_service.py`; that service is not modified and does not transmit local commands. Future queue retrieval must resolve firmware-v1.16 destructive dequeue of private/contact messages before integration, even if the retrieval opcode itself does not transmit RF. See `meshcore-intelligence.md`.
-
-### MeshCore optional message broker (Issue #395)
-
-The existing independent collector remains the sole MeshCore serial owner. Its optional `meshcore_broker_drain.py` can issue only audited firmware-local 0x1F and 0x0A requests after explicit configuration; it does not add RF transmit authority. `meshcore_message_broker.py` owns separate SQLite storage and consumer cursors, and `meshcore_broker_api.py` owns a separate token-scoped private Unix read/ack API. The existing observation SQLite, GPS bridge, QSO database, Tk UI and passive read-only Unix API remain independent. All activation requires parked verification of exact channel identity; see `meshcore-message-broker.md`.
-
-### MeshCore public consumer interface — Issue #395 follow-on
-
-`meshcore_public_consumer.py` is the separate, transport-only read adapter available to Rolling Thunder and future SCOUT under their distinct local bearer credentials. The independent collector and `meshcore_broker_api.py` remain sole owners of serial intake and consumer cursor state. The consumer exposes public-only immutable records and **does not automatically acknowledge**; an application with durable processing evidence must explicitly call the ACK method. `meshcore_public_intelligence.py` is a pure adapter to the existing traffic-classifier and assumes neither verified sender nor geocoded hazard. `meshcore_public_consumer_main.py` is an optional manual local preview, **not** wired into the Tk/application-runtime or autonomous SCOUT services. No expansion of QSO, map, voice, CAT/PTT or RF authority.
-
-### MeshCore geographic relevance source-only analysis
-
-Traffic georeference parsing owns only classified public-text interpretation.
-The snapshot sampler reads the existing GPS publisher with no acquisition
-authority. The default-disabled geocoding adapter requires an independently
-approved provider and does not itself create HTTP traffic. The relevance
-coordinator owns read-only evidence decisions, not broker ACK, persistence,
-Tkinter/UI, SCOUT voice, navigation, radio or RF operations.
-
-### MeshCore durable traffic processing worker (Issue #395)
-
-The standalone `meshcore_traffic_worker.py` consumes the existing authenticated **public-only** `meshcore_public_consumer.py`, derives no additional radio or message authority, and durably commits processing outcomes to the dedicated `meshcore_traffic_ledger.py` before explicitly ACKing that consumer's existing broker cursor. The broker service retains sole ownership of serial collection and private/unknown streams. The worker does not run in the UI process and has no Tk, CAT/PTT, FT8, GPS, map, voice, geocoding, alert display or RF effect. `meshcore_traffic_worker_main.py` supports separately authorized isolated one-shot/loop execution; a systemd user-service template is staged but not installed or enabled by default. Public traffic candidates are unverified observations, not validated hazard notifications. See `meshcore-traffic-worker.md`.
-
-### Forge MeshCore geographic evidence (source only)
-Forge catalog owns attested site-specific map records; explicit offline
-operator import owns mutations. A new audit store owns only immutable
-analysis decisions and query-only projections, not broker ACK, SCOUT,
-GPS acquisition, dashboard, FT8 or radio controls.
-See meshcore-forge-road-evidence.md.
-
-### OHGO incident provider and read-only mobile context
-
-Forge alone owns the systemd credential, HTTPS provider fetch and retained
-OHGO source snapshot. The existing Forge spots API publishes the optional
-read-only versioned route; an isolated Pi view adapter reads it in a
-background worker, and Tkinter renders only the immutable snapshot.
-The independent MeshCore broker, GPS, FT8 and radio authorities remain
-unchanged. See `meshcore-ohgo-incidents.md`.
-
-### OHGO large-text scroll ownership
-
-`meshcore_ohgo_panel.py` retains presentation-neutral incident/status text.
-`meshcore_ohgo_ui.py` owns the Tk-only scrollable text surface and white
-MORE indicator, and intercepts validated MOVE_NEXT / MOVE_PREVIOUS only while
-the OHGO context is active. The shared dispatcher, hardware mappings, active
-panel controller and Forge provider remain the original owners elsewhere.
+MC-REMOVE deletes the MeshCore collector, USB ownership, GPS snapshot bridge,
+message broker, public/private queues, traffic/geographic workers, database
+adapters, CLI entry points, service templates, and Rolling Thunder configuration
+from the active source tree. It preserves shared GPS, radio, logging, Forge spots,
+OHGO, and unrelated generic serial/hardware diagnostics. Historical design and
+incident records remain available; existing production services and databases
+are not removed by the source change and require separately authorized cutover.
 
 ### STAB-07I preference shutdown ownership (2026-11-14)
 

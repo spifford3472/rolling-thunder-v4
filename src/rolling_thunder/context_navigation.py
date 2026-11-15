@@ -21,7 +21,7 @@ class ContextId(StrEnum):
     DMR = "dmr"
     FT8 = "ft8"
     ANTENNAS = "antennas"
-    MESHCORE_OHGO = "meshcore_ohgo"
+    OHGO = "ohgo"
 
 
 @dataclass(frozen=True)
@@ -100,11 +100,11 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "Recent local Rolling Thunder contacts.",
     ),
     ContextDefinition(
-        ContextId.MESHCORE_OHGO,
-        "MESHCORE & OHGO",
+        ContextId.OHGO,
+        "OHGO",
         "o",
-        "MESHCORE & OHGO",
-        "Receive-only MeshCore and Ohio DOT traffic intelligence.",
+        "OHGO",
+        "Ohio DOT incident reports from Forge.",
     ),
     ContextDefinition(
         ContextId.DMR,

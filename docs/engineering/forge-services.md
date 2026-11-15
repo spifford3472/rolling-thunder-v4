@@ -359,20 +359,10 @@ SQL NULL with a bounded failure reason. Retryable legacy attempts create no cell
 until success or terminal failure. Earlier rows are not backfilled or reclassified.
 A failed request does not suppress the other site/band requests or the next run.
 
-### MeshCore road-site catalog and analysis (source only)
-Forge's unpopulated local SQLite evidence catalog supports explicit
-reviewed-site imports and versioned query-only JSON CLI. The provider
-callback is compatible with the existing default-disabled geocoder.
-A separate append-only analysis store has query-only inspection. No
-network listener, external provider calls or live background jobs.
-See meshcore-forge-road-evidence.md.
+### OHGO incident provider
 
-### OHGO incidents on the existing Forge spot service
-
-Optional, source-staged `ForgeOhgoIncidentProvider` polls the official
-OHGO incidents resource using a systemd-only private key, ETag and bounded
-120-second cadence. A separate thread publishes an immutable retained
-snapshot; `GET /api/v1/ohgo/incidents` is a read-only, disabled-by-default
-route layered over the existing Forge spot API. There is no new port or map
-provider. The Pi consumes retained state on a background thread. See
-`meshcore-ohgo-incidents.md`.
+OHGO is an optional provider within the existing Forge spots process. The
+process owns the protected credential, bounded HTTPS polling, retained snapshot,
+and versioned read-only route. It does not add a listener, provider scheduler,
+GPS pipeline, MeshCore dependency, driver alert, or map behavior. The Pi is only a
+read-only client. See `ohgo-incidents.md`.

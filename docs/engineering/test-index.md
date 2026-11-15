@@ -603,81 +603,15 @@ history, legacy response defaults), test_forge_contact_sync.py (old pending and
 synchronized claim hashes/changed payload rejection), and existing contact
 metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 
-- `tests/test_meshcore_passive.py` — synthetic v1.17.1 metadata payload, full-key collisions, 0x8A layout, unsupported frames, malformed lengths, no path synthesis.
-- `tests/test_meshcore_observation_repository.py` — isolated version-1 MeshCore-only SQLite tables, append-only identity summaries, valid/missing/stale/future/low-quality immutable GPS snapshots, invalid timestamp, no serial dependency.
+## OHGO incidents and navigation
 
-- `tests/test_meshcore_passive_worker.py` — disabled worker, nonblocking bounded queue/overflow evidence, safe unsupported-frame handling, immutable GPS snapshot timing, deterministic shutdown.
-
-- `tests/test_meshcore_inbound_frames.py` — synthetic fragmented, concatenated, oversized and malformed serial frames; ensures inbound-only decoder and 176-byte firmware bound.
-
-- `tests/test_meshcore_serial_service.py` — fake UART read-only boundary, missing-device degradation, physical path selection, V3/V4 USB VID/PID/transport validation, native CDC DTR policy, and no outgoing command.
-- `tests/test_meshcore_runtime_integration.py` — default-disabled runtime, invalid USB path rejection, and opt-in isolated database composition with no device access during configuration.
-
-- `tests/test_contact_retry.py` includes durable 1500-failure overflow regression (next due at configured cap), persisted eligibility after repository recreation, and finite pre-cap doubling behavior; verifies repeated remote HTTP 503 cannot overflow the scheduler backoff calculation.
-
-
-- `tests/test_meshcore_collector_main.py` — local-only HTTP-over-Unix API health/list/query responses, no mutation, no main QSO table.
-- `tests/test_meshcore_gps_bridge.py` — asynchronous atomic GPS publication, no second GPS receiver, stale/unavailable fix rejection.
-- `tests/test_meshcore_observation_repository.py` — schema v1→v2 migration preservation and anonymous signal metrics storage.
-- `tests/test_meshcore_runtime_integration.py` — legacy config flag no longer constructs embedded serial worker; only shared GPS publisher remains.
-
-## MeshCore intelligence classification
-
-- `tests/test_meshcore_incident_classification.py` — hardware-free classification categories, channel allowlisting, invalid input, unknown reports and conservative no-geocoding extraction. This does not prove live RF reception.
-
-- `tests/test_meshcore_traffic_georeferences.py` — bounded references, ambiguity and unknown incident rejection.
-- `tests/test_meshcore_traffic_gps_samples.py` — one-Hz snapshot reading and multi-fix validation.
-- `tests/test_meshcore_traffic_geocoding.py` — default-disabled provider, cache, throttling and specificity.
-- `tests/test_meshcore_traffic_relevance.py` — freshness, motion, site evidence and zero-alert behavior.
-- `tests/test_meshcore_traffic_analysis.py` — injected offline provider, fail-closed before lookup.
-- `tests/test_meshcore_geographic_relevance.py` — stationary/stale/invalid GPS, jitter, implausible motion, heading and direction, route-confidence distinction and distance limits.
-
-- `tests/test_meshcore_network_analytics.py` — read-only schema-2 SQL, UTC window bounds, missing/wrong database rejection, role/count integrity, receiver-location semantics and cell limits.
-
-- `tests/test_meshcore_collector_main.py` also asserts the private `GET /v1/activity` bounded response, absence of public query controls, and 405 on write methods; no real serial or radio fixture.
-
-- `tests/test_meshcore_public_intake_protocol.py` — exact v1.16 channel identity/fingerprint, malformed reply rejection, private/binary redaction, legacy/V3 message framing, untrusted timestamps and opcode fuzz coverage; no live hardware.
-
-## MeshCore message broker
-
-- `tests/test_meshcore_message_broker.py` — privacy stream separation, independent cursor/restart, file security and backpressure
-- `tests/test_meshcore_broker_drain.py` — fake host-local commands, channel mismatch, commit before next dequeue and timeout failures
-- `tests/test_meshcore_broker_serial_integration.py` — fake Heltec framing through existing reader into durable public/private streams
-- `tests/test_meshcore_broker_config.py` — owner-only config, strict channel/token fields and scope rejection
-- `tests/test_meshcore_broker_api.py` — token isolation and independent stream acknowledgement over Unix socket
-- `tests/test_meshcore_broker_cli.py` — disabled-by-default startup gates and existing socket ownership protection
-
-- `tests/test_meshcore_channel_audit.py` — fake-response channel audit, key redaction, only permitted local commands, malformed identity and bounds
-
-- `tests/test_meshcore_public_consumer.py` — actual Unix API/SQLite integration for independent preview, explicit ACK, permission failures and private isolation
-- `tests/test_meshcore_public_intelligence.py` — exact traffic provenance and no-alert classification for nontraffic/unknown text
-- `tests/test_meshcore_public_consumer_main.py` — bounded preview command, unverified labels, and no implicit ACK
-
-- `tests/test_meshcore_traffic_worker.py` — durable ledger, idempotent ACK replay, duplicate suppression, capacity/storage failures and secure file modes
-- `tests/test_meshcore_traffic_worker_integration.py` — full local Unix broker public/private separation, independent consumer cursors, commit-before-ACK and repeated public traffic deduplication
-- `tests/test_meshcore_traffic_worker_main.py` — standalone one-shot real Unix broker/ledger/ACK path, independent SCOUT cursor, exclusive worker lock and CLI argument validation
-- `tests/test_meshcore_traffic_worker_service.py` — staged user-unit isolation, polling, backoff, conservative hardening/resource cap and non-transmitting configuration
-
-### Forge MeshCore geographic evidence and analysis audit tests
-- tests/test_forge_meshcore_geo_catalog.py: exact matching, provenance, review age, privacy.
-- tests/test_forge_meshcore_geo_import.py: reviewed JSON schema and bounded offline import.
-- tests/test_forge_meshcore_geo_main.py: stable read-only CLI and no-match.
-- tests/test_forge_meshcore_geo_adapter.py: injected provider interoperability without network.
-- tests/test_meshcore_traffic_analysis_repository.py: immutable audit, privacy, read-only bounds.
-
-### OHGO incidents and MeshCore combined context
-
-- `tests/test_forge_ohgo_incidents.py` — safe parsing, no-key, ETag/caching, stale/upstream failures.
+- `tests/test_forge_ohgo_incidents.py` — bounded parsing, no-key, ETag/cache, stale and upstream failure behavior.
 - `tests/test_forge_ohgo_credentials.py` — systemd-only key loading and symlink/malformed protection.
 - `tests/test_forge_ohgo_api.py` — retained read-only route and existing Forge endpoint delegation.
-- `tests/test_meshcore_ohgo_panel.py` — disabled/stale/live-safe presentation and no Tk network I/O.
-- `tests/test_context_navigation.py` — new `o` context and full-cycle invariants.
-
-- `tests/test_meshcore_ohgo_ui.py` — context-gated rotary isolation, scroll persistence, new-data top reset and actual-overflow MORE behavior (mock Tk, no radio).
-- `tests/test_meshcore_ohgo_panel.py` — all bounded OHGO incidents displayed with separators without four-item truncation.
-
-- tests/test_meshcore_ohgo_ui.py also guards against OHGO widget geometry
-  toggling on repeated refreshes and redundant MORE StringVar writes.
+- `tests/test_ohgo_panel.py` — disabled/stale/live-safe presentation, incident dividers, and no Tk network I/O.
+- `tests/test_ohgo_ui.py` — context-gated rotary isolation, scroll persistence, MORE geometry, and stable refreshes.
+- `tests/test_context_navigation.py` — `o` shortcut, OHGO context order, and existing DMR navigation.
+- `tests/test_meshcore_runtime_integration.py` — removed runtime/USB boundary, narrowly scoped legacy-config compatibility, and strict validation of unrelated settings.
 
 ### STAB-06D offline verification
 

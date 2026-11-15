@@ -8,11 +8,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from rolling_thunder.forge_ohgo_incidents import OhgoState
-from rolling_thunder.meshcore_ohgo_panel import (
-    MeshcoreOhgoPanelState,
-    MeshcoreOhgoPanelWorker,
+from rolling_thunder.ohgo_panel import (
+    OhgoPanelState,
+    OhgoPanelWorker,
     decode_forge_ohgo,
-    present_meshcore_ohgo,
+    present_ohgo,
 )
 
 NOW = datetime(2026, 11, 11, 22, tzinfo=UTC)
@@ -36,10 +36,11 @@ def _payload() -> dict[str, object]:
     }
 
 
-def test_renders_ohgo_and_meshcore_title_without_live_fetch() -> None:
+def test_renders_ohgo_title_without_live_fetch() -> None:
     state = decode_forge_ohgo(json.dumps(_payload()).encode(), received_at=NOW)
-    view = present_meshcore_ohgo(state)
-    assert "MESHCORE" in view and "OHGO" in view
+    view = present_ohgo(state)
+    assert "OHGO" in view
+    assert "MESHCORE" not in view
     assert "I-75" in view and "Exit 44" in view
     assert "unverified for your route" in view
 
@@ -50,7 +51,7 @@ def test_stale_incidents_are_hidden_and_not_alerted() -> None:
         received_at=NOW + timedelta(minutes=6),
     )
     assert state.status == OhgoState.STALE
-    assert "I-75" not in present_meshcore_ohgo(state)
+    assert "I-75" not in present_ohgo(state)
 
 
 @pytest.mark.parametrize(
@@ -69,10 +70,10 @@ def test_unsupported_or_alerting_snapshot_rejected(mutation: dict[str, object]) 
 
 
 def test_disabled_worker_has_no_external_fetch() -> None:
-    worker = MeshcoreOhgoPanelWorker(None)
+    worker = OhgoPanelWorker(None)
     worker.start()
-    assert worker.state == MeshcoreOhgoPanelState()
-    assert "not configured" in present_meshcore_ohgo(worker.state)
+    assert worker.state == OhgoPanelState()
+    assert "not configured" in present_ohgo(worker.state)
     worker.stop()
 
 
@@ -82,7 +83,7 @@ def test_multiple_incidents_have_visible_dividers_and_no_four_item_truncation() 
     assert isinstance(item, dict)
     payload["incidents"] = [{**item, "route": f"I-{n}", "location": f"Exit {n}"} for n in range(5)]
     state = decode_forge_ohgo(json.dumps(payload).encode(), received_at=NOW)
-    result = present_meshcore_ohgo(state)
+    result = present_ohgo(state)
     assert len(state.lines) == 5
     assert result.count("──────────────") == 4
     assert "Exit 4" in result
