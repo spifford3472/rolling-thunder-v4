@@ -23,7 +23,7 @@ or a tested data-preserving rollback. Do not schedule a release automatically.
 
 ## Verified installed-state snapshot
 
-The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`rel01-installed-state-snapshot-2026-11-15.md`](rel01-installed-state-snapshot-2026-11-15.md). Follow-ups identified the installed checkout at `ba58b0b2a3b9b10b73dcdcb1ee046528f79b6d62`, live QSO database/schema, device mappings, retries, MeshCore units, all system drop-in paths, and the deployed wrapper hash/source. The wrapper has no visible mutex, transaction journal, or independent UI readiness check and is not tracked on current `main`. The wrapper-target backup directory exists but its contents were not inventoried; no current backup is verified. The verdict remains NO GO.
+The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`rel01-installed-state-snapshot-2026-11-15.md`](rel01-installed-state-snapshot-2026-11-15.md). Follow-ups identified the installed checkout at `ba58b0b2a3b9b10b73dcdcb1ee046528f79b6d62`, live QSO database/schema, device mappings, retries, MeshCore units, all system drop-in paths, and the deployed wrapper hash/source. The wrapper has no visible mutex, transaction journal, or independent UI readiness check and is not tracked on current `main`. The wrapper-target directory inventory now shows multiple backups. The newest is timestamped 2026-11-14 01:06:36Z, before the current dashboard process started; its SQLite integrity and data contents have not been validated, so no verified current backup is established. The verdict remains NO GO.
 
 ## Immutable evidence record to populate before execution
 
@@ -33,7 +33,7 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
 | Previous production | Current installed source SHA, runtime executable and cgroup, installed unit/drop-in hashes, approved launch witness | Clean editable checkout at `ba58b0b2a3b9b10b73dcdcb1ee046528f79b6d62`, Python 3.13.5, package 4.4.1; current `main` is 47 commits ahead. MainPID 60400 in the system service cgroup. Protected drop-in `60`, runtime loaded-byte witness and independent readiness heartbeat remain unverified. |
 | Host identity | System scope `rolling-thunder.service`, MainPID, one process, runtime heartbeats, current boot ID and monotonic start ticks | Active `Type=simple` service, MainPID 60400, cgroup `/system.slice/rolling-thunder.service`; launcher flock is held. FT8 `arecord` and DMR SSH child are present. `NotifyAccess=none`; `active` is not application readiness. |
 | Deploy path | Root-owned exact `/usr/local/sbin/rolling-thunder-deploy` contents/hash, SSH identity, sudo allowlist, single serialized lock and reconciliation | Wrapper is root-owned mode 0750, SHA-256 `476ecdbdbcc70bcb1025ac1ce97bae1982b98d8842d5e333ea43632378512daf`. It validates exact SHA/clean checkout/remote containment, stops the unit, SQLite-backs up only the primary DB to `/var/backups/rolling-thunder-deploy`, validates integrity, deploys/migrates, then waits 3 seconds and checks systemd active state/SHA. No mutex, transaction journal, or independent readiness check is visible. Target dir exists root:root 0700; its contents remain unverified. Wrapper source is absent from current main; no production action taken. |
-| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. All retries had the same contact-upload error class, with counters 772–2,176 at 09:33. No current backup was verified or copied. Wrapper backup targets only the main DB; optional outbox path and its data remain to be reconciled. |
+| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. All retries had the same contact-upload error class, with counters 772–2,176 at 09:33. Deployment backup files exist; the newest is timestamped 2026-11-14 01:06:36Z, before the current process start, and has not been validated or copied. Wrapper backup targets only the main DB; optional outbox path and its data remain to be reconciled. |
 | Rollback | Original exact SHA and dependency compatibility; schema migration direction; wrapper rollback route, protected backup and responsible operator | Not tested against current release |
 | Physical safety | FT-891 red TX indicator, manual safe receive/power-off plan, FT8 alarm inhibit after fault, no unrestricted rekey | Merged #474 disables unverified unlock; a separate owner-directed review restores deliberate in-app 1–3–1 override after acknowledgment, and session restart clears alarm; physical RX remains unverified |
 | USB/GPS/FT8 RX | Actual controller serial, DigiRig/audio capture, GPS freshness, native decoder receive-only and local UI latency | Configured radio CP2105/`ttyUSB1`, physical controls CP2102/`ttyUSB0`, GPS CP2102N/`ttyUSB3` are open by the dashboard process. FT8 capture process and C-Media device are present. Speech selects `CARD=Array`, not listed among capture devices. Operation and receive-only acceptance remain unverified. |
@@ -53,12 +53,13 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
    condition; the wrapper is absent from current repository `main`.
    Verify effective configuration paths and runtime/source/dependency witness.
    `Type=simple`/`active` is not UI readiness.
-4. Inventory the wrapper's actual target `/var/backups/rolling-thunder-deploy`
-   (the provided listing covered a different directory). Before any deployment,
-   establish a protected SQLite backup for the main QSO DB and any separately
-   configured outbox/durable state. Verify openability, schema, integrity/FKs,
-   row counts and last-QSO identifiers; preserve all WAL/contact/retry data.
-   Do not replace database from Git.
+4. Validate the newest existing candidate
+   `/var/backups/rolling-thunder-deploy/rolling-thunder-20261114T010636Z-179c005f0f7f61df1004641db75897f42b3dd8ad.db` read-only: verify it opens, passes integrity/FK checks,
+   and compare schema, contact/sync counts, retry state and latest QSO with the
+   current DB. It predates the current process start, so establish a fresh
+   consistent backup as part of any separately approved deployment. Reconcile
+   the optional outbox/durable state; preserve all WAL/contact/retry data. Do
+   not replace a database from Git.
 5. The inspected wrapper has no visible mutex or transaction journal, and no
    independent readiness check. Do not deploy through it until a tracked,
    reviewed wrapper (or another verified gate) serializes invocations, records
@@ -134,7 +135,7 @@ plan, appropriate antenna/dummy load, safety observer and hard abort.
 | Owner parked approval and operator readiness | Not obtained | NO GO |
 | Exact release SHA, native identity, trusted install | Not verified | NO GO |
 | Protected wrapper, drop-ins, mutex and recovery | Unit/drop-ins and wrapper SHA/source read; no mutex/journal/readiness check in wrapper; wrapper-target backup contents unverified | NO GO |
-| Consistent QSO/WAL backup plus rollback | Not performed | NO GO |
+| Consistent QSO/WAL backup plus rollback | Multiple copies listed; newest predates current process start and has not been validated | NO GO |
 | One managed UI process and working controls | Not field-tested | NO GO |
 | GPS, Digirig, FT8 receive-only | Not field-tested | NO GO |
 | CAT/PTT/physical receive | Separate authorization not obtained | NO GO |
@@ -169,6 +170,7 @@ transaction receipts, not this planning checklist.
   wrapper SHA-256 and source. The installed wrapper has no visible mutex,
   transaction journal or independent UI-ready check, backs up only the primary
   DB, and targets the separate root-only `/var/backups/rolling-thunder-deploy`
-  directory. Its contents were not inventoried; wrapper source is absent from
-  current `main`. No deployment or other production mutation occurred;
+  directory. The newest listed backup predates the current process start and
+  remains unvalidated; wrapper source is absent from current `main`. No
+  deployment or other production mutation occurred;
   verdict remains NO GO.
