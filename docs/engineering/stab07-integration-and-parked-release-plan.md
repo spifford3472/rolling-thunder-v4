@@ -245,3 +245,35 @@ AnvilMobile's sampled Debian 13 native runtime differs materially from the priva
 ## STAB-07L historical Raspberry Pi package byte-equivalence (2026-11-14)
 
 Exact ARM64 libc6 and libssl3t64 .deb bytes are available in the official Raspberry Pi pool and five unexecuted extracted ELF files match the Pi read-only SHA sample. The required historical signed RPi package index linking these .debs was not found, so they remain quarantined. Authenticated OS archive count stays 14/16, and the combined partial extracts match 22/52 Pi native-file samples with 30 absent. No executable complete image or production approval. See `stab07l-rpi-historical-package-quarantine.md`.
+
+## STAB-07 focused Track A — unexpected worker-start exception (2026-11-15)
+
+**Confirmed defect, offline mock-only.** `ApplicationRuntime.start()` caught
+only `OSError`, `RuntimeError`, and `ValueError` after mock radio polling began.
+A synthetic `LookupError` raised by an initializing worker bypassed the startup
+rollback; deterministic reproduction left the mock radio `CONNECTED` and
+`_started=True`. This is not proof of actual RF keying, but it violates runtime
+startup resource ownership. The smallest correction catches ordinary `Exception`
+for rollback and re-raises the original failure; `BaseException` such as
+`KeyboardInterrupt`/`SystemExit` is intentionally outside the handler. Existing
+`stop()` performs radio/FT8-first release and reports cleanup failures. A
+second pre-fix reproduction showed that an `ExceptionGroup` from rollback
+masked the original startup error; the handler now reports the cleanup error
+while preserving the initiating exception.
+
+`tests/test_stab07_functional_startup_recovery.py` reproduces the failure against
+the previous code and requires a disconnected mock radio after recovery. The
+isolated worktree test invocation **must use checked-out source**:
+`PYTHONPATH="$PWD/src" /home/rt-remote/workspaces/rt-stab06c/.venv/bin/python -m pytest`.
+An initial run without `PYTHONPATH` misleadingly imported an older installed
+package (4,346 passed, 2 failed, 7 skipped); the correct checked-out pre-fix
+baseline was **4,348 passed, 7 skipped**. The faulty baseline is not a confirmed
+source regression. No real radio, production SQLite, network or deployment
+changed. The new fix needs exact-head CI and further Track A acceptance.
+
+Track A outstanding: navigation responsiveness, duplicate shutdown requests,
+blocked cleanup, SQLite transactional/persistence scenarios, GPS disconnection,
+FT8 fake-adapter PTT failure and real ARM64 rerun of the rebuilt application.
+Track B historical signed Raspberry Pi index authenticity remains independent,
+blocked pending authenticated evidence; quarantined archive files cannot be used
+for an executable runtime. PR #414 remains a separate unreviewed draft.

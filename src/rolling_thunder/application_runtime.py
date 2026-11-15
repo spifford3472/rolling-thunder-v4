@@ -1673,10 +1673,14 @@ class ApplicationRuntime:
         self._started = True
         try:
             self._start_remaining_services()
-        except (OSError, RuntimeError, ValueError):
+        except Exception:
+            # A worker may fail with an unexpected exception class after the
+            # radio has connected; do not leave the startup owner running.
             try:
                 self.stop()
-            except (OSError, RuntimeError, ValueError) as cleanup_error:
+            except Exception as cleanup_error:  # noqa: BLE001 - report rollback ExceptionGroup
+                # stop() aggregates partial cleanup failures in ExceptionGroup;
+                # preserve the initiating failure while reporting the rollback.
                 print(f"Rolling Thunder startup cleanup error: {cleanup_error}")
             raise
         return state

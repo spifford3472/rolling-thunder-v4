@@ -816,3 +816,13 @@ has been changed by this inventory correction.
 
 - `tests/test_stab07l_rpi_quarantine_compare.py` — bounded fake archive/native-file comparison; reject modified archives, symlinks/path escape, mismatched Pi bytes, duplicate sources and false release claims. Quarantine remains NO GO after matching.
 - Separate Forge read-only archive extraction: Raspberry Pi libc6 and libssl3t64 five file SHA matches; with 14 signed-package extraction, 22/52 Pi sampled native files match, 30 missing. Two RPi packages lack historical signed index evidence.
+
+### STAB-07 focused functional recovery (2026-11-15)
+
+- `tests/test_stab07_functional_startup_recovery.py` — synthetic unexpected
+  worker-start exception after mock radio connection must trigger runtime
+  rollback and disconnect; regression reproduced against parent source. It
+  also verifies that rollback `ExceptionGroup` does not obscure the original
+  startup exception.
+- Always set `PYTHONPATH="$PWD/src"` in a worktree using a reused venv to prevent
+  installed-package shadowing during regression verification.
