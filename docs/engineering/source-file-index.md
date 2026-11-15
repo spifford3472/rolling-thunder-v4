@@ -658,3 +658,8 @@ has been changed by this inventory correction.
 - `deploy/rolling-thunder-arm64-native-smoke.py` — import-only Python ARM64 native/UI module smoke with I/O startup guards; never starts UI.
 - `deploy/rolling-thunder-arm64-record-audit.py` — offline installed `RECORD` hash/metadata validation for 26 wheels and noneditable application.
 - `deploy/locks/stab07g-debian-arm64-sysroot.json` — 55 exact Debian test package archive hashes and static QEMU digest; GPG Release signature not independently verified.
+
+### STAB-07H isolated ARM64 Tk lifecycle tools
+
+- `deploy/rolling-thunder-arm64-tk-lifecycle.py` — actual Tk event loop and existing UI shutdown helpers, inert fakes only, clean/error/stall scenarios, no dashboard/radio startup.
+- `deploy/rolling-thunder-arm64-tk-runner.py` — private Xvfb authenticated display and allowlisted QEMU guest lifecycle tests, bounded termination and fail-closed evidence.

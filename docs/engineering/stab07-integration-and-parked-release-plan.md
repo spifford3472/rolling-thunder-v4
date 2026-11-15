@@ -225,3 +225,7 @@ An exact-source noneditable app wheel built reproducibly and an unprivileged For
 ## STAB-07G isolated ARM64 execution (2026-11-14)
 
 Isolated QEMU ARM64 in a private, network-disabled Forge namespace now executes Debian Python 3.13.5, installs 26 hash-locked dependencies and the noneditable app wheel, and passes native imports and installed RECORD checks. This is an emulated Debian `deb13u5` build, **not** an exact Pi (`deb13u4`) OS image. A real Tk event-loop startup, independent loaded-byte runtime identity, protected root-owned installation, SQLite/WAL, PTT physical RX and owner authorization remain mandatory NO-GO gates. See `stab07g-isolated-arm64-execution.md`.
+
+## STAB-07H mock Tk lifecycle validation (2026-11-14)
+
+Isolated ARM64/QEMU using a private Xvfb virtual display exercised genuine Tk callbacks, current heartbeat and shutdown helper boundaries with inert fake runtime/peripherals. Normal, runtime-error, peripheral-error and delayed cleanup cases passed; a stalled fake worker deliberately returned status 75/refused, and the original 30-file staged candidate passed independent integrity verification. This does **not** start full dashboard composition, prove RF receive, or validate protected production rollback. See `stab07h-hardware-disabled-tk-lifecycle.md`. Production remains NO GO.

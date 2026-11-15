@@ -790,3 +790,8 @@ has been changed by this inventory correction.
 - `tests/test_arm64_sandbox.py` — ensure no network, host/radio mounts or arbitrary execution; reject unsafe emulator and fake production approvals.
 - `tests/test_arm64_record_audit.py` — exact wheel-installed file inventories and SHA256 RECORD validation, reject tamper, path escape, unexpected/missing packages and symlinks.
 - Independent Forge hardware-free QEMU smoke: all 18 native/app imports passed, ARM64 pip check clean, 2,213 installed RECORD hashes checked; not part of x86_64 CI.
+
+### STAB-07H emulated ARM64 Tk lifecycle
+
+- `tests/test_arm64_tk_lifecycle_runner.py` — deterministic fixed command, private display isolation, bad-signer/forged completion and process-cleanup safety checks; no live Xvfb in CI.
+- Independent private Forge ARM64 QEMU/Xvfb trial: SIGTERM, real Tk heartbeat, one close worker, ordered inert fake cleanup, exception continuation and delayed-cleanup behavior; physical FT8/PTT remains NO GO.

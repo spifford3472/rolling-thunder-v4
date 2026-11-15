@@ -173,3 +173,7 @@ package archives into Forge scratch, executed isolated Python and installed
 checks, added fail-closed offline rerun tools, pins, tests and this report.
 Release decision remains **NO GO** until independent parked physical and
 privileged deployment acceptance is completed under separate owner approval.
+
+## STAB-07H Tk event-loop continuation (2026-11-14)
+
+The previously import-only ARM64 test now has a separate real Tk/Xvfb fake lifecycle harness and private display runner. This tests the current heartbeat and UI shutdown helper semantics, but **not** full `run_dashboard`, active radio resources or production stop/rollback. See `stab07h-hardware-disabled-tk-lifecycle.md`.
