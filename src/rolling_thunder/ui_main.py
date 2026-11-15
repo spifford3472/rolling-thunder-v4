@@ -717,16 +717,20 @@ def run_dashboard(
         if not alarm.tx_inhibited:
             return False
         # All command presses during a lock are consumed, even an incorrect step.
-        # The operator must have manually powered down/recovered the radio.
-        # No independent physical-RX verification capability is present in
-        # this adapter. The polled RadioState.transmitting flag, successful
-        # TX0 CAT write, and operator gesture are not physical RX evidence.
-        # Fail closed: consume unlock inputs but retain the TX inhibit.
-        alarm.unlock_step(
+        # Explicit owner override after Voice Cancel and 1-3-1 is a recovery
+        # decision, NOT independent physical RX evidence. The CAT TX0 result
+        # and polled RadioState.transmitting cannot verify real de-keying.
+        # This gesture never sends CAT/PTT or initiates a new FT8 session.
+        if alarm.unlock_step(
             action,
             ft8_screen=context_navigation.state.selected is ContextId.FT8,
             radio_confirmed_receive=False,
-        )
+            operator_recovery_override=True,
+        ):
+            _LOGGER.warning(
+                "RT_FT8_PTT_LOCKOUT operator_override=accepted "
+                "physical_rx_verified=false transmit_started=false"
+            )
         return True
 
     ui_timing = UiTiming.from_environment()
@@ -853,7 +857,7 @@ def run_dashboard(
                           highlightbackground="#ffffff")
     ptt_unlock_text = tk.StringVar(value=(
         "FT8 TRANSMIT LOCKED. VERIFY PHYSICAL RADIO RECEIVE. "
-        "POWER DOWN RADIO SAFELY IF UNCERTAIN. NO IN-APP UNLOCK."
+        "IF SAFE, ACKNOWLEDGE THEN PRESS COMMAND 1, 3, 1 TO OVERRIDE."
     ))
     tk.Label(
         ptt_unlock,
@@ -1715,7 +1719,7 @@ def run_dashboard(
                 "VISUAL TEST ONLY: COMMAND 1, 3, 1 TO CLEAR TEST"
                 if visual_test_active() and visual_test.tx_inhibited
                 else "FT8 TRANSMIT LOCKED. VERIFY PHYSICAL RADIO RECEIVE. "
-                     "POWER DOWN RADIO SAFELY IF UNCERTAIN. NO IN-APP UNLOCK."
+                     "IF SAFE, ACKNOWLEDGE THEN PRESS COMMAND 1, 3, 1 TO OVERRIDE."
             )
             ptt_unlock.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
             ptt_unlock.lift()

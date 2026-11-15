@@ -106,3 +106,27 @@ unconditional true from silently returning. Existing FT8 QSO and operator
 command routing tests remain mandatory. No RF, network, service or database
 changes occurred. Rollback: revert this PR; a rollback would reintroduce the
 unverified unlock and must not be deployed as a safety fix.
+
+
+## Owner-directed FT8 operator recovery policy (2026-11-15, unmerged)
+
+The owner requires that the PTT warning not create an unrecoverable software
+lockout. The proposed recovery branch explicitly preserves `FT8PttAlarm` as
+**process/session-local** state: restarting the application creates a new
+clear alarm. The operator also may dismiss the warning and then deliberately
+enter 1–3–1 in the FT8 context to override the inhibit. The alarm implementation
+still requires the acknowledged state and entire ordered gesture; a new fault
+retriggers the warning and inhibit. The override is **manual operator authority**
+(`operator_recovery_override`), never fabricated receive proof
+(`radio_confirmed_receive=False`), and never issues CAT/PTT or begins FT8.
+The FT-891 adapter's own uncertain-CAT latch and normal transmit authorization
+checks remain separate. Emit an explicit operator-override warning log with
+`physical_rx_verified=false` and `transmit_started=false`.
+
+Recovery is operator-responsible: independently observe the red TX indicator,
+physically de-key or power down if uncertain, and do not start a new QSO while
+TX is unresolved. In-memory alarm reset after restart is **intentional owner
+policy**, not a guarantee the hardware is in receive. This policy supersedes
+the preceding source-only disabled-unlock design description when this review
+branch is merged, without implying deployment. Rollback: revert this PR;
+no host, radio, network or service state changed.

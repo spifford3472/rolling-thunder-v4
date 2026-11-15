@@ -888,3 +888,12 @@ the consolidated STAB-07 integration report for private evidence file paths.
   retains True only for its mock alarm. Existing hardware-transmit and
   operator-command tests protect the other consumers; physical RX state
   remains untested and requires parked supervision.
+
+
+### FT8 owner-directed manual recovery (2026-11-15)
+
+- `tests/test_ft8_ptt_alarm.py` covers acknowledged 1–3–1 operator override,
+  reject-before-ack and wrong-context handling, process restart resetting the
+  session-local alarm, and a new fault re-latching the inhibit. The real UI
+  explicitly keeps `radio_confirmed_receive=False` and labels the action as
+  manual recovery. No automated CAT or RF tests are authorized here.
