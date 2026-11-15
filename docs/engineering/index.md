@@ -20,6 +20,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 ## Engineering document set
 
+- `stab07j-native-runtime-provenance-and-release-readiness.md` — read-only native Pi ELF/dpkg SHA evidence, exact Forge comparison and protected-release NO-GO gates.
+
 - `stab07i-mock-full-dashboard-lifecycle.md` — actual ARM64 mock dashboard, preference drain fix, startup rollback and release NO GO.
 
 - `stab07h-hardware-disabled-tk-lifecycle.md` — private ARM64 Xvfb/Tk heartbeat, signal/cleanup failure tests, no-RF boundary, rollback preservation and NO-GO gates.

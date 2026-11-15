@@ -670,3 +670,8 @@ has been changed by this inventory correction.
 - `deploy/rolling-thunder-arm64-dashboard-runner.py` — bounded QEMU/Xvfb full-composition runner and strict evidence.
 - `src/rolling_thunder/application_runtime.py` — owner drains preferences before stopping them, after radio release.
 - `src/rolling_thunder/ui_main.py` — duplicate preference flush after runtime stop removed.
+
+### STAB-07J read-only Pi native provenance comparator
+
+- `deploy/rolling-thunder-native-runtime-compare.py` — strict offline SHA256 and Debian package revision comparison of bounded Pi observations to private ARM64 sysroot; refusal on mismatch, no production attestation authority.
+- `deploy/locks/stab07j-anvilmobile-native-observed.json` — 52 read-only Pi native-file SHA256 observations, 16 package version samples and explicitly untrusted/nonproduction flags.

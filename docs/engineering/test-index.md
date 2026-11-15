@@ -801,3 +801,8 @@ has been changed by this inventory correction.
 - `tests/test_stab07i_preference_shutdown_order.py` — radio-first preference flush order and failure reporting.
 - `tests/test_stab07i_full_dashboard_probe.py` — required real UI evidence, startup mock rollback and no production safety claims.
 - Independent Forge ARM64/QEMU/Xvfb actual `run_dashboard` uses mock radio/GPS, disposable SQLite, and no physical PTT/RF.
+
+### STAB-07J native runtime comparison
+
+- `tests/test_stab07j_native_runtime_compare.py` — exact sampled hash/revision comparison; reject forged release claims, symlink escape, traversal, missing files and unresolved libraries. Matched samples never establish trusted loaded-code identity.
+- Independent Forge comparison to current read-only Pi sample: 27/52 ELF files match, 10 differ, 15 absent; package revisions 6/16 match, 9 differ, 1 absent. Strict parity exit 75; production NO GO.

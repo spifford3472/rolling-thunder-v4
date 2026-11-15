@@ -53,3 +53,7 @@ Still outstanding: independently matching exact Pi interpreter/OS/native library
 **Rollback:** Abandon the unmerged draft branch and remove only reviewed disposable Forge scratch artifacts. There is no AnvilMobile change to undo. Any future changes affecting 192.168.9.0/24, 192.168.10.0/24 or OPNsense require committed documentation in private `spifford3472/ki5vnb-qth-infrastructure` listing configuration paths, integrations, jobs, validation, rollback and change history.
 
 **Change history — 2026-11-14:** First actual ARM64 mock-dashboard composition; exposed and corrected double preference drain, added startup failure/rollback and strict harness regressions. **Production NO GO.**
+
+## STAB-07J runtime provenance qualification (2026-11-14)
+
+The ARM64 mock-dashboard compatibility evidence remains valid for the Forge test image, but STAB-07J's read-only Pi ELF/package sampling independently demonstrated that the Forge sysroot is not bit-for-bit identical to installed Pi native libraries. See `stab07j-native-runtime-provenance-and-release-readiness.md`. No protected production release or physical acceptance was performed.

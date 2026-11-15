@@ -233,3 +233,7 @@ Isolated ARM64/QEMU using a private Xvfb virtual display exercised genuine Tk ca
 ## STAB-07I ARM64 full mock dashboard (2026-11-14)
 
 Real `run_dashboard` under isolated Forge QEMU/Xvfb reached Tk readiness and clean shutdown with a mock radio and synthetic SQLite. The first version exposed duplicate post-runtime-stop preference flushing; a narrow runtime-owned drain-before-stop correction passed ARM64 retest and startup-failure mock-radio rollback. No real radio, production service, WAL or privileged install acceptance occurred. See `stab07i-mock-full-dashboard-lifecycle.md`. Production NO GO.
+
+## STAB-07J read-only native Pi runtime provenance (2026-11-14)
+
+AnvilMobile's sampled Debian 13 native runtime differs materially from the private emulated Forge ARM64 sysroot (27/52 ELF hashes identical; 10 different, 15 absent; 6/16 package revisions identical). A new bounded offline verifier refuses to infer complete runtime equivalence, signed release or loaded Python identity. Existing protected-release and witness candidates remain uninstalled. See `stab07j-native-runtime-provenance-and-release-readiness.md`. Production NO GO.
