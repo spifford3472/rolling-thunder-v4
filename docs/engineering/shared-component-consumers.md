@@ -87,3 +87,15 @@ read a private stream, mutate ACK, send driver alerts or RF.
 | MeshCore & OHGO context (opt-in OHGO) | `forge_ohgo_incidents.py`, `forge_ohgo_api.py`, `meshcore_ohgo_panel.py`, `context_navigation.py`, `ui_main.py` | Forge spots service owns provider/cache; Pi background client owns polling; Tk renders cached status | No API key on Pi, no UI thread HTTP, no MeshCore private cursor, no alerts/navigation or new map layer |
 
 | MESHCORE & OHGO large-text scroll viewport | `meshcore_ohgo_ui.py`, `meshcore_ohgo_panel.py`, `ui_main.py` | Context-only consumer of validated physical rotary actions; other contexts still dispatch to existing active-panel owners | No changes to shared mappings, PTT/FT8, broker, GPS, network, or privileged commands |
+
+
+### FT8 uncertain-PTT recovery
+
+`FT8PttAlarm` is shared by FT8 hardware transmit failure notification,
+operator Voice Cancel, UI warning and control routing, and bounded transmit
+inhibition. The real unlock path may not equate a CAT write, a polled
+`RadioState.transmitting=False`, or 1–3–1 with verified receive. The
+isolated visual test may exercise its own alarm but has no transmit authority.
+Review `test_ft8_ptt_alarm.py`, `test_ft8_hardware_transmit.py`,
+`test_operator_commands.py` and supervised physical acceptance before changing
+this safety contract.

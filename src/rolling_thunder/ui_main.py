@@ -718,11 +718,14 @@ def run_dashboard(
             return False
         # All command presses during a lock are consumed, even an incorrect step.
         # The operator must have manually powered down/recovered the radio.
-        # The sequence acknowledges this; CAT status is not RF proof.
+        # No independent physical-RX verification capability is present in
+        # this adapter. The polled RadioState.transmitting flag, successful
+        # TX0 CAT write, and operator gesture are not physical RX evidence.
+        # Fail closed: consume unlock inputs but retain the TX inhibit.
         alarm.unlock_step(
             action,
             ft8_screen=context_navigation.state.selected is ContextId.FT8,
-            radio_confirmed_receive=True,
+            radio_confirmed_receive=False,
         )
         return True
 
@@ -844,12 +847,18 @@ def run_dashboard(
              "PRESS VOICE CANCEL TO ACKNOWLEDGE.",
              bg="#fff000", fg="#000000", font=("DejaVu Sans", 23, "bold"),
              justify="center").pack(padx=22, pady=(0, 16))
-    ptt_unlock = tk.Frame(root, bg="#148137", highlightthickness=5,
+    # Show a truthful operator recovery message for the real alarm. The
+    # isolated receive-only visual acceptance alarm retains its 1-3-1 test.
+    ptt_unlock = tk.Frame(root, bg="#8a1c1c", highlightthickness=5,
                           highlightbackground="#ffffff")
+    ptt_unlock_text = tk.StringVar(value=(
+        "FT8 TRANSMIT LOCKED. VERIFY PHYSICAL RADIO RECEIVE. "
+        "POWER DOWN RADIO SAFELY IF UNCERTAIN. NO IN-APP UNLOCK."
+    ))
     tk.Label(
         ptt_unlock,
-        text="Press command buttons in this order Command 1, Command 3, Command 1 to unlock",
-        bg="#148137", fg="#ffffff", font=("DejaVu Sans", 26, "bold"),
+        textvariable=ptt_unlock_text,
+        bg="#8a1c1c", fg="#ffffff", font=("DejaVu Sans", 26, "bold"),
         wraplength=1100, justify="center",
     ).pack(padx=18, pady=22)
     root.grid_columnconfigure(0, weight=2, uniform="dashboard")
@@ -1702,6 +1711,12 @@ def run_dashboard(
                 or (runtime.ft8_ptt_alarm.tx_inhibited and not runtime.ft8_ptt_alarm.active)) and (
             context_navigation.state.selected is ContextId.FT8
         ):
+            ptt_unlock_text.set(
+                "VISUAL TEST ONLY: COMMAND 1, 3, 1 TO CLEAR TEST"
+                if visual_test_active() and visual_test.tx_inhibited
+                else "FT8 TRANSMIT LOCKED. VERIFY PHYSICAL RADIO RECEIVE. "
+                     "POWER DOWN RADIO SAFELY IF UNCERTAIN. NO IN-APP UNLOCK."
+            )
             ptt_unlock.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.96)
             ptt_unlock.lift()
         else:

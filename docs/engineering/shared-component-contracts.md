@@ -638,3 +638,17 @@ release first** and reporting any fresh radio failure. This avoids inventing
 an inability to drain a queue that was previously shut down. The first drain
 failure is never suppressed. No UI worker or hardware adapter gains ownership
 of preference persistence or CAT/PTT.
+
+
+## FT8 uncertain-PTT alarm and physical receive evidence
+
+The dedicated `FT8PttAlarm` owns a latched transmit inhibit after ambiguous
+release. Voice Cancel acknowledges its warning without restoring authorization.
+The UI may consume physical controls during inhibition but may **not** turn
+an operator gesture, stale `RadioState.transmitting=False`, CAT TX0 write, or
+application-state snapshot into independent physical-RX verification. The
+real alarm's 1–3–1 unlock path remains fail-closed until a separately approved,
+trustworthy physical receive confirmation capability exists. The isolated
+visual-test instance has no linkage to production transmit authority. Never
+create an alternate CAT/PTT writer or reset the transmit inhibit as a side
+effect of UI navigation, cancellation, screen refresh, or shutdown.

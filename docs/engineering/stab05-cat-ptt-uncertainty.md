@@ -74,3 +74,35 @@ clear only on successful existing-owner TX0 retry, deterministic failure
 injection and finite serial-timeout configuration validation. No new CAT
 writer or automatic transmit retry. Rollback: revert these branch commits;
 no host or hardware changes made. Release still requires parked approval.
+
+
+## FT8 PTT alarm receive-confirmation remediation (2026-11-15 review branch)
+
+`ui_main.py::handle_ptt_unlock_action` previously supplied an unconditional
+`radio_confirmed_receive=True` to the real alarm. `ft891_radio.py` also
+populates `RadioState.transmitting=False` during frequency/mode refresh; it
+is not a physical RF receive observation. Neither a `TX0;` completion, an
+operator gesture, a stale state snapshot, nor a timer constitutes independent
+proof the rig de-keyed.
+
+The reviewed fail-closed correction supplies **False** for the production
+alarm until a separate independently verified receive-state capability is
+designed and approved. The existing alarm lock consumes all relevant control
+commands and preserves `tx_inhibited` even after warning dismissal or 1–3–1.
+The isolated *visual test* alarm may still use an injected True to demonstrate
+its overlay and gesture without touching real transmit authorization. Its
+presence must never clear the live alarm. The real on-screen recovery
+instruction explicitly says no in-app unlock and directs an operator to
+inspect/power down the rig and obtain supervised diagnosis, not to cycle the
+service to conceal a stuck transmitter.
+
+This is a **source-only safety correction**, not verified receive sensing or
+automatic recovery. A later hardware-backed design must identify the source,
+trust/freshness, physical semantics, transient/error handling, radio state
+and independent fail-safe before permission to unblock. Do not substitute
+`RadioState.transmitting=False`, rekey after successful CAT TX0 alone, or add
+a second CAT transport. Dedicated AST and alarm-state regressions prevent the
+unconditional true from silently returning. Existing FT8 QSO and operator
+command routing tests remain mandatory. No RF, network, service or database
+changes occurred. Rollback: revert this PR; a rollback would reintroduce the
+unverified unlock and must not be deployed as a safety fix.
