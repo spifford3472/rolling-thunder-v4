@@ -66,3 +66,31 @@ def test_startup_preserves_original_failure_when_rollback_reports_errors(
         runtime.start()
     assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
     assert "startup cleanup error" in capsys.readouterr().out
+
+
+def test_polling_start_failure_after_connect_releases_mock_radio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Radio polling itself can fail after opening the mock radio."""
+    config = ApplicationConfig.model_validate(
+        {
+            "operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+            "hardware": {"mock": True},
+            "storage": {"database_path": str(tmp_path / "polling.sqlite3")},
+            "pota_map": {"enabled": False},
+        }
+    )
+    runtime = ApplicationRuntime.from_config(config)
+    original_start = runtime.polling.start
+
+    def connect_then_fail() -> object:
+        state = original_start()
+        assert state.connection_state is RadioConnectionState.CONNECTED
+        raise LookupError("synthetic polling failure after connect")
+
+    monkeypatch.setattr(runtime.polling, "start", connect_then_fail)
+    with pytest.raises(LookupError, match="synthetic polling failure"):
+        runtime.start()
+    assert runtime.radio.get_state().connection_state is RadioConnectionState.DISCONNECTED
+    assert runtime._started is False
+    assert runtime.polling.is_running is False

@@ -826,3 +826,5 @@ has been changed by this inventory correction.
   startup exception.
 - Always set `PYTHONPATH="$PWD/src"` in a worktree using a reused venv to prevent
   installed-package shadowing during regression verification.
+- The same test module also injects a failure after radio polling connects and
+  registers a callback, asserting rollback cancels the callback and disconnects.

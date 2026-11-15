@@ -277,3 +277,11 @@ FT8 fake-adapter PTT failure and real ARM64 rerun of the rebuilt application.
 Track B historical signed Raspberry Pi index authenticity remains independent,
 blocked pending authenticated evidence; quarantined archive files cannot be used
 for an executable runtime. PR #414 remains a separate unreviewed draft.
+
+**Polling-start follow-up (same Track A defect family):** `polling.start()` was
+outside the exception rollback boundary. A synthetic failure *after* its mock
+radio connection and poll registration reproduced a connected radio with an
+active scheduler despite the unsuccessful `ApplicationRuntime.start()`. The
+runtime now attempts polling cancellation, then pre-start FT8/radio release,
+without masking the initial exception if either cleanup path reports a failure.
+The additional regression asserts disconnected mock radio and no active poll.

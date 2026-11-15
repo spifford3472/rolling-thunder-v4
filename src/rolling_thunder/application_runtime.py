@@ -1669,7 +1669,20 @@ class ApplicationRuntime:
         if self._started:
             raise RuntimeError("Application runtime is already started.")
 
-        state = self.polling.start()
+        try:
+            state = self.polling.start()
+        except Exception:
+            # Poll scheduling can fail after opening the radio. Cancel any
+            # partial polling registration before the pre-start radio release.
+            try:
+                self.polling.stop()
+            except Exception as cleanup_error:  # noqa: BLE001 - preserve startup cause
+                print(f"Rolling Thunder startup polling cleanup error: {cleanup_error}")
+            try:
+                self.stop()
+            except Exception as cleanup_error:  # noqa: BLE001 - preserve startup cause
+                print(f"Rolling Thunder startup cleanup error: {cleanup_error}")
+            raise
         self._started = True
         try:
             self._start_remaining_services()
