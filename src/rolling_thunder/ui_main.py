@@ -195,6 +195,11 @@ def _run_orderly_shutdown(
     )
 
 
+def _dashboard_shutdown_exit_code(errors: list[str]) -> int:
+    """Return a refusal status when any orderly shutdown step failed."""
+    return 4 if errors else 0
+
+
 def _run_cleanup_steps(
     steps: tuple[tuple[str, Callable[[], object]], ...],
     errors: list[str],
@@ -2613,7 +2618,7 @@ def run_dashboard(
         root.mainloop()
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm_handler)
-    return 0
+    return _dashboard_shutdown_exit_code(close_errors)
 
 
 def main() -> int:

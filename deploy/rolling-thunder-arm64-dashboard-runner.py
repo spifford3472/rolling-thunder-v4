@@ -33,7 +33,14 @@ def _module(name: str, path: Path) -> Any:
     return item
 
 
-MODES = ("normal", "startup-failure", "navigation")
+MODES = (
+    "normal",
+    "startup-failure",
+    "cleanup-failure",
+    "missing-heartbeat",
+    "blocked-worker",
+    "navigation",
+)
 
 
 def make_guest(root: Path, display: Path, *, mode: str = "normal") -> list[str]:
@@ -55,6 +62,22 @@ def make_guest(root: Path, display: Path, *, mode: str = "normal") -> list[str]:
         raise DashboardProbeError("guest dashboard probe differs from reviewed code")
     if cmd[-5:] != ["/work/tk-lifecycle.py", "--mode", "normal", "--scratch", "/test"]:
         raise DashboardProbeError("unexpected base guest command")
+    source = Path(__file__).resolve().parents[1] / "src/rolling_thunder"
+    repository = Path(__file__).resolve().parents[1]
+    if (
+        source.is_symlink()
+        or not source.is_dir()
+        or not source.resolve().is_relative_to(repository.resolve())
+    ):
+        raise DashboardProbeError("reviewed application source tree is unavailable")
+    source_mount = root / "runtime/rolling_thunder"
+    if source_mount.is_symlink():
+        raise DashboardProbeError("application source mount point is unsafe")
+    source_mount.mkdir(mode=0o700, exist_ok=True)
+    if source_mount.stat().st_mode & 0o077:
+        raise DashboardProbeError("application source mount point is not private")
+    marker = cmd.index("--proc")
+    cmd[marker:marker] = ["--ro-bind", str(source), "/work/rolling_thunder"]
     cmd[-5:] = ["/work/dashboard-probe.py", "--mode", mode]
     if "--unshare-net" not in cmd or "--dev" not in cmd or "--clearenv" not in cmd:
         raise DashboardProbeError("network or hardware namespace isolation missing")
@@ -68,14 +91,43 @@ def validate_result(report: dict[str, Any], output: str, *, mode: str = "normal"
             report.get("mode") == mode
             and report.get("return_code") == 3
             and report.get("root_created") is False
-            and report.get("rollback_disconnected") is True
+            and report.get("runtime_closed") is True
             and report.get("only_loopback") is True
             and report.get("production_ready") is False
             and report.get("physical_radio_tested") is False
             and "Rolling Thunder startup error" in output
         )
-    if mode not in ("normal", "navigation"):
+    if mode == "blocked-worker":
+        return (
+            report.get("mode") == mode
+            and report.get("expected_refusal") is True
+            and report.get("production_ready") is False
+            and report.get("physical_radio_tested") is False
+            and "RT_TEST_BLOCKED_WORKER phase=cleanup_started" in output
+            and "RT_DASHBOARD_REFUSAL blocked_shutdown_worker" in output
+            and "RT_SHUTDOWN phase=worker_start" in output
+            and "RT_SHUTDOWN phase=worker_end" not in output
+            and "RT_SHUTDOWN phase=destroy_root" not in output
+        )
+    if mode not in ("normal", "cleanup-failure", "missing-heartbeat", "navigation"):
         return False
+    common = (
+        report.get("mode") == mode
+        and report.get("after_close") is True
+        and report.get("root_created") is True
+        and report.get("sent_sigterm") is True
+        and report.get("only_loopback") is True
+        and report.get("production_ready") is False
+        and report.get("physical_radio_tested") is False
+    )
+    if mode == "missing-heartbeat":
+        return (
+            common
+            and report.get("return_code") == 0
+            and report.get("tk_ready") is False
+            and report.get("readiness_refused") is True
+            and "RT_SHUTDOWN phase=destroy_root" in output
+        )
     needed_phases = (
         "RT_SHUTDOWN phase=close_requested",
         "RT_SHUTDOWN phase=worker_start",
@@ -83,22 +135,49 @@ def validate_result(report: dict[str, Any], output: str, *, mode: str = "normal"
         "RT_SHUTDOWN phase=worker_end",
         "RT_SHUTDOWN phase=destroy_root",
     )
+    if mode == "cleanup-failure":
+        return (
+            common
+            and report.get("return_code") == 4
+            and report.get("runtime_closed") is True
+            and report.get("sqlite_integrity") == "ok"
+            and "Rolling Thunder shutdown error" in output
+            and all(output.count(phase) == 1 for phase in needed_phases)
+        )
     return (
-        report.get("mode") == mode
+        common
         and (mode != "navigation" or (
             report.get("navigation_responsive") is True
             and report.get("navigation_events") == ["dx", "browse", "pota"]
         ))
         and report.get("return_code") == 0
-        and report.get("root_created") is True
         and report.get("tk_ready") is True
-        and report.get("sent_sigterm") is True
-        and report.get("after_close") is True
+        and report.get("runtime_started") is True
+        and report.get("runtime_closed") is True
         and report.get("database_exists") is True
-        and report.get("only_loopback") is True
-        and report.get("production_ready") is False
-        and report.get("physical_radio_tested") is False
+        and report.get("mock_radio") is True
+        and report.get("mock_gps") is True
+        and report.get("refresh_callbacks", 0) >= 2
+        and report.get("widget_count", 0) > 0
+        and report.get("mutation_attempted") is True
+        and report.get("mutation_accepted") is False
+        and report.get("pending_callsign_after_mutation") == "K1TEST"
+        and report.get("close_worker_count") == 1
+        and report.get("close_request_count", 0) >= 2
+        and report.get("fixture_preserved") is True
+        and report.get("backup_fixture_preserved") is True
+        and report.get("sqlite_integrity") == "ok"
+        and report.get("sqlite_quick_check") == "ok"
+        and report.get("backup_integrity") == "ok"
         and all(output.count(phase) == 1 for phase in needed_phases)
+        and "RT_RUNTIME_SHUTDOWN phase=step_end step='radio polling'" in output
+        and "RT_RUNTIME_SHUTDOWN phase=step_start step='radio disconnect'" in output
+        and "RT_RUNTIME_SHUTDOWN phase=step_end step='operator preferences drain'" in output
+        and "RT_RUNTIME_SHUTDOWN phase=step_start step='operator preferences'" in output
+        and output.index("RT_RUNTIME_SHUTDOWN phase=step_end step='radio polling'")
+        < output.index("RT_RUNTIME_SHUTDOWN phase=step_start step='radio disconnect'")
+        and output.index("RT_RUNTIME_SHUTDOWN phase=step_end step='operator preferences drain'")
+        < output.index("RT_RUNTIME_SHUTDOWN phase=step_start step='operator preferences'")
         and "result=error" not in output
         and "Rolling Thunder shutdown error" not in output
     )
@@ -149,11 +228,37 @@ def run(root: Path, display: Path, *, mode: str = "normal") -> dict[str, Any]:
             for line in completed.stdout.splitlines()
             if line.startswith("RT_DASHBOARD_PROBE ")
         ]
-        if completed.returncode != 0 or len(markers) != 1:
-            raise DashboardProbeError("dashboard exited abnormally or omitted evidence")
+        expected_status = 0 if mode in ("normal", "startup-failure", "navigation") else 75
+        combined_output = completed.stdout + "\n" + completed.stderr
+        if mode == "blocked-worker":
+            refusal_report = {
+                "mode": mode,
+                "expected_refusal": True,
+                "production_ready": False,
+                "physical_radio_tested": False,
+            }
+            if completed.returncode != 75 or markers or not validate_result(
+                refusal_report, combined_output, mode=mode
+            ):
+                raise DashboardProbeError(
+                    f"blocked worker did not fail closed (status={completed.returncode}; "
+                    f"output={combined_output[-6000:]!r})"
+                )
+            return refusal_report
+        if completed.returncode != expected_status or len(markers) != 1:
+            evidence = (completed.stdout + "\n" + completed.stderr)[-6000:]
+            raise DashboardProbeError(
+                f"dashboard exited abnormally or omitted evidence "
+                f"(status={completed.returncode}; expected={expected_status}; output={evidence!r})"
+            )
         report = json.loads(markers[0])
-        if not isinstance(report, dict) or not validate_result(report, completed.stdout, mode=mode):
-            raise DashboardProbeError("dashboard startup/shutdown evidence refused")
+        combined_output = completed.stdout + "\n" + completed.stderr
+        if not isinstance(report, dict) or not validate_result(report, combined_output, mode=mode):
+            evidence = combined_output[-6000:]
+            raise DashboardProbeError(
+                f"dashboard startup/shutdown evidence refused (mode={mode}; report={report!r}; "
+                f"output={evidence!r})"
+            )
         return report
     except subprocess.TimeoutExpired as exc:
         raise DashboardProbeError("dashboard lifecycle timed out") from exc

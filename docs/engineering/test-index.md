@@ -799,8 +799,8 @@ has been changed by this inventory correction.
 ### STAB-07I full-dashboard mock-hardware lifecycle
 
 - `tests/test_stab07i_preference_shutdown_order.py` — radio-first preference flush order and failure reporting.
-- `tests/test_stab07i_full_dashboard_probe.py` — required real UI evidence, startup mock rollback and no production safety claims.
-- Independent Forge ARM64/QEMU/Xvfb actual `run_dashboard` uses mock radio/GPS, disposable SQLite, and no physical PTT/RF.
+- `tests/test_stab07i_full_dashboard_probe.py` — normal evidence, readiness and mutation inhibition, SQLite/backup preservation, startup/cleanup/stale-heartbeat/blocked-worker refusal, and false-claim rejection.
+- Independent Forge ARM64/QEMU/Xvfb actual `run_dashboard` uses mock radio/GPS, private Xvfb, fixed offline status probes and disposable SQLite; no physical PTT/RF.
 
 ### STAB-07J native runtime comparison
 

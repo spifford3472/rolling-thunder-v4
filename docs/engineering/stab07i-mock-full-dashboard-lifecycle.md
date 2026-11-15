@@ -1,58 +1,59 @@
 # STAB-07I — Actual dashboard composition with fake hardware on isolated ARM64
 
-**Status:** Offline review candidate, November 14, 2026. **Production NO GO.**
+**Status:** Offline engineering candidate, November 15, 2026. **Production NO GO.**
 
-STAB-07I extends the STAB-07H Tk-helper tests by executing the actual installed `rolling_thunder.ui_main.run_dashboard()` on the emulated ARM64 Python 3.13.5 runtime, with the genuine `ApplicationRuntime`, widget construction, refresh loop, SQLite initialization, worker lifecycle, Tk readiness, SIGTERM and shutdown.
+STAB-07I executes the actual `rolling_thunder.ui_main.run_dashboard()` composition on the emulated ARM64 Debian 13 CPython 3.13.5 runtime. It exercises the genuine `ApplicationRuntime`, controller composition, Tk widgets, refresh loop, SQLite initialization, mock polling, readiness heartbeat, signal handling and shutdown.
 
-This is intentionally **not** an all-feature test: the test config disables physical radio/GPS, FT8, PTT, speech/Tron, physical controls, Forge/network clients, DMR, maps/radar and MeshCore. Their live behavior, including physical RX/de-key, remains unverified.
+## Isolation and safety boundary
 
-## Safe execution environment
+- Forge development workspace: `/home/rt-remote/workspaces/rt-stab07`. The exact PR #461 head branch was fetched; its tree was verified identical to the local STAB-07H tree before STAB-07I was based directly on that head.
+- QEMU sandbox: `/home/rt-remote/workspaces/rt-stab07g-sandbox`; private disposable STAB-07I trial copies: `/home/rt-remote/workspaces/rt-stab07i-run2/attempt*`. Each trial uses a new display and scratch directory; the runner refuses to overwrite a prior database or share an X server.
+- Runner and guest probe: `deploy/rolling-thunder-arm64-dashboard-runner.py` and `deploy/rolling-thunder-arm64-dashboard-probe.py`. The runner compares the guest probe byte-for-byte with reviewed source and mounts the current application package read-only.
+- The QEMU process uses the established unprivileged user/PID/network namespace, private Debian ARM64 sysroot and Python venv, minimal device tree, no station home/secrets/database mounts, and private Xvfb/Xauthority. Only loopback was visible inside the guest. No host package, service, firewall, Docker permission, or privileged setting changed.
+- The validated test config explicitly selects MockRadio and MockGPS; disables FT8/PTT, speech, Tron, physical controls, Forge/home/network integrations, maps, radar, DMR, antenna reference and MeshCore. The status monitor uses its real lifecycle with fixed unavailable probes, not Internet probes.
+- The dashboard creates only a deterministic synthetic `K1TEST` contact in `/test/scratch-dashboard.sqlite3`. The harness checks SQLite integrity and quick-check, preserves the fixture through orderly shutdown, creates a separate SQLite online backup and verifies it. It never imports station contacts or automatically restores any database.
 
-- Forge, via Desktop Commander, using STAB-07G's verified AArch64 QEMU, private Python venv with 26 hashed ARM64 dependencies, and STAB-07H's rootless user/PID/**network**-isolated Xvfb.
-- `deploy/rolling-thunder-arm64-dashboard-probe.py` constructs a Pydantic-validated mock radio/GPS configuration. A private test-only hook substitutes `load_config` and empty `ApplicationSecrets`, records a real Tk heartbeat, sends SIGTERM and observes complete shutdown. It refuses real serial devices or inherited station credentials.
-- `deploy/rolling-thunder-arm64-dashboard-runner.py` checks the QEMU/Xvfb identities and byte-for-byte reviewed probe, permits only `normal` and `startup-failure`, refuses existing display sockets/DB, launches a fresh authenticated private Xvfb, bounds the guest's lifetime, and cleans its own process group/socket. It rejects missing phases, false production readiness and normal-shutdown errors.
-- Every test database is synthetic under private `/test/scratch-dashboard.sqlite3`. No production SQLite, QSO, systemd, CAT/PTT, host package, network setting or radio device was accessed.
+## Full-dashboard ARM64 results
 
-## A real shutdown bug found and corrected
-
-The first real dashboard run on the STAB-07G installed wheel reached Tk readiness and exited with code 0, but logged:
-`Rolling Thunder shutdown error: operator preferences: queued operator preferences did not drain`.
-
-Cause: `ApplicationRuntime.stop()` had already stopped its owned `OperatorPreferenceService` executor. Then `ui_main.close_worker()` tried to flush that stopped service, which returned false even when no queued writes were pending.
-
-Smallest correction: the **runtime owner** now performs one bounded 3-second preference flush **after the existing radio/FT8 cleanup path** and **before** stopping the preference executor. A failure is recorded explicitly, remaining cleanup still runs. The duplicate post-stop UI flush is removed. Radio/CAT/PTT authority and cleanup priority are unchanged.
-
-`tests/test_stab07i_preference_shutdown_order.py` asserts mock radio disconnect precedes drain and stop, single ownership and explicit failed-drain reporting. `tests/test_stab07i_full_dashboard_probe.py` checks required real-dashboard evidence, failure/refusal, no false RF acceptance, and startup rollback.
-
-## ARM64 acceptance observed
-
-A new locally built noneditable application wheel was installed **only** into the disposable Forge ARM64 venv using `--no-index --no-deps --require-hashes --force-reinstall`. Test-only wheel SHA256: `7d794ff65ba259b0aad4d9fa56ddbc397cda16cc965d0d38e9a2515ce5bbae02`. This is not an approved signed deployment artifact.
-
-| Mode | Observed result | Interpretation |
+| Trial | Dashboard result | Verified evidence |
 | --- | --- | --- |
-| `normal` | `run_dashboard` code 0; real Tk root, heartbeat, SIGTERM; mock runtime and UI cleanup complete; **no shutdown errors** | PASS for this disabled-hardware configuration |
-| `startup-failure` | Injected exception after mock radio polling start; code 3; mock radio disconnected and runtime stopped; no Tk root created | PASS expected safe refusal |
+| `normal` | Pass; application return code 0 | Five Tk widgets, fresh PID-bound heartbeat, two refresh callbacks, mock radio/GPS, SIGTERM, two close requests but one close worker, blocked DISCARD mutation rejected with pending callsign preserved, runtime closed, synthetic contact and online backup preserved, SQLite checks `ok`, radio polling stopped before disconnect and preference drain completed before executor stop. |
+| `startup-failure` | Expected safe failure; application return code 3 | Injected after mock runtime startup and before Tk construction; no root created; runtime stopped and mock radio disconnected. |
+| `cleanup-failure` | Expected refusal; application return code 4 | Injected background worker cleanup exception was reported; runtime closed; synthetic contact and SQLite integrity remained intact. |
+| `missing-heartbeat` | Readiness refused; orderly application return code 0 | A deliberately stale heartbeat was rejected (`tk_ready=false`, `readiness_refused=true`); dashboard then received SIGTERM and completed mock shutdown. |
+| `blocked-worker` | Expected refusal; harness return status 75 | A test-only mock cleanup callback stayed blocked. A bounded watchdog ended only the isolated QEMU test process before worker-end/UI-destroy markers; no successful shutdown report was emitted. This is not a claim that a blocked production worker can be safely killed. |
 
-The same normal configuration before the source fix exposed the preference-drain bug, providing an independent before/after regression observation. No full-feature or real-device test is claimed.
+Generic unexpected guest exits, missing/duplicate evidence, wrong status codes, false readiness, false production/RF claims, missing fixtures, SQLite errors and misordered runtime shutdown markers are rejected by the runner. All final trials completed; a Forge process check found no surviving QEMU dashboard, Xvfb or bwrap test process.
 
-Forge scratch paths:
-- Existing QEMU/venv: `/home/rt-remote/workspaces/rt-stab07g-sandbox`
-- Initial dashboard test: `/home/rt-remote/workspaces/rt-stab07i-display`
-- Failure rollback: `/home/rt-remote/workspaces/rt-stab07i-failure-display`
-- Updated normal: `/home/rt-remote/workspaces/rt-stab07i-normal-final`
-- Test wheel and offline installation log: `/home/rt-remote/workspaces/rt-stab07i-artifacts`
+The normal lifecycle takes about 7 seconds after guest startup; the emulated process startup dominates trial time. The environment is Debian package `deb13u5`, while AnvilMobile was observed on `deb13u4`; matching Python version strings are not exact runtime parity.
 
-Use the runner only with a fully reviewed, privately reconstructed scratch sandbox; it intentionally refuses reuse of a prior database or X server. The emulated Debian Python package remains `deb13u5` versus the Pi's observed `deb13u4`.
+## Implementation corrections
 
-## Validation and remaining NO GO gates
+The first full-dashboard run exposed duplicate preference draining: `ApplicationRuntime.stop()` had already stopped its owned executor before `ui_main.close_worker()` attempted another flush. The runtime now owns one bounded preference drain after the radio-release attempt and before stopping that executor; UI does not flush a stopped service.
 
-Normal CI exercises the deterministic safety/failure tests; actual ARM64/Xvfb trials are additional Forge-local evidence. The STAB-07F immutable candidate was independently verified previously, but no actual protected production rollback was attempted.
+The run also established that UI cleanup exceptions could be logged while `run_dashboard()` returned success. It now returns status 4 when orderly shutdown recorded an error. This is an error-reporting correction only; it does not claim physical radio receive or PTT release.
 
-Still outstanding: independently matching exact Pi interpreter/OS/native library bytes, full real hardware adapter and FT8 lifecycle, physical receive/PTT proof after abnormal release, sound/Tk screen responsiveness on the real monitor, SQLite/WAL QSO preservation, approved signed immutable root-owned release, trusted running code attestation and parked systemd stop/rollback acceptance. None may be inferred from a mock-radio dashboard shutdown.
+Relevant regression coverage:
+- `tests/test_stab07i_preference_shutdown_order.py` — radio release, preference drain and executor stop ownership/order.
+- `tests/test_stab07i_full_dashboard_probe.py` — readiness, widget/refresh, shutdown, mutation inhibition, database/backup preservation, startup/cleanup/stale-heartbeat/blocked-worker refusal, invalid evidence rejection.
+- `tests/test_ui_main.py` — nonzero return on shutdown error.
 
-**Rollback:** Abandon the unmerged draft branch and remove only reviewed disposable Forge scratch artifacts. There is no AnvilMobile change to undo. Any future changes affecting 192.168.9.0/24, 192.168.10.0/24 or OPNsense require committed documentation in private `spifford3472/ki5vnb-qth-infrastructure` listing configuration paths, integrations, jobs, validation, rollback and change history.
+## Regression results
 
-**Change history — 2026-11-14:** First actual ARM64 mock-dashboard composition; exposed and corrected double preference drain, added startup failure/rollback and strict harness regressions. **Production NO GO.**
+- Full Forge pytest: **4,311 passed, 7 skipped**.
+- Strict MyPy: **401 source files passed**.
+- Scoped Ruff for all changed Python files: **passed**.
+- Whole-repository `ruff check .`: four pre-existing findings remain in unchanged `deploy/diagnostics/rt-usb-observer.py` (EXE001, I001, UP017, BLE001). No unrelated USB observer change was made.
+- `git diff --check HEAD`: **passed**, including staged and unstaged changes.
+- GitHub exact-SHA CI and draft PR publication remain pending.
+
+## Remaining gates
+
+STAB-07I is offline composition evidence, not production acceptance. Outstanding gates include independent exact AnvilMobile interpreter/stdlib/native-library provenance; protected immutable root-owned release and trusted loaded-code attestation; deployment transaction/recovery acceptance; SQLite/WAL durability and interrupted recovery against disposable fixtures; production systemd identity; CAT/PTT/FT8 shutdown serialization; and owner-approved parked physical receive/de-key testing. No actual production database, radio, network service or AnvilMobile process was accessed.
+
+**Rollback:** discard the unmerged STAB-07I draft branch and remove only the reviewed private trial directories. No production state changed. Any later change affecting 192.168.9.0/24, 192.168.10.0/24 or OPNsense still requires committed documentation in private `spifford3472/ki5vnb-qth-infrastructure`.
+
+**Change history — 2026-11-15:** Hardened full-dashboard evidence, added shutdown error status, synthetic SQLite backup/integrity checks, post-shutdown mutation rejection and expected cleanup/readiness/blocked-worker refusals. Production remains NO GO.
 
 ## STAB-07J runtime provenance qualification (2026-11-14)
 

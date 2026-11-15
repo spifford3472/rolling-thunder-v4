@@ -24,9 +24,9 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `stab07k-authenticated-exact-arm64-os-reconstruction.md` — 14/16 exact signed ARM64 OS archives verified, historical Debian snapshots, incomplete Pi-native image and NO-GO gates.
 
-- `stab07j-native-runtime-provenance-and-release-readiness.md` — read-only native Pi ELF/dpkg SHA evidence, exact Forge comparison and protected-release NO-GO gates.
+- `stab07i-mock-full-dashboard-lifecycle.md` — actual ARM64 mock dashboard startup/readiness/refresh/shutdown, synthetic SQLite and failure/refusal evidence, preference drain fix and release NO GO.
 
-- `stab07i-mock-full-dashboard-lifecycle.md` — actual ARM64 mock dashboard, preference drain fix, startup rollback and release NO GO.
+- `stab07j-native-runtime-provenance-and-release-readiness.md` — read-only native Pi ELF/dpkg SHA evidence, exact Forge comparison and protected-release NO-GO gates.
 
 - `stab07h-hardware-disabled-tk-lifecycle.md` — private ARM64 Xvfb/Tk heartbeat, signal/cleanup failure tests, no-RF boundary, rollback preservation and NO-GO gates.
 

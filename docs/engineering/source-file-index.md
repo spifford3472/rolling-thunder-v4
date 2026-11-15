@@ -666,10 +666,10 @@ has been changed by this inventory correction.
 
 ### STAB-07I full-dashboard isolated ARM64 lifecycle
 
-- `deploy/rolling-thunder-arm64-dashboard-probe.py` — real mock-radio dashboard, throwaway SQLite, offline Xvfb, and injected startup rollback.
-- `deploy/rolling-thunder-arm64-dashboard-runner.py` — bounded QEMU/Xvfb full-composition runner and strict evidence.
-- `src/rolling_thunder/application_runtime.py` — owner drains preferences before stopping them, after radio release.
-- `src/rolling_thunder/ui_main.py` — duplicate preference flush after runtime stop removed.
+- `deploy/rolling-thunder-arm64-dashboard-probe.py` — real `run_dashboard` with mock radio/GPS, synthetic SQLite/online backup, fresh heartbeat and injected startup, cleanup, stale-heartbeat and blocked-worker cases.
+- `deploy/rolling-thunder-arm64-dashboard-runner.py` — private QEMU/Xvfb full-composition runner; refuses reused DB/display, unexpected guest exits and incomplete/misordered evidence.
+- `src/rolling_thunder/application_runtime.py` — owner drains preferences after radio cleanup and before executor stop.
+- `src/rolling_thunder/ui_main.py` — duplicate preference flush removed; orderly cleanup errors return status 4.
 
 ### STAB-07J read-only Pi native provenance comparator
 

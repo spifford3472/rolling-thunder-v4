@@ -167,6 +167,6 @@ full pytest **4,273 passed, 7 skipped**, strict MyPy 401 files, targeted Ruff
 and git diff --check passed. Whole-repository Ruff retained the four
 pre-existing USB-observer diagnostics (untouched). **Production NO GO.**
 
-## STAB-07I full composition continuation (2026-11-14)
+## STAB-07I full composition continuation (2026-11-15)
 
 STAB-07I exercises actual `run_dashboard` composition with mocked radio/GPS and disposable SQLite, correcting duplicate preference draining after runtime stop. See `stab07i-mock-full-dashboard-lifecycle.md`. Physical RF and production release remain unverified.
