@@ -1,6 +1,6 @@
 # STAB-04 — shutdown deadline and safety critical-path evidence
 
-Status: **STAB-04B concurrency guard candidate; physical safety gate unresolved**. This document is
+Status: **STAB-04B merged source correction; physical safety gate unresolved**. This document is
 a current-code analysis after STAB-03; it does not authorize a deployment, RF
 test, change in systemd stop timeout, or additional CAT command path.
 

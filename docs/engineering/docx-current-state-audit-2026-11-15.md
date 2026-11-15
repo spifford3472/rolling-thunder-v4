@@ -148,3 +148,9 @@ record is required.
   459/459, documented current ownership, corrected misleading headings,
   clarified PTT visual/unlock safety, scoped historical MeshCore assertions,
   added CI enforcement and synthetic regression tests.
+
+- **2026-11-15 source-status follow-up:** Corrected the operator guide's
+  STAB-04/05 headings and engineering guide statuses from unmerged candidates
+  to merged source with physical acceptance outstanding. The older DOC-02
+  checkpoint now points to this ledger. CI Ruff explicitly checks the new
+  inventory validator as well as source and tests.

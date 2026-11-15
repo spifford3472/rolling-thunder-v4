@@ -36,7 +36,7 @@ jobs:
         run: python tools/docx_inventory.py
 
       - name: Run Ruff
-        run: ruff check src tests
+        run: ruff check src tests tools/docx_inventory.py
 
       - name: Run MyPy
         run: mypy src

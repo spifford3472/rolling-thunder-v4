@@ -11,19 +11,19 @@ that stopped executor a second time. Isolated ARM64 fake-hardware tests passed;
 Pi**. Observe the actual installed SHA and radio receive state before claiming
 live readiness. A successful software release result never proves RF receive.
 
-## Shutdown safety status (STAB-04 candidate, not deployed)
+## Shutdown safety status (STAB-04 merged source; physical acceptance pending)
 
-An engineering candidate prioritizes the existing FT8 transmit release and
+The merged source prioritizes the existing FT8 transmit release and
 radio adapter shutdown ahead of unrelated background worker cleanup. Shutdown
 messages do not independently prove the FT-891 has returned to receive. If its
 TX indicator remains on, stop operating and follow the established supervised
 radio recovery procedure; do not assume software shutdown or a restart
-de-keyed the radio. This candidate still requires a parked acceptance test
+de-keyed the radio. This merged code still requires a parked acceptance test
 and does not authorize any unattended RF operation.
 
-## CAT/PTT release safety (STAB-05B candidate — not deployed)
+## CAT/PTT release safety (STAB-05B merged source; physical acceptance pending)
 
-The proposed FT-891 CAT safety correction rejects any new FT8 PTT key
+The merged FT-891 CAT safety correction rejects any new FT8 PTT key
 request after an unsuccessful transmit-off attempt until the existing radio
 adapter successfully retries the release command. This is an additional
 **software inhibit**, not proof that the rig is physically in receive.
