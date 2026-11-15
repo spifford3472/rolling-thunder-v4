@@ -168,6 +168,22 @@ the durable Forge binding is absent, but does not prove whether the Wavelog
 profile itself is absent, hidden, unlinked, or incompatible. Do not create or
 edit a profile until those read-only checks are done.
 
+
+## Follow-up after owner-reported station addition (17:20 EST)
+
+The owner reported adding a station in Wavelog; its exact name has not yet been
+provided. At 17:19 EST, the Pi still showed 340 synchronized and 15 failed
+contacts, 15 retry rows, and generic HTTP 503 errors. Retry counters had advanced
+to 865–2,269, with the next attempts due around 17:23:45–48 EST.
+
+Three consecutive read-only Forge `GET /health` checks at 17:19–17:20 EST
+returned `availability=unavailable` and
+`Configured Wavelog station location does not exist: 'Mobile'.` This is a
+current failure of the configured legacy target. The reason is not established;
+possible explanations include a rename/deletion or changed Wavelog visibility or
+logbook membership. No further station, profile, logbook, retry, or database
+changes were made during these checks.
+
 ## USB and peripheral inventory
 
 At 07:51 EST, `lsusb` showed VIA USB hubs, a SanDisk Extreme 55DD storage device,
