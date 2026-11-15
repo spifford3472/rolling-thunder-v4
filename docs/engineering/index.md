@@ -14,7 +14,8 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `stab06-supervision-recovery.md` — system-level service ownership, inherited flock test evidence, and unresolved wrapper/recovery gates.
 
-- `doc02-current-state-reconciliation.md` — verified editorial/status corrections, historical evidence pointers, DOC-03 audit gates.
+- `doc02-current-state-reconciliation.md` — verified DOC-02 editorial/status corrections and historical evidence pointers.
+- `docx-current-state-audit-2026-11-15.md` — merged-source documentation truth ledger, ownership/dependency map, prioritized drift and architecture risks, validation gates.
 
 - `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
 
@@ -88,7 +89,7 @@ This guide describes the implemented repository rather than an aspirational arch
 - `shared-component-contracts.md` — cross-feature invariants that feature agents must not casually change.
 - `shared-component-consumers.md` — consumer matrix for high-risk shared components.
 - `forge-services.md` — reusable Forge backend/process/API rules.
-- `source-file-index.md` — exhaustive catalog of all Python source modules.
+- `source-file-index.md` — source module catalog; verified automatically against the current checkout.
 - `test-index.md` — test ownership and validation/live-acceptance guidance.
 - `AGENTS.md` — maintenance rules for this documentation.
 - `codex-deployment-workflow.md` — Codex branch discipline, explicit merge/deploy authorization and guarded release paths.

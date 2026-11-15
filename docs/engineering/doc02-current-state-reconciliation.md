@@ -43,3 +43,14 @@ Recommended next review gates:
 2026-11-14: Corrected four source-known editorial/status discrepancies and
 cross-linked dated shutdown observations; no production or host changes.
 Revert this documentation PR to roll back.
+
+## DOC-X supersession pointer — 2026-11-15
+
+This DOC-02 report is a dated historical checkpoint, not the final current-state
+architecture inventory. The current ledger is
+`docx-current-state-audit-2026-11-15.md`, based on merged STAB-07 SHA
+`b792151313e60596e6ff3ad51f6ed4e260078718`. The source index has been
+reconciled to 401 modules and the tests index to 460 after DOC-X. The current
+operator guide distinguishes merged STAB-04/05/07 source corrections from
+still-unverified installed state and physical RF receive confirmation.
+Independent drafts #414 and #439 remain unmerged and require separate review.

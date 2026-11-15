@@ -1,6 +1,6 @@
 # STAB-05 — CAT/PTT uncertainty and shutdown safety boundary
 
-Status: **STAB-05B fail-closed CAT/PTT correction under CI; physical safety unverified**.
+Status: **STAB-05B fail-closed CAT/PTT source correction merged; physical safety unverified**.
 
 ## Existing mechanism and invariant
 

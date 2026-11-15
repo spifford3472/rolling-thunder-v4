@@ -2,6 +2,22 @@
 
 ## Status
 
+**Scope clarification — merged current source (2026-11-15):** The opening
+"not yet wired" and "does not preserve message text" statements below
+apply only to the **initial pure classifier and passive observation collector**,
+not to the complete optional MeshCore subsystem. Subsequent code contains
+`meshcore_message_broker.py`, `meshcore_broker_drain.py`, and the independently
+owned `meshcore_traffic_worker_main.py`; the approved broker can persist
+classified public messages and protected private messages in separate streams.
+It is disabled without its protected opt-in configuration and must not be
+confused with the independent Forge OHGO provider. See
+`meshcore-message-broker.md`, `meshcore-traffic-worker.md`, and
+`meshcore-ohgo-incidents.md`. This supersedes only the global implication of
+the original foundation wording; no live collector/device activation is
+claimed or authorized.
+
+### Historical pure classification foundation
+
 The initial classification module is **not yet wired to a receiver, database,
 UI, or RF transmitter**. It is a pure function tested using synthetic public
 messages. The independent collector introduced in PR #388 remains unchanged.

@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 340.**
+**Cataloged Python modules: 401 (verified against merged `main`, 2026-11-15).**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task

@@ -39,6 +39,22 @@ The descriptions below of staged/disabled-by-default source composition are **de
           CAT/radio           serial             FT8         + map storage
 ```
 
+## Source baseline and installed-state boundary (2026-11-15)
+
+The consolidated STAB-07 source was merged by PR #472 at
+`b792151313e60596e6ff3ad51f6ed4e260078718`. Its source-level
+runtime shutdown attempts FT8/radio release before unrelated slow workers;
+partial radio-poll startup failure now rolls back; repeated shutdown does not
+re-drain a preference service that has already stopped. See
+`stab07-integration-and-parked-release-plan.md` and the deterministic tests.
+The ARM64 Xvfb mock dashboard validated navigation, startup, shutdown,
+SQLite/backup integrity and expected blocked-worker refusal, **not** the
+installed Raspberry Pi process or physical de-keying. The earlier 2026-11-13
+service observations and code-order diagrams below are historical snapshots;
+verify their exact source/installed SHA before treating those sequences as
+current. A blocked real CAT/PTT operation still requires separately approved
+parked acceptance, and historical native-package provenance gaps remain open.
+
 ## Process model on anvilmobile
 
 The installed dashboard is started by `rolling-thunder.service`, which invokes
