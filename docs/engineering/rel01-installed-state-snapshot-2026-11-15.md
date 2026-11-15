@@ -213,7 +213,7 @@ compatibility before any rollback.
 
 The previous checkout SHA and editable package path are identified. The process's
 loaded source bytes, native package provenance/hashes, environment-file values,
-and integrity/row contents of the newest deployment backup remain unverified. The
+and per-retry field values plus FT8 outbox IDs/payloads in the newest deployment backup remain unverified. The
 installed wrapper hash/source are known, but its missing mutex/journal and absence
 from the repository leave deployment serialization and provenance unresolved.
 Rollback readiness for the primary QSO database now has a validated candidate
