@@ -1210,8 +1210,8 @@ no grid, city, or state. Wavelog requires CQ and ITU zones on every station loca
 so this fallback profile uses CQ Zone 4 and ITU Zone 8. These are profile-level
 defaults; the contact's missing location fields remain missing. This routing uses
 the location captured with the contact; a later vehicle position cannot redirect a
-retry. Grid-based dynamic Station Locations keep a four-character grid, while the QSO keeps its full
-captured grid when available.
+retry. Grid-based dynamic Station Locations keep a four-character grid, while the
+QSO keeps its full captured grid when available.
 
 The full local QSO grid is the sole Rolling Thunder grid identity; the four-character
 station profile grid is derived from it. Rolling Thunder submits the full grid in ADIF,
