@@ -297,7 +297,7 @@ code/schema rollback path are still outstanding.
 | Startup/shutdown | Installed base unit has 20-second stop timeout, SIGTERM and restart-on-failure. Source concurrency tests pass on the reviewed baseline. | Protected drop-ins, actual launcher outcome/readiness, and parked bounded stop/start observation. Do not restart now. |
 | Controller command and override | Source tests cover dispatch gates and owner recovery; no physical command action was made. | Actual controller serial mapping, command delivery, cancellation/override and restart behavior during parked acceptance. |
 | USB/audio/GPS | Configured radio, controls and GPS serial ports are open as `ttyUSB1`, `ttyUSB0`, and `ttyUSB3`; FT8 capture process is present. Speech selects `CARD=Array`, absent from the current capture listing. | Parked receive-only validation, actual mapping/operation, speech microphone, hub/reSpeaker/DigiRig stability, GPS freshness and FT8 decode remain unverified. |
-| QSO/contact sync | Main DB integrity and foreign keys pass. 355 contacts: 340 synced, 15 failed; all 15 report HTTP 503 with retry counters 766–2,170. Forge sync service is active; 693 FT8 performance records are synced. | Resolve 503 source and end-to-end delivery without deleting/retrying records; inspect protected outbox settings, verify a consistent backup and preserve all QSOs/retry state. |
+| QSO/contact sync | After the 2026-11-15 PR #480 Forge contact-sync deployment, the live AnvilMobile DB passed `integrity_check` with no foreign-key violations: 355 contacts, all 355 synchronized, zero retry rows; latest QSO remains `2026-11-13T09:38:52.594808Z`. Forge `/health` returned `availability=available`. | Confirm the Wavelog `Mobile - Unknown Location` profile has blank grid/city/state and CQ 4 / ITU 8, then verify one ordinary unknown-location contact end to end. Full application release still requires separate gates below. |
 | Installed source vs STAB-07 | Editable production checkout is clean at `ba58b0b2...`; current `main` `91315847...` is 47 commits ahead. Python 3.13.5 and `pip check` clean. | Attest loaded source bytes, native dependency provenance/hashes, protected drop-in and startup readiness; the installed code is not the current tested main candidate. |
 | Native ARM64/provenance | Historical STAB-07K/L evidence leaves two Raspberry Pi-patched archives quarantined pending authenticated signed indexes. | Do not deploy if the candidate requires those untrusted artifacts; validate exact installed/runtime dependency identity first. |
 
@@ -334,23 +334,54 @@ code/schema rollback path are still outstanding.
    state. Refuse rollback that would discard data or bypass an indeterminate
    deployment journal.
 
+## Contact-sync PR #480 deployment follow-up (2026-11-15 18:53–18:55 EST)
+
+The owner deployed merged commit `3cfad7bc20a83a951617b0d45080af0064b85080`
+to the isolated Forge `contact-sync` component with the approved exact-SHA
+wrapper at 18:53 EST. The wrapper reported `DEPLOYMENT SUCCESS`, recorded
+production SHA `3cfad7bc20a83a951617b0d45080af0064b85080`, and created
+`/var/backups/rolling-thunder-forge-deploy/contact-sync-20261115T235326Z-a6c9fa9d87d90ce9dbcfb7b46456563d9fdeeb4f.db`.
+
+The wrapper's immediate health probe could not connect while the service was
+starting. A later read-only check at 18:55:19 EST found the service active and
+`GET http://192.168.9.170:8767/health` returned
+`availability=available`. The initial probe failure was transient; the later
+endpoint check is the health evidence.
+
+A read-only AnvilMobile SQLite check after deployment reported
+`integrity_check=ok`, no foreign-key violations, 355 contacts with all 355
+`synchronized`, zero rows in `contact_sync_retries`, and latest QSO time
+`2026-11-13T09:38:52.594808Z`. This closes the 15-contact 503/retry blocker
+without a manual replay or local contact rewrite. No AnvilMobile application
+deployment or restart occurred.
+
+The owner-provided Wavelog edit screenshot showed CQ 4 / ITU 8, city `Ohio`,
+and grid `EM79XM` for the station labeled `Mobile - Unknown Location`.
+The screenshot does not establish the saved state, and those location values
+need owner verification before an unknown-location acceptance contact. Do not
+treat the 355 successful uploads as proof of that profile's blank-location
+fields.
+
+This resolves the focused Forge contact-sync issue only. It does not resolve
+the separately documented AnvilMobile release gates: the installed Pi deploy
+wrapper lacks a visible transaction mutex, journal and independent UI-readiness
+check; native runtime provenance and receive-only hardware acceptance remain
+incomplete; and installed MeshCore user services remain a separately gated
+cutover.
+
 ## Recommendation and approvals
 
-**Current recommendation: NO GO.** The production checkout and live databases
-are identified and passed read-only integrity checks, and the newest deployment backup now passes read-only integrity/FK checks and
-matches the live contact IDs and reported aggregate QSO state. Fifteen QSOs
-still fail with HTTP 503 despite the normal retry loop; Forge health is green,
-but the exact POST failure source is hidden by the Pi client's generic error. The deployed wrapper hash
-and source are known, but it is untracked in the repository and contains no
-visible mutex, transaction journal, or independent app-readiness check. Its
-separate target-backup directory inventory and environment-dependent data paths
-remain unresolved. Native provenance and physical acceptance are also
-incomplete. The enabled MeshCore collector is retrying against a missing USB
-path and its enabled traffic worker is inactive. MC-REMOVE does not stop or
-uninstall either unit.
+**Current recommendation: NO GO for a full AnvilMobile application release.**
+The focused contact-sync failure is resolved: after the Forge PR #480 deployment,
+all 355 local contacts are synchronized and the retry table is empty. The
+separately inspected AnvilMobile deployment wrapper still has no visible
+transaction mutex, journal, or independent app-readiness check and is not tracked
+in the repository. Native runtime provenance, environment-dependent durable
+store reconciliation, and physical receive-only acceptance remain incomplete.
+The enabled MeshCore collector and traffic-worker units also remain installed;
+MC-REMOVE does not stop or uninstall either unit.
 
-Next approval, when the evidence blockers are resolved: explicit owner approval
-for one parked exact-SHA deployment/restart. Separate approval is still required
-for stopping/removing the installed MeshCore service or deleting its history, and
-for any powered-radio/CAT/PTT/RF procedure. None of those operations occurred in
-this snapshot.
+The PR #480 Forge contact-sync deployment is complete and verified at its exact
+SHA. That approval and evidence do not authorize a full AnvilMobile deployment,
+restart, MeshCore service cutover, or powered-radio/CAT/PTT/RF procedure. Any
+future Pi release remains gated on the separate REL-01 acceptance requirements.
