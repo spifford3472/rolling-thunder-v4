@@ -122,9 +122,10 @@ risk under the scenario, not certainty that it occurred.
    checks, and diff checks pass in CI. Accept only if a blocked fake read prevents
    receiver disconnect, stop reports non-quiescence, and later release allows
    cleanup. Draft PR #481 passes targeted tests and local static/documentation gates; its
-   exact-head CI run #4034 is still in progress. The local full pytest is blocked
-   by unrelated sandbox permission/key failures (see PR #481), so it is not
-   release-ready evidence.
+   exact-head CI run #4034 passed the configured full pytest suite, Ruff, MyPy,
+   and documentation inventory/local-link validation. The local full pytest still
+   has unrelated sandbox permission/key failures (see PR #481); CI is the complete
+   passing suite evidence.
 2. **P1 — stable serial identity preflight.** Add a nonmutating diagnostic that
    records expected USB VID/PID, serial/interface identity and resolved path for
    radio, controls, GPS, and audio; fail closed on missing/duplicate/ambiguous
