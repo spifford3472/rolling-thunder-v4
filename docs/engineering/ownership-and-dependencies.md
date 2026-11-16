@@ -428,9 +428,9 @@ inside the coordinator; no additional receive observer or UI policy is created.
 The bounded hardware transmit executor suppresses adaptive power increases on
 explicit extension periods, independently of the display banner.
 
-## Controller recovery candidate (uncomposed)
+## Controller recovery (opt-in serial_v2; commissioning pending)
 
-`recovering_control_source.py` owns only a future single-owner USB lifecycle/mailbox; `control_session_v2.py` and `control_protocol_v2.py` own strict nonce/sequence/freshness observations. The explicit serial_v2 factory/UI path consumes this worker and its bounded gate; legacy serial remains unchanged. Existing physical-command, voice capture, CAT/PTT and logging owners are unchanged. See `controller-recovery-v2.md`.
+`recovering_control_source.py` owns the serial_v2 single-owner USB lifecycle and bounded mailbox; `control_session_v2.py` and `control_protocol_v2.py` own strict nonce/sequence/freshness observations. The factory and UI already compose this worker and its bounded gate when `physical_controls.transport: serial_v2` is explicitly configured. The default configuration remains mock, and legacy `serial` behavior is unchanged. Source integration does not establish installed Pi configuration or parked hardware commissioning. Existing physical-command, voice capture, CAT/PTT and logging owners are unchanged. See `controller-recovery-v2.md`.
 
 
 Issue246 keeps ownership unchanged: Wavelog adapter normalizes provider history

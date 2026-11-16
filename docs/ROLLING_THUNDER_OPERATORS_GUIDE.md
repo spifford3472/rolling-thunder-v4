@@ -43,15 +43,16 @@ transmission attempts. A software timeout, reconnect, warning dismissal,
 `TX0;` command, or service restart cannot by itself establish physical receive.
 
 The FT8 warning and transmit inhibit are separate. Voice Cancel acknowledges
-the warning but does not itself remove the inhibit. Under the **proposed
-operator-recovery update** (not deployed), after you have safely checked the
-radio, you can explicitly override the current session lockout using physical
-command buttons **1–3–1**, on the FT8 screen after acknowledging the alarm.
-This is **your recovery decision**, not a declaration that the software has
-verified physical receive. A successful CAT `TX0;` response or
-`RadioState.transmitting=False` also cannot establish physical receive.
-The override clears the alarm inhibit but **does not key the transmitter,
-start an FT8 QSO, or override other radio-adapter safety checks**.
+the warning but does not itself remove the inhibit. After you have safely
+checked the radio, you can explicitly override the current-session software
+inhibit using physical command buttons **1–3–1** on the FT8 screen after
+acknowledging the warning with Voice Cancel. This operator recovery is
+implemented in the current source. It is **your recovery
+decision**, not a declaration that the software has verified physical receive.
+A successful CAT `TX0;` response or `RadioState.transmitting=False` also
+cannot establish physical receive. The override clears the alarm inhibit but
+**does not key the transmitter, start an FT8 QSO, or override other
+radio-adapter safety checks**.
 
 If a real alarm fires, stop operating and safely inspect the FT-891's red TX
 indicator. Manually de-key or power down the radio if its state is uncertain;
@@ -60,22 +61,21 @@ explicitly recover using the gesture after resolving the issue. The alarm is
 **session-local**: a dashboard process restart creates a new clear instance,
 per owner policy. Restart is not proof of de-key, so observe radio state and
 exercise care before separately starting an FT8 transmit operation. New
-uncertain-PTT events still trigger a fresh alarm. No unattended RF test is
-authorized, and this new recovery design is not installed by writing this guide.
+uncertain-PTT events still trigger a fresh alarm. No unattended RF test
+is authorized.
 
-## FT8-RX-02 proposed receive-status diagnostics (not installed)
+## FT8-RX-02 read-only receive-status diagnostics
 
 Yaesu provides read-only FT-891 CAT queries for the radio/CAT transmit
-status and TX/RX indicator states. Their strict source-only parser is under
-review; the dashboard does **not** currently issue those queries or use them
-to unlock FT8. The reported indicators come from the radio's firmware and
-cannot independently prove the absence of RF transmission. A real PTT alarm
+status and TX/RX indicator states. The strict source-only parser is present,
+but the dashboard does **not** issue those queries or use them to unlock FT8.
+The reported indicators come from the radio's firmware and cannot
+independently prove the absence of RF transmission. A real PTT alarm
 continues to require safe operator intervention and supervised recovery.
-The operator controls recovery: the session-local alarm intentionally clears
-on a dashboard restart. The proposed separate owner override allows Voice
-Cancel then 1-3-1 on FT8 to clear it without rebooting. Neither recovery
-path proves the radio is in receive; inspect the rig and avoid transmitting
-while physical TX is uncertain. See
+The session-local alarm clears on a dashboard restart. The current source
+also permits an explicit Voice Cancel then 1–3–1 operator override on FT8.
+Neither recovery path proves the radio is in receive; inspect the rig and
+avoid transmitting while physical TX is uncertain. See
 `engineering/ft8-rx02-receive-evidence-and-supervised-recovery.md`.
 
 ## About this guide
