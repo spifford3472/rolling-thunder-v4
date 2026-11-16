@@ -74,7 +74,7 @@ risk under the scenario, not certainty that it occurred.
 
 | Candidate and evidence | Scenario and impact | Likelihood / severity | Status | Deterministic offline regression design |
 | --- | --- | --- | --- | --- |
-| GPS poll cancellation is not a quiescence barrier; runtime unconditionally disconnects afterward. Evidence: `gps_polling.py:79-101`, `threading_scheduler.py:23-31`, `application_runtime.py:1872-1877`, `serial_gps.py:335-354, 360-383`; existing test `test_gps_stop_cancels_future_polls_but_not_a_blocked_inflight_read` explicitly allows the in-flight read to remain. | With a slow/blocked serial read, stop may close the descriptor concurrently with `readline`; error/state corruption and uncertain cleanup. Does not grant radio transmit authority. | Medium / Medium | Confirmed source race; no production occurrence established | Fake receiver blocks `refresh_state` on an event; invoke stop, verify it cannot claim quiescence; runtime fake asserts `disconnect` is not called while read owns the receiver; release the event and verify orderly close. A focused local fix and tests are prepared separately on `fix/gps-poll-shutdown-race` at `2dc53b6`; it is not merged and does not alter current `main`. |
+| GPS poll cancellation is not a quiescence barrier; runtime unconditionally disconnects afterward. Evidence: `gps_polling.py:79-101`, `threading_scheduler.py:23-31`, `application_runtime.py:1872-1877`, `serial_gps.py:335-354, 360-383`; existing test `test_gps_stop_cancels_future_polls_but_not_a_blocked_inflight_read` explicitly allows the in-flight read to remain. | With a slow/blocked serial read, stop may close the descriptor concurrently with `readline`; error/state corruption and uncertain cleanup. Does not grant radio transmit authority. | Medium / Medium | Confirmed source race; no production occurrence established | Fake receiver blocks `refresh_state` on an event; invoke stop, verify it cannot claim quiescence; runtime fake asserts `disconnect` is not called while read owns the receiver; release the event and verify orderly close. A focused fix and tests are prepared separately in draft PR #481, head `22ce4beda77b1766eb48b790dfab5803817676f7`; it is not merged and does not alter current `main`. |
 | Configured serial paths may use volatile tty numbering and there is no identity/duplicate guard. Evidence: `config.py:93-111`; the 2026-11-15 installed-state snapshot observed radio CP2105 ttyUSB1, physical controls CP2102 ttyUSB0, GPS CP2102N ttyUSB3; those are historical only. Operator guides recommend stable by-id paths. | Enumeration order changes or simultaneous adapters can make a configured path absent or resolve to a different device. Startup/read failures are likely; wrong-device binding cannot be excluded by path validation alone. | Medium / High | Plausible | Fake udev/sysfs inventory with reordered tty numbers, stable serial/interface links, absent serial, and duplicate identities; assert preflight rejects ambiguous mapping and selects only exact expected interface. Never open real serial. |
 | Initial GPS connect runs synchronously and can scan 32 sentences, each read using the configured timeout (2s default; max 60s). Evidence: `application_runtime.py:1667-1710`; `gps_polling.py:63-77`; `config.py:75-77`; `serial_gps.py:360-433`. | A slow/intermittent or mixed stream can delay dashboard startup before Tk is built; worst-case configured read budget can be long. No incident evidence establishes that this occurred. | Low to Medium / Medium | Plausible | Fake serial emits delayed unrelated sentences/no supported GGA; assert current startup bound and a future total-deadline/async-start contract. Also test empty reads and eventual valid GGA. No hardware. |
 | Legacy physical-control serial source does not reconnect after read failure, and an open failure is only printed at startup. Evidence: `serial_control_source.py:100-113, 130-180`; `ui_main.py:786-793`. | A controller unplug/re-enumeration leaves physical controls unavailable until app restart; display may not provide ongoing health for this legacy mode. | Medium / Low to Medium | Confirmed behavior; operational defect plausible | Fake serial raises `SerialException` after open; assert port closes, buffer clears, no event dispatch, and status communicates unavailable. For a later reconnect design, simulate path reappearance and ensure no stale queued command replays. |
@@ -104,8 +104,9 @@ risk under the scenario, not certainty that it occurred.
   the later resolution is stated once in the packet.
 - The screenshot supports displayed CQ 4 / ITU 8 and displayed Ohio / EM79XM;
   it does not establish saved city/grid/state values. This remains explicit.
-- PR #478 head `69b0b52` and CI run #4032 were checked before local reconciliation;
-  #478 still needs rebase/update onto current main. #479 remains separate draft;
+- PR #478 draft head `b9413a81d87e849b0b1cacfa9d54f6037bd7f6ee` is based on current
+  main and exact-head CI run #4033 passed the configured documentation inventory,
+  Ruff, MyPy, and pytest gates. #479 remains a separate draft;
   its proposed MeshCore removal is not treated as current or deployed. The
   historical USB assignments are not promoted to current mappings.
 - The FT-891 integration guide’s old ttyUSB2 observation is retained as dated
@@ -120,9 +121,10 @@ risk under the scenario, not certainty that it occurred.
    fix only after exact-head Ruff, strict MyPy, full pytest, inventory/local-link
    checks, and diff checks pass in CI. Accept only if a blocked fake read prevents
    receiver disconnect, stop reports non-quiescence, and later release allows
-   cleanup. The current local fix passes targeted tests and static/documentation
-   gates; its local full pytest is blocked by unrelated sandbox permission/key
-   failures (see PR report), so it is not release-ready evidence.
+   cleanup. Draft PR #481 passes targeted tests and local static/documentation gates; its
+   exact-head CI run #4034 is still in progress. The local full pytest is blocked
+   by unrelated sandbox permission/key failures (see PR #481), so it is not
+   release-ready evidence.
 2. **P1 — stable serial identity preflight.** Add a nonmutating diagnostic that
    records expected USB VID/PID, serial/interface identity and resolved path for
    radio, controls, GPS, and audio; fail closed on missing/duplicate/ambiguous

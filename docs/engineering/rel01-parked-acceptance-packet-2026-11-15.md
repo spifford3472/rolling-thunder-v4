@@ -244,11 +244,10 @@ transaction receipts, not this planning checklist.
   AnvilMobile release NO GO disposition.
 
 - 2026-11-16 repository reconciliation: current merged `main` is
-  `3cfad7bc20a83a951617b0d45080af0064b85080`. PR #478 remains a draft based on
-  its earlier parent and must be updated/rebased before merge review. Its exact
-  head check run #4032 passed the documented inventory/local-link, Ruff, MyPy,
-  and pytest gates at the observed head; that result is not a check of later
-  local documentation edits. PR #479 remains a separate draft; its proposed
+  `3cfad7bc20a83a951617b0d45080af0064b85080`. PR #478 was updated onto current `main` as draft head
+  `b9413a81d87e849b0b1cacfa9d54f6037bd7f6ee`. Exact-head CI run #4033 passed
+  documentation inventory/local-link validation, Ruff, MyPy, and pytest for
+  the updated review state. The PR remains a draft pending review. PR #479 remains a separate draft; its proposed
   MeshCore removal is neither merged nor deployed, and the proposal does not
   stop/uninstall already-installed MeshCore user services or remove their data.
   The 15-contact retry backlog was resolved by the isolated Forge contact-sync
