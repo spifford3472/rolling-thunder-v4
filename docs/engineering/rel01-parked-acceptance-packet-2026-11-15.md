@@ -33,7 +33,7 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
 | Previous production | Current installed source SHA, runtime executable and cgroup, installed unit/drop-in hashes, approved launch witness | Clean editable checkout at `ba58b0b2a3b9b10b73dcdcb1ee046528f79b6d62`, Python 3.13.5, package 4.4.1; current `main` is 47 commits ahead. MainPID 60400 in the system service cgroup. Protected drop-in `60`, runtime loaded-byte witness and independent readiness heartbeat remain unverified. |
 | Host identity | System scope `rolling-thunder.service`, MainPID, one process, runtime heartbeats, current boot ID and monotonic start ticks | Active `Type=simple` service, MainPID 60400, cgroup `/system.slice/rolling-thunder.service`; launcher flock is held. FT8 `arecord` and DMR SSH child are present. `NotifyAccess=none`; `active` is not application readiness. |
 | Deploy path | Root-owned exact `/usr/local/sbin/rolling-thunder-deploy` contents/hash, SSH identity, sudo allowlist, single serialized lock and reconciliation | Wrapper is root-owned mode 0750, SHA-256 `476ecdbdbcc70bcb1025ac1ce97bae1982b98d8842d5e333ea43632378512daf`. It validates exact SHA/clean checkout/remote containment, stops the unit, SQLite-backs up only the primary DB to `/var/backups/rolling-thunder-deploy`, validates integrity, deploys/migrates, then waits 3 seconds and checks systemd active state/SHA. No mutex, transaction journal, or independent readiness check is visible. Target dir exists root:root 0700; the newest listed database backup has now passed read-only validation and matched the observed live contact IDs and aggregate state. Wrapper source is absent from current main; no production action taken. |
-| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. The newest AnvilMobile deployment backup also passed read-only integrity/FK checks and matched all 355 contact IDs and reported aggregate state, though per-retry fields and FT8 outbox IDs/payloads were not compared. Following the 18:53 EST Forge contact-sync deployment of PR #480 (`3cfad7bc20a83a951617b0d45080af0064b85080`), a read-only AnvilMobile check at about 18:55 EST reported schema 22, 355 synchronized contacts, zero retry rows, `integrity_check=ok`, and no foreign-key violations. Latest QSO time remained `2026-11-13T09:38:52.594808Z`. The Forge backup created by that component deploy is `/var/backups/rolling-thunder-forge-deploy/contact-sync-20261115T235326Z-a6c9fa9d87d90ce9dbcfb7b46456563d9fdeeb4f.db`; it is distinct from the Pi QSO database backup. This resolves the observed 15-contact delivery backlog without manual replay or local record edits. The Wavelog fallback profile's saved city/grid/state values were not independently queried; verify the screenshot's `Ohio` city and `EM79XM` grid before accepting a new unknown-location contact. Optional Pi outbox and other durable stores, per-retry history, and a tested code/schema rollback remain outstanding. |
+| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. The newest AnvilMobile deployment backup also passed read-only integrity/FK checks and matched all 355 contact IDs and reported aggregate state, though per-retry fields and FT8 outbox IDs/payloads were not compared. Following the 18:53 EST Forge contact-sync deployment of PR #480 (`3cfad7bc20a83a951617b0d45080af0064b85080`), a read-only AnvilMobile check at about 18:55 EST reported schema 22, 355 synchronized contacts, zero retry rows, `integrity_check=ok`, and no foreign-key violations. Latest QSO time remained `2026-11-13T09:38:52.594808Z`. On the morning of 2026-11-16, the owner reported the field test went well and every contact synchronized without issue; the exact test count/UUIDs and independent post-test DB evidence were not provided. The Forge backup created by that component deploy is `/var/backups/rolling-thunder-forge-deploy/contact-sync-20261115T235326Z-a6c9fa9d87d90ce9dbcfb7b46456563d9fdeeb4f.db`; it is distinct from the Pi QSO database backup. The observed 15-contact backlog is resolved without manual replay or local record edits. The Wavelog fallback profile's saved city/grid/state values remain unverified; the owner-provided screenshot showed city `Ohio` and grid `EM79XM`. Optional Pi outbox and other durable stores, per-retry history, and a tested code/schema rollback remain outstanding. |
 | Rollback | Original exact SHA and dependency compatibility; schema migration direction; wrapper rollback route, protected backup and responsible operator | Not tested against current release |
 | Physical safety | FT-891 red TX indicator, manual safe receive/power-off plan, FT8 alarm inhibit after fault, no unrestricted rekey | Merged #474 disables unverified unlock; a separate owner-directed review restores deliberate in-app 1–3–1 override after acknowledgment, and session restart clears alarm; physical RX remains unverified |
 | USB/GPS/FT8 RX | Actual controller serial, DigiRig/audio capture, GPS freshness, native decoder receive-only and local UI latency | Configured radio CP2105/`ttyUSB1`, physical controls CP2102/`ttyUSB0`, GPS CP2102N/`ttyUSB3` are open by the dashboard process. FT8 capture process and C-Media device are present. Speech selects `CARD=Array`, not listed among capture devices. Operation and receive-only acceptance remain unverified. |
@@ -66,16 +66,16 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
    do not execute or silently treat those as equivalent. If release path
    requires this exact image, STOP until provenance resolved.
 7. The 15-contact backlog is resolved after the approved PR #480 Forge
-   contact-sync deployment: all 355 local contacts report synchronized, the
-   retry table is empty, and the Forge health endpoint is available. No manual
-   replay or local contact rewrite was used. Before the unknown-location field
-   acceptance test, verify the saved Wavelog `Mobile - Unknown Location` profile
-   has CQ 4 / ITU 8 and blank grid/city/state; the owner-provided screenshot
-   showed city `Ohio` and grid `EM79XM`, so those fields still need explicit
-   confirmation. Run one ordinary unknown-location contact and verify its
-   successful Wavelog upload, local synchronized state and unchanged QSO UUID.
-   Recheck Forge service/job state; the successful PSK autoqueue oneshot remains
-   unrelated to this contact-sync result.
+   contact-sync deployment: the 2026-11-15 read-only snapshot showed all 355
+   local contacts synchronized, zero retry rows, and Forge health available.
+   On the morning of 2026-11-16, the owner reported a successful field test and
+   that every contact synchronized without issue. The exact test count/UUIDs,
+   independent post-test DB evidence, and saved Wavelog city/grid/state values
+   were not supplied. The owner-provided profile screenshot showed city `Ohio`
+   and grid `EM79XM`; document whether those values were cleared, together
+   with CQ 4 / ITU 8, before treating unknown-location metadata as verified.
+   The successful PSK autoqueue oneshot remains unrelated to this
+   contact-sync result.
 
 ## Approved deployment sequence (future only)
 
@@ -232,3 +232,10 @@ transaction receipts, not this planning checklist.
   grid/city/state values were not independently read; the owner-provided
   screenshot showed `Ohio` and `EM79XM`, so verify those before field
   acceptance.
+
+- 2026-11-16 morning owner-reported field test: the owner said the test went
+  well and every contact synchronized without issue. Exact test count/UUIDs,
+  independent post-test database output, and whether the Wavelog fallback
+  profile city/grid/state fields were checked were not provided. This confirms
+  reported end-to-end behavior for the test but does not change the full
+  AnvilMobile release NO GO disposition.
