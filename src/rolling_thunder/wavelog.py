@@ -22,6 +22,8 @@ from rolling_thunder.radio_band import RadioBandResolutionError, resolve_radio_b
 
 _JSON_CONTENT_TYPE = "application/json"
 _UNKNOWN_MOBILE_STATION_NAME = "Mobile - Unknown Location"
+_UNKNOWN_MOBILE_STATION_CQ_ZONE = 4
+_UNKNOWN_MOBILE_STATION_ITU_ZONE = 8
 
 
 class WavelogError(Exception):
@@ -68,6 +70,7 @@ class WavelogStationLocation:
     cq: int | None = None
     itu: int | None = None
     state: str = ""
+    city: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -356,6 +359,8 @@ class WavelogClient:
                 "name": _UNKNOWN_MOBILE_STATION_NAME,
                 "callsign": template.callsign,
                 "dxcc": template.dxcc,
+                "cq": _UNKNOWN_MOBILE_STATION_CQ_ZONE,
+                "itu": _UNKNOWN_MOBILE_STATION_ITU_ZONE,
             },
             separators=(",", ":"),
         ).encode("utf-8")
@@ -637,8 +642,9 @@ class WavelogClient:
             or location.name != _UNKNOWN_MOBILE_STATION_NAME
             or location.gridsquare
             or location.state
-            or location.cq is not None
-            or location.itu is not None
+            or location.city
+            or location.cq != _UNKNOWN_MOBILE_STATION_CQ_ZONE
+            or location.itu != _UNKNOWN_MOBILE_STATION_ITU_ZONE
             or location.callsign != template.callsign
             or location.dxcc != template.dxcc
         ):
@@ -686,7 +692,12 @@ class WavelogClient:
         cq = cls._positive_int(item.get("cq"))
         itu = cls._positive_int(item.get("itu"))
         state_raw = item.get("state") or ""
+        city_raw = item.get("city") or ""
         if not isinstance(state_raw, str):
+            raise WavelogResponseError(
+                f"Wavelog {operation} returned invalid station metadata."
+            )
+        if not isinstance(city_raw, str):
             raise WavelogResponseError(
                 f"Wavelog {operation} returned invalid station metadata."
             )
@@ -710,6 +721,7 @@ class WavelogClient:
             cq=cq,
             itu=itu,
             state=state_raw.strip().upper(),
+            city=city_raw.strip(),
         )
 
     @classmethod

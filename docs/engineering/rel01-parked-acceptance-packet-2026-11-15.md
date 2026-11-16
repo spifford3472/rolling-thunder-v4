@@ -1,7 +1,10 @@
 # REL-01 — parked production acceptance packet (prepared; NO GO)
 
 **Preparation baseline:** merged `main`
-`91315847e313d6b3f1e1eaad1f5a2b7dee7659e3` as of 2026-11-15.
+`91315847e313d6b3f1e1eaad1f5a2b7dee7659e3` as of 2026-11-15. A later
+reconciliation recorded current `main` as
+`3cfad7bc20a83a951617b0d45080af0064b85080` (PR #480), and the 2026-11-16
+owner-reported field test; neither changes this packet's full-Pi NO GO verdict.
 **Status:** written and reviewable **only**. No deployment, restart, mutating
 privileged operation, CAT, physical PTT, USB reconfiguration, database copy,
 rollback or RF test has been performed by this packet. Owner-provided
@@ -239,3 +242,17 @@ transaction receipts, not this planning checklist.
   profile city/grid/state fields were checked were not provided. This confirms
   reported end-to-end behavior for the test but does not change the full
   AnvilMobile release NO GO disposition.
+
+- 2026-11-16 repository reconciliation: current merged `main` is
+  `3cfad7bc20a83a951617b0d45080af0064b85080`. PR #478 remains a draft based on
+  its earlier parent and must be updated/rebased before merge review. Its exact
+  head check run #4032 passed the documented inventory/local-link, Ruff, MyPy,
+  and pytest gates at the observed head; that result is not a check of later
+  local documentation edits. PR #479 remains a separate draft; its proposed
+  MeshCore removal is neither merged nor deployed, and the proposal does not
+  stop/uninstall already-installed MeshCore user services or remove their data.
+  The 15-contact retry backlog was resolved by the isolated Forge contact-sync
+  deployment of #480 and the 2026-11-15 read-only Pi database check. The
+  2026-11-16 field test is owner-reported, without count/UUID or independent
+  post-test DB evidence. The screenshot confirmed CQ 4 / ITU 8 and displayed
+  `Ohio` / `EM79XM`; saved Wavelog city/grid/state values remain unverified.
