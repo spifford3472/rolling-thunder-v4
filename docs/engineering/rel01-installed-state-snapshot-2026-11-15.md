@@ -357,10 +357,12 @@ deployment or restart occurred.
 
 The owner-provided Wavelog edit screenshot showed CQ 4 / ITU 8, city `Ohio`,
 and grid `EM79XM` for the station labeled `Mobile - Unknown Location`.
-The screenshot does not establish the saved state, and those location values
-need owner verification before an unknown-location acceptance contact. Do not
-treat the 355 successful uploads as proof of that profile's blank-location
-fields.
+On the morning of 2026-11-16, the owner reported that the field test went well
+and every contact synchronized without issue. This is owner-reported end-to-end
+acceptance for the tested contacts; the exact count/UUIDs and whether the saved
+city/grid/state fields were checked were not provided. Do not infer those
+unreported profile values or treat this result as full AnvilMobile release
+acceptance.
 
 This resolves the focused Forge contact-sync issue only. It does not resolve
 the separately documented AnvilMobile release gates: the installed Pi deploy
@@ -368,6 +370,17 @@ wrapper lacks a visible transaction mutex, journal and independent UI-readiness
 check; native runtime provenance and receive-only hardware acceptance remain
 incomplete; and installed MeshCore user services remain a separately gated
 cutover.
+
+## Owner-reported contact-sync field test (2026-11-16 morning)
+
+The owner reported the morning field test went well and every contact
+synchronized without issue. This confirms the user-observed contact-sync flow
+for the contacts included in that test. No exact contact count, UUID list,
+Wavelog screenshot from the test, or independently captured post-test DB query
+was supplied in this report. Keep the 2026-11-15 read-only database snapshot
+(355/355 synchronized, zero retries) distinct from this later owner-reported
+acceptance. The report does not establish whether city/grid/state were blank
+on the Wavelog fallback profile.
 
 ## Recommendation and approvals
 
