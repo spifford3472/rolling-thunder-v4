@@ -210,6 +210,14 @@ Rolling Thunder uses that shared position for:
 - Forge mobile location;
 - location-aware weather alerts.
 
+When GPS data is missing or the receiver disconnects, the dashboard reports GPS
+error/unavailable state and background polling attempts to reconnect. GPS loss
+does not stop ordinary local logging; records may lack a current grid. During
+shutdown, an in-flight GPS read must finish before the receiver is closed. If it
+does not become idle within the two-second shutdown bound, the application logs
+the failure and leaves the descriptor to process exit; this does not establish
+that the receiver or USB path is healthy after restart.
+
 ## Physical controls
 
 Rolling Thunder maps physical controls into generic operator actions such as:
