@@ -33,11 +33,11 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
 | Previous production | Current installed source SHA, runtime executable and cgroup, installed unit/drop-in hashes, approved launch witness | Clean editable checkout at `ba58b0b2a3b9b10b73dcdcb1ee046528f79b6d62`, Python 3.13.5, package 4.4.1; current `main` is 47 commits ahead. MainPID 60400 in the system service cgroup. Protected drop-in `60`, runtime loaded-byte witness and independent readiness heartbeat remain unverified. |
 | Host identity | System scope `rolling-thunder.service`, MainPID, one process, runtime heartbeats, current boot ID and monotonic start ticks | Active `Type=simple` service, MainPID 60400, cgroup `/system.slice/rolling-thunder.service`; launcher flock is held. FT8 `arecord` and DMR SSH child are present. `NotifyAccess=none`; `active` is not application readiness. |
 | Deploy path | Root-owned exact `/usr/local/sbin/rolling-thunder-deploy` contents/hash, SSH identity, sudo allowlist, single serialized lock and reconciliation | Wrapper is root-owned mode 0750, SHA-256 `476ecdbdbcc70bcb1025ac1ce97bae1982b98d8842d5e333ea43632378512daf`. It validates exact SHA/clean checkout/remote containment, stops the unit, SQLite-backs up only the primary DB to `/var/backups/rolling-thunder-deploy`, validates integrity, deploys/migrates, then waits 3 seconds and checks systemd active state/SHA. No mutex, transaction journal, or independent readiness check is visible. Target dir exists root:root 0700; the newest listed database backup has now passed read-only validation and matched the observed live contact IDs and aggregate state. Wrapper source is absent from current main; no production action taken. |
-| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. A 2026-11-15 read-only comparison verified the newest deployment backup (timestamp 2026-11-14 01:06:36Z): both DBs pass integrity/FK checks and match schema 22, 355 contacts and all contact IDs, sync counts, 15 retry rows, 693 synchronized FT8 outbox rows, and latest QSO timestamp. Per-retry field values and FT8 outbox IDs/payloads were not compared. At 16:43 and 16:48 EST, Forge logged 15 `/contacts` POSTs returning HTTP 503 while `/health` returned HTTP 200. The Forge ledger passed integrity and contained 349 synchronized/imported rows with no pending entries. A grouped read-only Pi query showed all 15 failed contacts lack grid/state/CQ/ITU routing metadata, so source routes them to `Mobile - Unknown Location` before claiming the contact UUID. A read-only query confirmed no Forge binding row exists for that fallback profile; its Wavelog existence, visibility, compatibility, and `KI5VNB Main` membership remain unchecked. The Pi client discards the Forge 503 body. After the owner-reported station addition, three `/health` checks at 17:19–17:20 EST returned unavailable because the configured legacy station `Mobile` could not be found. The exact station added and the reason `Mobile` is now absent are not yet known. Wrapper backup targets only the main DB; optional outbox path and its data remain to be reconciled. |
+| QSO persistence | Live schema/counts, retry/outbox state, read-only integrity/FKs, verified consistent protected SQLite backup and rollback | At 09:29–09:33 EST, the live DB had schema metadata 22, 355 contacts (340 synced, 15 failed), 15 retry rows, and 693 synchronized FT8 outbox records; `integrity_check=ok` and zero FK violations. The newest AnvilMobile deployment backup also passed read-only integrity/FK checks and matched all 355 contact IDs and reported aggregate state, though per-retry fields and FT8 outbox IDs/payloads were not compared. Following the 18:53 EST Forge contact-sync deployment of PR #480 (`3cfad7bc20a83a951617b0d45080af0064b85080`), a read-only AnvilMobile check at about 18:55 EST reported schema 22, 355 synchronized contacts, zero retry rows, `integrity_check=ok`, and no foreign-key violations. Latest QSO time remained `2026-11-13T09:38:52.594808Z`. The Forge backup created by that component deploy is `/var/backups/rolling-thunder-forge-deploy/contact-sync-20261115T235326Z-a6c9fa9d87d90ce9dbcfb7b46456563d9fdeeb4f.db`; it is distinct from the Pi QSO database backup. This resolves the observed 15-contact delivery backlog without manual replay or local record edits. The Wavelog fallback profile's saved city/grid/state values were not independently queried; verify the screenshot's `Ohio` city and `EM79XM` grid before accepting a new unknown-location contact. Optional Pi outbox and other durable stores, per-retry history, and a tested code/schema rollback remain outstanding. |
 | Rollback | Original exact SHA and dependency compatibility; schema migration direction; wrapper rollback route, protected backup and responsible operator | Not tested against current release |
 | Physical safety | FT-891 red TX indicator, manual safe receive/power-off plan, FT8 alarm inhibit after fault, no unrestricted rekey | Merged #474 disables unverified unlock; a separate owner-directed review restores deliberate in-app 1–3–1 override after acknowledgment, and session restart clears alarm; physical RX remains unverified |
 | USB/GPS/FT8 RX | Actual controller serial, DigiRig/audio capture, GPS freshness, native decoder receive-only and local UI latency | Configured radio CP2105/`ttyUSB1`, physical controls CP2102/`ttyUSB0`, GPS CP2102N/`ttyUSB3` are open by the dashboard process. FT8 capture process and C-Media device are present. Speech selects `CARD=Array`, not listed among capture devices. Operation and receive-only acceptance remain unverified. |
-| Forge continuity | Read-only status for existing spots, weather, Wavelog/contact sync, PSK autoqueue timer/oneshot | Forge contact-sync is active, but 15 local contacts currently have HTTP 503 failures and are scheduled for retry; the last-24-hour unit journal query returned no entries. PSK autoqueue oneshot at 08:04 succeeded, which does not establish contact delivery. |
+| Forge continuity | Read-only status for existing spots, weather, Wavelog/contact sync, PSK autoqueue timer/oneshot | At 18:55 EST after PR #480, Forge contact-sync was active and `GET http://192.168.9.170:8767/health` returned `availability=available`; AnvilMobile reported all 355 contacts synchronized and zero retry rows. An immediate probe during service startup had failed to connect and was followed by the successful health check. The earlier 08:04 PSK autoqueue oneshot is separate and does not establish contact delivery. |
 
 ## Parked preflight — no mutation until separately authorized
 
@@ -65,17 +65,17 @@ The read-only AnvilMobile and Forge evidence from 2026-11-15 is recorded in [`re
    remain quarantined pending authenticated historic signed package indexes;
    do not execute or silently treat those as equivalent. If release path
    requires this exact image, STOP until provenance resolved.
-7. Correlate the 15 failed Pi contact UUIDs with the Forge ledger and
-   inspect the Wavelog `Mobile - Unknown Location` profile, the configured
-   legacy `Mobile` profile, and both profiles' `KI5VNB Main` membership read-only.
-   Forge has no durable binding row for the fallback profile. The health endpoint
-   now reports the legacy `Mobile` profile missing, so restore/verify the exact
-   configured target before any retry diagnosis. Determine whether fallback
-   station resolution/creation/linking or Forge binding storage is failing.
-   Fix only the confirmed cause, then let normal idempotent retries run and
-   verify all 15 contacts synchronize without rewriting local state or manually
-   replaying QSOs. Recheck Forge service/job state; the successful PSK autoqueue
-   oneshot is not end-to-end QSO delivery evidence.
+7. The 15-contact backlog is resolved after the approved PR #480 Forge
+   contact-sync deployment: all 355 local contacts report synchronized, the
+   retry table is empty, and the Forge health endpoint is available. No manual
+   replay or local contact rewrite was used. Before the unknown-location field
+   acceptance test, verify the saved Wavelog `Mobile - Unknown Location` profile
+   has CQ 4 / ITU 8 and blank grid/city/state; the owner-provided screenshot
+   showed city `Ohio` and grid `EM79XM`, so those fields still need explicit
+   confirmation. Run one ordinary unknown-location contact and verify its
+   successful Wavelog upload, local synchronized state and unchanged QSO UUID.
+   Recheck Forge service/job state; the successful PSK autoqueue oneshot remains
+   unrelated to this contact-sync result.
 
 ## Approved deployment sequence (future only)
 
@@ -141,14 +141,15 @@ plan, appropriate antenna/dummy load, safety observer and hard abort.
 | One managed UI process and working controls | Not field-tested | NO GO |
 | GPS, Digirig, FT8 receive-only | Not field-tested | NO GO |
 | CAT/PTT/physical receive | Separate authorization not obtained | NO GO |
-| Release disposition | No deployment authorized or executed | **NO GO** |
+| Release disposition | No AnvilMobile application deployment/restart authorized or executed; the separately approved Forge contact-sync component deployment for PR #480 completed and passed its health/data checks | **NO GO for full AnvilMobile release** |
 
 ## Change control
 
-This packet changes documentation only. Owner-provided privileged commands
-read unit/drop-in/wrapper state and path metadata; no services, deploy wrappers,
-Pi, Forge, 192.168.9.0/24, 192.168.10.0/24, OPNsense, credentials or radio
-configurations were modified. A future change affecting the listed network
+This packet is a documentation-only record. It now records the owner-approved
+PR #480 exact-SHA deployment to the Forge contact-sync service. The installed
+AnvilMobile service/wrapper, Pi runtime, durable QSO database, MeshCore units,
+network configuration, OPNsense, credentials and radio configuration were not
+changed by that deployment. A future change affecting the listed network
 infrastructure must be committed in the private
 `spifford3472/ki5vnb-qth-infrastructure` repository with paths, jobs,
 validation, rollback and change history. Roll back this document by reverting
@@ -213,3 +214,21 @@ transaction receipts, not this planning checklist.
   `Mobile` could not be found. The exact station added and the reason the
   legacy profile is missing remain unknown. No further Wavelog or Rolling
   Thunder production changes were made during this inspection.
+
+- 2026-11-15 18:53–18:55 EST follow-up: PR #480 commit
+  `3cfad7bc20a83a951617b0d45080af0064b85080` was deployed to the isolated
+  Forge `contact-sync` component with the exact-SHA wrapper. The wrapper reported
+  deployment success and created
+  `/var/backups/rolling-thunder-forge-deploy/contact-sync-20261115T235326Z-a6c9fa9d87d90ce9dbcfb7b46456563d9fdeeb4f.db`.
+  The first health probe ran during startup and could not connect; a later
+  read-only check at 18:55:19 EST confirmed the service active and health
+  `availability=available`. A read-only AnvilMobile DB check then reported
+  schema 22, 355 contacts all synchronized, zero retry rows,
+  `integrity_check=ok`, no foreign-key violations, and unchanged latest QSO
+  time `2026-11-13T09:38:52.594808Z`. No AnvilMobile app deployment/restart,
+  manual retry/replay, or QSO rewrite occurred. Full AnvilMobile release remains
+  NO GO under the independent wrapper, provenance, backup/rollback, and
+  receive-only acceptance gates. The unknown-location Wavelog profile's saved
+  grid/city/state values were not independently read; the owner-provided
+  screenshot showed `Ohio` and `EM79XM`, so verify those before field
+  acceptance.
