@@ -171,9 +171,9 @@
     "debian_trixie_stable": "abced156a22aa8683b228299ac35c1ea51515eef900cec0e562f56716dfe3915",
     "raspberrypi_archive": "3a29901549ae65a910de13a32551e6eea7f45ba1fd70f0cb67e5c70d98488071"
   },
-  "source_observation": "deploy/locks/stab07j-anvilmobile-native-observed.json",
+  "source_observation": "operator-collected Pi observation; raw host sample withheld from this public repository",
   "target_arch": "aarch64",
-  "target_host": "anvilmobile",
+  "target_host": "Raspberry Pi OS ARM64",
   "unresolved_exact_historical_package_count": 2,
   "verified_current_exact_archive_count": 6,
   "verified_exact_archive_count": 14

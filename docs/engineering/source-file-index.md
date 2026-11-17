@@ -615,7 +615,7 @@ has been changed by this inventory correction.
 ### STAB-07J read-only Pi native provenance comparator
 
 - `deploy/rolling-thunder-native-runtime-compare.py` — strict offline SHA256 and Debian package revision comparison of bounded Pi observations to private ARM64 sysroot; refusal on mismatch, no production attestation authority.
-- `deploy/locks/stab07j-anvilmobile-native-observed.json` — 52 read-only Pi native-file SHA256 observations, 16 package version samples and explicitly untrusted/nonproduction flags.
+- The exact STAB-07J production native-file observation is withheld from this public repository; synthetic fixtures in `tests/test_stab07j_native_runtime_compare.py` exercise the comparator.
 
 ### STAB-07K signed historical ARM64 APT archive chain
 
