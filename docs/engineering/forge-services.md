@@ -96,7 +96,9 @@ Responsibilities:
 - enforce idempotency keyed by stable contact UUID;
 - resolve, verify, and when necessary safely create the exact approved Wavelog
   dynamic mobile station from immutable QSO-local routing fields;
-- route incomplete location data to verified `Mobile - Unknown Location` and preserve configured-logbook membership;
+- route incomplete location data to verified `Mobile - Unknown Location`, with no
+  grid/city/state and the Wavelog-required CQ 4 / ITU 8 profile defaults, while
+  preserving configured-logbook membership;
 - convert the normalized contact into deterministic Wavelog-bound data;
 - preserve uncertain outcomes safely;
 - publish health independently of Pi local logging success.

@@ -133,12 +133,16 @@ Thunder is safe to reuse after a failed link or Forge restart because its verifi
 binding was committed before the link attempt. This guarantee does not extend to an
 arbitrary hidden external station that produced an ID-less `409`. If frozen routing
 data is insufficient, Forge resolves or creates the exact `Mobile - Unknown Location`
-profile, verifies that it carries no grid/state/CQ/ITU metadata, binds it durably, and
-links it to the configured logbook. The legacy `Mobile` profile remains the verified
-template for callsign/DXCC and health checks, not the locationless QSO target. Dynamic
-profiles are never patched to a six-character QSO grid. The legacy alignment helper
-also uses only derived grid4, so neither legacy nor dynamic profiles chase moving
-six-character subsquares.
+profile, verifies that it carries no grid, city, or state, and verifies the required
+CQ Zone 4 / ITU Zone 8 fallback values. Wavelog requires CQ and ITU zones on every
+station location; these explicit values satisfy that profile requirement without
+inventing a grid or state for the contact. The values are profile-level defaults and
+do not change the immutable contact's missing location fields. Forge binds the
+verified profile durably and links it to the configured logbook. The legacy `Mobile`
+profile remains the verified template for callsign/DXCC and health checks, not the
+locationless QSO target. Dynamic profiles are never patched to a six-character QSO
+grid. The legacy alignment helper also uses only derived grid4, so neither legacy
+nor dynamic profiles chase moving six-character subsquares.
 
 Wavelog 3.2.3 parses the submitted full `MY_GRIDSQUARE`, but its import path then
 unconditionally replaces `COL_MY_GRIDSQUARE` with the selected station profile's
@@ -530,7 +534,8 @@ CI/mocks are necessary but not sufficient. Before merge, acceptance must use:
 7. one safe offline/retry case;
 8. repeated manual/retry verification that only one Wavelog QSO exists;
 9. one locationless/historical contact confirming `Mobile - Unknown Location`
-   routing with no fabricated grid/state/CQ/ITU metadata;
+   routing with no fabricated grid/city/state, and the required CQ 4 / ITU 8
+   profile-level fallback values;
 10. capture confirming Rolling Thunder submits the full frozen `MY_GRIDSQUARE` and
     expected ADIF `NOTES`, while the dynamic profile and Wavelog 3.2.3 stored QSO
     retain grid4 because of the documented provider overwrite.

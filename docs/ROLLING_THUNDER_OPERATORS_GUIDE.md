@@ -210,6 +210,14 @@ Rolling Thunder uses that shared position for:
 - Forge mobile location;
 - location-aware weather alerts.
 
+When GPS data is missing or the receiver disconnects, the dashboard reports GPS
+error/unavailable state and background polling attempts to reconnect. GPS loss
+does not stop ordinary local logging; records may lack a current grid. During
+shutdown, an in-flight GPS read must finish before the receiver is closed. If it
+does not become idle within the two-second shutdown bound, the application logs
+the failure and leaves the descriptor to process exit; this does not establish
+that the receiver or USB path is healthy after restart.
+
 ## Physical controls
 
 Rolling Thunder maps physical controls into generic operator actions such as:
@@ -1206,10 +1214,12 @@ For a contact with complete frozen mobile grid/state/zone context, Forge routes 
 QSO to a verified Wavelog Station Location named `Mobile - XXXX - YY` (for example,
 `Mobile - EM79 - OH`) inside the configured station logbook. A contact without a
 trusted frozen mobile location is routed to `Mobile - Unknown Location`, which has
-no fabricated grid/state/CQ/ITU metadata. This routing uses the location captured
-with the contact; a later vehicle position cannot redirect a retry. Grid-based
-dynamic Station Locations keep a four-character grid, while the QSO keeps its full
-captured grid when available.
+no grid, city, or state. Wavelog requires CQ and ITU zones on every station location,
+so this fallback profile uses CQ Zone 4 and ITU Zone 8. These are profile-level
+defaults; the contact's missing location fields remain missing. This routing uses
+the location captured with the contact; a later vehicle position cannot redirect a
+retry. Grid-based dynamic Station Locations keep a four-character grid, while the
+QSO keeps its full captured grid when available.
 
 The full local QSO grid is the sole Rolling Thunder grid identity; the four-character
 station profile grid is derived from it. Rolling Thunder submits the full grid in ADIF,

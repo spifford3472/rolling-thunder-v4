@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from threading import Lock
 
 from rolling_thunder.gps import (
     GPSConnectionState,
@@ -31,16 +32,20 @@ class GPSPollingService:
         *,
         interval_s: float = 1.0,
         clock: Clock = _utc_now,
+        stop_wait_timeout_s: float = 2.0,
     ) -> None:
         if interval_s <= 0:
             raise ValueError("GPS polling interval must be positive.")
+        if stop_wait_timeout_s <= 0:
+            raise ValueError("GPS polling stop timeout must be positive.")
 
         self._gps = gps
         self._scheduler = scheduler
         self._interval_s = interval_s
         self._clock = clock
+        self._stop_wait_timeout_s = stop_wait_timeout_s
         self._scheduled_poll: ScheduledPoll | None = None
-        self._refreshing = False
+        self._operation_lock = Lock()
         self._latest_state = gps.get_state()
         self._listeners: tuple[GPSStateListener, ...] = ()
 
@@ -82,14 +87,21 @@ class GPSPollingService:
         self._scheduled_poll = None
         if scheduled_poll is not None:
             scheduled_poll.cancel()
+        if not self._operation_lock.acquire(timeout=self._stop_wait_timeout_s):
+            raise RuntimeError(
+                "GPS polling did not become idle before shutdown; "
+                "receiver disconnect was withheld"
+            )
+        self._operation_lock.release()
         return self._latest_state
 
     def _poll_once(self) -> None:
-        if not self.is_running or self._refreshing:
+        if not self.is_running or not self._operation_lock.acquire(blocking=False):
             return
 
-        self._refreshing = True
         try:
+            if not self.is_running:
+                return
             if self._latest_state.connection_state is GPSConnectionState.CONNECTED:
                 state = self._gps.refresh_state()
             else:
@@ -98,7 +110,7 @@ class GPSPollingService:
         except GPSError as error:
             self._publish(self._error_state(error))
         finally:
-            self._refreshing = False
+            self._operation_lock.release()
 
     def _publish(self, state: GPSState) -> None:
         """Publish one immutable state and isolate optional observer failures."""

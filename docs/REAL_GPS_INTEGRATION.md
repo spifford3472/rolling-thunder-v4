@@ -16,6 +16,11 @@ Live testing on `anvilmobile` identified this stable serial path:
 
 The path resolves to `/dev/ttyUSB3` in the tested installation. Configuration
 must use the stable `/dev/serial/by-id` link rather than the transient tty number.
+This is a historical installation observation, not a current mapping guarantee.
+The 2026-11-15 read-only installed-state inspection also recorded the configured
+GPS adapter at `/dev/ttyUSB3`.
+The configuration model currently requires an absolute path but does not enforce
+that it is a `/dev/serial/by-id` selector.
 
 Observed serial settings and stream characteristics:
 
@@ -60,6 +65,13 @@ state. GPS polling continues and attempts reconnection. Physical read failures
 close the failed serial handle so the stable by-id path can be reopened after the
 receiver is reattached.
 
+GPS polling and disconnect share one operation boundary. Runtime shutdown cancels
+future poll callbacks and waits up to two seconds for an in-flight GPS operation. If a
+poll does not become idle within that bound, shutdown reports the failure and
+does not close the serial handle underneath the active read; process exit releases
+the descriptor. This is a bounded safety refusal, not proof that GPS shutdown
+completed normally.
+
 GPS failure does not prevent the application runtime, mock radio, local contact
 logging, or other local services from starting.
 
@@ -95,5 +107,7 @@ Before merge, validate on `anvilmobile` with the FT-891 still mocked:
 7. Confirm GPS returns to READY without restarting the application.
 8. Confirm no FT-891 CAT device was opened or commanded during the test.
 
-The pull request remains draft until this hardware behavior is observed and
-approved by the repository owner.
+This hardware procedure remains a separate acceptance gate. Passing offline
+tests or merging the implementation does not prove the installed Pi's GPS,
+USB path, or coordinates are healthy. The current full-device release gates are
+tracked in [`engineering/rel01-parked-acceptance-packet-2026-11-15.md`](engineering/rel01-parked-acceptance-packet-2026-11-15.md).

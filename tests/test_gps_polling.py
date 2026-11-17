@@ -1,6 +1,7 @@
 """Tests for deterministic automatic GPS polling."""
 
 from datetime import UTC, datetime
+from threading import Event
 
 import pytest
 
@@ -13,6 +14,7 @@ from rolling_thunder.gps import (
 )
 from rolling_thunder.gps_polling import GPSPollingService
 from rolling_thunder.radio_polling import PollCallback
+from rolling_thunder.threading_scheduler import ThreadingPollScheduler
 
 
 class ManualScheduledPoll:
@@ -123,6 +125,35 @@ def test_start_schedules_configured_interval() -> None:
     assert service.is_running is True
     assert scheduler.interval_s == 0.5
     assert gps.connect_count == 0
+
+
+def test_stop_reports_when_a_poll_does_not_quiesce_before_its_deadline() -> None:
+    gps = ScriptedGPSReceiver()
+    entered = Event()
+    unblock = Event()
+
+    def blocked_refresh() -> None:
+        entered.set()
+        assert unblock.wait(timeout=3.0)
+
+    gps.during_refresh = blocked_refresh
+    service = GPSPollingService(
+        gps,
+        ThreadingPollScheduler(),
+        interval_s=0.01,
+        stop_wait_timeout_s=0.05,
+    )
+    service.start()
+    try:
+        assert entered.wait(timeout=1.0)
+        with pytest.raises(RuntimeError, match="did not become idle"):
+            service.stop()
+        assert not service.is_running
+    finally:
+        unblock.set()
+
+    # A later cleanup attempt is safe after the in-flight adapter call exits.
+    service.stop()
 
 
 def test_start_connects_disconnected_receiver() -> None:
