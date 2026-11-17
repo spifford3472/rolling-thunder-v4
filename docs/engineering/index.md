@@ -21,6 +21,7 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `pr-reconciliation-2026-11-15.md` — 20 historical open-draft PR dispositions and supersession evidence, without changing their GitHub state.
 - `rel01-parked-acceptance-packet-2026-11-15.md` — current exact-main parked release readiness, separate RF approval, data-preserving rollback and unexecuted NO GO record.
+- `rel01-installed-state-snapshot-2026-11-15.md` — read-only AnvilMobile/Forge installed-state observation, evidence limits, acceptance matrix, and separately gated rollback/cutover plan.
 
 - `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
 
@@ -64,6 +65,7 @@ MeshCore design, incident, and acceptance records remain historical evidence. Th
 - `stab06c-deployment-transaction-lock.md` — offline deployment transaction guard contract, tests and remaining production integration/readiness gates.
 
 - `usb-ft8-incident-2026-11-13.md` — observed USB topology, FT8 audio failure timeline, temporary observer, validation and rollback; cause unresolved.
+- `usb-reliability-audit-2026-11-16.md` — source-backed device lifecycle, USB failure-path audit, evidence levels, offline regression designs, and prioritized gates.
 - `issue-410-supervision-reconciliation.md` — system versus user systemd discrepancy, actual dashboard ownership, unverified wrapper and shutdown gates.
 - `production-inventory-2026-11-13.md` — dated read-only Pi/Forge service and timer inventory, PSK autoqueue failure, and documentation follow-ups.
 

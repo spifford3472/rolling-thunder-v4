@@ -50,6 +50,15 @@ The transient `/dev/ttyUSB*` numbers are diagnostic observations only. They may
 change after reconnects or other USB enumeration changes; configuration must use
 the stable `/dev/serial/by-id` path.
 
+These tty values are dated observations, not a current device check. A later
+read-only AnvilMobile inspection on 2026-11-15 reported the CP2105 radio on
+`/dev/ttyUSB1`, the physical-controls CP2102 serial 0001 on `/dev/ttyUSB0`, and
+the GPS CP2102N serial `a67ea6d582f4ef11804abf1b6d9880ab` on `/dev/ttyUSB3`.
+That historical inspection does not establish present enumeration, the running
+application's selected descriptors, or successful hardware operation. Keep the
+stable by-id configuration above and revalidate identity during any separately
+approved parked hardware acceptance.
+
 ## Verified Serial Settings
 
 The installed radio responded successfully with:
