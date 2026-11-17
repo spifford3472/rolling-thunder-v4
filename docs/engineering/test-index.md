@@ -641,7 +641,7 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 ### STAB-06F recovery acceptance tests (offline, no radio)
 
 - `tests/test_recovery_inspector.py`: database/WAL, full backup QSO row preservation (not just counts), journal, legacy heartbeat and no-write evidence behavior.
-- `tests/test_recovery_process_identity.py`: system manager PID, cgroup and singleton identity with fake procfs.
+- `tests/test_recovery_process_identity.py`: system manager PID, cgroup and singleton identity with fake procfs, including boot ID and process start ticks.
 - `tests/test_recovery_reconciliation.py`: root-only approval receipt, exact evidence binding, expiry, serialization and replay denial.
 - `tests/test_recovery_failure_injection.py`: SIGKILL, failed file/directory fsync, failed rename and corrupt journal refusal.
 - `tests/test_deployment_transaction_journal.py`: archive retention, collision refusal and terminal reconciled transaction.
@@ -709,13 +709,14 @@ has been changed by this inventory correction.
 
 ### STAB-07B security and privileged evidence (offline only)
 
-- `tests/test_recovery_reconciliation.py` now verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals.
+- `tests/test_recovery_reconciliation.py` verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals; a signed receipt cannot bypass missing protected-release/process identity.
 - `tests/test_stab07_privileged_evidence.py` tests wrapper/snapshot hash identity, all protected-file hashes, and secret-free directive-name reporting with temporary files. No installed root files or RF are tested.
 
 ### STAB-07C running-code release identity (offline)
 
-- `tests/test_runtime_release_identity.py` — private fake release/procfs manifest, source-file inventory, path and process identity, untrusted-code refusal and explicit no-in-memory-proof semantics.
-- `tests/test_recovery_reconciliation.py` — signed approvals cannot bypass an unverified loaded Python code identity; transactions remain blocked.
+- `tests/test_runtime_release_identity.py` — private fake release/procfs manifest, executable/command path, PID/boot/start-tick and Tk-heartbeat binding, mismatched evidence refusal, and explicit no-in-memory-proof semantics.
+- `tests/test_ui_deployment_readiness.py` — Tk-loop freshness and supervised process-instance binding, including PID reuse/start-time and boot mismatch.
+- `tests/test_recovery_reconciliation.py` — signed approvals cannot bypass an unverified protected release/process identity; transactions remain blocked.
 
 ### STAB-07D protected release and launch provenance (offline)
 

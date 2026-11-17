@@ -97,7 +97,7 @@ selected exact SHA. This procedure does not authorize a transmit test.
 | Check | Result | Evidence required |
 | --- | --- | --- |
 | Parked state, radio powered off, MeshCore removed | Owner confirmed | 2026-11-17 owner statement; no receive acceptance implied |
-| Exact installed source/runtime identity | Not established | Process-bound release identity and readiness evidence |
+| Exact installed source/runtime identity | Not established | Current Pi uses a mutable checkout; the new protected-release/process verifier is source-only and requires a root-owned exact-SHA release plus a matching PID/boot/start-tick Tk heartbeat |
 | One system-managed dashboard and effective protected configuration | Partial | Current read-only service state seen; installed identity/configuration reconciliation remains required |
 | Unique radio/controller/GPS/audio mapping | Partial | Interfaces enumerate; physical function-to-device mapping not confirmed |
 | Fresh GPS fix and visible loss/recovery behavior | Not tested | Live timestamped fix and safe observed recovery |

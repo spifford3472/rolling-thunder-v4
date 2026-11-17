@@ -58,6 +58,18 @@ def _private_file(path: Path) -> bool:
         return False
 
 
+def _process_start_ticks(path: Path) -> int:
+    """Read Linux process start time without splitting the comm field."""
+    raw = path.read_bytes()
+    closing = raw.rfind(b") ")
+    if closing < 0:
+        raise ValueError("malformed process stat")
+    fields = raw[closing + 2 :].split()
+    if len(fields) < 20:
+        raise ValueError("incomplete process stat")
+    return int(fields[19])
+
+
 def database_evidence(path: Path) -> dict[str, Any]:
     """Inspect SQLite using mode=ro; never initiate migrations or backups."""
     result: dict[str, Any] = {"path": str(path), "integrity": "unknown", "schema": "unknown"}
@@ -152,7 +164,9 @@ def backup_contacts_preserved(current: Path, backup: Path) -> bool:
         return False
 
 
-def _service_evidence(*, proc: Path, expected_user: str) -> dict[str, Any]:
+def _service_evidence(
+    *, proc: Path, expected_user: str, heartbeat_path: Path | None = None
+) -> dict[str, Any]:
     """Verify exact system-manager MainPID, user, cgroup and process identity."""
     result: dict[str, Any] = {"state": "unverified", "responsiveness": "unverified"}
     try:
@@ -212,24 +226,72 @@ def _service_evidence(*, proc: Path, expected_user: str) -> dict[str, Any]:
         result["state"] = "single_expected_service_process"
         # A previous release can legitimately lack the new Tk marker. The
         # correct label is unverified, not healthy, and cannot authorize resume.
-        marker = Path(f"/run/user/{uid}/rolling-thunder-ui-readiness.json")
+        marker = heartbeat_path or Path(f"/run/user/{uid}/rolling-thunder-ui-readiness.json")
         try:
             info = marker.lstat()
             payload = json.loads(marker.read_text(encoding="utf-8"))
             age = time.time() - float(payload["time"])
+            start_ticks = _process_start_ticks(member / "stat")
+            current_boot_id = (proc / "sys/kernel/random/boot_id").read_text(
+                encoding="ascii"
+            ).strip()
             if (
                 stat.S_ISREG(info.st_mode)
                 and info.st_uid == uid
                 and info.st_mode & 0o077 == 0
-                and info.st_size <= 128
+                and info.st_size <= 256
                 and type(payload["pid"]) is int
                 and payload["pid"] == pid
+                and type(payload.get("start_ticks")) is int
+                and payload["start_ticks"] == start_ticks
+                and payload.get("boot_id") == current_boot_id
                 and 0 <= age <= 5
             ):
                 result["responsiveness"] = "tk_heartbeat_fresh"
+                result["start_ticks"] = start_ticks
+                result["boot_id"] = current_boot_id
         except (OSError, ValueError, TypeError, KeyError):
             pass
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        pass
+    return result
+
+
+def _runtime_code_identity(
+    *, proc: Path, service: dict[str, Any], expected_user: str
+) -> dict[str, Any]:
+    """Verify protected release bytes, exact exec path and process-bound Tk tick."""
+    result: dict[str, Any] = {
+        "loaded_python_bytes_independently_proven": False,
+        "protected_release_process_identity_verified": False,
+        "state": "unverified_mutable_or_unattested_runtime",
+    }
+    if (
+        service.get("state") != "single_expected_service_process"
+        or service.get("responsiveness") != "tk_heartbeat_fresh"
+    ):
+        return result
+    try:
+        helper = Path(__file__).with_name("rolling-thunder-runtime-identity.py")
+        spec = importlib.util.spec_from_file_location("rt_runtime_identity", helper)
+        if spec is None or spec.loader is None:
+            return result
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        pid = int(service["pid"])
+        process = proc / str(pid)
+        release = process.joinpath("cwd").resolve(strict=True)
+        sha = release.name
+        uid = pwd.getpwnam(expected_user).pw_uid
+        result = module.inspect(
+            artifact=release,
+            expected_sha=sha,
+            proc_root=proc,
+            trusted_uid=0,
+            operator_user=expected_user,
+            heartbeat_path=Path(f"/run/user/{uid}/rolling-thunder-ui-readiness.json"),
+        )
+    except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
         pass
     return result
 
@@ -254,6 +316,7 @@ def inspect(
         "radio_ptt_state": "not_independently_verified",
         "runtime_code_identity": {
             "loaded_python_bytes_independently_proven": False,
+            "protected_release_process_identity_verified": False,
             "state": "unverified_mutable_or_unattested_runtime",
         },
     }
@@ -273,6 +336,9 @@ def inspect(
     except (OSError, subprocess.SubprocessError):
         pass
     evidence["service"] = _service_evidence(proc=proc, expected_user=expected_user)
+    evidence["runtime_code_identity"] = _runtime_code_identity(
+        proc=proc, service=evidence["service"], expected_user=expected_user
+    )
     evidence["database"] = database_evidence(db_path)
     record = evidence["journal"]
     if isinstance(record, dict):

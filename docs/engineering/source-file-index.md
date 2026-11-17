@@ -536,8 +536,8 @@ retain structured metadata instead of generating ordinary QSO notes.
 
 ### STAB-06D candidate source
 
-- src/rolling_thunder/ui_readiness.py: Tk-loop heartbeat only.
-- src/rolling_thunder/deployment_readiness.py: read-only service and UI readiness check.
+- src/rolling_thunder/ui_readiness.py: private Tk-loop heartbeat with process-instance identity (PID, boot ID, start ticks) and release SHA when launched from a SHA release.
+- src/rolling_thunder/deployment_readiness.py: read-only system-service, process-instance and Tk readiness check.
 - deploy/rolling-thunder-deploy.candidate: nonexecutable inspected-wrapper derivative.
 
 ### STAB-06E offline privileged deployment journal
@@ -547,7 +547,7 @@ retain structured metadata instead of generating ordinary QSO notes.
 
 ### STAB-06F offline recovery components
 
-- `deploy/rolling-thunder-recovery-inspect.py`: separate read-only systemd, Git, journal, SQLite and backup evidence collector.
+- `deploy/rolling-thunder-recovery-inspect.py`: separate read-only systemd, protected-release/process identity, Git, journal, SQLite and backup evidence collector.
 - `deploy/rolling-thunder-reconcile.py`: stable privileged candidate for explicit approval-bounded attestation only; no service, Git or DB mutation.
 - `deploy/rolling-thunder-deployment-journal.py`: preserves prior committed or reconciled records in a private history file before new transactions.
 - `deploy/diagnostics/rt-stab07-readonly-evidence.py`: owner-run, read-only hashes and directive-name inventory for the installed root wrapper, base service unit, and four observed protected drop-ins; it never prints protected values and is not installed.
@@ -576,7 +576,7 @@ has been changed by this inventory correction.
 
 ### STAB-07C separate runtime artifact identity evidence
 
-- `deploy/rolling-thunder-runtime-identity.py` — uninstalled independent read-only protected release manifest and process path binding; deliberately cannot claim loaded Python bytes independently proven.
+- `deploy/rolling-thunder-runtime-identity.py` — read-only protected release manifest, exact executable/launch path, PID/boot/start-tick and Tk-heartbeat verifier; deliberately does not claim loaded Python bytes independently proven.
 
 ### STAB-07D offline release provenance tools
 

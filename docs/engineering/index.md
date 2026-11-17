@@ -54,6 +54,7 @@ MeshCore design, incident, and acceptance records remain historical evidence. Th
 - `stab07d-protected-release-and-launch-witness.md` — deterministic Git-source candidate, signed launch observation, offline tests and explicit deployment blockers.
 
 - `stab07c-running-code-identity.md` — read-only actual Pi process evidence, protected release/process binding candidate and explicit lack of in-memory Python byte proof.
+- `stab07m-process-bound-runtime-identity.md` — implemented source contract for protected-release, executable, PID/boot/start-tick and Tk-heartbeat identity; offline-only and not installed.
 
 - `stab07-security-acceptance.md` — offline Ed25519 approval validation, privileged-file hash inspection, unverified running SHA and physical-PTT NO-GO gates.
 

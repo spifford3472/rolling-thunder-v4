@@ -102,9 +102,14 @@ def _setup(
             "responsiveness": "tk_heartbeat_fresh",
         },
         "radio_ptt_state": "not_independently_verified",
-        # The synthetic true signal exercises only the downstream signed
-        # receipt path; the actual inspector NEVER emits this proof.
-        "runtime_code_identity": {"loaded_python_bytes_independently_proven": True},
+        # Synthetic identity evidence exercises only the downstream approval
+        # gate; production derives this from the protected-release verifier.
+        "runtime_code_identity": {
+            "loaded_python_bytes_independently_proven": False,
+            "protected_release_process_identity_verified": True,
+            "sha": TARGET,
+            "verification_method": "fixture protected release and process identity",
+        },
     }
     approv_dir = tmp_path / "approvals"
     approv_dir.mkdir(mode=0o700)
@@ -181,6 +186,7 @@ def test_explicit_approved_attestation_preserves_history_and_allows_next_begin(
         "expired",
         "wrong_transaction",
         "wrong_sha",
+        "wrong_runtime_sha",
         "wrong_digest",
         "missing_running_attestation",
         "unknown_ui",
@@ -203,6 +209,8 @@ def test_mismatch_blocks_and_leaves_journal_untouched(
         receipt["transaction_id"] = "other"
     elif mutation == "wrong_sha":
         receipt["expected_sha"] = OLD
+    elif mutation == "wrong_runtime_sha":
+        report["runtime_code_identity"]["sha"] = OLD
     elif mutation == "wrong_digest":
         receipt["evidence_sha256"] = "0" * 64
     elif mutation == "missing_running_attestation":
@@ -310,13 +318,16 @@ def test_cryptographic_approval_boundary_rejects_unsafe_receipts(
     assert paths["journal"].read_bytes() == before
 
 
-def test_unproven_in_memory_python_bytes_never_reconcile_even_with_signed_receipt(
+def test_missing_protected_process_identity_never_reconciles_even_with_signed_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A signature cannot substitute for an independent running-code proof."""
+    """A signature cannot substitute for live protected process evidence."""
     report, paths = _setup(tmp_path, monkeypatch)
-    report["runtime_code_identity"] = {"loaded_python_bytes_independently_proven": False}
+    report["runtime_code_identity"] = {
+        "loaded_python_bytes_independently_proven": False,
+        "protected_release_process_identity_verified": False,
+    }
     before = paths["journal"].read_bytes()
-    with pytest.raises(ValueError, match="running Python bytes lack independent identity proof"):
+    with pytest.raises(ValueError, match="protected release/process identity is not verified"):
         _attempt(paths)
     assert paths["journal"].read_bytes() == before
