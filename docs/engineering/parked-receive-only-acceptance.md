@@ -1,6 +1,6 @@
 # Parked USB/GPS/FT8 receive-only acceptance
 
-**Status: NOT ACCEPTED — read-only preflight only.** This procedure records
+**Status: NOT ACCEPTED — parked precondition met; receive-only evidence still outstanding.** This procedure records
 what must be demonstrated on the installed AnvilMobile system before USB,
 GPS, controller, or FT8 receive operation can be accepted. It grants no
 deployment, service restart, database, USB manipulation, CAT/PTT, or RF
@@ -52,11 +52,12 @@ accepted as evidence for the current source release.
 
 ## Required parked acceptance sequence
 
-Do not begin until the owner confirms the vehicle is parked, the radio is not
-in an active QSO or transmit state, power is stable, and an operator is present
-at physical radio controls with a safe recovery path. Separately authorize any
-deployment or restart needed to test the selected exact SHA. This procedure
-does not authorize a transmit test.
+The owner confirmed on 2026-11-17 that the vehicle is parked, the radio is
+powered off, and the MeshCore receiver is physically removed. This satisfies
+the parked precondition and confirms no active radio operation at that point;
+it does not establish live GPS, receive audio, FT8 decodes, or installed code
+identity. Separately authorize any deployment or restart needed to test the
+selected exact SHA. This procedure does not authorize a transmit test.
 
 1. Record the exact target `main` SHA, exact installed source/runtime identity,
    and successful exact-head CI. Stop if the installed process cannot be tied
@@ -95,7 +96,7 @@ does not authorize a transmit test.
 
 | Check | Result | Evidence required |
 | --- | --- | --- |
-| Parked state, operator present, stable power | Not obtained | Owner confirmation and maintenance-window record |
+| Parked state, radio powered off, MeshCore removed | Owner confirmed | 2026-11-17 owner statement; no receive acceptance implied |
 | Exact installed source/runtime identity | Not established | Process-bound release identity and readiness evidence |
 | One system-managed dashboard and effective protected configuration | Partial | Current read-only service state seen; installed identity/configuration reconciliation remains required |
 | Unique radio/controller/GPS/audio mapping | Partial | Interfaces enumerate; physical function-to-device mapping not confirmed |
@@ -114,6 +115,8 @@ physically de-keyed. Do not add transmit authority or expand FT8 automation as
 part of acceptance. Any transmit/RF test remains a distinct owner-approved
 activity with its own safety plan.
 
-No production deployment, restart, service cutover, database mutation,
-physical USB operation, CAT/PTT activity, or RF transmission was performed in
-the 2026-11-17 read-only preflight.
+On 2026-11-17, the separately authorized MeshCore service cutover was completed
+as recorded in `meshcore-installed-service-cutover-plan.md`. No Rolling Thunder
+deployment or restart, source database mutation, physical USB operation,
+CAT/PTT activity, or RF transmission occurred. Receive-only acceptance remains
+incomplete.

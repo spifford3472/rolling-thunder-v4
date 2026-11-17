@@ -68,11 +68,14 @@ second remote-tool context ran under a different Unix account and therefore
 reported a different user systemd view; user services must be checked through
 their owning account's manager.
 
-That owner-level manager reported `meshcore-collector.service` enabled and
-active, and `meshcore-traffic-worker.service` enabled but inactive. This
-confirms the historical source-removal warning remains operationally relevant;
-it does not authorize stopping or disabling either service. No database or
-queue was read or changed during this refresh. See
+That inspection found `meshcore-collector.service` enabled and active, and
+`meshcore-traffic-worker.service` enabled but inactive. On November 17, after
+separate owner authorization, both units were stopped, disabled, and removed
+from the user systemd search path. Their definitions were archived and all
+three SQLite stores were backed up through SQLite's backup API and verified
+with integrity checks; source databases, configuration, credentials, and queue
+data remain preserved. Rolling Thunder remained active and OHGO was not
+modified. See
 [`parked-receive-only-acceptance.md`](parked-receive-only-acceptance.md) for
 the incomplete hardware acceptance record and
 [`meshcore-installed-service-cutover-plan.md`](meshcore-installed-service-cutover-plan.md)
