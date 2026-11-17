@@ -4,6 +4,19 @@
 
 ## Objective and actual result
 
+**Scope clarification (2026-11-17):** This workstream reconstructs the
+Raspberry Pi's existing `aarch64` OS userspace as an optional full-image
+reproducibility path; it is not a generic ARM deployment or migration target.
+STAB-07G's QEMU ARM64 tests run on x86_64 Forge and do not emulate Raspberry Pi
+board hardware. The reviewed application deployment candidate uses the Pi's
+existing virtual environment and does not install or replace OS `libc` or
+OpenSSL. Thus the 14/16 result blocks this reconstructed-image path. An
+application-only release could instead preserve the installed Pi OS as its
+baseline, but that needs explicit owner acceptance and separate verification
+of the exact application environment and running process. No such acceptance
+is recorded here. A possible future Intel host would require a separate
+x86_64 runtime and acceptance plan.
+
 Reconstruct the Raspberry Pi's exact installed native Debian/Raspberry Pi runtime on isolated Forge, using an authenticated `InRelease → Packages → .deb` SHA-256 chain. The complete image is **not yet buildable**: **14/16** selected exact installed packages have been cryptographically verified and acquired. The remaining **2 Raspberry Pi-patched archives** cannot be accepted without authenticated historical Raspberry Pi repository metadata.
 
 No AnvilMobile upgrade or write, restart, service edit, radio/CAT/PTT operation, QSO read/write, package-install script, sudo change or production deployment was performed. The pre-existing STAB-07G–I ARM64 emulator and mock-dashboard test remain intact; nothing in the live emulator has been replaced with a partial build.
