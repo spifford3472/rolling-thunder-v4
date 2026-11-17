@@ -1869,12 +1869,22 @@ class ApplicationRuntime:
             attempt("location publishing", self.pi_forge_location_publishing.stop)
         if self.clock_sync is not None:
             attempt("clock sync", self.clock_sync.stop)
+        gps_polling_stopped = self.gps_polling is None
         if self.gps_polling is not None:
-            attempt("GPS polling", self.gps_polling.stop)
+            gps_polling_stopped = (
+                attempt("GPS polling", self.gps_polling.stop) is not None
+            )
         if self.meshcore_gps_publisher is not None:
             attempt("MeshCore GPS", self.meshcore_gps_publisher.stop)
         if self.gps is not None:
-            attempt("GPS", self.gps.disconnect)
+            if gps_polling_stopped:
+                attempt("GPS", self.gps.disconnect)
+            else:
+                # Do not close the serial descriptor underneath a poll that
+                # failed to quiesce. Process exit will release it if necessary.
+                shutdown_logger.error(
+                    "RT_RUNTIME_SHUTDOWN GPS disconnect skipped because polling may still be active"
+                )
         if radio_shutdown_state is not None:
             self._started = False
         shutdown_logger.warning(

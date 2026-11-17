@@ -168,6 +168,13 @@ GPS/location is shared infrastructure.
 
 Features consume published GPS state rather than opening serial GPS paths.
 
+`GPSPollingService` serializes receiver I/O with its shutdown boundary. Shutdown
+cancels future polling and waits up to its configured stop deadline for any
+in-flight operation. If the deadline expires, runtime shutdown reports the
+failure and must not close the receiver concurrently; the process exit path
+releases the descriptor. A GPS timeout or disconnect does not establish fresh
+position state, and a connected serial handle alone is not proof of GPS health.
+
 `Contact.my_grid` is the single six-character persisted local-grid source.
 `my_grid6` exposes it explicitly and `my_grid4` is derived from its first four
 characters. FT8 likewise has one authoritative `local_grid6`; its on-air

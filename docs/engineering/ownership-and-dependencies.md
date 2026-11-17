@@ -265,6 +265,19 @@ UTC observation, but they do not own NTP configuration, GPS acquisition, system
 clock writes, or the privileged GPS clock-correction helper. Optional comparison
 and PCM retention must remain explicitly time/count bounded.
 
+### GPS and location
+
+`application_runtime.py` composes the single configured GPS receiver and its
+polling service. `serial_gps.py` owns the serial descriptor and NMEA parsing;
+`gps_polling.py` owns retry and publication of immutable state. Consumers use
+the shared snapshot and do not open the GPS device. Shutdown must quiesce an
+in-flight poll before the runtime closes the receiver. If the bounded quiescence
+wait expires, preserve single-owner access, report the failure, and allow process
+exit to release the descriptor rather than closing it underneath a read.
+
+See `../REAL_GPS_INTEGRATION.md` for the device/configuration contract and
+`usb-ft8-incident-2026-11-13.md` for dated USB event evidence.
+
 ### Repeaters
 
 Owns local repeater catalog parsing, stable repeater identity, nearby filtering,

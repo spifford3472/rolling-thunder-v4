@@ -123,6 +123,12 @@ Live acceptance should use an exact commit SHA and record rollback information.
 - `tests/test_serial_gps.py`
 - `tests/test_serial_gps_buffer_freshness.py`
 
+`tests/test_gps_polling.py` also exercises a blocked callback with the production
+thread-backed scheduler and verifies that shutdown reports failure if the
+operation does not quiesce before its deadline. The STAB-02 shutdown suite
+verifies runtime withholds `GPSReceiver.disconnect()` while that callback may
+still own the receiver; neither test uses physical GPS hardware.
+
 ## Contact logging and synchronization
 
 `tests/test_offline_contact_durability.py` is the integrated local-first acceptance
