@@ -20,8 +20,8 @@ This guide describes the implemented repository rather than an aspirational arch
 - `docx-current-state-audit-2026-11-15.md` — merged-source documentation truth ledger, ownership/dependency map, prioritized drift and architecture risks, validation gates.
 
 - `pr-reconciliation-2026-11-15.md` — 20 historical open-draft PR dispositions and supersession evidence, without changing their GitHub state.
-- `rel01-parked-acceptance-packet-2026-11-15.md` — current exact-main parked release readiness, separate RF approval, data-preserving rollback and unexecuted NO GO record.
-- `rel01-installed-state-snapshot-2026-11-15.md` — read-only AnvilMobile/Forge installed-state observation, evidence limits, acceptance matrix, and separately gated rollback/cutover plan.
+- `rel01-parked-acceptance-packet-2026-11-15.md` — public redacted release gates, separate RF approval, data-preserving rollback requirements, and NO GO disposition.
+- `rel01-installed-state-snapshot-2026-11-15.md` — public redacted installed-state conclusions, evidence limits, acceptance gates, and separately gated rollback/cutover plan.
 
 - `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
 
@@ -126,11 +126,8 @@ A screen is not automatically the owner of everything displayed on it. UI contex
 
 ### anvilmobile
 
-`anvilmobile` is the Raspberry Pi mobile runtime. Its production checkout is:
-
-```text
-/home/geoff/projects/rolling-thunder-v4
-```
+`anvilmobile` is the Raspberry Pi mobile runtime. The host-specific production
+checkout path is intentionally omitted from this public architecture guide.
 
 The Pi owns:
 

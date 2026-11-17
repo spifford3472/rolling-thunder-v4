@@ -10,7 +10,7 @@ No AnvilMobile upgrade or write, restart, service edit, radio/CAT/PTT operation,
 
 ## Source of truth: actual installed Pi revisions
 
-The read-only STAB-07J Pi evidence `deploy/locks/stab07j-anvilmobile-native-observed.json` retains 16 installed Debian package revisions and a 52-native-file hash sample. This list is a **target** to reproduce, not proof that the system process executes those particular bytes. On the Pi, `rolling-thunder.service` remained active with MainPID `60400` in the STAB-07K read-only inspection.
+The read-only STAB-07J Pi evidence established a bounded target of 16 installed Debian package revisions and 52 native files. Exact host-specific hashes and process identifiers are withheld from this public repository. This sample is a **target** to reproduce, not proof that the system process executes those particular bytes.
 
 A second read-only inspection of `/var/lib/apt/lists` verified:
 - Debian `trixie` and Raspberry Pi `trixie` cached `InRelease` signatures with root-installed archive keys using `gpgv`;
@@ -76,28 +76,26 @@ Comparison against the Pi's **52 sampled native file hashes** found:
 
 This demonstrates matching actual native bytes for the included files, **not** a bootable/complete image, full `lib-dynload` and dynamic-linker closure, or trusted process identity. Not all OS packages needed by the dashboard are in the 16-package sample. Full closure discovery and a complete signed dependency manifest remain mandatory.
 
-Private nonproduction paths:
-- `/home/rt-remote/workspaces/rt-stab07k-os-image/metadata` — downloaded verified signed release files and package indexes;
-- `.../keys` — verified public keys;
-- `.../archives/pool` — exact verified `.deb` archives;
-- `.../pkg-info` — private per-snapshot verified reports;
-- `.../staged-incomplete-exact-files` — **not runnable**, temporary extraction;
-- `.../logs` — signature-check evidence.
+Verified release files, public keys, exact `.deb` archives, per-snapshot
+reports, temporary extraction, and signature-check logs were held in private,
+nonproduction scratch and are not published here.
 No binary .deb, GPG key or large package index is checked into Rolling Thunder Git. The small manifest and verifier/test source are committed.
 
 ## Repeatable check and release decision
 
-After independently supplying the same exact archive files, signed release/index and pinned public keyring into a **private** Forge workspace, the verifier supports:
+After independently supplying the exact archive files, signed release/index,
+and pinned public keyring into a **private** Forge workspace, the verifier
+supports the following invocation (substitute private workspace paths):
 
 ```bash
-cd /home/rt-remote/workspaces/rt-stab07k
+cd "$RT_STAB07K_WORKSPACE"
 python deploy/rolling-thunder-signed-apt-closure.py \
-  --release /home/rt-remote/workspaces/rt-stab07k-os-image/metadata/debian-updates-20260720/InRelease \
-  --package-index /home/rt-remote/workspaces/rt-stab07k-os-image/metadata/debian-updates-20260720/Packages \
-  --keyring /home/rt-remote/workspaces/rt-stab07k-os-image/keys/debian-combined.pgp \
+  --release "$RT_STAB07K_RELEASE" \
+  --package-index "$RT_STAB07K_PACKAGES" \
+  --keyring "$RT_STAB07K_KEYRING" \
   --keyring-sha256 c042cf3ba41a234f709a6f50053ce3c23031d2d4f109a563ffc1193403b26895 \
-  --archive-root /home/rt-remote/workspaces/rt-stab07k-os-image/archives \
-  --required-json /home/rt-remote/workspaces/rt-stab07k-os-image/pkg-info/updates-six-required.json
+  --archive-root "$RT_STAB07K_ARCHIVE_ROOT" \
+  --required-json "$RT_STAB07K_REQUIRED_PACKAGES"
 ```
 
 The output documents **six source-authenticated Python archives**, never a production-ready runtime. The two other verified groups use the corresponding current Debian and August historical files.
