@@ -43,8 +43,10 @@ def test_preflight_and_backup_failure_recovery_are_explicit() -> None:
     preflight = script.index('[[ -d "$BACKUP_DIR" && -w "$BACKUP_DIR" ]]')
     stop = script.index('log "stopping $SERVICE"')
     assert preflight < stop
-    assert "failed to restart prior service after backup failure" in script
-    assert "failed to restart prior service after backup permission failure" in script
+    assert 'recover_unchanged_service "database backup failed"' in script
+    assert 'recover_unchanged_service "backup permissions could not be secured"' in script
+    assert "prior service did not pass application readiness" in script
+    assert "journal phase requires_review" in script
     assert 'chmod 600 "$BACKUP_PATH"' in script
     assert 'chown root:root "$BACKUP_PATH"' in script
 

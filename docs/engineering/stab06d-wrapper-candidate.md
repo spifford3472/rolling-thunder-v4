@@ -16,22 +16,25 @@ The captured script validates a 40-character lowercase target SHA and remote bra
 
 The candidate adds an exclusive, nonblocking `flock` under root-owned `/run/rolling-thunder-deploy.lock` before any Git fetch, stop, backup, checkout, or mutation, retaining descriptor 9 through rollback. It checks root ownership and private 0600 permissions for existing locks and refuses obvious unsafe lock paths; review the trusted-parent and no-symlink assumptions before privileged installation.
 
-It also checks the backup directory before service stop, fails if backup ownership/permissions cannot be secured, and reports attempted recovery failures. It replaces the three-second activity check with a bounded 210-second `deployment_readiness.py` probe requiring the system-level service, expected user, MainPID, cgroup, exactly one dashboard process and a fresh Tk-callback heartbeat.
+It also checks the backup directory before service stop, fails if backup ownership/permissions cannot be secured, and reports attempted recovery failures. When backup creation or backup permission setup fails after the original service was stopped, it starts the unchanged release, runs the same bounded application-readiness probe, and leaves the journal at `requires_review`; a successful `systemctl start` alone is not reported as recovery. The probe requires the system-level service, expected user, MainPID, cgroup, exactly one dashboard process and a fresh Tk-callback heartbeat.
+
+Rollback now verifies that the exact previous checkout was restored and that its editable install succeeded **before** restarting the service. It then runs the same bounded application-readiness probe. A failed checkout/install leaves the service stopped; a failed rollback readiness check leaves the transaction journal in `rolling_back` and reports recovery as unverified. A prior release that lacks the readiness module therefore fails closed and requires independent manual review; it is not silently called healthy.
 
 `ui_readiness.py` atomically writes a small marker into the user's private XDG runtime directory. It updates only from the Tk event loop: blocked UI callbacks cannot keep the marker fresh. This proves callback liveness, **not** operator workflow, GPS, radio state, physical receive/PTT release, or durable QSO correctness.
 
 ## Deterministic verification
 
 - `tests/test_deployment_wrapper_candidate.py`: Bash syntax, nonexecutable source, lock-before-mutation ordering, backup gate and readiness wiring.
-- `tests/test_deployment_wrapper_offline.py`: isolated, path-rewritten fake Git/systemd/SQLite wrapper; overlapping deploy refusal, malformed SHA, failed backup with prior-service restart attempt, schema-changing rollback refusal preserving contacts, and failed start with prior-code rollback.
+- `tests/test_deployment_wrapper_offline.py`: isolated, path-rewritten fake Git/systemd/SQLite wrapper; overlapping deploy refusal, malformed SHA, backup-failure recovery readiness and review-journal behavior, schema-changing rollback refusal preserving contacts, failed start with prior-code rollback, no restart after failed previous-code restoration, and rollback readiness refusal.
 - `tests/test_ui_deployment_readiness.py`: display-free Tk callback fake, freshness, private marker ownership, process/cgroup/UID checks, wrong service state and duplicate-dashboard refusal.
 
 ## Remaining hard safety gates
 
-The candidate still requires durable interrupted-transaction reconciliation, further failure-injection for failed installation, rollback restart/readiness, wrong checkout SHA, and abrupt power loss. An old-code rollback may lack the new heartbeat and must be reported as *not independently readiness-verified*. No `systemctl is-active`, heartbeat, or successful `TX0;` is independent proof of hardware de-key. Existing CAT/PTT uncertainty remains.
+The candidate remains uninstalled and requires protected installed-file comparison, durable interrupted-transaction reconciliation, failure-injection for wrong checkout SHA and abrupt power loss, plus owner-approved parked acceptance. A previous release without the new readiness module cannot pass rollback readiness and remains an explicit manual-review state. No `systemctl is-active`, heartbeat, or successful `TX0;` is independent proof of hardware de-key. Existing CAT/PTT uncertainty remains.
 
 Before any root-wrapper installation or parked production acceptance, verify the protected FT8 drop-in, recorded hashes, and exact target, current and rollback SHAs. Commit all installed service/wrapper configuration paths, integrations, validation, rollback and history in `spifford3472/ki5vnb-qth-infrastructure`. Obtain separate owner approvals for merge, installation, deployment/restart and RF.
 
 ## Change history / rollback
 
 2026-11-14: Captured the operator-authorized wrapper, wrote an uninstalled candidate, added Tk heartbeat/readiness and offline failure injection. Revert the draft source commit to remove the candidate; no installed host configuration has changed.
+2026-11-16: Require previous-code SHA/install verification and dashboard readiness before reporting a recovered rollback; added deterministic refusal tests. No production files or services were changed.

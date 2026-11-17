@@ -630,7 +630,7 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 ### STAB-06E durable transaction journal (offline)
 
 - `tests/test_deployment_transaction_journal.py` checks retained interrupted phases, corruption rejection, atomic private records and commit-only success.
-- `tests/test_deployment_wrapper_offline.py` also asserts failed/invalid journals block new mutation before fetch or systemd.
+- `tests/test_deployment_wrapper_offline.py` also asserts failed/invalid journals block new mutation before fetch or systemd; backup-failure service recovery checks application readiness and leaves `requires_review`; failed previous-code checkout/install cannot restart the service; and rollback readiness failure leaves the journal blocked.
 - `tests/test_deployment_wrapper_candidate.py` checks durable phase ordering and commit-before-success reporting.
 - No live host, powered FT-891, crash reboot or data recovery acceptance is established by these tests.
 
@@ -706,7 +706,7 @@ has been changed by this inventory correction.
 ### STAB-07B security and privileged evidence (offline only)
 
 - `tests/test_recovery_reconciliation.py` now verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals.
-- `tests/test_stab07_privileged_evidence.py` tests installed-wrapper snapshot identity checks and strictly redacted protected FT8 directive names with temporary files. No installed root files or RF tested.
+- `tests/test_stab07_privileged_evidence.py` tests wrapper/snapshot hash identity, all protected-file hashes, and secret-free directive-name reporting with temporary files. No installed root files or RF are tested.
 
 ### STAB-07C running-code release identity (offline)
 

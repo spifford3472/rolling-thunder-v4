@@ -63,19 +63,25 @@ independent runtime SHA correctness.
 
 `deploy/diagnostics/rt-stab07-readonly-evidence.py` is a **noninstalled**
 read-only evidence collector designed for a separately authorized, interactive
-on-device inspection. It computes SHA256 of the installed root wrapper, its
-operator-authorized captured copy, and protected drop-in; compares wrapper
-identities and reports only the protected unit's directive *names*, never
-values, environment secrets or drop-in content. It returns NO GO if protected
-reads fail, files are unsafe or wrapper hashes differ. Even matching hashes do
-not verify deployability, and directive names do not validate protected FT8
-configuration values. The owner must review the protected values locally and
-safely; never paste credentials into ChatGPT.
+on-device inspection. It computes SHA256 of the installed root wrapper and its
+operator-authorized captured copy, the base system service unit, and the four
+drop-ins observed on 2026-11-16 (`50-ft8-evidence.conf`,
+`60-ft8-period.conf`, `70-ft8-attempt-delivery.conf`, and `r1a-timing.conf`).
+It compares wrapper identities and reports only systemd directive *names*,
+never protected values, environment secrets, or file contents. It returns NO GO
+if protected reads fail, files are unsafe, or wrapper hashes differ. Hashes and
+directive names do not validate the values or prove deployability; the owner
+must review sanitized values locally and safely. Never paste credentials into
+ChatGPT.
 
-No privileged read was attempted through sudo expansion, and this collector
-has not been executed on AnvilMobile. The repo-local script's ownership and
-runtime path must be considered before any owner-approved execution; this is
-not a production installation procedure.
+On 2026-11-16, the owner ran a separately reviewed read-only inspection through
+interactive root authorization. The installed wrapper hash matched the
+operator-captured copy; the system unit and all four active drop-ins were
+hashed and their directive names reported. Protected values were not disclosed,
+and the deployment command was not invoked. This verifies file identity and
+the active drop-in inventory, not the correctness of protected values or
+application/hardware readiness. The repo-local collector remains uninstalled
+and is not a production installation procedure.
 
 ## Remaining evidence and safety prerequisites
 

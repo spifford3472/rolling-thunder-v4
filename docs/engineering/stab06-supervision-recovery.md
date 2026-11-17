@@ -37,7 +37,10 @@ runtime identity or deployed wrapper behavior.
   `systemctl is-active` check that does not prove UI readiness.
 - Test concurrent exact-SHA deployments, crash restart, early-boot
   startup, malformed SHA, backup failure, schema-changing rollback,
-  rollback refusal, stale cgroup/process and failed readiness.
+  rollback refusal, stale cgroup/process, failed target readiness, and failed
+  previous-code restore/install/readiness. The offline candidate now refuses
+  to restart after failed old-code restoration and requires the same bounded
+  dashboard-readiness check after rollback; it remains uninstalled.
   Do not install a second supervisor or modify production wrapper under
   the guise of a unit test.
 - Resolve STAB-04/05 safety stop gates before assuming force-kill/restart
@@ -71,3 +74,14 @@ STAB-06C–F provides offline candidate locking, journaling and inspected
 reconciliation but nothing is installed. The STAB-07 integration rehearsal is
 not a merge, deployment, or parked safety acceptance. See
 `stab07-integration-and-parked-release-plan.md`.
+
+## 2026-11-16 owner-run read-only production evidence
+
+The owner ran a read-only inspection through interactive root authorization.
+The installed wrapper's SHA-256 matched its operator-captured copy. The base
+service unit and all four active drop-ins were hashed, and only systemd
+directive names were reported; protected values were not disclosed. This
+confirms the installed wrapper is still the captured version described above,
+not the newer uninstalled candidate. No configuration, service, or database
+state changed. Hash identity does not independently validate configuration
+values, readiness, deployment safety, or physical PTT state.

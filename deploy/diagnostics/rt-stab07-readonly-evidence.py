@@ -16,6 +16,13 @@ from typing import Any
 
 WRAPPER = Path("/usr/local/sbin/rolling-thunder-deploy")
 SNAPSHOT = Path("/home/geoff/rolling-thunder-review/installed-wrapper-20261114T035408Z.sh")
+UNIT = Path("/etc/systemd/system/rolling-thunder.service")
+DROPINS = (
+    Path("/etc/systemd/system/rolling-thunder.service.d/50-ft8-evidence.conf"),
+    Path("/etc/systemd/system/rolling-thunder.service.d/60-ft8-period.conf"),
+    Path("/etc/systemd/system/rolling-thunder.service.d/70-ft8-attempt-delivery.conf"),
+    Path("/etc/systemd/system/rolling-thunder.service.d/r1a-timing.conf"),
+)
 FT8_DROPIN = Path("/etc/systemd/system/rolling-thunder.service.d/60-ft8-period.conf")
 
 
@@ -79,17 +86,43 @@ def collect_evidence(
     *,
     wrapper: Path = WRAPPER,
     snapshot: Path = SNAPSHOT,
-    dropin: Path = FT8_DROPIN,
+    unit: Path | None = UNIT,
+    dropins: tuple[Path, ...] = DROPINS,
     root_uid: int = 0,
 ) -> dict[str, Any]:
     """Keep all evidence read-only and report missing protected reads as NO GO."""
     installed = inspect_regular_file(wrapper, expected_uid=root_uid)
     captured = inspect_regular_file(snapshot)
-    ft8 = inspect_regular_file(dropin, expected_uid=root_uid)
+    unit_evidence = (
+        {"state": "not_requested"}
+        if unit is None
+        else inspect_regular_file(unit, expected_uid=root_uid)
+    )
+    dropin_evidence: list[dict[str, Any]] = []
+    for path in dropins:
+        entry = inspect_regular_file(path, expected_uid=root_uid)
+        entry["directive_names"] = []
+        if entry.get("state") == "read_only_verified":
+            try:
+                entry["directive_names"] = redacted_directive_keys(path)
+            except (OSError, UnicodeError):
+                entry["state"] = "unverified"
+                entry["error"] = "directive_read_failed"
+        dropin_evidence.append(entry)
+    ft8 = next(
+        (
+            entry
+            for entry in dropin_evidence
+            if Path(entry["path"]).name == FT8_DROPIN.name
+        ),
+        {"path": str(FT8_DROPIN), "state": "not_in_active_dropin_inventory"},
+    )
     report: dict[str, Any] = {
         "version": 1,
         "installed_wrapper": installed,
         "operator_snapshot": captured,
+        "installed_unit": unit_evidence,
+        "protected_dropins": dropin_evidence,
         "protected_ft8_dropin": ft8,
         "installed_wrapper_matches_snapshot": (
             installed.get("state") == "read_only_verified"
@@ -98,11 +131,14 @@ def collect_evidence(
         ),
         "disposition": "NO_GO_PENDING_OWNER_AND_PARKED_ACCEPTANCE",
     }
-    if ft8.get("state") == "read_only_verified":
-        try:
-            report["protected_ft8_directive_names_only"] = redacted_directive_keys(dropin)
-        except (OSError, UnicodeError):
-            report["protected_ft8_directive_names_only"] = []
+    all_protected_read = (
+        unit_evidence.get("state") == "read_only_verified"
+        and bool(dropin_evidence)
+        and all(entry.get("state") == "read_only_verified" for entry in dropin_evidence)
+        and ft8.get("state") == "read_only_verified"
+    )
+    report["all_protected_systemd_files_verified"] = all_protected_read
+    report["protected_ft8_directive_names_only"] = ft8.get("directive_names", [])
     return report
 
 
@@ -114,7 +150,7 @@ def main() -> int:
         0
         if (
             report["installed_wrapper_matches_snapshot"]
-            and report["protected_ft8_dropin"]["state"] == "read_only_verified"
+            and report["all_protected_systemd_files_verified"]
         )
         else 2
     )
