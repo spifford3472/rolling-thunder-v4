@@ -93,12 +93,14 @@ drop-in. Accordingly, exact process-to-release identity and application
 readiness remain **not established**. The registered protected runtime observer
 and a root-owned immutable release are not installed.
 
-The owner reports that the vehicle was parked with the radio powered on for
-receive, FT8 signals were audible, and GPS was working. The vehicle has since
-returned to the garage and the radio is now off. This is useful owner-reported
-hardware evidence, but no fresh-fix timestamp, application decode periods,
-physical receive/PTT indication, or process-bound runtime identity was
-supplied. Receive-only acceptance remains **NOT ACCEPTED**.
+The owner reports that while parked, GPS was working and several FT8 contacts
+were completed with the radio on. This supports FT8 decoding/QSO operation on
+the running installation by owner report, but contacts involved transmission
+and therefore do not constitute the required receive-only acceptance run. The
+vehicle is now in the garage and the radio is off. No fresh-fix timestamp,
+receive-only decode sequence, physical receive/PTT observation, or
+process-bound runtime identity was supplied. Receive-only acceptance remains
+**NOT ACCEPTED**.
 
 ## Immutable acceptance gates
 
