@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 15555)
-Total output lines: 638
-
 # Source File Index
 
 ## Purpose
@@ -250,7 +247,122 @@ originates from one screen.
 - `src/rolling_thunder/live_map_ui.py` — Tk rendering for map, overlays, marker, and map status, with optional payload-free subphase timing.
 - `src/rolling_thunder/map_refresh.py` — Primary-map subsystem module for refresh.
 - `src/rolling_thunder/map_solar.py` — GPS/solar DAY/NIGHT policy and shared primary-to-mirror style fan-out.
-- `src/rolling_thunder/map_sources.py` — Local-first installed/c…3555 tokens truncated…ts.
+- `src/rolling_thunder/map_sources.py` — Local-first installed/cache/online map resolution with style switching.
+- `src/rolling_thunder/map_tiles.py` — Validated tile HTTP/cache adapters, including callsign-only style-partitioned storage.
+- `src/rolling_thunder/map_zoom.py` — Primary-map zoom settings plus optional shared style-target dispatch.
+- `src/rolling_thunder/radar_coverage.py` — Radar domain/presentation module for coverage.
+- `src/rolling_thunder/radar_domain.py` — Radar domain/presentation module for domain.
+- `src/rolling_thunder/radar_tiles.py` — Radar domain/presentation module for tiles.
+
+## Weather
+
+- `src/rolling_thunder/open_meteo.py` — Module providing open meteo behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/weather_alert_audio.py` — Alert audio adapter/policy execution.
+- `src/rolling_thunder/weather_alert_notification_policy.py` — Module providing weather alert notification policy behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/weather_alert_notification_repository.py` — Module providing weather alert notification repository behavior within its owning subsystem. Inspect its tests and callers before changing public behavior.
+- `src/rolling_thunder/weather_alert_panel.py` — Weather-alert presentation/controller logic.
+- `src/rolling_thunder/weather_alert_viewport.py` — Alert text viewport/scroll state for driving-safe rendering.
+- `src/rolling_thunder/weather_panel.py` — Pure/current retained weather presentation controller.
+- `src/rolling_thunder/weather_ui.py` — Tk presentation for Weather context.
+
+## Pi Forge clients
+
+- `src/rolling_thunder/pi_forge_location_publisher.py` — Pi-side retained Forge integration for location publisher.
+- `src/rolling_thunder/pi_forge_runtime.py` — Pi composition helpers for retained Forge polling/location services.
+- `src/rolling_thunder/pi_forge_spot_polling.py` — Pi-side retained Forge integration for spot polling.
+- `src/rolling_thunder/pi_forge_spot_service.py` — Pi-side retained Forge integration for spot service.
+- `src/rolling_thunder/pi_forge_weather_alert_polling.py` — Pi-side retained Forge integration for weather alert polling.
+- `src/rolling_thunder/pi_forge_weather_alert_service.py` — Pi-side retained Forge integration for weather alert service.
+- `src/rolling_thunder/pi_forge_weather_polling.py` — Pi-side retained Forge integration for weather polling.
+- `src/rolling_thunder/pi_forge_weather_service.py` — Pi-side retained Forge integration for weather service.
+
+## Forge backend
+
+- `src/rolling_thunder/forge_callsign_info.py` — Forge callsign-intelligence service logic and caches.
+- `src/rolling_thunder/forge_callsign_info_api.py` — HTTP API contract for callsign intelligence.
+- `src/rolling_thunder/forge_callsign_info_config.py` — Forge backend module for callsign info config; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_callsign_info_main.py` — Independent Forge callsign-intelligence process entry/composition.
+- `src/rolling_thunder/forge_client.py` — Forge backend module for client; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_config.py` — Forge backend module for config; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_contact_sync.py` — Forge contact-sync application service and SQLite repository for exact target selection, immutable received-payload upload, durable UUID claims, and verified dynamic-station recovery bindings.
+- `src/rolling_thunder/forge_contact_sync_api.py` — HTTP API contract for idempotent contact synchronization.
+- `src/rolling_thunder/forge_contact_sync_config.py` — Forge backend module for contact sync config; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_contact_sync_main.py` — Independent Forge contact-sync process entry/composition.
+- `src/rolling_thunder/forge_dx_connection.py` — Forge backend module for dx connection; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_dx_spot_parser.py` — Forge backend module for dx spot parser; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_dxspider_provider.py` — Persistent disabled-by-default DXSpider fallback provider.
+- `src/rolling_thunder/forge_dxsummit_irc_parser.py` — Network-independent parser for DX Summit IRC messages.
+- `src/rolling_thunder/forge_dxsummit_provider.py` — Persistent DX Summit IRC provider lifecycle, cache, health, and reconnect behavior.
+- `src/rolling_thunder/forge_ft8_performance.py` — Forge backend module for ft8 performance; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_ft8_attempt_api.py` — authenticated bounded attempt ingestion and read-only per-attempt diagnostics application.
+- `src/rolling_thunder/forge_ft8_attempt_correlation.py` — durable attempt inbox,
+  leased retry/dead-letter worker, deterministic directional skip/status handling,
+  pre-egress terminal replay checks, immutable versioned full-input-hash VOACAP
+  history, safe legacy fallback, optional deterministic offline run identity, and
+  UUID-keyed audited synthetic/test processing/training exclusions.
+- `src/rolling_thunder/forge_ft8_attempt_coverage.py` — provider-free, read-only
+  Phase-C retrospective coverage and fail-closed snapshot reconciliation.
+- `src/rolling_thunder/forge_ft8_historical_replay.py` — Phase-C3 copied-SQLite,
+  single-UUID audited retrospective replay using only a bounded deterministic fake,
+  with strict event/provenance checks and a versioned hashed report.
+- `src/rolling_thunder/forge_ft8_historical_replay_main.py` — fake-only offline C3
+  CLI requiring copied/fixture acknowledgement, explicit audit identity, new output
+  paths, and no production provider or socket composition.
+- `src/rolling_thunder/forge_voacap_baseline.py` — disabled/uncomposed Phase-C4
+  reusable Forge baseline domain, additive SQLite plan/slot/response/ledger storage,
+  bounded single-concurrency worker contract and provider-free read-only diagnostics.
+- `src/rolling_thunder/forge_ft8_power_advisor.py` — offline-only Phase-C5 strict
+  as-of evidence/pairing, leakage-resistant descriptive evaluation, immutable
+  shadow-advisory contract and non-actuating readiness state machine.
+- `src/rolling_thunder/forge_ft8_power_advisor_config.py` — strict Forge C5 YAML
+  readiness policy and validate-before-publish atomic reload holder.
+- `src/rolling_thunder/forge_propagation_collectors.py` — HamQSL/KC2G collectors, deterministic grid query, existing-VOACAP client, and isolated correlation service.
+- `src/rolling_thunder/forge_propagation_config.py` — Typed disabled-by-default propagation-history configuration.
+- `src/rolling_thunder/forge_propagation_history.py` — Dedicated versioned raw-observation and QSO-correlation SQLite repository, including single-copy PSK provider-query archives.
+- `src/rolling_thunder/forge_propagation_main.py` — Disabled-by-default supervised propagation environmental entry point with database/provider-free configuration preflight and provider-free durable status.
+- `src/rolling_thunder/forge_propagation_runtime.py` — Supervised lifecycle for the independent hourly propagation environmental collector.
+- `src/rolling_thunder/completed_qso_ingestion_client.py` — Typed authenticated one-attempt producer client for the UUID-idempotent Forge completed-QSO API; source owners retain durable retry responsibility.
+- `src/rolling_thunder/forge_propagation_qso_api.py` — Bounded bearer-authenticated private completed-QSO ingestion API and supervised HTTP server lifecycle.
+- `src/rolling_thunder/forge_propagation_qso_ingestion.py` — Durable UUID-idempotent completed-QSO inbox/source-sink contract, identified bounded leases, retry/dead-letter worker contract, and isolated VOACAP correlator.
+- `src/rolling_thunder/forge_propagation_qso_worker.py` — Deterministic one-cycle orchestration and versioned atomic Forge-local status publication.
+- `src/rolling_thunder/forge_propagation_qso_worker_config.py` — Separate disabled service, authenticated-ingestion listener, worker identity, storage, polling, lease, retry, and optional declared VOACAP model-version configuration.
+- `src/rolling_thunder/forge_propagation_qso_worker_main.py` — Independent completed-QSO ingestion/server and double-gated worker composition/lifecycle root with provider-free preflight/status commands.
+- `src/rolling_thunder/forge_pskreporter.py` — Official bounded PSK Reporter XML client, concurrency-safe five-minute etiquette gate, bounded FT8 completion-aware correlation, and repository-backed analytics service.
+- `src/rolling_thunder/forge_pskreporter_orchestration.py` — Completed-FT8 event sink, durable global pacing/exact-window inbox, bounded PSK worker, and provider-free health contract.
+- `src/rolling_thunder/forge_pskreporter_worker.py` — Authenticated bounded event API, independent scheduler, atomic local status, and service diagnostics for PSK analytics.
+- `src/rolling_thunder/forge_pskreporter_worker_config.py` — Triple-gated PSK service/listener/storage/provider configuration with isolated path and cadence validation.
+- `src/rolling_thunder/forge_pskreporter_worker_main.py` — Disabled-by-default independent PSK service composition and provider-free preflight/status entry point.
+- `src/rolling_thunder/forge_location_client.py` — Forge backend module for location client; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_map.py` — Reusable typed configuration and bounded local style-aware map-renderer adapter.
+- `src/rolling_thunder/forge_map_api.py` — Optional map-tile route layer that delegates non-map requests to the existing Forge API application.
+- `src/rolling_thunder/forge_map_main.py` — Standalone Forge map development/testing entry point; production map serving is composed into the spot listener.
+- `src/rolling_thunder/forge_mobile_location.py` — Forge backend module for mobile location; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_mobile_location_repository.py` — Forge backend module for mobile location repository; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_noaa_radar.py` — Forge backend module for noaa radar; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_nws_weather_alerts.py` — Forge backend module for nws weather alerts; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_open_meteo_weather.py` — Forge backend module for open meteo weather; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_pota_provider.py` — Forge-side POTA provider adapter and normalization.
+- `src/rolling_thunder/forge_qrz_enrichment.py` — Forge backend module for qrz enrichment; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_qrz_provider.py` — Forge backend module for qrz provider; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_radar.py` — Forge backend module for radar; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_radar_api.py` — Forge backend module for radar api; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_radar_client.py` — Forge backend module for radar client; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_radar_polling.py` — Forge backend module for radar polling; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_snapshot_repository.py` — Forge backend module for snapshot repository; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_spot_aggregation.py` — Persistence-before-publication core for retained provider-neutral spot snapshots.
+- `src/rolling_thunder/forge_spot_api.py` — Versioned HTTP API for retained Forge spot/health state.
+- `src/rolling_thunder/forge_spot_cache_repository.py` — Forge backend module for spot cache repository; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_spot_main.py` — Forge spot/weather/radar process composition and lifecycle root.
+- `src/rolling_thunder/forge_spot_polling.py` — Forge backend module for spot polling; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_spot_provider.py` — Forge backend module for spot provider; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather.py` — Forge backend module for weather; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather_alert_api.py` — Forge backend module for weather alert api; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather_alert_cache_repository.py` — Forge backend module for weather alert cache repository; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather_alert_client.py` — Forge backend module for weather alert client; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather_alert_polling.py` — Forge backend module for weather alert polling; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather_alert_repository.py` — Forge backend module for weather alert repository; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather_alerts.py` — Forge backend module for weather alerts; keep provider/backend contracts reusable by non-UI clients.
+- `src/rolling_thunder/forge_weather_cache_repository.py` — Forge backend module for weather cache repository; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_weather_client.py` — Forge backend module for weather client; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_weather_polling.py` — Forge backend module for weather polling; keep provider/backend contracts reusable by non-UI clients.
 - `src/rolling_thunder/forge_weather_repository.py` — Forge backend module for weather repository; keep provider/backend contracts reusable by non-UI clients.

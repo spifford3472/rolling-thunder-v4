@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 12529)
-Total output lines: 854
-
 # Test Index and Validation Guide
 
 ## Purpose
@@ -519,7 +516,40 @@ clearly distinguished from CI-safe tests.
 
 - `tests/test_forge_known_callsigns.py` — SQLite persistence/schema/limits, admin CRUD/escaping/CSRF/delete confirmation, snapshot/batch privacy, real local HTTP handler.
 - `tests/test_known_callsign_client.py` — bounded transport validation, batch identity, cache refresh/failure/staleness, background polling and typed configuration.
-- `tests/te…529 tokens truncated…F authority.
+- `tests/test_friend_widgets.py` — headless gold-star FT8 and LOG adapters preserving outcome/selection/sync colors.
+- Existing shared-spot, FT8, callsign-info, DMR and runtime tests include decoration-only regression checks.
+
+Owner service-package, state backup, private-network admin, restart persistence,
+and installed screen acceptance remains required; see `../KNOWN_CALLSIGNS.md`.
+
+### Immutable contact location
+
+`tests/test_contact_location.py` covers coordinate bounds/pairs/frozen models, all
+repository paths, retry/enrichment preservation, schema-15 migration integrity,
+complete-contact export/backup/import, legacy formats, and the historical
+coordinate-independent ADIF baseline. Current Forge hash coverage additionally
+binds the exact selected station ID and Wavelog-bound ADIF. Existing
+contact-controller, logging, FT8 authorization/logging and HTTP/Forge API tests
+cover capture boundaries, movement and receiver compatibility.
+
+### Dynamic mobile Wavelog routing
+
+`tests/test_forge_contact_sync.py` owns ledger binding, uncertain duplicate replay,
+and changed-payload/changed-station conflict behavior after exact target selection.
+`tests/test_contact_weather.py` proves synchronization has no weather-enricher
+dependency, uploads the exact immutable payload, preserves weather already present,
+and formats absent requested weather as `N/A`. `tests/test_forge_contact_sync_config.py`
+rejects the removed contact-sync weather-provider configuration.
+`tests/test_wavelog.py` owns provider-adapter station creation and configured-logbook
+membership semantics. `tests/test_forge_contact_sync_api.py`,
+`tests/test_ft8_contact_sync.py`, and DMR/ADIF tests protect the one shared
+presentation-neutral sync boundary used by ordinary, POTA/DX, FT8, and DMR
+contacts. All provider writes are scripted fakes; installed Wavelog acceptance is
+still required.
+
+- `tests/test_forge_ft8_readiness_main.py` — missing C4, OFF/armed/no-calibration, read-only dedup and fail-closed output.
+
+- `tests/test_forge_ft8_power_experiment.py` — fail-closed randomized trial assignment, repeatability, bounded wattage and no RF authority.
 
 - `tests/test_forge_ft8_qualification.py` — certificate fail-closed controls, provenance and confidence-bound rejection.
 
