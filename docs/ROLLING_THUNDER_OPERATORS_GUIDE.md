@@ -1,6 +1,19 @@
 # Rolling Thunder Operator's Guide
 
-## Current source versus installed state — November 15, 2026
+## Current source versus installed state — November 17, 2026
+
+Current merged `main` is `3328c27d5eb41e4417fe6305d1942002a3488106`. PR #481's
+GPS shutdown quiescence fix and PR #479's MeshCore source removal are merged;
+PR #486 only redacted production evidence and documented remaining release
+gaps. None establishes the running Pi's exact code identity or completes
+parked USB/GPS/FT8 acceptance. The full AnvilMobile release remains **NO GO**;
+see `engineering/parked-receive-only-acceptance.md` and the REL-01 packet.
+
+The dated November 15 source note below remains historical. It describes the
+STAB-07 preference-drain and startup-rollback corrections; it is not the latest
+source baseline or evidence of installed readiness.
+
+### Dated STAB-07 note — November 15, 2026
 
 The STAB-07 preference-drain and startup-rollback corrections are **merged in
 source** at `b792151313e60596e6ff3ad51f6ed4e260078718` (PR #472), not an open
@@ -1508,6 +1521,17 @@ contains queued records. Do not stop, disable, remove, migrate, or delete any
 unit/data without separate owner approval and an accepted cutover plan. See
 engineering/rel01-installed-state-snapshot-2026-11-15.md for the observed
 paths, counts, and acceptance boundary.
+
+### Current service read-only recheck — November 17, 2026
+
+Through the Unix account that owns the user systemd manager, the collector was
+still enabled and active; the traffic worker was enabled but inactive. The
+historically identified MeshCore receiver USB identity was absent from current
+USB enumeration. No service or data was changed. A different remote-tool
+account cannot see this user manager, so a missing unit from that account is not
+proof of cutover. The separately gated procedure is
+`engineering/meshcore-installed-service-cutover-plan.md`; no stop, disable,
+uninstall, database operation, or deletion is authorized by this observation.
 
 ## OHGO (read-only)
 

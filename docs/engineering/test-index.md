@@ -37,6 +37,10 @@ Automated tests do not replace installed acceptance for changes involving:
 - bounded RF transmission.
 
 Live acceptance should use an exact commit SHA and record rollback information.
+The parked receive-only checklist is
+[`parked-receive-only-acceptance.md`](parked-receive-only-acceptance.md).
+It distinguishes hardware-free regression tests from installed USB/GPS/audio
+evidence and does not authorize transmission or service changes.
 
 
 ## Application/runtime/UI

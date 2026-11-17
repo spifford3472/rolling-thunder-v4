@@ -1,6 +1,6 @@
 # REL-01 — parked production acceptance packet (prepared; NO GO)
 
-**Current source baseline:** merged `main` at `b8f262299381c9175997e3394e2fb96a537e8685` (2026-11-17).
+**Current source baseline:** merged `main` at `3328c27d5eb41e4417fe6305d1942002a3488106` (2026-11-17).
 **Disposition:** **NO GO for a full AnvilMobile release.** This packet records
 acceptance requirements and source-level conclusions. It intentionally omits
 hostnames, process identifiers, internal network addresses, hardware serials,
@@ -56,6 +56,27 @@ service state still present after PR #479 removed the application source. The
 source merge does not stop, disable, or uninstall a host service and does not
 remove its data. No current cutover state is asserted here; service ownership
 and any cutover require a separately approved plan.
+
+## 2026-11-17 receive-only and MeshCore read-only refresh
+
+An authorized read-only check through the account owning the user systemd
+manager found the Rolling Thunder system unit active. The expected MeshCore
+receiver USB identity was absent from enumeration; the GPS serial endpoint and
+USB audio capture interface were enumerated. These are device-presence checks
+only: no live GPS fix, FT8 decode, or receiver-function test was observed. A
+second remote-tool context ran under a different Unix account and therefore
+reported a different user systemd view; user services must be checked through
+their owning account's manager.
+
+That owner-level manager reported `meshcore-collector.service` enabled and
+active, and `meshcore-traffic-worker.service` enabled but inactive. This
+confirms the historical source-removal warning remains operationally relevant;
+it does not authorize stopping or disabling either service. No database or
+queue was read or changed during this refresh. See
+[`parked-receive-only-acceptance.md`](parked-receive-only-acceptance.md) for
+the incomplete hardware acceptance record and
+[`meshcore-installed-service-cutover-plan.md`](meshcore-installed-service-cutover-plan.md)
+for the separately gated plan.
 
 ## Immutable acceptance gates
 
@@ -150,6 +171,9 @@ load, safety observer, and hard abort.
   confirmed installed or production-accepted.
 - PR #485 recorded the verified primary-QSO online backup. The public record
   intentionally omits its private artifact metadata.
+- PR #486 redacted private production identifiers and documented the remaining
+  native-package signer-trust and running-code identity limits. It did not
+  change runtime behavior or resolve those release gates.
 - PR #480's Forge contact-sync component deployment and the owner's field-test
   report are separate from full Pi acceptance.
 
