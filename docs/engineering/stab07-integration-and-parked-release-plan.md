@@ -212,7 +212,7 @@ Offline candidate validation now requires Ed25519-signed recovery approval recei
 
 ## STAB-07D source/witness status (2026-11-14)
 
-An exact-Git source archive is reproducible offline and a verifier can reject signed process-start observations with wrong boot ID, PID or start ticks. These are candidate components only. A hash-pinned dependency environment, protected release installation, actual trusted launch observer and independent in-memory Python code evidence are still missing; production remains NO GO. See `stab07d-protected-release-and-launch-witness.md`.
+An exact-Git source archive is reproducible offline and a verifier can reject signed process-start observations with wrong boot ID, PID or start ticks. These were candidate components at the time of this checkpoint. The current source-level process-bound release contract and remaining production gates are summarized in `stab07m-process-bound-runtime-identity.md`; full deployment remains NO GO.
 
 ## STAB-07E ARM64 dependency-layer status (2026-11-14)
 
@@ -224,7 +224,7 @@ An exact-source noneditable app wheel built reproducibly and an unprivileged For
 
 ## STAB-07G isolated ARM64 execution (2026-11-14)
 
-Isolated QEMU ARM64 in a private, network-disabled Forge namespace now executes Debian Python 3.13.5, installs 26 hash-locked dependencies and the noneditable app wheel, and passes native imports and installed RECORD checks. This is an emulated Debian `deb13u5` build, **not** an exact Pi (`deb13u4`) OS image. A real Tk event-loop startup, independent loaded-byte runtime identity, protected root-owned installation, SQLite/WAL, PTT physical RX and owner authorization remain mandatory NO-GO gates. See `stab07g-isolated-arm64-execution.md`.
+Isolated QEMU ARM64 in a private, network-disabled Forge namespace executes Debian Python 3.13.5, installs 26 hash-locked dependencies and the noneditable app wheel, and passes native imports and installed RECORD checks. This is an emulated Debian userspace, **not** a Raspberry Pi board or a replacement deployment target. A real Tk event-loop startup, protected root-owned installation, SQLite/WAL, PTT physical RX and owner authorization remain mandatory NO-GO gates. See `stab07g-isolated-arm64-execution.md` and the current process-identity contract in STAB-07M.
 
 ## STAB-07H mock Tk lifecycle validation (2026-11-14)
 
@@ -237,6 +237,15 @@ Real `run_dashboard` under isolated Forge QEMU/Xvfb passed with mock radio/GPS, 
 ## STAB-07J read-only native Pi runtime provenance (2026-11-14)
 
 AnvilMobile's sampled Debian 13 native runtime differs materially from the private emulated Forge ARM64 sysroot (27/52 ELF hashes identical; 10 different, 15 absent; 6/16 package revisions identical). A new bounded offline verifier refuses to infer complete runtime equivalence, signed release or loaded Python identity. Existing protected-release and witness candidates remain uninstalled. See `stab07j-native-runtime-provenance-and-release-readiness.md`. Production NO GO.
+
+### 2026-11-17 process-bound identity source update
+
+The process-bound protected-release verifier and recovery integration now
+require a complete manifest, exact executable/command path, matching live
+process boot ID and start ticks, and a fresh Tk heartbeat tied to that process
+and SHA. It does not claim independent in-memory Python byte proof. The new
+source remains uninstalled; the Pi's mutable checkout, protected service launch
+path and parked acceptance remain outstanding. See STAB-07M.
 
 ## STAB-07K signed exact native OS package reconstruction (2026-11-14)
 

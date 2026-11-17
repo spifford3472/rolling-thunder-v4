@@ -93,10 +93,13 @@ and is not a production installation procedure.
    connected, authenticated, authorizes this project/host/operation, audits
    receipt issuance and enforces expiry, nonce and key rotation. This branch
    includes the verifier only, **not** the issuer or host installation.
-3. **Independent runtime identity:** do not rely on an editable checkout HEAD,
-   `MainPID`, or a signed string supplied by the operator as sole evidence
-   that *loaded Python code* is the reviewed release. Design and validate an
-   independent exact-SHA runtime attestation under pinned release paths.
+3. **Process-bound runtime identity:** the source verifier now checks a
+   root-protected exact-SHA release manifest and executable/command path, then
+   binds the Tk heartbeat to the current PID, boot ID, process start ticks and
+   release SHA. This does not claim independent inspection of loaded Python
+   objects. The Pi still runs from a mutable checkout, and no protected release
+   launcher has been installed or field-verified; see
+   `stab07m-process-bound-runtime-identity.md`.
 4. **SQLite/WAL:** obtain an owner-approved consistent parked snapshot and
    test integrity, rollback schema constraints and preservation of every QSO
    and newer record. Immutable read-only mode correctly refuses a live WAL;
@@ -128,3 +131,13 @@ state changed. Live deployment decision: **NO GO**.
 ## STAB-07C status (2026-11-14)
 
 Read-only AnvilMobile inspection proved the running interpreter is launched from a `geoff`-writable editable checkout; HEAD and MainPID cannot establish loaded Python bytes. An offline protected-release artifact/process binder was built and tested, but it explicitly does **not** attest in-memory modules. The recovery inspector and reconciler now fail closed until genuinely independent loaded-code proof exists; a signed receipt alone cannot bypass it. See `stab07c-running-code-identity.md`. The real service was not modified.
+
+## 2026-11-17 source update
+
+STAB-07M replaces the unnecessary in-memory-byte gate with a named assurance:
+protected release/process identity. It verifies release contents and launch
+path, live process boot/start identity, and a matching Tk heartbeat. The report
+continues to state `loaded_python_bytes_independently_proven=false`. This
+corrects source-level reconciliation semantics only. The current Pi mutable
+checkout, protected unit/drop-in installation, exact release provenance, and
+parked field checks remain unverified; full deployment remains NO GO.

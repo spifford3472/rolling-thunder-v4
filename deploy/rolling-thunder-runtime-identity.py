@@ -16,6 +16,7 @@ import pwd
 import re
 import stat
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +96,69 @@ def _file_hash(
         os.close(fd)
 
 
+def _process_start_ticks(path: Path) -> int:
+    """Parse Linux /proc/PID/stat field 22 despite spaces in comm."""
+    raw = path.read_bytes()
+    closing = raw.rfind(b") ")
+    if closing < 0:
+        raise ValueError("malformed process stat")
+    fields = raw[closing + 2 :].split()
+    if len(fields) < 20:
+        raise ValueError("incomplete process stat")
+    return int(fields[19])
+
+
+def _heartbeat_matches(
+    path: Path,
+    *,
+    uid: int,
+    pid: int,
+    start_ticks: int,
+    boot_id: str,
+    expected_sha: str,
+    now: float,
+) -> bool:
+    """Require fresh Tk evidence bound to this exact process and release."""
+    try:
+        parent = path.parent.lstat()
+        if (
+            not stat.S_ISDIR(parent.st_mode)
+            or parent.st_uid != uid
+            or parent.st_mode & 0o077
+            or path.parent.is_symlink()
+        ):
+            return False
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            metadata = os.fstat(fd)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != uid
+                or metadata.st_mode & 0o077
+                or metadata.st_size > 256
+            ):
+                return False
+            content = os.read(fd, 257)
+        finally:
+            os.close(fd)
+        if len(content) > 256:
+            return False
+        record = json.loads(content.decode("utf-8"))
+        age = now - record["time"]
+        return (
+            type(record.get("pid")) is int
+            and record["pid"] == pid
+            and type(record.get("start_ticks")) is int
+            and record["start_ticks"] == start_ticks
+            and record.get("boot_id") == boot_id
+            and record.get("release_sha") == expected_sha
+            and type(record.get("time")) in (int, float)
+            and 0 <= age <= 5
+        )
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return False
+
+
 def protected_release(
     artifact: Path, *, expected_sha: str, uid: int, anchor: Path = Path("/")
 ) -> dict[str, Any]:
@@ -169,12 +233,16 @@ def inspect(
     operator_user: str = "geoff",
     service: dict[str, str] | None = None,
     trusted_anchor: Path = Path("/"),
+    heartbeat_path: Path | None = None,
+    boot_id_path: Path = Path("/proc/sys/kernel/random/boot_id"),
+    now: float | None = None,
 ) -> dict[str, Any]:
-    """Reconcile process identity with an immutable protected source artifact."""
+    """Bind a protected release to one live process instance and Tk readiness."""
     report: dict[str, Any] = {
         "expected_sha": expected_sha,
         "state": "unverified",
         "loaded_python_bytes_independently_proven": False,
+        "protected_release_process_identity_verified": False,
         "disposition": "blocked_manual_review",
         "release": protected_release(
             artifact, expected_sha=expected_sha, uid=trusted_uid, anchor=trusted_anchor
@@ -217,25 +285,69 @@ def inspect(
             or argv[1:4] != ["-I", "-B", expected_entrypoint]
         ):
             return report
-        report.update({"state": "protected_release_and_process_path_bound", "pid": pid})
-        # This does NOT prove loaded Python modules from memory. A separately
-        # reviewed launch-integrity protocol is required to clear release gate.
+        if process.joinpath("exe").resolve(strict=True) != Path(expected_executable).resolve(
+            strict=True
+        ):
+            return report
+        start_ticks = _process_start_ticks(process / "stat")
+        current_boot_id = boot_id_path.read_text(encoding="ascii").strip()
+        if not re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            current_boot_id,
+        ):
+            return report
+        ready_path = heartbeat_path or Path(
+            f"/run/user/{operator_uid}/rolling-thunder-ui-readiness.json"
+        )
+        if not _heartbeat_matches(
+            ready_path,
+            uid=operator_uid,
+            pid=pid,
+            start_ticks=start_ticks,
+            boot_id=current_boot_id,
+            expected_sha=expected_sha,
+            now=time.time() if now is None else now,
+        ):
+            return report
+        current_values = _service_status() if service is None else service
+        if (
+            current_values.get("ActiveState") != "active"
+            or current_values.get("MainPID") != str(pid)
+            or current_values.get("User") != operator_user
+            or current_values.get("ControlGroup") != "/system.slice/rolling-thunder.service"
+            or _process_start_ticks(process / "stat") != start_ticks
+        ):
+            return report
+        report.update(
+            {
+                "state": "protected_release_process_and_readiness_verified",
+                "protected_release_process_identity_verified": True,
+                "verification_method": (
+                    "protected_release_hashes_exact_exec_path_pid_boot_start_ticks_and_tk_heartbeat"
+                ),
+                "pid": pid,
+                "start_ticks": start_ticks,
+                "boot_id": current_boot_id,
+                "sha": expected_sha,
+                "disposition": "protected_release_identity_verified",
+            }
+        )
+        # This binds the protected files and launch path to a live process; it
+        # does not independently reconstruct Python code objects from memory.
     except (OSError, ValueError, UnicodeError, subprocess.SubprocessError, KeyError):
         pass
     return report
 
 
 def main() -> int:
-    """Never report fully verified in-memory code from this static check."""
+    """Report success only for protected release/process/readiness evidence."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", required=True, type=Path)
     parser.add_argument("--sha", required=True)
     args = parser.parse_args()
     report = inspect(artifact=args.artifact, expected_sha=args.sha)
     print(json.dumps(report, sort_keys=True))
-    # Never expose a success exit code for in-memory code identity on disk-only
-    # evidence; callers must not turn a valid artifact into release approval.
-    return 75
+    return 0 if report["protected_release_process_identity_verified"] else 75
 
 
 if __name__ == "__main__":

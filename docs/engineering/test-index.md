@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 12529)
+Total output lines: 854
+
 # Test Index and Validation Guide
 
 ## Purpose
@@ -516,40 +519,7 @@ clearly distinguished from CI-safe tests.
 
 - `tests/test_forge_known_callsigns.py` — SQLite persistence/schema/limits, admin CRUD/escaping/CSRF/delete confirmation, snapshot/batch privacy, real local HTTP handler.
 - `tests/test_known_callsign_client.py` — bounded transport validation, batch identity, cache refresh/failure/staleness, background polling and typed configuration.
-- `tests/test_friend_widgets.py` — headless gold-star FT8 and LOG adapters preserving outcome/selection/sync colors.
-- Existing shared-spot, FT8, callsign-info, DMR and runtime tests include decoration-only regression checks.
-
-Owner service-package, state backup, private-network admin, restart persistence,
-and installed screen acceptance remains required; see `../KNOWN_CALLSIGNS.md`.
-
-### Immutable contact location
-
-`tests/test_contact_location.py` covers coordinate bounds/pairs/frozen models, all
-repository paths, retry/enrichment preservation, schema-15 migration integrity,
-complete-contact export/backup/import, legacy formats, and the historical
-coordinate-independent ADIF baseline. Current Forge hash coverage additionally
-binds the exact selected station ID and Wavelog-bound ADIF. Existing
-contact-controller, logging, FT8 authorization/logging and HTTP/Forge API tests
-cover capture boundaries, movement and receiver compatibility.
-
-### Dynamic mobile Wavelog routing
-
-`tests/test_forge_contact_sync.py` owns ledger binding, uncertain duplicate replay,
-and changed-payload/changed-station conflict behavior after exact target selection.
-`tests/test_contact_weather.py` proves synchronization has no weather-enricher
-dependency, uploads the exact immutable payload, preserves weather already present,
-and formats absent requested weather as `N/A`. `tests/test_forge_contact_sync_config.py`
-rejects the removed contact-sync weather-provider configuration.
-`tests/test_wavelog.py` owns provider-adapter station creation and configured-logbook
-membership semantics. `tests/test_forge_contact_sync_api.py`,
-`tests/test_ft8_contact_sync.py`, and DMR/ADIF tests protect the one shared
-presentation-neutral sync boundary used by ordinary, POTA/DX, FT8, and DMR
-contacts. All provider writes are scripted fakes; installed Wavelog acceptance is
-still required.
-
-- `tests/test_forge_ft8_readiness_main.py` — missing C4, OFF/armed/no-calibration, read-only dedup and fail-closed output.
-
-- `tests/test_forge_ft8_power_experiment.py` — fail-closed randomized trial assignment, repeatability, bounded wattage and no RF authority.
+- `tests/te…529 tokens truncated…F authority.
 
 - `tests/test_forge_ft8_qualification.py` — certificate fail-closed controls, provenance and confidence-bound rejection.
 
@@ -641,7 +611,7 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 ### STAB-06F recovery acceptance tests (offline, no radio)
 
 - `tests/test_recovery_inspector.py`: database/WAL, full backup QSO row preservation (not just counts), journal, legacy heartbeat and no-write evidence behavior.
-- `tests/test_recovery_process_identity.py`: system manager PID, cgroup and singleton identity with fake procfs.
+- `tests/test_recovery_process_identity.py`: system manager PID, cgroup and singleton identity with fake procfs, including boot ID and process start ticks.
 - `tests/test_recovery_reconciliation.py`: root-only approval receipt, exact evidence binding, expiry, serialization and replay denial.
 - `tests/test_recovery_failure_injection.py`: SIGKILL, failed file/directory fsync, failed rename and corrupt journal refusal.
 - `tests/test_deployment_transaction_journal.py`: archive retention, collision refusal and terminal reconciled transaction.
@@ -709,13 +679,14 @@ has been changed by this inventory correction.
 
 ### STAB-07B security and privileged evidence (offline only)
 
-- `tests/test_recovery_reconciliation.py` now verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals.
+- `tests/test_recovery_reconciliation.py` verifies real ephemeral Ed25519 signatures and rejects unsigned, forged, tampered, wrong-project/host/operation, invalid-time and unsafe-key approvals; a signed receipt cannot bypass missing protected-release/process identity.
 - `tests/test_stab07_privileged_evidence.py` tests wrapper/snapshot hash identity, all protected-file hashes, and secret-free directive-name reporting with temporary files. No installed root files or RF are tested.
 
 ### STAB-07C running-code release identity (offline)
 
-- `tests/test_runtime_release_identity.py` — private fake release/procfs manifest, source-file inventory, path and process identity, untrusted-code refusal and explicit no-in-memory-proof semantics.
-- `tests/test_recovery_reconciliation.py` — signed approvals cannot bypass an unverified loaded Python code identity; transactions remain blocked.
+- `tests/test_runtime_release_identity.py` — private fake release/procfs manifest, executable/command path, PID/boot/start-tick and Tk-heartbeat binding, mismatched evidence refusal, and explicit no-in-memory-proof semantics.
+- `tests/test_ui_deployment_readiness.py` — Tk-loop freshness and supervised process-instance binding, including PID reuse/start-time and boot mismatch.
+- `tests/test_recovery_reconciliation.py` — signed approvals cannot bypass an unverified protected release/process identity; transactions remain blocked.
 
 ### STAB-07D protected release and launch provenance (offline)
 

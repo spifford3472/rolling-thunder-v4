@@ -44,6 +44,12 @@ def _proc(tmp_path: Path, *, pid: int = 1234) -> Path:
     process.mkdir(parents=True)
     (process / "cgroup").write_text("0::/system.slice/rolling-thunder.service\n", encoding="utf-8")
     (process / "cmdline").write_bytes(b"/bin/python\0/home/geoff/.venv/bin/rolling-thunder-ui\0")
+    (process / "stat").write_bytes(
+        b"1234 (python with spaces) S " + b"0 " * 18 + b"987654 0\n"
+    )
+    boot = root / "sys/kernel/random/boot_id"
+    boot.parent.mkdir(parents=True)
+    boot.write_text("01234567-89ab-cdef-0123-456789abcdef\n", encoding="ascii")
     return root
 
 
@@ -69,14 +75,59 @@ def test_heartbeat_path_requires_private_runtime_directory(tmp_path: Path) -> No
     assert ui_readiness.heartbeat_path(str(runtime)) is None
 
 
+def test_release_sha_is_derived_only_from_sha_named_process_cwd(tmp_path: Path) -> None:
+    root = tmp_path / "proc"
+    process = root / "1234"
+    process.mkdir(parents=True)
+    releases = tmp_path / "releases"
+    releases.mkdir()
+    release_sha = "a" * 40
+    release = releases / release_sha
+    release.mkdir()
+    (process / "cwd").symlink_to(release, target_is_directory=True)
+    assert ui_readiness.process_release_sha(1234, proc_root=root) == release_sha
+    (process / "cwd").unlink()
+    mutable = tmp_path / "rolling-thunder-v4"
+    mutable.mkdir()
+    (process / "cwd").symlink_to(mutable, target_is_directory=True)
+    assert ui_readiness.process_release_sha(1234, proc_root=root) is None
+
+
 def test_heartbeat_rejects_foreign_pid_future_and_malformed(tmp_path: Path) -> None:
     path = tmp_path / "ready.json"
-    ui_readiness.publish_heartbeat(path, pid=1234, now=100.0)
+    ui_readiness.publish_heartbeat(
+        path,
+        pid=1234,
+        now=100.0,
+        process_boot_id="01234567-89ab-cdef-0123-456789abcdef",
+        start_ticks=42,
+        release_sha="a" * 40,
+    )
     assert not ui_readiness.has_fresh_heartbeat(path, expected_pid=1235, now=101.0)
     assert not ui_readiness.has_fresh_heartbeat(path, expected_pid=1234, now=99.0)
     assert ui_readiness.has_fresh_heartbeat(path, expected_pid=1234, now=104.0)
     path.write_text(json.dumps({"pid": "1234", "time": 101.0}), encoding="utf-8")
     assert not ui_readiness.has_fresh_heartbeat(path, expected_pid=1234, now=102.0)
+
+
+def test_heartbeat_rejects_symlinked_marker(tmp_path: Path) -> None:
+    target = tmp_path / "target.json"
+    target.write_text(
+        json.dumps(
+            {
+                "pid": 1234,
+                "time": 100.0,
+                "boot_id": "01234567-89ab-cdef-0123-456789abcdef",
+                "start_ticks": 42,
+                "release_sha": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    target.chmod(0o600)
+    marker = tmp_path / "ready.json"
+    marker.symlink_to(target)
+    assert not ui_readiness.has_fresh_heartbeat(marker, expected_pid=1234, now=101.0)
 
 
 def test_readiness_requires_supervised_pid_cgroup_command_and_tk_tick(
@@ -86,7 +137,13 @@ def test_readiness_requires_supervised_pid_cgroup_command_and_tk_tick(
     marker = tmp_path / "ready.json"
     monkeypatch.setattr(deployment_readiness, "read_system_service", _service)
     monkeypatch.setattr(deployment_readiness.time, "time", lambda: 1000.0)
-    ui_readiness.publish_heartbeat(marker, pid=1234, now=999.0)
+    ui_readiness.publish_heartbeat(
+        marker,
+        pid=1234,
+        now=999.0,
+        process_boot_id="01234567-89ab-cdef-0123-456789abcdef",
+        start_ticks=987654,
+    )
     params = {"expected_uid": os.getuid(), "marker": marker, "proc_root": root}
     assert deployment_readiness.ready_once(**params)
     second = root / "4321"
@@ -108,6 +165,31 @@ def test_readiness_requires_supervised_pid_cgroup_command_and_tk_tick(
         assert not deployment_readiness.ready_once(**params)
     monkeypatch.setattr(deployment_readiness, "read_system_service", _service)
     (root / "1234" / "cgroup").write_text("0::/user.slice/not-rolling-thunder\n", encoding="utf-8")
+    assert not deployment_readiness.ready_once(**params)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("start_ticks", 987653), ("boot_id", "fedcba98-7654-3210-fedc-ba9876543210")],
+)
+def test_readiness_rejects_reused_pid_or_different_boot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, value: object
+) -> None:
+    root = _proc(tmp_path)
+    marker = tmp_path / "ready.json"
+    ui_readiness.publish_heartbeat(
+        marker,
+        pid=1234,
+        now=999.0,
+        process_boot_id="01234567-89ab-cdef-0123-456789abcdef",
+        start_ticks=987654,
+    )
+    record = json.loads(marker.read_text(encoding="utf-8"))
+    record[field] = value
+    marker.write_text(json.dumps(record), encoding="utf-8")
+    monkeypatch.setattr(deployment_readiness, "read_system_service", _service)
+    monkeypatch.setattr(deployment_readiness.time, "time", lambda: 1000.0)
+    params = {"expected_uid": os.getuid(), "marker": marker, "proc_root": root}
     assert not deployment_readiness.ready_once(**params)
 
 

@@ -78,8 +78,16 @@ def ready_once(*, expected_uid: int, marker: Path, proc_root: Path = Path("/proc
             return False
         if not unique_dashboard_pid(proc_root, uid=expected_uid, expected_pid=pid):
             return False
+        expected_boot_id = ui_readiness.boot_id(proc_root=proc_root)
+        expected_start_ticks = ui_readiness.process_start_ticks(pid, proc_root=proc_root)
         return has_fresh_heartbeat(
-            marker, expected_pid=pid, now=time.time(), expected_uid=expected_uid
+            marker,
+            expected_pid=pid,
+            now=time.time(),
+            expected_uid=expected_uid,
+            expected_boot_id=expected_boot_id,
+            expected_start_ticks=expected_start_ticks,
+            expected_release_sha=ui_readiness.process_release_sha(pid, proc_root=proc_root),
         )
     except (OSError, ValueError, subprocess.SubprocessError):
         return False

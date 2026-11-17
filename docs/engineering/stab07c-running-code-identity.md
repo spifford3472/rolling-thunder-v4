@@ -1,9 +1,18 @@
-# STAB-07C — Independent running-code identity: evidence and fail-closed design
+# STAB-07C — Historical running-code identity investigation
 
 **Status: OFFLINE SOURCE / NO-GO for production** (2026-11-14).
 No application, service, file permission, sudoers, database, radio or host change
 has been performed. Uses Desktop Commander; SpiffBridge remains optional and
 is not needed for development or diagnostics.
+
+**Current source disposition (2026-11-17):** the design below is historical.
+`stab07m-process-bound-runtime-identity.md` implements protected-release file,
+executable and command-path checks plus a Tk heartbeat bound to PID, boot ID,
+process start ticks and release SHA. It leaves
+`loaded_python_bytes_independently_proven=false` and reports only
+`protected_release_process_identity_verified`. The current mutable-checkout Pi
+process cannot pass, and no protected-release launcher has been installed;
+production identity and full release remain NO GO.
 
 ## Real AnvilMobile evidence (read-only)
 
@@ -45,13 +54,14 @@ requires *all* of the following:
    Python `-I` disables user site and environment injection and `-B` disables
    bytecode writes. No fallback accepts current editable launch semantics.
 
-The reported state is explicitly **artifact/process path binding**, NOT proof
-of independently verified Python modules in memory. A process may have loaded
+At the time of this historical investigation, the reported state was
+**artifact/process path binding**, NOT proof of independently verified Python modules in memory. A process may have loaded
 modules before a disk check, may load dynamically, or may be executing a code
 object not reconstructable by hashing disk. The report's
-`loaded_python_bytes_independently_proven` remains **false** and its release
-disposition stays `blocked_manual_review`, even with all checks green.
-The independent command-line verifier always exits with **status 75** (refused) even when protected artifact and process paths bind successfully; no caller may treat static artifact identity as release acceptance.
+`loaded_python_bytes_independently_proven` remains **false**. The current
+verifier now exits successfully only after the protected release, live process
+instance and fresh matching Tk heartbeat all pass; this does not claim to read
+Python objects from memory. See STAB-07M for its current contract.
 
 This protects against falsely accepting mutable checkout HEAD, duplicate
 identity, missing manifests, altered source or untrusted paths. It does not
@@ -63,36 +73,28 @@ cryptographically verified release process.
 
 ## Reconciliation integration and hazard control
 
-The separate read-only `deploy/rolling-thunder-recovery-inspect.py` now always
-reports `runtime_code_identity.loaded_python_bytes_independently_proven=false`
-for an unverified live runtime. The signed reconciliation executor now refuses
-a report without independent proof **before** accepting any approval receipt.
-An approved and signed human boolean is not sufficient proof of executing
-bytes. Existing tests that exercise the *downstream* approval path inject a
-synthetic positive evidence source; live inspection deliberately cannot do so.
+The separate read-only `deploy/rolling-thunder-recovery-inspect.py` reports
+`loaded_python_bytes_independently_proven=false` and requires the explicit
+protected-release/process identity result. Signed reconciliation refuses an
+unverified mutable checkout before accepting an approval receipt. A signed
+owner approval cannot substitute for process evidence. Tests that exercise the
+downstream approval path inject synthetic positive evidence; live inspection
+does not accept that fixture or a mutable checkout.
 No new autorollback, journal-clearing, service command, CAT/PTT or radio control
 path was introduced.
 
 ## Remaining acceptance design and sequence
 
-- Specify and independently test a reproducible, root-controlled protected
-  release build from a pinned exact commit, including dependencies and native
-  extensions, startup bootstrap and release signature. Avoid mutable editable
-  installs or adding two competing launcher instances. Review service restart,
-  full rollback, source/venv integrity and permission boundary.
-- Produce a trustworthy runtime launch attestation bound to the *exact process
-  instance* (PID plus boot ID and start ticks), release content, launch-time
-  verified hashes and reliable audit history. A secure exec-to-Python handoff
-  and dynamic module integrity strategy must be justified; do not simply
-  trust arbitrary process-generated JSON, environment values or Git HEAD.
-- Independently cross-check the running process with the protected launch
-  provenance, current artifact hashes, systemd MainPID/cgroup, Tk heartbeat and
-  startup audit. Protect against PID reuse, code replaced after startup,
-  symlink/path swaps, compromised verifier and unsigned claims. Treat failed
-  or partial proof as `unverified` and preserve the blocked transaction.
-- Integrate the independent source with reconciliation only once its trust
-  boundary and real parked tests are accepted. No current verifier reports
-  `loaded_python_bytes_independently_proven=true` in production.
+- Build and review a protected release installer/service integration for the
+  Pi's existing OS baseline. The mutable-checkout deployment candidate is not
+  sufficient and has not been replaced or installed.
+- Confirm that the privileged release builder binds the complete protected
+  manifest to the reviewed exact commit and pinned application environment.
+  The process verifier checks installed bytes but does not by itself prove the
+  manifest's creation provenance.
+- Perform separately authorized parked installation/rollback and verify the
+  process-bound Tk heartbeat on AnvilMobile. The source verifier remains
+  offline-only until then.
 - Require owner-approved read-only inspection of original installed wrapper
   hash and protected FT8 drop-in; consistent parked SQLite/WAL snapshot and
   QSO preservation; independent physical PTT de-key verification; signed owner
@@ -106,12 +108,9 @@ path was introduced.
 ## Deterministic tests
 
 `tests/test_runtime_release_identity.py` covers protected source and manifest
-identity, launched process path/cgroup binding, mismatch SHA, writable and
-symlinked source, untracked Python and virtualenv files, missing manifest,
-wrong cwd, PID, cgroup, entrypoint and nonisolated interpreter. Crucially a
-successful protected artifact binding still reports loaded-code proof FALSE.
-`tests/test_recovery_reconciliation.py` covers refusal to attest an incomplete
-runtime identity even when an approval is correctly signed.
+identity, executable/command path, PID/boot/start ticks, matching Tk heartbeat,
+and malformed or wrong-process evidence. A successful result still reports
+loaded-code proof FALSE. See STAB-07M for current offline coverage.
 
 2026-11-14: Added only offline read-only evidence and conservative reconciliation
 NO-GO enforcement. Rollback is revert of this draft code; no installed host
