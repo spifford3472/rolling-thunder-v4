@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 
+from rolling_thunder import ui_readiness
 from rolling_thunder.ui_readiness import HEARTBEAT_NAME, has_fresh_heartbeat
 
 SERVICE_NAME = "rolling-thunder.service"
