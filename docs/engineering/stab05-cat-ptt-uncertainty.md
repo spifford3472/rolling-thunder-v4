@@ -78,6 +78,11 @@ no host or hardware changes made. Release still requires parked approval.
 
 ## FT8 PTT alarm receive-confirmation remediation (2026-11-15 review branch)
 
+**Historical status:** this section records the fail-closed receive-confirmation
+correction before PR #477. The owner-directed manual recovery below was later
+merged and supersedes the statements that 1–3–1 cannot unlock the real alarm
+or that no in-app recovery exists.
+
 `ui_main.py::handle_ptt_unlock_action` previously supplied an unconditional
 `radio_confirmed_receive=True` to the real alarm. `ft891_radio.py` also
 populates `RadioState.transmitting=False` during frequency/mode refresh; it
@@ -108,10 +113,10 @@ changes occurred. Rollback: revert this PR; a rollback would reintroduce the
 unverified unlock and must not be deployed as a safety fix.
 
 
-## Owner-directed FT8 operator recovery policy (2026-11-15, unmerged)
+## Owner-directed FT8 operator recovery policy (2026-11-15, merged PR #477)
 
 The owner requires that the PTT warning not create an unrecoverable software
-lockout. The proposed recovery branch explicitly preserves `FT8PttAlarm` as
+lockout. The merged recovery explicitly preserves `FT8PttAlarm` as
 **process/session-local** state: restarting the application creates a new
 clear alarm. The operator also may dismiss the warning and then deliberately
 enter 1–3–1 in the FT8 context to override the inhibit. The alarm implementation
@@ -127,6 +132,7 @@ Recovery is operator-responsible: independently observe the red TX indicator,
 physically de-key or power down if uncertain, and do not start a new QSO while
 TX is unresolved. In-memory alarm reset after restart is **intentional owner
 policy**, not a guarantee the hardware is in receive. This policy supersedes
-the preceding source-only disabled-unlock design description when this review
-branch is merged, without implying deployment. Rollback: revert this PR;
+the preceding source-only disabled-unlock design description in the current
+source. It does not imply that the current source has been deployed. Rollback:
+revert this PR;
 no host, radio, network or service state changed.

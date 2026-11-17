@@ -10,7 +10,7 @@ This guide describes the implemented repository rather than an aspirational arch
 - `ohgo-incidents.md` — Forge OHGO incident source, protected credential gate, retained API and combined read-only dashboard context.
 - `stab04-shutdown-deadline.md` — current shutdown critical-path blocking evidence, passing ordering/concurrency regressions and outstanding safety gates.
 
-- `ft8-rx02-receive-evidence-and-supervised-recovery.md` — vendor-documented read-only FT-891 TX/LED CAT reports, no-unlock advisory boundary, independent physical RX requirements and restart-latch risk.
+- `ft8-rx02-receive-evidence-and-supervised-recovery.md` — vendor-documented read-only FT-891 TX/LED CAT reports, explicit operator recovery and restart reset, and the boundary that neither proves physical RX.
 
 - `stab05-cat-ptt-uncertainty.md` — current CAT/PTT lock and failed release evidence, preserved single-command authority, and parked acceptance gates.
 

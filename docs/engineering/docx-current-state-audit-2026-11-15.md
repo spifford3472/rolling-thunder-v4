@@ -12,20 +12,20 @@ radio safety, production readiness, or approved deployment.
    `source-file-index.md` displayed count was **340**, a verified documentation
    defect, now corrected. Adding DOC-X's own test makes **460 tests**. No
    speculative catalog rewrite is warranted.
-2. The FT8 lockout's actual UI handler supplies
-   `radio_confirmed_receive=True` as a constant to `FT8PttAlarm.unlock_step`,
-   both in normal and isolated visual-test paths. The function's argument name
-   implies an independent RX observation, which is **not implemented here**.
-   The alarm still requires dismissal and 1–3–1 within FT8. This is a source
-   safety-policy gap and an operator-documentation hazard, **not proof of a
-   currently stuck or transmitting radio**. Physical de-key must be established
-   independently; never silently relax the transmit inhibit in DOC-X.
-3. The MeshCore intelligence document began with a historical *pure classifier*
-   that did not store messages, while current source includes optional
-   `meshcore_message_broker.py` and `meshcore_broker_drain.py`, with separate
-   durable public/private streams. Its beginning is now explicitly scoped as
-   historical foundation. The OHGO API remains Forge-owned and independent;
-   sharing an operator context does not create a common source or lifecycle.
+2. At this report's 2026-11-15 baseline, the real FT8 alarm UI passed a
+   fabricated `radio_confirmed_receive=True`; PR #477 later corrected the
+   production path to pass `False` and a separately named explicit
+   `operator_recovery_override=True`. The isolated visual-test path still
+   uses `True` only for its mock alarm. The current operator override is a
+   manual recovery choice, **not** physical receive proof, and sends no CAT/PTT
+   command or FT8 transmission.
+3. At the 2026-11-15 report baseline, the MeshCore intelligence document began
+   with a historical *pure classifier* while source also included optional
+   broker/drain implementations with separate durable public/private streams.
+   PR #479 later removed MeshCore application code and retained Forge-backed
+   OHGO. Those broker implementation details are historical on current `main`;
+   installed independent services and databases remain separate operational
+   state and were not removed by that source merge. OHGO remains Forge-owned.
 4. The prior STAB-04/05/06/07 *candidate/not deployed* language must be
    separated into **merged source**, **historical observations**, **installed
    SHA not reverified**, and **parked physical acceptance incomplete**. The
@@ -89,13 +89,24 @@ There is **no safe inference** that all templates or entry points are active.
 
 | Priority | ID | Finding | Status / next action |
 | --- | --- | --- | --- |
-| P0 safety | DOCX-PTT-01 | UI passes unconditional RX confirmation into a function whose contract requires verified physical receive | **Confirmed source discrepancy**, not a measured RF incident. Separate design/test review, parked operator confirmation and fail-closed change; never silently bypass RF inhibit |
+| P0 safety | DOCX-PTT-01 | Historical production UI passed unconditional RX confirmation | **Corrected by merged PR #477**; retained as historical evidence. Current source uses explicit operator recovery and does not claim physical RX proof. See the current FT8-RX-02 guide. |
 | P1 runtime | DOCX-PROD-01 | Exact installed Pi/Forge SHA and protected drop-ins not verified in this documentation-only workstream | Read-only production evidence under separate authorization; until then source ≠ installed state |
 | P1 reliability | DOCX-PSK-01 | Dated PSK autoqueue oneshot failure observed while timer scheduled | Preserve historical observation; follow a read-only Forge job diagnosis, no auto-restart by DOC-X |
 | P1 release | DOCX-NATIVE-01 | STAB-07K/L two Raspberry Pi native archives remain unauthenticated; real physical release tests outstanding | Quarantined; Track B deferred. Do not use unsigned archives or claim parity |
 | P2 documentation | DOCX-DOC-01 | Source catalog headline 340 vs actual 401; stale STAB-07 candidate wording and historical MeshCore blanket claims | **Corrected in DOC-X** and covered by automated inventory regression |
 | P2 maintainability | DOCX-CI-01 | Documentation references can drift unnoticed | Source/test bidirectional index, displayed count and local Markdown link guard added to CI, with synthetic tests |
 | P2 scope | DOCX-PR-01 | #414 and #439 contain historical useful findings but overlap current main and have stale baseline assumptions | Treat as review material only; do not merge wholesale or close without explicit owner direction |
+
+## 2026-11-16 source-status reconciliation
+
+PR #477 merged at `80eb66295ebaff8b5a9821c7e592e16e95e7bb93`. It implements
+the owner's requested session-local recovery: Voice Cancel acknowledges the
+alarm; an explicit FT8-screen 1–3–1 sequence clears the software inhibit after
+the operator chooses recovery; a process restart creates a fresh alarm
+instance. Neither action proves physical de-key. The production UI passes
+`radio_confirmed_receive=False`, logs the manual override with
+`physical_rx_verified=false`, and starts no transmit. The old source finding
+above is historical and no longer an open defect on current `main`.
 
 ## DOC-01, DOC-02, DOC-03 disposition
 
@@ -154,3 +165,15 @@ record is required.
   to merged source with physical acceptance outstanding. The older DOC-02
   checkpoint now points to this ledger. CI Ruff explicitly checks the new
   inventory validator as well as source and tests.
+
+## 2026-11-17 merged-source reconciliation
+
+Current `main` is `2632dc8b4445ed84644d9324f7fe91bb6175b106`. PR #481's GPS
+poll/disconnect shutdown fix and PR #479's application-level MeshCore removal
+are merged; Forge-backed OHGO remains. The active-source inventory now contains
+369 Python modules and 425 test modules. `python tools/docx_inventory.py` on
+this tree reports 369 source modules, 425 tests, 29 local links and zero drift.
+The 401/460 counts recorded above describe the earlier 2026-11-15 baseline;
+they are historical, not current inventory values. The 2026-11-15 installed
+host snapshot remains dated evidence and does not establish current production
+state or deployment readiness. Full AnvilMobile release status remains NO GO.

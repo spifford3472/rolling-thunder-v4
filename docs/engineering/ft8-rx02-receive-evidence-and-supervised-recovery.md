@@ -70,22 +70,23 @@ Human visual confirmation of a non-red TX lamp or safely powering off the rig
 is appropriate for *operator-directed recovery*, but is not an in-band
 machine-verifiable sensor measurement. It must not be encoded as
 `radio_confirmed_receive=True` merely because the 1-3-1 gesture occurred.
-The operator's independent manual 1-3-1 override (proposed in a separate
-owner-directed fix) is an **explicit human decision**, never evidence from
-these CAT replies and never permission for automatic keying.
+The current UI implements the operator's manual 1-3-1 override as an
+**explicit human decision**, never evidence from these CAT replies and never
+permission for automatic keying.
 
 ## Owner policy — session-only alarm and manual override
 
-The current `FT8PttAlarm` is intentionally an in-memory object created at
-dashboard startup. **The owner requires a restart to clear the session alarm**
-and rejects any permanent/unrecoverable software lockout. The separate
-operator-recovery change proposes acknowledgment plus explicit 1-3-1 on the
-FT8 screen to clear it in-app; no CAT report may auto-clear it. Both a restart
-and manual override are operator recovery decisions, **not proof that the
-radio has de-keyed**. Hardware/CAT uncertainty requires safe observation
-and no new QSO until resolved. Do not introduce persistent reboot-proof
-lockout without separate owner approval. The manual override should produce
-a clear audit log, but there is no new credential or privileged operation.
+The current `FT8PttAlarm` is an in-memory object created at dashboard
+startup. **The owner requires restart to clear the session alarm** and rejects
+any permanent/unrecoverable software lockout. PR #477 merged the explicit
+acknowledgment plus 1–3–1 operator override on the FT8 screen; the production
+UI passes `radio_confirmed_receive=False` and
+`operator_recovery_override=True`. A successful override records
+`physical_rx_verified=false transmit_started=false`. No CAT report
+auto-clears the inhibit. Both restart and manual override are operator
+recovery decisions, **not proof that the radio has de-keyed**. Hardware/CAT
+uncertainty requires safe observation and no new QSO until resolved. Do not
+introduce persistent reboot-proof lockout without separate owner approval.
 
 ## Offline acceptance criteria for future stages
 
@@ -96,8 +97,9 @@ a clear audit log, but there is no new credential or privileged operation.
   or out-of-order response, reconnect/identity change, stale sample,
   blocked query, cancel/shutdown overlap and no unauthorised TX1.
 - Published states never infer RX from missing/non-response or from the
-  existing `RadioState.transmitting=False` field; source-only advisory data
-  cannot clear a real FT8 inhibit, even when three firmware reports agree.
+  existing `RadioState.transmitting=False` field; CAT advisory data never
+  clears an FT8 inhibit. Only the documented explicit operator override or
+  a new process instance clears this session-local software latch.
 - A future separate supervised sensor prototype must prove real physical
   semantics with an operator-present parked radio. Require distinct approvals
   for powered CAT polling and especially any live RF transmission.

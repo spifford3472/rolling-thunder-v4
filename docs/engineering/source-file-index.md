@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 369 (verified against the MC-REMOVE source branch from `91315847e313d6b3f1e1eaad1f5a2b7dee7659e3`, 2026-11-15).**
+**Cataloged Python modules: 369 (verified against current main, `2632dc8b4445ed84644d9324f7fe91bb6175b106`, 2026-11-17).**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task

@@ -1,4 +1,4 @@
-"""Uncomposed off-Tk RTCTRL/2 serial owner with expiring bounded input."""
+"""Off-Tk RTCTRL/2 serial owner selected by the explicit serial_v2 transport."""
 
 from __future__ import annotations
 
