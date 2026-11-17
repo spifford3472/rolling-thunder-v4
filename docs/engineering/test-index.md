@@ -669,7 +669,7 @@ has been changed by this inventory correction.
 - `tests/test_forge_c6_service_units.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `tests/test_forge_contact_snapshots.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `tests/test_forge_ft8_periods.py` — referenced in current repository; review related feature guide for ownership and behavior.
-- `tests/test_forge_psk_autoqueue.py` — referenced in current repository; review related feature guide for ownership and behavior.
+- `tests/test_forge_psk_autoqueue.py` — confirms read-only URI attachments for all source databases, byte-identical dry-run inputs, bounded enqueue, and replay deduplication.
 - `tests/test_forge_psk_bridge_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `tests/test_forge_psk_coverage_audit.py` — referenced in current repository; review related feature guide for ownership and behavior.
 - `tests/test_forge_psk_event_bridge.py` — referenced in current repository; review related feature guide for ownership and behavior.

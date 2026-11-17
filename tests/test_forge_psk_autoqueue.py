@@ -18,9 +18,9 @@ def config(tmp_path: Path) -> dict[str, Path]:
 
 def test_dry_run_is_readonly_and_no_provider(tmp_path: Path) -> None:
     kwargs = config(tmp_path)
-    original = kwargs["queue_database"].read_bytes()
+    original = {path: path.read_bytes() for path in kwargs.values()}
     assert run_once(**kwargs) == (1, 0)
-    assert kwargs["queue_database"].read_bytes() == original
+    assert {path: path.read_bytes() for path in kwargs.values()} == original
 
 
 def test_restart_safe_dedupe_and_no_oldest_starvation(tmp_path: Path) -> None:

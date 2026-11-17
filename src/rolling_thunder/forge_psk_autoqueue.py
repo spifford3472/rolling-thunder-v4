@@ -45,7 +45,8 @@ def unqueued_events(
         if not path.is_file():
             raise AutoQueueError(f"Required database missing: {path}")
     try:
-        with sqlite3.connect(":memory:") as db:
+        # URI processing is required for ATTACH to honor each source's mode=ro.
+        with sqlite3.connect(":memory:", uri=True) as db:
             db.row_factory = sqlite3.Row
             db.execute("PRAGMA query_only=ON")
             for alias, path in (
