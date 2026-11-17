@@ -136,7 +136,7 @@ neither establishes that the radio is physically in receive.
 
 ### 2026-11-17 current read-only host recheck
 
-Current merged `main` is `3328c27d5eb41e4417fe6305d1942002a3488106`; PR #486
+Current merged `main` is `a24d7d2a14cd1ea110696249e889a42fb0dc42c1`; PR #486
 redacted the public production packet and did not change runtime behavior. An
 authorized owner-account inspection found the main system service active,
 serial device paths present, and a USB audio-capture endpoint enumerated. The
