@@ -19,7 +19,7 @@ _MAX_BYTES = 64_000
 
 
 @dataclass(frozen=True, slots=True)
-class MeshcoreOhgoPanelState:
+class OhgoPanelState:
     """Immutable, display-only incident preview with explicit availability."""
 
     status: OhgoState = OhgoState.DISABLED
@@ -28,7 +28,7 @@ class MeshcoreOhgoPanelState:
     reason: str = "forge_not_configured"
 
 
-def decode_forge_ohgo(data: bytes, *, received_at: datetime) -> MeshcoreOhgoPanelState:
+def decode_forge_ohgo(data: bytes, *, received_at: datetime) -> OhgoPanelState:
     """Reject incomplete/nonversioned snapshots or stale incident dates."""
 
     if len(data) > _MAX_BYTES:
@@ -51,7 +51,7 @@ def decode_forge_ohgo(data: bytes, *, received_at: datetime) -> MeshcoreOhgoPane
         <= received_at.astimezone(UTC) - fetched_at.astimezone(UTC)
         <= timedelta(minutes=5)
     ):
-        return MeshcoreOhgoPanelState(OhgoState.STALE, reason="provider_snapshot_expired")
+        return OhgoPanelState(OhgoState.STALE, reason="provider_snapshot_expired")
     lines: list[str] = []
     if status == OhgoState.CURRENT:
         items = raw.get("incidents")
@@ -66,7 +66,7 @@ def decode_forge_ohgo(data: bytes, *, received_at: datetime) -> MeshcoreOhgoPane
             category = _safe_label(item.get("category"), 25)
             if route or location:
                 lines.append(f"{route} {direction}  •  {category}\n{location}".strip())
-    return MeshcoreOhgoPanelState(
+    return OhgoPanelState(
         status, fetched_at, tuple(lines), str(raw.get("reason") or "")[:45]
     )
 
@@ -77,7 +77,7 @@ def _safe_label(value: object, maximum: int) -> str:
     return "".join(c for c in value if c.isprintable())[:maximum] if isinstance(value, str) else ""
 
 
-class MeshcoreOhgoPanelWorker:
+class OhgoPanelWorker:
     """Independent private Forge polling; no network operations on UI thread."""
 
     def __init__(
@@ -91,10 +91,10 @@ class MeshcoreOhgoPanelWorker:
         self._lock = Lock()
         self._stop = Event()
         self._thread: Thread | None = None
-        self._state = MeshcoreOhgoPanelState()
+        self._state = OhgoPanelState()
 
     @property
-    def state(self) -> MeshcoreOhgoPanelState:
+    def state(self) -> OhgoPanelState:
         """No file I/O, HTTP or UI event handling in a Tk refresh."""
 
         with self._lock:
@@ -106,13 +106,13 @@ class MeshcoreOhgoPanelWorker:
         if self._base is None or self._thread is not None:
             return
         self._stop.clear()
-        self._thread = Thread(target=self._loop, daemon=True, name="meshcore-ohgo-panel")
+        self._thread = Thread(target=self._loop, daemon=True, name="ohgo-panel")
         self._thread.start()
 
     def _loop(self) -> None:
         assert self._base is not None
         while not self._stop.is_set():
-            status = MeshcoreOhgoPanelState(OhgoState.UNAVAILABLE, reason="forge_unavailable")
+            status = OhgoPanelState(OhgoState.UNAVAILABLE, reason="forge_unavailable")
             try:
                 request = Request(
                     self._base + "/api/v1/ohgo/incidents",
@@ -140,10 +140,10 @@ class MeshcoreOhgoPanelWorker:
             self._thread = None
 
 
-def present_meshcore_ohgo(state: MeshcoreOhgoPanelState) -> str:
+def present_ohgo(state: OhgoPanelState) -> str:
     """Legible at-a-glance read-only presentation, never an alert."""
 
-    header = "MESHCORE  •  Passive receive-only\nOHGO  •  Ohio DOT incident reports"
+    header = "OHGO  •  Ohio DOT incident reports"
     if state.status == OhgoState.DISABLED:
         status = "OHGO not configured on Forge."
     elif state.status == OhgoState.UNAVAILABLE:

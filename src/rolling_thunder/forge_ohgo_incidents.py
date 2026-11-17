@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
-from rolling_thunder.meshcore_geographic_relevance import GeoPoint
+from rolling_thunder.live_map import GeoPoint
 
 _API_URL = "https://publicapi.ohgo.com/api/v1/incidents"
 _MAX_ITEMS = 100

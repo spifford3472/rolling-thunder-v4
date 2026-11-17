@@ -1,4 +1,4 @@
-"""Large-text, scrollable MeshCore/OHGO viewport and rotary action adapter.
+"""Large-text, scrollable OHGO viewport and rotary action adapter.
 
 This viewport never fetches network data or mutates provider state. Only
 accepted, context-scoped rotary movements scroll its displayed text.
@@ -17,7 +17,7 @@ _OHGO_BODY_FONT = ("DejaVu Sans", 42, "bold")
 _OHGO_MORE_FONT = ("DejaVu Sans", 27, "bold")
 
 
-class MeshcoreOhgoScrollInterceptor(EventAwareInterceptor):
+class OhgoScrollInterceptor(EventAwareInterceptor):
     """Consume only rotary scroll actions within the active OHGO context."""
 
     def __init__(
@@ -36,7 +36,7 @@ class MeshcoreOhgoScrollInterceptor(EventAwareInterceptor):
 
         if (
             action not in (ControlAction.MOVE_NEXT, ControlAction.MOVE_PREVIOUS)
-            or self._selected_context() is not ContextId.MESHCORE_OHGO
+            or self._selected_context() is not ContextId.OHGO
         ):
             return None
         if not self._allowed():
@@ -45,7 +45,7 @@ class MeshcoreOhgoScrollInterceptor(EventAwareInterceptor):
         return self._scroll(action)
 
 
-class MeshcoreOhgoWidgets:
+class OhgoWidgets:
     """Dedicated, word-wrapped Text viewport with a fixed bottom MORE indicator."""
 
     def __init__(

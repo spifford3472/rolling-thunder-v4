@@ -1,5 +1,11 @@
 # MeshCore durable traffic worker — Issue #395 follow-on
 
+> **Historical record (not active Rolling Thunder source).** This document
+> describes the earlier MeshCore implementation, design, or acceptance evidence.
+> Keep it for history; do not use it to restore runtime integration. See
+> `mc-remove-dependency-inventory-2026-11-15.md` for the current source boundary
+> and separately authorized installed-service cutover.
+
 ## Current state and authority
 
 The independently runnable traffic worker is already merged and deployed as

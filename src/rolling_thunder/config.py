@@ -1,5 +1,6 @@
 """Typed YAML configuration for Rolling Thunder."""
 
+import warnings
 from datetime import time
 from enum import StrEnum
 from pathlib import Path
@@ -855,27 +856,6 @@ class FT8Config(ConfigurationModel):
         return self
 
 
-class MeshcorePassiveConfig(ConfigurationModel):
-    """Opt-in USB receive-only MeshCore collector configuration."""
-
-    enabled: bool = False
-    device: Path | None = None
-
-    @model_validator(mode="after")
-    def validate_receiver_selection(self) -> Self:
-        """Require an explicit physical USB selector on activation."""
-        if not self.enabled:
-            return self
-        if self.device is None or (
-            self.device.parent != Path("/dev/serial/by-path")
-        ):
-            raise ValueError(
-                "meshcore_passive.device must select a /dev/serial/by-path "
-                "interface when enabled"
-            )
-        return self
-
-
 class ApplicationConfig(ConfigurationModel):
     """Complete Rolling Thunder application configuration."""
 
@@ -895,9 +875,33 @@ class ApplicationConfig(ConfigurationModel):
     physical_controls: PhysicalControlsConfig = PhysicalControlsConfig()
     ft8: FT8Config = FT8Config()
     antenna_reference: AntennaReferenceConfig = AntennaReferenceConfig()
-    meshcore_passive: MeshcorePassiveConfig = MeshcorePassiveConfig()
     contact_logging: ContactLoggingConfig = ContactLoggingConfig()
     storage: StorageConfig = StorageConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def remove_legacy_meshcore_configuration(cls, value: object) -> object:
+        """Ignore only the retired MeshCore section in legacy YAML files.
+
+        All other fields remain subject to the strict model validation policy.
+        The legacy section is shape-checked so unrelated mistakes are not hidden.
+        """
+        if not isinstance(value, dict) or "meshcore_passive" not in value:
+            return value
+        legacy = value["meshcore_passive"]
+        if not isinstance(legacy, dict) or set(legacy) - {"enabled", "device"}:
+            raise ValueError("legacy meshcore_passive section has an unsupported shape")
+        if "enabled" in legacy and not isinstance(legacy["enabled"], bool):
+            raise ValueError("legacy meshcore_passive.enabled must be a boolean")
+        device = legacy.get("device")
+        if device is not None and (not isinstance(device, str) or not device.strip()):
+            raise ValueError("legacy meshcore_passive.device must be a non-empty path")
+        warnings.warn(
+            "meshcore_passive is retired and ignored; MeshCore integration was removed",
+            UserWarning,
+            stacklevel=2,
+        )
+        return {key: item for key, item in value.items() if key != "meshcore_passive"}
 
     @model_validator(mode="after")
     def validate_radar_dependencies(self) -> Self:

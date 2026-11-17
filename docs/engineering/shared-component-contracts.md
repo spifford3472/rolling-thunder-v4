@@ -563,73 +563,21 @@ TX flag is never cleared by disconnection; connecting/error states remain unknow
 and block the action. No live CAT query or radio command is issued by this guard.
 
 
-## Opt-in MeshCore passive observation extension
+## OHGO read-only provider and presentation contract
 
-The opt-in MeshCore collector may consume a caller-supplied immutable `GPSState` and separate version-1 MeshCore-only tables but must not query a second GPS receiver, infer routes from cached outbound paths, assume RSSI/SNR from 0x80/0x81/0x8A, connect to radio hardware or introduce an application-originated unattended transmit path. Existing MeshCore firmware-managed RF is permitted by the owner but does not authorize the application to send discovery, adverts, messages or other transmissions. Default configuration remains disabled; live activation requires a verified exclusive physical USB path and parked hardware acceptance. No ordinary radio control, PTT, contact logging or GPS acquisition is delegated to MeshCore.
+Forge owns the protected credential, rate-limited upstream retrieval, cached
+snapshot, and versioned read-only OHGO route. The Pi reads only that route on a
+bounded background worker. The OHGO context renders immutable state and may
+intercept rotary movement only while selected; other contexts retain shared
+control semantics. It grants no MeshCore, GPS, map, route, alert, radio, or
+transmit authority. See `ohgo-incidents.md`.
 
-Heltec V4 native CDC ACM is an approved receive-adapter transport only for a physically validated `303a:0002` USB device on an explicit `/dev/serial/by-path` selector. Its USB DTR signal must be asserted for firmware replies and does not authorize any MeshCore application-originated RF command. The legacy Heltec V3 `10c4:ea60` CP2102 transport remains supported with DTR deasserted. A validated USB hardware model is not proof of firmware version; version identification is conducted separately.
+### Historical MeshCore contracts
 
-
-### MeshCore independent ownership (cutover implementation)
-
-The standalone collector is the exclusive MeshCore USB owner; Rolling Thunder only publishes nonblocking, atomic snapshots of its current GPS state from the existing polling listener. Absence of fresh GPS state causes explicit null receiver location, never a new GPS acquisition. The read API uses a permission-restricted Unix socket, has no mutating endpoints and never exposes raw RF message data. RF signal metrics from 0x88 carry no trusted sender identity or routing attribution. Durable MeshCore-only SQLite is outside the RT production worktree and separately migrated; local QSO SQLite and FT8/Radio/CAT are untouched.
-
-## MeshCore private activity API
-
-The isolated MeshCore collector is the sole owner of its serial device and schema-2 observation database. Only the existing local permission-restricted Unix socket can serve `meshcore/activity/v1` through `GET /v1/activity`. Calls are read-only, bounded to rolling UTC 24 hours with at most 25 receiver-reception bins; POST and unknown routes are rejected. Receiver coordinates are not peer/device coordinates. No new network listener, second GPS reader, raw message persistence or RF command is introduced. UI clients must consume snapshots through a bounded asynchronous adapter; do not synchronously query the socket on Tk.
-
-## MeshCore message broker privacy and delivery
-
-Only the independent collector serial owner may issue audited *host-local* GET_CHANNEL and SYNC_NEXT_MESSAGE requests. Dequeued private contact frames must be synchronously preserved in an isolated protected inbox before the next dequeue; verified public and restricted quarantine streams are separate. A public-looking hashtag is not proof of public channel membership. Acknowledgements are scoped by bearer-verified consumer identity and stream, and never erase another consumer's unread message. The original passive observation API remains read-only. Full storage, mismatched channel identity and uncertain command timeout stop new dequeues. The owner accepts an at-most-one-message power-loss gap between firmware pop and SQLite commit. No RF transmission is authorized.
-
-## MeshCore public consumer read boundary
-
-The common consumer transport authenticates via the preexisting per-consumer protected local token file and connects only to the independent broker Unix socket. Its default behavior is bounded, immutable public-only reads with **no cursor advancement**. Private/quarantine frames must never cross into a public consumer even on malformed/unknown responses. A separate explicit `acknowledge_processed` action is reserved for a downstream consumer that has completed durable processing; no CLI preview, keyword classifier, dashboard refresh or SCOUT pilot is authorized to call it implicitly. Traffic classification requires the exact approved #traffic slot and retains unverified sender/location semantics. No UI, radio or GPS side effects.
-
-## MeshCore durable traffic worker commit-before-ACK
-
-The independent public consumer's broker cursor is ACKed **only after** the worker's separate SQLite ledger transaction has durably committed the exact source broker message ID and analysis disposition. A failed persistence step must not ACK. A committed-but-unacknowledged replay must validate the exact message fingerprint and retry ACK without duplicating a candidate. A broker ID reused with different source payload fails closed. Public general-channel messages are explicitly ignored in analysis but still durably recorded and ACKed; private/quarantined messages must never enter the worker. Similar traffic reports may be recorded as duplicate rather than new candidates within the bounded rolling suppression window, but source IDs remain recorded separately. Neither Tk, SCOUT, FT8 nor another consumer may ACK the worker's cursor or use its candidate rows as verified geographic hazards. The worker remains opt-in and has no RF, alert, route or provider authority.
-
-
-## MeshCore analysis-only geographic relevance
-
-The existing broker and traffic worker retain all public-intake, private
-isolation and ACK ownership. Parsing must not promote unknown or ambiguous
-messages into incidents or invent a point from highway text. An independent
-geocode provider is disabled by default and constrained by rate limits,
-cache, exact road and landmark evidence. The GPS sampler reuses only
-the existing snapshot at <=1 Hz; its 2–5-second history must be fresh and
-accurate before movement relevance. Heading alone is insufficient to confirm
-route alignment. Decisions cannot issue driver warnings, navigation changes
-or MeshCore RF commands. No new service, schema or external listener.
-
-## MeshCore Forge geographic evidence contracts
-No highway-name centroid becomes a trusted site or confirms a crash.
-Offline reviewed source identity is immutable; the catalog fails closed
-on multi-match, missing or stale records. No public/private messages,
-credentials, GPS track or broker cursor are exposed in the assessment
-store. No existing live database/service is migrated. See
-meshcore-forge-road-evidence.md.
-
-## OHGO optional Forge provider / mobile read-only view
-
-New screen `MESHCORE & OHGO` does not grant transport, broker, map,
-radio or navigation authority. Forge alone reads the OHGO credential
-from systemd `LoadCredential`; no key is transported to Pi or persisted
-in source. Its optional background provider must fail closed on stale,
-unauthorized, malformed or paginated data and must never block the Forge
-HTTP handler. Pi's background poll must never run on Tk's refresh thread.
-No unsolicited alert/route change is permitted.
-
-### MeshCore/OHGO context-scoped rotary scrolling
-
-The dashboard's shared physical control input remains guarded/deduplicated
-by the existing control dispatcher. Its MOVE_NEXT / MOVE_PREVIOUS actions
-may scroll the OHGO read-only text viewport **only when that context is
-selected**, with existing safety/lock gates preserved. All other contexts
-retain their original active-panel navigation and encoder semantics.
-No new radio, GPS, broker, voice or transmitter permissions are introduced.
-See `meshcore-ohgo-incidents.md`.
+Earlier MeshCore contracts, protocols, and device acceptance are retained in
+the historical engineering records. They are not active Rolling Thunder
+contracts after MC-REMOVE. Production service and database lifecycle remains a
+separate owner-approved cutover; no history is deleted by source removal.
 
 ## STAB-07I preference shutdown drain
 

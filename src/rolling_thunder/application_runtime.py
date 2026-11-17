@@ -160,7 +160,6 @@ from rolling_thunder.map_zoom import (
     effective_map_zoom_bounds,
     resolve_initial_map_zoom,
 )
-from rolling_thunder.meshcore_gps_bridge import MeshcoreGpsPublisher
 from rolling_thunder.mock_gps import MockGPSReceiver
 from rolling_thunder.mock_radio import MockRadio
 from rolling_thunder.network_keepalive import (
@@ -252,7 +251,6 @@ class ApplicationRuntime:
     contact_logging: ContactLoggingService
     gps: GPSReceiver | None = None
     gps_polling: GPSPollingService | None = None
-    meshcore_gps_publisher: MeshcoreGpsPublisher | None = None
     clock_sync: ClockSynchronizationService | None = None
     live_map: LiveMapService | None = None
     callsign_map: LiveMapService | None = None
@@ -1232,16 +1230,6 @@ class ApplicationRuntime:
             ft8_hardware_transmit=resolved_ft8_executor,
             ft8_ptt_alarm=ft8_ptt_alarm,
         )
-        # MeshCore's USB collector is an independent service. The main Pi
-        # process only publishes its existing GPS polling snapshots, and never
-        # opens or owns the MeshCore serial port or its SQLite database.
-        if runtime.gps_polling is not None:
-            publisher = MeshcoreGpsPublisher(
-                Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
-                / "meshcore-gps-snapshot.json"
-            )
-            runtime.gps_polling.add_listener(publisher.offer)
-            runtime.meshcore_gps_publisher = publisher
         if (
             config.ft8.transmit.enabled
             and isinstance(radio, Ft891Radio)
@@ -1704,8 +1692,6 @@ class ApplicationRuntime:
             self.known_callsigns.start()
         if self.ft8_receive is not None:
             self.ft8_receive.start()
-        if self.meshcore_gps_publisher is not None:
-            self.meshcore_gps_publisher.start()
         if self.gps_polling is not None:
             self.gps_polling.start()
         if self.clock_sync is not None:
@@ -1874,8 +1860,6 @@ class ApplicationRuntime:
             gps_polling_stopped = (
                 attempt("GPS polling", self.gps_polling.stop) is not None
             )
-        if self.meshcore_gps_publisher is not None:
-            attempt("MeshCore GPS", self.meshcore_gps_publisher.stop)
         if self.gps is not None:
             if gps_polling_stopped:
                 attempt("GPS", self.gps.disconnect)
