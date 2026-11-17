@@ -9,7 +9,7 @@ authority. A receive-only test must never start an FT8 QSO or key the radio.
 ## Current source and evidence boundary
 
 The source baseline is merged `main` at
-`3328c27d5eb41e4417fe6305d1942002a3488106`. PR #481 makes GPS polling stop
+`a24d7d2a14cd1ea110696249e889a42fb0dc42c1`. PR #481 makes GPS polling stop
 report whether a read has quiesced and prevents disconnecting a receiver that
 may still be in use. The source and deterministic tests establish this
 shutdown behavior; they do not establish that the installed AnvilMobile process
@@ -26,9 +26,26 @@ Machine-specific identifiers and private paths are omitted from this public
 record.
 
 There is no verified running-code identity bound to the installed process. The
-process currently launches from a mutable checkout, and #486 only redacted
-evidence and documented identity limits. Therefore this observation cannot be
-accepted as evidence for the current source release.
+process currently launches from a mutable checkout. PRs #487 and #488 update
+documentation and fix Forge-side SQLite URI handling; neither changes the
+AnvilMobile runtime identity or receive readiness. Therefore this observation
+cannot be accepted as evidence for the current source release.
+
+## Latest read-only installed-state recheck — 2026-11-17
+
+The system Rolling Thunder service was active with one dashboard MainPID in its
+service cgroup and zero recorded service restarts. The running command uses the
+existing editable checkout, whose clean Git revision predates current merged
+`main`. The expected Tk-loop readiness heartbeat was absent. This is process and
+checkout evidence only: it does not prove which Python modules are loaded, nor
+that Tk, GPS, audio, or FT8 receive is ready. The deployment wrapper and one
+protected service drop-in could not be read or rehashed through the available
+non-root account; earlier verified snapshots remain dated evidence.
+
+The owner confirmed the vehicle is parked, the radio is powered off, and the
+MeshCore receiver is physically removed. No new live GPS fix, FT8 decode, receive
+audio, or physical receive indication was collected. The exact installed source
+identity gate and all receive-only checks therefore remain incomplete.
 
 ## Source and offline test evidence
 
