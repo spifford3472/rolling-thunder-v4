@@ -37,7 +37,10 @@ runtime identity or deployed wrapper behavior.
   `systemctl is-active` check that does not prove UI readiness.
 - Test concurrent exact-SHA deployments, crash restart, early-boot
   startup, malformed SHA, backup failure, schema-changing rollback,
-  rollback refusal, stale cgroup/process and failed readiness.
+  rollback refusal, stale cgroup/process, failed target readiness, and failed
+  previous-code restore/install/readiness. The offline candidate now refuses
+  to restart after failed old-code restoration and requires the same bounded
+  dashboard-readiness check after rollback; it remains uninstalled.
   Do not install a second supervisor or modify production wrapper under
   the guise of a unit test.
 - Resolve STAB-04/05 safety stop gates before assuming force-kill/restart
@@ -71,3 +74,12 @@ STAB-06C–F provides offline candidate locking, journaling and inspected
 reconciliation but nothing is installed. The STAB-07 integration rehearsal is
 not a merge, deployment, or parked safety acceptance. See
 `stab07-integration-and-parked-release-plan.md`.
+
+## 2026-11-16 read-only privilege check
+
+The AnvilMobile operator account has no passwordless read-only command for the
+root deployment wrapper or protected service drop-ins. The exact-SHA deployment
+wrapper is the only listed passwordless command for this release path; it was
+not invoked. Previously captured wrapper and drop-in observations remain
+historical until the owner runs the read-only evidence tool with interactive
+sudo. No privileged file was read and no host state changed.

@@ -550,6 +550,7 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `deploy/rolling-thunder-recovery-inspect.py`: separate read-only systemd, Git, journal, SQLite and backup evidence collector.
 - `deploy/rolling-thunder-reconcile.py`: stable privileged candidate for explicit approval-bounded attestation only; no service, Git or DB mutation.
 - `deploy/rolling-thunder-deployment-journal.py`: preserves prior committed or reconciled records in a private history file before new transactions.
+- `deploy/diagnostics/rt-stab07-readonly-evidence.py`: owner-run, read-only hashes and directive-name inventory for the installed root wrapper, base service unit, and four observed protected drop-ins; it never prints protected values and is not installed.
 
 ### STAB-07 Source-module inventory gap closure (exact paths, 2026-11-14)
 

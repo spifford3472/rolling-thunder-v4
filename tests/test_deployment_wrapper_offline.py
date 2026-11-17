@@ -107,6 +107,8 @@ def test_concurrent_wrapper_refuses_before_any_git_or_service_action(tmp_path: P
 
 def test_backup_failure_attempts_old_service_recovery_without_checkout(tmp_path: Path) -> None:
     wrapper, _, trace, env = _sandbox(tmp_path)
+    python = tmp_path / "app" / ".venv" / "bin" / "python"
+    _fake(python, f'echo "python $*" >> "{trace}"\nexit 0')
     result = subprocess.run(
         ["bash", str(wrapper), TARGET],
         env=env,
@@ -120,7 +122,35 @@ def test_backup_failure_attempts_old_service_recovery_without_checkout(tmp_path:
     commands = trace.read_text(encoding="utf-8")
     assert "systemctl stop rolling-thunder.service" in commands
     assert "systemctl start rolling-thunder.service" in commands
+    assert "rolling_thunder.deployment_readiness --timeout 210" in commands
     assert "checkout" not in commands
+    journal = tmp_path / "journal" / "transaction.json"
+    import json
+
+    assert json.loads(journal.read_text(encoding="utf-8"))["phase"] == "requires_review"
+
+
+def test_backup_failure_with_unready_old_dashboard_stays_blocked(tmp_path: Path) -> None:
+    wrapper, _, trace, env = _sandbox(tmp_path)
+    python = tmp_path / "app" / ".venv" / "bin" / "python"
+    _fake(python, '[[ "$2" != rolling_thunder.deployment_readiness ]]')
+    result = subprocess.run(
+        ["bash", str(wrapper), TARGET],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+
+    assert result.returncode != 0
+    assert "prior service did not pass application readiness" in result.stdout
+    assert "physical PTT remains unverified" in result.stdout
+    assert "systemctl start rolling-thunder.service" in trace.read_text(encoding="utf-8")
+    import json
+
+    journal = tmp_path / "journal" / "transaction.json"
+    assert json.loads(journal.read_text(encoding="utf-8"))["phase"] == "requires_review"
 
 
 def test_malformed_sha_refused_before_mutation(tmp_path: Path) -> None:
@@ -210,6 +240,112 @@ def test_failed_service_start_restores_old_code_without_replacing_database(tmp_p
         assert db.execute("SELECT callsign FROM contacts").fetchone() == ("KI5VNB",)
 
 
+def test_rollback_keeps_service_stopped_when_previous_checkout_fails(tmp_path: Path) -> None:
+    """Do not restart the target release when old-code restoration failed."""
+    wrapper, _, trace, env = _sandbox(tmp_path)
+    bins = tmp_path / "fake-bin"
+    wrapper.write_text(
+        wrapper.read_text(encoding="utf-8").replace(
+            str(bins / "python3") + ' - "$DB_PATH" "$BACKUP_PATH"',
+            '/usr/bin/python3 - "$DB_PATH" "$BACKUP_PATH"',
+        ),
+        encoding="utf-8",
+    )
+    git = bins / "git"
+    git.write_text(
+        git.read_text(encoding="utf-8").replace(
+            'case " $* " in',
+            f'if [[ "${{@: -1}}" == "{PREVIOUS}" ]]; then exit 19; fi\n'
+            'case " $* " in',
+        ),
+        encoding="utf-8",
+    )
+    _fake(bins / "systemctl", f'echo "systemctl $*" >> "{trace}"\n[[ $1 != start ]]')
+    result = subprocess.run(
+        ["bash", str(wrapper), TARGET],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+
+    assert result.returncode != 0
+    assert "previous checkout failed" in result.stdout
+    assert "systemctl start rolling-thunder.service" in trace.read_text(encoding="utf-8")
+    assert "systemctl restart rolling-thunder.service" not in trace.read_text(encoding="utf-8")
+
+
+def test_rollback_keeps_service_stopped_when_previous_package_install_fails(
+    tmp_path: Path,
+) -> None:
+    """Do not restart an environment whose previous editable install failed."""
+    wrapper, _, trace, env = _sandbox(tmp_path)
+    bins = tmp_path / "fake-bin"
+    wrapper.write_text(
+        wrapper.read_text(encoding="utf-8").replace(
+            str(bins / "python3") + ' - "$DB_PATH" "$BACKUP_PATH"',
+            '/usr/bin/python3 - "$DB_PATH" "$BACKUP_PATH"',
+        ),
+        encoding="utf-8",
+    )
+    _fake(bins / "systemctl", f'echo "systemctl $*" >> "{trace}"\n[[ $1 != start ]]')
+    _fake(tmp_path / "app" / ".venv" / "bin" / "pip", "exit 19")
+    result = subprocess.run(
+        ["bash", str(wrapper), TARGET],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+
+    assert result.returncode != 0
+    assert "previous package install failed" in result.stdout
+    trace_text = trace.read_text(encoding="utf-8")
+    assert "systemctl restart rolling-thunder.service" not in trace_text
+
+
+def test_rollback_readiness_failure_is_reported_and_journal_stays_blocked(
+    tmp_path: Path,
+) -> None:
+    """A successful restart command alone cannot claim a recovered dashboard."""
+    wrapper, _, trace, env = _sandbox(tmp_path)
+    bins = tmp_path / "fake-bin"
+    wrapper.write_text(
+        wrapper.read_text(encoding="utf-8").replace(
+            str(bins / "python3") + ' - "$DB_PATH" "$BACKUP_PATH"',
+            '/usr/bin/python3 - "$DB_PATH" "$BACKUP_PATH"',
+        ),
+        encoding="utf-8",
+    )
+    _fake(bins / "systemctl", f'echo "systemctl $*" >> "{trace}"\n[[ $1 != start ]]')
+    python = tmp_path / "app" / ".venv" / "bin" / "python"
+    _fake(
+        python,
+        'if [[ "$1" == "-m" && "$2" == "rolling_thunder.deployment_readiness" ]]; then\n'
+        '  exit 19\n'
+        'fi\n'
+        'exit 0',
+    )
+    result = subprocess.run(
+        ["bash", str(wrapper), TARGET],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+
+    assert result.returncode != 0
+    assert "previous dashboard did not pass readiness" in result.stdout
+    assert "systemctl restart rolling-thunder.service" in trace.read_text(encoding="utf-8")
+    journal = tmp_path / "journal" / "transaction.json"
+    import json
+
+    assert json.loads(journal.read_text(encoding="utf-8"))["phase"] == "rolling_back"
+
+
 def test_unreconciled_failed_backup_blocks_followup_before_mutation(tmp_path: Path) -> None:
     """A failed transaction must survive the wrapper exit and reject the next deploy."""
     wrapper, _, trace, env = _sandbox(tmp_path)
@@ -225,7 +361,7 @@ def test_unreconciled_failed_backup_blocks_followup_before_mutation(tmp_path: Pa
     journal_path = tmp_path / "journal" / "transaction.json"
     import json
 
-    assert json.loads(journal_path.read_text(encoding="utf-8"))["phase"] == "backing_up"
+    assert json.loads(journal_path.read_text(encoding="utf-8"))["phase"] == "requires_review"
     trace.unlink()
     second = subprocess.run(
         ["bash", str(wrapper), TARGET],
