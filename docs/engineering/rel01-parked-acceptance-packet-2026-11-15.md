@@ -1,6 +1,6 @@
 # REL-01 — parked production acceptance packet (prepared; NO GO)
 
-**Current source baseline:** merged `main` at `3328c27d5eb41e4417fe6305d1942002a3488106` (2026-11-17).
+**Current source baseline:** merged `main` at `a24d7d2a14cd1ea110696249e889a42fb0dc42c1` (2026-11-17).
 **Disposition:** **NO GO for a full AnvilMobile release.** This packet records
 acceptance requirements and source-level conclusions. It intentionally omits
 hostnames, process identifiers, internal network addresses, hardware serials,
@@ -80,6 +80,23 @@ modified. See
 the incomplete hardware acceptance record and
 [`meshcore-installed-service-cutover-plan.md`](meshcore-installed-service-cutover-plan.md)
 for the separately gated plan.
+
+## 2026-11-17 post-merge runtime identity recheck
+
+PR #487 and #488 are merged; both exact-head CI runs passed. The latest main
+contains the cutover record and the PSK autoqueue URI fix, but neither changes
+the installed Pi process. Read-only host evidence still shows the system
+service running from the older editable checkout; its current Git revision is
+clean but predates this main. The expected Tk heartbeat was not present. The
+available non-root path could not re-read the protected wrapper or one service
+drop-in. Accordingly, exact process-to-release identity and application
+readiness remain **not established**. The registered protected runtime observer
+and a root-owned immutable release are not installed.
+
+The owner has confirmed the vehicle is parked, the radio powered off, and
+MeshCore physically removed. No fresh GPS fix, receive-audio test, FT8 decode,
+or physical receive observation was collected. Receive-only acceptance remains
+**NOT ACCEPTED**.
 
 ## Immutable acceptance gates
 
