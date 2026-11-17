@@ -270,8 +270,56 @@ transaction receipts, not this planning checklist.
 
 - 2026-11-17 post-merge reconciliation: PR #478 merged at
   `2632dc8b4445ed84644d9324f7fe91bb6175b106`; this is the current `main`
-  baseline. PR #482 remains a draft documentation reconciliation and is not a
-  deployment approval. The installed-state evidence above remains the dated
+  baseline at that point. PR #482 was still a draft documentation
+  reconciliation then, and was not a deployment approval. The installed-state evidence above remains the dated
   2026-11-15 inspection plus owner-reported 2026-11-16 field result; no current
   host or hardware verification is implied. Full AnvilMobile release remains
   **NO GO**.
+
+- 2026-11-16 22:01 EST read-only refresh: PR #482 has since merged. Current
+  `main` is `a806ab65470c345ccb7acfaaf00c71e9dc262cc6`; its tree matches the
+  CI-tested PR #482 head `8a4a9cfaaf1da9d14939d7464a33bd2abfc75112`, whose
+  workflow run #4051 passed. The installed AnvilMobile checkout remained
+  detached and clean at `ba58b0b2a3b9b10b73dcdcb1ee046528f79b6d62`, 88 commits
+  behind current `main`. The system service was active with MainPID `60400`,
+  cgroup `/system.slice/rolling-thunder.service`, launcher
+  `/home/geoff/projects/rolling-thunder-v4/deploy/rolling-thunder-autostart`,
+  and `TimeoutStopSec=20s`. Its tracked launcher file hash matched the Git
+  object in the installed checkout. These facts do not prove which Python code
+  is loaded by the running process. Systemd listed four drop-ins
+  (`50-ft8-evidence.conf`, `60-ft8-period.conf`,
+  `70-ft8-attempt-delivery.conf`, and
+  `r1a-timing.conf`); their protected contents and hashes were not readable in
+  this refresh. The current privileged deployment wrapper was also not
+  reverified; its previously captured hash/source is historical evidence.
+
+- The user-level `meshcore-collector.service` remained enabled and active
+  (MainPID `1078`) while `meshcore-traffic-worker.service` was enabled but
+  inactive. This is installed-service drift after source removal in #479; it
+  does not establish whether a serial device was open at inspection time.
+  Resolve service ownership through a separately approved plan before physical
+  USB acceptance.
+
+- A read-only immutable-mode query returned 367 contacts, zero contact retry
+  rows, 721 synchronized FT8 performance-outbox rows, schema metadata version
+  22, and two `uncertain` FT8 transmit-intent rows. A later filesystem check
+  found an active `rolling-thunder.db-wal` sidecar of 309,032 bytes. Immutable
+  mode does not include WAL frames, so those SQL results describe only the
+  main database file and are **not current database, integrity, backup, or
+  QSO-preservation evidence**. The main-file integrity result is not evidence
+  for the live database. Do not rely on those counts for release acceptance;
+  a parked, approved SQLite-consistent snapshot and its verification remain
+  mandatory. The two intent rows are not evidence of physical PTT state.
+
+- The fresh Forge health check was not completed because the authorized
+  Desktop Commander connection failed. Earlier Forge health output remains
+  historical and is not current service verification.
+
+**Disposition remains NO GO.** The active WAL, unverified protected drop-ins
+and privileged wrapper, 88-commit source gap, residual MeshCore service,
+incomplete Raspberry Pi native-package provenance, and uncompleted parked
+USB/GPS/FT8 receive and physical-safety acceptance remain gates. The operator
+must retain the ability to clear the application lockout; a system restart
+restores operator control, but software status or restart is not proof that
+physical PTT has released. No deployment or restart is authorized by this
+refresh.
