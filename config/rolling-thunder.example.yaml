@@ -278,14 +278,3 @@ storage:
     enabled: false
     directory: backups/contacts
     retention_count: 10
-
-# Optional, host receive-only MeshCore observation collector.
-# The normal MeshCore firmware may ACK/forward packets independently.
-# Select the verified physical /dev/serial/by-path location.
-# V4 native CDC uses ttyACM0 and USB 303a:0002; legacy V3 CP2102 uses ttyUSB.
-# Do not use the generic by-id name of the old CP2102 with serial 0001.
-meshcore_passive:
-  enabled: false
-  device: null
-  # After parked, verified binding:
-  # device: /dev/serial/by-path/<verified-physical-meshcore-interface>

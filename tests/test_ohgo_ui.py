@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rolling_thunder.context_navigation import ContextId
-from rolling_thunder.meshcore_ohgo_ui import (
+from rolling_thunder.ohgo_ui import (
     _OHGO_BODY_FONT,
-    MeshcoreOhgoScrollInterceptor,
-    MeshcoreOhgoWidgets,
+    OhgoScrollInterceptor,
+    OhgoWidgets,
 )
 from rolling_thunder.physical_controls import ControlAction, ControlInputEvent
 
@@ -20,12 +20,12 @@ def _event() -> ControlInputEvent:
 def test_ohgo_rotary_intercepts_only_on_ohgo_context() -> None:
     selected = [ContextId.POTA]
     received: list[ControlAction] = []
-    adapter = MeshcoreOhgoScrollInterceptor(
+    adapter = OhgoScrollInterceptor(
         selected_context=lambda: selected[0],
         scroll=lambda a: received.append(a) or True,
     )
     assert adapter.intercept(_event(), ControlAction.MOVE_NEXT) is None
-    selected[0] = ContextId.MESHCORE_OHGO
+    selected[0] = ContextId.OHGO
     assert adapter.intercept(_event(), ControlAction.MOVE_NEXT) is True
     assert adapter.intercept(_event(), ControlAction.MOVE_PREVIOUS) is True
     assert adapter.intercept(_event(), ControlAction.ACTIVATE_SELECTION) is None
@@ -34,8 +34,8 @@ def test_ohgo_rotary_intercepts_only_on_ohgo_context() -> None:
 
 def test_scroll_respects_existing_safety_gate() -> None:
     actions: list[ControlAction] = []
-    adapter = MeshcoreOhgoScrollInterceptor(
-        selected_context=lambda: ContextId.MESHCORE_OHGO,
+    adapter = OhgoScrollInterceptor(
+        selected_context=lambda: ContextId.OHGO,
         scroll=lambda a: actions.append(a) or True,
         allowed=lambda: False,
     )
@@ -81,7 +81,7 @@ class FakeMore:
 
 
 def test_scrollable_text_preserves_operator_position_across_refreshes() -> None:
-    widget = object.__new__(MeshcoreOhgoWidgets)
+    widget = object.__new__(OhgoWidgets)
     body = FakeText()
     more = FakeMore()
     widget._body = body  # type: ignore[assignment]
@@ -100,7 +100,7 @@ def test_scrollable_text_preserves_operator_position_across_refreshes() -> None:
 
 
 def test_more_indicator_reflects_actual_scrollable_geometry() -> None:
-    widget = object.__new__(MeshcoreOhgoWidgets)
+    widget = object.__new__(OhgoWidgets)
     indicator = FakeMore()
     widget._more = indicator  # type: ignore[assignment]
     widget._last_more = ""
@@ -114,7 +114,7 @@ def test_more_indicator_reflects_actual_scrollable_geometry() -> None:
 
 
 def test_rotary_scroll_does_not_activate_any_selection() -> None:
-    widget = object.__new__(MeshcoreOhgoWidgets)
+    widget = object.__new__(OhgoWidgets)
     body = FakeText()
     widget._body = body  # type: ignore[assignment]
     assert widget.scroll(ControlAction.MOVE_NEXT)
@@ -143,7 +143,7 @@ class FakeFrame:
 def test_repeated_ohgo_refresh_never_unmaps_or_remaps_visible_text() -> None:
     """Regression for the blank/flash every UI refresh on the OHGO page."""
 
-    widget = object.__new__(MeshcoreOhgoWidgets)
+    widget = object.__new__(OhgoWidgets)
     frame = FakeFrame()
     widget.frame = frame  # type: ignore[assignment]
     widget._visible = False
@@ -174,7 +174,7 @@ def test_more_indicator_not_rewritten_when_overflow_state_is_unchanged() -> None
             self.changes += 1
             super().set(value)
 
-    widget = object.__new__(MeshcoreOhgoWidgets)
+    widget = object.__new__(OhgoWidgets)
     indicator = TrackedMore()
     widget._more = indicator  # type: ignore[assignment]
     widget._last_more = ""

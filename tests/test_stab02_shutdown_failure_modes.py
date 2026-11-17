@@ -272,7 +272,9 @@ def test_gps_stop_cancels_future_polls_but_not_a_blocked_inflight_read(
     """Document cancellation's boundary without starting new GPS readers."""
     receiver = MockGPSReceiver()
     scheduler = ManualGPSPollScheduler()
-    gps_polling = GPSPollingService(receiver, scheduler)
+    gps_polling = GPSPollingService(
+        receiver, scheduler, stop_wait_timeout_s=0.05
+    )
     gps_polling.start()
     entered = Event()
     unblock = Event()
@@ -297,7 +299,8 @@ def test_gps_stop_cancels_future_polls_but_not_a_blocked_inflight_read(
     worker.start()
     try:
         assert entered.wait(timeout=1.0)
-        gps_polling.stop()
+        with pytest.raises(RuntimeError, match="did not become idle"):
+            gps_polling.stop()
         assert scheduler.handle.cancelled
         assert not gps_polling.is_running
         assert not finished.is_set()
@@ -307,6 +310,70 @@ def test_gps_stop_cancels_future_polls_but_not_a_blocked_inflight_read(
 
     assert not worker.is_alive()
     assert finished.is_set()
+    gps_polling.stop()
+
+
+def test_runtime_withholds_gps_disconnect_when_poll_shutdown_times_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A still-active GPS read must retain ownership of its serial handle."""
+    config = ApplicationConfig.model_validate(
+        {"operator": {"callsign": "KI5VNB", "home_grid": "EM79xm"},
+         "hardware": {"mock": True}}
+    )
+    runtime = ApplicationRuntime.from_config(
+        config,
+        gps_interval_s=0.01,
+    )
+    runtime.start()
+    assert runtime.gps is not None
+    assert runtime.gps_polling is not None
+    runtime.gps_polling._stop_wait_timeout_s = 0.05
+
+    entered = Event()
+    unblock = Event()
+    disconnect_calls: list[bool] = []
+    original_refresh = runtime.gps.refresh_state
+    original_disconnect = runtime.gps.disconnect
+
+    def blocked_refresh() -> GPSState:
+        entered.set()
+        assert unblock.wait(timeout=5.0)
+        return original_refresh()
+
+    def observe_disconnect() -> GPSState:
+        disconnect_calls.append(True)
+        return original_disconnect()
+
+    monkeypatch.setattr(runtime.gps, "refresh_state", blocked_refresh)
+    monkeypatch.setattr(runtime.gps, "disconnect", observe_disconnect)
+    stop_errors: list[Exception] = []
+
+    def stop_runtime() -> None:
+        try:
+            runtime.stop()
+        except Exception as error:  # noqa: BLE001 - shutdown aggregates evidence
+            stop_errors.append(error)
+
+    poll_worker = Thread(target=runtime.gps_polling._poll_once, daemon=True)
+    stop_worker: Thread | None = None
+    poll_worker.start()
+    try:
+        assert entered.wait(timeout=1.0)
+        stop_worker = Thread(target=stop_runtime, daemon=True)
+        stop_worker.start()
+        stop_worker.join(timeout=4.0)
+        assert not stop_worker.is_alive()
+        assert disconnect_calls == []
+        assert stop_errors
+    finally:
+        unblock.set()
+        poll_worker.join(timeout=3.0)
+        if stop_worker is not None:
+            stop_worker.join(timeout=3.0)
+
+    assert not poll_worker.is_alive()
+    assert disconnect_calls == []
 
 
 def test_runtime_unrelated_blocking_stop_cannot_delay_radio_disconnect(

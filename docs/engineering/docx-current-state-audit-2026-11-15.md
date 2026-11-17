@@ -19,12 +19,13 @@ radio safety, production readiness, or approved deployment.
    uses `True` only for its mock alarm. The current operator override is a
    manual recovery choice, **not** physical receive proof, and sends no CAT/PTT
    command or FT8 transmission.
-3. The MeshCore intelligence document began with a historical *pure classifier*
-   that did not store messages, while current source includes optional
-   `meshcore_message_broker.py` and `meshcore_broker_drain.py`, with separate
-   durable public/private streams. Its beginning is now explicitly scoped as
-   historical foundation. The OHGO API remains Forge-owned and independent;
-   sharing an operator context does not create a common source or lifecycle.
+3. At the 2026-11-15 report baseline, the MeshCore intelligence document began
+   with a historical *pure classifier* while source also included optional
+   broker/drain implementations with separate durable public/private streams.
+   PR #479 later removed MeshCore application code and retained Forge-backed
+   OHGO. Those broker implementation details are historical on current `main`;
+   installed independent services and databases remain separate operational
+   state and were not removed by that source merge. OHGO remains Forge-owned.
 4. The prior STAB-04/05/06/07 *candidate/not deployed* language must be
    separated into **merged source**, **historical observations**, **installed
    SHA not reverified**, and **parked physical acceptance incomplete**. The
@@ -164,3 +165,15 @@ record is required.
   to merged source with physical acceptance outstanding. The older DOC-02
   checkpoint now points to this ledger. CI Ruff explicitly checks the new
   inventory validator as well as source and tests.
+
+## 2026-11-17 merged-source reconciliation
+
+Current `main` is `2632dc8b4445ed84644d9324f7fe91bb6175b106`. PR #481's GPS
+poll/disconnect shutdown fix and PR #479's application-level MeshCore removal
+are merged; Forge-backed OHGO remains. The active-source inventory now contains
+369 Python modules and 425 test modules. `python tools/docx_inventory.py` on
+this tree reports 369 source modules, 425 tests, 29 local links and zero drift.
+The 401/460 counts recorded above describe the earlier 2026-11-15 baseline;
+they are historical, not current inventory values. The 2026-11-15 installed
+host snapshot remains dated evidence and does not establish current production
+state or deployment readiness. Full AnvilMobile release status remains NO GO.

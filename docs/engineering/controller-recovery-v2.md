@@ -160,8 +160,16 @@ Owner authorized moving forward. Qwen isolated run
 three valid frame types; its bounded pass was stopped after independent review.
 The coordinator corrected the wire piece and implemented/reviewed the worker,
 firmware and regression tests. Rejected Qwen workspace is retained. No coding
-worker remains. Owner subsequently explicitly authorized merge and deployment after validation; actual installed and firmware acceptance status must be recorded separately.
+worker remains. The owner authorized the historical source slice to proceed
+through review. That approval does not establish current deployment authorization
+or installed state. Any future production rollout requires separate current
+owner approval and the parked firmware/controller commissioning gates above.
 
-Validation checkpoint:3577passed7skipped across the full Python suite; Ruff and strict MyPy348sourcefiles pass. Both esp32dev and pinned esp32dev-recovery builds pass. Owner merge/deploy authorization is current. Hardware/firmware acceptance and actual installed identities must be recorded after cutover.
+Historical validation checkpoint: 3,577 passed and 7 skipped across the full
+Python suite; Ruff and strict MyPy (348 source files) passed, and both esp32dev
+and pinned esp32dev-recovery builds passed. These results describe that earlier
+source slice, not the current repository head. Hardware/firmware acceptance and
+actual installed identities must be recorded after any separately authorized
+cutover.
 
 Each v2 ControlInputEvent also carries a finite host expiry. The dispatch gate checks it immediately before each command, so a slow earlier command cannot revive stale remainder of a drained batch. Legacy events default to no expiry and retain their existing gate behavior.

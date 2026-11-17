@@ -84,13 +84,13 @@ from rolling_thunder.log_panel import ContactLogRepository, LogPanelController
 from rolling_thunder.log_panel_commands import LogAwareActivePanelCommands
 from rolling_thunder.log_ui import LogWidgets
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
-from rolling_thunder.meshcore_ohgo_panel import (
-    MeshcoreOhgoPanelWorker,
-    present_meshcore_ohgo,
+from rolling_thunder.ohgo_panel import (
+    OhgoPanelWorker,
+    present_ohgo,
 )
-from rolling_thunder.meshcore_ohgo_ui import (
-    MeshcoreOhgoScrollInterceptor,
-    MeshcoreOhgoWidgets,
+from rolling_thunder.ohgo_ui import (
+    OhgoScrollInterceptor,
+    OhgoWidgets,
 )
 from rolling_thunder.operator_commands import OperatorCommandController
 from rolling_thunder.operator_preferences import OperatorPreferenceRepository
@@ -511,7 +511,7 @@ def run_dashboard(
     if tron_microphone is not None and live_capture is not None:
         capture = PriorityCallsignCapture(live_capture, tron_microphone)
     # OHGO is read-only and polled off-Tk; Forge alone owns its secret.
-    ohgo_panel_worker = MeshcoreOhgoPanelWorker(
+    ohgo_panel_worker = OhgoPanelWorker(
         str(config.forge.api_url)
         if config.forge.enabled and config.forge.api_url
         else None
@@ -824,7 +824,7 @@ def run_dashboard(
             event_interceptor=CompositeEventInterceptor(
                 tron_toggle_interceptor,
                 settings_interceptor,
-                MeshcoreOhgoScrollInterceptor(
+                OhgoScrollInterceptor(
                     selected_context=lambda: context_navigation.state.selected,
                     scroll=scroll_ohgo,
                     allowed=lambda: (
@@ -1050,7 +1050,7 @@ def run_dashboard(
         wraplength=560,
     )
     context_body_label.grid(row=1, column=0, sticky="nsew")
-    ohgo_widgets = MeshcoreOhgoWidgets(
+    ohgo_widgets = OhgoWidgets(
         context_content,
         background=_SECONDARY_BACKGROUND,
         foreground=_BRIGHT,
@@ -2072,7 +2072,7 @@ def run_dashboard(
             )
 
         selected_context = context_navigation.state
-        if selected_context.selected is not ContextId.MESHCORE_OHGO:
+        if selected_context.selected is not ContextId.OHGO:
             ohgo_widgets.hide()
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.set_polling_enabled(
@@ -2250,7 +2250,7 @@ def run_dashboard(
                         friends=friends,
                     )
                 )
-        elif selected_context.selected is ContextId.MESHCORE_OHGO:
+        elif selected_context.selected is ContextId.OHGO:
             # Reconfigure the viewport on entry only. Hiding and showing the
             # Text widget every refresh caused the observed flashing.
             if not ohgo_widgets.visible:
@@ -2258,9 +2258,9 @@ def run_dashboard(
                 context_body_label.grid_remove()
                 ohgo_widgets.show()
             health_frame.grid_remove()
-            context_title_text.set("MESHCORE & OHGO")
+            context_title_text.set("OHGO")
             context_title_label.configure(font=("DejaVu Sans", 34, "bold"))
-            ohgo_widgets.update(present_meshcore_ohgo(ohgo_panel_worker.state))
+            ohgo_widgets.update(present_ohgo(ohgo_panel_worker.state))
         elif selected_context.selected is ContextId.FT8:
             health_frame.grid_remove()
             context_title_text.set("FT8")
@@ -2562,7 +2562,7 @@ def run_dashboard(
     def execute_panel_action(action: ControlAction) -> None:
         if (
             action in (ControlAction.MOVE_NEXT, ControlAction.MOVE_PREVIOUS)
-            and context_navigation.state.selected is ContextId.MESHCORE_OHGO
+            and context_navigation.state.selected is ContextId.OHGO
             and not power_confirmation.state.pending
             and not close_started.is_set()
             and not runtime.ft8_ptt_alarm.active

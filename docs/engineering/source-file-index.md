@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 401 (verified against merged `main`, 2026-11-15).**
+**Cataloged Python modules: 369 (verified against current main, `2632dc8b4445ed84644d9324f7fe91bb6175b106`, 2026-11-17).**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -525,74 +525,14 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/offline_county.py` — pure, not-yet-integrated offline county polygon lookup primitive; returns unknown on invalid or ambiguous geometry; see `offline-county-lookup.md`.
 - `src/rolling_thunder/offline_county_store.py` — indexed read-only offline county SQLite candidate reader and frozen GPS freshness/accuracy gate; not yet connected to logging.
 
-- `src/rolling_thunder/meshcore_passive.py` — dormant pure MeshCore companion-v1.17.1 already-deframed 0x80/0x81/0x8A identity metadata parser; no device access, RF commands, or runtime integration.
-- `src/rolling_thunder/meshcore_observation_repository.py` — dormant versioned MeshCore-only SQLite observation repository and immutable existing-GPS snapshot correlation; only called by explicit client, no hardware ownership or automatic worker.
+## OHGO incident provider and read-only Pi context
 
-- `src/rolling_thunder/meshcore_passive_worker.py` — uncomposed, bounded opt-in background writer; reads injected immutable GPS snapshots at frame receipt, drops on overflow with counters, ignores unsupported frames, and drains on stop. It contains no USB or transmit interface.
-
-- `src/rolling_thunder/meshcore_inbound_frames.py` — pure inbound-only MeshCore UART framing decoder for bounded `>`-prefixed little-endian lengths, with no serial writer or command encoder.
-
-- `src/rolling_thunder/meshcore_serial_service.py` — opt-in exclusive V3 CP2102 or V4 native USB CDC ACM by-path receive service and reconnect, never sends host protocol commands; runtime composition is disabled by default.
-- `src/rolling_thunder/config.py` and `application_runtime.py` — typed MeshCore enable/path gate and optional lifecycle using existing immutable GPS snapshots; no UI-thread device work.
-
-
-- `src/rolling_thunder/meshcore_collector_main.py` — independent user-service entrypoint, read-only HTTP-over-Unix API, separate serial/worker/SQLite lifecycle; no Tk, CAT/PTT or host RF command encoder.
-- `src/rolling_thunder/meshcore_gps_bridge.py` — nonblocking GPS listener publisher and freshness-checked file reader; reuses the existing GPS state, no new hardware acquisition.
-- `deploy/meshcore-collector.user.service` and `deploy/install-meshcore-user-service.sh` — staged separate service install and isolated SQLite data migration after embedded USB release.
-- `src/rolling_thunder/meshcore_passive.py` — now additionally decodes 0x88 signal metadata without retaining raw packets and labels known advertised role codes; other notifications unchanged.
-
-- `deploy/meshcore-traffic-worker.user.service` — staged, disabled-by-default supervisor template for the existing standalone traffic worker, with redacted journal health and bounded resource limits.
-
-## MeshCore intelligence (pure, noncomposed foundation)
-
-- `src/rolling_thunder/meshcore_incident_classification.py` — deterministic bounded classification of already-verified public traffic/SKYWARN messages; no device, GPS, persistence, UI, or RF authority. See `meshcore-intelligence.md`.
-
-- `src/rolling_thunder/meshcore_geographic_relevance.py` — immutable GPS sample validation, bounded heading history, great-circle distance/bearing and conservative route-confidence classification; no GPS polling, map matching, serial, or RF.
-- src/rolling_thunder/meshcore_traffic_georeferences.py — bounded road/exit/mile/direction parsing and ambiguity rejection.
-- src/rolling_thunder/meshcore_traffic_gps_samples.py — read-only 1 Hz existing GPS snapshot sampler.
-- src/rolling_thunder/meshcore_traffic_geocoding.py — optional disabled injected geographic provider cache and caps.
-- src/rolling_thunder/meshcore_traffic_relevance.py — conservative non-notifying geographic relevance.
-- src/rolling_thunder/meshcore_traffic_analysis.py — noncomposed source-only evidence coordinator.
-
-- `src/rolling_thunder/meshcore_network_analytics.py` — bounded read-only schema-2 aggregation, node/repeater activity and receiver-location reception cells; no collector, DB migration or UI authority.
-
-- `src/rolling_thunder/meshcore_public_intake_protocol.py` — pure non-actuating v1.16 channel attestation against operator-approved identity/fingerprint and strict legacy/V3 public-text decoding; no USB, queue-drain or RF calls.
-
-## MeshCore message broker
-
-- `src/rolling_thunder/meshcore_message_broker.py` — isolated synchronous SQLite inbox for public/private/quarantine messages, storage caps and per-consumer durable cursors
-- `src/rolling_thunder/meshcore_broker_drain.py` — single-flight audited host-local serial queries and destructive dequeue safety gate
-- `src/rolling_thunder/meshcore_broker_config.py` — strict owner-only channel attestation and consumer-token fingerprint configuration
-- `src/rolling_thunder/meshcore_broker_api.py` — separate token-scoped Unix read/ack service with no TCP or radio access
-- `src/rolling_thunder/meshcore_serial_service.py` — existing sole USB owner with optional broker drain; passive default remains
-- `src/rolling_thunder/meshcore_collector_main.py` — optional broker composition and dual Unix socket lifecycle
-
-- `src/rolling_thunder/meshcore_channel_audit.py` — parked-only local 0x1F GET_CHANNEL metadata verification (slot/name/key fingerprint only), no queue dequeue or RF
-
-- `src/rolling_thunder/meshcore_public_consumer.py` — typed public-only bearer-authenticated Unix consumer with bounded preview, strict frame validation and explicit post-processing ACK
-- `src/rolling_thunder/meshcore_public_intelligence.py` — pure traffic keyword candidate adapter with explicit verified slot and unverified-sender semantics
-- `src/rolling_thunder/meshcore_public_consumer_main.py` — local command-line read-only public preview with no implicit acknowledgement or RF authority
-
-- `src/rolling_thunder/meshcore_traffic_ledger.py` — isolated schema-1 SQLite public-message processing receipts, idempotent broker ID replay, 30-minute duplicate suppression, owner-only permissions and bounded storage
-- `src/rolling_thunder/meshcore_traffic_worker.py` — bounded one-batch public consumer, commits each message before individually ACKing the authorized consumer cursor
-- `src/rolling_thunder/meshcore_traffic_worker_main.py` — disabled-by-default standalone one-shot/continuous worker CLI, local single-instance lock and broker backoff; not composed into dashboard; service separately gated
-
-### Forge MeshCore geographic catalog and analysis audit
-- src/rolling_thunder/forge_meshcore_geo_catalog.py: site-specific private SQLite evidence.
-- src/rolling_thunder/forge_meshcore_geo_import.py: reviewed, offline JSON import.
-- src/rolling_thunder/forge_meshcore_geo_main.py: read-only JSON CLI contract.
-- src/rolling_thunder/forge_meshcore_geo_adapter.py: existing geocoder callback adapter.
-- src/rolling_thunder/meshcore_traffic_analysis_repository.py: independent append-only audit.
-
-### OHGO incident provider and read-only Pi context
-
-- `src/rolling_thunder/forge_ohgo_incidents.py` — OHGO bounded incident domain, retained state and default-off rate-limited provider.
+- `src/rolling_thunder/forge_ohgo_incidents.py` — OHGO bounded incident domain, retained state, and default-off rate-limited provider.
 - `src/rolling_thunder/forge_ohgo_http.py` — official-host-only HTTPS transport and response bounds.
 - `src/rolling_thunder/forge_ohgo_credentials.py` — systemd protected credential loader and independent opt-in.
 - `src/rolling_thunder/forge_ohgo_api.py` — additive retained GET API route and Forge background worker.
-- `src/rolling_thunder/meshcore_ohgo_panel.py` — Pi private Forge reader, stale/status decoder and read-only presentation.
-
-- `src/rolling_thunder/meshcore_ohgo_ui.py` — dedicated 42-point Tk OHGO viewport, fixed MORE visibility from actual scroll geometry and safe context-specific physical-control interception.
+- `src/rolling_thunder/ohgo_panel.py` — Pi Forge reader, stale/status decoder, and read-only presentation.
+- `src/rolling_thunder/ohgo_ui.py` — dedicated large-text Tk OHGO viewport, MORE indicator, and context-scoped rotary interception.
 
 ### STAB-06D candidate source
 

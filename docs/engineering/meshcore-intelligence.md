@@ -1,5 +1,11 @@
 # MeshCore Intelligence — public message classification (foundation)
 
+> **Historical record (not active Rolling Thunder source).** This document
+> describes the earlier MeshCore implementation, design, or acceptance evidence.
+> Keep it for history; do not use it to restore runtime integration. See
+> `mc-remove-dependency-inventory-2026-11-15.md` for the current source boundary
+> and separately authorized installed-service cutover.
+
 ## Status
 
 **Scope clarification — merged current source (2026-11-15):** The opening
@@ -12,7 +18,7 @@ classified public messages and protected private messages in separate streams.
 It is disabled without its protected opt-in configuration and must not be
 confused with the independent Forge OHGO provider. See
 `meshcore-message-broker.md`, `meshcore-traffic-worker.md`, and
-`meshcore-ohgo-incidents.md`. This supersedes only the global implication of
+`ohgo-incidents.md`. This supersedes only the global implication of
 the original foundation wording; no live collector/device activation is
 claimed or authorized.
 
@@ -172,4 +178,4 @@ A new `o` dashboard context combines a receive-only MeshCore label with
 a separate Ohio DOT OHGO incident status/list. The OHGO data path is a
 distinct Forge-owned provider; its reports are not automatically merged
 with community MeshCore claims, and no alert or radio action is enabled.
-See `meshcore-ohgo-incidents.md`.
+See `ohgo-incidents.md`.
