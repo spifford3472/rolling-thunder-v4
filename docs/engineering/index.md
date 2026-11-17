@@ -7,7 +7,7 @@ This directory is the current-code engineering map for Rolling Thunder v4. It ex
 This guide describes the implemented repository rather than an aspirational architecture. Existing subsystem documents remain authoritative for detailed protocols and acceptance history where linked below.
 
 - `tron-voice-control.md` — Issue #374 offline Vosk worker, callsign microphone priority, physical start/stop gesture, large transient feedback popups, hardware acceptance, and FT8 terminal return.
-- `meshcore-ohgo-incidents.md` — Forge OHGO incident source, protected credential gate, retained API and combined read-only dashboard context.
+- `ohgo-incidents.md` — Forge OHGO incident source, protected credential gate, retained API and combined read-only dashboard context.
 - `stab04-shutdown-deadline.md` — current shutdown critical-path blocking evidence, passing ordering/concurrency regressions and outstanding safety gates.
 
 - `ft8-rx02-receive-evidence-and-supervised-recovery.md` — vendor-documented read-only FT-891 TX/LED CAT reports, no-unlock advisory boundary, independent physical RX requirements and restart-latch risk.
@@ -25,7 +25,13 @@ This guide describes the implemented repository rather than an aspirational arch
 
 - `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
 
+## Retained MeshCore history (not active source)
+
+MeshCore design, incident, and acceptance records remain historical evidence. They describe prior source and installations and are not instructions to restore removed runtime integration. See `mc-remove-dependency-inventory-2026-11-15.md` for the source-removal classification and separately gated installed-service cutover.
+
 ## Engineering document set
+
+- `mc-remove-dependency-inventory-2026-11-15.md` — exact active-source removal classification, OHGO dependency graph, configuration compatibility, and separate production cutover gate.
 
 - `stab07l-rpi-historical-package-quarantine.md` — exact Raspberry Pi libc/OpenSSL candidate bytes, independent Pi hash match, unsigned-index quarantine and NO-GO gates.
 
@@ -493,14 +499,10 @@ The FT8 map banner consumes the existing read-only target activity snapshot from
 - `offline-county-lookup.md` — Issue #380 staged county polygon resolver,
   data provenance and integration gates (not production enabled).
 
-## MeshCore intelligence foundation
+## Retained MeshCore history (not active source)
 
-- `meshcore-intelligence.md` — pure allowlisted public-message classification, privacy boundary, no RF authority, and future verified intake requirements. This is not yet a receiver-integrated feature.
-
-- `meshcore-intelligence.md` also documents published-GPS heading and conservative geographic relevance (domain-only, not live-connected).
-
-- `meshcore-intelligence.md` includes read-only historical analytics of the existing Phase-1 MeshCore observation database (not yet exposed to UI).
-
-- `meshcore-message-broker.md` — optional message broker, local-only serial dequeue, protected SQLite streams, token-scoped delivery API, rollout gates and recovery.
-
-- `meshcore-traffic-worker.md` — isolated durable public-broker processing worker, traffic candidate deduplication, commit-before-ACK replay, and disabled-by-default launch/rollback gates.
+- `meshcore-intelligence.md` — historical public-message classification, geographic analysis, and observation analytics design.
+- `meshcore-passive-observation-design.md` — historical passive collector/USB/GPS design and acceptance notes.
+- `meshcore-message-broker.md` — historical broker, local queues, token-scoped delivery, and rollout evidence.
+- `meshcore-traffic-worker.md` — historical traffic processing and commit-before-ACK design.
+- `meshcore-forge-road-evidence.md` — historical Forge road-site catalog and analysis evidence.

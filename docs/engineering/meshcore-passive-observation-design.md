@@ -1,5 +1,11 @@
 # MeshCore passive observation collector — architecture gate (2026-11-10)
 
+> **Historical record (not active Rolling Thunder source).** This document
+> describes the earlier MeshCore implementation, design, or acceptance evidence.
+> Keep it for history; do not use it to restore runtime integration. See
+> `mc-remove-dependency-inventory-2026-11-15.md` for the current source boundary
+> and separately authorized installed-service cutover.
+
 **Current status (2026-11-11): source implementation merged in PR #385 at `bfe8a5877fa136fd28b865ef37fe629ccaa3a168`; production is NOT deployed or activated.** The collector is opt-in OFF by default, with a dedicated MeshCore-only SQLite database, shared immutable GPS, no host MeshCore command writer, and a validated physical USB-by-path serial adapter. GitHub CI #3582 passed (3,751 tests; 7 skipped). Physical activation remains **BLOCKED** by unstable USB enumeration and unverified GPS/controller recovery. Normal firmware-managed mesh RF is owner-permitted; host-initiated discovery, adverts, messages and configuration transmissions are not. Earlier sections below preserve the chronological investigation and may describe superseded proposals; this header and the latest engineering guides describe current implementation.
 
 ## Historical research record (superseded by implementation where noted)

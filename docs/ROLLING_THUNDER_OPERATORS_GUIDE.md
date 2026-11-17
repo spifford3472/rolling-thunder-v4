@@ -210,6 +210,14 @@ Rolling Thunder uses that shared position for:
 - Forge mobile location;
 - location-aware weather alerts.
 
+When GPS data is missing or the receiver disconnects, the dashboard reports GPS
+error/unavailable state and background polling attempts to reconnect. GPS loss
+does not stop ordinary local logging; records may lack a current grid. During
+shutdown, an in-flight GPS read must finish before the receiver is closed. If it
+does not become idle within the two-second shutdown bound, the application logs
+the failure and leaves the descriptor to process exit; this does not establish
+that the receiver or USB path is healthy after restart.
+
 ## Physical controls
 
 Rolling Thunder maps physical controls into generic operator actions such as:
@@ -1458,92 +1466,62 @@ The QSO map popup shows the remote station local-time label at twice its previou
 
 ---
 
-## Optional MeshCore observation collector (disabled by default)
+## Historical MeshCore receiver records
 
-An optional, background-only MeshCore collector can be enabled by a deliberate
-operator configuration change **after parked USB and GPS/controller acceptance**.
-There is currently no MeshCore dashboard screen or map overlay. It monitors
-incoming companion-protocol node identity announcements (including new contacts
-and path-update notifications), preserves first/last seen history, and stores
-each received observation with UTC time and the existing Rolling Thunder GPS
-snapshot where valid. No extra GPS receiver or network pipeline is started.
+MeshCore collection, messaging, traffic analysis, and related Rolling Thunder
+configuration have been removed from the active application source. Earlier
+hardware, protocol, and SQLite descriptions below are retained as historical
+records; they are not current setup or operating instructions. MeshCore history
+and databases are not deleted by source changes. The existing installed
+collector must be handled only through a separately approved production
+cutover; do not use this guide to stop or remove it.
 
-`meshcore_passive.enabled` defaults to `false`. When off, the MeshCore port
-is never opened and its database is not created. When explicitly enabled, the
-`device` setting must be a verified physical `/dev/serial/by-path/...` USB
-selector, never `/dev/ttyUSB#` or `/dev/serial/by-id`, because the installed
-MeshCore CP2102 shares its generic serial identifier with another device.
-Data goes into `meshcore-observations.db` beside the configured contact database,
-without changing contact-log schema, QSO logging or Wavelog synchronization.
+### Historical Heltec V4.3 USB receiver identification (2026-11-11)
 
-The software never sends discovery requests, advertisements, messages, radio
-configuration or trace commands. Ordinary firmware-managed MeshCore ACK and mesh
-routing transmissions may still occur, as permitted by the owner; no absolute
-RF silence is implied. RSSI/SNR and complete observed paths are stored only
-when actually available and validated; the initially supported identity
-notifications provide neither. A stale, absent or low-quality GPS fix causes
-an explicit null receiver location rather than an invented coordinate.
-
-**Do not enable the collector during a drive or while the USB bus is unstable.**
-The 2026-11-11 hardware investigation observed repeated USB hub protocol errors
-and missing MeshCore/GPS serial interfaces. A successful software regression
-suite is not a substitute for a parked physical USB, RF, and GPS/controller
-acceptance check. Rollback: set `meshcore_passive.enabled: false` and restart
-the application through the approved deployment process; retain the separate
-database for later analysis.
-
-
-### Heltec V4.3 USB receiver identification (2026-11-11)
-
-The replacement board is a Heltec WiFi LoRa 32 V4.3 with native ESP32 USB CDC
-(interface `ttyACM0`, USB vendor/product `303a:0002`) and an individual USB
-serial number. The earlier V3 used an ambiguous CP2102 bridge; the V4 uses a
-separate, distinguishable interface. The replacement's local-only MeshCore
-`CMD_DEVICE_QUERY` returned firmware **v1.16.0-07a3ca9**, protocol **13**,
-build **06-Jun-2026**, reported as **Heltec V4.3 OLED** and repeater mode off.
-The firmware's board label does not imply a physically installed display.
-
-V4 native CDC requires DTR asserted to provide USB replies; V3 CP2102 handling
-keeps it deasserted. A firmware query is an intentional parked diagnostic, not
-part of unattended collector behavior. The application retains its default-off
-gate; this identification alone does not prove the radio is receiving nearby
-nodes or that a full drive-tested collector has passed acceptance.
-
+The replacement board was recorded as a Heltec WiFi LoRa 32 V4.3 with native
+ESP32 USB CDC (interface `ttyACM0`, USB vendor/product `303a:0002`) and an
+individual USB serial number. Its local-only diagnostic reported MeshCore
+firmware v1.16.0-07a3ca9, protocol 13, build 06-Jun-2026. These observations
+are historical hardware records; the dashboard no longer uses this interface.
 
 ### Contact-sync repeated remote failures (2026-11-11)
 
 A remote Home Platform/Wavelog HTTP 503 does not invalidate the locally saved QSO. The retry schedule doubles initially but is capped by the configured maximum, even for contacts with a very large previous failure count. The persistent retry mechanism continues to schedule future eligible attempts instead of crashing on numeric overflow. This correction does not imply the remote HTTP 503 itself is resolved. Contact-sync error status and normal manual retry remain governed by the existing logging interface.
 
+The 2026-11-15 read-only AnvilMobile snapshot found 15 contacts still marked
+failed with HTTP 503 and retry counters from 766 to 2,170. They remain stored
+locally and scheduled for retry; no manual retry, contact deletion, or backup
+was performed. See engineering/rel01-installed-state-snapshot-2026-11-15.md
+for the exact database, retry, and backup evidence.
 
-### Separate MeshCore receiver service (planned transition, not deployed yet)
 
-The standalone `meshcore-collector.service` operates independently of the Rolling Thunder interface and captures passive node observations while the dashboard is off. It owns the Heltec V4 USB connection exclusively. GPS positions, when available, are copied from the normal Rolling Thunder GPS service through a nonblocking local snapshot publisher; while Rolling Thunder is down, observations continue with no valid receiver GPS. History is in `~/.local/share/meshcore-collector/meshcore-observations.db`, outside the RT checkout. The private read-only local API is `$XDG_RUNTIME_DIR/meshcore-collector.sock` for authorized Rolling Thunder and SCOUT users. No network port, host-initiated RF messaging, or raw-payload persistence is added. If firmware emits 0x88 raw-RX events, only unattributed RSSI/SNR measurements are kept; no message text or presumed node association.
+### Historical independent MeshCore service design
 
-Cutover requires parked stop of old USB owner, lossless database copy, approved source deployment, independent service enablement, and hardware/GPS/SQLite/USB acceptance. Roll back by stopping the service and restoring the approved prior configuration and source through the deployment wrapper; never delete saved SQLite history. The installation remains pending until the owner performs or confirms those commands and verification succeeds.
+Prior plans described a separate service, Unix socket, GPS snapshot file, and
+external SQLite database. The 2026-11-15 follow-up read-only inspection found
+the enabled user unit `meshcore-collector.service` running outside the system
+Rolling Thunder unit. Its configured serial path is absent; it is retrying and
+has no open serial descriptor. The broker is enabled. The separate enabled
+`meshcore-traffic-worker.service` is inactive. Observation, broker, and traffic
+databases remain present and passed read-only integrity checks; the broker
+contains queued records. Do not stop, disable, remove, migrate, or delete any
+unit/data without separate owner approval and an accepted cutover plan. See
+engineering/rel01-installed-state-snapshot-2026-11-15.md for the observed
+paths, counts, and acceptance boundary.
 
-## MeshCore & OHGO (read-only)
+## OHGO (read-only)
 
-Select the **MESHCORE & OHGO** context with the `o` shortcut or existing
-context navigation. The top label identifies the separately running passive
-MeshCore collector; the OHGO section displays all incident reports received
-from Forge, separated by horizontal divider lines. Its text is displayed
-at double the previous size and wraps in the available space. When the text
-extends below the display, a white **MORE** indicator appears at the bottom.
-Turn the rotary encoder clockwise to scroll down or counterclockwise to
-scroll up; MORE disappears when the bottom is reached. Scrolling works only
-within this screen and does not change selection on other screens.
-The panel should remain visually steady while new GPS and status snapshots
-arrive; routine refreshes do not blank or redraw the entire text widget.
-The same fixed 42-point font, encoder scroll behavior, and incident
-separators are retained. It may show **not configured**,
-**unavailable**, **stale**, **no reports**, or **current reports**. An empty
-list while the provider is unavailable is not evidence of clear roads.
+Select the **OHGO** context with the `o` shortcut or normal context navigation.
+The screen displays incident reports received from Forge, separated by
+horizontal divider lines. Its text uses the existing 42-point bold font and
+wraps to the available space. A white **MORE** indicator appears when additional
+text remains below the visible area. Turn the rotary encoder clockwise to scroll
+down or counterclockwise to scroll up; scrolling works only on this screen and
+does not change selection elsewhere. Routine refreshes preserve the scroll
+position while the incident data is unchanged.
 
-OHGO is enabled on Forge with a protected service credential as of the
-November 11 incident-source acceptance. If the feed is unavailable or not
-configured, the screen states that instead of implying roads are clear.
-The Pi never stores the key or talks directly to OHGO. Reports are informational,
-unverified for the current route, and must not be used instead of attentive
-driving or official roadway information. There are **no** automatic warnings,
-navigation changes, MeshCore transmissions or construction/map overlays.
-Future map overlays are tracked in GitHub issue #408.
+The screen reports **not configured**, **unavailable**, **stale**, **no reports**,
+or current reports explicitly. An empty list during provider outage does not
+mean roads are clear. Forge owns the protected OHGO key and the Pi only reads
+Forge's retained route. Reports are informational and unverified for your route;
+there are no automatic warnings, navigation changes, or map overlays.

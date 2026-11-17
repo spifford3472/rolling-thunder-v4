@@ -255,3 +255,15 @@ transaction receipts, not this planning checklist.
   2026-11-16 field test is owner-reported, without count/UUID or independent
   post-test DB evidence. The screenshot confirmed CQ 4 / ITU 8 and displayed
   `Ohio` / `EM79XM`; saved Wavelog city/grid/state values remain unverified.
+
+- 2026-11-17 source-status reconciliation: current merged `main` is
+  `b9f1b2c5149ea8ebf811b519568b136c36686adf`. PR #481's GPS polling
+  quiescence fix merged at `438894deab3dff3adcfffbd3b1447ac460bb8184`, and
+  PR #479's MeshCore application-source removal merged at the current `main`
+  SHA while retaining Forge-backed OHGO. Neither source merge was deployed to
+  AnvilMobile. No independent MeshCore service was stopped, disabled, or
+  uninstalled, and no MeshCore database was changed or deleted. The last
+  installed-state observation remains the dated 2026-11-15 snapshot, not a
+  current host check. Full AnvilMobile release disposition remains **NO GO**;
+  deployment, parked peripheral/receive-only acceptance, and any service
+  cutover require their existing separate owner approvals.

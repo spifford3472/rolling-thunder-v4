@@ -71,23 +71,7 @@ A feature needing one additional radio operation should extend the narrow typed 
 A Pi screen may consume a Forge service, but it does not own that service. Forge APIs should remain presentation-neutral and reusable by future authorized clients.
 
 
-Opt-in MeshCore collector (disabled by default) consumes shared published immutable GPS state and a dedicated SQLite database. It MUST NOT open the GPS serial, change the current grid or modify QSO persistence. When enabled, its own exclusive CP2102 physical USB path is an independent hardware source.
-
-| Optional MeshCore message broker | `meshcore_message_broker.py`, `meshcore_broker_drain.py`, `meshcore_broker_api.py` | Independent collector; future Rolling Thunder and SCOUT token-authorized clients | Critical: firmware destructive dequeue, private-message durability, public channel attestation, capability scopes, no RF authority |
-
-| MeshCore public broker client | `meshcore_public_consumer.py`, `meshcore_public_intelligence.py` | Rolling Thunder manual read-only preview; future independently authorized SCOUT/RT consumers | High: exact public stream only, strict bearer file, no implicit ACK, no private data or unverified traffic alerts |
-
-| MeshCore geographic analysis (source-only) | meshcore_traffic_georeferences.py, meshcore_traffic_gps_samples.py, meshcore_traffic_geocoding.py, meshcore_traffic_relevance.py, meshcore_traffic_analysis.py | Future separately authorized consumer of classified #traffic and existing GPS | Critical: no second GPS authority, default-off provider, no fabricated road/route certainty, no alert or RF authority |
-| MeshCore durable traffic worker | `meshcore_traffic_worker.py`, `meshcore_traffic_ledger.py`, `meshcore_traffic_worker_main.py` | Independently authenticated Rolling Thunder public-broker consumer; future isolated SCOUT worker by separate identity and ledger | Critical: synchronous durable receipt before per-message public cursor ACK, replay/idempotence, bounded duplication, separate DB, no Tk or RF authority |
-
-Forge MeshCore geographic evidence and audit are source-only future
-consumers of public-classified traffic and existing GPS. They cannot
-read a private stream, mutate ACK, send driver alerts or RF.
-
-| MeshCore & OHGO context (opt-in OHGO) | `forge_ohgo_incidents.py`, `forge_ohgo_api.py`, `meshcore_ohgo_panel.py`, `context_navigation.py`, `ui_main.py` | Forge spots service owns provider/cache; Pi background client owns polling; Tk renders cached status | No API key on Pi, no UI thread HTTP, no MeshCore private cursor, no alerts/navigation or new map layer |
-
-| MESHCORE & OHGO large-text scroll viewport | `meshcore_ohgo_ui.py`, `meshcore_ohgo_panel.py`, `ui_main.py` | Context-only consumer of validated physical rotary actions; other contexts still dispatch to existing active-panel owners | No changes to shared mappings, PTT/FT8, broker, GPS, network, or privileged commands |
-
+| OHGO read-only incident context | `forge_ohgo_incidents.py`, `forge_ohgo_api.py`, `ohgo_panel.py`, `ohgo_ui.py`, `context_navigation.py`, `ui_main.py` | Forge spots service owns provider/cache; Pi background client polls; Tk renders immutable state | No API key on Pi, UI-thread HTTP, driver alerts, route inference, map overlay, GPS or MeshCore dependency |
 
 ### FT8 uncertain-PTT recovery
 

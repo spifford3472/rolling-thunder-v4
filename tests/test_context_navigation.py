@@ -29,6 +29,7 @@ def test_defaults_to_pota_context() -> None:
         ("7", ContextId.LOG),
         ("8", ContextId.DMR),
         ("9", ContextId.FT8),
+        ("o", ContextId.OHGO),
     ],
 )
 def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId) -> None:
@@ -81,7 +82,7 @@ def test_select_next_advances_through_contexts() -> None:
     assert controller.select_next().selected is ContextId.WEATHER
     assert controller.select_next().selected is ContextId.SETTINGS
     assert controller.select_next().selected is ContextId.LOG
-    assert controller.select_next().selected is ContextId.MESHCORE_OHGO
+    assert controller.select_next().selected is ContextId.OHGO
     assert controller.select_next().selected is ContextId.DMR
 
 
@@ -130,8 +131,9 @@ def test_enabled_antenna_context_follows_settings_and_supports_bench_shortcut() 
     assert controller.state.definition.title == "ANTENNAS / RF EXPOSURE"
 
 
-def test_meshcore_ohgo_shortcut_preserves_existing_dmr_navigation() -> None:
+def test_ohgo_shortcut_preserves_existing_dmr_navigation() -> None:
     controller = ContextNavigationController()
     assert controller.select_shortcut("o")
-    assert controller.state.selected is ContextId.MESHCORE_OHGO
+    assert controller.state.selected is ContextId.OHGO
+    assert controller.state.definition.title == "OHGO"
     assert controller.select_next().selected is ContextId.DMR
