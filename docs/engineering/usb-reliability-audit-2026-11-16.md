@@ -134,6 +134,26 @@ shutdown/CAT state remains no proof of physical PTT release. Operator lockout
 override and process-restart recovery remain available per the existing policy;
 neither establishes that the radio is physically in receive.
 
+### 2026-11-17 current read-only host recheck
+
+Current merged `main` is `3328c27d5eb41e4417fe6305d1942002a3488106`; PR #486
+redacted the public production packet and did not change runtime behavior. An
+authorized owner-account inspection found the main system service active,
+serial device paths present, and a USB audio-capture endpoint enumerated. The
+historically identified MeshCore USB receiver identity was absent. These
+observations do not prove a fresh GPS fix, FT8 audio capture health, an FT8
+decode, installed source identity, or physical receive/PTT state. The complete
+parked acceptance remains **NOT ACCEPTED**; see
+`parked-receive-only-acceptance.md`.
+
+The same inspection, through the correct owner user-systemd manager, found the
+MeshCore collector enabled/active and the traffic worker enabled/inactive.
+The old service-manager mismatch arose because a second remote-tool account
+queried its own user manager. This is an access-context distinction, not a
+service-state transition. No service, database, USB, CAT/PTT, or RF state was
+changed. The separately approved cutover plan is
+`meshcore-installed-service-cutover-plan.md`.
+
 ## Prioritized remediation and acceptance
 
 1. **P0 — GPS polling shutdown ownership: source correction merged.** #481's

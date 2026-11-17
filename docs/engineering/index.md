@@ -24,6 +24,8 @@ This guide describes the implemented repository rather than an aspirational arch
 - `rel01-installed-state-snapshot-2026-11-15.md` — public redacted installed-state conclusions, evidence limits, acceptance gates, and separately gated rollback/cutover plan.
 
 - `rel01-parked-deployment-acceptance.md` — exact-SHA parked release prerequisites, stop/no-go decisions, acceptance record and rollback validation.
+- `parked-receive-only-acceptance.md` — current source and read-only host evidence, receive-only USB/GPS/FT8 acceptance steps, and explicit NO-GO record until installed identity and live evidence pass.
+- `meshcore-installed-service-cutover-plan.md` — separately approved user-service deactivation plan, SQLite/WAL preservation, owner-manager verification, and reversible rollback boundary.
 
 ## Retained MeshCore history (not active source)
 
@@ -31,7 +33,7 @@ MeshCore design, incident, and acceptance records remain historical evidence. Th
 
 ## Engineering document set
 
-- `mc-remove-dependency-inventory-2026-11-15.md` — exact active-source removal classification, OHGO dependency graph, configuration compatibility, and separate production cutover gate.
+- `mc-remove-dependency-inventory-2026-11-15.md` — exact active-source removal classification, OHGO dependency graph, configuration compatibility, and historical installed-service evidence. The current separately approved procedure is in `meshcore-installed-service-cutover-plan.md`.
 
 - `stab07l-rpi-historical-package-quarantine.md` — exact Raspberry Pi libc/OpenSSL candidate bytes, independent Pi hash match, unsigned-index quarantine and NO-GO gates.
 
