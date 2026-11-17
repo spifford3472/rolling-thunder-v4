@@ -271,8 +271,9 @@ transaction receipts, not this planning checklist.
 - 2026-11-17 post-merge reconciliation: PR #478 merged at
   `2632dc8b4445ed84644d9324f7fe91bb6175b106`; this is the current `main`
   baseline at that point. PR #482 was still a draft documentation
-  reconciliation then, and was not a deployment approval. The installed-state evidence above remains the dated
-  2026-11-15 inspection plus owner-reported 2026-11-16 field result; no current
+  reconciliation then, and was not a deployment approval. The installed-state
+  evidence above remains the dated 2026-11-15 inspection plus owner-reported
+  2026-11-16 field result; no current
   host or hardware verification is implied. Full AnvilMobile release remains
   **NO GO**.
 
