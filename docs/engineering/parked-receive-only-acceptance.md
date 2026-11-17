@@ -42,15 +42,16 @@ that Tk, GPS, audio, or FT8 receive is ready. The deployment wrapper and one
 protected service drop-in could not be read or rehashed through the available
 non-root account; earlier verified snapshots remain dated evidence.
 
-The owner confirmed the vehicle was parked, the radio was powered on, FT8
-signals were audible, and GPS was working. The vehicle was subsequently
-returned to the garage and the radio is now off. This is owner-reported
-receive-audio and GPS-function evidence;
-no timestamps, freshness details, or private measurements were supplied. It
-does not establish application FT8 decoding, two consecutive decode periods,
-physical receive/PTT indication, or exact installed source identity. The exact
-installed source identity gate and remaining receive-only checks therefore
-remain incomplete.
+The owner reports that while parked, with the radio powered on, several FT8
+contacts were completed and GPS was working. This supports successful FT8
+application decoding/QSO operation on the running installation by owner report;
+the contacts also mean the session involved transmission, so it was not a
+strictly receive-only acceptance run. The vehicle is now in the garage and the
+radio is off. No timestamps, freshness details, or private measurements were
+supplied. The report does not establish two consecutive receive-only decode
+periods, physical receive/PTT release, or exact installed source identity. The
+source identity gate and remaining acceptance checks therefore remain
+incomplete.
 
 ## Source and offline test evidence
 
@@ -74,13 +75,14 @@ remain incomplete.
 
 ## Required parked acceptance sequence
 
-The owner confirmed on 2026-11-17 that the vehicle was parked, the radio was
-powered on for receive, FT8 signals were audible, and GPS was working. The
-vehicle is now back in the garage and the radio is off. The parked precondition
-was met during the observation. The report does not establish FT8 software
-decode periods, physical radio receive/PTT indication, or installed code
-identity. Separately authorize any deployment or restart needed to test the
-selected exact SHA. This procedure does not authorize a transmit test.
+The owner reports on 2026-11-17 that the vehicle was parked, GPS was working,
+and several FT8 contacts were completed with the radio on. The vehicle is now
+back in the garage and the radio is off. This is useful field evidence of
+decoding/QSO operation on the running installation, but contacts involve
+transmission and do not satisfy the strictly receive-only procedure below. The
+report does not establish exact installed code identity or physical PTT release.
+Separately authorize any deployment or restart needed to test the selected exact
+SHA. This procedure does not authorize a transmit test.
 
 1. Record the exact target `main` SHA, exact installed source/runtime identity,
    and successful exact-head CI. Stop if the installed process cannot be tied
@@ -119,13 +121,14 @@ selected exact SHA. This procedure does not authorize a transmit test.
 
 | Check | Result | Evidence required |
 | --- | --- | --- |
-| Parked observation, radio powered on for receive, MeshCore removed | Owner reported; partial pass | 2026-11-17 owner statement; vehicle subsequently returned to garage; radio now off |
+| Parked GPS and FT8 QSO operation, MeshCore removed | Owner reported; partial pass | Several contacts and working GPS reported; session involved transmission; radio now off in garage |
 | Exact installed source/runtime identity | Not established | Process-bound release identity and readiness evidence |
 | One system-managed dashboard and effective protected configuration | Partial | Current read-only service state seen; installed identity/configuration reconciliation remains required |
 | Unique radio/controller/GPS/audio mapping | Partial | Interfaces enumerate; physical function-to-device mapping not confirmed |
 | GPS function | Owner reported working; partial | Fresh fix timestamp/validity and visible loss/recovery behavior not recorded |
-| FT8 receive audio | Owner reported audible; partial | Application audio health and two consecutive decode periods not recorded |
-| Physical radio remains in receive | Not recorded | Operator observation of receive indicator and physical controls; software is insufficient |
+| FT8 application decode/QSO workflow | Owner reported several contacts; partial pass | Supports decoding on running installation; timestamps/source identity not recorded; session was not receive-only |
+| Receive-only decode sequence | Not tested as specified | Two consecutive periods with no QSO/transmit workflow and timestamps |
+| Physical receive/PTT release | Not recorded | Operator observation of radio indicator and physical controls; software is insufficient |
 | Bounded orderly stop and rollback | Not tested | Separately approved maintenance-window result; preserve data |
 | Overall decision | **NO GO** | All required items must pass; missing evidence is not a pass |
 
@@ -142,7 +145,7 @@ On 2026-11-17, the separately authorized MeshCore service cutover was completed
 as recorded in `meshcore-installed-service-cutover-plan.md`. No Rolling Thunder
 deployment or restart, source database mutation, physical USB operation,
 CAT/PTT activity, or RF transmission was performed by this review. The owner
-reports that the parked radio was powered on for receive, FT8 signals were
-audible, and GPS was working. The vehicle is now back in the garage and the
-radio is off. These observations do not complete application decode, physical
-receive/PTT, runtime identity, or overall receive-only acceptance.
+reports several parked FT8 contacts and working GPS; contacts involved
+transmission, so this is not the specified receive-only acceptance. The vehicle
+is now in the garage and the radio is off. Exact runtime identity, physical
+receive/PTT observation, and overall receive-only acceptance remain incomplete.
