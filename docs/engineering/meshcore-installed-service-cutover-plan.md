@@ -10,7 +10,7 @@ it does not approve a Rolling Thunder deployment.
 ## Current verified boundary
 
 The current source baseline is merged `main` at
-`3328c27d5eb41e4417fe6305d1942002a3488106`. Source inventory and tests confirm
+`a24d7d2a14cd1ea110696249e889a42fb0dc42c1`. Source inventory and tests confirm
 that Rolling Thunder no longer composes MeshCore serial, GPS snapshot, broker,
 traffic, or database components; OHGO remains on the independent Forge spots
 route and has no MeshCore/GPS dependency.

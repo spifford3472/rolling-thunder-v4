@@ -65,3 +65,23 @@ First independently authenticate fingerprint `480203C910DA290C44F704D6A41C828854
 Rollback: abandon the unmerged draft; explicitly delete only reviewed private Forge quarantine scratch if desired. No AnvilMobile writes, service restart, QSO database access, CAT/PTT, RF, installation, network or OPNsense changes occurred. Any later infrastructure change involving 192.168.9.0/24, 192.168.10.0/24 or OPNsense requires configuration paths, integrations, jobs, verification, rollback and change-history documentation committed in spifford3472/ki5vnb-qth-infrastructure.
 
 Change history: 2026-11-14 — recovered two exact but unsigned-index-unauthenticated Raspberry Pi archive candidates, confirmed five additional Pi file SHA matches, added bounded read-only quarantine/refusal tests, preserved the 14/16 publisher-authenticated gate and declared PRODUCTION NO GO. 2026-11-16 — recovered a signed historical InRelease without its Packages index and two matching maintainer-signed buildinfo records; signature validity is established, signer-key trust is not, so the 14/16 count and PRODUCTION NO GO remain unchanged.
+
+
+## 2026-11-17 provenance recheck
+
+A renewed search of the official Raspberry Pi software-source documentation and
+archive confirms the official archive exposes its archive-key file and
+`buildinfo-pool`, but no independently verifiable binding for the buildinfo
+signer fingerprint `480203C910DA290C44F704D6A41C82885484A525` was found.
+Official Raspberry Pi repository commits authored with the corresponding
+maintainer name/email are unsigned in GitHub's verification metadata; author
+metadata alone does not bind that OpenPGP key to the maintainer. The current
+archive-key file is the archive Release-signing trust path, not evidence for the
+separate buildinfo signer. This recheck therefore leaves both Raspberry
+Pi-patched archives quarantined and the authenticated count at 14/16.
+
+References: [Raspberry Pi software sources](https://www.raspberrypi.com/documentation/computers/software-sources.html),
+[official Raspberry Pi archive index](https://archive.raspberrypi.com/debian/),
+and [an official RPi-Distro commit authored by Serge Schneider](https://github.com/RPi-Distro/firmware-nonfree/commit/5d2295b633d94641253e16ba90fc847436fc9d4a).
+The available material is useful identity context but is not cryptographic key
+certification. Do not promote the candidate archives to authenticated inputs.

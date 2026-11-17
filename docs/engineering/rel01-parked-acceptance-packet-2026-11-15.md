@@ -1,12 +1,33 @@
 # REL-01 — parked production acceptance packet (prepared; NO GO)
 
-**Current source baseline:** merged `main` at `3328c27d5eb41e4417fe6305d1942002a3488106` (2026-11-17).
+**Current source baseline:** merged `main` at `a24d7d2a14cd1ea110696249e889a42fb0dc42c1` (2026-11-17).
 **Disposition:** **NO GO for a full AnvilMobile release.** This packet records
 acceptance requirements and source-level conclusions. It intentionally omits
 hostnames, process identifiers, internal network addresses, hardware serials,
 private filesystem paths, database contents, and production binary digests.
 Those details are not needed to establish the gates below and must not be
 copied into this public repository.
+
+## Current platform and native-runtime scope
+
+The only current production target is the Raspberry Pi 4 running its installed
+64-bit Raspberry Pi OS (`aarch64`). The STAB-07G test ran an isolated Debian
+ARM64 userspace under QEMU on x86_64 Forge; it checks selected ARM64 Python and
+native-library compatibility, but does not emulate the Pi board, its USB/radio
+hardware, or the complete Raspberry Pi OS. The STAB-07K/L work attempts a
+reproducible reconstruction of the Pi's full native OS runtime. That is a
+separate base-image/rebuild objective, not a generic ARM deployment target.
+
+The reviewed deployment candidate installs the application into the existing
+Pi virtual environment with `pip --no-deps -e` and does not replace OS `libc`
+or OpenSSL. Therefore, the 14/16 base-package provenance result blocks a
+reconstructed full OS image, but need not automatically block an application-
+only source release that leaves the installed OS libraries untouched. Such a
+release still needs an explicit owner decision to accept the installed Pi OS as
+its baseline, plus exact identity/provenance for the application environment
+and process. This acceptance decision has not been made; full release remains
+NO GO. A future Intel host would be a separate x86_64 target with its own
+runtime and acceptance evidence; it is not part of this release.
 
 ## Authority and release decision
 
@@ -81,12 +102,33 @@ the incomplete hardware acceptance record and
 [`meshcore-installed-service-cutover-plan.md`](meshcore-installed-service-cutover-plan.md)
 for the separately gated plan.
 
+## 2026-11-17 post-merge runtime identity recheck
+
+PR #487 and #488 are merged; both exact-head CI runs passed. The latest main
+contains the cutover record and the PSK autoqueue URI fix, but neither changes
+the installed Pi process. Read-only host evidence still shows the system
+service running from the older editable checkout; its current Git revision is
+clean but predates this main. The expected Tk heartbeat was not present. The
+available non-root path could not re-read the protected wrapper or one service
+drop-in. Accordingly, exact process-to-release identity and application
+readiness remain **not established**. The registered protected runtime observer
+and a root-owned immutable release are not installed.
+
+The owner reports that while parked, GPS was working and several FT8 contacts
+were completed with the radio on. This supports FT8 decoding/QSO operation on
+the running installation by owner report, but contacts involved transmission
+and therefore do not constitute the required receive-only acceptance run. The
+vehicle is now in the garage and the radio is off. No fresh-fix timestamp,
+receive-only decode sequence, physical receive/PTT observation, or
+process-bound runtime identity was supplied. Receive-only acceptance remains
+**NOT ACCEPTED**.
+
 ## Immutable acceptance gates
 
 | Gate | Required evidence | Current disposition |
 | --- | --- | --- |
 | Exact release candidate | Reviewed merged SHA, exact-head CI, source/wheel/native manifest and signature | Not selected for AnvilMobile; NO GO |
-| Native package provenance | Authenticated package metadata for every required installed package, or independently authenticated publisher-signed equivalent | 14 of 16 sampled package revisions have authenticated archive provenance. Two Raspberry Pi-patched revisions remain quarantined pending trust in the build-record signing key or recovery of their signed historical package index; see [STAB-07L](stab07l-rpi-historical-package-quarantine.md). |
+| Native package provenance | For a full OS image rebuild, authenticate every included native package. For an app-only release, explicitly accept the existing Pi OS baseline and verify the application environment without replacing OS libraries. | The optional full-image reconstruction is 14/16 for the sampled package revisions; two Raspberry Pi-patched revisions remain quarantined pending signer trust or matching signed historical index. No owner decision to accept the existing Pi OS baseline for an app-only release has been recorded; see [STAB-07L](stab07l-rpi-historical-package-quarantine.md). |
 | Running-code identity | Protected immutable release, exact constrained launch path, trusted process-instance observer, and readiness bound to that process | Not established. Existing checks correctly refuse to equate process path, source checkout, hashes, systemd active state, or signed observation with Python bytes in memory. |
 | Deployment wrapper | Serialized invocations, durable transaction journal, protected verified backup, truthful readiness check, bounded rollback | Source candidate is merged; installed wrapper is not confirmed to match it and production acceptance is incomplete. |
 | Durable data and rollback | Consistent verified backup of all required stores; compatible code/schema rollback; operator-owned recovery | Primary QSO online backup was verified. Other stores and production rollback remain unaccepted; no restore was performed. |

@@ -2,15 +2,16 @@
 
 ## Current source versus installed state — November 17, 2026
 
-Current merged `main` is `3328c27d5eb41e4417fe6305d1942002a3488106`. PR #481's
-GPS shutdown quiescence fix and PR #479's MeshCore source removal are merged;
-PR #486 only redacted production evidence and documented remaining release
-gaps. On November 17, the owner-authorized MeshCore collector and traffic-worker
-user services were stopped, disabled, and removed from the user systemd search
-path after verified backups; their data/configuration and unit definitions were
-preserved. Rolling Thunder remained active and OHGO was not changed. This does
-not establish the running Pi's exact code identity or complete parked USB/GPS/FT8
-acceptance. The full AnvilMobile release remains **NO GO**;
+Current merged `main` is `a24d7d2a14cd1ea110696249e889a42fb0dc42c1`. PR #481's
+GPS shutdown quiescence fix, PR #479's MeshCore source removal, and PRs #487
+and #488 are merged. #487 records that the owner-authorized MeshCore collector
+and traffic-worker user services were stopped, disabled, and removed from the
+user systemd search path after verified backups; their data/configuration and
+unit definitions were preserved. #488 fixes read-only SQLite URI attachment in
+PSK autoqueue. Rolling Thunder remained active and OHGO was not changed. These
+source and service changes do not establish the running Pi's exact code identity
+or complete parked USB/GPS/FT8 acceptance. The full AnvilMobile release remains
+**NO GO**;
 see `engineering/parked-receive-only-acceptance.md` and the REL-01 packet.
 
 The dated November 15 source note below remains historical. It describes the
