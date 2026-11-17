@@ -74,11 +74,14 @@ directive names do not validate the values or prove deployability; the owner
 must review sanitized values locally and safely. Never paste credentials into
 ChatGPT.
 
-A 2026-11-16 `sudo -n -l` check found no passwordless read-only command for
-these protected files; the exact-SHA deploy command was not invoked. The
-collector has not been executed on AnvilMobile. The repo-local script's
-ownership and runtime path must be considered before owner-approved interactive
-execution; it is not a production installation procedure.
+On 2026-11-16, the owner ran a separately reviewed read-only inspection through
+interactive root authorization. The installed wrapper hash matched the
+operator-captured copy; the system unit and all four active drop-ins were
+hashed and their directive names reported. Protected values were not disclosed,
+and the deployment command was not invoked. This verifies file identity and
+the active drop-in inventory, not the correctness of protected values or
+application/hardware readiness. The repo-local collector remains uninstalled
+and is not a production installation procedure.
 
 ## Remaining evidence and safety prerequisites
 

@@ -75,11 +75,13 @@ reconciliation but nothing is installed. The STAB-07 integration rehearsal is
 not a merge, deployment, or parked safety acceptance. See
 `stab07-integration-and-parked-release-plan.md`.
 
-## 2026-11-16 read-only privilege check
+## 2026-11-16 owner-run read-only production evidence
 
-The AnvilMobile operator account has no passwordless read-only command for the
-root deployment wrapper or protected service drop-ins. The exact-SHA deployment
-wrapper is the only listed passwordless command for this release path; it was
-not invoked. Previously captured wrapper and drop-in observations remain
-historical until the owner runs the read-only evidence tool with interactive
-sudo. No privileged file was read and no host state changed.
+The owner ran a read-only inspection through interactive root authorization.
+The installed wrapper's SHA-256 matched its operator-captured copy. The base
+service unit and all four active drop-ins were hashed, and only systemd
+directive names were reported; protected values were not disclosed. This
+confirms the installed wrapper is still the captured version described above,
+not the newer uninstalled candidate. No configuration, service, or database
+state changed. Hash identity does not independently validate configuration
+values, readiness, deployment safety, or physical PTT state.
