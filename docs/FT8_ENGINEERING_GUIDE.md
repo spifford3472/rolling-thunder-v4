@@ -390,6 +390,12 @@ sample is used for the next period rather than the previous start plus a fixed
 Operational expectation: FT8 receive must remain correctly aligned during
 30–90-day continuous Rolling Thunder uptime without requiring a service restart.
 
+The ALSA receive adapter monitors PCM progress while waiting for the first sample
+or a complete period. Five seconds without sample progress raises a capture
+error even if `arecord` is still running. The receive service reports degraded
+capture, stops the stalled process, and retries on its existing schedule.
+Continuously arriving samples keep the full 15-second FT8 window eligible.
+
 ## Receive-Loss Investigation Diagnostics
 
 Issue #237 distinguishes three different quantities that must not be conflated:

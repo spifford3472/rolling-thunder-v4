@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import threading
 from dataclasses import dataclass
+from time import monotonic
 from typing import Protocol
 
 from rolling_thunder.ft8.audio_buffer import (
@@ -23,6 +24,7 @@ FT8_PERIOD_BYTES = FT8_PERIOD_SAMPLES * FT8_SAMPLE_WIDTH_BYTES
 # Keep continuous reads short so the software FT8 boundary cannot be displaced
 # by a large userspace audio read.
 FT8_CAPTURE_CHUNK_MS = 50
+_FT8_CAPTURE_STALL_TIMEOUT_S = 5.0
 FT8_CAPTURE_CHUNK_BYTES = (
     FT8_SAMPLE_RATE_HZ
     * FT8_SAMPLE_WIDTH_BYTES
@@ -161,7 +163,7 @@ class AlsaArecordFT8AudioInput:
             raise FT8AudioInputError("FT8 audio input is not started")
 
         if period is None or start_sample is None:
-            self._wait_for_initial_audio(process, buffer)
+            self._wait_for_samples(process, buffer, 1)
 
             now = self._clock.now_utc()
             current = FT8Period.from_utc(now)
@@ -333,28 +335,30 @@ class AlsaArecordFT8AudioInput:
                 self._set_reader_error(f"invalid FT8 capture audio: {exc}")
                 return
 
-    def _wait_for_initial_audio(
-        self,
-        process: subprocess.Popen[bytes],
-        buffer: FT8AudioBuffer,
-    ) -> None:
-        while buffer.next_sample == 0:
-            self._raise_if_capture_failed(process)
-
-            if self._stop_event.wait(0.05):
-                raise FT8AudioInputError("FT8 audio capture cancelled")
-
     def _wait_for_samples(
         self,
         process: subprocess.Popen[bytes],
         buffer: FT8AudioBuffer,
         end_sample: int,
     ) -> None:
+        last_sample = buffer.next_sample
+        last_progress = monotonic()
         while not buffer.wait_for_sample(end_sample, timeout_s=0.1):
             self._raise_if_capture_failed(process)
 
             if self._stop_event.is_set():
                 raise FT8AudioInputError("FT8 audio capture cancelled")
+
+            next_sample = buffer.next_sample
+            now = monotonic()
+            if next_sample > last_sample:
+                last_sample = next_sample
+                last_progress = now
+            elif now - last_progress >= _FT8_CAPTURE_STALL_TIMEOUT_S:
+                # An ALSA process can remain alive while its PCM stream stalls.
+                raise FT8AudioInputError(
+                    f"FT8 audio capture stalled: no PCM samples for {_FT8_CAPTURE_STALL_TIMEOUT_S:g} s"
+                )
 
     def _raise_if_capture_failed(
         self,

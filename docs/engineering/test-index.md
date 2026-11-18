@@ -272,7 +272,8 @@ the durable Forge UUID ledger so lost responses do not duplicate Wavelog writes.
 - `tests/test_ft8_attempt_history.py`
 - `tests/test_ft8_attempt_ledger.py` — terminal classifications, frozen UTC/grid/
   coordinates, report directions, per-period power, replay and offline retry.
-- `tests/test_ft8_audio.py`
+- `tests/test_ft8_audio.py` — PCM stall detection at startup and mid-period,
+  continuous sample progress, and UTC period alignment.
 - `tests/test_ft8_audio_buffer.py`
 - `tests/test_ft8_audio_output.py`
 - `tests/test_ft8_authorization.py` — fail-closed selection freshness and preparation-delay regression coverage.
