@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import pytest
 
+from rolling_thunder.ft8 import audio as audio_module
 from rolling_thunder.ft8.audio import (
     FT8_PERIOD_BYTES,
     FT8_SAMPLE_RATE_HZ,
@@ -67,6 +68,57 @@ def test_incomplete_capture_is_rejected() -> None:
 class _LiveProcess:
     def poll(self) -> None:
         return None
+
+
+class _CaptureProgress:
+    def __init__(self, sample_counts: list[int]) -> None:
+        self.now = 0.0
+        self.next_sample = 0
+        self._sample_counts = iter(sample_counts)
+
+    def wait_for_sample(self, end_sample: int, *, timeout_s: float) -> bool:
+        self.now += 1.0
+        self.next_sample = next(self._sample_counts, -1)
+        assert self.next_sample >= 0, "capture kept waiting after the stall deadline"
+        return self.next_sample >= end_sample
+
+
+@pytest.mark.parametrize(
+    ("samples", "end_sample", "stall_at"),
+    [
+        ([0] * 5, 1, 5.0),
+        ([12_000] * 6, 180_000, 6.0),
+    ],
+)
+def test_live_capture_without_pcm_progress_reports_stall(
+    monkeypatch: pytest.MonkeyPatch, samples: list[int], end_sample: int, stall_at: float
+) -> None:
+    audio = AlsaArecordFT8AudioInput("plughw:CARD=Device,DEV=0")
+    buffer = _CaptureProgress(samples)
+    monkeypatch.setattr(audio_module, "monotonic", lambda: buffer.now)
+    process = cast(Any, _LiveProcess())
+
+    audio._process = process
+    audio._buffer = cast(Any, buffer)
+    if end_sample > 1:
+        audio._next_period = FT8Period(0)
+        audio._next_period_start_sample = 0
+
+    with pytest.raises(FT8AudioInputError, match="no PCM samples"):
+        audio.read_period()
+    assert buffer.now == stall_at
+
+
+def test_capture_with_continuous_pcm_progress_can_wait_a_full_ft8_period(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    audio = AlsaArecordFT8AudioInput("plughw:CARD=Device,DEV=0")
+    buffer = _CaptureProgress(list(range(12_000, 180_001, 12_000)))
+    monkeypatch.setattr(audio_module, "monotonic", lambda: buffer.now)
+
+    audio._wait_for_samples(cast(Any, _LiveProcess()), cast(Any, buffer), 180_000)
+
+    assert buffer.now == 15.0
 
 
 class _ReanchorBuffer:
