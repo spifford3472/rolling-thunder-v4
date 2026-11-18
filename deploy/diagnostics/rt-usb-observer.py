@@ -5,10 +5,10 @@ import datetime
 import json
 import logging
 import os
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 import subprocess
 import time
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 
 def run(*args: str) -> str:
@@ -53,7 +53,7 @@ def record(logger: logging.Logger, kind: str, data: dict[str, object]) -> None:
     """Write one UTC-stamped structured record."""
     logger.info(
         json.dumps(
-            {"time_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(), "event": kind, **data},
+            {"time_utc": datetime.datetime.now(datetime.UTC).isoformat(), "event": kind, **data},
             sort_keys=True,
         )
     )
@@ -78,7 +78,8 @@ def main() -> None:
             if now - heartbeat >= 60:
                 heartbeat = now
             previous = current
-        except Exception as exc:
+        # A failed diagnostic sample must leave the next sample eligible.
+        except Exception as exc:  # noqa: BLE001
             record(logger, "observer_error", {"error_type": type(exc).__name__, "message": str(exc)[:200]})
         time.sleep(5)
 
