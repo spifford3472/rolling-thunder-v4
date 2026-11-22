@@ -33,6 +33,7 @@ _SUBPHASE_NAMES = frozenset(
         "map_controller",
         "map_viewport_request",
         "map_snapshot",
+        "ohgo_map",
         "pota_viewport_request",
         "radar_viewport_request",
         "ft8_panel_snapshot",

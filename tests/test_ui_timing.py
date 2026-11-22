@@ -1,5 +1,8 @@
 """Major UI timing aggregate contract (no production application required)."""
 
+import ast
+from pathlib import Path
+
 from rolling_thunder.ui_timing import UiTiming
 
 
@@ -143,3 +146,25 @@ def test_subphase_and_action_names_reject_unbounded_payloads():
         pass
     with pytest.raises(ValueError):
         timer.observe_control_action("move_next event-123", 1.0)
+
+
+def test_dashboard_refresh_subphases_are_registered():
+    dashboard = Path(__file__).resolve().parents[1] / "src/rolling_thunder/ui_main.py"
+    tree = ast.parse(dashboard.read_text(encoding="utf-8"))
+    timing = UiTiming()
+    subphases = [
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "ui_timing"
+        and node.func.attr == "subphase"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    ]
+    assert subphases
+    for name in subphases:
+        with timing.subphase(name):
+            pass
