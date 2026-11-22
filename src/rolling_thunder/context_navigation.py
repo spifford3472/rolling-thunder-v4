@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -22,6 +23,7 @@ class ContextId(StrEnum):
     FT8 = "ft8"
     ANTENNAS = "antennas"
     OHGO = "ohgo"
+    WSPR = "wspr"
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,13 @@ CONTEXT_DEFINITIONS: Final[tuple[ContextDefinition, ...]] = (
         "9",
         "FT8",
         "Native FT8 CQ browser and one-QSO operator workflow.",
+    ),
+    ContextDefinition(
+        ContextId.WSPR,
+        "WSPR",
+        "w",
+        "WSPR",
+        "Parked receive-only propagation reports.",
     ),
     ContextDefinition(
         ContextId.REPEATERS,
@@ -167,6 +176,7 @@ class ContextNavigationController:
         initial: ContextId = ContextId.POTA,
         *,
         include_antennas: bool = False,
+        on_selected: Callable[[ContextId], None] | None = None,
     ) -> None:
         self._definitions = context_definitions(include_antennas=include_antennas)
         self._available = frozenset(item.context_id for item in self._definitions)
@@ -174,6 +184,7 @@ class ContextNavigationController:
         if initial not in self._available:
             raise ValueError(f"Context is not enabled: {initial.value}")
         self._state = ContextNavigationState(selected=initial)
+        self._on_selected = on_selected
 
     @property
     def definitions(self) -> tuple[ContextDefinition, ...]:
@@ -190,6 +201,8 @@ class ContextNavigationController:
         if context_id not in self._available:
             raise ValueError(f"Context is not enabled: {context_id.value}")
         self._state = ContextNavigationState(selected=context_id)
+        if self._on_selected is not None:
+            self._on_selected(context_id)
         return self._state
 
     def select_shortcut(self, shortcut: str) -> bool:

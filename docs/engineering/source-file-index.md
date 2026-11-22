@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 373 in the OHGO map layers source tree.**
+**Cataloged Python modules: 380 in the WSPR receive source tree.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -640,3 +640,14 @@ has been changed by this inventory correction.
 - `deploy/rolling-thunder-arm64-dashboard-runner.py` — strictly accepts
   navigation evidence only with all normal shutdown, radio-off and provenance
   guardrails; unchanged arbitrary-command refusal behavior.
+
+
+## WSPR
+
+- `src/rolling_thunder/wspr_audio.py` — UTC-aligned, receive-only ALSA PCM capture through a pipe.
+- `src/rolling_thunder/wspr_controls.py` — Validated physical WSPR start and stop dispatch.
+- `src/rolling_thunder/wspr_decoder.py` — Bounded pipe-only WSPR decode adapter.
+- `src/rolling_thunder/wspr_radio.py` — FT-891 receive lease, shared audio handoff and state restoration.
+- `src/rolling_thunder/wspr_receive.py` — Parked session eligibility, rotation, cancellation and volatile statistics.
+- `src/rolling_thunder/wspr_reporting.py` — Single-attempt HTTPS WSPRnet reporting and acknowledgement.
+- `src/rolling_thunder/wspr_widgets.py` — Tk WSPR panel for immutable runtime state.

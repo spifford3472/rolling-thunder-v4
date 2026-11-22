@@ -156,6 +156,8 @@ from rolling_thunder.weather_alert_panel import (
 from rolling_thunder.weather_alert_viewport import WeatherAlertViewportController
 from rolling_thunder.weather_panel import WeatherPanelController
 from rolling_thunder.weather_ui import WeatherWidgets
+from rolling_thunder.wspr_controls import WsprControlInterceptor
+from rolling_thunder.wspr_widgets import WsprWidgets
 
 _REFRESH_MS = 250
 
@@ -528,8 +530,19 @@ def run_dashboard(
     )
     ohgo_panel_worker.start()
 
+    wspr = runtime.wspr
+    wspr_screen_ready = False
+
+    def track_wspr_context(context: ContextId) -> None:
+        nonlocal wspr_screen_ready
+        if context is not ContextId.WSPR:
+            wspr_screen_ready = False
+        if wspr is not None:
+            wspr.select(context is ContextId.WSPR)
+
     context_navigation = ContextNavigationController(
-        include_antennas=config.antenna_reference.enabled
+        include_antennas=config.antenna_reference.enabled,
+        on_selected=track_wspr_context,
     )
     antenna_panel = (
         AntennaReferencePanelController(
@@ -624,6 +637,20 @@ def run_dashboard(
             log_aware_active_panel_commands,
             dmr_panel_runtime.commands,
         )
+    ft8_entry_pending = False
+
+    def enter_ft8_after_receive_handoff() -> bool:
+        nonlocal ft8_entry_pending
+        ft8_entry_pending = wspr is not None and wspr.busy
+        return ft8_entry_pending or runtime.enter_ft8_context()
+
+    def exit_ft8_after_receive_handoff() -> bool:
+        nonlocal ft8_entry_pending
+        if ft8_entry_pending:
+            ft8_entry_pending = False
+            return True
+        return runtime.exit_ft8_context()
+
     if runtime.ft8_panel is not None:
         active_panel_commands = FT8AwareActivePanelCommands(
             context_navigation,
@@ -634,8 +661,8 @@ def run_dashboard(
                 if runtime.ft8_band_control is None
                 else runtime.ft8_band_control.cycle_band
             ),
-            enter_ft8=runtime.enter_ft8_context,
-            exit_ft8=runtime.exit_ft8_context,
+            enter_ft8=enter_ft8_after_receive_handoff,
+            exit_ft8=exit_ft8_after_receive_handoff,
             clear_start_status=runtime.clear_ft8_qso_start_status,
             pending_callsign=capture,
         )
@@ -834,6 +861,26 @@ def run_dashboard(
             event_interceptor=CompositeEventInterceptor(
                 tron_toggle_interceptor,
                 settings_interceptor,
+                WsprControlInterceptor(
+                    wspr,
+                    selected=lambda: context_navigation.state.selected is ContextId.WSPR,
+                    allowed=lambda: (
+                        wspr_screen_ready
+                        and not power_confirmation.state.pending
+                        and not close_started.is_set()
+                        and not runtime.ft8_ptt_alarm.active
+                        and not runtime.ft8_ptt_alarm.tx_inhibited
+                        and not visual_test_active()
+                    ),
+                    radio_idle=lambda: (
+                        not shared_spot_tuning.status.tuning
+                        and not browse_controls.state.busy
+                        and (
+                            repeater_configuration is None
+                            or not repeater_configuration.configuring
+                        )
+                    ),
+                ) if wspr is not None else None,
                 OhgoScrollInterceptor(
                     selected_context=lambda: context_navigation.state.selected,
                     scroll=scroll_ohgo,
@@ -1067,6 +1114,9 @@ def run_dashboard(
     )
     ohgo_scroll_handlers[0] = ohgo_widgets.scroll
 
+    wspr_widgets = WsprWidgets(
+        context_content, background=_SECONDARY_BACKGROUND, foreground=_BRIGHT,
+    )
     settings_widgets = SettingsWidgets(context_content)
     antenna_widgets = (
         AntennaReferenceWidgets(context_content)
@@ -1697,6 +1747,7 @@ def run_dashboard(
             show_tron_popup("TRON START FAILED")
 
     def refresh() -> None:
+        nonlocal wspr_screen_ready
         if close_started.is_set():
             return
         if sigterm_requested.is_set():
@@ -1787,6 +1838,8 @@ def run_dashboard(
                 )
 
         with ui_timing.subphase("radio_sync"):
+            if ft8_entry_pending and wspr is not None and not wspr.busy:
+                enter_ft8_after_receive_handoff()
             active_panel_commands.synchronize_radio_state()
         with ui_timing.subphase("spot_tune_status"):
             shared_spot_tune_status.refresh()
@@ -2089,6 +2142,8 @@ def run_dashboard(
         selected_context = context_navigation.state
         if selected_context.selected is not ContextId.OHGO:
             ohgo_widgets.hide()
+        if selected_context.selected is not ContextId.WSPR and wspr_widgets.visible:
+            wspr_widgets.hide()
         if dmr_panel_runtime is not None:
             dmr_panel_runtime.set_polling_enabled(
                 selected_context.selected is ContextId.DMR
@@ -2276,6 +2331,16 @@ def run_dashboard(
             context_title_text.set("OHGO")
             context_title_label.configure(font=("DejaVu Sans", 34, "bold"))
             ohgo_widgets.update(present_ohgo(ohgo_panel_worker.state))
+        elif selected_context.selected is ContextId.WSPR and wspr is not None:
+            if not wspr_widgets.visible:
+                show_standard_context_body()
+                context_body_label.grid_remove()
+                wspr_widgets.show()
+            health_frame.grid_remove()
+            context_title_text.set("WSPR")
+            context_title_label.configure(font=_CONTEXT_HEADER_FONT)
+            wspr_widgets.update(wspr.snapshot())
+            wspr_screen_ready = True
         elif selected_context.selected is ContextId.FT8:
             health_frame.grid_remove()
             context_title_text.set("FT8")

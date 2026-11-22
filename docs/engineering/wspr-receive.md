@@ -1,0 +1,89 @@
+# Parked receive-only WSPR
+
+The persistent dashboard provides WSPR on its normal context cycle after FT8.
+Validated physical Command Button 3 on a rendered WSPR screen requests one
+session. Button 2, any context exit, dashboard shutdown, GPS loss, motion, UTC
+disagreement or lost receive ownership revokes that request. Re-entry,
+reconnection and fresh GPS evidence leave WSPR idle.
+
+## Shared equipment and timing
+
+- GPS remains owned by the existing poller. A start needs a valid fix and a
+  continuously observed five seconds at or below 0.15 m/s. Position and advancing
+  RMC UTC/motion evidence expire at four seconds. The system UTC is checked
+  against the latest trusted GPS UTC using the existing FT8 clock calculation.
+  A valid antenna and a physically parked vehicle remain operator requirements.
+- At acceptance, freeze the current position for distance calculations and the
+  four-character Maidenhead square for public reports. The dashboard previews
+  that square. The upload adapter receives the grid and configured callsign.
+- The single FT-891 adapter and its CAT operation lock guard receive ownership.
+  Firmware TX and TX LED queries must agree with reception. These queries are
+  advisory and never clear an FT8 transmit lockout. Active or preparing FT8,
+  pending FT8 settings, shared spot tuning, Browse tuning and repeater setup
+  inhibit acquisition. Background FT8 capture yields only when its decoder is
+  idle and its audio workers quiesce. FT8 resumes after release.
+- The reservation limits competing application CAT writes and prohibits CAT
+  keying. Tuning reuses the existing band-memory, frequency and mode sequence.
+  WSPR uses the shared DigiRig capture device through the ALSA pipe in USB with
+  the FT-891 SSB BFO set to USB. It periodically verifies mode, BFO and
+  frequency and checks them again at slot completion. On release, it restores
+  previous frequency, mode and BFO if the firmware remains in RX and the WSPR
+  settings are still in force. Physical front-panel controls remain under the
+  operator's control.
+- WSPR-2 windows begin on even UTC minutes. Capture takes 114 seconds at 12 kHz
+  mono signed 16-bit PCM. Tune ahead of the boundary and allow at least two
+  seconds to settle. The next band's tune can proceed while the previous slot
+  decodes and reports. An incomplete window produces no results. An unverified
+  band recall shows a skip and continues the rotation.
+
+| Band | USB dial frequency |
+| --- | ---: |
+| 40 m | 7.038600 MHz |
+| 30 m | 10.138700 MHz |
+| 20 m | 14.095600 MHz |
+| 17 m | 18.104600 MHz |
+| 15 m | 21.094600 MHz |
+| 12 m | 24.924600 MHz |
+| 10 m | 28.124600 MHz |
+| 6 m | 50.293000 MHz |
+
+The frequencies, including the Region 2 six-meter center, follow the pinned
+[WSJT-X frequency list](https://github.com/WSJTX/wsjtx/blob/967c85a6119110788b0df3782cf796485b2cee14/models/FrequencyList.cpp).
+See the [WSJT-X WSPR guide](https://wsjt.sourceforge.io/wsjtx-doc/wsjtx-main-2.7.0.html#WSPR).
+
+## Decoder and delivery
+
+The package builds the separately licensed [pipe-only wsprd helper](../../tools/wsprd-pipe/README.md)
+on Linux where a C compiler and FFTW development files are installed. The
+dashboard can launch with the helper absent and reports the missing decoder
+when started. The native process uses PCM stdin and decode stdout. It has no
+audio file, decode journal, FFTW wisdom file, or persistent callsign hash.
+
+The result worker makes fresh one-spot direct HTTPS attempts within the
+current slot's 90-second decode and reporting budget. It uses the [WSJT-X upload form](https://github.com/WSJTX/wsjtx/blob/967c85a6119110788b0df3782cf796485b2cee14/Network/wsprnet.cpp)
+and [WSPRnet HTTPS endpoint](https://wsprnet.org/post/) with curl 8.4 or later.
+The [provider accepts four-character locator input](https://www.wsprnet.org/drupal/user/register).
+Requests have four-second total deadlines, a 200 ms minimum start interval,
+and a bounded response. An unavailable or unconfirmed request abandons the
+rest of the current window's reports. A result already sent may reach the
+provider after Stop. The screen can show that its acknowledgement is unknown.
+There is no replay after network recovery and no reporting work on Forge.
+
+Only anonymous per-band counts survive failed/offline delivery in process
+memory. Only the closest and farthest acknowledged stations with usable grids
+remain as named statistics. Distances are in statute miles from the frozen
+session fix to each transmitted Maidenhead center. The session timer measures
+monotonic time since acquisition. Decodes per hour use actual listening time
+and all valid decodes for the local date. Local midnight clears that day's
+counts, listening time and extrema while a live session keeps its timer and
+frozen position. Restart clears all WSPR statistics.
+
+## Acceptance
+
+Use synthesized or recorded receive-only fixtures and a fake report endpoint
+for automated checks. On a verified parked installation, check every band
+recall, continued dashboard refresh, physical start/stop, navigation stop,
+FT8/Browse handoff and actual WSPRnet acknowledgement. A full uninterrupted
+rotation uses at least sixteen minutes including the eight receive slots.
+The six-meter antenna and each FT-891 band memory must be validated on the
+installed vehicle.

@@ -265,6 +265,15 @@ UTC observation, but they do not own NTP configuration, GPS acquisition, system
 clock writes, or the privileged GPS clock-correction helper. Optional comparison
 and PCM retention must remain explicitly time/count bounded.
 
+### WSPR
+
+WSPR owns its manually authorized parked session, eight-band scheduler, pipe-only
+decoder, volatile daily statistics and best-effort WSPRnet reporting. It
+consumes the existing GPS/UTC publication, DigiRig capture configuration,
+context navigation and physical dispatcher. It acquires the shared FT-891
+receive reservation and yields it before another context applies FT8 settings.
+See [WSPR receive](wspr-receive.md) for the lifecycle and data boundaries.
+
 ### GPS and location
 
 `application_runtime.py` composes the single configured GPS receiver and its

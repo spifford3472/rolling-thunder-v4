@@ -1,9 +1,10 @@
 """FT-891 radio adapter built on the typed CAT transport boundary."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
-from threading import RLock
+from threading import RLock, get_ident
 from time import perf_counter
 from typing import cast
 
@@ -27,6 +28,7 @@ from rolling_thunder.ft891_cat import (
     Ft891OperatingContext,
     Ft891SsbBfo,
     Ft891SsbMicSelect,
+    Ft891TxReadback,
     encode_cat_transmit_off,
     encode_cat_transmit_on,
     encode_memory_to_vfo_a,
@@ -45,6 +47,8 @@ from rolling_thunder.ft891_cat import (
     encode_read_repeater_shift,
     encode_read_ssb_bfo,
     encode_read_ssb_mic_select,
+    encode_read_tx_led,
+    encode_read_tx_readback,
     encode_select_band_memory,
     encode_set_6m_repeater_offset,
     encode_set_ctcss_behavior,
@@ -71,9 +75,11 @@ from rolling_thunder.ft891_cat import (
     parse_operating_context_reply,
     parse_power_reply,
     parse_preamp_enabled_reply,
+    parse_radio_led_reply,
     parse_repeater_shift_reply,
     parse_ssb_bfo_reply,
     parse_ssb_mic_select_reply,
+    parse_tx_readback,
 )
 from rolling_thunder.radio import (
     BandChangeRequiredError,
@@ -102,6 +108,7 @@ class Ft891Radio:
         self._transport = transport
         self._clock = clock
         self._operation_lock = RLock()
+        self._receive_owner: int | None = None
         self._cp6_cat_ptt_asserted = False
         # A failed CAT write may have reached the radio. Do not authorize
         # another key until an existing-owner TX0 write completes.
@@ -114,6 +121,7 @@ class Ft891Radio:
     def connect(self) -> RadioState:
         """Open CAT and read the current frequency and mode."""
         with self._operation_lock:
+            self._require_write_authority()
             try:
                 self._transport.open()
                 frequency, mode = self._read_hardware_state()
@@ -145,6 +153,7 @@ class Ft891Radio:
     def disconnect(self) -> RadioState:
         """Close CAT and report a disconnected state."""
         with self._operation_lock:
+            self._require_write_authority()
             if self._cp6_cat_ptt_asserted:
                 self._release_cp6_cat_ptt()
             self._transport.close()
@@ -167,6 +176,8 @@ class Ft891Radio:
     def _assert_cp6_cat_ptt(self) -> None:
         with self._operation_lock:
             self._require_connected()
+            if self._receive_owner is not None:
+                raise RadioConnectionError("FT-891 is reserved for receive-only WSPR.")
             if self._cp6_cat_ptt_uncertain:
                 raise RadioConnectionError(
                     "FT-891 CAT PTT release is unverified; refusing new key."
@@ -281,6 +292,7 @@ class Ft891Radio:
     def set_frequency(self, frequency: Frequency) -> RadioState:
         """Set and verify VFO-A frequency without implicitly changing bands."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             current_frequency = self._current_frequency()
             target_band = resolve_radio_band(frequency)
@@ -323,6 +335,7 @@ class Ft891Radio:
     def set_mode(self, mode: RadioMode) -> RadioState:
         """Set and verify the main receiver mode."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             self._transport.command(encode_set_mode(mode))
             verified_mode = parse_mode_reply(
@@ -356,6 +369,7 @@ class Ft891Radio:
     def set_preamp_enabled(self, enabled: bool) -> bool:
         """Set and verify FT-891 VFO-A preamp/IPO state."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             self._transport.command(encode_set_preamp_enabled(enabled))
             verified = parse_preamp_enabled_reply(
@@ -371,6 +385,7 @@ class Ft891Radio:
     def set_narrow_enabled(self, enabled: bool) -> bool:
         """Set and verify FT-891 VFO-A NARROW state."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             self._transport.command(encode_set_narrow_enabled(enabled))
             verified = parse_narrow_enabled_reply(
@@ -385,6 +400,7 @@ class Ft891Radio:
     def set_noise_blanker_enabled(self, enabled: bool) -> bool:
         """Set and verify FT-891 VFO-A Noise Blanker state."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             self._transport.command(encode_set_noise_blanker_enabled(enabled))
             verified = parse_noise_blanker_enabled_reply(
@@ -405,6 +421,7 @@ class Ft891Radio:
     def set_power_watts(self, power_watts: int) -> int:
         """Set and verify the configured FT-891 transmitter power."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             self._transport.command(encode_set_power(power_watts))
             verified = parse_power_reply(self._transport.query(encode_read_power()))
@@ -424,6 +441,7 @@ class Ft891Radio:
     def set_ssb_mic_select(self, value: Ft891SsbMicSelect) -> Ft891SsbMicSelect:
         """Set and verify documented FT-891 menu 11-05 SSB MIC SELECT."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             self._transport.command(encode_set_ssb_mic_select(value))
             verified = parse_ssb_mic_select_reply(self._transport.query(encode_read_ssb_mic_select()))
@@ -443,6 +461,7 @@ class Ft891Radio:
     def set_ssb_bfo(self, value: Ft891SsbBfo) -> Ft891SsbBfo:
         """Set and verify documented FT-891 menu 11-07 SSB BFO."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             self._transport.command(encode_set_ssb_bfo(value))
             verified = parse_ssb_bfo_reply(self._transport.query(encode_read_ssb_bfo()))
@@ -456,6 +475,7 @@ class Ft891Radio:
     def select_band(self, band: RadioBand) -> RadioState:
         """Recall the dedicated band memory to VFO-A and verify the result."""
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             expected_memory = memory_channel_for_band(band)
 
@@ -513,6 +533,7 @@ class Ft891Radio:
         tone_plan = cast(CtcssPlan, resolve_ctcss_plan(request))
 
         with self._operation_lock:
+            self._require_write_authority()
             self._require_connected()
             if self._state.transmitting:
                 raise RadioConnectionError(
@@ -674,6 +695,44 @@ class Ft891Radio:
                 f"{close_error}"
             )
         return error_message
+
+    @contextmanager
+    def exclusive_receive(self) -> Iterator[RadioState]:
+        """Reserve CAT writes for a receive-only worker; keep shared reads available."""
+        with self._operation_lock:
+            if self._receive_owner is not None:
+                raise RadioConnectionError("FT-891 already has a receive reservation.")
+            state = self._verify_receive_only()
+            self._receive_owner = get_ident()
+        try:
+            yield state
+        finally:
+            with self._operation_lock:
+                self._receive_owner = None
+
+    @contextmanager
+    def receive_operation(self) -> Iterator[RadioState]:
+        """Check firmware RX and serialize one reserved receive operation."""
+        with self._operation_lock:
+            if self._receive_owner != get_ident():
+                raise RadioConnectionError("FT-891 receive reservation is unavailable.")
+            yield self._verify_receive_only()
+
+    def _verify_receive_only(self) -> RadioState:
+        self._require_connected()
+        if self._cp6_cat_ptt_asserted or self._cp6_cat_ptt_uncertain:
+            raise RadioConnectionError("FT-891 CAT PTT is active or uncertain.")
+        reply = self._transport.query(encode_read_tx_readback())
+        if parse_tx_readback(reply) is not Ft891TxReadback.BOTH_OFF:
+            raise RadioConnectionError("FT-891 reports transmit.")
+        tx_led = self._transport.query(encode_read_tx_led())
+        if parse_radio_led_reply(tx_led, indicator="A"):
+            raise RadioConnectionError("FT-891 TX LED is active.")
+        return self.refresh_state()
+
+    def _require_write_authority(self) -> None:
+        if self._receive_owner is not None and self._receive_owner != get_ident():
+            raise RadioConnectionError("FT-891 is reserved for receive-only WSPR.")
 
     def _require_connected(self) -> None:
         if self._state.connection_state is not RadioConnectionState.CONNECTED:

@@ -715,6 +715,31 @@ For additional detail see `FT8_OPERATOR_GUIDE.md`.
 
 ---
 
+## WSPR Screen
+
+Cycle to WSPR after FT8, or use **W** to open the screen. Park and wait for a
+fresh GPS fix and five seconds of stationary evidence. Then press physical
+**Command Button 3** to run. The dashboard shows the current band, elapsed
+session time, upload status and receiver grid. The first decode waits for a
+complete two-minute UTC slot. **Command Button 2** stops reception. Leaving
+the WSPR screen also stops it. Return to the screen and press Button 3 again
+for a fresh session.
+
+The radio listens on 40, 30, 20, 17, 15, 12, 10 and 6 meters in that order.
+An unavailable band displays a skip. If FT8 is actively decoding when you
+start, wait briefly and press Button 3 again. If the radio reports transmit
+or GPS or clock evidence becomes unsafe, WSPR stops, releases its equipment
+and shows the reason.
+
+Running may publish your configured callsign and the first four characters
+of your parked Maidenhead square to WSPRnet. The dashboard posts only fresh
+reception reports. If upload fails, the station details are discarded and
+there is no later replay. Anonymous decode totals and decodes per listening
+hour include offline reception. **Closest posted** and **Farthest posted**
+use only acknowledged reports with a usable station grid. Those daily
+statistics reset at local midnight. The live session timer continues across
+midnight. WSPR starts idle after application startup and recovery.
+
 # 9. Repeaters Screen
 
 ## Purpose

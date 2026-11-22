@@ -64,32 +64,42 @@ class FT8BandController:
         self._lock = Lock()
         self._operation_lock = Lock()
         self._status = FT8BandTuneStatus()
+        self._settings_pending = 0
 
     @property
     def status(self) -> FT8BandTuneStatus:
         with self._lock:
             return self._status
 
+    @property
+    def busy(self) -> bool:
+        """Include queued context settings as well as active band tuning."""
+        with self._lock:
+            return self._settings_pending > 0 or self._status.tuning
+
     def enter_ft8(self) -> bool:
         """Apply verified FT8 receive settings in the background."""
-        if self._configure_receive_settings is None:
-            return True
-        Thread(
-            target=self._settings_worker,
-            daemon=True,
-            name="rolling-thunder-ft8-receive-settings",
-        ).start()
-        return True
+        return self._schedule_settings(
+            self._configure_receive_settings, "rolling-thunder-ft8-receive-settings",
+        )
 
     def exit_ft8(self) -> bool:
         """Restore owner-required normal receive settings in the background."""
-        if self._restore_normal_settings is None:
+        return self._schedule_settings(
+            self._restore_normal_settings, "rolling-thunder-ft8-restore-settings",
+        )
+
+    def _schedule_settings(self, callback: Callable[[], object] | None, name: str) -> bool:
+        if callback is None:
             return True
-        Thread(
-            target=self._restore_worker,
-            daemon=True,
-            name="rolling-thunder-ft8-restore-settings",
-        ).start()
+        with self._lock:
+            self._settings_pending += 1
+        try:
+            Thread(target=self._settings_worker, args=(callback,), daemon=True, name=name).start()
+        except RuntimeError:
+            with self._lock:
+                self._settings_pending -= 1
+            return False
         return True
 
     def restore_normal_settings_for_shutdown(self) -> None:
@@ -156,15 +166,15 @@ class FT8BandController:
             )
 
 
-    def _settings_worker(self) -> None:
-        callback = self._configure_receive_settings
-        if callback is None:
-            return
+    def _settings_worker(self, callback: Callable[[], object]) -> None:
         try:
             with self._operation_lock:
                 callback()
         except (RadioError, ValueError):
             return
+        finally:
+            with self._lock:
+                self._settings_pending -= 1
 
     def _restore_worker(self) -> None:
         callback = self._restore_normal_settings

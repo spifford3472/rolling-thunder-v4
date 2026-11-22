@@ -5,6 +5,7 @@ import os
 import sqlite3
 from collections.abc import Callable
 from concurrent.futures import Executor
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
@@ -217,6 +218,11 @@ from rolling_thunder.serial_gps import SerialGPSReceiver
 from rolling_thunder.shared_pota_contact import shared_pota_spots_for_contact
 from rolling_thunder.status_messages import StatusMessageService
 from rolling_thunder.threading_scheduler import ThreadingPollScheduler
+from rolling_thunder.wspr_audio import WsprAudio
+from rolling_thunder.wspr_decoder import PipeWsprDecoder
+from rolling_thunder.wspr_radio import Ft891WsprLease, reserve_ft891_wspr
+from rolling_thunder.wspr_receive import WsprReceive
+from rolling_thunder.wspr_reporting import WsprnetReporter
 
 GPSFactory = Callable[..., GPSReceiver]
 RadioFactory = Callable[..., Radio]
@@ -254,6 +260,7 @@ class ApplicationRuntime:
     contact_logging: ContactLoggingService
     gps: GPSReceiver | None = None
     gps_polling: GPSPollingService | None = None
+    wspr: WsprReceive | None = None
     clock_sync: ClockSynchronizationService | None = None
     live_map: LiveMapService | None = None
     callsign_map: LiveMapService | None = None
@@ -1345,6 +1352,31 @@ class ApplicationRuntime:
                 activity_order=ft8_ranked_order,
                 respond=runtime.request_ft8_response,
             )
+        def ft8_radio_idle() -> bool:
+            start_status = runtime.latest_ft8_qso_start_status
+            executor = runtime.ft8_hardware_transmit
+            return (
+                runtime.latest_ft8_qso_state in {
+                    FT8QsoState.IDLE, FT8QsoState.COMPLETED, FT8QsoState.ABORTED,
+                    FT8QsoState.RETRY_EXHAUSTED, FT8QsoState.ERROR,
+                }
+                and (start_status is None or not start_status.busy)
+                and (executor is None or not executor.transmitting)
+                and not runtime.ft8_ptt_alarm.tx_inhibited
+                and (ft8_band_control is None or not ft8_band_control.busy)
+            )
+
+        wspr_lease: Callable[[], AbstractContextManager[Ft891WsprLease]] | None = None
+        if isinstance(radio, Ft891Radio):
+            ft891 = radio
+            wspr_lease = lambda: reserve_ft891_wspr(ft891, ft8_receive, ft8_radio_idle)
+
+        runtime.wspr = WsprReceive(
+            callsign=str(config.operator.callsign), lease=wspr_lease,
+            audio=WsprAudio(config.ft8.receive.audio_device),
+            decoder=PipeWsprDecoder(), reporter=WsprnetReporter(),
+        )
+        gps_polling.add_listener(runtime.wspr.observe_gps)
         return runtime
 
     @property
@@ -1356,6 +1388,8 @@ class ApplicationRuntime:
 
     def request_ft8_qso(self, activity: FT8CQActivity) -> bool:
         """Accept one selected CQ without blocking the caller on CAT preparation."""
+        if self.wspr is not None and self.wspr.busy:
+            return False
         if self.ft8_authorization is None or self.ft8_qso is None:
             return False
         selected_at_utc = self.ft8_authorization.clock.now_utc()
@@ -1397,6 +1431,8 @@ class ApplicationRuntime:
 
     def request_ft8_response(self, incoming: FT8IncomingCall) -> bool:
         """Accept one exact addressed decode after explicit Button 2 authorization."""
+        if self.wspr is not None and self.wspr.busy:
+            return False
         if self.ft8_authorization is None or self.ft8_qso is None:
             return False
         selected_at_utc = self.ft8_authorization.clock.now_utc()
@@ -1482,6 +1518,8 @@ class ApplicationRuntime:
 
     def authorize_ft8_qso(self, activity: FT8CQActivity) -> FT8QsoContext:
         """Freeze and start one explicitly selected FT8 CQ through application services."""
+        if self.wspr is not None and self.wspr.busy:
+            raise RuntimeError("WSPR owns receive resources")
         if self.ft8_authorization is None or self.ft8_qso is None:
             raise RuntimeError("FT8 QSO transmit execution is disabled")
         context = self.ft8_authorization.authorize(
@@ -1494,6 +1532,8 @@ class ApplicationRuntime:
 
     def authorize_ft8_response(self, incoming: FT8IncomingCall) -> FT8QsoContext:
         """Freeze and start one explicitly accepted inbound FT8 call."""
+        if self.wspr is not None and self.wspr.busy:
+            raise RuntimeError("WSPR owns receive resources")
         if self.ft8_authorization is None or self.ft8_qso is None:
             raise RuntimeError("FT8 QSO transmit execution is disabled")
         context = self.ft8_authorization.authorize_incoming(
@@ -1763,6 +1803,8 @@ class ApplicationRuntime:
             )
             return result
 
+        if self.wspr is not None:
+            attempt("WSPR receive", self.wspr.close)
         if self.ft8_browser_ranking is not None:
             attempt("FT8 browser ranking", self.ft8_browser_ranking.close)
             self.ft8_browser_ranking = None
