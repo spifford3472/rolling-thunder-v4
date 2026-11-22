@@ -854,3 +854,10 @@ the consolidated STAB-07 integration report for private evidence file paths.
   commands, and no restored FT8 alarm transmit authority. These queries
   are **not composed into production** and no physical receive sensing has
   been accepted; see `ft8-rx02-receive-evidence-and-supervised-recovery.md`.
+
+
+## WSPR
+
+- `tests/test_wspr_decoder.py` — Strict decoder output and offline synthesized WSPR receive fixture.
+- `tests/test_wspr_receive.py` — Physical start/stop, navigation, motion, UTC, rotation and daily statistics.
+- `tests/test_wspr_reporting.py` — Validated form, single HTTPS attempt, cancellation and no replay.

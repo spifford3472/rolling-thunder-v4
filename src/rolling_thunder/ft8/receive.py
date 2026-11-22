@@ -230,6 +230,16 @@ class FT8ReceiveService:
         self._capture_thread.start()
         self._decode_thread.start()
 
+    def suspend_for_other_receive(self) -> bool:
+        """Release audio only if FT8 has no decoder operation in progress."""
+        with self._state_lock:
+            if self._state.decoding:
+                return False
+            self._stop_event.set()
+        self.stop()
+        self.clear_cq_activity()
+        return True
+
     def stop(self) -> None:
         self._stop_event.set()
         self._audio_input.stop()
@@ -239,6 +249,8 @@ class FT8ReceiveService:
             capture.join(timeout=3)
         if decode is not None:
             decode.join(timeout=3)
+        if any(worker is not None and worker.is_alive() for worker in (capture, decode)):
+            raise RuntimeError("FT8 receive workers have not released their resources")
         self._capture_thread = None
         self._decode_thread = None
         self._drain_queue()
@@ -292,13 +304,17 @@ class FT8ReceiveService:
             except queue.Empty:
                 continue
             with self._state_lock:
+                if self._stop_event.is_set():
+                    break
                 self._state = replace(self._state, decoding=True)
             try:
                 result = self._decode_period(period)
                 decodes = result.decodes
             except (FT8DecoderError, OSError) as exc:
                 detail = str(exc)
-                self._set_state(status=FT8ReceiveStatus.DEGRADED, last_error=detail)
+                self._set_state(
+                    status=FT8ReceiveStatus.DEGRADED, last_error=detail, decoding=False
+                )
                 self._notify_receive_error(detail)
                 self._write_diagnostic_snapshot()
                 continue

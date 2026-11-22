@@ -27,6 +27,8 @@ This guide describes the implemented repository rather than an aspirational arch
 - `parked-receive-only-acceptance.md` — current source and read-only host evidence, receive-only USB/GPS/FT8 acceptance steps, and explicit NO-GO record until installed identity and live evidence pass.
 - `meshcore-installed-service-cutover-plan.md` — separately approved user-service deactivation plan, SQLite/WAL preservation, owner-manager verification, and reversible rollback boundary.
 
+- [WSPR receive](wspr-receive.md) — parked operation, DigiRig and CAT handoff, UTC windows and volatile reporting.
+
 ## Retained MeshCore history (not active source)
 
 MeshCore design, incident, and acceptance records remain historical evidence. They describe prior source and installations and are not instructions to restore removed runtime integration. See `mc-remove-dependency-inventory-2026-11-15.md` for the source-removal classification and separately gated installed-service cutover.

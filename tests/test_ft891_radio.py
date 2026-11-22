@@ -609,3 +609,44 @@ def test_h3_failed_release_cannot_authorize_second_cat_key() -> None:
     del transport.command_errors[b"TX0;"]
     ptt.cancel()
     assert transport.commands.count(b"TX0;") == 2
+
+
+def test_receive_reservation_rejects_foreign_tuning_and_all_cat_keying() -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    transport = FakeTransport()
+    transport.replies.update({b"TX;": b"TX0;", b"RIA;": b"RIA0;"})
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+    ptt = radio.create_cp6_cat_ptt_capability()
+
+    with radio.exclusive_receive() as original:
+        with ThreadPoolExecutor(max_workers=1) as other:
+            future = other.submit(radio.set_frequency, Frequency(hz=14_250_000))
+            with pytest.raises(RadioConnectionError, match="reserved"):
+                future.result(timeout=1)
+            assert other.submit(radio.refresh_state).result(timeout=1).frequency == original.frequency
+        with pytest.raises(RadioConnectionError, match="reserved"):
+            ptt.key()
+        with radio.receive_operation() as verified:
+            assert verified.mode is RadioMode.USB
+
+    assert b"TX1;" not in transport.commands
+    assert b"TX0;" not in transport.commands
+    radio.set_frequency(Frequency(hz=14_250_000))
+
+
+@pytest.mark.parametrize(("tx_reply", "led_reply"), [
+    (b"TX1;", b"RIA0;"), (b"TX2;", b"RIA0;"), (b"TX0;", b"RIA1;"), (b"?;", b"RIA0;"),
+])
+def test_receive_reservation_fails_closed_on_tx_or_unknown_firmware(
+    tx_reply: bytes, led_reply: bytes,
+) -> None:
+    transport = FakeTransport()
+    transport.replies.update({b"TX;": tx_reply, b"RIA;": led_reply})
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    with pytest.raises(RadioError), radio.exclusive_receive():
+        pytest.fail("Radio must stay unreserved")
+    assert set(transport.commands) <= {b"FA;", b"MD0;", b"TX;", b"RIA;"}

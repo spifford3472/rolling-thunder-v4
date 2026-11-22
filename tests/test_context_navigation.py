@@ -30,6 +30,7 @@ def test_defaults_to_pota_context() -> None:
         ("8", ContextId.DMR),
         ("9", ContextId.FT8),
         ("o", ContextId.OHGO),
+        ("w", ContextId.WSPR),
     ],
 )
 def test_selects_context_directly_by_shortcut(shortcut: str, expected: ContextId) -> None:
@@ -77,6 +78,7 @@ def test_select_next_advances_through_contexts() -> None:
     assert controller.select_next().selected is ContextId.DX
     assert controller.select_next().selected is ContextId.BROWSE
     assert controller.select_next().selected is ContextId.FT8
+    assert controller.select_next().selected is ContextId.WSPR
     assert controller.select_next().selected is ContextId.REPEATERS
     assert controller.select_next().selected is ContextId.AI
     assert controller.select_next().selected is ContextId.WEATHER
@@ -90,6 +92,7 @@ def test_ft8_follows_browse_in_physical_navigation_order() -> None:
     controller = ContextNavigationController(ContextId.BROWSE)
 
     assert controller.select_next().selected is ContextId.FT8
+    assert controller.select_next().selected is ContextId.WSPR
     assert controller.select_next().selected is ContextId.REPEATERS
 
 

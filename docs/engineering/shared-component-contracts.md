@@ -218,6 +218,16 @@ workflows. Feature code should submit typed intent rather than issue raw CAT.
 A new screen-specific raw-CAT shortcut is an architectural regression unless
 explicitly approved.
 
+WSPR reserves the existing FT-891 CAT write path for receive tuning and leaves
+shared read access available. CAT keying is inhibited throughout that
+reservation. Digirig PCM is exclusively acquired after the idle FT8 capture
+workers quiesce and released before FT8 capture restarts. WSPR uses published
+RMC UTC/motion and GPS position. Any dashboard context exit revokes WSPR
+before another panel can own the radio. FT8 entry defers its receive settings
+until WSPR has released the lease. The existing dashboard map, station
+selection and contact logging keep their original state and inputs.
+See [WSPR receive](wspr-receive.md).
+
 ## STAB-04B shutdown command and FT8 authority
 
 The dashboard close event revokes the existing `OperatorCommandController`
