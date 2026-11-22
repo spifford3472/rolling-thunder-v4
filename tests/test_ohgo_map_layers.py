@@ -259,34 +259,40 @@ def test_navigation_changes_only_the_selected_layer_and_persists(tmp_path: Path)
 
 
 def test_projection_panning_zoom_density_and_marker_symbols() -> None:
-    viewport = build_map_viewport(CLEVELAND, zoom=6, width_px=768, height_px=650)
+    viewport = build_map_viewport(CLEVELAND, zoom=13, width_px=768, height_px=650)
     rows = tuple(
-        OhgoMarker(str(i), GeoPoint(39 + (i % 100) / 40, -84.7 + i // 100 / 10))
+        OhgoMarker(str(i), GeoPoint(41.46 + (i % 100) / 1250, -81.75 + i // 100 / 350))
         for i in range(4000)
     )
     layers = tuple(OhgoLayerSnapshot(layer, OhgoLayerStatus.CURRENT, NOW, rows)
                    for layer in OhgoLayer)
+    zoom12 = build_map_viewport(CLEVELAND, zoom=12, width_px=768, height_px=650)
+    assert visible_ohgo_markers(zoom12, layers) == []
     visible = visible_ohgo_markers(viewport, layers)
     assert {layer for layer, _, _ in visible} == set(OhgoLayer)
     assert 0 < len(visible) <= 4 * 48
     assert all(0 <= x < 768 and 0 <= y < 650 for _, x, y in visible)
     zoomed = build_map_viewport(CLEVELAND, zoom=15, width_px=768, height_px=650)
-    assert len(visible_ohgo_markers(zoomed, layers)) < len(visible)
-    panned = build_map_viewport(GeoPoint(37, -122), zoom=9, width_px=768, height_px=650)
+    assert visible_ohgo_markers(zoomed, layers) != visible
+    panned = build_map_viewport(GeoPoint(37, -122), zoom=13, width_px=768, height_px=650)
     assert visible_ohgo_markers(panned, layers) == []
 
     class Canvas:
         def __init__(self) -> None:
             self.items: list[dict[str, object]] = []
+            self.coordinates: list[tuple[float, ...]] = []
 
-        def create(self, *args: object, **options: object) -> None:
+        def create(self, *args: float, **options: object) -> None:
             self.items.append(options)
+            self.coordinates.append(args)
 
         create_line = create_text = create_polygon = create_oval = create
 
     canvas = Canvas()
     for layer in OhgoLayer:
         draw_ohgo_marker(canvas, layer, 30, 30)
+        shape = canvas.coordinates[-2 if layer is not OhgoLayer.CONSTRUCTION else -3]
+        assert max(shape[1::2]) - min(shape[1::2]) == 78
     assert {item.get("text") for item in canvas.items} == {None, "SLOW", "!"}
     assert {"#ff810b", "#ffe035", "#ff4747", "#2486e8"} <= {
         item["fill"] for item in canvas.items

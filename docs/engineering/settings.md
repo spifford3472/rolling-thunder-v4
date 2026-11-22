@@ -8,8 +8,9 @@ application-lifecycle owners.
 
 The fixed clamped order is MAP ZOOM, RADAR, CALLSIGN INFO, MAP STYLE, REBOOT,
 SHUTDOWN, followed by Construction Zones, Dangerous Slowdowns, Incidents,
-and Travel Delays in a compact OHGO group. The selected control's button
-instruction appears in a fixed footer. Encoder
+and Travel Delays as full-width OHGO rows with the standard Settings typography.
+On shorter screens the rows page with the encoder selection. The selected
+control's button instruction stays in a fixed footer. Encoder
 rotation changes only the highlighted row. B1 and encoder press are inert. B2
 requests OUT/OFF/NIGHT or CANCEL; B3 requests IN/ON/DAY or advances power from
 SELECT to CONFIRM. Requests are explicit and idempotent. Text exposes actual zoom,

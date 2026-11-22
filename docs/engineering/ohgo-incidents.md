@@ -88,9 +88,9 @@ after the gate closes. Forge outages retain only still-fresh marker data. All
 HTTP, decoding, and jurisdiction artifact access run outside Tk.
 
 The primary map uses its visible Web Mercator viewport and redraws on changes
-to relevant settings, data, or viewport. At dense zooms the renderer draws at
-most one point per 24-pixel cell per category and 48 points per category per
-viewport. Zoom in for local detail.
+to relevant settings, data, or viewport. Markers appear at zoom 13 or higher
+and are about the size of the vehicle marker. The renderer draws at most one
+point per 78-pixel cell per category and 48 points per category per viewport.
 
 ## Verification and rollback
 
