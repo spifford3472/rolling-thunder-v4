@@ -28,6 +28,8 @@ from rolling_thunder.live_radar_service import (
 )
 from rolling_thunder.map_sources import DEFAULT_MAP_ATTRIBUTION
 from rolling_thunder.map_tiles import MapTileKey
+from rolling_thunder.ohgo_layers import OhgoLayersSnapshot
+from rolling_thunder.ohgo_map_ui import MARKER_TAG, draw_ohgo_marker, visible_ohgo_markers
 from rolling_thunder.pota_map_markers import (
     PotaMapMarkerSnapshot,
     project_pota_marker,
@@ -352,6 +354,7 @@ class LiveMapWidgets:
         self._pota_items: dict[PotaMarkerKey, tuple[str, tuple[int, ...]]] = {}
 
         self._last_snapshot: LiveMapSnapshot | None = None
+        self._last_ohgo_layers: OhgoLayersSnapshot = ()
         self._last_radar_snapshot: LiveRadarSnapshot | None = None
         self._last_pota_snapshot: PotaMapMarkerSnapshot | None = None
         self._pota_label_min_zoom = pota_label_min_zoom
@@ -377,6 +380,8 @@ class LiveMapWidgets:
         ft8_status: str | None = None,
         ft8_remote_status: str | None = None,
         timing: UiTiming | None = None,
+        *,
+        ohgo_layers: OhgoLayersSnapshot = (),
     ) -> None:
         """Update changed base/radar tiles and redraw lightweight overlays."""
         width, height = self.viewport_size
@@ -427,6 +432,23 @@ class LiveMapWidgets:
         self._flush_pending_radar_tiles(timing=timing)
         if timing is not None:
             timing.observe("radar", radar_started)
+
+        viewport = snapshot.viewport if snapshot is not None else None
+        previous_viewport = self._last_snapshot.viewport if self._last_snapshot else None
+        layers_changed = len(ohgo_layers) != len(self._last_ohgo_layers) or any(
+            current is not previous
+            for current, previous in zip(ohgo_layers, self._last_ohgo_layers, strict=False)
+        )
+        if (ohgo_layers or self._last_ohgo_layers) and (
+            layers_changed or viewport != previous_viewport or size_changed
+        ):
+            self._canvas.delete(MARKER_TAG)
+            if viewport is not None:
+                for layer, x, y in visible_ohgo_markers(viewport, ohgo_layers):
+                    draw_ohgo_marker(self._canvas, layer, x, y)
+                if self._attribution_item is not None:
+                    self._canvas.tag_raise(self._attribution_item)
+        self._last_ohgo_layers = ohgo_layers
 
         self._last_snapshot = snapshot
         self._last_radar_snapshot = radar_snapshot

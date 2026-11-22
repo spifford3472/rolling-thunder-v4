@@ -143,7 +143,10 @@ from rolling_thunder.known_callsign_client import (
 )
 from rolling_thunder.live_map_service import LiveMapService, LiveMapSnapshot
 from rolling_thunder.live_radar_service import LiveRadarOverlayService, LiveRadarSnapshot
-from rolling_thunder.local_jurisdiction import LocalJurisdictionResolver
+from rolling_thunder.local_jurisdiction import (
+    JURISDICTION_ARTIFACT_PATH,
+    LocalJurisdictionResolver,
+)
 from rolling_thunder.maidenhead import maidenhead_grid
 from rolling_thunder.map_solar import MapSolarStyleService, SynchronizedMapStyleTarget
 from rolling_thunder.map_sources import (
@@ -410,13 +413,8 @@ class ApplicationRuntime:
             )
 
         repository = ContactRepository(config.storage.database_path)
-        jurisdiction_artifact = (
-            Path(__file__).resolve().parent
-            / "data"
-            / "us_state_jurisdiction_v2.zip"
-        )
         jurisdiction_resolver = LocalJurisdictionResolver.from_artifact(
-            jurisdiction_artifact
+            JURISDICTION_ARTIFACT_PATH
         )
         preference_repository = OperatorPreferenceRepository(config.storage.database_path)
         operator_preferences = OperatorPreferenceService(preference_repository)

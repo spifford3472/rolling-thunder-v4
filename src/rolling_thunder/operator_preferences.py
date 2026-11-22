@@ -13,6 +13,7 @@ from rolling_thunder.map_zoom import (
     OPERATOR_MAXIMUM_MAP_ZOOM,
     OPERATOR_MINIMUM_MAP_ZOOM,
 )
+from rolling_thunder.ohgo_layers import OhgoLayer
 from rolling_thunder.storage import StorageError, initialize_database
 
 
@@ -22,6 +23,10 @@ class OperatorPreferenceKey(StrEnum):
     MAP_ZOOM = "map.zoom"
     RADAR_IMAGE_ENABLED = "radar.image.enabled"
     CALLSIGN_INFO_ENABLED = "callsign.info.enabled"
+
+
+def _ohgo_key(layer: OhgoLayer) -> str:
+    return f"map.ohgo.{layer.value}.enabled"
 
 
 class OperatorPreferenceRepository:
@@ -85,7 +90,15 @@ class OperatorPreferenceRepository:
             "1" if enabled else "0",
         )
 
-    def _read_text(self, key: OperatorPreferenceKey) -> str | None:
+    def read_ohgo_layers(self) -> frozenset[OhgoLayer]:
+        """Return enabled layers only; new or malformed preferences default off."""
+        return frozenset(layer for layer in OhgoLayer if self._read_text(_ohgo_key(layer)) == "1")
+
+    def write_ohgo_layer(self, layer: OhgoLayer, enabled: bool) -> None:
+        """Persist one independent OHGO map choice."""
+        self._write_text(_ohgo_key(layer), "1" if enabled else "0")
+
+    def _read_text(self, key: str) -> str | None:
         try:
             with sqlite3.connect(self._database_path) as connection:
                 row = connection.execute(
@@ -94,11 +107,11 @@ class OperatorPreferenceRepository:
                     FROM operator_preferences
                     WHERE preference_key = ?
                     """,
-                    (key.value,),
+                    (key,),
                 ).fetchone()
         except sqlite3.Error as error:
             raise StorageError(
-                f"Operator preference could not be read: {key.value}: {error}"
+                f"Operator preference could not be read: {key}: {error}"
             ) from error
 
         if row is None:
@@ -106,7 +119,7 @@ class OperatorPreferenceRepository:
         value = row[0]
         return value if isinstance(value, str) else None
 
-    def _write_text(self, key: OperatorPreferenceKey, value: str) -> None:
+    def _write_text(self, key: str, value: str) -> None:
         try:
             with sqlite3.connect(self._database_path) as connection:
                 connection.execute(
@@ -121,12 +134,12 @@ class OperatorPreferenceRepository:
                         preference_value = excluded.preference_value,
                         updated_at = CURRENT_TIMESTAMP
                     """,
-                    (key.value, value),
+                    (key, value),
                 )
                 connection.commit()
         except sqlite3.Error as error:
             raise StorageError(
-                f"Operator preference could not be stored: {key.value}: {error}"
+                f"Operator preference could not be stored: {key}: {error}"
             ) from error
 
 
@@ -143,7 +156,7 @@ class OperatorPreferenceService:
         self._executor = executor
         self._owns_executor = executor is None
         self._lock = Lock()
-        self._errors: dict[OperatorPreferenceKey, str] = {}
+        self._errors: dict[str, str] = {}
         self._stopped = False
 
     @property
@@ -195,6 +208,28 @@ class OperatorPreferenceService:
         except RuntimeError:
             return False
         return True
+
+    def persist_ohgo_layer(self, layer: OhgoLayer, enabled: bool) -> bool:
+        """Queue an independent layer choice on the existing preference worker."""
+        executor = self._write_executor()
+        if executor is None:
+            return False
+        try:
+            executor.submit(self._write_ohgo_layer_safely, layer, enabled)
+        except RuntimeError:
+            return False
+        return True
+
+    def _write_ohgo_layer_safely(self, layer: OhgoLayer, enabled: bool) -> None:
+        key = _ohgo_key(layer)
+        try:
+            self._repository.write_ohgo_layer(layer, enabled)
+        except StorageError as error:
+            with self._lock:
+                self._errors[key] = str(error)
+            return
+        with self._lock:
+            self._errors.pop(key, None)
 
     def stop(self) -> None:
         """Stop accepting writes without blocking dashboard shutdown."""

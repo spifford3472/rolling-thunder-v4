@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
 
+from rolling_thunder.ohgo_layers import OhgoLayer
+
 
 class SettingsOption(StrEnum):
     """Stable Settings rows in operator-visible order."""
@@ -16,6 +18,21 @@ class SettingsOption(StrEnum):
     MAP_STYLE = "map_style"
     REBOOT = "reboot"
     SHUTDOWN = "shutdown"
+    OHGO_CONSTRUCTION = "ohgo_construction"
+    OHGO_DANGEROUS_SLOWDOWNS = "ohgo_dangerous_slowdowns"
+    OHGO_INCIDENTS = "ohgo_incidents"
+    OHGO_TRAVEL_DELAYS = "ohgo_travel_delays"
+
+
+OHGO_SETTINGS = {
+    SettingsOption.OHGO_CONSTRUCTION: (OhgoLayer.CONSTRUCTION, "Construction Zones"),
+    SettingsOption.OHGO_DANGEROUS_SLOWDOWNS: (
+        OhgoLayer.DANGEROUS_SLOWDOWNS,
+        "Dangerous Slowdowns",
+    ),
+    SettingsOption.OHGO_INCIDENTS: (OhgoLayer.INCIDENTS, "Incidents"),
+    SettingsOption.OHGO_TRAVEL_DELAYS: (OhgoLayer.TRAVEL_DELAYS, "Travel Delays"),
+}
 
 
 @dataclass(frozen=True, slots=True)

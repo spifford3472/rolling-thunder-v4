@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
 from rolling_thunder.callsign_info_service import CallsignInfoLookupService
 from rolling_thunder.map_sources import MapPackageStyle
 from rolling_thunder.map_zoom import MapZoomSettingsController, MapZoomSettingsState
+from rolling_thunder.ohgo_layers import OhgoLayer
 from rolling_thunder.power_control import PowerConfirmationState
-from rolling_thunder.settings_selection import SettingId, SettingsSelection
+from rolling_thunder.settings_selection import OHGO_SETTINGS, SettingId, SettingsSelection
 
 
 class PowerConfirmationCommands(Protocol):
@@ -62,6 +64,7 @@ class DashboardSettingsState:
     callsign_info_enabled: bool = False
     selection: SettingsSelection = field(default_factory=SettingsSelection)
     power_confirmation: PowerConfirmationState = field(default_factory=PowerConfirmationState)
+    ohgo_layers: frozenset[OhgoLayer] = frozenset()
 
 
 class DashboardSettingsController:
@@ -75,6 +78,9 @@ class DashboardSettingsController:
         map_style_automation: MapStyleAutomation | None = None,
         callsign_info: CallsignInfoLookupService | None = None,
         power_confirmation: PowerConfirmationCommands | None = None,
+        *,
+        ohgo_layers: frozenset[OhgoLayer] = frozenset(),
+        persist_ohgo_layer: Callable[[OhgoLayer, bool], bool] | None = None,
     ) -> None:
         self._map_zoom = map_zoom
         self._radar = radar
@@ -83,6 +89,8 @@ class DashboardSettingsController:
         self._callsign_info = callsign_info
         self._selection = SettingsSelection()
         self._power_confirmation = power_confirmation
+        self._ohgo_layers = ohgo_layers
+        self._persist_ohgo_layer = persist_ohgo_layer
 
     @property
     def state(self) -> DashboardSettingsState:
@@ -99,6 +107,7 @@ class DashboardSettingsController:
             callsign_info_available=callsign_info is not None,
             callsign_info_enabled=callsign_enabled,
             selection=self._selection,
+            ohgo_layers=self._ohgo_layers,
             power_confirmation=(
                 PowerConfirmationState()
                 if self._power_confirmation is None
@@ -135,7 +144,7 @@ class DashboardSettingsController:
             return self.set_callsign_info(False)
         if selected is SettingId.MAP_STYLE:
             return self.set_map_style(MapPackageStyle.NIGHT)
-        return False
+        return self._set_ohgo_option(selected, False)
 
     def higher_selected(self) -> bool:
         """Apply Button 3's explicit higher/on choice to the selected row."""
@@ -148,7 +157,23 @@ class DashboardSettingsController:
             return self.set_callsign_info(True)
         if selected is SettingId.MAP_STYLE:
             return self.set_map_style(MapPackageStyle.DAY)
-        return False
+        return self._set_ohgo_option(selected, True)
+
+    @property
+    def ohgo_layers(self) -> frozenset[OhgoLayer]:
+        return self._ohgo_layers
+
+    def _set_ohgo_option(self, option: SettingId, enabled: bool) -> bool:
+        setting = OHGO_SETTINGS.get(option)
+        if setting is None or self._persist_ohgo_layer is None:
+            return False
+        layer, _ = setting
+        if (layer in self._ohgo_layers) == enabled or not self._persist_ohgo_layer(layer, enabled):
+            return False
+        self._ohgo_layers = (
+            self._ohgo_layers | {layer} if enabled else self._ohgo_layers - {layer}
+        )
+        return True
 
     def set_map_style(self, style: MapPackageStyle) -> bool:
         """Set DAY/NIGHT explicitly and arm the solar manual override on change."""

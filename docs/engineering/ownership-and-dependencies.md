@@ -453,6 +453,12 @@ callsign presentation consumes count/band without provider access. See
 
 ## OHGO incident provider and read-only mobile context
 
+Forge owns statewide category polling, normalized marker snapshots, and the
+read-only versioned route. The Pi overlay service consumes current primary-map
+GPS acceptance, the existing jurisdiction artifact, and operator choices.
+Settings owns navigation and persistence. The map canvas owns projection and
+drawing. See [OHGO](ohgo-incidents.md#statewide-map-layers).
+
 Forge alone owns the protected OHGO credential, provider fetch/cache, and
 versioned read-only route. The existing Pi Forge client polls that route on a
 bounded worker; `ohgo_panel.py` publishes immutable status and incident text,

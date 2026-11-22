@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Final
 
 JURISDICTION_ARTIFACT_FORMAT_VERSION: Final = 2
+JURISDICTION_ARTIFACT_PATH = Path(__file__).resolve().parent / "data/us_state_jurisdiction_v2.zip"
 _ARTIFACT_CACHE_SIZE: Final = 3
 
 Point = tuple[float, float]

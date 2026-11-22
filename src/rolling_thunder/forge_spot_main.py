@@ -50,6 +50,7 @@ from rolling_thunder.forge_ohgo_credentials import (
 )
 from rolling_thunder.forge_ohgo_http import fetch_ohgo_https
 from rolling_thunder.forge_ohgo_incidents import ForgeOhgoIncidentProvider
+from rolling_thunder.forge_ohgo_layers import ForgeOhgoMapLayers
 from rolling_thunder.forge_open_meteo_weather import OpenMeteoForgeWeatherProvider
 from rolling_thunder.forge_pota_provider import ForgePotaSpotProvider
 from rolling_thunder.forge_qrz_enrichment import ForgeQrzEnricher
@@ -152,6 +153,7 @@ class ForgeSpotRuntime:
         radar: ForgeRadarService | None = None,
         radar_polling: ForgeRadarPollingService | None = None,
         ohgo: ForgeOhgoBackgroundService | None = None,
+        ohgo_map_layers: ForgeOhgoMapLayers | None = None,
         dxspider: ForgeDxSpiderSpotProvider | None = None,
         dxsummit: ForgeDxSummitSpotProvider | None = None,
         logger: logging.Logger,
@@ -166,6 +168,7 @@ class ForgeSpotRuntime:
         self.radar = radar
         self.radar_polling = radar_polling
         self.ohgo = ohgo
+        self.ohgo_map_layers = ohgo_map_layers
         self.dxspider = dxspider
         self.dxsummit = dxsummit
         self._logger = logger
@@ -188,6 +191,8 @@ class ForgeSpotRuntime:
                 self.dxsummit.start()
             if self.ohgo is not None:
                 self.ohgo.start()
+            if self.ohgo_map_layers is not None:
+                self.ohgo_map_layers.start()
             self.polling.start()
             if self.weather_polling is not None:
                 self.weather_polling.start()
@@ -200,6 +205,8 @@ class ForgeSpotRuntime:
             self.server.shutdown()
             if self.ohgo is not None:
                 self.ohgo.stop()
+            if self.ohgo_map_layers is not None:
+                self.ohgo_map_layers.stop()
             if self.radar_polling is not None:
                 self.radar_polling.stop()
             if self.weather_alert_polling is not None:
@@ -484,7 +491,8 @@ def build_forge_runtime(
         else None
     )
     ohgo_service = ForgeOhgoBackgroundService(ohgo_provider)
-    application = OhgoAwareForgeSpotApiApplication(application, ohgo_service)
+    ohgo_map_layers = ForgeOhgoMapLayers(fetch_ohgo_https, ohgo_key)
+    application = OhgoAwareForgeSpotApiApplication(application, ohgo_service, ohgo_map_layers)
 
     factory = server_factory or _default_server_factory
     server = factory(
@@ -503,6 +511,7 @@ def build_forge_runtime(
         radar=radar_service,
         radar_polling=radar_polling,
         ohgo=ohgo_service,
+        ohgo_map_layers=ohgo_map_layers,
         dxspider=dxspider,
         dxsummit=dxsummit,
         logger=process_logger,

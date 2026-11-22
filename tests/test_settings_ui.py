@@ -159,15 +159,15 @@ def test_settings_cards_preserve_installed_readable_typography() -> None:
     assert _HEALTHY == "#66ccff"
 
 
-def test_six_row_layout_keeps_readable_fonts_with_compact_switches() -> None:
-    assert len(tuple(SettingsOption)) == 6
+def test_settings_layout_keeps_readable_fonts_with_compact_switches() -> None:
+    assert len(tuple(SettingsOption)) == 10
     assert _SETTINGS_CARD_FONT_SIZE == 30
     assert _SETTINGS_SECONDARY_FONT_SIZE == 18
     assert _SETTINGS_VALUE_FONT_SIZE == 36
     assert _SETTINGS_SWITCH_HEIGHT_PX == 40
 
 
-def test_all_six_rows_remain_visible_when_shutdown_is_selected(monkeypatch: Any) -> None:
+def test_all_settings_cards_remain_visible_when_shutdown_is_selected(monkeypatch: Any) -> None:
     monkeypatch.setitem(sys.modules, "tkinter", fake_tk_module())
     widgets = SettingsWidgets(None)
     state = DashboardSettingsState(
@@ -179,7 +179,7 @@ def test_all_six_rows_remain_visible_when_shutdown_is_selected(monkeypatch: Any)
 
     widgets.update(state)
 
-    assert len(widgets._cards) == 6
+    assert len(widgets._cards) == 10
     assert all(not card.grid_removed for card in widgets._cards.values())
     assert "MORE" not in widgets._action_text.value
     assert widgets._action_text.value == "NO TRUSTED INPUT"

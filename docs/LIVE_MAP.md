@@ -209,6 +209,12 @@ POTA catalog coordinates are approximate pins only. They are not navigation
 destinations, property boundaries, or activation-boundary evidence. The former
 PAD-US/polygon plan is intentionally not part of the current roadmap.
 
+## OHGO traffic markers
+
+The primary map displays enabled OHGO layers only while the vehicle GPS fix is current and resolves to Ohio. The switches are under Settings.
+Zoom in for detail where a statewide view thins dense records. See the
+[OHGO layer contract](engineering/ohgo-incidents.md#statewide-map-layers).
+
 ## Radar Layer Motion
 
 When radar is enabled, the visual stacking order is:

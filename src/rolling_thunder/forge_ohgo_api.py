@@ -17,10 +17,12 @@ from rolling_thunder.forge_ohgo_incidents import (
     OhgoState,
     OhioIncidentSnapshot,
 )
+from rolling_thunder.forge_ohgo_layers import ForgeOhgoMapLayers
 from rolling_thunder.forge_spot_api import (
     ForgeHttpResponse,
     ForgeSpotApiApplication,
 )
+from rolling_thunder.ohgo_layers import OHGO_LAYERS_PATH, encode_ohgo_layers
 
 _OHGO_PATH = "/api/v1/ohgo/incidents"
 
@@ -80,9 +82,11 @@ class OhgoAwareForgeSpotApiApplication(ForgeSpotApiApplication):
         self,
         core: ForgeSpotApiApplication,
         ohgo: ForgeOhgoBackgroundService,
+        map_layers: ForgeOhgoMapLayers | None = None,
     ) -> None:
         self._core = core
         self._ohgo = ohgo
+        self._map_layers = map_layers
 
     def handle(
         self,
@@ -94,7 +98,19 @@ class OhgoAwareForgeSpotApiApplication(ForgeSpotApiApplication):
     ) -> ForgeHttpResponse:
         """Return bounded retained response without upstream fetch."""
 
-        if urlsplit(target).path != _OHGO_PATH:
+        path = urlsplit(target).path
+        if path == OHGO_LAYERS_PATH and self._map_layers is not None:
+            if method.strip().upper() != "GET":
+                return ForgeSpotApiApplication.error_response(
+                    status_code=405,
+                    error="method_not_allowed",
+                    message="Only GET is supported for OHGO map layers.",
+                    extra_headers=(("Allow", "GET"),),
+                )
+            return self._ohgo_json_response(
+                encode_ohgo_layers(self._map_layers.snapshot, now=datetime.now(UTC))
+            )
+        if path != _OHGO_PATH:
             return self._core.handle(method, target, headers=headers, body=body)
         if method.strip().upper() != "GET":
             return ForgeSpotApiApplication.error_response(
@@ -129,7 +145,10 @@ class OhgoAwareForgeSpotApiApplication(ForgeSpotApiApplication):
             "incident_confirmed": False,
             "driver_alert_permitted": False,
         }
-        encoded = json.dumps(response, separators=(",", ":")).encode("utf-8")
+        return self._ohgo_json_response(json.dumps(response, separators=(",", ":")).encode("utf-8"))
+
+    @staticmethod
+    def _ohgo_json_response(encoded: bytes) -> ForgeHttpResponse:
         return ForgeHttpResponse(
             status_code=200,
             headers=(

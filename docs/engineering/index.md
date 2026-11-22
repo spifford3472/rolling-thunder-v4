@@ -337,6 +337,9 @@ Read: `docs/WEATHER_PANEL.md`, `docs/WEATHER_ALERTS.md`, `docs/FORGE_WEATHER_API
 
 ### Maps and radar
 
+The [OHGO map layer contract](ohgo-incidents.md#statewide-map-layers) covers
+statewide traffic markers on the primary map and their Ohio GPS gate.
+
 Map code owns local/offline tile resolution, viewport behavior, solar/day-night style, zoom, GPS presentation, POTA marker projection, and optional radar overlay. Callsign mini-map behavior is deliberately separate from the primary installed/offline map path.
 
 Primary modules:

@@ -565,6 +565,12 @@ and block the action. No live CAT query or radio command is issued by this guard
 
 ## OHGO read-only provider and presentation contract
 
+The [statewide overlay](ohgo-incidents.md#statewide-map-layers) consumes current
+GPS and the exact visible primary-map viewport. It does not use retained
+position, the mini-map, or the regional text snapshot as overlay authority.
+The dedicated worker reuses the jurisdiction resolver and artifact with a
+private cache. Settings writes through the existing preference service.
+
 Forge owns the protected credential, rate-limited upstream retrieval, cached
 snapshot, and versioned read-only OHGO route. The Pi reads only that route on a
 bounded background worker. The OHGO context renders immutable state and may

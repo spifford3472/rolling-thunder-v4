@@ -84,6 +84,7 @@ from rolling_thunder.log_panel import ContactLogRepository, LogPanelController
 from rolling_thunder.log_panel_commands import LogAwareActivePanelCommands
 from rolling_thunder.log_ui import LogWidgets
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
+from rolling_thunder.ohgo_map import OhgoMapOverlay, ohio_state_resolver
 from rolling_thunder.ohgo_panel import (
     OhgoPanelWorker,
     present_ohgo,
@@ -451,7 +452,16 @@ def run_dashboard(
         preference_service,
         runtime.map_solar,
         runtime.callsign_info,
+        ohgo_layers=preference_repository.read_ohgo_layers(),
+        persist_ohgo_layer=preference_service.persist_ohgo_layer,
     )
+    ohgo_map_overlay = OhgoMapOverlay(
+        str(config.forge.api_url) if config.forge.enabled and config.forge.api_url else None,
+        ohio_state_resolver(),
+        gps_max_age=timedelta(seconds=config.map.gps_stale_after_s),
+    )
+    if runtime.gps_polling is not None:
+        runtime.gps_polling.add_listener(ohgo_map_overlay.observe_gps_state)
     weather_panel = WeatherPanelController()
     weather_alert_panel = WeatherAlertPanelController()
     weather_alert_viewport = WeatherAlertViewportController()
@@ -1886,18 +1896,23 @@ def run_dashboard(
             with ui_timing.subphase("ft8_receive_target"):
                 runtime.ft8_receive.select_activity_target(None)
 
+        with ui_timing.subphase("ohgo_map"):
+            ohgo_layers = ohgo_map_overlay.update(
+                live_map_presentation, settings_panel.ohgo_layers
+            )
         ui_timing.checkpoint("map_prepare")
         map_start = ui_timing.start()
         try:
             live_map_widgets.update(
                 live_map_presentation,
-            live_map_snapshot,
-            runtime.latest_live_radar_state,
-            runtime.latest_pota_map_marker_state,
-            weather_presentation,
-            ft8_status=ft8_map_status,
+                live_map_snapshot,
+                runtime.latest_live_radar_state,
+                runtime.latest_pota_map_marker_state,
+                weather_presentation,
+                ft8_status=ft8_map_status,
                 ft8_remote_status=ft8_remote_status,
                 timing=ui_timing,
+                ohgo_layers=ohgo_layers,
             )
         finally:
             ui_timing.observe("map", map_start)
@@ -2504,6 +2519,7 @@ def run_dashboard(
                     ("callsign audio", stop_callsign_capture),
                     ("Tron audio", stop_tron_microphone),
                     ("OHGO panel", ohgo_panel_worker.stop),
+                    ("OHGO map", ohgo_map_overlay.stop),
                     ("DMR", stop_dmr),
                     ("antenna reference", close_antenna),
                     ("log panel", log_panel.stop),

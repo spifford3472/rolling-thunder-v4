@@ -16,6 +16,10 @@ def test_initial_selection_and_order_are_fixed() -> None:
         SettingId.MAP_STYLE,
         SettingId.REBOOT,
         SettingId.SHUTDOWN,
+        SettingId.OHGO_CONSTRUCTION,
+        SettingId.OHGO_DANGEROUS_SLOWDOWNS,
+        SettingId.OHGO_INCIDENTS,
+        SettingId.OHGO_TRAVEL_DELAYS,
     )
 
 
@@ -23,7 +27,7 @@ def test_movement_is_clamped_and_does_not_mutate() -> None:
     initial = SettingsSelection()
     assert initial.moved(-1) == initial
     assert initial.moved(3).selected is SettingId.MAP_STYLE
-    assert initial.moved(99).selected is SettingId.SHUTDOWN
+    assert initial.moved(99).selected is SettingId.OHGO_TRAVEL_DELAYS
     assert initial.selected is SettingId.MAP_ZOOM
 
 

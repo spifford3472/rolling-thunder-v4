@@ -361,7 +361,12 @@ SQL NULL with a bounded failure reason. Retryable legacy attempts create no cell
 until success or terminal failure. Earlier rows are not backfilled or reclassified.
 A failed request does not suppress the other site/band requests or the next run.
 
-### OHGO incident provider
+### OHGO incident provider and statewide map feed
+
+The spots listener also serves `GET /api/v1/ohgo/map-layers`. A separate worker
+uses the existing protected OHGO credential to maintain four category
+snapshots. See the [OHGO contract](ohgo-incidents.md#statewide-map-layers) for
+the wire format, request budget, cache behavior, and failure isolation.
 
 OHGO is an optional provider within the existing Forge spots process. The
 process owns the protected credential, bounded HTTPS polling, retained snapshot,

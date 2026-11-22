@@ -72,6 +72,7 @@ A Pi screen may consume a Forge service, but it does not own that service. Forge
 
 
 | OHGO read-only incident context | `forge_ohgo_incidents.py`, `forge_ohgo_api.py`, `ohgo_panel.py`, `ohgo_ui.py`, `context_navigation.py`, `ui_main.py` | Forge spots service owns provider/cache; Pi background client polls; Tk renders immutable state | No API key on Pi, UI-thread HTTP, driver alerts, route inference, map overlay, GPS or MeshCore dependency |
+| OHGO statewide map layers | `forge_ohgo_layers.py`, `ohgo_layers.py`, `ohgo_map.py`, `ohgo_map_ui.py`, `settings_panel.py`, `live_map_ui.py` | Forge supplies category snapshots. Pi workers resolve current GPS and read the private route. Settings saves choices and Tk draws visible markers. | Ohio gate uses the current GPS fix. No driver alerts, GPS sent to Forge, UI-thread network or artifact I/O, or use by the callsign map. |
 
 ### FT8 uncertain-PTT recovery
 
