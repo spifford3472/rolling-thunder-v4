@@ -26,8 +26,25 @@ from rolling_thunder.settings_ui import (
 class FakeWidget:
     def __init__(self, *args: object, **kwargs: object) -> None:
         self.grid_removed = False
+        self.grid_options: dict[str, object] = {}
+        self.parent = args[0]
+        self.options = kwargs
+        self.height = 720
+        if isinstance(self.parent, FakeWidget):
+            self.parent.children.append(self)
+        self.children: list[FakeWidget] = []
+
+    def bind(self, *args: object) -> None:
+        pass
+
+    def winfo_height(self) -> int:
+        return self.height
+
+    def winfo_reqheight(self) -> int:
+        return 48
 
     def grid(self, **kwargs: object) -> None:
+        self.grid_options.update(kwargs)
         self.grid_removed = False
 
     def grid_remove(self) -> None:
@@ -183,6 +200,31 @@ def test_all_settings_cards_remain_visible_when_shutdown_is_selected(monkeypatch
     assert all(not card.grid_removed for card in widgets._cards.values())
     assert "MORE" not in widgets._action_text.value
     assert widgets._action_text.value == "NO TRUSTED INPUT"
+
+
+def test_ohgo_cards_match_full_width_rows_and_stay_visible_when_selected(monkeypatch: Any):
+    monkeypatch.setitem(sys.modules, "tkinter", fake_tk_module())
+    widgets = SettingsWidgets(None)
+    zoom = widgets._cards[SettingsOption.MAP_ZOOM]
+    for row, option in enumerate(tuple(SettingsOption)[6:], start=6):
+        card = widgets._cards[option]
+        assert card.parent is zoom.parent
+        assert card.grid_options == {**zoom.grid_options, "row": row}
+        assert [child.options["font"] for child in card.children] == [
+            child.options["font"] for child in zoom.children
+        ]
+
+    widgets.frame.height = 350
+    widgets._fit_cards()
+    assert widgets._cards[SettingsOption.OHGO_TRAVEL_DELAYS].grid_removed
+    widgets.update(DashboardSettingsState(
+        map_zoom=None,
+        radar_available=True,
+        radar_image_enabled=False,
+        selection=SettingsSelection(SettingsOption.OHGO_TRAVEL_DELAYS),
+    ))
+    assert not widgets._cards[SettingsOption.OHGO_TRAVEL_DELAYS].grid_removed
+    assert widgets._action_text.value == "B2 OFF   B3 ON"
 
 
 def test_power_copy_is_truthful_available_staged_pending_and_failed() -> None:

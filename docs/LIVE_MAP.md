@@ -212,7 +212,7 @@ PAD-US/polygon plan is intentionally not part of the current roadmap.
 ## OHGO traffic markers
 
 The primary map displays enabled OHGO layers only while the vehicle GPS fix is current and resolves to Ohio. The switches are under Settings.
-Zoom in for detail where a statewide view thins dense records. See the
+Traffic symbols are approximately car-sized and appear at map zoom 13 or higher. See the
 [OHGO layer contract](engineering/ohgo-incidents.md#statewide-map-layers).
 
 ## Radar Layer Motion

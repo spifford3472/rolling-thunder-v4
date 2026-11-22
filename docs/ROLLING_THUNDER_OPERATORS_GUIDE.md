@@ -859,8 +859,9 @@ preferences without editing configuration files.
 - **Context Button #2** — selected-row OUT, OFF, NIGHT, or CANCEL.
 - **Context Button #3** — selected-row IN, ON, DAY, or power SELECT/CONFIRM.
 
-All six rows are visible at once at the supported display size and retain the
-installed readable type sizes. A fixed footer shows the highlighted row's button
+Settings uses full-width rows with the same title size, including the four
+OHGO controls. If the display is too short for all rows, rotating the encoder
+brings the selected row into view. A fixed footer shows the highlighted row's button
 instruction. Text shows actual zoom/style, ON/OFF or
 UNAVAILABLE, the selected marker, and the highlight. Power is UNAVAILABLE unless
 a healthy trusted serial-v2 controller is current. The first Button #3 says
@@ -1054,7 +1055,7 @@ survives a restart. The OHGO text screen remains available via `o`.
 
 The right-hand map shows enabled layers only with a valid, current GPS fix
 inside Ohio. Leaving Ohio, losing the fix, or letting feed data expire hides
-the relevant markers. Zoom in to see local detail in dense areas.
+the relevant markers. The car-sized traffic symbols appear at zoom 13 and above.
 
 ## Radar
 

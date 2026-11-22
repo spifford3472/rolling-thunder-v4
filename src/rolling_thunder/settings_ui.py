@@ -200,50 +200,66 @@ class SettingsWidgets:
             self._remember(setting, card, title_text)
             self._power_values[setting] = value
 
-        ohgo_group = tk.Frame(content, bg=_BACKGROUND)
-        ohgo_group.grid(row=6, column=0, sticky="ew")
-        for column in range(2):
-            ohgo_group.grid_columnconfigure(column, weight=1, uniform="ohgo-settings")
         self._ohgo_values: dict[SettingId, Any] = {}
-        for index, (setting, (_, title)) in enumerate(OHGO_SETTINGS.items()):
-            row, column = divmod(index, 2)
-            card = self._create_card(ohgo_group, row=row, column=column)
-            title_text = tk.StringVar(value=title)
+        for row, (setting, (_, title)) in enumerate(OHGO_SETTINGS.items(), start=6):
+            card = self._create_card(content, row=row)
+            title_text = tk.StringVar(value=title.upper())
             value = tk.StringVar(value="OFF")
-            tk.Label(
-                card, textvariable=title_text, bg=_PANEL_BACKGROUND, fg=_BRIGHT,
-                font=("DejaVu Sans", 12, "bold"), anchor="w",
-            ).grid(row=0, column=0, sticky="w", padx=4)
+            self._create_card_text(card, title_variable=title_text)
             tk.Label(
                 card, textvariable=value, bg=_PANEL_BACKGROUND, fg=_HEALTHY,
-                font=("DejaVu Sans Mono", 12, "bold"), anchor="e",
-            ).grid(row=0, column=1, sticky="e", padx=4)
+                font=("DejaVu Sans Mono", _SETTINGS_VALUE_FONT_SIZE, "bold"), anchor="e",
+            ).grid(row=0, column=1, sticky="e", padx=(12, 18))
             self._remember(setting, card, title_text)
             self._ohgo_values[setting] = value
 
         self._action_text = tk.StringVar(value="B2 OUT   B3 IN")
         self._action_label = tk.Label(
-            content,
+            self.frame,
             textvariable=self._action_text,
             bg=_BACKGROUND,
             fg=_MUTED,
             font=("DejaVu Sans", _SETTINGS_SECONDARY_FONT_SIZE, "bold"),
             anchor="center",
         )
-        self._action_label.grid(row=7, column=0, sticky="ew")
+        self._action_label.grid(row=1, column=0, sticky="ew", padx=18)
+        self._visible_cards: tuple[SettingId, ...] = tuple(SettingsOption)
+        self._selected = SettingId.MAP_ZOOM
+        self.frame.bind("<Configure>", lambda _event: self._fit_cards())
+
+    def _fit_cards(self) -> None:
+        """Keep the selected card and action footer in view on shorter displays."""
+        height = self.frame.winfo_height()
+        if height <= 1:
+            return
+        row_height = max(card.winfo_reqheight() + 1 for card in self._cards.values())
+        available = height - self._action_label.winfo_reqheight()
+        count = min(len(SettingsOption), max(1, available // row_height))
+        order = tuple(SettingsOption)
+        index = order.index(self._selected)
+        start = min(index // count * count, len(order) - count)
+        visible = order[start:start + count]
+        if visible == self._visible_cards:
+            return
+        self._visible_cards = visible
+        for setting, card in self._cards.items():
+            if setting in visible:
+                card.grid()
+            else:
+                card.grid_remove()
 
     def _remember(self, setting: SettingId, card: Any, title: Any) -> None:
         self._cards[setting] = card
         self._titles[setting] = title
 
-    def _create_card(self, parent: Any, *, row: int, column: int = 0) -> Any:
+    def _create_card(self, parent: Any, *, row: int) -> Any:
         card = self._tk.Frame(
             parent,
             bg=_PANEL_BACKGROUND,
             highlightthickness=2,
             highlightbackground=_BORDER,
         )
-        card.grid(row=row, column=column, sticky="ew", pady=(0, 1))
+        card.grid(row=row, column=0, sticky="ew", pady=(0, 1))
         card.grid_columnconfigure(0, weight=1)
         return card
 
@@ -309,9 +325,12 @@ class SettingsWidgets:
             SettingId.MAP_STYLE: "MAP STYLE",
             SettingId.REBOOT: "REBOOT",
             SettingId.SHUTDOWN: "SHUTDOWN",
-            **{setting: title for setting, (_, title) in OHGO_SETTINGS.items()},
+            **{setting: title.upper() for setting, (_, title) in OHGO_SETTINGS.items()},
         }
         selected = state.selection.selected
+        if selected is not self._selected:
+            self._selected = selected
+            self._fit_cards()
         for setting, card in self._cards.items():
             is_selected = setting is selected
             self._titles[setting].set(("> " if is_selected else "  ") + base_titles[setting])
