@@ -1,5 +1,6 @@
 """Manually started WSPR receive lifecycle and volatile operator statistics."""
 
+import logging
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ _GPS_MAX_AGE_S = 4.0
 _STATIONARY_SECONDS = 5.0
 _STATIONARY_SPEED_M_S = 0.15
 _RESULT_WINDOW_SECONDS = 90.0
+_LOGGER = logging.getLogger(__name__)
 _MAX_NTP_OFFSET_S = 0.25
 _MAX_CLOCK_STEP_S = 0.25
 _MAX_GPS_DISAGREEMENT_WITH_NTP_S = 2.0
@@ -404,7 +406,10 @@ class WsprReceive:
                         if (slot - self._now()).total_seconds() < _SETTLE_SECONDS:
                             slot = next_wspr_slot(self._now())
                         self._wait_until(slot - timedelta(seconds=1), cancel)
-                        next_verify = self._elapsed()
+                        # Check the radio before launching ALSA so CAT latency
+                        # does not delay the first PCM read across the slot boundary.
+                        lease.verify(dial)
+                        next_verify = self._elapsed() + 5.0
 
                         def verify_receive(frequency: int = dial) -> None:
                             nonlocal next_verify
@@ -441,10 +446,14 @@ class WsprReceive:
         except WsprCancelled:
             pass
         except WsprInhibit as error:
+            _LOGGER.warning("WSPR stopped: %s", error)
             with self._lock:
                 if not self.stop(str(error)):
                     self._detail = f"Stopped: {error}"
-        except (WsprAudioError, OSError):
+        except WsprAudioError as error:
+            _LOGGER.warning("WSPR stopped: %s", error)
+            self.stop(str(error))
+        except OSError:
             self.stop("Receive audio unavailable; check DigiRig")
         except Exception:  # noqa: BLE001 - Suppress payload-bearing worker exception text.
             self.stop("Receive resources failed; verify radio and audio")

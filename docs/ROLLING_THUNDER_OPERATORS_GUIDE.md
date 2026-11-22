@@ -731,6 +731,8 @@ the WSPR screen also stops it. Return to the screen and press Button 3 again
 for a fresh session.
 
 The radio listens on 40, 30, 20, 17, 15, 12, 10 and 6 meters in that order.
+Rotation changes the receive frequency and leaves the antenna tuner and ATAS alone.
+After a stop, the timer shows the final elapsed time for that session.
 An unavailable band displays a skip. If FT8 is actively decoding when you
 start, wait briefly and press Button 3 again. If the radio reports transmit
 or GPS or clock evidence becomes unsafe, WSPR stops, releases its equipment

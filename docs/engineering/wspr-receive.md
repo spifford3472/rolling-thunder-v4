@@ -28,10 +28,14 @@ reconnection and fresh GPS evidence leave WSPR idle.
   inhibit acquisition. Background FT8 capture yields only when its decoder is
   idle and its audio workers quiesce. FT8 resumes after release.
 - The reservation limits competing application CAT writes and prohibits CAT
-  keying. Tuning reuses the existing band-memory, frequency and mode sequence.
+  keying. Receiver frequency and mode changes reuse the existing band-memory
+  sequence. WSPR leaves antenna tuning and ATAS controls alone.
   WSPR uses the shared DigiRig capture device through the ALSA pipe in USB with
   the FT-891 SSB BFO set to USB. It periodically verifies mode, BFO and
-  frequency and checks them again at slot completion. On release, it restores
+  frequency and checks them again at slot completion. A settings mismatch
+  gets one read-only recheck, including RX verification, before stopping.
+  A persistent mismatch identifies frequency, mode, or BFO. Cleanup preserves
+  the original stop reason. On release, it restores
   previous frequency, mode and BFO if the firmware remains in RX and the WSPR
   settings are still in force. Physical front-panel controls remain under the
   operator's control.
