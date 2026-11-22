@@ -27,23 +27,30 @@ class WsprWidgets:
         self._timer = tk.StringVar(value="")
         self._stats = tk.StringVar(value="")
         self._details = tk.StringVar(value="")
-        labels: list[tk.Label] = []
+        labels: list[tuple[tk.Label, int, str]] = []
+        last_scale = 0.0
+        self._frame.grid_propagate(False)
         for row, (text, size, weight) in enumerate((
-            (self._activity, 18, "bold"),
-            (self._timer, 36, "bold"),
-            (self._stats, 16, "normal"),
-            (self._details, 13, "normal"),
+            (self._activity, 34, "bold"),
+            (self._timer, 64, "bold"),
+            (self._stats, 32, "normal"),
+            (self._details, 27, "normal"),
         )):
             label = tk.Label(
                 self._frame, bg=background, fg=foreground, textvariable=text,
                 font=("DejaVu Sans", size, weight), justify="left", anchor="w",
             )
             label.grid(row=row, column=0, sticky="ew", pady=3)
-            labels.append(label)
+            labels.append((label, size, weight))
 
         def resize(event: tk.Event[tk.Frame]) -> None:
-            for label in labels:
+            nonlocal last_scale
+            scale = max(0.40, min(1.0, (event.width - 24) / 900, event.height / 510))
+            for label, size, weight in labels:
                 label.configure(wraplength=max(100, event.width - 24))
+                if scale != last_scale:
+                    label.configure(font=("DejaVu Sans", round(size * scale), weight))
+            last_scale = scale
 
         self._frame.bind("<Configure>", resize)
 
@@ -70,7 +77,8 @@ class WsprWidgets:
             f"Farthest posted   {_distance(state.farthest)}",
         )))
         self._set(self._details, "\n".join((
-            f"Upload  {state.upload}     Receiver grid  {state.grid or '—'}",
+            f"Upload  {state.upload}",
+            f"Receiver grid  {state.grid or '—'}",
             "Running may publish your callsign and grid.",
             "Button 3  Run     Button 2  Stop",
         )))

@@ -1375,6 +1375,7 @@ class ApplicationRuntime:
             callsign=str(config.operator.callsign), lease=wspr_lease,
             audio=WsprAudio(config.ft8.receive.audio_device),
             decoder=PipeWsprDecoder(), reporter=WsprnetReporter(),
+            ntp_status=ft8_ntp_status or ChronyNTPClockProbe(timeout_s=0.25),
         )
         gps_polling.add_listener(runtime.wspr.observe_gps)
         return runtime

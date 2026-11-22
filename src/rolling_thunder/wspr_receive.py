@@ -4,12 +4,13 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from math import isfinite
 from threading import Event, RLock, Thread
 from time import monotonic
 from typing import Protocol
 
 from rolling_thunder.domain import GPSFixState, GPSPosition
-from rolling_thunder.ft8.diagnostics import FT8ClockQuality, assess_ft8_clock
+from rolling_thunder.ft8.diagnostics import FT8ClockQuality, NTPClockStatus, assess_ft8_clock
 from rolling_thunder.gps import GPSConnectionState, GPSState
 from rolling_thunder.maidenhead import maidenhead_grid, maidenhead_grid_center
 from rolling_thunder.repeater_nearby import haversine_distance_miles
@@ -35,6 +36,9 @@ _GPS_MAX_AGE_S = 4.0
 _STATIONARY_SECONDS = 5.0
 _STATIONARY_SPEED_M_S = 0.15
 _RESULT_WINDOW_SECONDS = 90.0
+_MAX_NTP_OFFSET_S = 0.25
+_MAX_CLOCK_STEP_S = 0.25
+_MAX_GPS_DISAGREEMENT_WITH_NTP_S = 2.0
 
 
 class WsprInhibit(RuntimeError):
@@ -124,6 +128,7 @@ class WsprReceive:
         audio: WsprAudioSource,
         decoder: WsprDecoder,
         reporter: WsprReporter,
+        ntp_status: Callable[[], NTPClockStatus] | None = None,
         now_utc: Callable[[], datetime] = _utc_now,
         elapsed_clock: Callable[[], float] = monotonic,
     ) -> None:
@@ -132,6 +137,9 @@ class WsprReceive:
         self._audio = audio
         self._decoder = decoder
         self._reporter = reporter
+        self._ntp_status = ntp_status
+        self._ntp: NTPClockStatus | None = None
+        self._clock_anchor: tuple[datetime, float] | None = None
         self._now = now_utc
         self._elapsed = elapsed_clock
         self._lock = RLock()
@@ -205,8 +213,6 @@ class WsprReceive:
                 or self._last_motion_sample - since < _STATIONARY_SECONDS
             ):
                 problem = "Wait for five seconds of stationary GPS fixes"
-            if problem is None:
-                problem = self._clock_problem()
             reserve = self._lease
             if reserve is None:
                 problem = "FT-891 receive path unavailable"
@@ -217,6 +223,8 @@ class WsprReceive:
             origin = WsprOrigin.from_fix(self._gps.position)
             cancel = Event()
             self._cancel = cancel
+            self._ntp = None
+            self._clock_anchor = (self._now(), self._elapsed())
             self._origin = origin
             self._detail = "Starting"
             self._upload = "Waiting for a decode"
@@ -293,11 +301,43 @@ class WsprReceive:
         return None
 
     def _clock_problem(self) -> str | None:
-        quality = assess_ft8_clock(
-            system_utc=self._now(), monotonic_seconds=self._elapsed(),
+        wall, elapsed = self._now(), self._elapsed()
+        if self._clock_anchor is not None:
+            start_wall, start_elapsed = self._clock_anchor
+            change = (wall - start_wall).total_seconds() - (elapsed - start_elapsed)
+            if abs(change) > _MAX_CLOCK_STEP_S:
+                return "System UTC shifted during WSPR"
+
+        ntp = self._ntp
+        if ntp is not None and ntp.synchronized:
+            offset = ntp.offset_seconds
+            if offset is None or not isfinite(offset) or abs(offset) > _MAX_NTP_OFFSET_S:
+                return "NTP clock offset exceeds WSPR limit"
+            # NMEA time is referenced to the fix, while its receipt includes
+            # receiver and serial latency. Use it as a coarse cross-check when
+            # chrony independently verifies the clock used to align the audio.
+            tolerance = _MAX_GPS_DISAGREEMENT_WITH_NTP_S
+        else:
+            tolerance = 1.0
+        assessment = assess_ft8_clock(
+            system_utc=wall, monotonic_seconds=elapsed,
             gps_utc=self._gps.utc if self._gps is not None else None,
-        ).quality
-        return None if quality is FT8ClockQuality.TRUSTED else "System UTC disagrees with GPS"
+            ntp=ntp, maximum_offset_seconds=tolerance,
+        )
+        if assessment.quality is FT8ClockQuality.TRUSTED:
+            return None
+        offset = assessment.offset_seconds
+        if offset is None:
+            return "UTC could not be verified by NTP or GPS"
+        return f"System UTC disagrees with GPS ({offset:+.2f} s)"
+
+    def _refresh_ntp(self, cancel: Event) -> None:
+        # Run once per slot on the receive worker, before tuning or audio capture.
+        if self._ntp_status is None or cancel.is_set():
+            return
+        status = self._ntp_status()
+        with self._lock:
+            self._ntp = status
 
     def _check(self, cancel: Event) -> None:
         with self._lock:
@@ -336,6 +376,7 @@ class WsprReceive:
     ) -> None:
         result: Thread | None = None
         try:
+            self._refresh_ntp(cancel)
             self._check(cancel)
             if not self._decoder.available:
                 raise WsprInhibit("Pipe-only WSPR decoder unavailable")
@@ -396,6 +437,7 @@ class WsprReceive:
                         del pcm
                     index = (index + 1) % len(WSPR_BANDS)
                     slot += timedelta(seconds=_SLOT_SECONDS)
+                    self._refresh_ntp(cancel)
         except WsprCancelled:
             pass
         except WsprInhibit as error:

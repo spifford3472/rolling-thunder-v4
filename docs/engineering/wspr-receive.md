@@ -11,7 +11,12 @@ reconnection and fresh GPS evidence leave WSPR idle.
 - GPS remains owned by the existing poller. A start needs a valid fix and a
   continuously observed five seconds at or below 0.15 m/s. Position and advancing
   RMC UTC/motion evidence expire at four seconds. The system UTC is checked
-  against the latest trusted GPS UTC using the existing FT8 clock calculation.
+  against chrony and the latest trusted GPS UTC using the existing FT8 clock calculation.
+  WSPR samples chrony off the UI thread before receive and at slot changes.
+  A synchronized chrony offset within 250 ms permits up to two seconds of GPS
+  disagreement to account for receiver and serial delivery. With chrony unavailable,
+  GPS must agree within one second. WSPR stops on a wall-clock shift greater than
+  250 ms relative to monotonic time. GPS motion and fix freshness remain required.
   A valid antenna and a physically parked vehicle remain operator requirements.
 - At acceptance, freeze the current position for distance calculations and the
   four-character Maidenhead square for public reports. The dashboard previews

@@ -12,6 +12,7 @@ import pytest
 from rolling_thunder.context_navigation import ContextId, ContextNavigationController
 from rolling_thunder.control_dispatcher import ControlDispatcher
 from rolling_thunder.domain import GPSFixState, GPSPosition
+from rolling_thunder.ft8.diagnostics import NTPClockStatus
 from rolling_thunder.gps import GPSConnectionState, GPSState, GPSUTCObservation, GPSUTCSource
 from rolling_thunder.physical_controls import (
     ControlAction,
@@ -112,10 +113,10 @@ def _wait_for(predicate) -> None:
     assert predicate()
 
 
-def _controller(clock, radio, audio, reporter) -> WsprReceive:
+def _controller(clock, radio, audio, reporter, *, ntp_status=None) -> WsprReceive:
     return WsprReceive(
         callsign="KI5VNB", lease=radio.reserve, audio=audio, decoder=Decoder(),
-        reporter=reporter, now_utc=lambda: clock.wall, elapsed_clock=lambda: clock.elapsed,
+        reporter=reporter, ntp_status=ntp_status, now_utc=lambda: clock.wall, elapsed_clock=lambda: clock.elapsed,
     )
 
 
@@ -202,6 +203,43 @@ def test_motion_and_timing_fail_closed_without_restart(failure: str) -> None:
     assert not receive.busy
     assert receive.start()
     receive.close()
+
+
+@pytest.mark.parametrize(("chrony_offset", "gps_offset", "reason"), [
+    (0.002, -1.35, None),
+    (None, -1.35, "System UTC disagrees with GPS"),
+    (None, -0.6, None),
+    (0.002, -2.5, "System UTC disagrees with GPS"),
+    (0.5, -0.1, "NTP clock offset exceeds WSPR limit"),
+])
+def test_chrony_independently_verifies_clock_with_delayed_serial_gps(
+    chrony_offset, gps_offset, reason,
+) -> None:
+    clock = FakeClock()
+    radio = FakeReceiver()
+    receive = _controller(
+        clock, radio, NeverCapture(), Reporter(),
+        ntp_status=lambda: NTPClockStatus(chrony_offset is not None, offset_seconds=chrony_offset),
+    )
+    receive.select(True)
+    _stationary(receive, clock)
+    receive.observe_gps(clock.gps(clock_offset=gps_offset))
+    try:
+        assert receive.start()
+        if reason is None:
+            assert radio.acquired.wait(1)
+            assert receive.busy
+            # Even healthy chrony cannot carry a session through a wall-clock step.
+            clock.wall += timedelta(seconds=0.5)
+            receive.observe_gps(clock.gps(clock_offset=gps_offset))
+            _wait_for(lambda: not receive.busy)
+            assert "System UTC shifted during WSPR" in receive.snapshot().detail
+        else:
+            _wait_for(lambda: not receive.busy)
+            assert not radio.acquired.is_set()
+            assert reason in receive.snapshot().detail
+    finally:
+        receive.close()
 
 
 def test_rotation_with_online_and_offline_windows_and_midnight(monkeypatch) -> None:
