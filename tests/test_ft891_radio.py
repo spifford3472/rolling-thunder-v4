@@ -15,6 +15,8 @@ from rolling_thunder.radio import (
     RadioError,
     RadioVerificationError,
 )
+from rolling_thunder.wspr_radio import reserve_ft891_wspr
+from rolling_thunder.wspr_receive import WsprInhibit
 
 
 class FakeTransport:
@@ -650,3 +652,69 @@ def test_receive_reservation_fails_closed_on_tx_or_unknown_firmware(
     with pytest.raises(RadioError), radio.exclusive_receive():
         pytest.fail("Radio must stay unreserved")
     assert set(transport.commands) <= {b"FA;", b"MD0;", b"TX;", b"RIA;"}
+
+class WsprTransport(FakeTransport):
+    """Model band memory recalls and a single outdated FT-891 readback."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.replies.update({b"TX;": b"TX0;", b"RIA;": b"RIA0;", b"FA;": b"FA007200000;"})
+        self.next_frequency: bytes | None = None
+        self.writes: list[bytes] = []
+
+    def query(self, command: bytes) -> bytes:
+        if command == b"FA;" and self.next_frequency is not None:
+            reply, self.next_frequency = self.next_frequency, None
+            return reply
+        return super().query(command)
+
+    def command(self, command: bytes) -> None:
+        super().command(command)
+        self.writes.append(command)
+        if command.startswith(b"FA"):
+            self.replies[b"FA;"] = command
+        elif command.startswith(b"MC"):
+            self.replies[b"MC;"] = command
+        elif command == b"MA;":
+            frequency = {b"MC003;": b"FA007200000;", b"MC004;": b"FA010120000;"}
+            self.replies[b"FA;"] = frequency[self.replies[b"MC;"]]
+        elif command.startswith(b"EX1107"):
+            self.replies[b"EX1107;"] = command
+
+
+def test_wspr_rotates_40m_to_30m_despite_one_outdated_readback() -> None:
+    transport = WsprTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    with reserve_ft891_wspr(radio, None, lambda: True) as lease:
+        lease.tune(7_038_600)
+        lease.tune(10_138_700)
+        transport.next_frequency = b"FA007038600;"
+        lease.verify(10_138_700)
+        assert radio.get_state().frequency == Frequency(hz=10_138_700)
+
+    assert radio.get_state().frequency == Frequency(hz=7_200_000)
+    assert transport.writes == [
+        b"FA007038600;", b"EX11070;", b"MC004;", b"MA;", b"FA010138700;",
+        b"MC003;", b"MA;", b"FA007200000;", b"EX11072;",
+    ]
+
+
+def test_wspr_preserves_primary_failure_and_leaves_persistent_manual_retune_alone() -> None:
+    transport = WsprTransport()
+    radio = Ft891Radio(transport, clock=fixed_clock)
+    radio.connect()
+
+    with pytest.raises(WsprInhibit, match="Primary stop reason"), reserve_ft891_wspr(
+        radio, None, lambda: True,
+    ) as lease:
+        lease.tune(7_038_600)
+        lease.tune(10_138_700)
+        transport.replies[b"FA;"] = b"FA010130000;"
+        with pytest.raises(WsprInhibit, match="10138700 → 10130000 Hz"):
+            lease.verify(10_138_700)
+        raise WsprInhibit("Primary stop reason")
+
+    assert transport.writes[-1] == b"FA010138700;"
+    assert radio.get_state().frequency == Frequency(hz=10_130_000)
