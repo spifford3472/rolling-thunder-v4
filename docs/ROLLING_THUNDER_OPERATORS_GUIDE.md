@@ -227,6 +227,11 @@ Rolling Thunder uses that shared position for:
 - Forge mobile location;
 - location-aware weather alerts.
 
+With real GPS, Rolling Thunder verifies the Pi clock at midnight, 6 a.m.,
+noon, and 6 p.m. local time. A trusted GPS fix can qualify during the
+ten-minute window. A clock correction is requested only when the difference
+exceeds two seconds, and waits while a timed radio operation is active.
+
 When GPS data is missing or the receiver disconnects, the dashboard reports GPS
 error/unavailable state and background polling attempts to reconnect. GPS loss
 does not stop ordinary local logging; records may lack a current grid. During

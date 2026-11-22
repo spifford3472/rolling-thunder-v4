@@ -230,9 +230,10 @@ _CLOCK_SYNC_ENV = "ROLLING_THUNDER_GPS_CLOCK_SYNC"
 _LOGGER = logging.getLogger("rolling_thunder.application_runtime")
 
 
-def _clock_sync_enabled_from_environment() -> bool:
-    """Enable the production clock-sync path only through an explicit runtime flag."""
-    return os.environ.get(_CLOCK_SYNC_ENV, "").strip() == "1"
+def _clock_sync_enabled_from_environment(*, real_gps: bool) -> bool:
+    """Enable scheduled verification on real GPS with an explicit opt-out."""
+    flag = os.environ.get(_CLOCK_SYNC_ENV)
+    return real_gps if flag is None else flag.strip() == "1"
 
 
 def _build_serial_radio(
@@ -403,20 +404,25 @@ class ApplicationRuntime:
             interval_s=gps_interval_s,
         )
 
+        real_gps = config.hardware.effective_gps_mode is HardwareAdapterMode.REAL
         enable_clock_sync = (
-            _clock_sync_enabled_from_environment()
+            _clock_sync_enabled_from_environment(real_gps=real_gps)
             if clock_sync_enabled is None
             else clock_sync_enabled
         )
         clock_sync: ClockSynchronizationService | None = None
         if enable_clock_sync:
-            if config.hardware.effective_gps_mode is not HardwareAdapterMode.REAL:
+            if not real_gps:
                 raise ValueError("GPS clock synchronization requires real GPS hardware mode.")
             clock_sync = ClockSynchronizationService(
                 lambda: gps_polling.latest_state,
                 clock_sync_setter or ChronyHelperClockSetter(),
                 clock_sync_scheduler or ThreadingPollScheduler(),
                 monotonic_clock=monotonic,
+                use_local_schedule=True,
+                clock_write_allowed=lambda: (
+                    ft8_radio_idle() and (runtime.wspr is None or not runtime.wspr.busy)
+                ),
             )
 
         repository = ContactRepository(config.storage.database_path)

@@ -77,7 +77,7 @@ def gps_factory(
     return MockGPSReceiver()
 
 
-def test_clock_sync_is_disabled_by_default_for_real_gps(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_clock_sync_is_enabled_by_default_for_real_gps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ROLLING_THUNDER_GPS_CLOCK_SYNC", raising=False)
 
     runtime = ApplicationRuntime.from_config(
@@ -87,8 +87,17 @@ def test_clock_sync_is_disabled_by_default_for_real_gps(monkeypatch: pytest.Monk
         gps_scheduler=ManualScheduler(),
     )
 
+    assert runtime.clock_sync is not None
+    assert runtime.latest_clock_sync_state is not None
+
+
+def test_real_gps_clock_sync_explicit_opt_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ROLLING_THUNDER_GPS_CLOCK_SYNC", "0")
+    runtime = ApplicationRuntime.from_config(
+        real_gps_config(), gps_factory=gps_factory,
+        scheduler=ManualScheduler(), gps_scheduler=ManualScheduler(),
+    )
     assert runtime.clock_sync is None
-    assert runtime.latest_clock_sync_state is None
 
 
 def test_clock_sync_environment_flag_composes_real_gps_service(
