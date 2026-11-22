@@ -4,21 +4,29 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from urllib.error import HTTPError
+from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from rolling_thunder.forge_ohgo_incidents import OhgoResponse
+from rolling_thunder.ohgo_layers import OhgoLayer
 
 _MAX_CONTENT_BYTES = 2_000_000
 
 
 def fetch_ohgo_https(url: str, headers: Mapping[str, str], timeout_s: float) -> OhgoResponse:
-    """Retrieve only the constant official OHGO incident endpoint.
+    """Retrieve only the four allowlisted official OHGO endpoints.
 
     Do not place a key in a URL, log the request/headers or follow redirects
     to other hosts. Never expose raw upstream error text containing secrets.
     """
 
-    if not url.startswith("https://publicapi.ohgo.com/api/v1/incidents?"):
+    target = urlsplit(url)
+    if (
+        target.scheme != "https"
+        or target.netloc != "publicapi.ohgo.com"
+        or target.path not in {f"/api/v1/{layer.value}" for layer in OhgoLayer}
+        or target.fragment
+    ):
         raise ValueError("Unexpected OHGO host or endpoint")
     if "api-key" in url.lower() or "Authorization" not in headers:
         raise ValueError("OHGO credentials must use the request header")

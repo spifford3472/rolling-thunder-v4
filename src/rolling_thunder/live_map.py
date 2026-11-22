@@ -51,6 +51,28 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def valid_map_position(
+    gps_state: GPSState | None,
+) -> tuple[GeoPoint, datetime] | None:
+    """Return the coordinates and timestamp accepted by the live map."""
+    if (
+        gps_state is None
+        or gps_state.connection_state is not GPSConnectionState.CONNECTED
+        or gps_state.position is None
+        or gps_state.position.fix_state is GPSFixState.NO_FIX
+        or gps_state.position.latitude is None
+        or gps_state.position.longitude is None
+    ):
+        return None
+    return (
+        GeoPoint(
+            latitude=gps_state.position.latitude,
+            longitude=gps_state.position.longitude,
+        ),
+        gps_state.position.updated_at,
+    )
+
+
 class LiveMapController:
     """Retain the last valid fix without ever presenting stale data as current."""
 
@@ -75,7 +97,7 @@ class LiveMapController:
     def update(self, gps_state: GPSState | None) -> LiveMapPresentation:
         """Build current map presentation from one immutable GPS snapshot."""
         now = self._aware_now()
-        current = self._valid_position(gps_state)
+        current = valid_map_position(gps_state)
         if current is not None:
             position, fix_time = current
             if self._last_fix_time is None or fix_time >= self._last_fix_time:
@@ -168,27 +190,6 @@ class LiveMapController:
         ):
             return
         self._last_heading_degrees = position.heading_degrees
-
-    @staticmethod
-    def _valid_position(
-        gps_state: GPSState | None,
-    ) -> tuple[GeoPoint, datetime] | None:
-        if (
-            gps_state is None
-            or gps_state.connection_state is not GPSConnectionState.CONNECTED
-            or gps_state.position is None
-            or gps_state.position.fix_state is GPSFixState.NO_FIX
-            or gps_state.position.latitude is None
-            or gps_state.position.longitude is None
-        ):
-            return None
-        return (
-            GeoPoint(
-                latitude=gps_state.position.latitude,
-                longitude=gps_state.position.longitude,
-            ),
-            gps_state.position.updated_at,
-        )
 
     @staticmethod
     def _unavailable_reason(gps_state: GPSState | None) -> str:

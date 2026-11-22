@@ -6,7 +6,7 @@ from typing import Any
 
 from rolling_thunder.power_control import PowerAction, PowerConfirmationState
 from rolling_thunder.settings_panel import DashboardSettingsState
-from rolling_thunder.settings_selection import SettingId, SettingsOption
+from rolling_thunder.settings_selection import OHGO_SETTINGS, SettingId, SettingsOption
 
 _BACKGROUND = "#151515"
 _PANEL_BACKGROUND = "#101010"
@@ -200,6 +200,27 @@ class SettingsWidgets:
             self._remember(setting, card, title_text)
             self._power_values[setting] = value
 
+        ohgo_group = tk.Frame(content, bg=_BACKGROUND)
+        ohgo_group.grid(row=6, column=0, sticky="ew")
+        for column in range(2):
+            ohgo_group.grid_columnconfigure(column, weight=1, uniform="ohgo-settings")
+        self._ohgo_values: dict[SettingId, Any] = {}
+        for index, (setting, (_, title)) in enumerate(OHGO_SETTINGS.items()):
+            row, column = divmod(index, 2)
+            card = self._create_card(ohgo_group, row=row, column=column)
+            title_text = tk.StringVar(value=title)
+            value = tk.StringVar(value="OFF")
+            tk.Label(
+                card, textvariable=title_text, bg=_PANEL_BACKGROUND, fg=_BRIGHT,
+                font=("DejaVu Sans", 12, "bold"), anchor="w",
+            ).grid(row=0, column=0, sticky="w", padx=4)
+            tk.Label(
+                card, textvariable=value, bg=_PANEL_BACKGROUND, fg=_HEALTHY,
+                font=("DejaVu Sans Mono", 12, "bold"), anchor="e",
+            ).grid(row=0, column=1, sticky="e", padx=4)
+            self._remember(setting, card, title_text)
+            self._ohgo_values[setting] = value
+
         self._action_text = tk.StringVar(value="B2 OUT   B3 IN")
         self._action_label = tk.Label(
             content,
@@ -209,20 +230,20 @@ class SettingsWidgets:
             font=("DejaVu Sans", _SETTINGS_SECONDARY_FONT_SIZE, "bold"),
             anchor="center",
         )
-        self._action_label.grid(row=6, column=0, sticky="ew")
+        self._action_label.grid(row=7, column=0, sticky="ew")
 
     def _remember(self, setting: SettingId, card: Any, title: Any) -> None:
         self._cards[setting] = card
         self._titles[setting] = title
 
-    def _create_card(self, parent: Any, *, row: int) -> Any:
+    def _create_card(self, parent: Any, *, row: int, column: int = 0) -> Any:
         card = self._tk.Frame(
             parent,
             bg=_PANEL_BACKGROUND,
             highlightthickness=2,
             highlightbackground=_BORDER,
         )
-        card.grid(row=row, column=0, sticky="ew", pady=(0, 1))
+        card.grid(row=row, column=column, sticky="ew", pady=(0, 1))
         card.grid_columnconfigure(0, weight=1)
         return card
 
@@ -288,6 +309,7 @@ class SettingsWidgets:
             SettingId.MAP_STYLE: "MAP STYLE",
             SettingId.REBOOT: "REBOOT",
             SettingId.SHUTDOWN: "SHUTDOWN",
+            **{setting: title for setting, (_, title) in OHGO_SETTINGS.items()},
         }
         selected = state.selection.selected
         for setting, card in self._cards.items():
@@ -303,6 +325,10 @@ class SettingsWidgets:
             SettingId.REBOOT: "",
             SettingId.SHUTDOWN: "",
         }
+
+        for setting, (layer, _) in OHGO_SETTINGS.items():
+            self._ohgo_values[setting].set("ON" if layer in state.ohgo_layers else "OFF")
+            instructions[setting] = "B2 OFF   B3 ON"
 
         confirmation = state.power_confirmation
         for setting in (SettingId.REBOOT, SettingId.SHUTDOWN):

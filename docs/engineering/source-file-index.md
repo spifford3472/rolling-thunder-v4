@@ -7,7 +7,7 @@ current engineering baseline. It is a navigation aid, not a replacement for
 reading code. Before editing a module, read the owning subsystem documentation,
 its tests, and `shared-component-consumers.md`.
 
-**Cataloged Python modules: 369 (verified against current main, `2632dc8b4445ed84644d9324f7fe91bb6175b106`, 2026-11-17).**
+**Cataloged Python modules: 373 in the OHGO map layers source tree.**
 
 A one-line purpose statement answers why the file exists. Files marked by their
 group as shared or composition roots have broad change impact even when a task
@@ -531,6 +531,10 @@ retain structured metadata instead of generating ordinary QSO notes.
 - `src/rolling_thunder/forge_ohgo_http.py` — official-host-only HTTPS transport and response bounds.
 - `src/rolling_thunder/forge_ohgo_credentials.py` — systemd protected credential loader and independent opt-in.
 - `src/rolling_thunder/forge_ohgo_api.py` — additive retained GET API route and Forge background worker.
+- `src/rolling_thunder/forge_ohgo_layers.py` — statewide provider intake and independent retained layer refresh.
+- `src/rolling_thunder/ohgo_layers.py` — immutable marker and category snapshots and their versioned wire format.
+- `src/rolling_thunder/ohgo_map.py` — mobile GPS jurisdiction gate, worker lifecycle, and private feed client.
+- `src/rolling_thunder/ohgo_map_ui.py` — visible viewport projection, dense-marker bounds, and Tk symbols.
 - `src/rolling_thunder/ohgo_panel.py` — Pi Forge reader, stale/status decoder, and read-only presentation.
 - `src/rolling_thunder/ohgo_ui.py` — dedicated large-text Tk OHGO viewport, MORE indicator, and context-scoped rotary interception.
 

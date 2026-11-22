@@ -1,20 +1,24 @@
 # Settings
 
-Settings owns the frozen six-row selection, all-visible-row presentation,
+Settings owns clamped selection, all-visible-control presentation,
 explicit routing, and
 two-step power-confirmation lifecycle. Feature meaning remains with the map,
 radar, callsign-info, persistence, radio/FT8, contact, DMR, physical-control, and
 application-lifecycle owners.
 
 The fixed clamped order is MAP ZOOM, RADAR, CALLSIGN INFO, MAP STYLE, REBOOT,
-SHUTDOWN. All six compact rows remain visible at the supported 1280x720 display
-size, with the selected row's button instruction in a fixed footer. Encoder
+SHUTDOWN, followed by Construction Zones, Dangerous Slowdowns, Incidents,
+and Travel Delays in a compact OHGO group. The selected control's button
+instruction appears in a fixed footer. Encoder
 rotation changes only the highlighted row. B1 and encoder press are inert. B2
 requests OUT/OFF/NIGHT or CANCEL; B3 requests IN/ON/DAY or advances power from
 SELECT to CONFIRM. Requests are explicit and idempotent. Text exposes actual zoom,
 style, ON/OFF/UNAVAILABLE state, power availability, action, and bounded failure
 reason; color and switch position are supplementary. Zoom preserves map bounds.
-Manual style uses the shared fan-out and solar manual override.
+Manual style uses the shared fan-out and solar manual override. For each OHGO
+choice B2 means OFF and B3 means ON. Choices default to OFF and use the
+existing asynchronous preference writer. Visibility is gated by GPS and feed
+freshness independently of the saved switch position. See [OHGO](ohgo-incidents.md).
 
 ## Power contract
 

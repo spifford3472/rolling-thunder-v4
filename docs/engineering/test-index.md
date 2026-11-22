@@ -6,7 +6,7 @@ Rolling Thunder has broad automated regression coverage. This index groups the
 current Python test modules by engineering ownership so an agent can identify
 targeted coverage before running the full suite.
 
-**Cataloged Python test modules: 425 (verified against current main, 2026-11-17).**
+**Cataloged Python test modules: 426 in the OHGO map layers source tree.**
 
 The final gate remains the full suite; this index does not authorize skipping
 cross-feature regression tests when a shared contract changes.
@@ -622,6 +622,7 @@ metadata/logging/commit/weather plus Wavelog tests (blank/explicit notes).
 - `tests/test_forge_ohgo_api.py` — retained read-only route and existing Forge endpoint delegation.
 - `tests/test_ohgo_panel.py` — disabled/stale/live-safe presentation, incident dividers, and no Tk network I/O.
 - `tests/test_ohgo_ui.py` — context-gated rotary isolation, scroll persistence, MORE geometry, and stable refreshes.
+- `tests/test_ohgo_map_layers.py` — statewide provider fixtures, category isolation, GPS gating, persisted switches, marker shapes, viewport projection, and density limits.
 - `tests/test_context_navigation.py` — `o` shortcut, OHGO context order, and existing DMR navigation.
 - `tests/test_meshcore_runtime_integration.py` — removed runtime/USB boundary, narrowly scoped legacy-config compatibility, and strict validation of unrelated settings.
 

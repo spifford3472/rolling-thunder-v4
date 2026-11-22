@@ -566,6 +566,7 @@ def test_live_map_update_records_base_map_timing_when_enabled() -> None:
     widgets._last_snapshot = None
     widgets._last_radar_snapshot = None
     widgets._last_pota_snapshot = None
+    widgets._last_ohgo_layers = ()
     widgets._pending_base_tiles = []
     widgets._pending_radar_tiles = []
     widgets._flush_pending_base_tiles = Mock()

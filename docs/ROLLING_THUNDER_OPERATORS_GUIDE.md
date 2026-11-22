@@ -1044,6 +1044,18 @@ At higher zoom, markers include park reference/name; at lower zoom they become
 compact dots. These coordinates are situational pins only and are not legal
 activation-boundary evidence.
 
+## OHGO traffic layers
+
+In Settings, rotate past SHUTDOWN to select **Construction Zones** (orange
+barrel), **Dangerous Slowdowns** (yellow SLOW triangle), **Incidents** (red
+exclamation triangle), or **Travel Delays** (blue clock). Use **B2 OFF**
+or **B3 ON** for the highlighted layer. All four start OFF and each choice
+survives a restart. The OHGO text screen remains available via `o`.
+
+The right-hand map shows enabled layers only with a valid, current GPS fix
+inside Ohio. Leaving Ohio, losing the fix, or letting feed data expire hides
+the relevant markers. Zoom in to see local detail in dense areas.
+
 ## Radar
 
 Radar is an optional overlay with an independent lifecycle from the base map.
