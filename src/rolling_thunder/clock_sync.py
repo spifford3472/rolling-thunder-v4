@@ -12,6 +12,7 @@ from rolling_thunder.radio_polling import PollScheduler, ScheduledPoll
 GPSStateProvider = Callable[[], GPSState | None]
 MonotonicClock = Callable[[], float]
 WallClock = Callable[[], datetime]
+_LOCAL_SYNC_INTERVAL_HOURS = 6
 
 
 class ClockSetError(Exception):
@@ -112,6 +113,14 @@ def _normalize_utc(value: datetime, *, label: str) -> datetime:
     return value.astimezone(UTC)
 
 
+def _local_slot(wall: datetime) -> tuple[datetime, float]:
+    """Return the local slot identity and seconds since its scheduled start."""
+    local = wall.astimezone().replace(tzinfo=None)
+    hour = local.hour - local.hour % _LOCAL_SYNC_INTERVAL_HOURS
+    slot = local.replace(hour=hour, minute=0, second=0, microsecond=0)
+    return slot, (local - slot).total_seconds()
+
+
 class ClockSynchronizationService:
     """Verify or set the Pi clock from trusted GPS UTC on a bounded cadence."""
 
@@ -130,6 +139,8 @@ class ClockSynchronizationService:
         success_interval_s: float = 43_200.0,
         tolerance_s: float = 2.0,
         maximum_gps_sample_age_s: float = 5.0,
+        use_local_schedule: bool = False,
+        clock_write_allowed: Callable[[], bool] = lambda: True,
     ) -> None:
         if poll_interval_s <= 0:
             raise ValueError("Clock-sync poll interval must be positive.")
@@ -158,6 +169,10 @@ class ClockSynchronizationService:
         self._success_interval_s = success_interval_s
         self._tolerance_s = tolerance_s
         self._maximum_gps_sample_age_s = maximum_gps_sample_age_s
+        self._use_local_schedule = use_local_schedule
+        self._clock_write_allowed = clock_write_allowed
+        self._last_scheduled_slot: datetime | None = None
+        self._started_s = 0.0
 
         initial_now = self._monotonic_clock()
         if initial_now < 0:
@@ -189,6 +204,8 @@ class ClockSynchronizationService:
         self._opportunity_started_s = None
         self._next_attempt_s = None
         self._next_opportunity_s = now
+        self._started_s = now
+        self._last_scheduled_slot = None
         self._last_result = None
         self._state = self._build_state(ClockSyncStatus.WAITING_FOR_TRUST, now)
         self._scheduled_poll = self._scheduler.schedule_repeating(
@@ -219,7 +236,19 @@ class ClockSynchronizationService:
             self._evaluate_open_opportunity(now, gps_utc)
             return
 
-        if now < self._next_opportunity_s:
+        slot: datetime | None = None
+        slot_elapsed = 0.0
+        if self._use_local_schedule and gps_utc is not None:
+            slot, slot_elapsed = _local_slot(gps_utc)
+            if self._last_scheduled_slot is None:
+                # Reconstruct the launch slot from GPS even if the Pi booted
+                # with the wrong time. Do not repeat a slot after restarting.
+                launch = gps_utc - timedelta(seconds=now - self._started_s)
+                self._last_scheduled_slot, _ = _local_slot(launch)
+            waiting = slot <= self._last_scheduled_slot or slot_elapsed >= self._retry_window_s
+        else:
+            waiting = now < self._next_opportunity_s
+        if waiting:
             self._state = self._build_state(
                 ClockSyncStatus.WAITING_FOR_CADENCE,
                 now,
@@ -240,7 +269,9 @@ class ClockSynchronizationService:
             )
             return
 
-        self._opportunity_started_s = now
+        if slot is not None:
+            self._last_scheduled_slot = slot
+        self._opportunity_started_s = now - slot_elapsed
         self._next_attempt_s = now
         self._evaluate_open_opportunity(now, gps_utc)
 
@@ -253,7 +284,13 @@ class ClockSynchronizationService:
         if started is None:
             raise RuntimeError("Clock-sync opportunity state is inconsistent.")
 
-        if now - started >= self._retry_window_s:
+        scheduled_window_closed = False
+        if self._use_local_schedule and gps_utc is not None:
+            slot, elapsed = _local_slot(gps_utc)
+            scheduled_window_closed = (
+                slot != self._last_scheduled_slot or elapsed >= self._retry_window_s
+            )
+        if now - started >= self._retry_window_s or scheduled_window_closed:
             self._opportunity_started_s = None
             self._next_attempt_s = None
             self._next_opportunity_s = started + self._success_interval_s
@@ -290,6 +327,12 @@ class ClockSynchronizationService:
             )
             return
 
+        if self._use_local_schedule and (
+            self._trusted_since_s is None or now - self._trusted_since_s < self._initial_trust_s
+        ):
+            self._schedule_retry(now, "Waiting for continuously trusted GPS UTC.")
+            return
+
         wall_utc = _normalize_utc(self._wall_clock(), label="System wall clock")
         offset_s = (gps_utc - wall_utc).total_seconds()
 
@@ -300,6 +343,13 @@ class ClockSynchronizationService:
                 gps_utc,
                 offset_s,
                 clock_written=False,
+            )
+            return
+
+        if not self._clock_write_allowed():
+            self._schedule_retry(
+                now, "Clock correction deferred while a timed radio operation is active.",
+                gps_utc=gps_utc, offset_s=offset_s,
             )
             return
 

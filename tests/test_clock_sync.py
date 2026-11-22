@@ -1,6 +1,8 @@
 """Deterministic tests for bounded GPS-assisted system-clock synchronization."""
 
+import time
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -504,3 +506,116 @@ def test_policy_configuration_is_validated(
             monotonic_clock=MutableMonotonic(),
             **kwargs,
         )
+
+
+@pytest.fixture
+def eastern_timezone(monkeypatch: pytest.MonkeyPatch):
+    try:
+        with monkeypatch.context() as env:
+            env.setenv("TZ", "America/New_York")
+            time.tzset()
+            yield ZoneInfo("America/New_York")
+    finally:
+        time.tzset()
+
+
+@pytest.mark.parametrize("day", [1, 7, 15])
+def test_schedule_uses_local_slots_across_eastern_dst(day, eastern_timezone) -> None:
+    wall = MutableWallClock(datetime(2026, 3, day, 23, 55, tzinfo=eastern_timezone))
+    monotonic = MutableMonotonic()
+    gps = MutableGPSState(None)
+    setter = FakeClockSetter()
+    scheduler = ManualScheduler()
+    service = ClockSynchronizationService(
+        gps, setter, scheduler, monotonic_clock=monotonic, wall_clock=wall,
+        use_local_schedule=True,
+    )
+    service.start()
+
+    def poll(value: datetime) -> None:
+        monotonic.advance((value.astimezone(UTC) - wall.value.astimezone(UTC)).total_seconds())
+        wall.value = value
+        gps.state = trusted_state(value, received_monotonic_s=monotonic.value)
+        scheduler.fire()
+
+    next_day = wall.value + timedelta(days=1)
+    for hour in (0, 6, 12, 18):
+        target = next_day.replace(hour=hour, minute=0)
+        poll(target - timedelta(minutes=2))
+        assert service.latest_state.status is ClockSyncStatus.WAITING_FOR_CADENCE
+        previous = service.latest_state.last_result
+        poll(target)
+        result = service.latest_state.last_result
+        assert result is not None and result is not previous
+        assert result.gps_utc == target.astimezone(UTC)
+        assert result.status is ClockSyncStatus.VERIFIED
+        poll(target + timedelta(minutes=2))
+        assert service.latest_state.last_result is result
+    assert setter.values == []
+
+
+def test_scheduled_sync_defers_writes_and_skips_missed_or_repeated_windows(
+    eastern_timezone,
+) -> None:
+    start = datetime(2026, 11, 1, 5, 57, tzinfo=eastern_timezone)
+    wall = MutableWallClock(start)
+    monotonic = MutableMonotonic()
+    gps = MutableGPSState(trusted_state(start))
+    setter = FakeClockSetter()
+    scheduler = ManualScheduler()
+    radio_busy = True
+    service = ClockSynchronizationService(
+        gps, setter, scheduler, monotonic_clock=monotonic, wall_clock=wall,
+        use_local_schedule=True, clock_write_allowed=lambda: not radio_busy,
+    )
+    service.start()
+
+    def poll(minute: int, *, available: bool = True) -> None:
+        monotonic.advance(60)
+        wall.value = start + timedelta(minutes=minute)
+        target = wall.value.astimezone(UTC) + timedelta(seconds=5)
+        gps.state = trusted_state(target, received_monotonic_s=monotonic.value) if available else None
+        scheduler.fire()
+
+    poll(0)
+    poll(3)
+    assert service.latest_state.status is ClockSyncStatus.RETRY_PENDING
+    assert setter.values == []
+    radio_busy = False
+    poll(4)
+    assert service.latest_state.status is ClockSyncStatus.SYNCHRONIZED
+    assert len(setter.values) == 1
+    poll(3)
+    assert len(setter.values) == 1
+    service.stop()
+    service.start()
+    poll(5)
+    poll(6)
+    assert len(setter.values) == 1
+
+    poll(363, available=False)
+    poll(374, available=False)
+    poll(375)
+    poll(376)
+    assert len(setter.values) == 1
+
+
+def test_schedule_uses_gps_calendar_when_pi_wall_clock_is_wrong(eastern_timezone) -> None:
+    start = datetime(2026, 11, 2, 5, 58, tzinfo=eastern_timezone)
+    wall = MutableWallClock(start + timedelta(hours=8))
+    monotonic = MutableMonotonic()
+    gps = MutableGPSState(trusted_state(start, received_monotonic_s=0.0))
+    setter = FakeClockSetter()
+    scheduler = ManualScheduler()
+    service = ClockSynchronizationService(
+        gps, setter, scheduler, monotonic_clock=monotonic, wall_clock=wall,
+        use_local_schedule=True,
+    )
+    service.start()
+    scheduler.fire()
+    assert setter.values == []
+    monotonic.advance(120)
+    target = start + timedelta(minutes=2)
+    gps.state = trusted_state(target, received_monotonic_s=monotonic.value)
+    scheduler.fire()
+    assert setter.values == [target.astimezone(UTC)]

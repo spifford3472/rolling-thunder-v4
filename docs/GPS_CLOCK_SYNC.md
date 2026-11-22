@@ -15,14 +15,19 @@ The application policy is separated from operating-system authorization:
 
 ## Approved cadence
 
-All cadence decisions use a monotonic clock and therefore do not change when the Pi wall clock is corrected.
+Rolling Thunder checks the system clock at **midnight, 6 a.m., noon, and 6 p.m.**
+in the Pi's configured local timezone, including daylight saving time changes.
+The slot calendar uses trusted GPS UTC, so an incorrect Pi clock cannot move
+the next check to the wrong local hour.
 
-1. After application startup, GPS UTC must remain continuously trusted for approximately 60 seconds before the first synchronization opportunity opens.
-2. During an open opportunity, a failed attempt or unavailable/untrusted GPS UTC may be retried no more frequently than once every 60 seconds.
-3. The retry opportunity is bounded to 10 minutes from its first attempt.
-4. A successful verification or synchronization closes the opportunity and defers another opportunity for at least 12 hours.
-5. If the 10-minute retry window expires without success, the opportunity closes and another opportunity is not opened until the same 12-hour cadence permits it.
-6. A later opportunity still requires trusted GPS UTC; if trust was lost and recently recovered, the continuous-trust gate must be satisfied before action.
+1. Each local slot has a ten-minute window. GPS UTC must remain continuously
+   trusted for approximately 60 seconds before an attempt.
+2. If a clock correction fails or a timed radio operation is active, retry
+   no more frequently than once every 60 seconds within that slot.
+3. A successful verification or correction closes the slot. When GPS is
+   unavailable for the window, the service waits for the next scheduled slot.
+4. A restart waits for the next scheduled slot. A backward clock adjustment
+   does not reopen a slot already attempted by the current process.
 
 ## Trust requirement
 
@@ -42,7 +47,7 @@ If the difference exceeds the tolerance, the service requests `SystemClockSetter
 
 The current policy status and the result of the most recently completed synchronization opportunity are separate concepts.
 
-After a successful verification, the current status normally advances from `VERIFIED` to `WAITING_FOR_CADENCE` on the next poll because another attempt is not permitted for 12 hours. A one-poll `VERIFIED` state is too transient for a UI, diagnostic sampler, or acceptance script to observe reliably.
+After a successful verification, the current status normally advances from `VERIFIED` to `WAITING_FOR_CADENCE` on the next poll because another attempt waits for the next local slot. A one-poll `VERIFIED` state is too transient for a UI, diagnostic sampler, or acceptance script to observe reliably.
 
 `ClockSyncState.last_result` therefore retains an immutable `ClockSyncResult` for the lifetime of the running service. It records the most recent completed opportunity as `VERIFIED`, `SYNCHRONIZED`, or `WINDOW_EXPIRED`, including the GPS UTC, measured offset, whether a clock write occurred, and any completion error. The current status can continue to describe cadence or shutdown while `last_result` remains available as durable in-memory evidence of what actually happened.
 
@@ -84,13 +89,10 @@ Rolling Thunder itself does not receive shell, service-management, package-manag
 
 `ApplicationRuntime` owns the clock-synchronization lifecycle alongside GPS polling.
 
-The production path is intentionally disabled unless the process environment contains exactly:
-
-```text
-ROLLING_THUNDER_GPS_CLOCK_SYNC=1
-```
-
-This keeps deployment opt-in while the feature is accepted on the installed vehicle Pi. The runtime refuses to enable clock synchronization when the configured GPS adapter is in mock mode.
+Production enables the scheduled checks with real GPS. Set
+`ROLLING_THUNDER_GPS_CLOCK_SYNC=0` to disable the service. The explicit
+`=1` enable flag remains supported. The runtime refuses to enable clock
+synchronization with a mock GPS adapter.
 
 When enabled:
 
@@ -169,13 +171,13 @@ systemctl is-active chrony.service
 
 ## Final installed runtime acceptance
 
-Before enabling the production runtime flag, confirm the branch passes CI on the final runtime-observability head.
+Confirm CI passes before deployment. Observe a scheduled local slot while the Pi remains powered and GPS is trusted.
 
 Then run the isolated real-GPS/mock-radio acceptance and confirm:
 
 1. runtime composition succeeds
 2. GPS reaches trusted UTC normally
-3. no helper invocation occurs during the first approximately 60 seconds
+3. no helper invocation occurs before the scheduled slot or during the GPS trust warm-up
 4. because the Pi is already NTP-synchronized within the two-second tolerance, `last_result.status` becomes `VERIFIED`
 5. `last_result.clock_written` remains false
 6. the current status may be `WAITING_FOR_CADENCE` after verification; that is expected
