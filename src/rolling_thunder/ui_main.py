@@ -80,10 +80,10 @@ from rolling_thunder.ft8_widgets import FT8Widgets
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
-from rolling_thunder.logging_setup import configure_wspr_logging
 from rolling_thunder.log_panel import ContactLogRepository, LogPanelController
 from rolling_thunder.log_panel_commands import LogAwareActivePanelCommands
 from rolling_thunder.log_ui import LogWidgets
+from rolling_thunder.logging_setup import configure_wspr_logging
 from rolling_thunder.main import DEFAULT_CONFIG_PATH
 from rolling_thunder.ohgo_map import OhgoMapOverlay, ohio_state_resolver
 from rolling_thunder.ohgo_panel import (

@@ -482,7 +482,7 @@ class WsprReceive:
                                 "capture_complete band=%s slot_utc=%s elapsed_s=%.2f pcm_bytes=%d",
                                 band, slot.isoformat(), monotonic() - capture_started, len(pcm),
                             )
-                        except Exception as error:  # noqa: BLE001
+                        except Exception as error:
                             _LOGGER.warning(
                                 "capture_failed band=%s slot_utc=%s elapsed_s=%.2f error_type=%s",
                                 band, slot.isoformat(), monotonic() - capture_started,
