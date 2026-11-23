@@ -80,6 +80,7 @@ from rolling_thunder.ft8_widgets import FT8Widgets
 from rolling_thunder.live_callsign_capture import LiveCallsignCaptureController
 from rolling_thunder.live_map import LiveMapController
 from rolling_thunder.live_map_ui import LiveMapWidgets
+from rolling_thunder.logging_setup import configure_wspr_logging
 from rolling_thunder.log_panel import ContactLogRepository, LogPanelController
 from rolling_thunder.log_panel_commands import LogAwareActivePanelCommands
 from rolling_thunder.log_ui import LogWidgets
@@ -419,6 +420,15 @@ def run_dashboard(
     except ConfigurationError as error:
         print(f"Rolling Thunder configuration error: {error}")
         return 2
+
+    try:
+        configure_wspr_logging(
+            config.storage.database_path.parent / "rolling-thunder-wspr-debug.log"
+        )
+    except OSError as error:
+        _LOGGER.warning(
+            "WSPR diagnostics unavailable error_type=%s", type(error).__name__,
+        )
 
     try:
         secrets = load_application_secrets()

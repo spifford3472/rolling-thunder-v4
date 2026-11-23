@@ -1,5 +1,6 @@
 """Exercise WSPR through the physical dispatcher and a controlled receive lifecycle."""
 
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -272,12 +273,27 @@ def test_chrony_independently_verifies_clock_with_delayed_serial_gps(
         receive.close()
 
 
-def test_rotation_with_online_and_offline_windows_and_midnight(monkeypatch) -> None:
+def test_rotation_with_online_and_offline_windows_and_midnight(monkeypatch, caplog) -> None:
+    caplog.set_level(logging.INFO, logger="rolling_thunder.wspr_receive")
     monkeypatch.setenv("TZ", "UTC")
     import time
     time.tzset()
     try:
         _rotation_test(monkeypatch)
+        messages = "\n".join(
+            record.getMessage() for record in caplog.records
+            if record.name == "rolling_thunder.wspr_receive"
+        )
+        assert "session_start" in messages
+        assert "slot_start band=40 m" in messages
+        assert "capture_complete band=40 m" in messages
+        assert "decode_complete band=40 m" in messages
+        assert "decode_count=2" in messages
+        assert "report_summary band=40 m" in messages and "accepted=2" in messages
+        assert "report_summary band=30 m" in messages and "unavailable=2" in messages
+        assert "session_end" in messages
+        station_data = ("K1JT", "W1AW", "EM79", "FN20", "FN31")
+        assert not any(station in messages for station in station_data)
     finally:
         monkeypatch.undo()
         time.tzset()

@@ -82,9 +82,22 @@ rest of the current window's reports. A result already sent may reach the
 provider after Stop. The screen can show that its acknowledgement is unknown.
 There is no replay after network recovery and no reporting work on Forge.
 
-Only anonymous per-band counts survive failed/offline delivery in process
-memory. Only the closest and farthest acknowledged stations with usable grids
-remain as named statistics. Distances are in statute miles from the frozen
+### Bounded diagnostics
+
+The dashboard configures a dedicated WSPR logger at
+`<configured database directory>/rolling-thunder-wspr-debug.log`. It rotates at
+1 MiB and keeps three backups. Entries record session lifecycle, band and UTC
+slot, capture duration and byte count, decoder output count and duration, and
+aggregate upload outcomes. They never record callsigns, locators, coordinates,
+PCM, per-station decode fields, upload bodies, or provider response bodies.
+These local aggregate diagnostics are retained only for troubleshooting and do
+not feed station statistics or trigger retries.
+
+Anonymous per-band counts and the closest/farthest acknowledged stations remain
+in process memory only. The diagnostic file persists per-slot decode counts and
+aggregate upload outcomes, without station identities or locations.
+
+Distances are in statute miles from the frozen
 session fix to each transmitted Maidenhead center. The session timer measures
 monotonic time since acquisition. Decodes per hour use actual listening time
 and all valid decodes for the local date. Local midnight clears that day's

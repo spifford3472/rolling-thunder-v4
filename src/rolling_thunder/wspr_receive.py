@@ -411,6 +411,7 @@ class WsprReceive:
     ) -> None:
         result: Thread | None = None
         try:
+            _LOGGER.info("session_start")
             self._refresh_ntp(cancel)
             self._check(cancel)
             if not self._decoder.available:
@@ -426,12 +427,24 @@ class WsprReceive:
                 while True:
                     self._check(cancel)
                     band, dial = WSPR_BANDS[index]
+                    _LOGGER.info(
+                        "slot_start band=%s dial_hz=%d slot_utc=%s",
+                        band, dial, slot.isoformat(),
+                    )
                     with self._lock:
                         self._band = band
                         self._detail = "Listening · waiting for UTC slot"
                     try:
                         lease.tune(dial)
+                        _LOGGER.info(
+                            "tune_complete band=%s dial_hz=%d", band, dial,
+                        )
                     except WsprBandUnavailable:
+                        _LOGGER.warning(
+                            "slot_skipped band=%s dial_hz=%d slot_utc=%s "
+                            "reason=receive_tuning_unavailable",
+                            band, dial, slot.isoformat(),
+                        )
                         with self._lock:
                             self._detail = f"Skipped {band}: receive tuning unavailable"
                         self._wait_until(slot + timedelta(seconds=_SLOT_SECONDS - 6), cancel)
@@ -457,8 +470,25 @@ class WsprReceive:
                             self._listening_started = self._elapsed() + max(
                                 0.0, (slot - self._now()).total_seconds(),
                             )
+                        capture_started = monotonic()
+                        _LOGGER.info(
+                            "capture_start band=%s slot_utc=%s", band, slot.isoformat(),
+                        )
                         try:
-                            pcm = self._audio.capture(slot, WSPR_PCM_BYTES, self._now, verify_receive)
+                            pcm = self._audio.capture(
+                                slot, WSPR_PCM_BYTES, self._now, verify_receive,
+                            )
+                            _LOGGER.info(
+                                "capture_complete band=%s slot_utc=%s elapsed_s=%.2f pcm_bytes=%d",
+                                band, slot.isoformat(), monotonic() - capture_started, len(pcm),
+                            )
+                        except Exception as error:  # noqa: BLE001
+                            _LOGGER.warning(
+                                "capture_failed band=%s slot_utc=%s elapsed_s=%.2f error_type=%s",
+                                band, slot.isoformat(), monotonic() - capture_started,
+                                type(error).__name__,
+                            )
+                            raise
                         finally:
                             with self._lock:
                                 self._account(self._elapsed())
@@ -496,7 +526,10 @@ class WsprReceive:
                 result.join()
             with self._lock:
                 self._finish_listening()
+                detail = self._detail
+                elapsed = self._last_elapsed
                 self._worker = None
+            _LOGGER.info("session_end detail=%s elapsed_s=%.1f", detail, elapsed)
 
     def _wait_until(self, deadline: datetime, cancel: Event) -> None:
         while (remaining := (deadline - self._now()).total_seconds()) > 0:
@@ -508,8 +541,17 @@ class WsprReceive:
     ) -> None:
         band, dial = WSPR_BANDS[index]
         result_deadline = self._elapsed() + _RESULT_WINDOW_SECONDS
+        decode_started = monotonic()
+        decoded_count: int | None = None
+        report_attempts = 0
+        report_statuses: dict[str, int] = {}
         try:
             decodes = self._decoder.decode(pcm, dial, cancel)
+            decoded_count = len(decodes)
+            _LOGGER.info(
+                "decode_complete band=%s slot_utc=%s decode_count=%d elapsed_s=%.2f",
+                band, slot.isoformat(), decoded_count, monotonic() - decode_started,
+            )
             del pcm
             # Use the receive window's date, even if a worker result arrives after midnight.
             sample_day = (slot + timedelta(seconds=WSPR_WINDOW_SECONDS)).astimezone().date()
@@ -535,6 +577,8 @@ class WsprReceive:
                     ),
                     cancel=cancel,
                 )
+                report_attempts += 1
+                report_statuses[status.value] = report_statuses.get(status.value, 0) + 1
                 with self._lock:
                     if cancel.is_set():
                         if status is WsprUploadStatus.IN_FLIGHT_UNKNOWN:
@@ -554,9 +598,25 @@ class WsprReceive:
         except WsprCancelled:
             pass
         except WsprDecoderError:
+            _LOGGER.warning(
+                "decode_failed band=%s slot_utc=%s", band, slot.isoformat(),
+            )
             self.stop("WSPR decoder failed")
         except Exception:  # noqa: BLE001 - Suppress payload-bearing transport exception text.
+            _LOGGER.warning(
+                "result_processing_failed band=%s slot_utc=%s", band, slot.isoformat(),
+            )
             self.stop("WSPR result processing failed")
+        finally:
+            if decoded_count is not None:
+                outcomes = ",".join(
+                    f"{name}={count}" for name, count in sorted(report_statuses.items())
+                ) or "none"
+                _LOGGER.info(
+                    "report_summary band=%s slot_utc=%s decode_count=%d "
+                    "attempts=%d outcomes=%s",
+                    band, slot.isoformat(), decoded_count, report_attempts, outcomes,
+                )
 
     def _record_extreme(self, decode: WsprDecode, origin: WsprOrigin) -> None:
         if decode.locator is None:

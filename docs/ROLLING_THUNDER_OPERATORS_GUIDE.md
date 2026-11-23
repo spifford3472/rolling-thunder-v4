@@ -741,6 +741,11 @@ start, wait briefly and press Button 3 again. If the radio reports transmit
 or GPS or clock evidence becomes unsafe, WSPR stops, releases its equipment
 and shows the reason.
 
+For low or missing WSPRnet totals, inspect
+`<configured database directory>/rolling-thunder-wspr-debug.log`. It records
+band-slot capture and decode counts plus aggregate upload outcomes; it does not
+store station callsigns, grids, coordinates, audio, or report payloads.
+
 Running may publish your configured callsign and the first four characters
 of your parked Maidenhead square to WSPRnet. The dashboard posts only fresh
 reception reports. If upload fails, the station details are discarded and
