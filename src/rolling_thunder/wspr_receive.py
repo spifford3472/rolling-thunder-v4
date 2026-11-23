@@ -427,13 +427,14 @@ class WsprReceive:
                 while True:
                     self._check(cancel)
                     band, dial = WSPR_BANDS[index]
+                    with self._lock:
+                        self._check(cancel)
+                        self._band = band
+                        self._detail = "Listening · waiting for UTC slot"
                     _LOGGER.info(
                         "slot_start band=%s dial_hz=%d slot_utc=%s",
                         band, dial, slot.isoformat(),
                     )
-                    with self._lock:
-                        self._band = band
-                        self._detail = "Listening · waiting for UTC slot"
                     try:
                         lease.tune(dial)
                         _LOGGER.info(
