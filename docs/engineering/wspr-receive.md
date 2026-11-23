@@ -16,7 +16,11 @@ reconnection and fresh GPS evidence leave WSPR idle.
   A synchronized chrony offset within 250 ms permits up to two seconds of GPS
   disagreement to account for receiver and serial delivery. With chrony unavailable,
   GPS must agree within one second. WSPR stops on a wall-clock shift greater than
-  250 ms relative to monotonic time. GPS motion and fix freshness remain required.
+  250 ms relative to monotonic time. Valid and fresh GPS remains required
+  throughout reception. Once started, WSPR stops when distinct, fresh fixes
+  stay at least 50 feet from the frozen start position for five seconds.
+  A fix inside the radius clears the motion confirmation, and repeated
+  publications of the same fix do not advance it. GPS speed is used at start.
   A valid antenna and a physically parked vehicle remain operator requirements.
 - At acceptance, freeze the current position for distance calculations and the
   four-character Maidenhead square for public reports. The dashboard previews
