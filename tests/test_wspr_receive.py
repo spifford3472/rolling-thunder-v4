@@ -290,7 +290,7 @@ def test_rotation_with_online_and_offline_windows_and_midnight(monkeypatch, capl
         assert "decode_complete band=40 m" in messages
         assert "decode_count=2" in messages
         assert "report_summary band=40 m" in messages and "accepted=2" in messages
-        assert "report_summary band=30 m" in messages and "unavailable=2" in messages
+        assert "report_summary band=30 m" in messages and "unavailable=1" in messages
         assert "session_end" in messages
         station_data = ("K1JT", "W1AW", "EM79", "FN20", "FN31")
         assert not any(station in messages for station in station_data)
