@@ -2,9 +2,13 @@
 
 The persistent dashboard provides WSPR on its normal context cycle after FT8.
 Validated physical Command Button 3 on a rendered WSPR screen requests one
-session. Button 2, any context exit, dashboard shutdown, GPS loss, motion, UTC
-disagreement or lost receive ownership revokes that request. Re-entry,
-reconnection and fresh GPS evidence leave WSPR idle.
+session. Button 2, any context exit, dashboard shutdown, confirmed motion, UTC
+disagreement or lost receive ownership revokes that request. Stale or
+unavailable GPS keeps receive listening active at the frozen start grid. Uploads
+continue only when the last fresh fixes established a parked position before GPS
+loss; otherwise they pause until fresh GPS confirms the receiver is stationary
+at the original position. Re-entry, reconnection and fresh GPS evidence leave
+WSPR idle.
 
 ## Shared equipment and timing
 
@@ -16,9 +20,15 @@ reconnection and fresh GPS evidence leave WSPR idle.
   A synchronized chrony offset within 250 ms permits up to two seconds of GPS
   disagreement to account for receiver and serial delivery. With chrony unavailable,
   GPS must agree within one second. WSPR stops on a wall-clock shift greater than
-  250 ms relative to monotonic time. Valid and fresh GPS remains required
-  throughout reception. Once started, WSPR stops when distinct, fresh fixes
-  stay at least 50 feet from the frozen start position for five seconds.
+  250 ms relative to monotonic time. If GPS becomes stale or unavailable during a
+  session, receive listening continues at the frozen start position. Uploads remain
+  enabled only if the last fresh fixes had established at least five seconds of
+  stationary evidence immediately before loss; otherwise they pause until fresh
+  GPS returns and confirms a stationary fix at the original position. After a
+  GPS outage, uploads stay paused while the recovered fix indicates movement or
+  displacement from the start. Once fresh GPS is available, WSPR stops when
+  distinct fixes stay at least 50 feet from the frozen start position for five
+  seconds.
   A fix inside the radius clears the motion confirmation, and repeated
   publications of the same fix do not advance it. GPS speed is used at start.
   A valid antenna and a physically parked vehicle remain operator requirements.
@@ -82,9 +92,22 @@ rest of the current window's reports. A result already sent may reach the
 provider after Stop. The screen can show that its acknowledgement is unknown.
 There is no replay after network recovery and no reporting work on Forge.
 
-Only anonymous per-band counts survive failed/offline delivery in process
-memory. Only the closest and farthest acknowledged stations with usable grids
-remain as named statistics. Distances are in statute miles from the frozen
+### Bounded diagnostics
+
+The dashboard configures a dedicated WSPR logger at
+`<configured database directory>/rolling-thunder-wspr-debug.log`. It rotates at
+1 MiB and keeps three backups. Entries record session lifecycle, band and UTC
+slot, capture duration and byte count, decoder output count and duration, and
+aggregate upload outcomes. They never record callsigns, locators, coordinates,
+PCM, per-station decode fields, upload bodies, or provider response bodies.
+These local aggregate diagnostics are retained only for troubleshooting and do
+not feed station statistics or trigger retries.
+
+Anonymous per-band counts and the closest/farthest acknowledged stations remain
+in process memory only. The diagnostic file persists per-slot decode counts and
+aggregate upload outcomes, without station identities or locations.
+
+Distances are in statute miles from the frozen
 session fix to each transmitted Maidenhead center. The session timer measures
 monotonic time since acquisition. Decodes per hour use actual listening time
 and all valid decodes for the local date. Local midnight clears that day's
