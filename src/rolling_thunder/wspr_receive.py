@@ -148,6 +148,9 @@ class WsprReceive:
         self._elapsed = elapsed_clock
         self._lock = RLock()
         self._gps: GPSState | None = None
+        self._last_good_gps: GPSState | None = None
+        self._gps_degraded = False
+        self._gps_upload_allowed = True
         self._stationary_since: float | None = None
         self._last_fix_receipt: float | None = None
         self._outside_since: float | None = None
@@ -178,14 +181,17 @@ class WsprReceive:
     def observe_gps(self, state: GPSState) -> None:
         """Consume existing GPS publications without acquiring hardware or doing I/O."""
         with self._lock:
+            problem = self._gps_state_problem(state)
             self._gps = state
-            problem = self._gps_problem()
             if problem is not None:
-                self._stationary_since = self._last_fix_receipt = self._outside_since = None
                 if self._worker is not None and not self._cancel.is_set():
-                    self.stop(problem)
+                    self._enter_gps_degraded(problem)
+                self._stationary_since = self._last_fix_receipt = self._outside_since = None
                 return
 
+            recovered = self._gps_degraded
+            self._gps_degraded = False
+            self._last_good_gps = state
             receipt = state.utc.received_monotonic_s
             position = state.position
             assert receipt is not None and position is not None
@@ -201,8 +207,56 @@ class WsprReceive:
                 self._stationary_since = receipt
 
             origin = self._origin
+            if recovered and origin is not None and self._worker is not None:
+                self._gps_upload_allowed = self._position_is_stationary_at_origin(position, origin)
+                self._detail = "GPS restored; listening"
+                _LOGGER.info(
+                    "gps_recovered uploads_allowed=%s", self._gps_upload_allowed,
+                )
+            elif self._worker is None:
+                self._gps_upload_allowed = True
+            elif not self._gps_upload_allowed and origin is not None:
+                self._gps_upload_allowed = self._position_is_stationary_at_origin(position, origin)
             if self._worker is not None and not self._cancel.is_set() and origin is not None:
                 self._observe_displacement(position, origin, receipt)
+
+    @staticmethod
+    def _position_is_stationary_at_origin(position: GPSPosition, origin: WsprOrigin) -> bool:
+        """Allow reports only at the frozen origin while the recovered fix is stationary."""
+        if (
+            position.latitude is None or position.longitude is None
+            or not WsprReceive._stationary_speed(position)
+        ):
+            return False
+        distance = haversine_distance_miles(
+            origin.latitude, origin.longitude, position.latitude, position.longitude,
+        )
+        return distance < _MOTION_DISTANCE_MILES
+
+    def _enter_gps_degraded(self, reason: str) -> None:
+        """Keep receive-only operation alive and gate uploads on prior stationary evidence."""
+        if self._gps_degraded:
+            return
+        self._gps_degraded = True
+        last_good = self._last_good_gps
+        since = self._stationary_since
+        receipt = self._last_fix_receipt
+        position = last_good.position if last_good is not None else None
+        stationary_before_loss = (
+            since is not None and receipt is not None
+            and receipt - since >= _STATIONARY_SECONDS
+            and 0 <= self._elapsed() - receipt <= _GPS_MAX_AGE_S * 2
+            and position is not None and self._stationary_speed(position)
+        )
+        self._gps_upload_allowed = stationary_before_loss
+        if stationary_before_loss:
+            self._detail = "GPS stale; holding last stationary location"
+        else:
+            self._detail = "GPS stale; listening only, uploads paused"
+        _LOGGER.warning(
+            "gps_degraded uploads_allowed=%s reason=%s",
+            self._gps_upload_allowed, reason,
+        )
 
     def _observe_displacement(
         self, position: GPSPosition, origin: WsprOrigin, receipt: float,
@@ -259,6 +313,9 @@ class WsprReceive:
             self._clock_anchor = (self._now(), self._elapsed())
             self._origin = origin
             self._outside_since = None
+            self._gps_degraded = False
+            self._gps_upload_allowed = True
+            self._last_good_gps = self._gps
             self._detail = "Starting"
             self._upload = "Waiting for a decode"
             self._band = None
@@ -316,7 +373,9 @@ class WsprReceive:
             )
 
     def _gps_problem(self) -> str | None:
-        state = self._gps
+        return self._gps_state_problem(self._gps)
+
+    def _gps_state_problem(self, state: GPSState | None) -> str | None:
         if state is None or state.connection_state is not GPSConnectionState.CONNECTED:
             return "GPS motion unavailable"
         position = state.position
@@ -354,9 +413,15 @@ class WsprReceive:
             tolerance = _MAX_GPS_DISAGREEMENT_WITH_NTP_S
         else:
             tolerance = 1.0
+        if self._gps_degraded and (ntp is None or not ntp.synchronized):
+            # GPS was verified at session start; while it is unavailable, the
+            # monotonic wall-clock anchor above detects any system clock step.
+            return None
         assessment = assess_ft8_clock(
             system_utc=wall, monotonic_seconds=elapsed,
-            gps_utc=self._gps.utc if self._gps is not None else None,
+            gps_utc=None if self._gps_degraded else (
+                self._gps.utc if self._gps is not None else None
+            ),
             ntp=ntp, maximum_offset_seconds=tolerance,
         )
         if assessment.quality is FT8ClockQuality.TRUSTED:
@@ -378,7 +443,10 @@ class WsprReceive:
         with self._lock:
             if cancel.is_set():
                 raise WsprCancelled
-            problem = self._gps_problem() or self._clock_problem()
+            gps_problem = self._gps_problem()
+            if gps_problem is not None:
+                self._enter_gps_degraded(gps_problem)
+            problem = self._clock_problem()
             if problem is not None:
                 self.stop(problem)
                 raise WsprCancelled
@@ -430,7 +498,8 @@ class WsprReceive:
                     with self._lock:
                         self._check(cancel)
                         self._band = band
-                        self._detail = "Listening · waiting for UTC slot"
+                        if not self._gps_degraded:
+                            self._detail = "Listening · waiting for UTC slot"
                     _LOGGER.info(
                         "slot_start band=%s dial_hz=%d slot_utc=%s",
                         band, dial, slot.isoformat(),
@@ -467,7 +536,8 @@ class WsprReceive:
 
                         with self._lock:
                             self._check(cancel)
-                            self._detail = "Listening"
+                            if not self._gps_degraded:
+                                self._detail = "Listening"
                             self._listening_started = self._elapsed() + max(
                                 0.0, (slot - self._now()).total_seconds(),
                             )
@@ -568,6 +638,13 @@ class WsprReceive:
                         self._check(cancel)
                         self._upload = "Upload window ended"
                     return
+                with self._lock:
+                    if not self._gps_upload_allowed:
+                        self._upload = "Paused: GPS stale; listening only"
+                        report_statuses["paused_gps"] = (
+                            report_statuses.get("paused_gps", 0) + 1
+                        )
+                        continue
                 status = self._reporter.report(
                     WsprSpot(
                         receiver_callsign=self._callsign, receiver_grid=origin.grid, slot_utc=slot,

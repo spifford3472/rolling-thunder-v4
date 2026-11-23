@@ -738,8 +738,13 @@ the start position for five seconds. A brief GPS jump can clear on the next
 fix inside that radius.
 An unavailable band displays a skip. If FT8 is actively decoding when you
 start, wait briefly and press Button 3 again. If the radio reports transmit
-or GPS or clock evidence becomes unsafe, WSPR stops, releases its equipment
-and shows the reason.
+or UTC clock evidence becomes unsafe, WSPR stops, releases its equipment and
+shows the reason. If GPS becomes stale or unavailable, WSPR keeps receiving at
+the frozen start grid. Uploads continue only if the last fresh fixes showed at
+least five seconds of stationary GPS immediately before the loss; otherwise,
+uploads pause until fresh GPS returns and confirms a stationary fix at the
+original position. Uploads remain paused while the recovered fix shows motion
+or displacement from the start. Confirmed motion still stops WSPR.
 
 For low or missing WSPRnet totals, inspect
 `<configured database directory>/rolling-thunder-wspr-debug.log`. It records

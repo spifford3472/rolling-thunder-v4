@@ -213,8 +213,7 @@ def test_parked_wspr_ignores_speed_and_position_spikes_then_stops_on_sustained_m
         receive.close()
 
 
-@pytest.mark.parametrize("failure", ["stale", "clock"])
-def test_motion_and_timing_fail_closed_without_restart(failure: str) -> None:
+def test_clock_failure_stops_without_restart() -> None:
     clock = FakeClock()
     radio = FakeReceiver()
     receive = _controller(clock, radio, NeverCapture(), Reporter())
@@ -223,10 +222,7 @@ def test_motion_and_timing_fail_closed_without_restart(failure: str) -> None:
     _stationary(receive, clock)
     assert receive.start()
     assert radio.acquired.wait(1)
-    if failure == "stale":
-        clock.advance(5)
-    else:
-        receive.observe_gps(clock.gps(clock_offset=3.0))
+    receive.observe_gps(clock.gps(clock_offset=3.0))
     _wait_for(lambda: not receive.busy)
     detail = receive.snapshot().detail
     assert any(word in detail for word in ("motion", "Motion", "UTC"))
@@ -234,6 +230,70 @@ def test_motion_and_timing_fail_closed_without_restart(failure: str) -> None:
     assert not receive.busy
     assert receive.start()
     receive.close()
+
+
+def test_stationary_gps_loss_holds_grid_and_keeps_uploads_enabled() -> None:
+    clock = FakeClock()
+    radio = FakeReceiver()
+    reporter = Reporter()
+    receive = _controller(clock, radio, NeverCapture(), reporter)
+    receive.select(True)
+    _stationary(receive, clock)
+    assert receive.start()
+    assert radio.acquired.wait(1)
+    try:
+        origin = receive._origin
+        assert origin is not None
+        clock.advance(5)
+        _wait_for(lambda: receive._gps_degraded)
+        snapshot = receive.snapshot()
+        assert snapshot.active
+        assert snapshot.grid == origin.grid
+        assert "holding last stationary location" in snapshot.detail
+        receive._decode(
+            b"\0" * WSPR_PCM_BYTES, 0, clock.wall, origin, receive._cancel,
+        )
+        assert len(reporter.calls) == 2
+    finally:
+        receive.stop()
+        _wait_for(lambda: not receive.busy)
+        receive.close()
+
+
+def test_gps_loss_after_motion_pauses_uploads_until_stationary_fix_returns() -> None:
+    clock = FakeClock()
+    radio = FakeReceiver()
+    reporter = Reporter()
+    receive = _controller(clock, radio, NeverCapture(), reporter)
+    receive.select(True)
+    _stationary(receive, clock)
+    assert receive.start()
+    assert radio.acquired.wait(1)
+    try:
+        origin = receive._origin
+        assert origin is not None
+        clock.advance(1)
+        receive.observe_gps(clock.gps(speed=1.0))
+        clock.advance(5)
+        _wait_for(lambda: receive._gps_degraded)
+        assert receive.snapshot().active
+        assert "uploads paused" in receive.snapshot().detail
+        receive._decode(
+            b"\0" * WSPR_PCM_BYTES, 0, clock.wall, origin, receive._cancel,
+        )
+        assert reporter.calls == []
+
+        clock.advance(1)
+        receive.observe_gps(clock.gps())
+        assert receive._gps_upload_allowed
+        receive._decode(
+            b"\0" * WSPR_PCM_BYTES, 0, clock.wall, origin, receive._cancel,
+        )
+        assert len(reporter.calls) == 2
+    finally:
+        receive.stop()
+        _wait_for(lambda: not receive.busy)
+        receive.close()
 
 
 @pytest.mark.parametrize(("chrony_offset", "gps_offset", "reason"), [
