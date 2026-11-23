@@ -36,6 +36,8 @@ _SETTLE_SECONDS = 2.0
 _GPS_MAX_AGE_S = 4.0
 _STATIONARY_SECONDS = 5.0
 _STATIONARY_SPEED_M_S = 0.15
+_MOTION_DISTANCE_MILES = 50.0 / 5280.0
+_MOTION_CONFIRM_SECONDS = 5.0
 _RESULT_WINDOW_SECONDS = 90.0
 _LOGGER = logging.getLogger(__name__)
 _MAX_NTP_OFFSET_S = 0.25
@@ -147,7 +149,8 @@ class WsprReceive:
         self._lock = RLock()
         self._gps: GPSState | None = None
         self._stationary_since: float | None = None
-        self._last_motion_sample: float | None = None
+        self._last_fix_receipt: float | None = None
+        self._outside_since: float | None = None
         self._selected = False
         self._closed = False
         self._worker: Thread | None = None
@@ -176,21 +179,44 @@ class WsprReceive:
         """Consume existing GPS publications without acquiring hardware or doing I/O."""
         with self._lock:
             self._gps = state
-            problem = self._motion_problem()
+            problem = self._gps_problem()
             if problem is not None:
-                self._stationary_since = self._last_motion_sample = None
+                self._stationary_since = self._last_fix_receipt = self._outside_since = None
                 if self._worker is not None and not self._cancel.is_set():
                     self.stop(problem)
                 return
+
             receipt = state.utc.received_monotonic_s
-            assert receipt is not None
-            if (
-                self._last_motion_sample is None
-                or receipt - self._last_motion_sample > _GPS_MAX_AGE_S
-                or receipt < self._last_motion_sample
-            ):
+            position = state.position
+            assert receipt is not None and position is not None
+            previous = self._last_fix_receipt
+            if not self._stationary_speed(position):
+                self._stationary_since = None
+            if receipt == previous:
+                return
+            self._last_fix_receipt = receipt
+            if previous is None or not 0 < receipt - previous <= _GPS_MAX_AGE_S:
+                self._stationary_since = self._outside_since = None
+            if self._stationary_since is None and self._stationary_speed(position):
                 self._stationary_since = receipt
-            self._last_motion_sample = receipt
+
+            origin = self._origin
+            if self._worker is not None and not self._cancel.is_set() and origin is not None:
+                self._observe_displacement(position, origin, receipt)
+
+    def _observe_displacement(
+        self, position: GPSPosition, origin: WsprOrigin, receipt: float,
+    ) -> None:
+        assert position.latitude is not None and position.longitude is not None
+        distance = haversine_distance_miles(
+            origin.latitude, origin.longitude, position.latitude, position.longitude,
+        )
+        if distance < _MOTION_DISTANCE_MILES:
+            self._outside_since = None
+        elif self._outside_since is None:
+            self._outside_since = receipt
+        elif receipt - self._outside_since >= _MOTION_CONFIRM_SECONDS:
+            self.stop("Vehicle moved at least 50 ft for five seconds")
 
     def select(self, selected: bool) -> None:
         """Update context availability. Selection alone never starts reception."""
@@ -208,11 +234,15 @@ class WsprReceive:
         with self._lock:
             if self._closed or not self._selected or self._worker is not None:
                 return False
-            problem = self._motion_problem()
+            problem = self._gps_problem()
+            position = self._gps.position if self._gps is not None else None
+            if problem is None and position is not None and not self._stationary_speed(position):
+                problem = "Wait for stationary GPS speed"
+
             since = self._stationary_since
             if problem is None and (
-                since is None or self._last_motion_sample is None
-                or self._last_motion_sample - since < _STATIONARY_SECONDS
+                since is None or self._last_fix_receipt is None
+                or self._last_fix_receipt - since < _STATIONARY_SECONDS
             ):
                 problem = "Wait for five seconds of stationary GPS fixes"
             reserve = self._lease
@@ -228,6 +258,7 @@ class WsprReceive:
             self._ntp = None
             self._clock_anchor = (self._now(), self._elapsed())
             self._origin = origin
+            self._outside_since = None
             self._detail = "Starting"
             self._upload = "Waiting for a decode"
             self._band = None
@@ -270,7 +301,7 @@ class WsprReceive:
             self._account(now)
             elapsed = self._last_elapsed if self._started is None else now - self._started
             grid = self._origin.grid if self._origin is not None and self._worker else None
-            if grid is None and self._motion_problem() is None:
+            if grid is None and self._gps_problem() is None:
                 assert self._gps is not None and self._gps.position is not None
                 grid = WsprOrigin.from_fix(self._gps.position).grid
             return WsprSnapshot(
@@ -284,7 +315,7 @@ class WsprReceive:
                 active=self._worker is not None and not self._cancel.is_set(),
             )
 
-    def _motion_problem(self) -> str | None:
+    def _gps_problem(self) -> str | None:
         state = self._gps
         if state is None or state.connection_state is not GPSConnectionState.CONNECTED:
             return "GPS motion unavailable"
@@ -292,15 +323,17 @@ class WsprReceive:
         receipt = state.utc.received_monotonic_s
         if (
             position is None or position.fix_state is GPSFixState.NO_FIX
-            or position.speed_m_s is None or position.latitude is None
+            or position.latitude is None or position.longitude is None
             or not state.utc.trusted or receipt is None
             or not 0 <= self._elapsed() - receipt <= _GPS_MAX_AGE_S
             or abs((self._now() - position.updated_at).total_seconds()) > _GPS_MAX_AGE_S
         ):
             return "GPS position or motion is stale or unavailable"
-        if position.speed_m_s > _STATIONARY_SPEED_M_S:
-            return "Vehicle motion detected"
         return None
+
+    @staticmethod
+    def _stationary_speed(position: GPSPosition) -> bool:
+        return position.speed_m_s is not None and position.speed_m_s <= _STATIONARY_SPEED_M_S
 
     def _clock_problem(self) -> str | None:
         wall, elapsed = self._now(), self._elapsed()
@@ -345,7 +378,7 @@ class WsprReceive:
         with self._lock:
             if cancel.is_set():
                 raise WsprCancelled
-            problem = self._motion_problem() or self._clock_problem()
+            problem = self._gps_problem() or self._clock_problem()
             if problem is not None:
                 self.stop(problem)
                 raise WsprCancelled

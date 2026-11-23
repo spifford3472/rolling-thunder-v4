@@ -36,12 +36,14 @@ class FakeClock:
         self.wall += timedelta(seconds=seconds)
         self.elapsed += seconds
 
-    def gps(self, *, speed: float = 0.0, clock_offset: float = 0.0) -> GPSState:
+    def gps(
+        self, *, speed: float = 0.0, clock_offset: float = 0.0, latitude: float = 39.5,
+    ) -> GPSState:
         return GPSState(
             GPSConnectionState.CONNECTED,
             GPSPosition(
                 fix_state=GPSFixState.THREE_DIMENSIONAL,
-                latitude=39.5, longitude=-84.1, speed_m_s=speed, updated_at=self.wall,
+                latitude=latitude, longitude=-84.1, speed_m_s=speed, updated_at=self.wall,
             ),
             self.wall,
             utc=GPSUTCObservation(
@@ -180,7 +182,37 @@ def test_only_selected_physical_button_starts_and_every_exit_revokes() -> None:
     assert press("run", "after-shutdown") == 0
 
 
-@pytest.mark.parametrize("failure", ["motion", "stale", "clock"])
+def test_parked_wspr_ignores_speed_and_position_spikes_then_stops_on_sustained_move() -> None:
+    clock = FakeClock()
+    radio = FakeReceiver()
+    receive = _controller(clock, radio, NeverCapture(), Reporter())
+    receive.select(True)
+    _stationary(receive, clock)
+    assert receive.start()
+    assert radio.acquired.wait(1)
+    try:
+        receive.observe_gps(clock.gps(speed=1.0, latitude=39.501))
+        assert receive.snapshot().active
+        clock.advance(1)
+        receive.observe_gps(clock.gps(speed=1.0, latitude=39.5001))
+        assert receive.snapshot().active
+        # Roughly 73 feet away, starting a new confirmation window.
+        for _ in range(5):
+            clock.advance(1)
+            fix = clock.gps(latitude=39.5002)
+            receive.observe_gps(fix)
+            receive.observe_gps(fix)
+            assert receive.snapshot().active
+        clock.advance(1)
+        receive.observe_gps(clock.gps(latitude=39.5002))
+        _wait_for(lambda: not receive.busy)
+        assert receive.snapshot().detail == "Stopped: Vehicle moved at least 50 ft for five seconds"
+        assert radio.released.is_set()
+    finally:
+        receive.close()
+
+
+@pytest.mark.parametrize("failure", ["stale", "clock"])
 def test_motion_and_timing_fail_closed_without_restart(failure: str) -> None:
     clock = FakeClock()
     radio = FakeReceiver()
@@ -190,9 +222,7 @@ def test_motion_and_timing_fail_closed_without_restart(failure: str) -> None:
     _stationary(receive, clock)
     assert receive.start()
     assert radio.acquired.wait(1)
-    if failure == "motion":
-        receive.observe_gps(clock.gps(speed=0.5))
-    elif failure == "stale":
+    if failure == "stale":
         clock.advance(5)
     else:
         receive.observe_gps(clock.gps(clock_offset=3.0))
